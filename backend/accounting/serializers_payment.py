@@ -39,7 +39,8 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'pay_to_ledger': {'required': False, 'allow_null': True},
             'reference_type': {'required': False},
-            'advance_ref_no': {'write_only': True, 'required': False}
+            'advance_ref_no': {'write_only': True, 'required': False},
+            'amount': {'max_digits': 20, 'decimal_places': 2},
         }
 
     def get_vendor_name(self, obj):
@@ -93,7 +94,7 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
     
     # Optional Top-Level Advance (for backward compatibility / bulk)
     advance_ref_no = serializers.CharField(required=False, allow_null=True, allow_blank=True, write_only=True)
-    advance_amount = serializers.DecimalField(max_digits=15, decimal_places=2, required=False, write_only=True)
+    advance_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, write_only=True)
     total_payment = serializers.SerializerMethodField()
     items = PaymentVoucherItemSerializer(many=True, required=False)
 
@@ -122,7 +123,7 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                             'amount': item.amount,
                             'total_amount': item.amount,
                             'status': p_status,
-                            'reference_number': voucher.voucher_number,
+                            'reference_number': item.advance_ref_no or voucher.voucher_number,
                             'notes': voucher.narration,
                             'ledger_name': vendor.vendor_name
                         }
@@ -196,6 +197,9 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
             'bank_reconciled', 'bank_reconcile_date', 'bank_statement_id', 'bank_reference_number'
         ]
         read_only_fields = ['tenant_id']
+        extra_kwargs = {
+            'total_amount': {'max_digits': 20, 'decimal_places': 2},
+        }
 
     def get_total_payment(self, obj):
         return obj.total_amount
@@ -390,9 +394,9 @@ class VoucherPaymentSingleSerializer(PaymentVoucherSerializer):
     """
     # Shim fields for validation (sent by frontend but not on model)
     pay_to = serializers.CharField(required=False)
-    total_payment = serializers.DecimalField(max_digits=15, decimal_places=2, required=False, source='total_amount')
+    total_payment = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, source='total_amount')
     advance_ref_no = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    advance_amount = serializers.DecimalField(max_digits=15, decimal_places=2, required=False)
+    advance_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
     transaction_details = serializers.JSONField(required=False, allow_null=True)
     bank_transaction_id = serializers.IntegerField(required=False, allow_null=True)
 
@@ -468,7 +472,7 @@ class VoucherPaymentBulkSerializer(PaymentVoucherSerializer):
     unified format.
     """
     payment_rows = serializers.JSONField(required=False)
-    total_payment = serializers.DecimalField(max_digits=15, decimal_places=2, required=False, source='total_amount')
+    total_payment = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, source='total_amount')
     posting_note = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     transaction_details = serializers.JSONField(required=False, allow_null=True)
     bank_transaction_id = serializers.IntegerField(required=False, allow_null=True)

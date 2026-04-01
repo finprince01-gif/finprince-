@@ -12,6 +12,8 @@ interface PendingTransaction {
     amount: number;
     receipt: number;
     status: string;
+    dueDate?: string;
+    daysToDue?: number;
 }
 
 interface ReceiptRow {
@@ -32,6 +34,8 @@ interface BulkTransaction {
     receiveNow: number;
     selected: boolean;
     status: string;
+    dueDate?: string;
+    daysToDue?: number;
 }
 
 
@@ -63,7 +67,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     };
 
     const [date, setDate] = useState(getCurrentDate());
-    const [voucherType, setVoucherType] = useState('Receipt');
+    const [voucherType, setVoucherType] = useState('');
     const [voucherNumber, setVoucherNumber] = useState('');
     const [bankTransactionId, setBankTransactionId] = useState<number | null>(null);
 
@@ -458,7 +462,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     referenceNumber: t.invoiceNo,
                     amount: t.amount,
                     receipt: 0,
-                    status: t.status
+                    status: t.status,
+                    dueDate: t.dueDate,
+                    daysToDue: t.daysToDue as number | undefined
                 }));
                 setPendingTransactions(mappedPending);
 
@@ -565,9 +571,15 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         setSingleAdvanceAmount(0);
         setShowSingleAdvanceSection(false);
         setTotalReceipt(0);
+        setSelectedReceiptConfig('');
     };
 
     const handlePostReceipt = async () => {
+        if (!selectedReceiptConfig) {
+            showError("Please select a Voucher Type.");
+            return;
+        }
+
         try {
             const findLedgerId = (name: string) => {
                 if (!name) return null;
@@ -608,7 +620,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     voucher_number: voucherNumber,
                     receive_in: receiveInId,
                     customer: receiveFromId, // RESTORED to Master
-                    total_amount: totalReceipt,
+                    total_amount: Number(Number(totalReceipt).toFixed(2)),
                     bank_transaction_id: bankTransactionId,
                     items: [
                         // Main allocation items
@@ -619,10 +631,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 reference_id: t.referenceNumber,
                                 reference_type: 'invoice',
                                 pending_transaction: { ...t, customer_name: receiveFrom },
-                                amount: t.amount,
-                                pending_before: t.amount,
-                                received_amount: t.receipt,
-                                balance_after: Math.max(0, t.amount - t.receipt)
+                                amount: Number(Number(t.amount).toFixed(2)),
+                                pending_before: Number(Number(t.amount).toFixed(2)),
+                                received_amount: Number(Number(t.receipt).toFixed(2)),
+                                balance_after: Number(Math.max(0, t.amount - t.receipt).toFixed(2))
                             })),
                         // Advance item if applicable
                         ...(singleAdvanceAmount > 0 ? [{
@@ -630,8 +642,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             reference_id: singleAdvanceRefNo || 'ADVANCE',
                             reference_type: 'advance',
                             pending_transaction: { customer_name: receiveFrom },
-                            amount: singleAdvanceAmount,
-                            received_amount: singleAdvanceAmount,
+                            amount: Number(Number(singleAdvanceAmount).toFixed(2)),
+                            received_amount: Number(Number(singleAdvanceAmount).toFixed(2)),
                             is_advance: true,
                             advance_ref_no: singleAdvanceRefNo
                         }] : [])
@@ -710,10 +722,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 reference_id: t.invoiceNo,
                                 reference_type: 'invoice',
                                 pending_transaction: { ...t, customer_name: row.receiveFrom },
-                                amount: t.amount,
-                                pending_before: t.amount,
-                                received_amount: t.receiveNow,
-                                balance_after: Math.max(0, t.amount - t.receiveNow)
+                                amount: Number(Number(t.amount).toFixed(2)),
+                                pending_before: Number(Number(t.amount).toFixed(2)),
+                                received_amount: Number(Number(t.receiveNow).toFixed(2)),
+                                balance_after: Number(Math.max(0, t.amount - t.receiveNow).toFixed(2))
                             }));
 
                         allItems.push(...allocatedItems);
@@ -728,8 +740,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 reference_id: rowAdvanceRefNo || 'ADVANCE',
                                 reference_type: 'advance',
                                 pending_transaction: { customer_name: row.receiveFrom },
-                                amount: Math.max(remaining, rowAdvanceAmount, row.amount),
-                                received_amount: Math.max(remaining, rowAdvanceAmount),
+                                amount: Number(Math.max(remaining, rowAdvanceAmount, row.amount).toFixed(2)),
+                                received_amount: Number(Math.max(remaining, rowAdvanceAmount).toFixed(2)),
                                 is_advance: true,
                                 advance_ref_no: rowAdvanceRefNo
                             });
@@ -774,8 +786,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             reference_id: rowAdvanceRefNo || row.referenceNumber || 'RCV',
                             reference_type: isAdvance ? 'advance' : 'on_account',
                             pending_transaction: { customer_name: row.receiveFrom },
-                            amount: row.amount,
-                            received_amount: row.amount,
+                            amount: Number(Number(row.amount).toFixed(2)),
+                            received_amount: Number(Number(row.amount).toFixed(2)),
                             is_advance: isAdvance,
                             advance_ref_no: rowAdvanceRefNo || row.referenceNumber
                         });
@@ -785,7 +797,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 const payload = {
                     date: date,
                     receive_in: receiveInId,
-                    total_amount: bulkTotalReceipt,
+                    total_amount: Number(Number(bulkTotalReceipt).toFixed(2)),
                     voucher_number: voucherNumber,
                     voucher_type: selectedReceiptConfig || voucherType,
                     items: allItems,
@@ -996,17 +1008,23 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                             <tr key={index} className="hover:bg-gray-50">
                                                 <td className="px-6 py-4 text-sm text-gray-700">{txn.date}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-700">
-                                                    <input
-                                                        type="text"
-                                                        value={txn.referenceNumber}
-                                                        readOnly
-                                                        className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none bg-gray-50 text-gray-500 cursor-default"
-                                                    />
+                                                    <div className="font-medium">{txn.referenceNumber}</div>
+                                                    {txn.dueDate && (
+                                                        <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
+                                                    )}
                                                 </td>
-                                                <td className="px-6 py-4 text-sm text-gray-700">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.status === 'Due' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.status === 'Due' || txn.status === 'Due Today'
+                                                        ? 'bg-red-100 text-red-600 border border-red-200'
+                                                        : 'bg-green-100 text-green-600 border border-green-200'
+                                                        }`}>
                                                         {txn.status}
                                                     </span>
+                                                    {txn.status === 'Not Due' && txn.daysToDue !== undefined && (
+                                                        <div className="text-[10px] text-gray-400 mt-1">
+                                                            {txn.daysToDue} days left
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-700 text-right">
                                                     ₹{txn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -1244,35 +1262,41 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 </thead>
                                                 <tbody>
                                                     {bulkTransactions.map(transaction => (
-                                                        <tr key={transaction.id} className="border-b border-gray-200">
+                                                        <tr key={transaction.id} className="border-b border-gray-200 hover:bg-gray-50">
                                                             <td className="py-3 px-2 text-sm text-gray-700 text-left">
                                                                 <div className="flex items-center gap-2">
                                                                     <input
                                                                         type="checkbox"
                                                                         checked={transaction.selected}
                                                                         onChange={e => handleTransactionSelect(transaction.id, e.target.checked)}
-                                                                        className="w-4 h-4"
+                                                                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                                                                     />
                                                                     <span>{transaction.date}</span>
                                                                 </div>
                                                             </td>
                                                             <td className="py-3 px-2 text-sm text-gray-700">
-                                                                <input
-                                                                    type="text"
-                                                                    value={transaction.invoiceNo}
-                                                                    readOnly
-                                                                    className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none bg-gray-50 text-gray-500 cursor-default"
-                                                                />
+                                                                <div className="font-medium">{transaction.invoiceNo}</div>
+                                                                {transaction.dueDate && (
+                                                                    <div className="text-[10px] text-gray-400">Due: {transaction.dueDate}</div>
+                                                                )}
                                                             </td>
-                                                            <td className="py-3 px-2 text-sm text-gray-700">
-                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${transaction.status === 'Due' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
-                                                                    {transaction.status}
+                                                            <td className="py-3 px-2 text-center text-sm text-gray-700">
+                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${transaction.status === 'Due' || transaction.status === 'Due Today'
+                                                                    ? 'bg-red-100 text-red-600 border border-red-200'
+                                                                    : (transaction.status === 'Not Due' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200')
+                                                                    }`}>
+                                                                    {transaction.status || 'Pending'}
                                                                 </span>
+                                                                {transaction.status === 'Not Due' && transaction.daysToDue !== undefined && (
+                                                                    <div className="text-[10px] text-gray-400 mt-1">
+                                                                        {transaction.daysToDue} days left
+                                                                    </div>
+                                                                )}
                                                             </td>
                                                             <td className="py-3 px-2 text-sm text-gray-700 text-right">
                                                                 ₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                             </td>
-                                                            <td className="py-3 px-2 text-sm text-right text-red-600 font-medium">
+                                                            <td className="py-3 px-2 text-sm text-right text-red-600 font-medium font-medium">
                                                                 ₹{(Math.max(0, transaction.amount - transaction.receiveNow)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                             </td>
                                                             <td className="py-3 px-2 text-center">

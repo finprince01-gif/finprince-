@@ -23,6 +23,12 @@ class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
             'pending_transaction', 'amount', 'pending_before', 'received_amount', 
             'balance_after', 'is_advance', 'advance_ref_no'
         ]
+        extra_kwargs = {
+            'amount': {'max_digits': 20, 'decimal_places': 2},
+            'pending_before': {'max_digits': 20, 'decimal_places': 2},
+            'received_amount': {'max_digits': 20, 'decimal_places': 2},
+            'balance_after': {'max_digits': 20, 'decimal_places': 2},
+        }
 
     def validate_customer(self, value):
         request = self.context.get('request')
@@ -109,6 +115,9 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
         model = ReceiptVoucher
         fields = '__all__'
         read_only_fields = ['tenant_id']
+        extra_kwargs = {
+            'total_amount': {'max_digits': 20, 'decimal_places': 2},
+        }
 
     def validate(self, attrs):
         request = self.context.get('request')

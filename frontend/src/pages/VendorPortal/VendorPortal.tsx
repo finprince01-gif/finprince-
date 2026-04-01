@@ -26,13 +26,14 @@ const VENDOR_SYSTEM_CATEGORIES = [
     'Raw Material',
     'Stores and Spares',
     'Packing Material',
-    'Stock in Trade',
+    'Stock-in Trade',
     'Fixed Assets',
     'Capital Goods',
     'Consumables',
-    'Service',
+    'Services',
     'Jobwork'
 ];
+
 
 const VENDOR_DEFAULT_GROUPS = [
     {
@@ -601,6 +602,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const [categoryDescription, setCategoryDescription] = useState('');
     const [categorySearchQuery, setCategorySearchQuery] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Optimized Merged Categories for Dashboards
+    const allDisplayCategories = useMemo(() => {
+        const userCats = categories.filter(c => c.is_active).map(c => c.category);
+        return Array.from(new Set([...VENDOR_SYSTEM_CATEGORIES, ...userCats]));
+    }, [categories, VENDOR_SYSTEM_CATEGORIES]);
+
 
     // PO Settings State
     const [poSeriesList, setPoSeriesList] = useState<POSeries[]>([]);
@@ -4974,11 +4982,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {(categories.length > 0
-                                                    ? categories.filter(c => c.is_active).map(c => ({ name: c.category, desc: `Manage ${c.category.toLowerCase()} procurement` }))
-                                                    : VENDOR_SYSTEM_CATEGORIES.map(name => ({ name, desc: `Manage ${name.toLowerCase()} procurement` }))
-                                                )
-                                                    .filter(item => isSuperuser || hasTabAccess('Vendor Portal', item.name))
+                                                {allDisplayCategories.map(name => ({ name, desc: `Manage ${name.toLowerCase()} procurement` }))
                                                     .map((item) => {
                                                         const activeOrders = purchaseOrders.filter(po =>
                                                             po.category === item.name &&
@@ -5871,10 +5875,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {(categories.length > 0
-                                                    ? categories.filter(c => c.is_active).map(c => ({ name: c.category, desc: `Manage ${c.category.toLowerCase()} payments` }))
-                                                    : VENDOR_SYSTEM_CATEGORIES.map(name => ({ name, desc: `Manage ${name.toLowerCase()} payments` }))
-                                                ).map((item) => {
+                                                {allDisplayCategories.map(name => ({ name, desc: `Manage ${name.toLowerCase()} payments` }))
+                                                    .map((item) => {
                                                     const pendingBillsList = paymentBills.filter(bill => bill.status !== 'Posted' && bill.category === item.name);
                                                     const totalPendingAmount = pendingBillsList.reduce((sum, bill) => {
                                                         const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
