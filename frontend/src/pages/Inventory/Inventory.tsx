@@ -56,6 +56,24 @@ interface Item {
   is_active: boolean;
 }
 
+const getSOColor = (value: string) => {
+  const colors = [
+    'bg-indigo-50 text-indigo-700 border-indigo-100 shadow-sm',
+    'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm',
+    'bg-amber-50 text-amber-700 border-amber-100 shadow-sm',
+    'bg-rose-50 text-rose-700 border-rose-100 shadow-sm',
+    'bg-sky-50 text-sky-700 border-sky-100 shadow-sm',
+    'bg-violet-50 text-violet-700 border-violet-100 shadow-sm',
+    'bg-orange-50 text-orange-700 border-orange-100 shadow-sm',
+    'bg-teal-50 text-teal-700 border-teal-100 shadow-sm',
+  ];
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = value.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
 const InventoryPage: React.FC = () => {
   // Permissions
   const { hasTabAccess, getAccessibleTabs, isSuperuser } = usePermissions();
@@ -248,6 +266,8 @@ const InventoryPage: React.FC = () => {
     }
   }, [activeTab, activeMasterSubTab, activeGRNIssueSlipSubTab]);
 
+
+
   // --- Inventory Items State ---
   const [selectedItemDetail, setSelectedItemDetail] = useState<any>(null);
   const [itemSearchQuery2, setItemSearchQuery2] = useState('');
@@ -266,9 +286,11 @@ const InventoryPage: React.FC = () => {
   const [jobWorkSentType, setJobWorkSentType] = useState<'outward' | 'receipt'>('outward');
   const [productionType, setProductionType] = useState<'materials_issued' | 'inter_process' | 'finished_goods'>('materials_issued');
   const [outwardType, setOutwardType] = useState('sales');
+  const [reasonsForReturn, setReasonsForReturn] = useState('');
+  const todayStr = new Date().toISOString().split('T')[0];
   const [issueSlipNumber, setIssueSlipNumber] = useState('');
-  const [issueSlipDate, setIssueSlipDate] = useState('');
-  const [issueSlipTime, setIssueSlipTime] = useState('');
+  const [issueSlipDate, setIssueSlipDate] = useState(todayStr);
+  const [issueSlipTime, setIssueSlipTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   const [goodsFromLocation, setGoodsFromLocation] = useState('');
   const [goodsToLocation, setGoodsToLocation] = useState('');
   const [interProcessToLocation, setInterProcessToLocation] = useState('');
@@ -289,6 +311,7 @@ const InventoryPage: React.FC = () => {
   const [outwardVendorName, setOutwardVendorName] = useState('');
   const [outwardBranchOptions, setOutwardBranchOptions] = useState<any[]>([]); // Added for dynamic branches
   const [outwardSalesOrderOptions, setOutwardSalesOrderOptions] = useState<any[]>([]);
+  const [selectedOutwardSalesOrders, setSelectedOutwardSalesOrders] = useState<string[]>([]);
   const [outwardSupplierInvoiceOptions, setOutwardSupplierInvoiceOptions] = useState<any[]>([]);
   const [materialIssueSlipNo, setMaterialIssueSlipNo] = useState('');
   const [materialIssueSlipOptions, setMaterialIssueSlipOptions] = useState<any[]>([]);
@@ -297,7 +320,7 @@ const InventoryPage: React.FC = () => {
   const [selectedProcessTransferSlips, setSelectedProcessTransferSlips] = useState<string[]>([]);
   const [processTransferSlipNo, setProcessTransferSlipNo] = useState('');
   const [prodItemTab, setProdItemTab] = useState<'materials_issued' | 'converted_output'>('materials_issued');
-  const [issueSlipItems, setIssueSlipItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0, noOfBoxes: '' }]);
+  const [issueSlipItems, setIssueSlipItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0, noOfBoxes: '', remarks: '' }]);
   const [resultingWIPItems, setResultingWIPItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantity: '' }]);
   const [convertedOutputItems, setConvertedOutputItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', amount: '' }]);
   const [fgReceiptSlipNo, setFgReceiptSlipNo] = useState('');
@@ -309,8 +332,8 @@ const InventoryPage: React.FC = () => {
   const [grnNumber, setGrnNumber] = useState('');
   const [grnSelectedSeriesId, setGrnSelectedSeriesId] = useState<number | null>(null);
   const [grnSelectedSeriesName, setGrnSelectedSeriesName] = useState('');
-  const [grnDate, setGrnDate] = useState('');
-  const [grnTime, setGrnTime] = useState('');
+  const [grnDate, setGrnDate] = useState(todayStr);
+  const [grnTime, setGrnTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   const [grnLocation, setGrnLocation] = useState('');
   const [grnVendorName, setGrnVendorName] = useState('');
   const [grnCustomerName, setGrnCustomerName] = useState('');
@@ -334,8 +357,8 @@ const InventoryPage: React.FC = () => {
   // Production Scrap
   const [scrapProdSlipSeries, setScrapProdSlipSeries] = useState('');
   const [scrapProdSlipNo, setScrapProdSlipNo] = useState('');
-  const [scrapProdDate, setScrapProdDate] = useState('');
-  const [scrapProdTime, setScrapProdTime] = useState('');
+  const [scrapProdDate, setScrapProdDate] = useState(todayStr);
+  const [scrapProdTime, setScrapProdTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   const [scrapProdIssuedTo, setScrapProdIssuedTo] = useState('');
   const [scrapProdProductionSlipNo, setScrapProdProductionSlipNo] = useState('');
   const [scrapProdItems, setScrapProdItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantityGenerated: '' }]);
@@ -343,8 +366,8 @@ const InventoryPage: React.FC = () => {
   // Other Scrap
   const [scrapOtherSlipSeries, setScrapOtherSlipSeries] = useState('');
   const [scrapOtherSlipNo, setScrapOtherSlipNo] = useState('');
-  const [scrapOtherDate, setScrapOtherDate] = useState('');
-  const [scrapOtherTime, setScrapOtherTime] = useState('');
+  const [scrapOtherDate, setScrapOtherDate] = useState(todayStr);
+  const [scrapOtherTime, setScrapOtherTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   const [scrapOtherIssuedFrom, setScrapOtherIssuedFrom] = useState('');
   const [scrapOtherIssuedTo, setScrapOtherIssuedTo] = useState('');
   const [scrapOtherItemsScrapped, setScrapOtherItemsScrapped] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantity: '' }]);
@@ -353,8 +376,8 @@ const InventoryPage: React.FC = () => {
   // Scrap Disposed
   const [scrapDispSlipSeries, setScrapDispSlipSeries] = useState('');
   const [scrapDispSlipNo, setScrapDispSlipNo] = useState('');
-  const [scrapDispDate, setScrapDispDate] = useState('');
-  const [scrapDispTime, setScrapDispTime] = useState('');
+  const [scrapDispDate, setScrapDispDate] = useState(todayStr);
+  const [scrapDispTime, setScrapDispTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   const [scrapDispIssuedFrom, setScrapDispIssuedFrom] = useState('');
   const [scrapDispItems, setScrapDispItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantityDisposed: '', rate: '', value: 0 }]);
   const [scrapDispReasonForDisposal, setScrapDispReasonForDisposal] = useState('');
@@ -372,6 +395,54 @@ const InventoryPage: React.FC = () => {
   const [grnReason, setGrnReason] = useState('');
   const [grnPostingNote, setGrnPostingNote] = useState('');
   const [postingNote, setPostingNote] = useState('');
+
+  // Auto-select Series
+  useEffect(() => {
+    if (!showIssueSlipForm || issueSlipSeriesList.length === 0 || selectedIssueSlipSeriesName) return;
+
+    if (issueSlipTab === 'inter-unit') {
+      const interUnitSeries = issueSlipSeriesList.filter(s => 
+        (s.issueSlipType || '').toLowerCase().includes('inter_unit') || 
+        (s.issueSlipType || '').toLowerCase().includes('inter-unit') || 
+        (s.issueSlipType || '').toLowerCase().includes('inter unit')
+      );
+      if (interUnitSeries.length === 1) {
+        setSelectedIssueSlipSeriesName(interUnitSeries[0].name);
+        setIssueSlipNumber(interUnitSeries[0].preview || '');
+      }
+    } else if (issueSlipTab === 'outward') {
+      const outwardSeries = issueSlipSeriesList.filter(s => (s.issueSlipType || '').toLowerCase() === 'outward');
+      if (outwardSeries.length === 1) {
+        setSelectedIssueSlipSeriesName(outwardSeries[0].name);
+        setIssueSlipNumber(outwardSeries[0].preview || '');
+      }
+    } else if (issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'outward') {
+      const jwSeries = issueSlipSeriesList.filter(s => 
+        (s.issueSlipType || '').toLowerCase().includes('jobwork') || 
+        (s.issueSlipType || '').toLowerCase().includes('job work')
+      );
+      if (jwSeries.length === 1) {
+        setSelectedIssueSlipSeriesName(jwSeries[0].name);
+        setIssueSlipNumber(jwSeries[0].preview || '');
+      }
+    } else if (issueSlipTab === 'consumption') {
+      const consumptionSeries = issueSlipSeriesList.filter(s => (s.issueSlipType || '').toLowerCase() === 'consumption');
+      if (consumptionSeries.length === 1) {
+        setSelectedIssueSlipSeriesName(consumptionSeries[0].name);
+        setIssueSlipNumber(consumptionSeries[0].preview || '');
+      }
+    } else if (issueSlipTab === 'location-change') {
+      const locSeries = issueSlipSeriesList.filter(s => 
+        (s.issueSlipType || '').toLowerCase().includes('location-change') || 
+        (s.issueSlipType || '').toLowerCase().includes('location_change') || 
+        (s.issueSlipType || '').toLowerCase().includes('location change')
+      );
+      if (locSeries.length === 1) {
+        setSelectedIssueSlipSeriesName(locSeries[0].name);
+        setIssueSlipNumber(locSeries[0].preview || '');
+      }
+    }
+  }, [showIssueSlipForm, issueSlipTab, issueSlipSeriesList, selectedIssueSlipSeriesName, jobWorkSubTab, jobWorkSentType]);
   const [showDeliveryChallan, setShowDeliveryChallan] = useState(false);
   const [deliveryChallanAddress, setDeliveryChallanAddress] = useState('');
   const [deliveryChallanDate, setDeliveryChallanDate] = useState('');
@@ -451,8 +522,8 @@ const InventoryPage: React.FC = () => {
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
   const [modeOfTransport, setModeOfTransport] = useState('');
-  const [dispatchDate, setDispatchDate] = useState('');
-  const [dispatchTime, setDispatchTime] = useState('');
+  const [dispatchDate, setDispatchDate] = useState(todayStr);
+  const [dispatchTime, setDispatchTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   const [dispatchDocument, setDispatchDocument] = useState<File | null>(null);
   const [deliveryType, setDeliveryType] = useState('');
   const [transporterId, setTransporterId] = useState('');
@@ -472,6 +543,7 @@ const InventoryPage: React.FC = () => {
   const [beyondPortPortOfLoading, setBeyondPortPortOfLoading] = useState('');
   const [beyondPortPortOfDischarge, setBeyondPortPortOfDischarge] = useState('');
   const [beyondPortFinalDestination, setBeyondPortFinalDestination] = useState('');
+  const [beyondPortOrigin, setBeyondPortOrigin] = useState('');
   const [beyondPortOriginCountry, setBeyondPortOriginCountry] = useState('');
   const [beyondPortDestCountry, setBeyondPortDestCountry] = useState('');
 
@@ -483,6 +555,7 @@ const InventoryPage: React.FC = () => {
   const [railBeyondPortRailwayReceiptDate, setRailBeyondPortRailwayReceiptDate] = useState('');
   const [railBeyondPortOrigin, setRailBeyondPortOrigin] = useState('');
   const [railBeyondPortOriginCountry, setRailBeyondPortOriginCountry] = useState('');
+  const [railBeyondPortFnrNo, setRailBeyondPortFnrNo] = useState('');
   const [railBeyondPortRailNo, setRailBeyondPortRailNo] = useState('');
   const [railBeyondPortStationOfLoading, setRailBeyondPortStationOfLoading] = useState('');
   const [railBeyondPortStationOfDischarge, setRailBeyondPortStationOfDischarge] = useState('');
@@ -1484,8 +1557,10 @@ const InventoryPage: React.FC = () => {
             hsn_code: item.hsnCode || null,
             uom: item.uom,
             quantity: item.quantity || 0,
-            no_of_boxes: item.noOfBoxes || null
+            no_of_boxes: item.noOfBoxes || null,
+            remarks: item.remarks || ''
           })),
+          reasons_for_return: outwardType === 'purchase_return' ? reasonsForReturn : '',
           delivery_challan: {
             dispatch_from: dispatchFrom || deliveryChallanAddress,
             mode_of_transport: modeOfTransport,
@@ -1541,6 +1616,7 @@ const InventoryPage: React.FC = () => {
       } else if (issueSlipTab === 'job-work') {
         const jobWorkPayload = {
           operation_type: jobWorkSentType, // 'outward' or 'receipt'
+          issue_slip_series: selectedIssueSlipSeriesName || '',
           transaction_date: issueSlipDate || new Date().toISOString().split('T')[0],
           transaction_time: issueSlipTime || new Date().toTimeString().split(' ')[0],
           location_id: itemLocation || goodsFromLocation || null, // Map correctly
@@ -1702,6 +1778,7 @@ const InventoryPage: React.FC = () => {
       } else if (issueSlipTab === 'inter-unit') {
         const interUnitPayload = {
           issue_slip_no: issueSlipNumber,
+          issue_slip_series: selectedIssueSlipSeriesName || '',
           date: issueSlipDate || null,
           time: issueSlipTime || null,
           status: 'Posted',
@@ -1898,32 +1975,35 @@ const InventoryPage: React.FC = () => {
 
   // --- Handlers for Outward Sales & Purchase Return ---
 
-  const handleOutwardSalesOrderChange = (soId: string) => {
-    setOutwardSalesOrder(soId);
-    if (!soId) {
+  const handleOutwardSalesOrderChange = (soIds: string | string[]) => {
+    const selectedIds = Array.isArray(soIds) ? soIds : [soIds];
+    setSelectedOutwardSalesOrders(selectedIds);
+    setOutwardSalesOrder(selectedIds.join(', '));
+
+    if (selectedIds.length === 0) {
       setOutwardCustomerName('');
       setOutwardBranch('');
       setOutwardBranchOptions([]);
       setOutwardAddress('');
       setOutwardGstin('');
-      setIssueSlipItems([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0, noOfBoxes: '' }]);
+      setIssueSlipItems([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0, noOfBoxes: '', remarks: '' }]);
       return;
     }
 
-    const so = outwardSalesOrderOptions.find(o => o.id?.toString() === soId || o.so_number === soId);
-    if (so) {
-      console.log("Selected Order:", so); // Mandatory log for debugging
-      if (so.customer_name) {
-        setOutwardCustomerName(so.customer_name);
+    const selectedOrders = outwardSalesOrderOptions.filter(o => 
+      selectedIds.includes(o.id?.toString()) || selectedIds.includes(o.so_number)
+    );
 
-        // Populate branch options safely without an external async handler
-        const customer = customers.find(c => c.customer_name === so.customer_name);
+    if (selectedOrders.length > 0) {
+      // Use the first order to set customer and branch header details
+      const firstOrder = selectedOrders[0];
+      if (firstOrder.customer_name) {
+        setOutwardCustomerName(firstOrder.customer_name);
+        const customer = customers.find(c => c.customer_name === firstOrder.customer_name);
         if (customer && customer.gst_details && Array.isArray(customer.gst_details.branches)) {
           const branches = customer.gst_details.branches.map((b: any) => {
-            // Concatenate address lines if separate fields are provided instead of a single address field
             const lines = [b.address_line1 || b.addressLine1, b.address_line2 || b.addressLine2, b.address_line3 || b.addressLine3];
             const fullAddress = lines.filter(Boolean).join(', ');
-            
             return {
               ...b,
               reference_name: b.defaultRef || b.branch_reference_name || 'Main',
@@ -1932,52 +2012,36 @@ const InventoryPage: React.FC = () => {
             };
           });
           setOutwardBranchOptions(branches);
-        } else {
-          setOutwardBranchOptions([]);
         }
-      } else {
-        setOutwardCustomerName('');
-        setOutwardBranchOptions([]);
       }
 
-      // Safely apply specific populated branch and address mapping
-      if (so.branch) {
-        setOutwardBranch(so.branch);
-      } else {
-        setOutwardBranch('');
-      }
+      setOutwardBranch(firstOrder.branch || '');
+      setOutwardAddress(firstOrder.address || '');
+      setOutwardGstin(firstOrder.gst_no || firstOrder.gstin || '');
 
-      if (so.address) {
-        setOutwardAddress(so.address);
-      } else {
-        setOutwardAddress('');
-      }
-
-      const gst = so.gst_no || so.gstin || '';
-      if (gst) {
-        setOutwardGstin(gst);
-      } else {
-        setOutwardGstin('');
-      }
-
-      // Populate items from Sales Order
-      if (so.items && Array.isArray(so.items)) {
-        const itemsList = so.items.map((item: any) => {
-          // Lookup HSN code from Master Items list
-          const masterItem = items.find(i => i.item_code === item.item_code);
-          return {
-            itemCode: item.item_code || '',
-            itemName: item.item_name || '',
-            hsnCode: masterItem?.hsn_code || (masterItem as any)?.hsn || item.hsn_code || '',
-            uom: item.uom || '',
-            quantity: item.quantity || 0,
-            rate: item.price || 0,
-            value: item.taxable_value || 0,
-            noOfBoxes: item.packing_notes || ''
-          };
-        });
-        setIssueSlipItems(itemsList.length > 0 ? itemsList : [{ itemCode: '', itemName: '', uom: '', hsnCode: '', quantity: '', rate: '', value: 0, noOfBoxes: '' }]);
-      }
+      // Aggregate items from all selected orders
+      const aggregatedItems: any[] = [];
+      selectedOrders.forEach(so => {
+        const orderNo = so.so_number || so.voucher_number || so.id?.toString();
+        if (so.items && Array.isArray(so.items)) {
+          so.items.forEach((item: any) => {
+            const masterItem = items.find(i => i.item_code === item.item_code);
+            aggregatedItems.push({
+              itemCode: item.item_code || '',
+              itemName: item.item_name || masterItem?.item_name || '',
+              hsnCode: masterItem?.hsn_code || item.hsn_code || '',
+              uom: item.uom || masterItem?.uom || '',
+              quantity: item.quantity || 0,
+              rate: item.price || item.rate || 0,
+              value: item.taxable_value || (item.quantity * (item.price || item.rate || 0)) || 0,
+              noOfBoxes: item.packing_notes || '',
+              remarks: item.remarks || '',
+              soNo: orderNo // Track origin for row color coding
+            });
+          });
+        }
+      });
+      setIssueSlipItems(aggregatedItems.length > 0 ? aggregatedItems : [{ itemCode: '', itemName: '', uom: '', hsnCode: '', quantity: '', rate: '', value: 0, noOfBoxes: '', remarks: '' }]);
     }
   };
 
@@ -2532,7 +2596,27 @@ const InventoryPage: React.FC = () => {
     if (field === 'quantity' || field === 'rate') {
       const qty = parseFloat(updatedItems[index].quantity) || 0;
       const rate = parseFloat(updatedItems[index].rate) || 0;
-      updatedItems[index].value = qty * rate;
+      
+      // Stock Balance Validation
+      const balanceStock = parseFloat(updatedItems[index].remainingQty) || 0;
+      if (field === 'quantity' && qty > balanceStock && balanceStock > 0) {
+        showError("Insufficient stock at selected location.");
+        updatedItems[index].quantity = balanceStock;
+        updatedItems[index].value = balanceStock * rate;
+      } else {
+        updatedItems[index].value = qty * rate;
+      }
+
+      // Sales Order Quantity Prompt
+      if (field === 'quantity' && issueSlipTab === 'outward' && outwardType === 'sales' && updatedItems[index].soNo) {
+        const soQty = parseFloat(updatedItems[index].soQty) || 0;
+        if (qty > soQty) {
+          if (!window.confirm("Issue quantity exceeds Sales Order quantity. Proceed?")) {
+            updatedItems[index].quantity = soQty;
+            updatedItems[index].value = soQty * rate;
+          }
+        }
+      }
     }
 
     // Calculate Shortage/Excess for Receipt (Received - Vendor) & Rejected (Received - Accepted)
@@ -2679,6 +2763,9 @@ const InventoryPage: React.FC = () => {
 
           {/* Right Column */}
           <div className="space-y-4">
+            {(modeOfTransport === 'Air' || modeOfTransport === 'Sea' || modeOfTransport === 'Rail') && (
+              <h3 className="text-md font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">UPTO PORT</h3>
+            )}
             {/* Delivery Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2703,7 +2790,6 @@ const InventoryPage: React.FC = () => {
                 <option value="Courier">Courier</option>
               </select>
             </div>
-
             {/* Transporter ID/GSTIN */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2714,8 +2800,9 @@ const InventoryPage: React.FC = () => {
                 value={transporterId}
                 onChange={(e) => setTransporterId(e.target.value)}
                 disabled={deliveryType === 'Courier'}
+                maxLength={15}
                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                placeholder="Editable with numerics and alphabet"
+                placeholder="Editable (max 15 characters)"
               />
             </div>
 
@@ -2730,7 +2817,7 @@ const InventoryPage: React.FC = () => {
                 onChange={(e) => setTransporterName(e.target.value)}
                 disabled={deliveryType === 'Courier'}
                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                placeholder="Editable with numerics and alphabet"
+                placeholder="Enter transporter name"
               />
             </div>
 
@@ -2745,14 +2832,14 @@ const InventoryPage: React.FC = () => {
                 onChange={(e) => setVehicleNo(e.target.value)}
                 disabled={deliveryType === 'Courier'}
                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                placeholder="Editable with numerics and alphabet"
+                placeholder="Enter vehicle number"
               />
             </div>
 
             {/* LR/GR/Consignment */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                LR/GR/Consignment
+                LR/GR/Consignment No.
               </label>
               <input
                 type="text"
@@ -2760,7 +2847,7 @@ const InventoryPage: React.FC = () => {
                 onChange={(e) => setLrGrConsignment(e.target.value)}
                 disabled={deliveryType === 'Courier'}
                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                placeholder="Editable with numerics and alphabet"
+                placeholder="Enter LR/GR/Consignment number"
               />
             </div>
           </div>
@@ -2768,71 +2855,25 @@ const InventoryPage: React.FC = () => {
 
         {(modeOfTransport === 'Air' || modeOfTransport === 'Sea') && (
           <div className="space-y-6 mt-6 border-t border-gray-200 pt-4">
-            {/* UPTO PORT */}
-            <div>
-              <h3 className="text-md font-semibold text-gray-800 mb-3">UPTO PORT</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill No.</label>
-                    <input type="text" value={uptoPortShippingBillNo} onChange={(e) => setUptoPortShippingBillNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
-                    <input type="text" value={uptoPortShipPortCode} onChange={(e) => setUptoPortShipPortCode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
+            <h3 className="text-md font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">BEYOND PORT</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill No.</label>
+                  <input type="text" value={beyondPortShippingBillNo} onChange={(e) => setBeyondPortShippingBillNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
-                    <input type="date" value={uptoPortShippingBillDate} onChange={(e) => setUptoPortShippingBillDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                    <input type="text" value={uptoPortOrigin} onChange={(e) => setUptoPortOrigin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="City" />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
+                  <input type="text" value={beyondPortShipPortCode} onChange={(e) => setBeyondPortShipPortCode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
-              </div>
-            </div>
-
-            {/* BEYOND PORT */}
-            <div>
-              <h3 className="text-md font-semibold text-gray-800 mb-3">BEYOND PORT</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill No.</label>
-                    <input type="text" value={beyondPortShippingBillNo} onChange={(e) => setBeyondPortShippingBillNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
-                    <input type="text" value={beyondPortShipPortCode} onChange={(e) => setBeyondPortShipPortCode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
-                    <input type="text" value={beyondPortPortOfLoading} onChange={(e) => setBeyondPortPortOfLoading(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
-                    <input type="text" value={beyondPortFinalDestination} onChange={(e) => setBeyondPortFinalDestination(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination Country</label>
-                    <input type="text" value={beyondPortDestCountry} onChange={(e) => setBeyondPortDestCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
+                  <input type="text" value={beyondPortPortOfLoading} onChange={(e) => setBeyondPortPortOfLoading(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
-                <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
-                    <input type="date" value={beyondPortShippingBillDate} onChange={(e) => setBeyondPortShippingBillDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
-                    <input type="text" value={beyondPortVesselFlightNo} onChange={(e) => setBeyondPortVesselFlightNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
-                    <input type="text" value={beyondPortPortOfDischarge} onChange={(e) => setBeyondPortPortOfDischarge(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Origin City</label>
+                    <input type="text" value={beyondPortOrigin} onChange={(e) => setBeyondPortOrigin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Origin Country</label>
@@ -2840,78 +2881,83 @@ const InventoryPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Conditional Details for Rail */}
-        {modeOfTransport === 'Rail' && (
-          <div className="space-y-6 mt-6 border-t border-gray-200 pt-4">
-            {/* UPTO PORT (Rail) */}
-            <div>
-              <h3 className="text-md font-semibold text-gray-800 mb-3">UPTO PORT</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Type</label>
-                    <input type="text" value={railUptoPortDeliveryType} onChange={(e) => setRailUptoPortDeliveryType(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Transporter Name</label>
-                    <input type="text" value={railUptoPortTransporterName} onChange={(e) => setRailUptoPortTransporterName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
+                  <input type="date" value={beyondPortShippingBillDate} onChange={(e) => setBeyondPortShippingBillDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
-                <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
+                  <input type="text" value={beyondPortVesselFlightNo} onChange={(e) => setBeyondPortVesselFlightNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
+                  <input type="text" value={beyondPortPortOfDischarge} onChange={(e) => setBeyondPortPortOfDischarge(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Transporter ID</label>
-                    <input type="text" value={railUptoPortTransporterId} onChange={(e) => setRailUptoPortTransporterId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination City</label>
+                    <input type="text" value={beyondPortFinalDestination} onChange={(e) => setBeyondPortFinalDestination(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination Country</label>
+                    <input type="text" value={beyondPortDestCountry} onChange={(e) => setBeyondPortDestCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* BEYOND PORT (Rail) */}
-            <div>
-              <h3 className="text-md font-semibold text-gray-800 mb-3">BEYOND PORT</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
-                    <input type="text" value={railBeyondPortRailwayReceiptNo} onChange={(e) => setRailBeyondPortRailwayReceiptNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                    <input type="text" value={railBeyondPortOrigin} onChange={(e) => setRailBeyondPortOrigin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rail No.</label>
-                    <input type="text" value={railBeyondPortRailNo} onChange={(e) => setRailBeyondPortRailNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
-                    <input type="text" value={railBeyondPortStationOfDischarge} onChange={(e) => setRailBeyondPortStationOfDischarge(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination Country</label>
-                    <input type="text" value={railBeyondPortDestCountry} onChange={(e) => setRailBeyondPortDestCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
+        {modeOfTransport === 'Rail' && (
+          <div className="space-y-6 mt-6 border-t border-gray-200 pt-4">
+            <h3 className="text-md font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">BEYOND PORT</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
+                  <input type="text" value={railBeyondPortRailwayReceiptNo} onChange={(e) => setRailBeyondPortRailwayReceiptNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
-                <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">FNR No.</label>
+                  <input type="text" value={railBeyondPortFnrNo} onChange={(e) => setRailBeyondPortFnrNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
+                  <input type="text" value={railBeyondPortStationOfLoading} onChange={(e) => setRailBeyondPortStationOfLoading(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
-                    <input type="date" value={railBeyondPortRailwayReceiptDate} onChange={(e) => setRailBeyondPortRailwayReceiptDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Origin City</label>
+                    <input type="text" value={railBeyondPortOrigin} onChange={(e) => setRailBeyondPortOrigin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Origin Country</label>
                     <input type="text" value={railBeyondPortOriginCountry} onChange={(e) => setRailBeyondPortOriginCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
+                  <input type="date" value={railBeyondPortRailwayReceiptDate} onChange={(e) => setRailBeyondPortRailwayReceiptDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle No. (Rail No.)</label>
+                  <input type="text" value={railBeyondPortRailNo} onChange={(e) => setRailBeyondPortRailNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
+                  <input type="text" value={railBeyondPortStationOfDischarge} onChange={(e) => setRailBeyondPortStationOfDischarge(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
-                    <input type="text" value={railBeyondPortStationOfLoading} onChange={(e) => setRailBeyondPortStationOfLoading(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination City</label>
+                    <input type="text" value={railBeyondPortFinalDestination} onChange={(e) => setRailBeyondPortFinalDestination(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
-                    <input type="text" value={railBeyondPortFinalDestination} onChange={(e) => setRailBeyondPortFinalDestination(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination Country</label>
+                    <input type="text" value={railBeyondPortDestCountry} onChange={(e) => setRailBeyondPortDestCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                 </div>
               </div>
@@ -2920,7 +2966,6 @@ const InventoryPage: React.FC = () => {
         )}
       </div>
     );
-
 
     return (
       <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-6">
@@ -3214,14 +3259,36 @@ const InventoryPage: React.FC = () => {
                   {issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'outward' && (
                     <div className="mt-8 space-y-6">
                       {/* Top Row: Jobwork Outward No */}
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-5">
+                        <div className="w-1/4">
+                          <label className="block text-sm font-semibold text-gray-700 mb-1">Job-work Series</label>
+                          <select
+                            value={selectedIssueSlipSeriesName}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setSelectedIssueSlipSeriesName(v);
+                              const s = issueSlipSeriesList.find((x: any) => x.name === v);
+                              setIssueSlipNumber(s ? (s.preview || '') : '');
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">Select Series</option>
+                            {issueSlipSeriesList.filter((s: any) => 
+                              (s.issueSlipType || '').toLowerCase().includes('jobwork') || 
+                              (s.issueSlipType || '').toLowerCase().includes('job work')
+                            ).map((s: any) => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
                         <div className="w-1/4">
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Jobwork Outward No.</label>
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            onChange={(e) => setIssueSlipNumber(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            readOnly
+                            placeholder="Auto-generated"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500 font-bold cursor-not-allowed"
                           />
                         </div>
                       </div>
@@ -4132,12 +4199,37 @@ const InventoryPage: React.FC = () => {
                     <>
                       <div className="grid grid-cols-4 gap-5">
                         <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Issue Slip Series</label>
+                          <select
+                            value={selectedIssueSlipSeriesName}
+                            onChange={(e) => {
+                              const seriesName = e.target.value;
+                              setSelectedIssueSlipSeriesName(seriesName);
+                              if (!seriesName) {
+                                setIssueSlipNumber('');
+                                return;
+                              }
+                              const seriesObj = issueSlipSeriesList.find((s: any) => s.name === seriesName);
+                              if (seriesObj) {
+                                setIssueSlipNumber(seriesObj.preview || '');
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">Select Series</option>
+                            {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase() === 'outward').map((s: any) => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Outward Slip No</label>
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            onChange={(e) => setIssueSlipNumber(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            readOnly
+                            placeholder="Auto-generated"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500 font-bold cursor-not-allowed"
                           />
                         </div>
                         <div>
@@ -4146,6 +4238,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
+                            max={todayStr}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -4176,18 +4269,39 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Sales Order No.</label>
-                          <select
-                            value={outwardSalesOrder}
-                            onChange={(e) => handleOutwardSalesOrderChange(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          >
-                            <option value="">Select Pending Sales Order</option>
-                            {outwardSalesOrderOptions.map(order => (
-                              <option key={order.id} value={order.id}>
-                                {order.so_number}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex flex-col gap-2">
+                            <MultiSelectDropdown
+                              options={outwardSalesOrderOptions.map(order => ({
+                                value: order.id?.toString() || order.so_number,
+                                label: order.so_number
+                              }))}
+                              selectedValues={selectedOutwardSalesOrders}
+                              onChange={handleOutwardSalesOrderChange}
+                              placeholder="Select Pending Sales Orders"
+                            />
+                            {selectedOutwardSalesOrders.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {selectedOutwardSalesOrders.map(soId => {
+                                  const so = outwardSalesOrderOptions.find(o => o.id?.toString() === soId || o.so_number === soId);
+                                  const label = so?.so_number || soId;
+                                  return (
+                                    <div
+                                      key={soId}
+                                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold border ${getSOColor(label)}`}
+                                    >
+                                      <span>{label}</span>
+                                      <button
+                                        onClick={() => handleOutwardSalesOrderChange(selectedOutwardSalesOrders.filter(id => id !== soId))}
+                                        className="hover:text-red-600 ml-1"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -4270,12 +4384,24 @@ const InventoryPage: React.FC = () => {
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Quantity</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">No. of boxes/packs</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Remarks</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Action</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                              {issueSlipItems.map((item, index) => (
-                                <tr key={index}>
+                              {issueSlipItems.map((item, index) => {
+                                const soColorClasses = item.soNo && selectedOutwardSalesOrders.length > 1
+                                  ? getSOColor(item.soNo)
+                                  : '';
+                                const rowBgClass = soColorClasses
+                                  ? soColorClasses.split(' ').find(c => c.startsWith('bg-'))
+                                  : '';
+                                const borderClass = soColorClasses
+                                  ? `border-l-4 ${soColorClasses.split(' ').find(c => c.startsWith('border-'))?.replace('border-', 'border-l-')}`
+                                  : '';
+
+                                return (
+                                  <tr key={index} className={`${rowBgClass} ${borderClass}`}>
                                   <td className="px-3 py-2">
                                     <select
                                       value={item.itemCode}
@@ -4320,19 +4446,22 @@ const InventoryPage: React.FC = () => {
                                     </select>
                                   </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2"><input type="number" min="0" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2"><input type="text" value={item.remarks || ''} onChange={(e) => handleIssueSlipItemChange(index, 'remarks', e.target.value)} placeholder="Remarks" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2 text-center">
                                     <button onClick={() => handleRemoveIssueSlipItem(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
                                   </td>
-                                </tr>
-                              ))}
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
                         <div className="mt-4 flex justify-end items-center gap-4">
                           <label className="text-sm font-bold text-gray-900">Total Number of Boxes / Packs:</label>
                           <input
-                            type="text"
+                            type="number"
+                            min="0"
                             value={outwardTotalBoxes}
                             onChange={(e) => setOutwardTotalBoxes(e.target.value)}
                             className="w-32 px-2 py-1 border border-gray-300 rounded text-sm font-bold text-right"
@@ -4375,12 +4504,37 @@ const InventoryPage: React.FC = () => {
                     <>
                       <div className="grid grid-cols-4 gap-5">
                         <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Issue Slip Series</label>
+                          <select
+                            value={selectedIssueSlipSeriesName}
+                            onChange={(e) => {
+                              const seriesName = e.target.value;
+                              setSelectedIssueSlipSeriesName(seriesName);
+                              if (!seriesName) {
+                                setIssueSlipNumber('');
+                                return;
+                              }
+                              const seriesObj = issueSlipSeriesList.find((s: any) => s.name === seriesName);
+                              if (seriesObj) {
+                                setIssueSlipNumber(seriesObj.preview || '');
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">Select Series</option>
+                            {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase() === 'outward').map((s: any) => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Outward Slip No</label>
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            onChange={(e) => setIssueSlipNumber(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            readOnly
+                            placeholder="Auto-generated"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500 font-bold cursor-not-allowed"
                           />
                         </div>
                         <div>
@@ -4389,6 +4543,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
+                            max={todayStr}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -4511,6 +4666,7 @@ const InventoryPage: React.FC = () => {
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Quantity</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">No. of boxes/packs</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Remarks</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Action</th>
                               </tr>
                             </thead>
@@ -4561,7 +4717,8 @@ const InventoryPage: React.FC = () => {
                                     </select>
                                   </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2"><input type="number" min="0" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2"><input type="text" value={item.remarks || ''} onChange={(e) => handleIssueSlipItemChange(index, 'remarks', e.target.value)} placeholder="Remarks" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2 text-center">
                                     <button onClick={() => handleRemoveIssueSlipItem(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
                                   </td>
@@ -4573,13 +4730,27 @@ const InventoryPage: React.FC = () => {
                         <div className="mt-4 flex justify-end items-center gap-4">
                           <label className="text-sm font-bold text-gray-900">Total Number of Boxes / Packs:</label>
                           <input
-                            type="text"
+                            type="number"
+                            min="0"
                             value={outwardTotalBoxes}
                             onChange={(e) => setOutwardTotalBoxes(e.target.value)}
                             className="w-32 px-2 py-1 border border-gray-300 rounded text-sm font-bold text-right"
                           />
                         </div>
+
+                        {/* Reasons for Return Box */}
+                        <div className="mt-4">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2 font-bold uppercase tracking-tight">Reasons for Return</label>
+                          <textarea
+                            value={reasonsForReturn}
+                            onChange={(e) => setReasonsForReturn(e.target.value)}
+                            rows={3}
+                            placeholder="Enter reasons for return..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                          />
+                        </div>
                       </div>
+
 
                       <div className="mt-6">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Posting Note</label>
@@ -4675,6 +4846,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
+                            max={todayStr}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -5355,6 +5527,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
+                            max={todayStr}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -5775,13 +5948,13 @@ const InventoryPage: React.FC = () => {
                             <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
                               DATE
                             </label>
-                            <input
-                              type="date"
-                              value={issueSlipDate}
-                              onChange={(e) => setIssueSlipDate(e.target.value)}
-                              max={new Date().toISOString().split('T')[0]}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
-                            />
+                              <input
+                                type="date"
+                                value={issueSlipDate}
+                                onChange={(e) => setIssueSlipDate(e.target.value)}
+                                max={todayStr}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              />
                           </div>
                           <div>
                             <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
@@ -5982,13 +6155,46 @@ const InventoryPage: React.FC = () => {
                       {/* Basic Details */}
                       <div className="grid grid-cols-4 gap-5">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">Issue Slip No</label>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2 uppercase tracking-tight">Issue Slip Series</label>
+                          <select
+                            value={selectedIssueSlipSeriesName}
+                            onChange={(e) => {
+                              const seriesName = e.target.value;
+                              setSelectedIssueSlipSeriesName(seriesName);
+                              if (!seriesName) {
+                                setIssueSlipNumber('');
+                                return;
+                              }
+                              const seriesObj = issueSlipSeriesList.find((s: any) => s.name === seriesName);
+                              if (seriesObj) {
+                                setIssueSlipNumber(seriesObj.preview || '');
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">Select Series</option>
+                            {issueSlipSeriesList.filter(s => {
+                              const type = (s.issueSlipType || '').toLowerCase();
+                              if (issueSlipTab === 'inter-unit') {
+                                return type.includes('inter-unit') || type.includes('inter_unit') || type.includes('inter unit');
+                              }
+                              if (issueSlipTab === 'location-change') {
+                                return type.includes('location-change') || type.includes('location_change') || type.includes('location change');
+                              }
+                              return true;
+                            }).map((s: any) => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2 uppercase tracking-tight">Issue Slip No</label>
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            onChange={(e) => setIssueSlipNumber(e.target.value)}
-                            placeholder="Auto/Manual"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            readOnly
+                            placeholder="Auto-generated"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500 font-bold cursor-not-allowed"
                           />
                         </div>
                         <div>
@@ -5997,6 +6203,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
+                            max={todayStr}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -6069,6 +6276,7 @@ const InventoryPage: React.FC = () => {
                               <tr>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Code</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Name</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">HSN/SAC</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Qty</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Rate</th>
@@ -6277,7 +6485,7 @@ const InventoryPage: React.FC = () => {
                                 type="date"
                                 value={scrapProdDate}
                                 onChange={(e) => setScrapProdDate(e.target.value)}
-                                max={new Date().toISOString().split('T')[0]}
+                                max={todayStr}
                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                               />
                             </div>

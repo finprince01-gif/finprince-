@@ -12,7 +12,6 @@ class Migration(migrations.Migration):
     dependencies = [
         ('customerportal', '__first__'),
         ('masters', '__first__'),
-        ('vendors', '__first__'),
     ]
 
     operations = [
@@ -674,7 +673,7 @@ class Migration(migrations.Migration):
                 ('input_type', models.CharField(default='Intrastate', max_length=50)),
                 ('invoice_in_foreign_currency', models.CharField(default='No', max_length=10)),
                 ('supporting_document', models.FileField(blank=True, null=True, upload_to='purchase_documents/')),
-                ('vendor_basic_detail', models.ForeignKey(db_column='vendor_basic_detail_id', on_delete=django.db.models.deletion.RESTRICT, related_name='purchase_vouchers', to='vendors.vendormasterbasicdetail')),
+                # ('vendor_basic_detail', models.ForeignKey(db_column='vendor_basic_detail_id', on_delete=django.db.models.deletion.RESTRICT, related_name='purchase_vouchers', to='vendors.vendormasterbasicdetail')),
             ],
             options={
                 'db_table': 'voucher_purchase_supplier_details',
@@ -939,7 +938,6 @@ class Migration(migrations.Migration):
                 ('debit', models.DecimalField(decimal_places=2, default=0, max_digits=15)),
                 ('credit', models.DecimalField(decimal_places=2, default=0, max_digits=15)),
                 ('customer', models.ForeignKey(blank=True, db_column='customer_id', null=True, on_delete=django.db.models.deletion.SET_NULL, to='customerportal.customermastercustomerbasicdetails')),
-                ('vendor', models.ForeignKey(blank=True, db_column='vendor_id', null=True, on_delete=django.db.models.deletion.SET_NULL, to='vendors.vendormasterbasicdetail')),
                 ('ledger', models.ForeignKey(blank=True, db_column='ledger_id', null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='journal_entries', to='accounting.masterledger')),
             ],
             options={

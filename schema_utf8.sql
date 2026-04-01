@@ -1185,29 +1185,24 @@ CREATE TABLE `inventory_operation_consumption` (
   `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `issue_slip_no` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `issue_slip_series` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `date` date DEFAULT NULL,
   `time` time DEFAULT NULL,
   `status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Draft',
   `goods_from_location` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `goods_to_location` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `consumption_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fixed_asset_ledger` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expense_ledger` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `posting_note` text COLLATE utf8mb4_unicode_ci,
   `items` json DEFAULT NULL COMMENT 'List of items: item_code, quantity, rate, etc.',
   `delivery_challan` json DEFAULT NULL,
   `eway_bill_details` json DEFAULT NULL,
-  `dispatch_from` text COLLATE utf8mb4_unicode_ci,
-  `mode_of_transport` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `dispatch_date` date DEFAULT NULL,
-  `dispatch_time` time DEFAULT NULL,
-  `delivery_type` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `transporter_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `transporter_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `vehicle_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `lr_gr_consignment` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_ioc_tenant` (`tenant_id`),
   KEY `idx_ioc_issue_slip` (`issue_slip_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
 
 --
 -- Table structure for table `inventory_operation_interunit`
@@ -1384,11 +1379,12 @@ CREATE TABLE `inventory_operation_outward` (
   `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `outward_slip_no` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `issue_slip_series` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `date` date DEFAULT NULL,
   `time` time DEFAULT NULL,
   `outward_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'sales' COMMENT 'sales or purchase_return',
   `location_id` bigint DEFAULT NULL,
-  `sales_order_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sales_order_no` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `customer_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `supplier_invoice_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `vendor_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1397,18 +1393,10 @@ CREATE TABLE `inventory_operation_outward` (
   `gstin` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `total_boxes` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `posting_note` text COLLATE utf8mb4_unicode_ci,
+  `reasons_for_return` text COLLATE utf8mb4_unicode_ci,
   `items` json DEFAULT NULL COMMENT 'List of items: item_code, quantity, hsn, etc.',
   `delivery_challan` json DEFAULT NULL,
   `eway_bill_details` json DEFAULT NULL,
-  `dispatch_from` text COLLATE utf8mb4_unicode_ci,
-  `mode_of_transport` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `dispatch_date` date DEFAULT NULL,
-  `dispatch_time` time DEFAULT NULL,
-  `delivery_type` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `transporter_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `transporter_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `vehicle_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `lr_gr_consignment` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `customer_id` bigint DEFAULT NULL,
   `status` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'PENDING',
   `linked_sales_voucher_id` bigint DEFAULT NULL,
@@ -1424,6 +1412,7 @@ CREATE TABLE `inventory_operation_outward` (
   CONSTRAINT `fk_outward_sales` FOREIGN KEY (`linked_sales_voucher_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
 
 --
 -- Table structure for table `inventory_operation_production`

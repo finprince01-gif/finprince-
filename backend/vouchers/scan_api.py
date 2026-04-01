@@ -15,7 +15,8 @@ from django.core.cache import cache
 from django.db import transaction
 from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails
 from accounting.serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer
-import google.generativeai as genai
+from google import genai
+import google.generativeai as old_genai # Keeping for specific needs if any, but transitioning
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 
@@ -23,7 +24,11 @@ from openpyxl.styles import Font, Alignment, PatternFill
 # Configure Gemini
 GEN_API_KEY = os.environ.get('GEMINI_API_KEY')
 if GEN_API_KEY:
-    genai.configure(api_key=GEN_API_KEY)
+    try:
+        # For backward compatibility if any internal code uses genai.configure
+        old_genai.configure(api_key=GEN_API_KEY)
+    except:
+        pass
 
 # Header-level fields (appear once per invoice, not per line item)
 HEADER_FIELDS = [

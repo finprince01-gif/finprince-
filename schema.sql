@@ -53,3 +53,58 @@ CREATE TABLE `receipt_voucher_items` (
 ALTER TABLE `receipt_vouchers`
 ADD COLUMN `receive_in_ledger_id` bigint NULL AFTER `voucher_type`,
 ADD COLUMN `customer_ledger_id` bigint NULL AFTER `receive_in_ledger_id`;
+
+CREATE TABLE `inventory_operation_outward` ( 
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `outward_slip_no` varchar(100) NOT NULL,
+  `issue_slip_series` varchar(100) DEFAULT NULL,
+  `date` date DEFAULT NULL,
+  `time` time DEFAULT NULL,
+  `outward_type` varchar(50) NOT NULL DEFAULT 'sales',
+  `location_id` bigint DEFAULT NULL,
+  `sales_order_no` varchar(500) DEFAULT NULL,
+  `customer_name` varchar(255) DEFAULT NULL,
+  `supplier_invoice_no` varchar(100) DEFAULT NULL,
+  `vendor_name` varchar(255) DEFAULT NULL,
+  `branch` varchar(100) DEFAULT NULL,
+  `address` text,
+  `gstin` varchar(20) DEFAULT NULL,
+  `total_boxes` varchar(50) DEFAULT NULL,
+  `posting_note` text,
+  `reasons_for_return` text,
+  `items` json DEFAULT NULL,
+  `delivery_challan` json DEFAULT NULL,
+  `eway_bill_details` json DEFAULT NULL,
+  `customer_id` bigint DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'PENDING',
+  `linked_sales_voucher_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_outward_voucher` (`linked_sales_voucher_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `inventory_operation_consumption` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `issue_slip_no` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `issue_slip_series` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `date` date DEFAULT NULL,
+  `time` time DEFAULT NULL,
+  `status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Draft',
+  `goods_from_location` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `consumption_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fixed_asset_ledger` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expense_ledger` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `posting_note` text COLLATE utf8mb4_unicode_ci,
+  `items` json DEFAULT NULL,
+  `delivery_challan` json DEFAULT NULL,
+  `eway_bill_details` json DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ioc_tenant` (`tenant_id`),
+  KEY `idx_ioc_issue_slip` (`issue_slip_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
