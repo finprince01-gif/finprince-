@@ -426,9 +426,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         status = 'Due Today';
                     }
 
-                    // Resolve the outstanding amount from rich payment details or standard balance
+                    // Resolve the outstanding amount using the actual payment balance
                     const outstandingAmount = item.payment_details 
-                        ? Number(item.payment_details.payment_payable || 0)
+                        ? Number(item.payment_details.payment_balance ?? item.payment_details.payment_payable ?? 0)
                         : (typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0));
 
                     const dueDate = new Date(d1);

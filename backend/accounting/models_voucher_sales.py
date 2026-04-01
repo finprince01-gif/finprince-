@@ -101,7 +101,14 @@ class VoucherSalesInvoiceDetails(BaseModel):
     # Status Tracking
     status = models.CharField(
         max_length=20, 
-        choices=[('draft', 'Draft'), ('pending', 'Pending Approval'), ('completed', 'Completed'), ('cancelled', 'Cancelled')],
+        choices=[
+            ('draft', 'Draft'), 
+            ('pending', 'Pending Approval'), 
+            ('completed', 'Completed'), 
+            ('cancelled', 'Cancelled'),
+            ('received', 'Received'),
+            ('partially received', 'Partially Received')
+        ],
         default='draft'
     )
     current_step = models.IntegerField(default=1, help_text="Current creation step (1-5)")
@@ -193,6 +200,10 @@ class VoucherSalesPaymentDetails(BaseModel):
     payment_tds_gst = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     payment_advance = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     payment_payable = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    
+    # Tracking (Quantitative)
+    payment_received = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    payment_balance = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     
     # Notes
     posting_note = models.TextField(null=True, blank=True)

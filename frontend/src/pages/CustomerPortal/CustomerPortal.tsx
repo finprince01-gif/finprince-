@@ -4083,9 +4083,9 @@ const LongTermContractsContent: React.FC = () => {
                                                             {(() => {
                                                                 const item = contractStockItems.find(i => i.code === product.itemCode || i.name === product.itemName);
                                                                 if (!item) return null;
-                                                                
+
                                                                 const units = [...new Set([item.uom, item.alternateUom].filter(u => u && u.trim() !== ''))];
-                                                                
+
                                                                 return units.map((u, ui) => (
                                                                     <option key={ui} value={u as string}>{u as string}</option>
                                                                 ));
@@ -5685,7 +5685,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
             setError(null);
             try {
                 const [salesData, transactionsData] = await Promise.all([
-                    httpClient.get<any[]>(`/api/voucher-sales-new/`),
+                    httpClient.get<any[]>(`/api/voucher-sales-new/?show_all=true`),
                     httpClient.get<any[]>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
                 ]);
 
@@ -5707,7 +5707,9 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         postFrom: 'Sales' as TransactionType,
                         referenceNo: inv.sales_invoice_no,
                         ledger: 'Sales',
-                        status: (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
+                        status: (inv.status && inv.status.toLowerCase() === 'received') ? 'Received'
+                            : (inv.status && inv.status.toLowerCase() === 'partially received') ? 'Partially Received'
+                            : (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
                         debit: parseFloat(inv.payment_details?.payment_payable || 0),
                         credit: 0,
                         runningBalance: 0,
@@ -5742,8 +5744,8 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     const isDue = diffDays > creditPeriod;
 
-                    let finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending') 
-                        ? t.payment_status 
+                    let finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending')
+                        ? t.payment_status
                         : (transType === 'Receipt' ? 'Not Utilized' : (transType === 'Sales' ? (isDue ? 'Due' : 'Not Due') : 'Not Due'));
 
                     return {
@@ -6608,8 +6610,8 @@ function SalesContent() {
                 } as any;
             }
 
-            // Extract total amount from invoice
-            const amount = parseFloat(inv.payment_details?.payment_payable || 0);
+            // Extract outstanding balance from invoice
+            const amount = parseFloat(inv.payment_details?.payment_balance ?? inv.payment_details?.payment_payable ?? 0);
 
             // Calculate aging days relative to credit period
             const invDate = new Date(inv.date);
@@ -6618,7 +6620,7 @@ function SalesContent() {
             const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
             const diffTime = d2.getTime() - d1.getTime();
             const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            
+
             const creditPeriod = parseInt(customer.credit_period || '0', 10);
             const overdueDays = diffDays - creditPeriod;
 

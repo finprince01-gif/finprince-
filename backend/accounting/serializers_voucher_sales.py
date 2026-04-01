@@ -28,7 +28,7 @@ class VoucherSalesPaymentDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = VoucherSalesPaymentDetails
         exclude = ('invoice', 'tenant_id')
-        read_only_fields = ('id', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at', 'payment_received', 'payment_balance')
 
 class VoucherSalesDispatchDetailsSerializer(serializers.ModelSerializer):
     dispatch_document = serializers.FileField(required=False, allow_null=True)
@@ -64,7 +64,7 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             'sales_order_no', 'place_of_supply', 'reverse_charge', 'invoice_type',
             'gst_export_type', 'port_code', 'shipping_bill_number', 'shipping_bill_date',
             'ecommerce_gstin', 'irn', 'ack_no', 'created_at', 'updated_at',
-            'posting_status', 'posting_error', 'outward_slip_id',
+            'posting_status', 'posting_error', 'outward_slip_id', 'status',
             # Nested Fields
             'items', 'foreign_items', 'payment_details', 'dispatch_details', 'eway_bill_details'
         ]
