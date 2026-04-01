@@ -412,19 +412,30 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             if (response && Array.isArray(response)) {
                 const today = new Date();
                 
-                // Map API response to BulkTransaction format
                 const mappedTransactions: BulkTransaction[] = response.map((item: any) => {
                     const invDate = new Date(item.date || getCurrentDate());
                     const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
                     const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                     const diffTime = d2.getTime() - d1.getTime();
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                    const status = diffDays > creditPeriod ? 'Due' : 'Not Due';
+                    
+                    let status = 'Not Due';
+                    if (diffDays > creditPeriod) {
+                        status = 'Due';
+                    } else if (diffDays === creditPeriod) {
+                        status = 'Due Today';
+                    }
 
                     // Resolve the outstanding amount from rich payment details or standard balance
                     const outstandingAmount = item.payment_details 
                         ? Number(item.payment_details.payment_payable || 0)
                         : (typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0));
+
+                    const dueDate = new Date(d1);
+                    dueDate.setDate(dueDate.getDate() + creditPeriod);
+                    const dueDateStr = dueDate.getFullYear() + '-' + 
+                                       String(dueDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                                       String(dueDate.getDate()).padStart(2, '0');
 
                     return {
                         id: item.id?.toString() || Math.random().toString(),
@@ -433,9 +444,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         amount: outstandingAmount,
                         receiveNow: 0,
                         selected: false,
-                        status: status
+                        status: status,
+                        dueDate: dueDateStr
                     };
-                });
+                }).filter(t => t.status === 'Due' || t.status === 'Due Today');
 
                 const validTransactions = mappedTransactions.filter(t => t.amount > 0);
                 setBulkTransactions(validTransactions);
@@ -449,6 +461,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     status: t.status
                 }));
                 setPendingTransactions(mappedPending);
+
             } else {
                 setBulkTransactions([]);
                 setPendingTransactions([]);

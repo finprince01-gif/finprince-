@@ -76,6 +76,14 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
         return Response({'is_unique': True})
 
+    def _parse_credit_days(self, raw_val):
+        import re
+        raw = str(raw_val).strip()
+        if raw.isdigit():
+            return int(raw)
+        m = re.search(r"(\d+)", raw)
+        return int(m.group(1)) if m else 0
+
     @action(detail=False, methods=['get'], url_path='pending-invoices')
     def pending_invoices(self, request):
         ledger_id = request.query_params.get('ledger_id')
@@ -110,20 +118,21 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
         ).order_by('-date')
         
         # 3. Get Credit Period for this ledger
-        from vendors.models import VendorMasterTerms, VendorMasterBasicDetail
-        import re
-        
         credit_period_days = 0
+        from vendors.models import VendorMasterTerms, VendorMasterBasicDetail
         vendor = VendorMasterBasicDetail.objects.filter(ledger_id=ledger_id, tenant_id=tenant_id).first()
         if vendor:
             terms = VendorMasterTerms.objects.filter(vendor_basic_detail=vendor, tenant_id=tenant_id).first()
             if terms and terms.credit_period:
-                raw = str(terms.credit_period).strip()
-                if raw.isdigit():
-                    credit_period_days = int(raw)
-                else:
-                    m = re.search(r'(\d+)', raw)
-                    if m: credit_period_days = int(m.group(1))
+                credit_period_days = self._parse_credit_days(terms.credit_period)
+        else:
+            # Check customers
+            from customerportal.database import CustomerMasterCustomerTermsCondition, CustomerMasterCustomerBasicDetails
+            customer = CustomerMasterCustomerBasicDetails.objects.filter(ledger_id=ledger_id, tenant_id=tenant_id).first()
+            if customer:
+                terms = CustomerMasterCustomerTermsCondition.objects.filter(customer_basic_detail=customer, tenant_id=tenant_id).first()
+                if terms and terms.credit_period:
+                    credit_period_days = self._parse_credit_days(terms.credit_period)
 
         from datetime import timedelta
         today = datetime.date.today()
@@ -146,20 +155,23 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                 elif days_to_due == 0:
                     due_status = "Due Today"
             
-            results.append({
-                'id': v.id,
-                'date': v.date.strftime('%Y-%m-%d') if v.date else '',
-                'reference_number': v.voucher_number or v.invoice_no or f"V-{v.id}",
-                'amount': float(v_amt),
-                'pending': float(v_amt), 
-                'type': v.type,
-                'credit_period': credit_period_days,
-                'due_date': due_date.strftime('%Y-%m-%d') if due_date else '',
-                'due_status': due_status,
-                'days_to_due': days_to_due
-            })
+            # FILTER: only show "Due" or "Due Today" as requested by user
+            if due_status in ["Due", "Due Today"]:
+                results.append({
+                    'id': v.id,
+                    'date': v.date.strftime('%Y-%m-%d') if v.date else '',
+                    'reference_number': v.voucher_number or v.invoice_no or f"V-{v.id}",
+                    'amount': float(v_amt),
+                    'pending': float(v_amt), 
+                    'type': v.type,
+                    'credit_period': credit_period_days,
+                    'due_date': due_date.strftime('%Y-%m-%d') if due_date else '',
+                    'due_status': due_status,
+                    'days_to_due': days_to_due
+                })
             
         return Response(results)
+
 
     def create(self, request, *args, **kwargs):
         bank_transaction_id = request.data.get('bank_transaction_id')

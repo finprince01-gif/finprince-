@@ -25,6 +25,7 @@ from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesDispatchDetails,
     VoucherSalesEwayBill
 )
+from .models_voucher_allocation import VoucherAllocation
 
 
 # ============================================================================

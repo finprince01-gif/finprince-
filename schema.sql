@@ -1,4 +1,27 @@
-﻿
+-- MySQL dump 10.13  Distrib 8.0.44, for Win64 (x86_64)
+--
+-- Host: localhost    Database: ai_accounting
+-- ------------------------------------------------------
+-- Server version	8.0.44
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `advance_allocation_map`
+--
+
+DROP TABLE IF EXISTS `advance_allocation_map`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `advance_allocation_map` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL,
@@ -20,6 +43,7 @@ CREATE TABLE `advance_allocation_map` (
 -- Table structure for table `advance_applications`
 --
 
+DROP TABLE IF EXISTS `advance_applications`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `advance_applications` (
@@ -38,6 +62,7 @@ CREATE TABLE `advance_applications` (
 -- Table structure for table `advance_master`
 --
 
+DROP TABLE IF EXISTS `advance_master`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `advance_master` (
@@ -61,6 +86,7 @@ CREATE TABLE `advance_master` (
 -- Table structure for table `ai_usage`
 --
 
+DROP TABLE IF EXISTS `ai_usage`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ai_usage` (
@@ -79,6 +105,7 @@ CREATE TABLE `ai_usage` (
 -- Table structure for table `amount_transactions`
 --
 
+DROP TABLE IF EXISTS `amount_transactions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `amount_transactions` (
@@ -109,6 +136,7 @@ CREATE TABLE `amount_transactions` (
 -- Table structure for table `answers`
 --
 
+DROP TABLE IF EXISTS `answers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `answers` (
@@ -127,6 +155,7 @@ CREATE TABLE `answers` (
 -- Table structure for table `auth_group`
 --
 
+DROP TABLE IF EXISTS `auth_group`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `auth_group` (
@@ -141,6 +170,7 @@ CREATE TABLE `auth_group` (
 -- Table structure for table `auth_group_permissions`
 --
 
+DROP TABLE IF EXISTS `auth_group_permissions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `auth_group_permissions` (
@@ -159,6 +189,7 @@ CREATE TABLE `auth_group_permissions` (
 -- Table structure for table `auth_permission`
 --
 
+DROP TABLE IF EXISTS `auth_permission`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `auth_permission` (
@@ -169,13 +200,14 @@ CREATE TABLE `auth_permission` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `auth_permission_content_type_id_codename_01ab375a_uniq` (`content_type_id`,`codename`),
   CONSTRAINT `auth_permission_content_type_id_2f476e4b_fk_django_co` FOREIGN KEY (`content_type_id`) REFERENCES `django_content_type` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=501 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=505 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `bank_reconciliation_links`
 --
 
+DROP TABLE IF EXISTS `bank_reconciliation_links`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `bank_reconciliation_links` (
@@ -206,6 +238,7 @@ CREATE TABLE `bank_reconciliation_links` (
 -- Table structure for table `bank_statement_transactions`
 --
 
+DROP TABLE IF EXISTS `bank_statement_transactions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `bank_statement_transactions` (
@@ -246,6 +279,7 @@ CREATE TABLE `bank_statement_transactions` (
 -- Table structure for table `bulk_invoice_jobs`
 --
 
+DROP TABLE IF EXISTS `bulk_invoice_jobs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `bulk_invoice_jobs` (
@@ -272,6 +306,7 @@ CREATE TABLE `bulk_invoice_jobs` (
 -- Table structure for table `company_informations`
 --
 
+DROP TABLE IF EXISTS `company_informations`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `company_informations` (
@@ -315,6 +350,7 @@ CREATE TABLE `company_informations` (
 -- Table structure for table `customer_master`
 --
 
+DROP TABLE IF EXISTS `customer_master`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master` (
@@ -354,6 +390,7 @@ CREATE TABLE `customer_master` (
 -- Table structure for table `customer_master_category`
 --
 
+DROP TABLE IF EXISTS `customer_master_category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_category` (
@@ -377,6 +414,7 @@ CREATE TABLE `customer_master_category` (
 -- Table structure for table `customer_master_customer_banking`
 --
 
+DROP TABLE IF EXISTS `customer_master_customer_banking`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_banking` (
@@ -404,6 +442,7 @@ CREATE TABLE `customer_master_customer_banking` (
 -- Table structure for table `customer_master_customer_basicdetails`
 --
 
+DROP TABLE IF EXISTS `customer_master_customer_basicdetails`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_basicdetails` (
@@ -441,6 +480,7 @@ CREATE TABLE `customer_master_customer_basicdetails` (
 -- Table structure for table `customer_master_customer_gstdetails`
 --
 
+DROP TABLE IF EXISTS `customer_master_customer_gstdetails`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_gstdetails` (
@@ -476,6 +516,7 @@ CREATE TABLE `customer_master_customer_gstdetails` (
 -- Table structure for table `customer_master_customer_productservice`
 --
 
+DROP TABLE IF EXISTS `customer_master_customer_productservice`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_productservice` (
@@ -504,6 +545,7 @@ CREATE TABLE `customer_master_customer_productservice` (
 -- Table structure for table `customer_master_customer_tds`
 --
 
+DROP TABLE IF EXISTS `customer_master_customer_tds`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_tds` (
@@ -533,6 +575,7 @@ CREATE TABLE `customer_master_customer_tds` (
 -- Table structure for table `customer_master_customer_termscondition`
 --
 
+DROP TABLE IF EXISTS `customer_master_customer_termscondition`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_termscondition` (
@@ -561,6 +604,7 @@ CREATE TABLE `customer_master_customer_termscondition` (
 -- Table structure for table `customer_master_longtermcontracts_basicdetails`
 --
 
+DROP TABLE IF EXISTS `customer_master_longtermcontracts_basicdetails`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
@@ -599,6 +643,7 @@ CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
 -- Table structure for table `customer_master_longtermcontracts_productservices`
 --
 
+DROP TABLE IF EXISTS `customer_master_longtermcontracts_productservices`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_longtermcontracts_productservices` (
@@ -613,7 +658,7 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
   `qty_max` decimal(15,2) DEFAULT NULL COMMENT 'Maximum quantity',
   `price_min` decimal(15,2) DEFAULT NULL COMMENT 'Minimum price',
   `price_max` decimal(15,2) DEFAULT NULL COMMENT 'Maximum price',
-  `acceptable_price_deviation` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'e.g., Γö¼ΓûÆ5%',
+  `acceptable_price_deviation` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'e.g., ┬▒5%',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -629,6 +674,7 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
 -- Table structure for table `customer_master_longtermcontracts_termscondition`
 --
 
+DROP TABLE IF EXISTS `customer_master_longtermcontracts_termscondition`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_longtermcontracts_termscondition` (
@@ -656,6 +702,7 @@ CREATE TABLE `customer_master_longtermcontracts_termscondition` (
 -- Table structure for table `customer_masters_salesorder`
 --
 
+DROP TABLE IF EXISTS `customer_masters_salesorder`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_masters_salesorder` (
@@ -686,6 +733,7 @@ CREATE TABLE `customer_masters_salesorder` (
 -- Table structure for table `customer_masters_salesquotation`
 --
 
+DROP TABLE IF EXISTS `customer_masters_salesquotation`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_masters_salesquotation` (
@@ -716,6 +764,7 @@ CREATE TABLE `customer_masters_salesquotation` (
 -- Table structure for table `customer_transaction`
 --
 
+DROP TABLE IF EXISTS `customer_transaction`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction` (
@@ -737,13 +786,14 @@ CREATE TABLE `customer_transaction` (
   PRIMARY KEY (`id`),
   KEY `customer_transaction_tenant_id_customer_id_idx` (`tenant_id`,`customer_id`),
   KEY `customer_transaction_date_idx` (`transaction_date`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `customer_transaction_salesorder_basicdetails`
 --
 
+DROP TABLE IF EXISTS `customer_transaction_salesorder_basicdetails`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_basicdetails` (
@@ -778,6 +828,7 @@ CREATE TABLE `customer_transaction_salesorder_basicdetails` (
 -- Table structure for table `customer_transaction_salesorder_deliveryterms`
 --
 
+DROP TABLE IF EXISTS `customer_transaction_salesorder_deliveryterms`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_deliveryterms` (
@@ -800,6 +851,7 @@ CREATE TABLE `customer_transaction_salesorder_deliveryterms` (
 -- Table structure for table `customer_transaction_salesorder_items`
 --
 
+DROP TABLE IF EXISTS `customer_transaction_salesorder_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_items` (
@@ -829,6 +881,7 @@ CREATE TABLE `customer_transaction_salesorder_items` (
 -- Table structure for table `customer_transaction_salesorder_payment_salesperson`
 --
 
+DROP TABLE IF EXISTS `customer_transaction_salesorder_payment_salesperson`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_payment_salesperson` (
@@ -852,6 +905,7 @@ CREATE TABLE `customer_transaction_salesorder_payment_salesperson` (
 -- Table structure for table `customer_transaction_salesorder_quotation_details`
 --
 
+DROP TABLE IF EXISTS `customer_transaction_salesorder_quotation_details`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_quotation_details` (
@@ -873,6 +927,7 @@ CREATE TABLE `customer_transaction_salesorder_quotation_details` (
 -- Table structure for table `customer_transaction_salesquotation_general`
 --
 
+DROP TABLE IF EXISTS `customer_transaction_salesquotation_general`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesquotation_general` (
@@ -897,6 +952,7 @@ CREATE TABLE `customer_transaction_salesquotation_general` (
 -- Table structure for table `customer_transaction_salesquotation_specific`
 --
 
+DROP TABLE IF EXISTS `customer_transaction_salesquotation_specific`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesquotation_specific` (
@@ -927,6 +983,7 @@ CREATE TABLE `customer_transaction_salesquotation_specific` (
 -- Table structure for table `django_admin_log`
 --
 
+DROP TABLE IF EXISTS `django_admin_log`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `django_admin_log` (
@@ -951,6 +1008,7 @@ CREATE TABLE `django_admin_log` (
 -- Table structure for table `django_content_type`
 --
 
+DROP TABLE IF EXISTS `django_content_type`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `django_content_type` (
@@ -959,13 +1017,14 @@ CREATE TABLE `django_content_type` (
   `model` varchar(100) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `django_content_type_app_label_model_76bd3d3b_uniq` (`app_label`,`model`)
-) ENGINE=InnoDB AUTO_INCREMENT=126 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `django_migrations`
 --
 
+DROP TABLE IF EXISTS `django_migrations`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `django_migrations` (
@@ -974,13 +1033,14 @@ CREATE TABLE `django_migrations` (
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `applied` datetime(6) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `django_session`
 --
 
+DROP TABLE IF EXISTS `django_session`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `django_session` (
@@ -996,6 +1056,7 @@ CREATE TABLE `django_session` (
 -- Table structure for table `entries`
 --
 
+DROP TABLE IF EXISTS `entries`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `entries` (
@@ -1018,13 +1079,14 @@ CREATE TABLE `entries` (
   KEY `entries_tenant_id_idx` (`tenant_id`),
   KEY `entries_voucher_sync_idx` (`tenant_id`,`voucher_type`,`voucher_id`),
   KEY `entries_ledger_id_idx` (`ledger_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=45 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=47 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `extracted_invoices`
 --
 
+DROP TABLE IF EXISTS `extracted_invoices`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `extracted_invoices` (
@@ -1087,6 +1149,7 @@ CREATE TABLE `extracted_invoices` (
 -- Table structure for table `extraction_performance`
 --
 
+DROP TABLE IF EXISTS `extraction_performance`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `extraction_performance` (
@@ -1102,6 +1165,7 @@ CREATE TABLE `extraction_performance` (
 -- Table structure for table `gst_apiusagelog`
 --
 
+DROP TABLE IF EXISTS `gst_apiusagelog`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `gst_apiusagelog` (
@@ -1122,6 +1186,7 @@ CREATE TABLE `gst_apiusagelog` (
 -- Table structure for table `hsn_gst_master`
 --
 
+DROP TABLE IF EXISTS `hsn_gst_master`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `hsn_gst_master` (
@@ -1142,6 +1207,7 @@ CREATE TABLE `hsn_gst_master` (
 -- Table structure for table `inventory_master_category`
 --
 
+DROP TABLE IF EXISTS `inventory_master_category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_category` (
@@ -1167,6 +1233,7 @@ CREATE TABLE `inventory_master_category` (
 -- Table structure for table `inventory_master_grn`
 --
 
+DROP TABLE IF EXISTS `inventory_master_grn`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_grn` (
@@ -1191,6 +1258,7 @@ CREATE TABLE `inventory_master_grn` (
 -- Table structure for table `inventory_master_inventoryitems`
 --
 
+DROP TABLE IF EXISTS `inventory_master_inventoryitems`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_inventoryitems` (
@@ -1232,6 +1300,7 @@ CREATE TABLE `inventory_master_inventoryitems` (
 -- Table structure for table `inventory_master_issueslip`
 --
 
+DROP TABLE IF EXISTS `inventory_master_issueslip`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_issueslip` (
@@ -1256,6 +1325,7 @@ CREATE TABLE `inventory_master_issueslip` (
 -- Table structure for table `inventory_master_location`
 --
 
+DROP TABLE IF EXISTS `inventory_master_location`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_location` (
@@ -1287,6 +1357,7 @@ CREATE TABLE `inventory_master_location` (
 -- Table structure for table `inventory_operation_consumption`
 --
 
+DROP TABLE IF EXISTS `inventory_operation_consumption`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_consumption` (
@@ -1323,6 +1394,7 @@ CREATE TABLE `inventory_operation_consumption` (
 -- Table structure for table `inventory_operation_interunit`
 --
 
+DROP TABLE IF EXISTS `inventory_operation_interunit`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_interunit` (
@@ -1361,6 +1433,7 @@ CREATE TABLE `inventory_operation_interunit` (
 -- Table structure for table `inventory_operation_jobwork`
 --
 
+DROP TABLE IF EXISTS `inventory_operation_jobwork`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_jobwork` (
@@ -1413,6 +1486,7 @@ CREATE TABLE `inventory_operation_jobwork` (
 -- Table structure for table `inventory_operation_locationchange`
 --
 
+DROP TABLE IF EXISTS `inventory_operation_locationchange`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_locationchange` (
@@ -1449,6 +1523,7 @@ CREATE TABLE `inventory_operation_locationchange` (
 -- Table structure for table `inventory_operation_new_grn`
 --
 
+DROP TABLE IF EXISTS `inventory_operation_new_grn`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_new_grn` (
@@ -1481,6 +1556,7 @@ CREATE TABLE `inventory_operation_new_grn` (
 -- Table structure for table `inventory_operation_outward`
 --
 
+DROP TABLE IF EXISTS `inventory_operation_outward`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_outward` (
@@ -1534,6 +1610,7 @@ CREATE TABLE `inventory_operation_outward` (
 -- Table structure for table `inventory_operation_production`
 --
 
+DROP TABLE IF EXISTS `inventory_operation_production`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_production` (
@@ -1576,6 +1653,7 @@ CREATE TABLE `inventory_operation_production` (
 -- Table structure for table `inventory_operation_scrap`
 --
 
+DROP TABLE IF EXISTS `inventory_operation_scrap`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_scrap` (
@@ -1612,6 +1690,7 @@ CREATE TABLE `inventory_operation_scrap` (
 -- Table structure for table `inventory_unit`
 --
 
+DROP TABLE IF EXISTS `inventory_unit`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_unit` (
@@ -1631,6 +1710,7 @@ CREATE TABLE `inventory_unit` (
 -- Table structure for table `invoice_ocr_temp`
 --
 
+DROP TABLE IF EXISTS `invoice_ocr_temp`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `invoice_ocr_temp` (
@@ -1675,6 +1755,7 @@ CREATE TABLE `invoice_ocr_temp` (
 -- Table structure for table `invoice_processing_items`
 --
 
+DROP TABLE IF EXISTS `invoice_processing_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `invoice_processing_items` (
@@ -1705,6 +1786,7 @@ CREATE TABLE `invoice_processing_items` (
 -- Table structure for table `invoice_temp_ocr`
 --
 
+DROP TABLE IF EXISTS `invoice_temp_ocr`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `invoice_temp_ocr` (
@@ -1733,6 +1815,7 @@ CREATE TABLE `invoice_temp_ocr` (
 -- Table structure for table `master_chart_of_accounts`
 --
 
+DROP TABLE IF EXISTS `master_chart_of_accounts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_chart_of_accounts` (
@@ -1759,6 +1842,7 @@ CREATE TABLE `master_chart_of_accounts` (
 -- Table structure for table `master_hierarchy_raw`
 --
 
+DROP TABLE IF EXISTS `master_hierarchy_raw`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_hierarchy_raw` (
@@ -1788,6 +1872,7 @@ CREATE TABLE `master_hierarchy_raw` (
 -- Table structure for table `master_ledger_groups`
 --
 
+DROP TABLE IF EXISTS `master_ledger_groups`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_ledger_groups` (
@@ -1809,6 +1894,7 @@ CREATE TABLE `master_ledger_groups` (
 -- Table structure for table `master_ledgers`
 --
 
+DROP TABLE IF EXISTS `master_ledgers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_ledgers` (
@@ -1849,6 +1935,7 @@ CREATE TABLE `master_ledgers` (
 -- Table structure for table `master_voucher_contra`
 --
 
+DROP TABLE IF EXISTS `master_voucher_contra`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_contra` (
@@ -1877,6 +1964,7 @@ CREATE TABLE `master_voucher_contra` (
 -- Table structure for table `master_voucher_creditnote`
 --
 
+DROP TABLE IF EXISTS `master_voucher_creditnote`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_creditnote` (
@@ -1905,6 +1993,7 @@ CREATE TABLE `master_voucher_creditnote` (
 -- Table structure for table `master_voucher_debitnote`
 --
 
+DROP TABLE IF EXISTS `master_voucher_debitnote`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_debitnote` (
@@ -1933,6 +2022,7 @@ CREATE TABLE `master_voucher_debitnote` (
 -- Table structure for table `master_voucher_expenses`
 --
 
+DROP TABLE IF EXISTS `master_voucher_expenses`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_expenses` (
@@ -1961,6 +2051,7 @@ CREATE TABLE `master_voucher_expenses` (
 -- Table structure for table `master_voucher_journal`
 --
 
+DROP TABLE IF EXISTS `master_voucher_journal`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_journal` (
@@ -1989,6 +2080,7 @@ CREATE TABLE `master_voucher_journal` (
 -- Table structure for table `master_voucher_payments`
 --
 
+DROP TABLE IF EXISTS `master_voucher_payments`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_payments` (
@@ -2010,13 +2102,14 @@ CREATE TABLE `master_voucher_payments` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_payments` (`tenant_id`),
   KEY `idx_voucher_name_payments` (`voucher_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `master_voucher_purchases`
 --
 
+DROP TABLE IF EXISTS `master_voucher_purchases`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_purchases` (
@@ -2045,6 +2138,7 @@ CREATE TABLE `master_voucher_purchases` (
 -- Table structure for table `master_voucher_receipts`
 --
 
+DROP TABLE IF EXISTS `master_voucher_receipts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_receipts` (
@@ -2073,6 +2167,7 @@ CREATE TABLE `master_voucher_receipts` (
 -- Table structure for table `master_voucher_sales`
 --
 
+DROP TABLE IF EXISTS `master_voucher_sales`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_sales` (
@@ -2101,6 +2196,7 @@ CREATE TABLE `master_voucher_sales` (
 -- Table structure for table `password_reset_otps`
 --
 
+DROP TABLE IF EXISTS `password_reset_otps`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `password_reset_otps` (
@@ -2121,6 +2217,7 @@ CREATE TABLE `password_reset_otps` (
 -- Table structure for table `payment_voucher_items`
 --
 
+DROP TABLE IF EXISTS `payment_voucher_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payment_voucher_items` (
@@ -2143,13 +2240,14 @@ CREATE TABLE `payment_voucher_items` (
   CONSTRAINT `fk_pvi_pay_to` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `fk_pvi_pay_to_ledger` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `fk_pvi_voucher` FOREIGN KEY (`voucher_id`) REFERENCES `payment_vouchers` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `payment_vouchers`
 --
 
+DROP TABLE IF EXISTS `payment_vouchers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payment_vouchers` (
@@ -2176,13 +2274,14 @@ CREATE TABLE `payment_vouchers` (
   KEY `idx_pv_voucher_number` (`voucher_number`),
   KEY `idx_pv_source` (`tenant_id`),
   CONSTRAINT `fk_pv_pay_from` FOREIGN KEY (`pay_from_id`) REFERENCES `master_ledgers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `payroll_attendance`
 --
 
+DROP TABLE IF EXISTS `payroll_attendance`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_attendance` (
@@ -2210,6 +2309,7 @@ CREATE TABLE `payroll_attendance` (
 -- Table structure for table `payroll_employee`
 --
 
+DROP TABLE IF EXISTS `payroll_employee`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee` (
@@ -2252,6 +2352,7 @@ CREATE TABLE `payroll_employee` (
 -- Table structure for table `payroll_employee_bank_details`
 --
 
+DROP TABLE IF EXISTS `payroll_employee_bank_details`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_bank_details` (
@@ -2275,6 +2376,7 @@ CREATE TABLE `payroll_employee_bank_details` (
 -- Table structure for table `payroll_employee_basic_details`
 --
 
+DROP TABLE IF EXISTS `payroll_employee_basic_details`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_basic_details` (
@@ -2303,6 +2405,7 @@ CREATE TABLE `payroll_employee_basic_details` (
 -- Table structure for table `payroll_employee_employment`
 --
 
+DROP TABLE IF EXISTS `payroll_employee_employment`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_employment` (
@@ -2326,6 +2429,7 @@ CREATE TABLE `payroll_employee_employment` (
 -- Table structure for table `payroll_employee_salary`
 --
 
+DROP TABLE IF EXISTS `payroll_employee_salary`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_salary` (
@@ -2347,6 +2451,7 @@ CREATE TABLE `payroll_employee_salary` (
 -- Table structure for table `payroll_employee_statutory`
 --
 
+DROP TABLE IF EXISTS `payroll_employee_statutory`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_statutory` (
@@ -2370,6 +2475,7 @@ CREATE TABLE `payroll_employee_statutory` (
 -- Table structure for table `payroll_leave_application`
 --
 
+DROP TABLE IF EXISTS `payroll_leave_application`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_leave_application` (
@@ -2399,6 +2505,7 @@ CREATE TABLE `payroll_leave_application` (
 -- Table structure for table `payroll_pay_run`
 --
 
+DROP TABLE IF EXISTS `payroll_pay_run`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_pay_run` (
@@ -2430,6 +2537,7 @@ CREATE TABLE `payroll_pay_run` (
 -- Table structure for table `payroll_pay_run_detail`
 --
 
+DROP TABLE IF EXISTS `payroll_pay_run_detail`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_pay_run_detail` (
@@ -2467,6 +2575,7 @@ CREATE TABLE `payroll_pay_run_detail` (
 -- Table structure for table `payroll_salary_component`
 --
 
+DROP TABLE IF EXISTS `payroll_salary_component`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_salary_component` (
@@ -2491,6 +2600,7 @@ CREATE TABLE `payroll_salary_component` (
 -- Table structure for table `payroll_salary_template`
 --
 
+DROP TABLE IF EXISTS `payroll_salary_template`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_salary_template` (
@@ -2511,6 +2621,7 @@ CREATE TABLE `payroll_salary_template` (
 -- Table structure for table `payroll_salary_template_component`
 --
 
+DROP TABLE IF EXISTS `payroll_salary_template_component`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_salary_template_component` (
@@ -2530,6 +2641,7 @@ CREATE TABLE `payroll_salary_template_component` (
 -- Table structure for table `payroll_statutory_configuration`
 --
 
+DROP TABLE IF EXISTS `payroll_statutory_configuration`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_statutory_configuration` (
@@ -2554,6 +2666,7 @@ CREATE TABLE `payroll_statutory_configuration` (
 -- Table structure for table `questions`
 --
 
+DROP TABLE IF EXISTS `questions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `questions` (
@@ -2572,6 +2685,7 @@ CREATE TABLE `questions` (
 -- Table structure for table `rbac_roles`
 --
 
+DROP TABLE IF EXISTS `rbac_roles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `rbac_roles` (
@@ -2594,6 +2708,7 @@ CREATE TABLE `rbac_roles` (
 -- Table structure for table `rbac_user_roles`
 --
 
+DROP TABLE IF EXISTS `rbac_user_roles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `rbac_user_roles` (
@@ -2625,6 +2740,7 @@ CREATE TABLE `rbac_user_roles` (
 -- Table structure for table `receipt_voucher_items`
 --
 
+DROP TABLE IF EXISTS `receipt_voucher_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `receipt_voucher_items` (
@@ -2655,6 +2771,7 @@ CREATE TABLE `receipt_voucher_items` (
 -- Table structure for table `receipt_vouchers`
 --
 
+DROP TABLE IF EXISTS `receipt_vouchers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `receipt_vouchers` (
@@ -2689,6 +2806,7 @@ CREATE TABLE `receipt_vouchers` (
 -- Table structure for table `sales_invoices`
 --
 
+DROP TABLE IF EXISTS `sales_invoices`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sales_invoices` (
@@ -2726,6 +2844,7 @@ CREATE TABLE `sales_invoices` (
 -- Table structure for table `service_group`
 --
 
+DROP TABLE IF EXISTS `service_group`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_group` (
@@ -2746,6 +2865,7 @@ CREATE TABLE `service_group` (
 -- Table structure for table `service_list`
 --
 
+DROP TABLE IF EXISTS `service_list`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_list` (
@@ -2774,6 +2894,7 @@ CREATE TABLE `service_list` (
 -- Table structure for table `tenant_ledgers`
 --
 
+DROP TABLE IF EXISTS `tenant_ledgers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `tenant_ledgers` (
@@ -2796,6 +2917,7 @@ CREATE TABLE `tenant_ledgers` (
 -- Table structure for table `tenants`
 --
 
+DROP TABLE IF EXISTS `tenants`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `tenants` (
@@ -2811,6 +2933,7 @@ CREATE TABLE `tenants` (
 -- Table structure for table `transcaction_file`
 --
 
+DROP TABLE IF EXISTS `transcaction_file`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `transcaction_file` (
@@ -2876,6 +2999,7 @@ CREATE TABLE `transcaction_file` (
 -- Table structure for table `users`
 --
 
+DROP TABLE IF EXISTS `users`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
@@ -2915,6 +3039,7 @@ CREATE TABLE `users` (
 -- Table structure for table `vendor_master_category`
 --
 
+DROP TABLE IF EXISTS `vendor_master_category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_category` (
@@ -2940,6 +3065,7 @@ CREATE TABLE `vendor_master_category` (
 -- Table structure for table `vendor_master_posettings`
 --
 
+DROP TABLE IF EXISTS `vendor_master_posettings`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_posettings` (
@@ -2967,6 +3093,7 @@ CREATE TABLE `vendor_master_posettings` (
 -- Table structure for table `vendor_master_vendorcreation_banking`
 --
 
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_banking`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_banking` (
@@ -2997,6 +3124,7 @@ CREATE TABLE `vendor_master_vendorcreation_banking` (
 -- Table structure for table `vendor_master_vendorcreation_basicdetail`
 --
 
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_basicdetail`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_basicdetail` (
@@ -3033,6 +3161,7 @@ CREATE TABLE `vendor_master_vendorcreation_basicdetail` (
 -- Table structure for table `vendor_master_vendorcreation_gstdetails`
 --
 
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_gstdetails`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_gstdetails` (
@@ -3074,6 +3203,7 @@ CREATE TABLE `vendor_master_vendorcreation_gstdetails` (
 -- Table structure for table `vendor_master_vendorcreation_productservices`
 --
 
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_productservices`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_productservices` (
@@ -3097,6 +3227,7 @@ CREATE TABLE `vendor_master_vendorcreation_productservices` (
 -- Table structure for table `vendor_master_vendorcreation_tds`
 --
 
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_tds`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_tds` (
@@ -3137,6 +3268,7 @@ CREATE TABLE `vendor_master_vendorcreation_tds` (
 -- Table structure for table `vendor_master_vendorcreation_terms`
 --
 
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_terms`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_terms` (
@@ -3167,6 +3299,7 @@ CREATE TABLE `vendor_master_vendorcreation_terms` (
 -- Table structure for table `vendor_transaction`
 --
 
+DROP TABLE IF EXISTS `vendor_transaction`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_transaction` (
@@ -3196,6 +3329,7 @@ CREATE TABLE `vendor_transaction` (
 -- Table structure for table `vendor_transaction_po`
 --
 
+DROP TABLE IF EXISTS `vendor_transaction_po`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_transaction_po` (
@@ -3242,6 +3376,7 @@ CREATE TABLE `vendor_transaction_po` (
 -- Table structure for table `vendor_transaction_po_items`
 --
 
+DROP TABLE IF EXISTS `vendor_transaction_po_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_transaction_po_items` (
@@ -3269,9 +3404,38 @@ CREATE TABLE `vendor_transaction_po_items` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `voucher_allocations`
+--
+
+DROP TABLE IF EXISTS `voucher_allocations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_allocations` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `source_voucher_id` bigint NOT NULL,
+  `source_type` varchar(20) NOT NULL,
+  `target_voucher_id` bigint NOT NULL,
+  `target_type` varchar(20) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `ledger_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `voucher_allocations_ledger_id_fa0d93d9_fk_master_ledgers_id` (`ledger_id`),
+  KEY `voucher_allocations_tenant_id_0f0697a7` (`tenant_id`),
+  KEY `voucher_all_tenant__d2883b_idx` (`tenant_id`,`ledger_id`),
+  KEY `voucher_all_source__3fb48b_idx` (`source_voucher_id`,`source_type`),
+  KEY `voucher_all_target__97ecf0_idx` (`target_voucher_id`,`target_type`),
+  CONSTRAINT `voucher_allocations_ledger_id_fa0d93d9_fk_master_ledgers_id` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `voucher_contra`
 --
 
+DROP TABLE IF EXISTS `voucher_contra`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_contra` (
@@ -3313,6 +3477,7 @@ CREATE TABLE `voucher_contra` (
 -- Table structure for table `voucher_expenses`
 --
 
+DROP TABLE IF EXISTS `voucher_expenses`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_expenses` (
@@ -3338,6 +3503,7 @@ CREATE TABLE `voucher_expenses` (
 -- Table structure for table `voucher_journal`
 --
 
+DROP TABLE IF EXISTS `voucher_journal`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_journal` (
@@ -3363,6 +3529,7 @@ CREATE TABLE `voucher_journal` (
 -- Table structure for table `voucher_purchase_due_details`
 --
 
+DROP TABLE IF EXISTS `voucher_purchase_due_details`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_due_details` (
@@ -3389,6 +3556,7 @@ CREATE TABLE `voucher_purchase_due_details` (
 -- Table structure for table `voucher_purchase_supplier_details`
 --
 
+DROP TABLE IF EXISTS `voucher_purchase_supplier_details`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_supplier_details` (
@@ -3425,6 +3593,7 @@ CREATE TABLE `voucher_purchase_supplier_details` (
 -- Table structure for table `voucher_purchase_supply_foreign_details`
 --
 
+DROP TABLE IF EXISTS `voucher_purchase_supply_foreign_details`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_supply_foreign_details` (
@@ -3449,6 +3618,7 @@ CREATE TABLE `voucher_purchase_supply_foreign_details` (
 -- Table structure for table `voucher_purchase_supply_inr_details`
 --
 
+DROP TABLE IF EXISTS `voucher_purchase_supply_inr_details`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_supply_inr_details` (
@@ -3472,6 +3642,7 @@ CREATE TABLE `voucher_purchase_supply_inr_details` (
 -- Table structure for table `voucher_purchase_transit_details`
 --
 
+DROP TABLE IF EXISTS `voucher_purchase_transit_details`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_transit_details` (
@@ -3538,6 +3709,7 @@ CREATE TABLE `voucher_purchase_transit_details` (
 -- Table structure for table `voucher_receipt_bulk`
 --
 
+DROP TABLE IF EXISTS `voucher_receipt_bulk`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_receipt_bulk` (
@@ -3572,6 +3744,7 @@ CREATE TABLE `voucher_receipt_bulk` (
 -- Table structure for table `voucher_receipt_single`
 --
 
+DROP TABLE IF EXISTS `voucher_receipt_single`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_receipt_single` (
@@ -3610,6 +3783,7 @@ CREATE TABLE `voucher_receipt_single` (
 -- Table structure for table `voucher_sales_dispatchdetails`
 --
 
+DROP TABLE IF EXISTS `voucher_sales_dispatchdetails`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_dispatchdetails` (
@@ -3667,6 +3841,7 @@ CREATE TABLE `voucher_sales_dispatchdetails` (
 -- Table structure for table `voucher_sales_ewaybill`
 --
 
+DROP TABLE IF EXISTS `voucher_sales_ewaybill`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_ewaybill` (
@@ -3699,6 +3874,7 @@ CREATE TABLE `voucher_sales_ewaybill` (
 -- Table structure for table `voucher_sales_invoicedetails`
 --
 
+DROP TABLE IF EXISTS `voucher_sales_invoicedetails`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_invoicedetails` (
@@ -3754,6 +3930,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
 -- Table structure for table `voucher_sales_items`
 --
 
+DROP TABLE IF EXISTS `voucher_sales_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_items` (
@@ -3787,6 +3964,7 @@ CREATE TABLE `voucher_sales_items` (
 -- Table structure for table `voucher_sales_items_foreign`
 --
 
+DROP TABLE IF EXISTS `voucher_sales_items_foreign`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_items_foreign` (
@@ -3813,6 +3991,7 @@ CREATE TABLE `voucher_sales_items_foreign` (
 -- Table structure for table `voucher_sales_paymentdetails`
 --
 
+DROP TABLE IF EXISTS `voucher_sales_paymentdetails`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_paymentdetails` (
@@ -3839,8 +4018,15 @@ CREATE TABLE `voucher_sales_paymentdetails` (
   KEY `idx_tenant_id` (`tenant_id`),
   KEY `idx_invoice_id` (`invoice_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
+--
+-- Table structure for table `vouchers`
+--
 
+DROP TABLE IF EXISTS `vouchers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vouchers` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -3874,4 +4060,16 @@ CREATE TABLE `vouchers` (
   KEY `vouchers_tenant_id_3bd1aa70` (`tenant_id`),
   KEY `vouchers_type_567f73_idx` (`type`,`tenant_id`,`date`),
   KEY `vouchers_tenant__6180d8_idx` (`tenant_id`,`date`)
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-04-01 11:28:58

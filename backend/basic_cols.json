@@ -1,1 +1,0 @@
-["id", "tenant_id", "contract_number", "customer_id", "customer_name", "branch_id", "contract_type", "contract_validity_from", "contract_validity_to", "contract_document", "automate_billing", "bill_start_date", "billing_frequency", "voucher_name", "bill_period_from", "bill_period_to", "is_active", "is_deleted", "created_at", "updated_at", "created_by", "updated_by"]

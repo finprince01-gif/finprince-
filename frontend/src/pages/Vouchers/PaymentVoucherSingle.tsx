@@ -163,7 +163,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         // Use rich purchase API for vendors
                         data = await apiService.getVendorPurchaseInvoices(selectedOpt.name);
                         const vendor = vendors.find(v => v.id === selectedOpt.id);
-                        entityCreditPeriod = parseInt(vendor?.payment_terms || vendor?.credit_days || '0', 10);
+                        
+                        // Robust credit period parsing
+                        const rawTerms = vendor?.credit_period || vendor?.payment_terms || vendor?.credit_days || '0';
+                        const termsMatch = String(rawTerms).match(/(\d+)/);
+                        entityCreditPeriod = termsMatch ? parseInt(termsMatch[1], 10) : 0;
                         
                         setPendingTransactions(data.map(item => {
                             const invDate = new Date(item.date || getCurrentDate());
@@ -171,9 +175,21 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                             const diffTime = d2.getTime() - d1.getTime();
                             const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                            const status = diffDays > entityCreditPeriod ? 'Due' : 'Not Due';
+                            
+                            let status = 'Not Due';
+                            if (diffDays > entityCreditPeriod) {
+                                status = 'Due';
+                            } else if (diffDays === entityCreditPeriod) {
+                                status = 'Due Today';
+                            }
+                            
                             const dueDate = new Date(d1);
                             dueDate.setDate(dueDate.getDate() + entityCreditPeriod);
+                            
+                            // Safe date string in local time (YYYY-MM-DD)
+                            const dueDateStr = dueDate.getFullYear() + '-' + 
+                                               String(dueDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                                               String(dueDate.getDate()).padStart(2, '0');
 
                             const isMatch = prefilledData?.invoiceNumber === item.supplier_invoice_no || prefilledData?.invoiceNumber === item.purchase_voucher_no;
                             const pAmt = isMatch ? (prefilledData?.totalAmount || 0) : 0;
@@ -184,15 +200,17 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 amount: Number(item.due_details?.to_pay || item.total || 0),
                                 payment: pAmt,
                                 dueStatus: status,
-                                daysToDue: Math.abs(entityCreditPeriod - diffDays),
-                                dueDate: dueDate.toISOString().split('T')[0]
+                                daysToDue: Math.max(0, entityCreditPeriod - diffDays),
+                                dueDate: dueDateStr
                             };
-                        }));
+                        }).filter(item => item.dueStatus === 'Due' || item.dueStatus === 'Due Today'));
                     } else if (selectedOpt.type === 'customer') {
                         // Use rich sales API for customers
                         data = await apiService.getRichCustomerSalesInvoices(selectedOpt.name);
                         const customer = customers.find(c => c.id === selectedOpt.id);
-                        entityCreditPeriod = parseInt(customer?.credit_period || '0', 10);
+                        const rawTerms = customer?.credit_period || '0';
+                        const termsMatch = String(rawTerms).match(/(\d+)/);
+                        entityCreditPeriod = termsMatch ? parseInt(termsMatch[1], 10) : 0;
 
                         setPendingTransactions(data.map(item => {
                             const invDate = new Date(item.date || getCurrentDate());
@@ -200,9 +218,20 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                             const diffTime = d2.getTime() - d1.getTime();
                             const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                            const status = diffDays > entityCreditPeriod ? 'Due' : 'Not Due';
+                            
+                            let status = 'Not Due';
+                            if (diffDays > entityCreditPeriod) {
+                                status = 'Due';
+                            } else if (diffDays === entityCreditPeriod) {
+                                status = 'Due Today';
+                            }
+
                             const dueDate = new Date(d1);
                             dueDate.setDate(dueDate.getDate() + entityCreditPeriod);
+                            
+                            const dueDateStr = dueDate.getFullYear() + '-' + 
+                                               String(dueDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                                               String(dueDate.getDate()).padStart(2, '0');
 
                             return {
                                 date: item.date,
@@ -210,14 +239,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 amount: Number(item.payment_details?.payment_payable || item.total || 0),
                                 payment: 0,
                                 dueStatus: status,
-                                daysToDue: Math.abs(entityCreditPeriod - diffDays),
-                                dueDate: dueDate.toISOString().split('T')[0]
+                                daysToDue: Math.max(0, entityCreditPeriod - diffDays),
+                                dueDate: dueDateStr
                             };
-                        }));
+                        }).filter(item => item.dueStatus === 'Due' || item.dueStatus === 'Due Today'));
                     } else {
                         // Fallback to standard pending invoices for other ledgers
                         data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
-                        setPendingTransactions(data.map(item => ({
+                        const mapped = data.map(item => ({
                             date: item.date,
                             referenceNumber: item.reference_number,
                             amount: item.amount,
@@ -225,7 +254,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             dueStatus: item.due_status,
                             daysToDue: item.days_to_due,
                             dueDate: item.due_date
-                        })));
+                        }));
+                        setPendingTransactions(mapped.filter(item => item.dueStatus === 'Due' || item.dueStatus === 'Due Today'));
                     }
                     
                     // 2. Fetch available advances
@@ -262,14 +292,16 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if (selectedOpt && selectedOpt.ledger_id) {
                 try {
                     const data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
-                    setBulkTransactions(data.map(item => ({
+                    const mapped = data.map(item => ({
                         id: item.id.toString(),
                         date: item.date,
                         invoiceNo: item.reference_number,
                         amount: item.amount,
                         payNow: 0,
-                        selected: false
-                    })));
+                        selected: false,
+                        due_status: item.due_status
+                    }));
+                    setBulkTransactions(mapped.filter(item => item.due_status === 'Due' || item.due_status === 'Due Today'));
                 } catch (error) {
                     console.error('Error fetching bulk pending invoices:', error);
                 }
@@ -535,7 +567,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     // Use rich purchase API for vendors
                     data = await apiService.getVendorPurchaseInvoices(selectedOpt.name);
                     const vendor = vendors.find(v => v.id === selectedOpt.id);
-                    entityCreditPeriod = parseInt(vendor?.payment_terms || vendor?.credit_days || '0', 10);
+                    const rawTerms = vendor?.credit_period || vendor?.payment_terms || vendor?.credit_days || '0';
+                    const termsMatch = String(rawTerms).match(/(\d+)/);
+                    entityCreditPeriod = termsMatch ? parseInt(termsMatch[1], 10) : 0;
                     
                     const mapped: BulkTransaction[] = data.map(item => {
                         const invDate = new Date(item.date || getCurrentDate());
@@ -543,9 +577,20 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                         const diffTime = d2.getTime() - d1.getTime();
                         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                        const status = diffDays > entityCreditPeriod ? 'Due' : 'Not Due';
+                        
+                        let status = 'Not Due';
+                        if (diffDays > entityCreditPeriod) {
+                            status = 'Due';
+                        } else if (diffDays === entityCreditPeriod) {
+                            status = 'Due Today';
+                        }
+                        
                         const dueDate = new Date(d1);
                         dueDate.setDate(dueDate.getDate() + entityCreditPeriod);
+                        
+                        const dueDateStr = dueDate.getFullYear() + '-' + 
+                                           String(dueDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                                           String(dueDate.getDate()).padStart(2, '0');
                         
                         return {
                             id: item.id?.toString() || Math.random().toString(),
@@ -555,17 +600,19 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             payNow: 0,
                             selected: false,
                             status: status,
-                            daysToDue: Math.abs(entityCreditPeriod - diffDays),
-                            dueDate: dueDate.toISOString().split('T')[0]
+                            daysToDue: Math.max(0, entityCreditPeriod - diffDays),
+                            dueDate: dueDateStr
                         };
                     });
-                    setBulkTransactions(mapped.filter(t => t.amount > 0));
+                    setBulkTransactions(mapped.filter(t => t.amount > 0 && (t.status === 'Due' || t.status === 'Due Today')));
 
                 } else if (selectedOpt.type === 'customer') {
                     // Use rich sales API for customers
                     data = await apiService.getRichCustomerSalesInvoices(selectedOpt.name);
                     const customer = customers.find(c => c.id === selectedOpt.id);
-                    entityCreditPeriod = parseInt(customer?.credit_period || '0', 10);
+                    const rawTerms = customer?.credit_period || '0';
+                    const termsMatch = String(rawTerms).match(/(\d+)/);
+                    entityCreditPeriod = termsMatch ? parseInt(termsMatch[1], 10) : 0;
 
                     const mapped: BulkTransaction[] = data.map(item => {
                         const invDate = new Date(item.date || getCurrentDate());
@@ -573,9 +620,20 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                         const diffTime = d2.getTime() - d1.getTime();
                         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                        const status = diffDays > entityCreditPeriod ? 'Due' : 'Not Due';
+                        
+                        let status = 'Not Due';
+                        if (diffDays > entityCreditPeriod) {
+                            status = 'Due';
+                        } else if (diffDays === entityCreditPeriod) {
+                            status = 'Due Today';
+                        }
+                        
                         const dueDate = new Date(d1);
                         dueDate.setDate(dueDate.getDate() + entityCreditPeriod);
+
+                        const dueDateStr = dueDate.getFullYear() + '-' + 
+                                           String(dueDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                                           String(dueDate.getDate()).padStart(2, '0');
 
                         return {
                             id: item.id?.toString() || Math.random().toString(),
@@ -585,11 +643,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             payNow: 0,
                             selected: false,
                             status: status,
-                            daysToDue: Math.abs(entityCreditPeriod - diffDays),
-                            dueDate: dueDate.toISOString().split('T')[0]
+                            daysToDue: Math.max(0, entityCreditPeriod - diffDays),
+                            dueDate: dueDateStr
                         };
                     });
-                    setBulkTransactions(mapped.filter(t => t.amount > 0));
+                    setBulkTransactions(mapped.filter(t => t.amount > 0 && (t.status === 'Due' || t.status === 'Due Today')));
 
                 } else {
                     // Fallback to standard pending invoices
