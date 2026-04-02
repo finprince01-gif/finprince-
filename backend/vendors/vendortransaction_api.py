@@ -7,8 +7,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 import logging
+import re
+from datetime import datetime, date, timedelta
+from decimal import Decimal
 
-from .models import VendorTransaction
+from .models import VendorTransaction, VendorMasterTerms
 from .vendortransaction_serializers import VendorTransactionSerializer
 
 logger = logging.getLogger(__name__)
@@ -108,9 +111,45 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                 tx_status = (item.get('status') or '').lower()
                 tx_date = item.get('transaction_date')
                 
-                if tx_status == 'paid' or tx_status == 'received':
+                # Calculate paid sum and balance for this purchase on-the-fly
+                ref_no = item.get('reference_number')
+                total_amt = Decimal(str(item.get('total_amount') or 0))
+                paid_sum = Decimal('0')
+                
+                if ref_no:
+                    # Find all payments pointing to this purchase
+                    linking_txs = VendorTransaction.objects.filter(
+                        tenant_id=tenant_id,
+                        vendor_id=vendor_id,
+                        reference_number=ref_no
+                    ).exclude(id=item.get('id'))
+                    
+                    for ltx in linking_txs:
+                        ltype = ltx.transaction_type.lower()
+                        if ltype in ['payment', 'debit_note']:
+                            paid_sum += Decimal(str(ltx.total_amount or 0))
+                        elif ltype == 'receipt': # shouldn't happen for vendor but safe
+                            paid_sum -= Decimal(str(ltx.total_amount or 0))
+
+                item['paid_amount'] = float(paid_sum)
+                item['payment_balance'] = float(total_amt - paid_sum)
+
+                if tx_status == 'paid' or tx_status == 'received' or (total_amt > 0 and paid_sum >= total_amt):
                     item['due_status'] = 'Paid'
                     item['due_date'] = None
+                    item['credit_period_days'] = credit_period_days
+                elif tx_status == 'partially paid' or tx_status == 'partially received' or (paid_sum > 0 and paid_sum < total_amt):
+                    item['due_status'] = 'Partially Received'
+                    # still show due date calculated
+                    if tx_date:
+                        try:
+                            parsed_date = datetime.strptime(str(tx_date), '%Y-%m-%d').date()
+                            _, due_date_str = calculate_due_status(parsed_date, credit_period_days)
+                            item['due_date'] = due_date_str
+                        except:
+                            item['due_date'] = None
+                    else:
+                        item['due_date'] = None
                     item['credit_period_days'] = credit_period_days
                 elif tx_date:
                     try:
