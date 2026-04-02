@@ -242,11 +242,11 @@ const PaymentVoucherBulk: React.FC = () => {
 
     // Map paymentRows to contain payTo IDs instead of names
     const mappedPaymentRows = paymentRows.map(row => {
-        const rowPayToId = allLedgers.find(l => l.name === row.payTo)?.id;
-        return {
-            ...row,
-            payTo: rowPayToId || row.payTo
-        };
+      const rowPayToId = allLedgers.find(l => l.name === row.payTo)?.id;
+      return {
+        ...row,
+        payTo: rowPayToId || row.payTo
+      };
     });
 
     const payload = {
@@ -262,39 +262,39 @@ const PaymentVoucherBulk: React.FC = () => {
     console.log('Posting payment voucher:', payload);
 
     try {
-        const token = httpClient.getToken();
-        const response = await fetch(`${API_BASE_URL}/api/vouchers/payment-bulk/`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
+      const token = httpClient.getToken();
+      const response = await fetch(`${API_BASE_URL}/api/vouchers/payment-bulk/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
 
-        if (response.ok) {
-            showSuccess('Payment voucher posted successfully!');
-            
-            // Increment the voucher series counter so the next number is ready
-            const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
-            if (savedConfig && savedConfig.enable_auto_numbering) {
-                try {
-                    const res = await httpClient.post<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/increment-number/`, {});
-                    // Update local state with the next formatted number
-                    setVoucherNumber(res.next_invoice_number || '');
-                } catch (e) {
-                    console.error('Failed to increment voucher number:', e);
-                }
-            }
+      if (response.ok) {
+        showSuccess('Payment voucher posted successfully!');
 
-            handleCancel();
-        } else {
-            const err = await response.json();
-            showError(err.error || 'Failed to post payment voucher');
+        // Increment the voucher series counter so the next number is ready
+        const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
+        if (savedConfig && savedConfig.enable_auto_numbering) {
+          try {
+            const res = await httpClient.post<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/increment-number/`, {});
+            // Update local state with the next formatted number
+            setVoucherNumber(res.next_invoice_number || '');
+          } catch (e) {
+            console.error('Failed to increment voucher number:', e);
+          }
         }
+
+        handleCancel();
+      } else {
+        const err = await response.json();
+        showError(err.error || 'Failed to post payment voucher');
+      }
     } catch (e) {
-        console.error(e);
-        showError('Failed to post payment voucher');
+      console.error(e);
+      showError('Failed to post payment voucher');
     }
   };
 
