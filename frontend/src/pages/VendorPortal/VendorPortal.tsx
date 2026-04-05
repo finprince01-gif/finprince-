@@ -466,11 +466,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     // Format for display only at the final step
                     debit: entry.debit > 0 ? entry.debit.toLocaleString('en-IN') : '-',
                     credit: entry.credit > 0 ? entry.credit.toLocaleString('en-IN') : '-',
-                    runningBalance: balanceLeft.toLocaleString('en-IN') + (balanceLeft >= 0 ? ' Cr' : ' Dr')
+                    runningBalance: balance.toLocaleString('en-IN') + (balance >= 0 ? ' Cr' : ' Dr')
                 };
             });
 
-            setVendorLedgerData(updatedEntries.filter(e => e.rawVoucher?.transaction_type?.toLowerCase() === 'purchase'));
+            setVendorLedgerData(updatedEntries);
         } catch (error) {
             console.error('Error fetching vendor ledger:', error);
             setVendorLedgerData([]);
@@ -5534,24 +5534,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                 {formatDate(entry.date)}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-bold text-gray-800">
-                                                                                {entry.transferFrom === 'Purchase' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm text-gray-500 uppercase">
-                                                                                {entry.transferFrom === 'Purchase' ? 'PURCHASE' : entry.transferFrom === 'Payment' ? 'PAYMENT' : entry.transferFrom}
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' ? 'PURCHASE' : entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' ? 'PAYMENT' : entry.transferFrom}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm text-gray-500">
                                                                                 {entry.referenceNo}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">
-                                                                                {entry.transferFrom === 'Payment' && entry.debit !== '-' ? `₹${entry.debit}` : '-'}
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' && entry.debit !== '-' ? `₹${entry.debit}` : '-'}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-medium text-gray-400 text-right">
-                                                                                {entry.transferFrom === 'Purchase' && entry.credit !== '-' ? <span className="text-gray-900">₹{entry.credit}</span> : '-'}
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' && entry.credit !== '-' ? <span className="text-gray-900">₹{entry.credit}</span> : '-'}
                                                                             </td>
                                                                         </tr>
 
                                                                         {/* Purchase Details - Correct Double Entry: Debit side = Purchase A/c + Input GST; Credit side = Vendor A/c + TDS Payable */}
-                                                                        {entry.transferFrom === 'Purchase' && (() => {
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' && (() => {
                                                                             let supplyInrDetails = entry.rawVoucher?.supply_inr_details;
                                                                             if (typeof supplyInrDetails === 'string') {
                                                                                 try { supplyInrDetails = JSON.parse(supplyInrDetails); } catch { supplyInrDetails = {}; }
@@ -5666,7 +5666,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         })()}
 
                                                                         {/* Payment Details - Correct Double Entry: Vendor A/c DR, Bank/Cash CR */}
-                                                                        {entry.transferFrom === 'Payment' && entry.rawVoucher && (
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' && entry.rawVoucher && (
                                                                             <React.Fragment>
                                                                                 {/* DEBIT: Vendor A/c */}
                                                                                 <tr className="border-b border-gray-50/50">
@@ -5692,7 +5692,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         )}
 
                                                                         {/* Receipt Details */}
-                                                                        {entry.transferFrom === 'Receipt' && entry.rawVoucher && (
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'receipt' && entry.rawVoucher && (
                                                                             <React.Fragment>
                                                                                 <tr className="border-b border-gray-50/50">
                                                                                     <td></td>
