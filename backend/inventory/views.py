@@ -304,6 +304,21 @@ class InventoryOperationProductionViewSet(viewsets.ModelViewSet):
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
 
+        # Increment the preview number in the master Issue Slip Series for production
+        series_name = self.request.data.get('issue_slip_series')
+        if series_name:
+            series = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, name=series_name).first()
+            if series and series.preview:
+                match = re.search(r'(\d+)$', series.preview)
+                if match:
+                    num_str = match.group(1)
+                    num = int(num_str) + 1
+                    prefix = series.preview[:match.start()]
+                    series.preview = f"{prefix}{num:0{len(num_str)}d}"
+                else:
+                    series.preview = f"{series.preview}-1"
+                series.save()
+
 class InventoryOperationConsumptionViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationConsumptionSerializer
     permission_classes = [IsAuthenticated]

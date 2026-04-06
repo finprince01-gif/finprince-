@@ -361,6 +361,7 @@ class InventoryOperationProduction(BaseModel):
     Production Operation
     """
     issue_slip_no = models.CharField(max_length=100)
+    issue_slip_series = models.CharField(max_length=255, null=True, blank=True, help_text='Issue Slip Series name for production')
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Draft')
@@ -386,16 +387,7 @@ class InventoryOperationProduction(BaseModel):
 
 
 
-    # Dispatch Details
-    dispatch_from = models.TextField(null=True, blank=True)
-    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
-    dispatch_date = models.DateField(null=True, blank=True)
-    dispatch_time = models.TimeField(null=True, blank=True)
-    delivery_type = models.CharField(max_length=100, null=True, blank=True)
-    transporter_id = models.CharField(max_length=100, null=True, blank=True)
-    transporter_name = models.CharField(max_length=255, null=True, blank=True)
-    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
-    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
+
 
     class Meta:
 

@@ -969,7 +969,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 <SearchableSelect
                                     value={payTo}
                                     onChange={(val) => setPayTo(val)}
-                                    options={payToOptions.map(l => l.name)}
+                                    options={payToOptions.map(l => ({
+                                        label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
+                                        value: l.name
+                                    }))}
                                     placeholder="Select Pay To"
                                     className="flex-1"
                                 />
@@ -1238,7 +1241,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                 <SearchableSelect
                                                     value={row.payTo}
                                                     onChange={val => handlePaymentRowChange(row.id, 'payTo', val)}
-                                                    options={payToOptions.map(l => l.name)}
+                                                    options={payToOptions.map(l => ({
+                                                        label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
+                                                        value: l.name
+                                                    }))}
                                                     placeholder="Select Pay To"
                                                     className="w-full h-[40px]"
                                                 />
