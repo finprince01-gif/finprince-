@@ -4325,6 +4325,7 @@ const LongTermContractsContent: React.FC = () => {
                         <tr>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">CONTRACT NO</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">CUSTOMER REFERENCE NAME</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">BRANCH</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">CONTRACT TYPE</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">VALIDITY PERIOD</th>
                             <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">ACTIONS</th>
@@ -4335,6 +4336,7 @@ const LongTermContractsContent: React.FC = () => {
                             <tr key={contract.id} className="hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{contract.contract_number}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{contract.customer_name}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{contract.branch_name || 'Main Branch'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] cursor-default ${getBadgeStyle(contract.contract_type)}`}>
                                         {contract.contract_type}
