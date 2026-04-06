@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 import re
+from django.db.models import Exists, OuterRef
 
 from .models import (
     InventoryMasterCategory, InventoryLocation, InventoryItem, InventoryUnit,
@@ -82,7 +83,7 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        queryset = InventoryItem.objects.filter(tenant_id=tenant_id)
+        queryset = InventoryItem.objects.filter(tenant_id=tenant_id).select_related('category')
         if self.action == 'list':
             return queryset.filter(is_active=True)
         return queryset
@@ -455,14 +456,16 @@ class PendingGRNListView(generics.ListAPIView):
         
         # 2. Get list of GRN numbers already used in Purchase Vouchers
         used_grns = VoucherPurchaseSupplierDetails.objects.filter(
-            tenant_id=tenant_id
-        ).values_list('grn_reference', flat=True)
+            tenant_id=OuterRef('tenant_id'),
+            grn_reference=OuterRef('grn_no')
+        )
         
         # 3. Exclude used GRNs & Empty GRN numbers
-        # Filter out empty strings/nulls from exclusion check to be safe, though usage should be strict
-        used_grns = [g for g in used_grns if g]
-        
-        return qs.exclude(grn_no__in=used_grns).exclude(grn_no__isnull=True).exclude(grn_no__exact='')
+        return qs.annotate(
+            is_used=Exists(used_grns)
+        ).filter(
+            is_used=False
+        ).exclude(grn_no__isnull=True).exclude(grn_no__exact='')
 
 
 from rest_framework.views import APIView

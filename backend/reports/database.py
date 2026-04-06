@@ -46,14 +46,16 @@ def get_vouchers_for_ledger(tenant_id, ledger_name, start_date=None, end_date=No
     q_account = Q(account=ledger_name)
     q_contra = Q(from_account=ledger_name) | Q(to_account=ledger_name)
     
-    # Get voucher IDs from journal entries
-    journal_voucher_ids = JournalEntry.objects.filter(
+    # Use Exists subquery instead of large IN clause values_list
+    from django.db.models import Exists, OuterRef
+    journal_vouchers = JournalEntry.objects.filter(
         tenant_id=tenant_id,
-        ledger=ledger_name
-    ).values_list('voucher_id', flat=True)
+        ledger=ledger_name,
+        voucher_id=OuterRef('id')
+    )
     
     return vouchers.filter(
-        q_party | q_account | q_contra | Q(id__in=journal_voucher_ids)
+        q_party | q_account | q_contra | Exists(journal_vouchers)
     ).distinct().order_by('date', 'id')
 
 

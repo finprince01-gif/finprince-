@@ -24,13 +24,19 @@ class InventoryMasterCategory(BaseModel):
         blank=True,
         help_text="Subgroup under group (optional)"
     )
+    sub_subgroup = models.CharField(
+        max_length=255,
+        default='',
+        blank=True,
+        help_text="Sub-subgroup under subgroup (optional)"
+    )
     is_active = models.BooleanField(default=True)
     
     class Meta:
 
         db_table = 'inventory_master_category'
-        unique_together = ('tenant_id', 'category', 'group', 'subgroup')
-        ordering = ['category', 'group', 'subgroup']
+        unique_together = ('tenant_id', 'category', 'group', 'subgroup', 'sub_subgroup')
+        ordering = ['category', 'group', 'subgroup', 'sub_subgroup']
         indexes = [
             models.Index(fields=['tenant_id', 'is_active']),
             models.Index(fields=['category']),
@@ -42,6 +48,8 @@ class InventoryMasterCategory(BaseModel):
             parts.append(self.group)
         if self.subgroup:
             parts.append(self.subgroup)
+        if self.sub_subgroup:
+            parts.append(self.sub_subgroup)
         return " > ".join(parts)
     
     @property
@@ -125,7 +133,7 @@ class InventoryItem(BaseModel):
     cess_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     
     # Other
-    reorder_level = models.CharField(max_length=255, null=True, blank=True)
+    reorder_level = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     reorder_level_2 = models.CharField(max_length=255, null=True, blank=True)
     is_saleable = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -165,7 +173,7 @@ class InventoryMasterGRN(BaseModel):
     prefix = models.CharField(max_length=50, null=True, blank=True)
     suffix = models.CharField(max_length=50, null=True, blank=True)
     year = models.CharField(max_length=4, help_text="Year", default="2024")
-    required_digits = models.IntegerField(help_text="Required Digits", default=4)
+    required_digits = models.PositiveSmallIntegerField(help_text="Required Digits", default=4)
     preview = models.CharField(max_length=255, null=True, blank=True)
     
     is_active = models.BooleanField(default=True)
@@ -484,7 +492,7 @@ class InventoryOperationOutward(BaseModel):
     address = models.TextField(null=True, blank=True)
     gstin = models.CharField(max_length=20, null=True, blank=True)
     
-    total_boxes = models.CharField(max_length=50, null=True, blank=True)
+    total_boxes = models.PositiveIntegerField(null=True, blank=True)
     posting_note = models.TextField(null=True, blank=True)
     reasons_for_return = models.TextField(null=True, blank=True)
     
