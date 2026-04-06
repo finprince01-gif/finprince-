@@ -441,8 +441,14 @@ const InventoryPage: React.FC = () => {
         setSelectedIssueSlipSeriesName(locSeries[0].name);
         setIssueSlipNumber(locSeries[0].preview || '');
       }
+    } else if (issueSlipTab === 'production' && productionType === 'materials_issued') {
+      const prodSeries = issueSlipSeriesList.filter(s => (s.issueSlipType || '').toLowerCase() === 'production');
+      if (prodSeries.length === 1) {
+        setSelectedIssueSlipSeriesName(prodSeries[0].name);
+        setMaterialIssueSlipNo(prodSeries[0].preview || '');
+      }
     }
-  }, [showIssueSlipForm, issueSlipTab, issueSlipSeriesList, selectedIssueSlipSeriesName, jobWorkSubTab, jobWorkSentType]);
+  }, [showIssueSlipForm, issueSlipTab, issueSlipSeriesList, selectedIssueSlipSeriesName, jobWorkSubTab, jobWorkSentType, productionType]);
   const [showDeliveryChallan, setShowDeliveryChallan] = useState(false);
   const [deliveryChallanAddress, setDeliveryChallanAddress] = useState('');
   const [deliveryChallanDate, setDeliveryChallanDate] = useState('');
@@ -950,6 +956,7 @@ const InventoryPage: React.FC = () => {
   useEffect(() => {
     if (['inter-unit', 'location-change', 'consumption', 'scrap', 'production'].includes(issueSlipTab)) {
       if (locations.length === 0) fetchLocations();
+      if (items.length === 0) fetchItems();
       if (issueSlipTab === 'consumption' && ledgers.length === 0) fetchLedgers();
       if (issueSlipSeriesList.length === 0) fetchIssueSlipSeries();
     }
@@ -1683,20 +1690,29 @@ const InventoryPage: React.FC = () => {
 
         if (productionType === 'materials_issued') {
           // Input: issueSlipItems (Raw Materials)
-          const inputs = issueSlipItems.map(item => ({
-            item_code: item.itemCode,
-            item_name: item.itemName,
-            uom: item.uom,
-            quantity: item.quantity || 0,
-            qty_issued: item.quantity || 0, // In this context, same
-            item_type: 'input' // Raw Material
-          }));
+          const inputs = issueSlipItems.map(item => {
+            const masterItem = items.find(i => i.item_code === item.itemCode);
+            const rate = masterItem ? (masterItem.rate || 0) : 0;
+            const qty = Number(item.quantity) || 0;
+            return {
+              item_code: item.itemCode,
+              item_name: item.itemName,
+              uom: item.uom,
+              quantity: qty,
+              qty_issued: qty, // In this context, same
+              rate: rate,
+              amount: parseFloat((qty * Number(rate)).toFixed(2)),
+              item_type: 'input' // Raw Material
+            };
+          });
           // Output: resultingWIPItems
           const outputs = resultingWIPItems.map(item => ({
             item_code: item.itemCode,
             item_name: item.itemName,
             uom: item.uom,
-            quantity: item.quantity || 0,
+            quantity: Number(item.quantity) || 0,
+            rate: Number(item.rate) || 0,
+            amount: Number(item.amount) || 0,
             item_type: 'output' // WIP
           }));
           productionItems = [...inputs, ...outputs];
@@ -1741,6 +1757,7 @@ const InventoryPage: React.FC = () => {
 
         const productionPayload = {
           issue_slip_no: productionType === 'materials_issued' ? materialIssueSlipNo : (productionType === 'inter_process' ? processTransferSlipNo : fgReceiptSlipNo), // Use correct slip no. state based on type
+          issue_slip_series: productionType === 'materials_issued' ? selectedIssueSlipSeriesName : '',
           date: issueSlipDate || null,
           time: issueSlipTime || null,
           status: 'Posted',
@@ -1897,16 +1914,81 @@ const InventoryPage: React.FC = () => {
         }
 
         const endpoints: { [key: string]: string } = {
-          // 'inter-unit': handled above
           'location-change': '/api/inventory/operations/location-change/',
-          'production': '/api/inventory/operations/production/', // If not handled in earlier if-block? production IS handled in earlier if-block
+          'production': '/api/inventory/operations/production/',
           'consumption': '/api/inventory/operations/consumption/',
           'scrap': '/api/inventory/operations/scrap/'
         };
 
+        let finalPayload = commonPayload;
+
+        if (issueSlipTab === 'scrap') {
+          if (scrapSubType === 'production') {
+            finalPayload = {
+              scrap_type: 'production',
+              issue_slip_no: scrapProdSlipNo,
+              issue_slip_series: scrapProdSlipSeries,
+              date: scrapProdDate,
+              time: scrapProdTime,
+              goods_from_location: goodsFromLocation,
+              goods_to_location: scrapProdIssuedTo,
+              posting_note: scrapProdPostingNote,
+              items: scrapProdItems.map(item => ({
+                item_code: item.itemCode,
+                item_name: item.itemName,
+                uom: item.uom,
+                quantity: item.quantityGenerated || 0,
+              })),
+            };
+          } else if (scrapSubType === 'other') {
+            finalPayload = {
+              scrap_type: 'other',
+              issue_slip_no: scrapOtherSlipNo,
+              issue_slip_series: scrapOtherSlipSeries,
+              date: scrapOtherDate,
+              time: scrapOtherTime,
+              goods_from_location: scrapOtherIssuedFrom,
+              goods_to_location: scrapOtherIssuedTo,
+              posting_note: scrapOtherPostingNote,
+              scrapped_items: scrapOtherItemsScrapped.map(item => ({
+                item_code: item.itemCode,
+                item_name: item.itemName,
+                uom: item.uom,
+                quantity: item.quantity || 0,
+              })),
+              resulting_items: scrapOtherResultingItems.map(item => ({
+                item_code: item.itemCode,
+                item_name: item.itemName,
+                uom: item.uom,
+                quantity: item.quantity || 0,
+                rate: item.rate || 0,
+                value: item.value || 0,
+              })),
+            };
+          } else if (scrapSubType === 'disposed') {
+            finalPayload = {
+              scrap_type: 'disposed',
+              issue_slip_no: scrapDispSlipNo,
+              issue_slip_series: scrapDispSlipSeries,
+              date: scrapDispDate,
+              time: scrapDispTime,
+              goods_from_location: scrapDispIssuedFrom,
+              posting_note: postingNote,
+              items: scrapDispItems.map(item => ({
+                item_code: item.itemCode,
+                item_name: item.itemName,
+                uom: item.uom,
+                quantity: item.quantityDisposed || 0,
+                rate: item.rate || 0,
+                value: item.value || 0,
+              })),
+            };
+          }
+        }
+
         const endpoint = endpoints[issueSlipTab];
         if (endpoint) {
-          await httpClient.post(endpoint, commonPayload);
+          await httpClient.post(endpoint, finalPayload);
         }
       }
 
@@ -2575,7 +2657,7 @@ const InventoryPage: React.FC = () => {
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
         updatedItems[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
         updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
-        updatedItems[index].remainingQty = selectedItem.remaining_qty || 0;
+        updatedItems[index].remainingQty = (selectedItem as any).remaining_qty || 0;
         const qty = parseFloat(updatedItems[index].quantity) || 0;
         updatedItems[index].value = qty * updatedItems[index].rate;
       }
@@ -2586,7 +2668,7 @@ const InventoryPage: React.FC = () => {
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
         updatedItems[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
         updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
-        updatedItems[index].remainingQty = selectedItem.remaining_qty || 0;
+        updatedItems[index].remainingQty = (selectedItem as any).remaining_qty || 0;
         const qty = parseFloat(updatedItems[index].quantity) || 0;
         updatedItems[index].value = qty * updatedItems[index].rate;
       }
@@ -4825,15 +4907,37 @@ const InventoryPage: React.FC = () => {
                   {/* Production - Materials Issued Form */}
                   {issueSlipTab === 'production' && productionType === 'materials_issued' && (
                     <div className="mt-8 space-y-6">
-                      {/* Material Issue Slip No */}
-                      <div className="flex justify-end">
-                        <div className="w-1/4">
+                      {/* Issue Slip Series & Material Issue Slip No */}
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-1">Issue Slip Series</label>
+                          <select
+                            value={selectedIssueSlipSeriesName}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSelectedIssueSlipSeriesName(val);
+                              const series = issueSlipSeriesList.find(s => s.name === val);
+                              if (series) {
+                                setMaterialIssueSlipNo(series.preview || '');
+                              } else {
+                                setMaterialIssueSlipNo('');
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="">Select Series</option>
+                            {issueSlipSeriesList.filter(s => s.issueSlipType === 'production').map(series => (
+                              <option key={series.id} value={series.name}>{series.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Material Issue Slip No.</label>
                           <input
                             type="text"
                             value={materialIssueSlipNo}
-                            onChange={(e) => setMaterialIssueSlipNo(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-100 cursor-not-allowed font-semibold text-gray-600"
                           />
                         </div>
                       </div>
@@ -4871,7 +4975,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                            {locations.map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -4884,7 +4988,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                            {locations.map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -4902,71 +5006,75 @@ const InventoryPage: React.FC = () => {
                             <table className="min-w-full">
                               <thead className="bg-gray-50 border-b">
                                 <tr>
-                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Item Code</th>
-                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Item Name</th>
-                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">HSN Code</th>
+                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 w-1/4">Item Code</th>
+                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 w-1/4">Item Name</th>
                                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">UOM</th>
-                                  <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Quantity</th>
+                                  <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Qty</th>
+                                  <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Rate</th>
+                                  <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Amount</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-200">
                                 {/* We reuse issueSlipItems for Raw Materials here */}
-                                {issueSlipItems.map((item, index) => (
-                                  <tr key={index}>
-                                    <td className="p-1">
-                                      <select
-                                        value={item.itemCode}
-                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
-                                        className="w-full border rounded px-1 text-xs"
-                                      >
-                                        <option value="">Code</option>
-                                        {items.map(i => (
-                                          <option key={i.id} value={i.item_code}>{i.item_code}</option>
-                                        ))}
-                                      </select>
-                                    </td>
-                                    <td className="p-1">
-                                      <select
-                                        value={item.itemName}
-                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
-                                        className="w-full border rounded px-1 text-xs"
-                                      >
-                                        <option value="">Item</option>
-                                        {items.map(i => (
-                                          <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>
-                                        ))}
-                                      </select>
-                                    </td>
-                                    <td className="p-1">
-                                      <input type="text" value={item.hsnCode || ''} readOnly className="w-full border rounded px-1 text-xs bg-gray-50" />
-                                    </td>
-                                    <td className="p-1">
-                                      <select
-                                        value={item.uom || ''}
-                                        onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
-                                        className="w-16 border rounded px-1 text-xs"
-                                      >
-                                        <option value="">Unit</option>
-                                        {(() => {
-                                          const selectedItem = items.find(i => i.item_code === item.itemCode);
-                                          const units = [];
-                                          if (selectedItem) {
-                                            const u1 = selectedItem.uom || selectedItem.unit;
-                                            const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
-                                            if (u1) units.push(u1);
-                                            if (u2 && u2 !== u1) units.push(u2);
-                                          }
-                                          return units.map(u => (
-                                            <option key={u} value={u}>{u}</option>
-                                          ));
-                                        })()}
-                                      </select>
-                                    </td>
-                                    <td className="p-1"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full border rounded px-1 text-xs text-right" /></td>
-                                  </tr>
-                                ))}
+                                {issueSlipItems.map((item, index) => {
+                                  const masterItem = items.find(i => i.item_code === item.itemCode);
+                                  const rate = masterItem ? (masterItem.rate || 0) : 0;
+                                  const amount = (Number(item.quantity || 0) * Number(rate)).toFixed(2);
+                                  return (
+                                    <tr key={index}>
+                                      <td className="p-1">
+                                        <select
+                                          value={item.itemCode}
+                                          onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                          className="w-full border rounded px-1 text-xs"
+                                        >
+                                          <option value="">Code</option>
+                                          {items.map(i => (
+                                            <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                          ))}
+                                        </select>
+                                      </td>
+                                      <td className="p-1">
+                                        <select
+                                          value={item.itemName}
+                                          onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                          className="w-full border rounded px-1 text-xs"
+                                        >
+                                          <option value="">Item</option>
+                                          {items.map(i => (
+                                            <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>
+                                          ))}
+                                        </select>
+                                      </td>
+                                      <td className="p-1">
+                                        <select
+                                          value={item.uom || ''}
+                                          onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                          className="w-16 border rounded px-1 text-xs"
+                                        >
+                                          <option value="">Unit</option>
+                                          {(() => {
+                                            const units = [];
+                                            if (masterItem) {
+                                              const u1 = masterItem.uom || masterItem.unit;
+                                              const u2 = masterItem.alternate_uom || masterItem.alternative_unit;
+                                              if (u1) units.push(u1);
+                                              if (u2 && u2 !== u1) units.push(u2);
+                                            }
+                                            return units.map(u => (
+                                              <option key={u} value={u}>{u}</option>
+                                            ));
+                                          })()}
+                                        </select>
+                                      </td>
+                                      <td className="p-1"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-16 border rounded px-1 text-xs text-right" /></td>
+                                      <td className="p-1"><input type="text" value={rate} readOnly className="w-16 border rounded px-1 text-xs bg-gray-50 text-right cursor-not-allowed text-gray-500" /></td>
+                                      <td className="p-1"><input type="text" value={amount} readOnly className="w-20 border rounded px-1 text-xs bg-gray-50 text-right cursor-not-allowed text-gray-500" /></td>
+                                    </tr>
+                                  );
+                                })}
                                 <tr>
-                                  <td colSpan={5} className="p-2 text-center">
+                                  <td colSpan={6} className="p-2 text-center">
                                     <button onClick={handleAddIssueSlipItem} className="text-indigo-600 text-xs font-bold hover:underline">+ Add Raw Material</button>
                                   </td>
                                 </tr>
@@ -4984,11 +5092,12 @@ const InventoryPage: React.FC = () => {
                             <table className="min-w-full">
                               <thead className="bg-gray-50 border-b">
                                 <tr>
-                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Item Code</th>
-                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Item Name</th>
-                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">HSN Code</th>
+                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 w-1/4">Item Code</th>
+                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 w-1/4">Item Name</th>
                                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">UOM</th>
-                                  <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Quantity</th>
+                                  <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Qty</th>
+                                  <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Rate</th>
+                                  <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Amount</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-200">
@@ -5005,7 +5114,6 @@ const InventoryPage: React.FC = () => {
                                           if (selectedItem) {
                                             newWIP[index].itemName = selectedItem.name || selectedItem.item_name;
                                             newWIP[index].uom = selectedItem.uom || selectedItem.unit;
-                                            newWIP[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
                                           }
                                           setResultingWIPItems(newWIP);
                                         }}
@@ -5028,7 +5136,6 @@ const InventoryPage: React.FC = () => {
                                           if (selectedItem) {
                                             newWIP[index].itemCode = selectedItem.item_code;
                                             newWIP[index].uom = selectedItem.uom || selectedItem.unit;
-                                            newWIP[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
                                           }
                                           setResultingWIPItems(newWIP);
                                         }}
@@ -5039,9 +5146,6 @@ const InventoryPage: React.FC = () => {
                                           <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>
                                         ))}
                                       </select>
-                                    </td>
-                                    <td className="p-1">
-                                      <input type="text" value={item.hsnCode || ''} readOnly className="w-full border rounded px-1 text-xs bg-gray-50" />
                                     </td>
                                     <td className="p-1">
                                       <select
@@ -5074,19 +5178,38 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.quantity}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newWIP = [...resultingWIPItems];
-                                          newWIP[index].quantity = e.target.value;
+                                          newWIP[index].quantity = val;
+                                          newWIP[index].amount = (parseFloat(val || '0') * parseFloat(newWIP[index].rate || '0')).toFixed(2);
                                           setResultingWIPItems(newWIP);
                                         }}
-                                        className="w-full border rounded px-1 text-xs text-right"
+                                        className="w-16 border rounded px-1 text-xs text-right"
                                       />
+                                    </td>
+                                    <td className="p-1">
+                                      <input
+                                        type="number"
+                                        value={item.rate || ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const newWIP = [...resultingWIPItems];
+                                          newWIP[index].rate = val;
+                                          newWIP[index].amount = (parseFloat(newWIP[index].quantity || '0') * parseFloat(val || '0')).toFixed(2);
+                                          setResultingWIPItems(newWIP);
+                                        }}
+                                        className="w-16 border rounded px-1 text-xs text-right"
+                                      />
+                                    </td>
+                                    <td className="p-1">
+                                      <input type="text" value={item.amount || '0.00'} readOnly className="w-20 border rounded px-1 text-xs bg-gray-50 text-right cursor-not-allowed text-gray-500" />
                                     </td>
                                   </tr>
                                 ))}
                                 <tr>
-                                  <td colSpan={5} className="p-2 text-center">
+                                  <td colSpan={6} className="p-2 text-center">
                                     <button
-                                      onClick={() => setResultingWIPItems([...resultingWIPItems, { itemCode: '', itemName: '', uom: '', quantity: '' }])}
+                                      onClick={() => setResultingWIPItems([...resultingWIPItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: '', amount: '' }])}
                                       className="text-indigo-600 text-xs font-bold hover:underline"
                                     >
                                       + Add WIP Item
@@ -6477,7 +6600,7 @@ const InventoryPage: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Header Row 2: Date, Time, Issued To */}
+                          {/* Header Row 2: Date, Time, Issued From, Issued To */}
                           <div className="grid grid-cols-4 gap-5">
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Date</label>
@@ -6498,7 +6621,18 @@ const InventoryPage: React.FC = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                               />
                             </div>
-                            <div className="col-span-2">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Issued From</label>
+                              <select
+                                value={goodsFromLocation}
+                                onChange={(e) => setGoodsFromLocation(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              >
+                                <option value="">Select Location</option>
+                                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Issued To</label>
                               <select
                                 value={scrapProdIssuedTo}
@@ -6548,39 +6682,99 @@ const InventoryPage: React.FC = () => {
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                   {scrapProdItems.map((item, idx) => {
-                                    const scrapItems = items.filter(i => (i.category_name || '').toLowerCase().includes('scrap'));
+                                    // Combine both sources and ensure they're unique by item code
+                                    const sourcePool = [...inventoryItems, ...items];
+                                    const uniqueMap = new Map();
+                                    sourcePool.forEach(i => {
+                                      const code = i.item_code || i.itemCode;
+                                      if (code && !uniqueMap.has(code)) uniqueMap.set(code, i);
+                                    });
+                                    const allUniqueItems = Array.from(uniqueMap.values());
+                                    
+                                    const scrapOnlyItems = allUniqueItems.filter(i => {
+                                      const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
+                                      const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
+                                      return cat.includes('scrap') || name.includes('scrap');
+                                    });
+
                                     return (
                                       <tr key={idx}>
                                         <td className="px-3 py-2">
                                           <select value={item.itemCode} onChange={(e) => {
-                                            const v = e.target.value; const ni = [...scrapProdItems]; ni[idx].itemCode = v;
-                                            const si = scrapItems.find(i => i.item_code === v);
-                                            if (si) { ni[idx].itemName = si.name || si.item_name; ni[idx].uom = si.uom || si.unit; }
+                                            const v = e.target.value; 
+                                            const ni = [...scrapProdItems]; 
+                                            ni[idx].itemCode = v;
+                                            const si = scrapOnlyItems.find(i => (i.item_code || i.itemCode) === v);
+                                            if (si) { 
+                                              ni[idx].itemName = si.name || si.item_name || si.itemName; 
+                                              ni[idx].uom = si.uom || si.unit; 
+                                              ni[idx].stockBalance = 100; // Mock balance
+                                            } else {
+                                              ni[idx].itemName = '';
+                                              ni[idx].uom = '';
+                                            }
                                             setScrapProdItems(ni);
                                           }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Select Code</option>
-                                            {scrapItems.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                            {scrapOnlyItems.map(i => {
+                                              const code = i.item_code || i.itemCode;
+                                              return <option key={i.id} value={code}>{code}</option>;
+                                            })}
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
                                           <select value={item.itemName} onChange={(e) => {
-                                            const v = e.target.value; const ni = [...scrapProdItems]; ni[idx].itemName = v;
-                                            const si = scrapItems.find(i => (i.name || i.item_name) === v);
-                                            if (si) { ni[idx].itemCode = si.item_code; ni[idx].uom = si.uom || si.unit; }
+                                            const v = e.target.value; 
+                                            const ni = [...scrapProdItems]; 
+                                            ni[idx].itemName = v;
+                                            const si = scrapOnlyItems.find(i => (i.name || i.item_name || i.itemName) === v);
+                                            if (si) { 
+                                              ni[idx].itemCode = si.item_code || si.itemCode; 
+                                              ni[idx].uom = si.uom || si.unit; 
+                                              ni[idx].stockBalance = 100;
+                                            } else {
+                                              ni[idx].itemCode = '';
+                                              ni[idx].uom = '';
+                                            }
                                             setScrapProdItems(ni);
                                           }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Select Item</option>
-                                            {scrapItems.map(i => <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>)}
+                                            {scrapOnlyItems.map(i => {
+                                              const name = i.name || i.item_name || i.itemName;
+                                              const code = i.item_code || i.itemCode;
+                                              return <option key={i.id} value={name}>{name} ({code})</option>;
+                                            })}
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
                                           <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapProdItems]; ni[idx].uom = e.target.value; setScrapProdItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Unit</option>
-                                            {(() => { const si = scrapItems.find(i => i.item_code === item.itemCode); const us: string[] = []; if (si) { const u1 = si.uom || si.unit; const u2 = si.alternate_uom || si.alternative_unit; if (u1) us.push(u1); if (u2 && u2 !== u1) us.push(u2); } return us.map(u => <option key={u} value={u}>{u}</option>); })()}
+                                            {(() => { 
+                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode); 
+                                              const us: string[] = []; 
+                                              if (si) { 
+                                                const u1 = si.uom || si.unit; 
+                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit; 
+                                                if (u1) us.push(u1); 
+                                                if (u2 && u2 !== u1) us.push(u2); 
+                                              } 
+                                              return us.map(u => <option key={u} value={u}>{u}</option>); 
+                                            })()}
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
-                                          <input type="number" value={item.quantityGenerated} onChange={(e) => { const ni = [...scrapProdItems]; ni[idx].quantityGenerated = e.target.value; setScrapProdItems(ni); }} placeholder="Qty" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
+                                          <input type="number" value={item.quantityGenerated} onChange={(e) => { 
+                                            const v = e.target.value;
+                                            const val = parseFloat(v) || 0;
+                                            const ni = [...scrapProdItems]; 
+                                            const totalOfItem = ni.reduce((acc, curr, i) => acc + ((curr.itemCode === item.itemCode) ? (i === idx ? val : (parseFloat(curr.quantityGenerated) || 0)) : 0), 0);
+                                            const balance = item.stockBalance ?? 999999;
+                                            if (totalOfItem > balance) {
+                                              showError(`Insufficient stock at dispatch location. Available: ${balance}`);
+                                            }
+                                            ni[idx].quantityGenerated = v; 
+                                            setScrapProdItems(ni); 
+                                          }} placeholder="Qty" className={`w-full px-2 py-1.5 border rounded text-[11px] focus:ring-1 focus:ring-indigo-500 ${parseFloat(item.quantityGenerated) > (item.stockBalance || 999999) ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} />
                                         </td>
                                         <td className="px-3 py-2 text-center">
                                           <button onClick={() => setScrapProdItems(scrapProdItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
@@ -6669,34 +6863,108 @@ const InventoryPage: React.FC = () => {
                                   </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                  {scrapOtherItemsScrapped.map((item, idx) => (
-                                    <tr key={idx}>
-                                      <td className="px-3 py-2">
-                                        <select value={item.itemCode} onChange={(e) => { const v = e.target.value; const ni = [...scrapOtherItemsScrapped]; ni[idx].itemCode = v; const si = items.find(i => i.item_code === v); if (si) { ni[idx].itemName = si.name || si.item_name; ni[idx].uom = si.uom || si.unit; } setScrapOtherItemsScrapped(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
-                                          <option value="">Select Code</option>
-                                          {items.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
-                                        </select>
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <select value={item.itemName} onChange={(e) => { const v = e.target.value; const ni = [...scrapOtherItemsScrapped]; ni[idx].itemName = v; const si = items.find(i => (i.name || i.item_name) === v); if (si) { ni[idx].itemCode = si.item_code; ni[idx].uom = si.uom || si.unit; } setScrapOtherItemsScrapped(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
-                                          <option value="">Select Item</option>
-                                          {items.map(i => <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>)}
-                                        </select>
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapOtherItemsScrapped]; ni[idx].uom = e.target.value; setScrapOtherItemsScrapped(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
-                                          <option value="">Unit</option>
-                                          {(() => { const si = items.find(i => i.item_code === item.itemCode); const us: string[] = []; if (si) { const u1 = si.uom || si.unit; const u2 = si.alternate_uom || si.alternative_unit; if (u1) us.push(u1); if (u2 && u2 !== u1) us.push(u2); } return us.map(u => <option key={u} value={u}>{u}</option>); })()}
-                                        </select>
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <input type="number" value={item.quantity} onChange={(e) => { const ni = [...scrapOtherItemsScrapped]; ni[idx].quantity = e.target.value; setScrapOtherItemsScrapped(ni); }} placeholder="Qty" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
-                                      </td>
-                                      <td className="px-3 py-2 text-center">
-                                        <button onClick={() => setScrapOtherItemsScrapped(scrapOtherItemsScrapped.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
-                                      </td>
-                                    </tr>
-                                  ))}
+                                   {scrapOtherItemsScrapped.map((item, idx) => {
+                                    const sourcePool = [...inventoryItems, ...items];
+                                    const uniqueMap = new Map();
+                                    sourcePool.forEach(i => {
+                                      const code = i.item_code || i.itemCode;
+                                      if (code && !uniqueMap.has(code)) uniqueMap.set(code, i);
+                                    });
+                                    const allUniqueItems = Array.from(uniqueMap.values());
+                                    const scrapOnlyItems = allUniqueItems.filter(i => {
+                                      const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
+                                      const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
+                                      return cat.includes('scrap') || name.includes('scrap');
+                                    });
+
+                                    return (
+                                      <tr key={idx}>
+                                        <td className="px-3 py-2">
+                                          <select value={item.itemCode} onChange={(e) => {
+                                            const v = e.target.value; 
+                                            const ni = [...scrapOtherItemsScrapped]; 
+                                            ni[idx].itemCode = v; 
+                                            const si = scrapOnlyItems.find(i => (i.item_code || i.itemCode) === v); 
+                                            if (si) { 
+                                              ni[idx].itemName = si.name || si.item_name || si.itemName; 
+                                              ni[idx].uom = si.uom || si.unit; 
+                                              ni[idx].stockBalance = 100;
+                                            } else {
+                                              ni[idx].itemName = '';
+                                              ni[idx].uom = '';
+                                            }
+                                            setScrapOtherItemsScrapped(ni);
+                                          }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Select Code</option>
+                                            {scrapOnlyItems.map(i => {
+                                              const code = i.item_code || i.itemCode;
+                                              return <option key={i.id} value={code}>{code}</option>;
+                                            })}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <select value={item.itemName} onChange={(e) => {
+                                            const v = e.target.value; 
+                                            const ni = [...scrapOtherItemsScrapped]; 
+                                            ni[idx].itemName = v; 
+                                            const si = scrapOnlyItems.find(i => (i.name || i.item_name || i.itemName) === v); 
+                                            if (si) { 
+                                              ni[idx].itemCode = si.item_code || si.itemCode; 
+                                              ni[idx].uom = si.uom || si.unit; 
+                                              ni[idx].stockBalance = 100;
+                                            } else {
+                                              ni[idx].itemCode = '';
+                                              ni[idx].uom = '';
+                                            }
+                                            setScrapOtherItemsScrapped(ni);
+                                          }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Select Item</option>
+                                            {scrapOnlyItems.map(i => {
+                                              const name = i.name || i.item_name || i.itemName;
+                                              const code = i.item_code || i.itemCode;
+                                              return <option key={i.id} value={name}>{name} ({code})</option>
+                                            })}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapOtherItemsScrapped]; ni[idx].uom = e.target.value; setScrapOtherItemsScrapped(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Unit</option>
+                                            {(() => { 
+                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode); 
+                                              const us: string[] = []; 
+                                              if (si) { 
+                                                const u1 = si.uom || si.unit; 
+                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit; 
+                                                if (u1) us.push(u1); 
+                                                if (u2 && u2 !== u1) us.push(u2); 
+                                              } 
+                                              return us.map(u => <option key={u} value={u}>{u}</option>); 
+                                            })()}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <input type="number" value={item.quantity} onChange={(e) => { 
+                                            const v = e.target.value;
+                                            const val = parseFloat(v) || 0;
+                                            const ni = [...scrapOtherItemsScrapped]; 
+                                            
+                                            // Stock Validation
+                                            const totalOfItem = ni.reduce((acc, curr, i) => acc + ((curr.itemCode === item.itemCode) ? (i === idx ? val : (parseFloat(curr.quantity) || 0)) : 0), 0);
+                                            const balance = item.stockBalance ?? 999999;
+                                            if (totalOfItem > balance) {
+                                              showError(`Insufficient stock at dispatch location. Available: ${balance}`);
+                                            }
+                                            
+                                            ni[idx].quantity = v; 
+                                            setScrapOtherItemsScrapped(ni); 
+                                          }} placeholder="Qty" className={`w-full px-2 py-1.5 border rounded text-[11px] focus:ring-1 focus:ring-indigo-500 ${parseFloat(item.quantity) > (item.stockBalance || 999999) ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} />
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                          <button onClick={() => setScrapOtherItemsScrapped(scrapOtherItemsScrapped.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
@@ -6723,25 +6991,80 @@ const InventoryPage: React.FC = () => {
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                   {scrapOtherResultingItems.map((item, idx) => {
-                                    const scrapItems = items.filter(i => (i.category_name || '').toLowerCase().includes('scrap'));
+                                    const sourcePool = [...inventoryItems, ...items];
+                                    const uniqueMap = new Map();
+                                    sourcePool.forEach(i => {
+                                      const code = i.item_code || i.itemCode;
+                                      if (code && !uniqueMap.has(code)) uniqueMap.set(code, i);
+                                    });
+                                    const allUniqueItems = Array.from(uniqueMap.values());
+                                    const scrapItems = allUniqueItems.filter(i => {
+                                      const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
+                                      const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
+                                      return cat.includes('scrap') || name.includes('scrap');
+                                    });
+
                                     return (
                                       <tr key={idx}>
                                         <td className="px-3 py-2">
-                                          <select value={item.itemCode} onChange={(e) => { const v = e.target.value; const ni = [...scrapOtherResultingItems]; ni[idx].itemCode = v; const si = scrapItems.find(i => i.item_code === v); if (si) { ni[idx].itemName = si.name || si.item_name; ni[idx].uom = si.uom || si.unit; } setScrapOtherResultingItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                          <select value={item.itemCode} onChange={(e) => { 
+                                            const v = e.target.value; 
+                                            const ni = [...scrapOtherResultingItems]; 
+                                            ni[idx].itemCode = v; 
+                                            const si = scrapItems.find(i => (i.item_code || i.itemCode) === v); 
+                                            if (si) { 
+                                              ni[idx].itemName = si.name || si.item_name || si.itemName; 
+                                              ni[idx].uom = si.uom || si.unit; 
+                                            } else {
+                                              ni[idx].itemName = '';
+                                              ni[idx].uom = '';
+                                            }
+                                            setScrapOtherResultingItems(ni); 
+                                          }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Select Code</option>
-                                            {scrapItems.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                            {scrapItems.map(i => {
+                                              const code = i.item_code || i.itemCode;
+                                              return <option key={i.id} value={code}>{code}</option>;
+                                            })}
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
-                                          <select value={item.itemName} onChange={(e) => { const v = e.target.value; const ni = [...scrapOtherResultingItems]; ni[idx].itemName = v; const si = scrapItems.find(i => (i.name || i.item_name) === v); if (si) { ni[idx].itemCode = si.item_code; ni[idx].uom = si.uom || si.unit; } setScrapOtherResultingItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                          <select value={item.itemName} onChange={(e) => { 
+                                            const v = e.target.value; 
+                                            const ni = [...scrapOtherResultingItems]; 
+                                            ni[idx].itemName = v; 
+                                            const si = scrapItems.find(i => (i.name || i.item_name || i.itemName) === v); 
+                                            if (si) { 
+                                              ni[idx].itemCode = si.item_code || si.itemCode; 
+                                              ni[idx].uom = si.uom || si.unit; 
+                                            } else {
+                                              ni[idx].itemCode = '';
+                                              ni[idx].uom = '';
+                                            }
+                                            setScrapOtherResultingItems(ni); 
+                                          }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Select Item</option>
-                                            {scrapItems.map(i => <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>)}
+                                            {scrapItems.map(i => {
+                                              const name = i.name || i.item_name || i.itemName;
+                                              const code = i.item_code || i.itemCode;
+                                              return <option key={i.id} value={name}>{name} ({code})</option>;
+                                            })}
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
                                           <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapOtherResultingItems]; ni[idx].uom = e.target.value; setScrapOtherResultingItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Unit</option>
-                                            {(() => { const si = scrapItems.find(i => i.item_code === item.itemCode); const us: string[] = []; if (si) { const u1 = si.uom || si.unit; const u2 = si.alternate_uom || si.alternative_unit; if (u1) us.push(u1); if (u2 && u2 !== u1) us.push(u2); } return us.map(u => <option key={u} value={u}>{u}</option>); })()}
+                                            {(() => { 
+                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode); 
+                                              const us: string[] = []; 
+                                              if (si) { 
+                                                const u1 = si.uom || si.unit; 
+                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit; 
+                                                if (u1) us.push(u1); 
+                                                if (u2 && u2 !== u1) us.push(u2); 
+                                              } 
+                                              return us.map(u => <option key={u} value={u}>{u}</option>); 
+                                            })()}
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
@@ -6835,40 +7158,98 @@ const InventoryPage: React.FC = () => {
                                   </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                  {scrapDispItems.map((item, idx) => (
-                                    <tr key={idx}>
-                                      <td className="px-3 py-2">
-                                        <select value={item.itemCode} onChange={(e) => { const v = e.target.value; const ni = [...scrapDispItems]; ni[idx].itemCode = v; const si = items.find(i => i.item_code === v); if (si) { ni[idx].itemName = si.name || si.item_name; ni[idx].uom = si.uom || si.unit; } setScrapDispItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
-                                          <option value="">Select Code</option>
-                                          {items.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
-                                        </select>
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <select value={item.itemName} onChange={(e) => { const v = e.target.value; const ni = [...scrapDispItems]; ni[idx].itemName = v; const si = items.find(i => (i.name || i.item_name) === v); if (si) { ni[idx].itemCode = si.item_code; ni[idx].uom = si.uom || si.unit; } setScrapDispItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
-                                          <option value="">Select Item</option>
-                                          {items.map(i => <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>)}
-                                        </select>
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapDispItems]; ni[idx].uom = e.target.value; setScrapDispItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
-                                          <option value="">Unit</option>
-                                          {(() => { const si = items.find(i => i.item_code === item.itemCode); const us: string[] = []; if (si) { const u1 = si.uom || si.unit; const u2 = si.alternate_uom || si.alternative_unit; if (u1) us.push(u1); if (u2 && u2 !== u1) us.push(u2); } return us.map(u => <option key={u} value={u}>{u}</option>); })()}
-                                        </select>
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <input type="number" value={item.quantityDisposed} onChange={(e) => { const ni = [...scrapDispItems]; const qty = parseFloat(e.target.value) || 0; const rate = parseFloat(ni[idx].rate) || 0; ni[idx].quantityDisposed = e.target.value; ni[idx].value = parseFloat((qty * rate).toFixed(2)); setScrapDispItems(ni); }} placeholder="Qty" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <input type="number" value={item.rate} readOnly placeholder="Auto" className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500 cursor-not-allowed" />
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <input type="text" value={`₹${(item.value || 0).toFixed(2)}`} readOnly className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold" />
-                                      </td>
-                                      <td className="px-3 py-2 text-center">
-                                        <button onClick={() => setScrapDispItems(scrapDispItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {scrapDispItems.map((item, idx) => {
+                                    const sourcePool = [...inventoryItems, ...items];
+                                    const uniqueMap = new Map();
+                                    sourcePool.forEach(i => {
+                                      const code = i.item_code || i.itemCode;
+                                      if (code && !uniqueMap.has(code)) uniqueMap.set(code, i);
+                                    });
+                                    const allUniqueItems = Array.from(uniqueMap.values());
+                                    const scrapOnlyItems = allUniqueItems.filter(i => {
+                                      const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
+                                      const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
+                                      return cat.includes('scrap') || name.includes('scrap');
+                                    });
+
+                                    return (
+                                      <tr key={idx}>
+                                        <td className="px-3 py-2">
+                                          <select value={item.itemCode} onChange={(e) => { 
+                                            const v = e.target.value; 
+                                            const ni = [...scrapDispItems]; 
+                                            ni[idx].itemCode = v; 
+                                            const si = scrapOnlyItems.find(i => (i.item_code || i.itemCode) === v); 
+                                            if (si) { 
+                                              ni[idx].itemName = si.name || si.item_name || si.itemName; 
+                                              ni[idx].uom = si.uom || si.unit; 
+                                            } else {
+                                              ni[idx].itemName = '';
+                                              ni[idx].uom = '';
+                                            }
+                                            setScrapDispItems(ni); 
+                                          }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Select Code</option>
+                                            {scrapOnlyItems.map(i => {
+                                              const code = i.item_code || i.itemCode;
+                                              return <option key={i.id} value={code}>{code}</option>;
+                                            })}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <select value={item.itemName} onChange={(e) => { 
+                                            const v = e.target.value; 
+                                            const ni = [...scrapDispItems]; 
+                                            ni[idx].itemName = v; 
+                                            const si = scrapOnlyItems.find(i => (i.name || i.item_name || i.itemName) === v); 
+                                            if (si) { 
+                                              ni[idx].itemCode = si.item_code || si.itemCode; 
+                                              ni[idx].uom = si.uom || si.unit; 
+                                            } else {
+                                              ni[idx].itemCode = '';
+                                              ni[idx].uom = '';
+                                            }
+                                            setScrapDispItems(ni); 
+                                          }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Select Item</option>
+                                            {scrapOnlyItems.map(i => {
+                                              const name = i.name || i.item_name || i.itemName;
+                                              const code = i.item_code || i.itemCode;
+                                              return <option key={i.id} value={name}>{name} ({code})</option>;
+                                            })}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapDispItems]; ni[idx].uom = e.target.value; setScrapDispItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Unit</option>
+                                            {(() => { 
+                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode); 
+                                              const us: string[] = []; 
+                                              if (si) { 
+                                                const u1 = si.uom || si.unit; 
+                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit; 
+                                                if (u1) us.push(u1); 
+                                                if (u2 && u2 !== u1) us.push(u2); 
+                                              } 
+                                              return us.map(u => <option key={u} value={u}>{u}</option>); 
+                                            })()}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <input type="number" value={item.quantityDisposed} onChange={(e) => { const ni = [...scrapDispItems]; const qty = parseFloat(e.target.value) || 0; const rate = parseFloat(ni[idx].rate) || 0; ni[idx].quantityDisposed = e.target.value; ni[idx].value = parseFloat((qty * rate).toFixed(2)); setScrapDispItems(ni); }} placeholder="Qty" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <input type="number" value={item.rate} readOnly placeholder="Auto" className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500 cursor-not-allowed" />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <input type="text" value={`₹${(item.value || 0).toFixed(2)}`} readOnly className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold" />
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                          <button onClick={() => setScrapDispItems(scrapDispItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
@@ -8230,7 +8611,7 @@ const InventoryPage: React.FC = () => {
                   onSelect={async (selection) => {
                     handleFormChange('category', selection.id);
                     handleFormChange('categoryPath', selection.fullPath);
-                    setSelectedCategoryId(selection.id);
+                    setSelectedCategoryId(String(selection.id));
                     // Subgroup fetching logic removed as it's no longer used
                   }}
                   value={editFormData?.categoryPath || editFormData?.category || ''}
