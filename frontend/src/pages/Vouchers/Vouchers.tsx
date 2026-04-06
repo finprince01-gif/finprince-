@@ -646,6 +646,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     date: string;
     refNo: string;
     amount: string;
+    originalAmount: string;
+    remainingAmount: string;
     appliedNow: string;
   }>>([]);
 
@@ -783,8 +785,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             id: adv.id,
             date: adv.date,
             refNo: adv.advance_ref_no || adv.reference_no || adv.ref_no || adv.voucher_no,
-            amount: adv.amount || 0,
-            appliedNow: '0'
+            amount: (adv.remaining || adv.amount || 0).toString(),
+            originalAmount: (adv.amount || 0).toString(),
+            remainingAmount: (adv.remaining || adv.amount || 0).toString(),
+            appliedNow: '0',
+            allocatedNow: '0'
           }));
           console.log('[ADV-DEBUG] Mapped & setting:', mapped);
           setPurchaseAdvanceRefs(mapped);
@@ -2501,9 +2506,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     // Auto-population logic for Vouchers
     if (voucherType === 'Purchase' || voucherType === 'Sales') {
-      if (voucherType === 'Purchase' && value) {
-        fetchVendorAdvances(value);
-      }
+      // (Fetch advances moved to end to ensure it runs even if matched above)
 
       if (!value) {
         setGstin('');
@@ -2577,8 +2580,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
         setPurchaseTerms(parts.join('\n\n'));
         setMasterTermsData(vendor);
-
-        return;
       }
 
       // 2. Try to match Customer from Rich Data
@@ -2611,8 +2612,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
         setPurchaseTerms(parts.join('\n\n'));
         setMasterTermsData(customer);
-
-        return;
       }
 
       // 3. Fallback to Ledgers
@@ -2622,6 +2621,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (ledger.additional_data?.address) {
           setAddressFields(ledger.additional_data.address);
         }
+      }
+
+      // 4. ALWAYS fetch advances if value present
+      if (value) {
+        fetchVendorAdvances(value);
       }
     }
   }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers, setGrnRefNo, setSelectedPurchasePOs, setPurchaseItems, setPurchaseAdvanceRefs, fetchVendorAdvances]);
@@ -3230,15 +3234,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const ref = { ...newRefs[index] };
     
     let finalValue = value;
-    if (field === 'appliedNow') {
-      const max = parseFloat(ref.amount) || 0;
+    if (field === 'appliedNow' || field === 'allocatedNow') {
+      const available = parseFloat(ref.amount) || 0;
       const current = parseFloat(value) || 0;
-      if (current > max) {
+      
+      // Cap at available amount
+      if (current > available) {
           finalValue = ref.amount;
       }
+      
+      // Update both to keep them synced for totals and API
+      ref.appliedNow = finalValue;
+      (ref as any).allocatedNow = finalValue;
+    } else {
+      (ref as any)[field] = finalValue;
     }
 
-    (ref as any)[field] = finalValue;
     newRefs[index] = ref;
     setPurchaseAdvanceRefs(newRefs);
   };
@@ -3246,7 +3257,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Auto-calculate Advance Paid from Advance References
   useEffect(() => {
     const totalAppliedNow = purchaseAdvanceRefs.reduce((sum, ref) => {
-      const val = parseFloat(ref.appliedNow) || 0;
+      const val = parseFloat((ref as any).allocatedNow || ref.appliedNow) || 0;
       return sum + val;
     }, 0);
     setPurchaseAdvancePaid(totalAppliedNow.toFixed(2));
@@ -4784,41 +4795,55 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   {/* Middle Column: Advance Reference Grid */}
                   <div className="border border-gray-300 rounded-[4px] p-4 bg-indigo-50/50 flex flex-col h-full">
                     <div className="space-y-3 flex-1 flex flex-col">
-                      <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700 border-b border-gray-200 pb-2">
+                      <div className="grid grid-cols-[100px_1fr_100px_120px] gap-2 text-xs font-semibold text-gray-700 border-b border-gray-200 pb-2">
                         <div className="text-center">Date</div>
-                        <div className="text-center">Advance Ref. No.</div>
-                        <div className="text-center text-right pr-4">Amount</div>
-                        <div className="text-center">Applied Now</div>
+                        <div className="text-center">Reference No.</div>
+                        <div className="text-right pr-2">Available</div>
+                        <div className="text-center">Allocated Amount</div>
                       </div>
 
                       {purchaseAdvanceRefs.length > 0 ? (
                         <div className="max-h-[450px] overflow-y-auto space-y-2 flex-1">
-                          {purchaseAdvanceRefs.map((ref, idx) => (
-                            <div key={ref.id || idx} className="grid grid-cols-4 gap-2 items-center text-sm py-1 border-b border-indigo-100/50">
-                              <div className="text-center text-gray-600">{ref.date}</div>
-                              <div className="text-center font-medium text-indigo-900">{ref.refNo}</div>
-                              <div className="text-right pr-4">
-                                <input
-                                  type="text"
-                                  value={ref.appliedNow === "0" ? Number(ref.amount).toFixed(2) : ref.appliedNow}
-                                  readOnly={ref.appliedNow === "0"}
-                                  onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'appliedNow', e.target.value)}
-                                  className={`w-24 px-2 py-1 border border-gray-300 rounded text-xs text-right ${ref.appliedNow === "0" ? 'bg-white cursor-not-allowed' : 'bg-white font-medium border-indigo-300 shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500'}`}
-                                />
+                          {purchaseAdvanceRefs.map((ref, idx) => {
+                            const isAllocated = Number(ref.appliedNow) > 0;
+                            return (
+                              <div key={ref.id || idx} className="grid grid-cols-[110px_1fr_100px_130px] gap-2 items-center text-sm py-2 border-b border-indigo-100/50 hover:bg-white transition-colors">
+                                <div className="text-center text-gray-500 text-xs">{ref.date}</div>
+                                <div className="font-medium text-indigo-900 truncate px-1" title={ref.refNo}>{ref.refNo}</div>
+                                <div className="text-right pr-2 font-semibold text-emerald-700">
+                                  {Number(ref.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isAllocated}
+                                    title="Check to use full amount"
+                                    onChange={(e) => {
+                                      const newVal = e.target.checked ? String(ref.amount) : "0";
+                                      handlePurchaseAdvanceRefChange(idx, 'allocatedNow', newVal);
+                                    }}
+                                    className="h-5 w-5 text-indigo-600 focus:ring-indigo-200 border-gray-300 rounded cursor-pointer transition-transform hover:scale-110"
+                                  />
+                                  <div className="relative w-full">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">₹</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={(ref as any).allocatedNow === "0" || !(ref as any).allocatedNow ? "" : (ref as any).allocatedNow}
+                                      placeholder="0.00"
+                                      title="Enter partial amount to allocate"
+                                      onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'allocatedNow', e.target.value)}
+                                      className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right transition-all outline-none ${
+                                        isAllocated 
+                                        ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-100 font-bold text-indigo-950" 
+                                        : "bg-gray-50/50 border-gray-200 text-gray-400"
+                                      }`}
+                                    />
+                                  </div>
+                                </div>
                               </div>
-                              <div className="flex justify-center">
-                                <input
-                                  type="checkbox"
-                                  checked={Number(ref.appliedNow) > 0}
-                                  onChange={(e) => {
-                                    const newVal = e.target.checked ? String(ref.amount) : "0";
-                                    handlePurchaseAdvanceRefChange(idx, 'appliedNow', newVal);
-                                  }}
-                                  className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                                />
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-500 text-sm italic">

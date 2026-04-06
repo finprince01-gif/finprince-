@@ -350,7 +350,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         setPaymentPayable('');
         setPaymentPostingNote('');
         setTermsConditions('');
-        setAdvanceReferences([{ id: 1, date: '', refNo: '', amount: '', originalAmount: '', appliedNow: false }]);
+        setAdvanceReferences([{ id: 1, date: '', refNo: '', amount: '', originalAmount: '', remainingAmount: '', appliedNow: false }]);
         
         setDispatchFrom('');
         setModeOfTransport('Road');
@@ -796,8 +796,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 id: adv.id,
                                 date: adv.date,
                                 refNo: adv.advance_ref_no,
-                                amount: adv.amount.toString(),
+                                amount: (adv.remaining || adv.amount).toString(),
                                 originalAmount: adv.amount.toString(),
+                                remainingAmount: (adv.remaining || adv.amount).toString(),
                                 appliedNow: false
                             })));
                         }
@@ -831,10 +832,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     const handleAdvanceAmountChange = (id: number | string, amount: string) => {
         setAdvanceReferences(prev => prev.map(ref => {
             if (ref.id === id) {
-                const max = parseFloat(ref.originalAmount) || 0;
+                const max = parseFloat(ref.remainingAmount) || 0;
                 const value = parseFloat(amount) || 0;
-                // If entered amount is more than maximum available, cap it to maximum
-                const finalAmount = value > max ? ref.originalAmount : amount;
+                // If entered amount is more than maximum remaining, cap it
+                const finalAmount = value > max ? ref.remainingAmount : amount;
                 return { ...ref, amount: finalAmount };
             }
             return ref;
@@ -1329,6 +1330,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         refNo: string;
         amount: string;
         originalAmount: string;
+        remainingAmount: string;
         appliedNow: boolean;
     }>>([]);
     const [termsConditions, setTermsConditions] = useState('');
@@ -4182,11 +4184,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 {/* Middle Column - Advance References */}
                                 <div className="border border-gray-300 rounded-[4px] p-4 bg-blue-50 h-full">
                                     <div className="space-y-3 h-full flex flex-col">
-                                        <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700">
+                                        <div className="grid grid-cols-[100px_1fr_100px_120px] gap-2 text-xs font-semibold text-gray-700 border-b border-gray-200 pb-2">
                                             <div className="text-center">Date</div>
-                                            <div className="text-center">Advance Ref. No.</div>
-                                            <div className="text-center">Amount</div>
-                                            <div className="text-center">Applied Now</div>
+                                            <div className="text-center">Reference No.</div>
+                                            <div className="text-right pr-2">Available</div>
+                                            <div className="text-center">Allocated Amount</div>
                                         </div>
 
                                         {advanceReferences.length === 0 ? (
@@ -4195,33 +4197,26 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                             </div>
                                         ) : (
                                             advanceReferences.map((ref) => (
-                                                <div key={ref.id} className="grid grid-cols-4 gap-2">
-                                                    <input
-                                                        type="date"
-                                                        value={ref.date}
-                                                        readOnly
-                                                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white"
-                                                    />
-                                                    <select
-                                                        value={ref.refNo}
-                                                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white"
-                                                    >
-                                                        <option value="">Select</option>
-                                                        <option value={ref.refNo}>{ref.refNo}</option>
-                                                    </select>
-                                                    <input
-                                                        type="text"
-                                                        value={ref.amount}
-                                                        readOnly={!ref.appliedNow}
-                                                        onChange={(e) => handleAdvanceAmountChange(ref.id, e.target.value)}
-                                                        className={`px-2 py-1 border border-gray-300 rounded text-xs text-center ${!ref.appliedNow ? 'bg-white' : 'bg-white font-medium border-indigo-300 shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500'}`}
-                                                    />
-                                                    <div className="flex items-center justify-center">
+                                                <div key={ref.id} className="grid grid-cols-[100px_1fr_100px_120px] gap-2 items-center text-sm py-1 border-b border-blue-100/50">
+                                                    <div className="text-center text-gray-500 text-xs">{ref.date}</div>
+                                                    <div className="text-center truncate px-1" title={ref.refNo}>{ref.refNo}</div>
+                                                    <div className="text-right pr-2 font-medium text-gray-700">
+                                                        {Number(ref.remainingAmount || ref.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
                                                         <input
                                                             type="checkbox"
-                                                            checked={ref.appliedNow}
+                                                            checked={!!ref.appliedNow}
                                                             onChange={(e) => handleAdvanceCheckedChange(ref.id, e.target.checked)}
-                                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                                                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={!ref.appliedNow ? "" : ref.amount}
+                                                            placeholder="0.00"
+                                                            onChange={(e) => handleAdvanceAmountChange(ref.id, e.target.value)}
+                                                            className="w-full px-1.5 py-1 border border-gray-300 rounded text-xs text-right bg-white focus:ring-1 focus:ring-indigo-500 font-semibold"
                                                         />
                                                     </div>
                                                 </div>

@@ -26,6 +26,7 @@ from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesEwayBill
 )
 from .models_voucher_allocation import VoucherAllocation
+from .models_advance_allocation import AdvanceAllocationMap  # noqa: F401  advance consumption tracking
 
 
 # ============================================================================

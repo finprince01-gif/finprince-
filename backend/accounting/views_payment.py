@@ -342,10 +342,33 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
         from itertools import chain
         combined = list(chain(payment_items, receipt_items))
         
+        # 3. Calculate Remaining and Filter (Phase 3 & 4A)
+        from decimal import Decimal
+        from accounting.services.advance_service import get_allocated_amount
+        
+        final_list = []
+        for adv in combined:
+            source_type = 'payment' if isinstance(adv, PaymentVoucherItem) else 'receipt'
+            total_amt = Decimal(str(getattr(adv, 'amount', 0)))
+            if source_type == 'receipt':
+                # ReceiptVoucherItem might have received_amount or amount
+                total_amt = Decimal(str(getattr(adv, 'received_amount', 0) or getattr(adv, 'amount', 0)))
+            
+            allocated = get_allocated_amount(adv.id, source_type, tenant_id)
+            remaining = total_amt - allocated
+            
+            # Attach to object for serializer
+            adv._allocated = allocated
+            adv._remaining = remaining
+            
+            # Only include if remaining balance is positive (> 0.01 tolerance)
+            if remaining > Decimal('0.01'):
+                final_list.append(adv)
+        
         # Sort by date descending (vouchers must be Prefetched)
-        combined.sort(key=lambda x: x.voucher.date, reverse=True)
+        final_list.sort(key=lambda x: x.voucher.date, reverse=True)
 
-        serializer = self.get_serializer(combined, many=True)
+        serializer = self.get_serializer(final_list, many=True)
         return Response(serializer.data)
 
     def _get_receipt_advances(self, ledger_id, tenant_id=None, category=None):
