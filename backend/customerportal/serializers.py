@@ -823,18 +823,33 @@ class CustomerMasterLongTermContractBasicDetailSerializer(serializers.ModelSeria
     """Serializer for Long-term Contract Basic Details"""
     products_services = CustomerMasterLongTermContractProductServiceSerializer(many=True, read_only=True)
     terms_conditions = CustomerMasterLongTermContractTermsConditionSerializer(read_only=True)
+    branch_name = serializers.SerializerMethodField()
     
     class Meta:
         model = CustomerMasterLongTermContractBasicDetail
         fields = [
             'id', 'tenant_id', 'contract_number', 'customer_id', 'customer_name',
-            'branch_id', 'contract_type', 'contract_validity_from', 'contract_validity_to',
+            'branch_id', 'branch_name', 'contract_type', 'contract_validity_from', 'contract_validity_to',
             'contract_document', 'automate_billing', 'bill_start_date', 'billing_frequency',
             'bill_period_from', 'bill_period_to',
             'is_active', 'is_deleted', 'created_at', 'updated_at', 'created_by',
             'products_services', 'terms_conditions'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_by', 'created_at', 'updated_at']
+
+    def get_branch_name(self, obj):
+        """Get the branch reference name for display"""
+        if not obj.branch_id:
+            return "Main Branch"
+            
+        try:
+            from .models import CustomerMasterCustomerGSTDetails
+            branch = CustomerMasterCustomerGSTDetails.objects.filter(id=obj.branch_id).first()
+            if branch:
+                return branch.branch_reference_name or "Main Branch"
+            return "Unknown Branch"
+        except Exception:
+            return "Unknown Branch"
 
 
 class CustomerTransactionSalesQuotationGeneralSerializer(serializers.ModelSerializer):

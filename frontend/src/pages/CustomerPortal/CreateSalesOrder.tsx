@@ -51,7 +51,16 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 id: number;
                 gstin: string;
                 defaultRef: string;
-                address: string;
+                address?: string;
+                addressLine1?: string;
+                addressLine2?: string;
+                addressLine3?: string;
+                city?: string;
+                state?: string;
+                pincode?: string;
+                country?: string;
+                email?: string;
+                contactNumber?: string;
             }[];
         };
         address_line1?: string;
@@ -507,8 +516,24 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 const singleBranch = customer.gst_details.branches[0];
                 setBranch(singleBranch.defaultRef || 'Main Branch');
                 setGstNo(singleBranch.gstin || '');
-                setAddress(singleBranch.address || '');
-                setDeliverAt(singleBranch.address || '');
+                
+                // Construct full address from parts
+                const fullAddress = [
+                    singleBranch.addressLine1,
+                    singleBranch.addressLine2,
+                    singleBranch.addressLine3,
+                    singleBranch.city,
+                    singleBranch.state,
+                    singleBranch.pincode,
+                    singleBranch.country
+                ].filter(Boolean).join(', ');
+                
+                setAddress(fullAddress || singleBranch.address || '');
+                setDeliverAt(fullAddress || singleBranch.address || '');
+                
+                // Also update contact info if available
+                if (singleBranch.email) setEmail(singleBranch.email);
+                if (singleBranch.contactNumber) setContactNumber(singleBranch.contactNumber);
             }
         } else {
             setAllCustomerBranches([]);
@@ -529,8 +554,24 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
             if (branchesForGst.length === 1) {
                 const singleBranch = branchesForGst[0];
                 setBranch(singleBranch.defaultRef || '');
-                setAddress(singleBranch.address || '');
-                setDeliverAt(singleBranch.address || '');
+                
+                // Construct full address from parts
+                const fullAddress = [
+                    singleBranch.addressLine1,
+                    singleBranch.addressLine2,
+                    singleBranch.addressLine3,
+                    singleBranch.city,
+                    singleBranch.state,
+                    singleBranch.pincode,
+                    singleBranch.country
+                ].filter(Boolean).join(', ');
+                
+                setAddress(fullAddress || singleBranch.address || '');
+                setDeliverAt(fullAddress || singleBranch.address || '');
+                
+                // Also update contact info if available
+                if (singleBranch.email) setEmail(singleBranch.email);
+                if (singleBranch.contactNumber) setContactNumber(singleBranch.contactNumber);
             }
         } else {
             // If GST is cleared, show all branches for the customer
@@ -545,8 +586,24 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
         const branchDetails = allCustomerBranches.find(b => b.defaultRef === selectedBranchRef);
         if (branchDetails) {
             setGstNo(branchDetails.gstin || '');
-            setAddress(branchDetails.address || '');
-            setDeliverAt(branchDetails.address || '');
+            
+            // Construct full address from parts
+            const fullAddress = [
+                branchDetails.addressLine1,
+                branchDetails.addressLine2,
+                branchDetails.addressLine3,
+                branchDetails.city,
+                branchDetails.state,
+                branchDetails.pincode,
+                branchDetails.country
+            ].filter(Boolean).join(', ');
+            
+            setAddress(fullAddress || branchDetails.address || '');
+            setDeliverAt(fullAddress || branchDetails.address || '');
+            
+            // Also update contact info if available
+            if (branchDetails.email) setEmail(branchDetails.email);
+            if (branchDetails.contactNumber) setContactNumber(branchDetails.contactNumber);
         }
     };
 
