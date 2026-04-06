@@ -312,25 +312,22 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                         entries=entries,
                     )
                     
-                    # --- Record Advance Allocation Maps (Missing Linkage) ---
-                    try:
-                        from accounting.models import AdvanceAllocationMap
-                        adv_refs = due_data.get('advance_references', []) if due_data else []
-                        if isinstance(adv_refs, list):
-                            for ref in adv_refs:
-                                ref_no = ref.get('refNo')
-                                applied = float(ref.get('appliedNow', 0))
-                                if ref_no and applied > 0:
-                                    AdvanceAllocationMap.objects.create(
-                                        tenant_id=tenant_id,
-                                        advance_ref_no=ref_no,
-                                        voucher_id=voucher.id,
-                                        voucher_type='purchase',
-                                        amount=applied
-                                    )
-                                    print(f"Registered allocation: {ref_no} -> Purchase {voucher.id}")
-                    except Exception as ex:
-                        print(f"FAILED TO REGISTER ADVANCE ALLOCATION: {ex}")
+                    # --- Record Advance Allocation Maps (Phase 4B) ---
+                    from accounting.services.advance_service import write_allocations
+                    adv_refs = due_data.get('advance_references', []) if due_data else []
+                    if adv_refs:
+                        try:
+                            write_allocations(
+                                tenant_id=tenant_id,
+                                voucher_id=voucher.id,
+                                voucher_type='purchase',
+                                advance_refs=adv_refs,
+                                ledger_id=vendor_ledger.id if vendor_ledger else None
+                            )
+                        except Exception as ex:
+                            print(f"[PurchaseSerializer] Advance allocation failed: {ex}")
+                            # In serious production, we might raise a validation error here.
+                            # For now, we log it to avoid breaking the main voucher save if a ref is slightly off.
         except Exception as e:
             print(f"Error posting purchase to entries: {str(e)}")
 
@@ -515,27 +512,20 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                         entries=entries,
                     )
                     
-                    # --- Record Advance Allocation Maps Update ---
-                    try:
-                        from accounting.models import AdvanceAllocationMap
-                        # Clear old allocations for this voucher
-                        AdvanceAllocationMap.objects.filter(tenant_id=tenant_id, voucher_id=voucher_id, voucher_type='purchase').delete()
-                        
-                        adv_refs = due_data.get('advance_references', []) if due_data else []
-                        if isinstance(adv_refs, list):
-                            for ref in adv_refs:
-                                ref_no = ref.get('refNo')
-                                applied = float(ref.get('appliedNow', 0))
-                                if ref_no and applied > 0:
-                                    AdvanceAllocationMap.objects.create(
-                                        tenant_id=tenant_id,
-                                        advance_ref_no=ref_no,
-                                        voucher_id=voucher_id,
-                                        voucher_type='purchase',
-                                        amount=applied
-                                    )
-                    except Exception as ex:
-                        print(f"FAILED TO UPDATE ADVANCE ALLOCATION: {ex}")
+                    # --- Record Advance Allocation Maps Update (Phase 4B) ---
+                    from accounting.services.advance_service import write_allocations
+                    adv_refs = due_data.get('advance_references', []) if due_data else []
+                    if adv_refs:
+                        try:
+                            write_allocations(
+                                tenant_id=tenant_id,
+                                voucher_id=voucher_id,
+                                voucher_type='purchase',
+                                advance_refs=adv_refs,
+                                ledger_id=vendor_ledger.id if vendor_ledger else None
+                            )
+                        except Exception as ex:
+                            print(f"[PurchaseSerializer] Advance allocation update failed: {ex}")
         except Exception as e:
             print(f"Error updating purchase accounting entries: {str(e)}")
 

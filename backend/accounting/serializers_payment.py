@@ -545,10 +545,18 @@ class AdvancePaymentSerializer(serializers.ModelSerializer):
     pay_to_name = serializers.SerializerMethodField()
     category = serializers.SerializerMethodField()
     pay_to_ledger = serializers.SerializerMethodField()
+    remaining = serializers.SerializerMethodField()
+    allocated = serializers.SerializerMethodField()
 
     class Meta:
         model = PaymentVoucherItem
-        fields = ['id', 'advance_ref_no', 'amount', 'date', 'pay_to_ledger', 'pay_to_name', 'category']
+        fields = ['id', 'advance_ref_no', 'amount', 'date', 'pay_to_ledger', 'pay_to_name', 'category', 'remaining', 'allocated']
+
+    def get_remaining(self, obj):
+        return getattr(obj, '_remaining', Decimal(str(obj.amount)))
+
+    def get_allocated(self, obj):
+        return getattr(obj, '_allocated', Decimal('0.00'))
 
     def get_advance_ref_no(self, obj):
         # 1. Direct field (ReceiptVoucherItem)
