@@ -198,6 +198,19 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 'id': gst.id,
                 'gstin': gst.gstin,
                 'branch_reference_name': gst.branch_reference_name or "Main Branch",
+                'address_line_1': addressLine1,
+                'address_line_2': addressLine2,
+                'address_line_3': addressLine3,
+                'city': city,
+                'state': state,
+                'pincode': pincode,
+                'country': country,
+                'addressLine1': addressLine1,
+                'addressLine2': addressLine2,
+                'addressLine3': addressLine3,
+                'contactPerson': gst.branch_contact_person,
+                'email': gst.branch_email,
+                'contactNumber': gst.branch_contact_number
             })
 
         return {

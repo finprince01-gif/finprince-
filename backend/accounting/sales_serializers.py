@@ -79,21 +79,21 @@ class SalesVoucherDocumentSerializer(serializers.Serializer):
 class SalesVoucherListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for Sales Voucher list/dropdowns"""
     
-    # Map new fields to old names for frontend compatibility where possible
+    # Aliases for frontend compatibility
+    voucher_no = serializers.CharField(source='sales_invoice_no', read_only=True)
     sales_invoice_number = serializers.CharField(source='sales_invoice_no', read_only=True)
-    # customer field is removed as we use customer_name directly
     voucher_type_name = serializers.CharField(source='voucher_name', read_only=True)
     
-    # Missing fields in schema: grand_total, status
-    # We return 0 or empty for now
-    grand_total = serializers.FloatField(default=0.0, read_only=True)
+    # Map grand_total to total_amount for frontend
+    total_amount = serializers.FloatField(source='payment_details.payment_invoice_value', default=0.0, read_only=True)
+    grand_total = serializers.FloatField(source='payment_details.payment_invoice_value', default=0.0, read_only=True)
     status = serializers.CharField(default='draft', read_only=True)
 
     class Meta:
         model = SalesVoucher
         fields = [
-            'id', 'date', 'sales_invoice_number', 'customer_name', 
-            'voucher_type_name', 'grand_total', 'status'
+            'id', 'date', 'voucher_no', 'sales_invoice_number', 'customer_name', 
+            'voucher_type_name', 'total_amount', 'grand_total', 'status'
         ]
         read_only_fields = fields
 

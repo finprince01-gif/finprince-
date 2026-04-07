@@ -35,6 +35,7 @@ from accounting.sales_serializers import (
 )
 from accounting import sales_flow, sales_database
 from core.tenant import get_tenant_from_request
+from core.utils import TenantQuerysetMixin
 
 
 class ReceiptVoucherTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -75,16 +76,9 @@ class ReceiptVoucherTypeViewSet(viewsets.ReadOnlyModelViewSet):
         return sales_database.get_voucher_types(tenant_id)
 
 
-class SalesVoucherViewSet(viewsets.ModelViewSet):
+class SalesVoucherViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     """
     API endpoint for Sales Vouchers.
-    
-    GET /api/vouchers/sales/ - List all sales vouchers
-    POST /api/vouchers/sales/ - Create a new sales voucher
-    GET /api/vouchers/sales/{id}/ - Retrieve a specific sales voucher
-    PUT /api/vouchers/sales/{id}/ - Update a sales voucher
-    PATCH /api/vouchers/sales/{id}/ - Partial update
-    DELETE /api/vouchers/sales/{id}/ - Delete (cancel) a sales voucher
     """
     serializer_class = SalesVoucherSerializer
     permission_classes = [IsAuthenticated]
@@ -96,37 +90,33 @@ class SalesVoucherViewSet(viewsets.ModelViewSet):
         return SalesVoucherSerializer
 
     def get_queryset(self):
-        tenant_id = get_tenant_from_request(self.request)
-        if not tenant_id:
+        queryset = SalesVoucher.objects.all()
+        
+        # Identity-based tenant filtering via TenantQuerysetMixin
+        user = self.request.user
+        tenant_id = getattr(user, 'tenant_id', None)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        else:
             return SalesVoucher.objects.none()
 
         # Get filter parameters
         filters = {}
-        if self.request.query_params.get('date_from'):
-            filters['date_from'] = self.request.query_params['date_from']
-        if self.request.query_params.get('date_to'):
-            filters['date_to'] = self.request.query_params['date_to']
-            
-        # Ensure customer_id is a valid integer if provided
-        customer_id = self.request.query_params.get('customer_id')
-        if customer_id and customer_id.isdigit():
-            filters['customer_id'] = int(customer_id)
-        elif customer_id:
-            # If invalid ID format, return empty to avoid slow queries or errors
-            return SalesVoucher.objects.none()
-
+        
         if self.request.query_params.get('customer_name'):
             filters['customer_name'] = self.request.query_params['customer_name']
+
+        if self.request.query_params.get('branch'):
+            filters['branch'] = self.request.query_params['branch']
 
         if self.request.query_params.get('status'):
             filters['status'] = self.request.query_params['status']
         
-        prefetch = (self.action != 'list')
-        queryset = sales_database.get_sales_vouchers(tenant_id, filters, prefetch=prefetch)
+        # Use database layer for filtering
+        queryset = sales_database.get_sales_vouchers(tenant_id, filters, prefetch=True)
         
-        # Security/Performance: Always limit list results to prevent timeouts
-        if self.action == 'list':
-            return queryset[:1000]
+        # Always prefetch payment_details to ensure grand_total stays accurate
+        queryset = queryset.select_related('payment_details').prefetch_related('items')
             
         return queryset
     
