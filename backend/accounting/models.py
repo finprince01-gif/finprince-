@@ -26,16 +26,7 @@ from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesEwayBill
 )
 from .models_voucher_allocation import VoucherAllocation
-<<<<<<< Updated upstream
-=======
-from .models_voucher_debit_note import (
-    VoucherDebitNoteSupplierDetails,
-    VoucherDebitNoteSupplyDetails,
-    VoucherDebitNoteDueDetails,
-    VoucherDebitNoteTransitDetails
-)
 from .models_advance_allocation import AdvanceAllocationMap  # noqa: F401  advance consumption tracking
->>>>>>> Stashed changes
 
 
 # ============================================================================

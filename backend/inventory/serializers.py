@@ -16,10 +16,11 @@ class InventoryMasterCategorySerializer(serializers.ModelSerializer):
     full_path = serializers.ReadOnlyField()
     group = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
     subgroup = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
+    sub_subgroup = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
     
     class Meta:
         model = InventoryMasterCategory
-        fields = ['id', 'tenant_id', 'category', 'group', 'subgroup', 'full_path', 'is_active', 'created_at', 'updated_at']
+        fields = ['id', 'tenant_id', 'category', 'group', 'subgroup', 'sub_subgroup', 'full_path', 'is_active', 'created_at', 'updated_at']
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at', 'full_path']
 
     def validate_group(self, value):

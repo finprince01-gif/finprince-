@@ -141,6 +141,28 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             invoice.voucher_id = voucher.id
             invoice.save(update_fields=['voucher_id'])
 
+            # --- Record Advance Allocation Maps (Phase 4C) ---
+            if payment_obj and payment_obj.advance_references:
+                from django.db.models import Q
+                from accounting.services.advance_service import write_allocations
+                try:
+                    # Parse if string, or use as-is if already list/dict
+                    adv_refs = payment_obj.advance_references
+                    if isinstance(adv_refs, str):
+                        import json
+                        adv_refs = json.loads(adv_refs)
+                    
+                    if adv_refs:
+                        write_allocations(
+                            tenant_id=tenant_id,
+                            voucher_id=voucher.id,
+                            voucher_type='sales',
+                            advance_refs=adv_refs,
+                            ledger_id=invoice.customer_id
+                        )
+                except Exception as ex:
+                    print(f"[SalesSerializer] Advance allocation failed: {ex}")
+
         print(f"Voucher {invoice.sales_invoice_no} saved successfully (ID: {invoice.id})")
 
         # ACCOUNTING POSTING (OUTSIDE atomic transaction)
@@ -289,5 +311,28 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             instance.eway_bill_details.all().delete()
             for eway_data in eway_bill_details_data:
                 VoucherSalesEwayBill.objects.create(invoice=instance, tenant_id=tenant_id, **eway_data)
+
+        # --- Record Advance Allocation Maps Update (Phase 4C) ---
+        if instance.voucher_id:
+            from accounting.models_voucher_sales import VoucherSalesPaymentDetails
+            payment_obj = VoucherSalesPaymentDetails.objects.filter(invoice=instance).first()
+            if payment_obj and payment_obj.advance_references:
+                from accounting.services.advance_service import write_allocations
+                try:
+                    adv_refs = payment_obj.advance_references
+                    if isinstance(adv_refs, str):
+                        import json
+                        adv_refs = json.loads(adv_refs)
+                    
+                    if adv_refs:
+                        write_allocations(
+                            tenant_id=tenant_id,
+                            voucher_id=instance.voucher_id,
+                            voucher_type='sales',
+                            advance_refs=adv_refs,
+                            ledger_id=instance.customer_id
+                        )
+                except Exception as ex:
+                    print(f"[SalesSerializer] Advance allocation update failed: {ex}")
 
         return instance

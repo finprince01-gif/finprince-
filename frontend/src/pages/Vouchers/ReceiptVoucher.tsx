@@ -136,19 +136,28 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             id: `portal-cust-${c.id}`,
             name: c.customer_name || c.name,
             group: 'Sundry Debtors',
-            isPortal: true
+            isPortal: true,
+            type: 'Customer'
         }));
 
         const vendOptions = portalVendors.map(v => ({
             id: `portal-vend-${v.id}`,
             name: v.vendor_name || v.name,
             group: 'Sundry Creditors',
-            isPortal: true
+            isPortal: true,
+            type: 'Vendor'
+        }));
+
+        // Map existing ledgers and assign types
+        const ledgerOptions = allLedgers.map(l => ({
+            ...l,
+            type: l.group === 'Sundry Debtors' ? 'Customer' : 
+                  l.group === 'Sundry Creditors' ? 'Vendor' : 'Ledger'
         }));
 
         // Combine all, avoiding duplicates if name matches exactly with an existing ledger
-        const combined = [...allLedgers];
-        const existingNames = new Set(allLedgers.map(l => l.name.toLowerCase()));
+        const combined = [...ledgerOptions];
+        const existingNames = new Set(ledgerOptions.map(l => l.name.toLowerCase()));
 
         [...custOptions, ...vendOptions].forEach(portalEntity => {
             if (!existingNames.has(portalEntity.name.toLowerCase())) {
@@ -928,7 +937,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         setReceiveFrom(val);
                                         handleCustomerSelect(val);
                                     }}
-                                    options={receiveFromOptions.map(l => l.name)}
+                                    options={receiveFromOptions.map(l => ({
+                                        label: (l as any).type ? `${l.name} (${(l as any).type})` : l.name,
+                                        value: l.name
+                                    }))}
                                     placeholder="Select Receive From"
                                     className="flex-1"
                                 />
@@ -1168,7 +1180,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 key={`receive-from-${row.id}`}
                                                 value={row.receiveFrom}
                                                 onChange={val => handleReceiptRowChange(row.id, 'receiveFrom', val)}
-                                                options={receiveFromOptions.map(l => l.name)}
+                                                options={receiveFromOptions.map(l => ({
+                                                    label: (l as any).type ? `${l.name} (${(l as any).type})` : l.name,
+                                                    value: l.name
+                                                }))}
                                                 placeholder="Select Receive From"
                                                 className="w-full h-[40px]"
                                             />

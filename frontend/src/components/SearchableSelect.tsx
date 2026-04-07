@@ -1,11 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from './Icon';
+
+interface SearchableOption {
+    label: string;
+    value: string;
+}
 
 interface SearchableSelectProps {
     value: string;
     onChange: (value: string) => void;
-    options: string[];
+    options: (string | SearchableOption)[];
     placeholder?: string;
     className?: string;
     disabled?: boolean;
@@ -17,6 +22,11 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
     const portalRef = useRef<HTMLDivElement>(null);
     const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
     const [isTyping, setIsTyping] = useState(false);
+    const [searchValue, setSearchValue] = useState("");
+
+    const normalizedOptions = useMemo(() => 
+        options.map(opt => typeof opt === 'string' ? { label: opt, value: opt } : opt),
+    [options]);
 
     const updatePosition = () => {
         if (containerRef.current) {
@@ -29,6 +39,14 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
         }
     };
 
+    // When value changes from outside, update search value to match its label
+    useEffect(() => {
+        if (!isTyping) {
+            const selected = normalizedOptions.find(o => o.value === value);
+            setSearchValue(selected ? selected.label : value || "");
+        }
+    }, [value, normalizedOptions, isTyping]);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as Node;
@@ -37,6 +55,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
                 portalRef.current && !portalRef.current.contains(target)
             ) {
                 setIsOpen(false);
+                const selected = normalizedOptions.find(o => o.value === value);
+                setSearchValue(selected ? selected.label : value);
+                setIsTyping(false);
             }
         };
 
@@ -59,13 +80,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
             window.removeEventListener('scroll', handleScroll, true);
             window.removeEventListener('resize', () => setIsOpen(false));
         };
-    }, [isOpen]);
+    }, [isOpen, value, normalizedOptions]);
 
     const filteredOptions = isTyping
-        ? options.filter(opt =>
-            (opt || '').toLowerCase().includes((value || '').toLowerCase())
+        ? normalizedOptions.filter(opt =>
+            (opt.label || '').toLowerCase().includes((searchValue || '').toLowerCase())
         )
-        : options;
+        : normalizedOptions;
 
     return (
         <div className={`relative ${className} ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`} ref={containerRef}>
@@ -73,14 +94,20 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
                 <input
                     type="text"
                     className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:ring-indigo-500 focus:border-indigo-500 pr-10 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    value={value}
+                    value={searchValue}
                     disabled={disabled}
                     onChange={(e) => {
-                        onChange(e.target.value);
+                        const newVal = e.target.value;
+                        setSearchValue(newVal);
                         if (!isOpen) {
                             setIsOpen(true);
                         }
                         setIsTyping(true);
+                        
+                        // If user clears input, notify parent
+                        if (!newVal) {
+                            onChange("");
+                        }
                     }}
                     onFocus={() => {
                         if (!disabled) {
@@ -118,14 +145,15 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
                         filteredOptions.map((opt, i) => (
                             <div
                                 key={i}
-                                className={`px-4 py-2 text-sm hover:bg-indigo-50 cursor-pointer transition-colors ${value === opt ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}`}
+                                className={`px-4 py-2 text-sm hover:bg-indigo-50 cursor-pointer transition-colors ${value === opt.value ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}`}
                                 onClick={() => {
-                                    onChange(opt);
+                                    onChange(opt.value);
+                                    setSearchValue(opt.label);
                                     setIsOpen(false);
                                     setIsTyping(false);
                                 }}
                             >
-                                {opt}
+                                {opt.label}
                             </div>
                         ))
                     ) : (

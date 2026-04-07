@@ -109,6 +109,16 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                     ledger_id=item.pay_to_ledger_id
                 ).first()
                 if vendor:
+                    # Try to find a reference invoice number to link the payment in the ledger
+                    ref_no = None
+                    if item.transaction_details and isinstance(item.transaction_details, dict):
+                        ref_no = (
+                            item.transaction_details.get('invoice_no')
+                            or item.transaction_details.get('reference_no')
+                            or item.transaction_details.get('referenceNumber') # Case from Single Mode
+                            or item.transaction_details.get('invoiceNo')       # Case from Bulk Mode
+                        )
+
                     # If it's an advance, mark it accordingly
                     p_status = 'Advance' if item.reference_type == 'ADVANCE' else 'Paid'
                     
@@ -123,8 +133,8 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                             'amount': item.amount,
                             'total_amount': item.amount,
                             'status': p_status,
-                            'reference_number': item.advance_ref_no or voucher.voucher_number,
-                            'notes': voucher.narration,
+                            'reference_number': ref_no or item.advance_ref_no or voucher.voucher_number,
+                            'notes': f"Payment for {ref_no}" if ref_no else voucher.narration,
                             'ledger_name': vendor.vendor_name
                         }
                     )
@@ -133,25 +143,28 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                     # This ensures the Due/Not Due status in the procurement
                     # ledger flips to "Paid" once a payment is recorded.
                     if p_status == 'Paid':
-                        # Try to narrow by specific invoice reference from transaction_details
-                        ref_no = None
-                        if item.transaction_details and isinstance(item.transaction_details, dict):
-                            ref_no = (
-                                item.transaction_details.get('invoice_no')
-                                or item.transaction_details.get('reference_no')
-                            )
-
-                        qs = VendorTransaction.objects.filter(
-                            tenant_id=voucher.tenant_id,
-                            vendor_id=vendor.id,
-                            transaction_type='purchase',
-                        ).exclude(status='Paid')
-
                         if ref_no:
-                            qs = qs.filter(reference_number=ref_no)
+                            p_txn = VendorTransaction.objects.filter(
+                                tenant_id=voucher.tenant_id,
+                                vendor_id=vendor.id,
+                                transaction_type='purchase',
+                                reference_number=ref_no
+                            ).exclude(status='Paid').first()
 
-                        updated = qs.update(status='Paid')
-                        print(f"!!! Vendor Purchase rows marked Paid: {updated} row(s) for {vendor.vendor_name} (ref={ref_no})")
+                            if p_txn:
+                                # Current payment for this invoice
+                                current_payment = Decimal(str(item.amount or 0))
+                                invoice_total = Decimal(str(p_txn.total_amount or 0))
+                                
+                                if current_payment >= invoice_total:
+                                    p_txn.status = 'Paid'
+                                else:
+                                    p_txn.status = 'Partially Paid'
+                                
+                                p_txn.save()
+                                print(f"!!! Vendor Purchase {ref_no} marked {p_txn.status} for {vendor.vendor_name}")
+                        else:
+                            print(f"!!! No ref_no found for item {item.id}, skipping blanket Paid update.")
 
         except Exception as e:
             print(f"!!! Vendor Portal Sync Failure (Payment): {str(e)}")
@@ -532,10 +545,18 @@ class AdvancePaymentSerializer(serializers.ModelSerializer):
     pay_to_name = serializers.SerializerMethodField()
     category = serializers.SerializerMethodField()
     pay_to_ledger = serializers.SerializerMethodField()
+    remaining = serializers.SerializerMethodField()
+    allocated = serializers.SerializerMethodField()
 
     class Meta:
         model = PaymentVoucherItem
-        fields = ['id', 'advance_ref_no', 'amount', 'date', 'pay_to_ledger', 'pay_to_name', 'category']
+        fields = ['id', 'advance_ref_no', 'amount', 'date', 'pay_to_ledger', 'pay_to_name', 'category', 'remaining', 'allocated']
+
+    def get_remaining(self, obj):
+        return getattr(obj, '_remaining', Decimal(str(obj.amount)))
+
+    def get_allocated(self, obj):
+        return getattr(obj, '_allocated', Decimal('0.00'))
 
     def get_advance_ref_no(self, obj):
         # 1. Direct field (ReceiptVoucherItem)
@@ -567,6 +588,18 @@ class AdvancePaymentSerializer(serializers.ModelSerializer):
         return ledger.name
 
     def get_category(self, obj):
+        ledger = getattr(obj, 'pay_to_ledger', None) or getattr(obj, 'customer', None)
+        if not ledger: return None
+        v = ledger.vendors_basic.first()
+        if v: return v.vendor_category
+        c = ledger.customers_basic.first()
+        if c: 
+            # In some models it might be a related object or just a string
+            cat_obj = getattr(c, 'customer_category', None)
+            if hasattr(cat_obj, 'category'): return cat_obj.category # type: ignore
+            return str(cat_obj) if cat_obj else None
+        return None
+
         ledger = getattr(obj, 'pay_to_ledger', None) or getattr(obj, 'customer', None)
         if not ledger: return None
         v = ledger.vendors_basic.first()

@@ -322,8 +322,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         });
 
         // Add Advance Payments (negative outstanding or separate bucket)
-        const advancesToUse = advancePayments.length > 0 
-            ? advancePayments 
+        const advancesToUse = advancePayments.length > 0
+            ? advancePayments
             : allAdvancePayments.filter((adv: any) => {
                 const cat = (adv.category || '').toLowerCase();
                 return cat.includes(categoryName.toLowerCase());
@@ -336,7 +336,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             // Match by ledger_id
             const vendor = vendorList.find((v: any) => v.ledger_id === ledgerId || v.ledger === ledgerId);
             if (!vendor) return;
-            
+
             const vendorId = vendor.id;
             const vendorCode = vendor.vendor_code || `VEN-${vendorId}`;
             const vendorName = vendor.vendor_name || adv.pay_to_name || 'Unknown Vendor';
@@ -383,7 +383,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 const transactionType = (t.transaction_type || t.type || '').toLowerCase();
                 const isDebit = ['payment', 'debit_note'].includes(transactionType);
                 const amt = parseFloat(t.total_amount || t.total || t.amount || 0);
-                
+
                 // Map backend transaction type to frontend-friendly label
                 const typeMap: Record<string, string> = {
                     'purchase': 'Purchase Voucher',
@@ -408,14 +408,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         const paidAmount = parseFloat(t.paid_amount || t.used_amount || 0);
 
                         // ── PURCHASE: use backend credit-period due status ──────────
+                        // ── PURCHASE: use backend credit-period due status ──────────
                         if (txType === 'purchase') {
-                            if (t.due_status === 'Paid') return 'Received';
+                            const isFullyPaid = paidAmount >= amount && amount > 0;
+                            const isPartiallyPaid = (paidAmount > 0 && paidAmount < amount) || t.status?.toLowerCase().includes('partial');
+
+                            if (isFullyPaid || t.due_status === 'Paid') return 'Received';
+                            if (isPartiallyPaid || t.due_status === 'Partially Received') return 'Partially Received';
+                            
+                            // If not paid, use the due status calculated from credit period
                             if (t.due_status === 'Due') return 'Due';
                             if (t.due_status === 'Not Due') return 'Not Due';
-                            
-                            // Fallback logic
-                            if (paidAmount >= amount && amount > 0) return 'Received';
-                            if (paidAmount > 0) return 'Partially Received';
+
                             return 'Not Due';
                         }
 
@@ -452,13 +456,17 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 const pCredit = typeof entry.credit === 'number' ? entry.credit : 0;
                 const pDebit = typeof entry.debit === 'number' ? entry.debit : 0;
                 balance += pCredit - pDebit;
-                
+
+                const balanceLeft = typeof entry.rawVoucher?.payment_balance === 'number' 
+                    ? entry.rawVoucher.payment_balance 
+                    : (pCredit - pDebit); // Fallback to basic ledger math
+
                 return {
                     ...entry,
                     // Format for display only at the final step
                     debit: entry.debit > 0 ? entry.debit.toLocaleString('en-IN') : '-',
                     credit: entry.credit > 0 ? entry.credit.toLocaleString('en-IN') : '-',
-                    runningBalance: Math.abs(balance).toLocaleString('en-IN') + (balance >= 0 ? ' Cr' : ' Dr')
+                    runningBalance: balance.toLocaleString('en-IN') + (balance >= 0 ? ' Cr' : ' Dr')
                 };
             });
 
@@ -2371,7 +2379,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             }
         };
         fetchItems();
-        
+
         const fetchLedgers = async () => {
             try {
                 const res: any = await httpClient.get('/api/accounting/ledgers/?group=Sundry Creditors');
@@ -2797,7 +2805,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             <CategoryHierarchicalDropdown
                                                 apiEndpoint="/api/vendors/categories/"
                                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
-                                                 mergeSystem={true}
+                                                mergeSystem={true}
                                                 onSelect={(selection) => {
                                                     setPoCategoryId(selection.id);
                                                     setPoCategoryPath(selection.fullPath);
@@ -3179,7 +3187,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             <CategoryHierarchicalDropdown
                                                 apiEndpoint="/api/vendors/categories/"
                                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
-                                                 mergeSystem={true}
+                                                mergeSystem={true}
                                                 value={vendorCategory}
                                                 onSelect={(selection) => setVendorCategory(selection.fullPath)}
                                                 placeholder="Select Category"
@@ -4989,7 +4997,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             ['Draft', 'Pending Approval', 'Approved', 'Mailed'].includes(po.status)
                                                         ).length;
 
-                                                        const activeAdvances = allAdvancePayments.filter(adv => 
+                                                        const activeAdvances = allAdvancePayments.filter(adv =>
                                                             (adv.category || '').toLowerCase() === (item.name || '').toLowerCase()
                                                         ).length;
 
@@ -5455,16 +5463,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.referenceNo || entry.ledger}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
-                                                                                    entry.status === 'Received'          ? 'bg-green-100 text-green-800' :
-                                                                                    entry.status === 'Due'               ? 'bg-red-100 text-red-800' :
-                                                                                    entry.status === 'Partially Received'? 'bg-orange-100 text-orange-700' :
-                                                                                    entry.status === 'Utilized'          ? 'bg-blue-100 text-blue-700' :
-                                                                                    entry.status === 'Not Utilized'      ? 'bg-purple-100 text-purple-700' :
-                                                                                    'bg-gray-100 text-gray-600'
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                                                entry.status === 'Due' ? 'bg-red-100 text-red-800' :
+                                                                                    entry.status === 'Partially Received' ? 'bg-orange-100 text-orange-700' :
+                                                                                        entry.status === 'Utilized' ? 'bg-blue-100 text-blue-700' :
+                                                                                            entry.status === 'Not Utilized' ? 'bg-purple-100 text-purple-700' :
+                                                                                                'bg-gray-100 text-gray-600'
                                                                                 }`}>
-                                                                                    {entry.status}
-                                                                                </span>
+                                                                                {entry.status}
+                                                                            </span>
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
@@ -5527,24 +5534,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                 {formatDate(entry.date)}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-bold text-gray-800">
-                                                                                {entry.transferFrom === 'Purchase' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm text-gray-500 uppercase">
-                                                                                {entry.transferFrom === 'Purchase' ? 'PURCHASE' : entry.transferFrom === 'Payment' ? 'PAYMENT' : entry.transferFrom}
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' ? 'PURCHASE' : entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' ? 'PAYMENT' : entry.transferFrom}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm text-gray-500">
                                                                                 {entry.referenceNo}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">
-                                                                                {entry.transferFrom === 'Payment' && entry.debit !== '-' ? `₹${entry.debit}` : '-'}
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' && entry.debit !== '-' ? `₹${entry.debit}` : '-'}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-medium text-gray-400 text-right">
-                                                                                {entry.transferFrom === 'Purchase' && entry.credit !== '-' ? <span className="text-gray-900">₹{entry.credit}</span> : '-'}
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' && entry.credit !== '-' ? <span className="text-gray-900">₹{entry.credit}</span> : '-'}
                                                                             </td>
                                                                         </tr>
 
                                                                         {/* Purchase Details - Correct Double Entry: Debit side = Purchase A/c + Input GST; Credit side = Vendor A/c + TDS Payable */}
-                                                                        {entry.transferFrom === 'Purchase' && (() => {
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' && (() => {
                                                                             let supplyInrDetails = entry.rawVoucher?.supply_inr_details;
                                                                             if (typeof supplyInrDetails === 'string') {
                                                                                 try { supplyInrDetails = JSON.parse(supplyInrDetails); } catch { supplyInrDetails = {}; }
@@ -5659,7 +5666,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         })()}
 
                                                                         {/* Payment Details - Correct Double Entry: Vendor A/c DR, Bank/Cash CR */}
-                                                                        {entry.transferFrom === 'Payment' && entry.rawVoucher && (
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' && entry.rawVoucher && (
                                                                             <React.Fragment>
                                                                                 {/* DEBIT: Vendor A/c */}
                                                                                 <tr className="border-b border-gray-50/50">
@@ -5685,7 +5692,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         )}
 
                                                                         {/* Receipt Details */}
-                                                                        {entry.transferFrom === 'Receipt' && entry.rawVoucher && (
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'receipt' && entry.rawVoucher && (
                                                                             <React.Fragment>
                                                                                 <tr className="border-b border-gray-50/50">
                                                                                     <td></td>
@@ -5877,44 +5884,44 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                 {allDisplayCategories.map(name => ({ name, desc: `Manage ${name.toLowerCase()} payments` }))
                                                     .map((item) => {
-                                                    const pendingBillsList = paymentBills.filter(bill => bill.status !== 'Posted' && bill.category === item.name);
-                                                    const totalPendingAmount = pendingBillsList.reduce((sum, bill) => {
-                                                        const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
-                                                        return sum + amount;
-                                                    }, 0);
-                                                    const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+                                                        const pendingBillsList = paymentBills.filter(bill => bill.status !== 'Posted' && bill.category === item.name);
+                                                        const totalPendingAmount = pendingBillsList.reduce((sum, bill) => {
+                                                            const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
+                                                            return sum + amount;
+                                                        }, 0);
+                                                        const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 
-                                                    return (
-                                                        <div
-                                                            key={item.name}
-                                                            onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
-                                                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
-                                                        >
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <div className="p-3 rounded-[4px] bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                                                                    <Filter className="w-6 h-6" />
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="text-right mr-2">
-                                                                        <p className="text-lg font-bold text-gray-800">{pendingBillsList.length}</p>
-                                                                        <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Unpaid</p>
+                                                        return (
+                                                            <div
+                                                                key={item.name}
+                                                                onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
+                                                                className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+                                                            >
+                                                                <div className="flex items-center justify-between mb-4">
+                                                                    <div className="p-3 rounded-[4px] bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                                                                        <Filter className="w-6 h-6" />
                                                                     </div>
-                                                                    <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="text-right mr-2">
+                                                                            <p className="text-lg font-bold text-gray-800">{pendingBillsList.length}</p>
+                                                                            <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Unpaid</p>
+                                                                        </div>
+                                                                        <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex justify-between items-end">
+                                                                    <div>
+                                                                        <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+                                                                        <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="text-lg font-bold text-gray-900">{formattedTotal}</p>
+                                                                        <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Payable</p>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex justify-between items-end">
-                                                                <div>
-                                                                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
-                                                                    <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <p className="text-lg font-bold text-gray-900">{formattedTotal}</p>
-                                                                    <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Payable</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })}
                                             </div>
                                         </div>
                                     ) : selectedVoucherForView ? (
