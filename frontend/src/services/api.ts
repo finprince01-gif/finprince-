@@ -398,8 +398,11 @@ class ApiService {
      * Get Sales Invoices (Vouchers) for a specific customer
      * @param customerName - Customer name to filter by
      */
-    async getCustomerSalesInvoices(customerName: string) {
+    async getCustomerSalesInvoices(customerName: string, branch?: string) {
         let url = `/api/vouchers/sales/?customer_name=${encodeURIComponent(customerName)}`;
+        if (branch) {
+            url += `&branch=${encodeURIComponent(branch)}`;
+        }
         return httpClient.get<any[]>(url);
     }
 

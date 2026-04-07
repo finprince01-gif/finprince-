@@ -34,11 +34,12 @@ interface CreateGRNModalProps {
     mainVendorName?: string;
     mainBranch?: string;
     mainGstin?: string;
+    context?: 'Credit Note' | 'Purchase';
 }
 
-const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initialSupplierInvoiceNo = '', initialExtractedData, mainVendorName, mainBranch, mainGstin }) => {
+const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initialSupplierInvoiceNo = '', initialExtractedData, mainVendorName, mainBranch, mainGstin, context = 'Purchase' }) => {
     // Form State
-    const [grnType, setGrnType] = useState<'purchases' | 'sales_return'>('purchases');
+    const [grnType, setGrnType] = useState<'purchases' | 'sales_return'>(context === 'Credit Note' ? 'sales_return' : 'purchases');
     const [grnNo, setGrnNo] = useState('');
     const [grnSeriesId, setGrnSeriesId] = useState('');
     const [grnSeriesName, setGrnSeriesName] = useState('');
@@ -60,6 +61,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
     const [supplierInvoiceNo, setSupplierInvoiceNo] = useState(initialSupplierInvoiceNo);
 
     const [postingNote, setPostingNote] = useState('');
+    const [reasonsForReturn, setReasonsForReturn] = useState('');
 
     // Data Source State
     const [locations, setLocations] = useState<Location[]>([]);
@@ -100,6 +102,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
     const [branchOptions, setBranchOptions] = useState<any[]>([]);
     const [poOptions, setPoOptions] = useState<any[]>([]);
     const [invoiceOptions, setInvoiceOptions] = useState<any[]>([]);
+    const [customerSalesInvoices, setCustomerSalesInvoices] = useState<any[]>([]);
 
     // Items State
     const [items, setItems] = useState<GRNItem[]>([
@@ -215,6 +218,10 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
             if (mainVendorName) setVendorName(mainVendorName);
             if (mainBranch) setBranch(mainBranch);
             if (mainGstin) setGstin(mainGstin);
+        } else if (grnType === 'sales_return') {
+            if (mainVendorName) setCustomerName(mainVendorName);
+            if (mainBranch) setBranch(mainBranch);
+            if (mainGstin) setGstin(mainGstin);
         }
     }, [initialExtractedData, mainVendorName, mainBranch, mainGstin, grnType]);
 
@@ -277,7 +284,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                     console.log('[CreateGRNModal] Fetching pending POs for vendor:', vendorName, 'ID:', vendor.id);
                     const poResponse = await apiService.getPendingPOs(vendor.id, vendor.vendor_name);
                     console.log('[CreateGRNModal] Pending PO Fetch Response:', poResponse);
-                    
+
                     if (Array.isArray(poResponse)) {
                         setPoOptions(poResponse);
                     } else if (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) {
@@ -301,6 +308,42 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
 
         loadDetails();
     }, [vendorName, vendors]);
+
+    // Fetch Customer Sales Invoices & Branches
+    useEffect(() => {
+        const fetchInvoices = async () => {
+            if (grnType === 'sales_return' && customerName) {
+                try {
+                    const response = await apiService.getCustomerSalesInvoices(customerName);
+                    setCustomerSalesInvoices(response || []);
+                } catch (error) {
+                    console.error("Error fetching customer invoices:", error);
+                }
+
+                // Fill branches from pre-loaded customers list
+                if (customers.length > 0) {
+                    const customer = customers.find(c => c.customer_name === customerName);
+                    if (customer && customer.branches) {
+                        setBranchOptions(customer.branches);
+                        console.log('[CreateGRNModal] Popularing branches for customer:', customerName, customer.branches);
+
+                        // Auto-select if only one branch exists
+                        if (customer.branches.length === 1 && !branch) {
+                            const b = customer.branches[0];
+                            const branchName = b.branch_reference_name || 'Main Branch';
+                            setBranch(branchName);
+                            setGstin(b.gstin || '');
+
+                            // Reconstruct address from branch details if possible
+                            const addrParts = [b.addressLine1, b.addressLine2, b.addressLine3, b.city, b.state, b.pincode].filter(Boolean);
+                            setAddress(addrParts.join(', '));
+                        }
+                    }
+                }
+            }
+        };
+        fetchInvoices();
+    }, [customerName, grnType, customers]);
 
     // Auto-fetch items when PO(s) are selected
     useEffect(() => {
@@ -388,26 +431,37 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
     // Handle Branch Change
     const handleBranchChange = (selectedBranchName: string) => {
         setBranch(selectedBranchName);
-        const selectedBranch = branchOptions.find(b =>
-            (b.reference_name || b.trade_name || 'Main') === selectedBranchName
-        );
 
-        if (selectedBranch) {
-            // Use branch_address if available, otherwise fallback to assembling from components
-            if (selectedBranch.branch_address) {
-                setAddress(selectedBranch.branch_address);
-            } else {
-                const addressParts = [
-                    selectedBranch.address_line_1,
-                    selectedBranch.address_line_2,
-                    selectedBranch.city,
-                    selectedBranch.state,
-                    selectedBranch.pincode,
-                    selectedBranch.country
-                ].filter(Boolean);
-                setAddress(addressParts.join(', '));
+        if (grnType === 'purchases') {
+            const selectedBranch = branchOptions.find(b =>
+                (b.reference_name || b.trade_name || 'Main') === selectedBranchName
+            );
+
+            if (selectedBranch) {
+                // Use branch_address if available, otherwise fallback to assembling from components
+                if (selectedBranch.branch_address) {
+                    setAddress(selectedBranch.branch_address);
+                } else {
+                    const addressParts = [
+                        selectedBranch.address_line_1,
+                        selectedBranch.address_line_2,
+                        selectedBranch.city,
+                        selectedBranch.state,
+                        selectedBranch.pincode,
+                        selectedBranch.country
+                    ].filter(Boolean);
+                    setAddress(addressParts.join(', '));
+                }
+                setGstin(selectedBranch.gstin || '');
             }
-            setGstin(selectedBranch.gstin || '');
+        } else {
+            // Customer branches (sales_return)
+            const b = branchOptions.find(opt => opt.branch_reference_name === selectedBranchName);
+            if (b) {
+                setGstin(b.gstin || '');
+                const addrParts = [b.addressLine1, b.addressLine2, b.addressLine3, b.city, b.state, b.pincode].filter(Boolean);
+                setAddress(addrParts.join(', '));
+            }
         }
     };
 
@@ -513,7 +567,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
 
             reference_no: grnType === 'purchases' ? selectedPOs.join(', ') : purchaseOrderNo, // Use selectedPOs for purchases
             secondary_ref_no: supplierInvoiceNo || '',
-
+            reasons_for_return: reasonsForReturn,
             posting_note: postingNote || '',
             status: 'Posted',
 
@@ -543,7 +597,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
             <div className="bg-white rounded-[4px] shadow-none border border-slate-200 w-full max-w-7xl mx-4 max-h-[90vh] overflow-y-auto flex flex-col">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                    <h3 className="text-xl font-bold text-gray-800">GOODS RECEIPT NOTE</h3>
+                    <h3 className="text-xl font-bold text-gray-800 uppercase">{context === 'Credit Note' ? 'Create GRN (Sales Return)' : 'Create GRN'}</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
                 </div>
 
@@ -553,7 +607,8 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
 
 
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Primary Header Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">DATE</label>
                             <input
@@ -588,9 +643,6 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                 ))}
                             </select>
                         </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">GRN SERIES NAME</label>
                             <select
@@ -612,7 +664,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                 type="text"
                                 value={grnNo}
                                 readOnly
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none bg-gray-50 cursor-not-allowed"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none bg-gray-50 cursor-not-allowed font-medium text-gray-700"
                             />
                         </div>
                     </div>
@@ -665,11 +717,16 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                                 <option value="">Select Branch</option>
-                                {branchOptions.map((b, idx) => (
-                                    <option key={idx} value={b.reference_name || b.trade_name || 'Main'}>
-                                        {b.reference_name || b.trade_name || 'Main'}
-                                    </option>
-                                ))}
+                                {branchOptions.map((b, idx) => {
+                                    const bName = grnType === 'purchases'
+                                        ? (b.reference_name || b.trade_name || 'Main')
+                                        : (b.branch_reference_name || 'Main Branch');
+                                    return (
+                                        <option key={idx} value={bName}>
+                                            {bName}
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
                     </div>
@@ -699,7 +756,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                                {grnType === 'purchases' ? 'PURCHASE ORDER NO.' : 'SALES VOUCHER NO.'}
+                                {grnType === 'purchases' ? 'PURCHASE ORDER NO.' : 'SALES INVOICE NO.'}
                             </label>
                             {grnType === 'purchases' ? (
                                 <div className="relative">
@@ -755,13 +812,18 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                     )}
                                 </div>
                             ) : (
-                                <input
-                                    type="text"
+                                <select
                                     value={purchaseOrderNo}
                                     onChange={(e) => setPurchaseOrderNo(e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                    placeholder="Enter Sales Voucher No."
-                                />
+                                >
+                                    <option value="">Select Invoice</option>
+                                    {customerSalesInvoices.map((inv) => (
+                                        <option key={inv.id} value={inv.voucher_no || inv.sales_invoice_no}>
+                                            {inv.voucher_no || inv.sales_invoice_no} ({inv.date})
+                                        </option>
+                                    ))}
+                                </select>
                             )}
                         </div>
                         <div>
@@ -789,8 +851,8 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-48">Item Name</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-24">HSN/SAC</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">UOM</th>
-                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">PO Qty</th>
-                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Inv Qty</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20 truncate">{grnType === 'purchases' ? 'PO Qty' : 'Sales Voucher Qty'}</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20 truncate">{grnType === 'purchases' ? 'Inv Qty' : 'Debit Note Qty'}</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Received</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Accepted</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Rejected</th>
@@ -880,15 +942,27 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                         </button>
                     </div>
 
-                    {/* Posting Note */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">POSTING NOTE</label>
-                        <textarea
-                            value={postingNote}
-                            onChange={(e) => setPostingNote(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 h-20 resize-none"
-                            placeholder="Enter notes here..."
-                        />
+                    {/* Posting Note & Reasons for Return */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">REASONS FOR RETURN (MANDATORY)</label>
+                            <textarea
+                                value={reasonsForReturn}
+                                onChange={(e) => setReasonsForReturn(e.target.value)}
+                                required
+                                className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 h-20 resize-none ${!reasonsForReturn ? 'border-red-300 bg-red-50' : ''}`}
+                                placeholder="State reason for returning items..."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">POSTING NOTE</label>
+                            <textarea
+                                value={postingNote}
+                                onChange={(e) => setPostingNote(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 h-20 resize-none"
+                                placeholder="Enter additional notes here..."
+                            />
+                        </div>
                     </div>
                 </div>
 

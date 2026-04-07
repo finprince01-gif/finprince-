@@ -131,7 +131,10 @@ def get_sales_vouchers(tenant_id: str, filters: Optional[Dict] = None, prefetch:
                 return SalesVoucher.objects.none()
 
         if filters.get('customer_name'):
-            queryset = queryset.filter(customer_name=filters['customer_name'])
+            queryset = queryset.filter(customer_name__iexact=filters['customer_name'])
+            
+        if filters.get('branch'):
+            queryset = queryset.filter(customer_branch__iexact=filters['branch'])
 
         # Schema does not have status column in header?
         # if filters.get('status'):

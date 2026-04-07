@@ -5712,7 +5712,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         status: (inv.status && inv.status.toLowerCase() === 'received') ? 'Received'
                             : (inv.status && inv.status.toLowerCase() === 'partially received') ? 'Partially Received'
                             : (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
-                        debit: parseFloat(inv.payment_details?.payment_payable || 0),
+                        debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
                         credit: 0,
                         runningBalance: 0,
                         posting_status: inv.posting_status,
@@ -6532,7 +6532,7 @@ function SalesContent() {
         const fetchSalesData = async () => {
             try {
                 const [invData, custData, allAdvData] = await Promise.all([
-                    httpClient.get('/api/voucher-sales-new/'),
+                    httpClient.get('/api/voucher-sales-new/?show_all=true'),
                     httpClient.get('/api/customerportal/customer-master/'),
                     apiService.getAdvances() // Fetch ALL advances for tiles
                 ]);
