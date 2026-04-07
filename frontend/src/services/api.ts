@@ -295,6 +295,14 @@ class ApiService {
         return httpClient.delete<any>(`/api/inventory/master-voucher-issue-slip/${id}/`);
     }
 
+    async getDebitNoteSeries() {
+        return httpClient.get<any[]>('/api/masters/master-voucher-debitnote/');
+    }
+
+    async getDebitNoteNextNumber(pk: number | string) {
+        return httpClient.get<any>(`/api/masters/master-voucher-debitnote/${pk}/next-number/`);
+    }
+
     async createInventoryOperationGRN(data: any) {
         return httpClient.post<any>('/api/inventory/operations/new-grn/', data);
     }
@@ -393,6 +401,15 @@ class ApiService {
     async getCustomerSalesInvoices(customerName: string) {
         let url = `/api/vouchers/sales/?customer_name=${encodeURIComponent(customerName)}`;
         return httpClient.get<any[]>(url);
+    }
+
+    async getPendingOutwardSlips(vendorName: string) {
+        let url = `/api/operations/outward/pending/?vendor_name=${encodeURIComponent(vendorName)}`;
+        return httpClient.get<any[]>(url);
+    }
+
+    async saveDebitNote(data: any) {
+        return httpClient.post('/api/vouchers/debit-note/', data);
     }
 
     async getHierarchy() {

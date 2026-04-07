@@ -252,6 +252,7 @@ class Voucher(BaseModel):
         ('receipt', 'Receipt'),
         ('contra', 'Contra'),
         ('journal', 'Journal'),
+        ('debit_note', 'Debit Note'),
     ]
     type = models.CharField(max_length=20, choices=VOUCHER_TYPES)
     voucher_number = models.CharField(max_length=50)

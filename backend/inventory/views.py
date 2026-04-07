@@ -373,6 +373,37 @@ class InventoryOperationOutwardViewSet(viewsets.ModelViewSet):
                     series.preview = f"{series.preview}-1"
                 series.save()
 
+    @action(detail=False, methods=['get'], url_path='pending')
+    def pending(self, request):
+        tenant_id = get_tenant_from_request(request)
+        vendor_name = request.query_params.get('vendor_name')
+        
+        # 1. Get all Posted Outward Slips (Purchase Returns)
+        qs = InventoryOperationOutward.objects.filter(
+            tenant_id=tenant_id,
+            status='Posted',
+            outward_type='purchase_return'
+        )
+        
+        if vendor_name:
+            qs = qs.filter(vendor_name=vendor_name)
+            
+        # 2. Exclude those already linked to a Debit Note
+        from accounting.models_voucher_debit_note import VoucherDebitNoteSupplierDetails
+        linked_slips = VoucherDebitNoteSupplierDetails.objects.filter(
+            tenant_id=tenant_id
+        ).values_list('outward_slip_nos', flat=True)
+        
+        all_linked = []
+        for s in linked_slips:
+            if s:
+                all_linked.extend([ss.strip() for ss in s.split(',') if ss.strip()])
+        
+        qs = qs.exclude(outward_slip_no__in=all_linked)
+        
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
 class InventoryOperationNewGRNViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationNewGRNSerializer
     permission_classes = [IsAuthenticated]
