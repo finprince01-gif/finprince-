@@ -13,6 +13,7 @@ import TallyMasterScannerModal from '../../components/TallyMasterScannerModal';
 import SalesExcelUploadWorkflow from '../../components/SalesExcelUploadWorkflow';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import SalesVoucher from './SalesVoucher';
+import DebitNoteVoucher from './DebitNoteVoucher';
 import PaymentVoucherSingle from './PaymentVoucherSingle';
 import PaymentVoucherBulk from './PaymentVoucherBulk';
 import ReceiptVoucher from './ReceiptVoucher';
@@ -8030,10 +8031,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               </div>
             )}
             {voucherType === 'Debit Note' && (
-              <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-[4px] bg-gray-50">
-                <h3 className="text-xl font-medium text-gray-900 mb-2">Debit Note Voucher</h3>
-                <p className="text-gray-500">Debit Note entry form is under development.</p>
-              </div>
+              <DebitNoteVoucher 
+                prefilledData={localPrefilledData}
+                clearPrefilledData={handleClearPrefilledData}
+                companyDetails={companyDetails}
+                onAddVouchers={onAddVouchers}
+              />
             )}
 
             {voucherType === 'Purchase' && (
