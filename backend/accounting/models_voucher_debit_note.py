@@ -45,6 +45,9 @@ class VoucherDebitNoteSupplierDetails(BaseModel):
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=4, default=1.0)
     foreign_currency = models.CharField(max_length=10, default='USD')
     
+    # Narration
+    narration = models.TextField(null=True, blank=True)
+    
     # Document
     supporting_document = models.FileField(upload_to='debit_note_documents/', null=True, blank=True)
 

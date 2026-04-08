@@ -130,7 +130,7 @@ class ApiService {
         const params: string[] = [];
         if (ledgerId) params.push(`ledger_id=${ledgerId}`);
         if (category) params.push(`category=${encodeURIComponent(category)}`);
-        
+
         if (params.length > 0) {
             url += `?${params.join('&')}`;
         }
@@ -389,9 +389,20 @@ class ApiService {
      * Get Purchase Invoices (Vouchers) for a specific vendor
      * @param vendorName - Vendor name to filter by
      */
-    async getVendorPurchaseInvoices(vendorName: string) {
+    async getVendorPurchaseInvoices(vendorName: string, branch?: string) {
         let url = `/api/vouchers/purchase/?vendor_name=${encodeURIComponent(vendorName)}`;
+        if (branch) {
+            url += `&branch=${encodeURIComponent(branch)}`;
+        }
         return httpClient.get<any[]>(url);
+    }
+
+    /**
+     * Get unified vendor transactions (Procurement/Ledger data)
+     * @param vendorId - Vendor base detail ID
+     */
+    async getVendorTransactions(vendorId: number) {
+        return httpClient.get<any[]>(`/api/vendors/transactions/by_vendor/?vendor_id=${vendorId}`);
     }
 
     /**
@@ -404,6 +415,16 @@ class ApiService {
             url += `&branch=${encodeURIComponent(branch)}`;
         }
         return httpClient.get<any[]>(url);
+    }
+
+    /**
+     * Get full Sales Invoice details (including items) by invoice number
+     * Used by Credit Note to auto-populate item rows
+     */
+    async getSalesInvoiceDetails(invoiceNo: string) {
+        const url = `/api/voucher-sales-new/?sales_invoice_no=${encodeURIComponent(invoiceNo)}&show_all=true`;
+        const results = await httpClient.get<any[]>(url);
+        return results && results.length > 0 ? results[0] : null;
     }
 
     async getPendingOutwardSlips(vendorName: string) {

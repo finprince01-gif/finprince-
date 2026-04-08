@@ -154,6 +154,7 @@ class SalesVoucherCreateSerializer(serializers.Serializer):
     voucher_type_id = serializers.IntegerField()
     customer_id = serializers.IntegerField()
     ship_to_address = serializers.CharField(required=False, allow_blank=True)
+    customer_branch = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     items = serializers.ListField(
         child=serializers.DictField(),
         required=False,

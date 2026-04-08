@@ -55,8 +55,26 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             'outward_slip_nos', 'bill_to', 'ship_to',
             'nature_of_supply', 'reverse_charge', 'place_of_supply',
             'invoice_in_foreign_currency', 'exchange_rate', 'foreign_currency',
-            'supporting_document', 'supply_details', 'due_details', 'transit_details'
+            'narration', 'supporting_document', 'supply_details', 'due_details', 'transit_details'
         ]
+
+    def to_internal_value(self, data):
+        # Handle JSON strings from FormData (since multipart doesn't support nested objects)
+        import json
+        if hasattr(data, 'dict'): # Handle QueryDict
+            data = data.dict()
+        
+        # Create a mutable copy if it's not already a dict we can change
+        data = dict(data)
+        
+        for field in ['supply_details', 'due_details', 'transit_details']:
+            if field in data and isinstance(data[field], str):
+                try:
+                    data[field] = json.loads(data[field])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        
+        return super().to_internal_value(data)
 
     def create(self, validated_data):
         supply_data = validated_data.pop('supply_details', None)

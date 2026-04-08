@@ -554,7 +554,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [originalInvoiceNo, setOriginalInvoiceNo] = useState('');
   const [originalInvoiceDate, setOriginalInvoiceDate] = useState('');
   const [creditNoteReason, setCreditNoteReason] = useState('');
-  
+
   // Credit Note specific states
   const [cnDate, setCnDate] = useState(getTodayDate());
   const [cnVoucherConfigs, setCnVoucherConfigs] = useState<any[]>([]);
@@ -612,7 +612,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         const inv = cnSalesInvoicesList.find(i => i.voucher_no === no);
         return inv ? inv.date : '';
       }).filter(date => date !== '');
-      
+
       setCnSalesInvoiceDate(selectedDates.join(', '));
     } else {
       setCnSalesInvoiceDate('');
@@ -840,15 +840,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     // Extract entity name if it's in the format "Name (Branch)"
     const match = value.match(/^(.*) \((.*)\)$/);
     const entityName = match ? match[1] : value;
-    
+
     // Attempt to find the most accurate ledger ID
     const findLedgerId = (name: string) => {
       if (!name) return null;
       const lower = name.toLowerCase().trim();
-      
+
       // 1. Check richVendors for a matching vendor with a ledger_id
-      const vendor = richVendors.find(v => 
-        (v.vendor_name || '').toLowerCase().trim() === lower || 
+      const vendor = richVendors.find(v =>
+        (v.vendor_name || '').toLowerCase().trim() === lower ||
         (v.name || '').toLowerCase().trim() === lower
       );
       // Only return ledger_id if it's actually set; if vendor found but ledger_id is null,
@@ -856,8 +856,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       if (vendor && (vendor.ledger_id || vendor.ledger)) return vendor.ledger_id || vendor.ledger;
 
       // 2. Check richCustomers for a matching customer with a ledger_id
-      const customer = richCustomers.find(c => 
-        (c.customer_name || '').toLowerCase().trim() === lower || 
+      const customer = richCustomers.find(c =>
+        (c.customer_name || '').toLowerCase().trim() === lower ||
         (c.name || '').toLowerCase().trim() === lower
       );
       if (customer && (customer.ledger_id || customer.ledger)) return customer.ledger_id || customer.ledger;
@@ -884,9 +884,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     console.log('[ADV-DEBUG] value:', value, '| entityName:', entityName, '| resolvedLedgerId:', ledgerId);
     const _dbgVendor = richVendors.find((v: any) => (v.vendor_name || '').toLowerCase().trim() === entityName.toLowerCase().trim());
-    console.log('[ADV-DEBUG] richVendors.length:', richVendors.length, '| matched vendor:', _dbgVendor ? {id: _dbgVendor.id, name: _dbgVendor.vendor_name, ledger_id: _dbgVendor.ledger_id} : 'NOT FOUND');
+    console.log('[ADV-DEBUG] richVendors.length:', richVendors.length, '| matched vendor:', _dbgVendor ? { id: _dbgVendor.id, name: _dbgVendor.vendor_name, ledger_id: _dbgVendor.ledger_id } : 'NOT FOUND');
     const _dbgLedger = ledgers.find((l: any) => (l.name || '').toLowerCase().trim() === entityName.toLowerCase().trim());
-    console.log('[ADV-DEBUG] ledgers.length:', ledgers.length, '| matched ledger:', _dbgLedger ? {id: _dbgLedger.id, name: _dbgLedger.name} : 'NOT FOUND');
+    console.log('[ADV-DEBUG] ledgers.length:', ledgers.length, '| matched ledger:', _dbgLedger ? { id: _dbgLedger.id, name: _dbgLedger.name } : 'NOT FOUND');
 
     if (ledgerId) {
       try {
@@ -916,8 +916,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     } else {
       console.warn('[ADV-DEBUG] Could not resolve ledger ID for vendor:', entityName);
-      console.log('[ADV-DEBUG] All richVendors (name + ledger_id):', richVendors.map((v: any) => ({name: v.vendor_name, ledger_id: v.ledger_id})));
-      console.log('[ADV-DEBUG] All ledgers (id + name):', ledgers.map((l: any) => ({id: l.id, name: l.name})));
+      console.log('[ADV-DEBUG] All richVendors (name + ledger_id):', richVendors.map((v: any) => ({ name: v.vendor_name, ledger_id: v.ledger_id })));
+      console.log('[ADV-DEBUG] All ledgers (id + name):', ledgers.map((l: any) => ({ id: l.id, name: l.name })));
       setPurchaseAdvanceRefs([]);
     }
   }, [richVendors, richCustomers, ledgers, setPurchaseAdvanceRefs]);
@@ -2564,9 +2564,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             };
           });
           if (prefilledData.sellerName) {
-          fetchVendorAdvances(prefilledData.sellerName);
-        }
-        setPurchaseItems(newPurchaseItems);
+            fetchVendorAdvances(prefilledData.sellerName);
+          }
+          setPurchaseItems(newPurchaseItems);
 
         } else {
           setItems([{ name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
@@ -3456,17 +3456,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const handlePurchaseAdvanceRefChange = (index: number, field: string, value: string) => {
     const newRefs = [...purchaseAdvanceRefs];
     const ref = { ...newRefs[index] };
-    
+
     let finalValue = value;
     if (field === 'appliedNow' || field === 'allocatedNow') {
       const available = parseFloat(ref.amount) || 0;
       const current = parseFloat(value) || 0;
-      
+
       // Cap at available amount
       if (current > available) {
-          finalValue = ref.amount;
+        finalValue = ref.amount;
       }
-      
+
       // Update both to keep them synced for totals and API
       ref.appliedNow = finalValue;
       (ref as any).allocatedNow = finalValue;
@@ -5057,11 +5057,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       placeholder="0.00"
                                       title="Enter partial amount to allocate"
                                       onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'allocatedNow', e.target.value)}
-                                      className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right transition-all outline-none ${
-                                        isAllocated 
-                                        ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-100 font-bold text-indigo-950" 
-                                        : "bg-gray-50/50 border-gray-200 text-gray-400"
-                                      }`}
+                                      className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right transition-all outline-none ${isAllocated
+                                          ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-100 font-bold text-indigo-950"
+                                          : "bg-gray-50/50 border-gray-200 text-gray-400"
+                                        }`}
                                     />
                                   </div>
                                 </div>
@@ -5092,8 +5091,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           disabled={!party}
                           onClick={openTermsModal}
                           className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${!party
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
-                              : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
                             }`}
                           title={!party ? "Please select a vendor first" : ""}
                         >
@@ -6305,14 +6304,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     if (field === 'qty' || field === 'rate' || field === 'foreignRate') {
       if (cnInForeignCurrency === 'Yes') {
-         if (field === 'foreignRate' || field === 'qty') {
-            item.foreignAmount = qty * foreignRate;
-            item.rate = foreignRate * exchangeRate;
-            item.taxableValue = qty * item.rate;
-         } else if (field === 'rate') {
-            // If manual INR rate update in CN, it's rare but let's sync
-            item.taxableValue = qty * rate;
-         }
+        if (field === 'foreignRate' || field === 'qty') {
+          item.foreignAmount = qty * foreignRate;
+          item.rate = foreignRate * exchangeRate;
+          item.taxableValue = qty * item.rate;
+        } else if (field === 'rate') {
+          // If manual INR rate update in CN, it's rare but let's sync
+          item.taxableValue = qty * rate;
+        }
       } else {
         item.taxableValue = qty * rate;
       }
@@ -6429,18 +6428,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <SearchableSelect
                       value={cnCustomer}
                       onChange={(val) => {
-                      setCnCustomer(val);
-                      setCnBranch('');
-                      setCnSelectedSalesInvoices([]);
-                      setCnGstin('');
-                      if (val) {
-                         apiService.getCustomerSalesInvoices(val)
-                           .then(data => {
-                             setCnSalesInvoicesList(data || []);
-                           });
-                      } else {
-                         setCnSalesInvoicesList([]);
-                      }
+                        setCnCustomer(val);
+                        setCnBranch('');
+                        setCnSelectedSalesInvoices([]);
+                        setCnGstin('');
+                        if (val) {
+                          apiService.getCustomerSalesInvoices(val)
+                            .then(data => {
+                              setCnSalesInvoicesList(data || []);
+                            });
+                        } else {
+                          setCnSalesInvoicesList([]);
+                        }
                       }}
                       options={richCustomers.map(c => ({
                         value: c.customer_name,
@@ -6479,23 +6478,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           setBillFromPincode(branch.pincode || '');
                           setBillFromState(branch.state || '');
                           if (cnSameAsBillFrom) {
-                             setShipFromAddress1(branch.address_line_1 || '');
-                             setShipFromAddress2(branch.address_line_2 || '');
-                             setShipFromAddress3(branch.address_line_3 || '');
-                             setShipFromCity(branch.city || '');
-                             setShipFromPincode(branch.pincode || '');
-                             setShipFromState(branch.state || '');
+                            setShipFromAddress1(branch.address_line_1 || '');
+                            setShipFromAddress2(branch.address_line_2 || '');
+                            setShipFromAddress3(branch.address_line_3 || '');
+                            setShipFromCity(branch.city || '');
+                            setShipFromPincode(branch.pincode || '');
+                            setShipFromState(branch.state || '');
                           }
                         }
                       }
                       setCnSelectedSalesInvoices([]);
                       if (cnCustomer && e.target.value) {
-                         apiService.getCustomerSalesInvoices(cnCustomer, e.target.value)
-                           .then(data => {
-                             setCnSalesInvoicesList(data || []);
-                           });
+                        apiService.getCustomerSalesInvoices(cnCustomer, e.target.value)
+                          .then(data => {
+                            setCnSalesInvoicesList(data || []);
+                          });
                       } else {
-                         setCnSalesInvoicesList([]);
+                        setCnSalesInvoicesList([]);
                       }
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
@@ -6521,13 +6520,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
               </div>
 
-               {/* Row 3: Sales Invoice No., Sales Invoice Date, Customer's Debit Note No. */}
+              {/* Row 3: Sales Invoice No., Sales Invoice Date, Customer's Debit Note No. */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     SALES INVOICE NO. <span className="text-red-500">*</span>
                   </label>
-                  <div 
+                  <div
                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-white cursor-pointer flex items-center justify-between min-h-[42px]"
                     onClick={() => setIsCnInvoiceDropdownOpen(!isCnInvoiceDropdownOpen)}
                   >
@@ -6545,27 +6544,65 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isCnInvoiceDropdownOpen ? 'rotate-180' : ''}`} />
                   </div>
-                  
+
                   {isCnInvoiceDropdownOpen && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-[4px] shadow-xl max-h-60 overflow-y-auto">
                       {cnSalesInvoicesList.length > 0 ? (
                         cnSalesInvoicesList.map(inv => (
-                          <div 
-                            key={inv.voucher_no} 
+                          <div
+                            key={inv.voucher_no}
                             className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-3 border-b border-gray-50 last:border-0"
-                            onClick={() => {
-                              const alreadySelected = cnSelectedSalesInvoices.includes(inv.voucher_no);
+                            onClick={async () => {
+                              const invNo = inv.voucher_no;
+                              const alreadySelected = cnSelectedSalesInvoices.includes(invNo);
+                              
                               if (alreadySelected) {
-                                setCnSelectedSalesInvoices(prev => prev.filter(p => p !== inv.voucher_no));
+                                // Deselect: Remove invoice and its items
+                                setCnSelectedSalesInvoices(prev => prev.filter(p => p !== invNo));
+                                // Optional: You might want to filter out rows that belong to this invoice
+                                // But for now, we'll keep it simple and just allow the user to manual delete if needed
                               } else {
-                                setCnSelectedSalesInvoices(prev => [...prev, inv.voucher_no]);
+                                // Select: Add invoice and fetch its items
+                                setCnSelectedSalesInvoices(prev => [...prev, invNo]);
+                                try {
+                                  const fullDetails = await apiService.getSalesInvoiceDetails(invNo);
+                                  if (fullDetails && fullDetails.items && fullDetails.items.length > 0) {
+                                    const newItems = fullDetails.items.map((item: any, index: number) => ({
+                                      id: `${invNo}-${Date.now()}-${index}`,
+                                      itemCode: item.item_code || '',
+                                      itemName: item.item_name || '',
+                                      hsnSac: item.hsn_sac || '',
+                                      qty: parseFloat(item.qty) || 0,
+                                      uom: item.uom || '',
+                                      rate: parseFloat(item.item_rate) || 0,
+                                      taxableValue: parseFloat(item.taxable_value) || 0,
+                                      igst: parseFloat(item.igst) || 0,
+                                      cgst: parseFloat(item.cgst) || 0,
+                                      sgst: parseFloat(item.sgst) || 0,
+                                      cess: parseFloat(item.cess) || 0,
+                                      invoiceValue: parseFloat(item.invoice_value) || 0,
+                                      description: item.description || '',
+                                      sourcePoNo: invNo // Track source invoice
+                                    }));
+
+                                    setCnItems(prev => {
+                                      // If the first row is empty, replace it
+                                      if (prev.length === 1 && !prev[0].itemName && !prev[0].itemCode) {
+                                        return newItems;
+                                      }
+                                      return [...prev, ...newItems];
+                                    });
+                                  }
+                                } catch (error) {
+                                  console.error("Failed to fetch invoice details:", error);
+                                }
                               }
                             }}
                           >
-                            <input 
-                              type="checkbox" 
-                              checked={cnSelectedSalesInvoices.includes(inv.voucher_no)} 
-                              readOnly 
+                            <input
+                              type="checkbox"
+                              checked={cnSelectedSalesInvoices.includes(inv.voucher_no)}
+                              readOnly
                               className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             />
                             <div className="flex flex-col">
@@ -6593,7 +6630,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   />
                 </div>
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     CUSTOMER'S DEBIT NOTE NO.
                   </label>
                   <input
@@ -6606,7 +6643,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
               </div>
 
-               {/* Row 4: Customer's Debit Note Date, GRN Reference No., Upload Document */}
+              {/* Row 4: Customer's Debit Note Date, GRN Reference No., Upload Document */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
@@ -6621,181 +6658,181 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   />
                 </div>
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     GRN REFERENCE NO.
                   </label>
-                    <SearchableSelect
-                      value={cnGrnRefNo === '+ Create GRN' ? '' : cnGrnRefNo}
-                      onChange={(val) => {
-                        if (val === '+ Create GRN') {
-                          setIsCreateGRNModalOpen(true);
-                        } else {
-                          setCnGrnRefNo(val);
-                        }
-                      }}
-                      options={['+ Create GRN', ...pendingGRNs.map(grn => grn.grn_no)]}
-                      placeholder="Select Posted GRN or Create"
-                      className="w-full"
-                    />
-                  </div>
+                  <SearchableSelect
+                    value={cnGrnRefNo === '+ Create GRN' ? '' : cnGrnRefNo}
+                    onChange={(val) => {
+                      if (val === '+ Create GRN') {
+                        setIsCreateGRNModalOpen(true);
+                      } else {
+                        setCnGrnRefNo(val);
+                      }
+                    }}
+                    options={['+ Create GRN', ...pendingGRNs.map(grn => grn.grn_no)]}
+                    placeholder="Select Posted GRN or Create"
+                    className="w-full"
+                  />
+                </div>
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     UPLOAD SUPPORTING DOCUMENT
                   </label>
-                   {!cnUploadFile ? (
-                      <div className="relative group">
-                          <input
-                              type="file"
-                              id="supporting-doc-cn"
-                              onChange={(e) => setCnUploadFile(e.target.files?.[0] || null)}
-                              className="hidden"
-                              accept=".jpg,.jpeg,.pdf"
-                          />
-                          <button
-                              type="button"
-                              onClick={() => document.getElementById('supporting-doc-cn')?.click()}
-                              className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-all flex items-center justify-center gap-2 shadow-sm uppercase font-medium"
-                          >
-                              <Icon name="upload" className="w-5 h-5 text-white" />
-                              <span className="text-sm">UPLOAD DOCUMENT</span>
-                          </button>
-                          <p className="text-xs text-gray-400 text-center mt-1">Accepted: JPG, JPEG, PDF</p>
-                      </div>
+                  {!cnUploadFile ? (
+                    <div className="relative group">
+                      <input
+                        type="file"
+                        id="supporting-doc-cn"
+                        onChange={(e) => setCnUploadFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                        accept=".jpg,.jpeg,.pdf"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('supporting-doc-cn')?.click()}
+                        className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-all flex items-center justify-center gap-2 shadow-sm uppercase font-medium"
+                      >
+                        <Icon name="upload" className="w-5 h-5 text-white" />
+                        <span className="text-sm">UPLOAD DOCUMENT</span>
+                      </button>
+                      <p className="text-xs text-gray-400 text-center mt-1">Accepted: JPG, JPEG, PDF</p>
+                    </div>
                   ) : (
-                      <div className="relative border-2 border-dashed border-indigo-200 rounded-[4px] p-2 bg-indigo-50/30">
-                          <div className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-100 group/file">
-                              <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
-                                  <Icon name="upload" className="w-6 h-6" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-900 truncate uppercase tracking-tight leading-none">{cnUploadFile.name}</p>
-                              </div>
-                          </div>
-                          <button
-                              type="button"
-                              onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCnUploadFile(null);
-                              }}
-                              className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-colors z-10"
-                              title="Remove file"
-                          >
-                              <Icon name="x" className="w-4 h-4" />
-                          </button>
+                    <div className="relative border-2 border-dashed border-indigo-200 rounded-[4px] p-2 bg-indigo-50/30">
+                      <div className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-100 group/file">
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+                          <Icon name="upload" className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate uppercase tracking-tight leading-none">{cnUploadFile.name}</p>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCnUploadFile(null);
+                        }}
+                        className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-colors z-10"
+                        title="Remove file"
+                      >
+                        <Icon name="x" className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
 
-               {/* Bill From / Ship From */}
+              {/* Bill From / Ship From */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide">
-                          Bill From (Full Address)
-                      </label>
-                      <div className="space-y-2">
-                          <input
-                              type="text"
-                              value={billFromAddress1}
-                              onChange={(e) => setBillFromAddress1(e.target.value)}
-                              placeholder="Address Line 1"
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                          <input
-                              type="text"
-                              value={billFromAddress2}
-                              onChange={(e) => setBillFromAddress2(e.target.value)}
-                              placeholder="Address Line 2"
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                          <input
-                              type="text"
-                              value={billFromAddress3}
-                              onChange={(e) => setBillFromAddress3(e.target.value)}
-                              placeholder="Address Line 3"
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                          <div className="grid grid-cols-2 gap-2">
-                              <input
-                                  type="text"
-                                  value={billFromCity}
-                                  onChange={(e) => setBillFromCity(e.target.value)}
-                                  placeholder="City"
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                              />
-                              <input
-                                  type="text"
-                                  value={billFromPincode}
-                                  onChange={(e) => setBillFromPincode(e.target.value)}
-                                  placeholder="Pincode"
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                              />
-                          </div>
-                      </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide">
+                    Bill From (Full Address)
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={billFromAddress1}
+                      onChange={(e) => setBillFromAddress1(e.target.value)}
+                      placeholder="Address Line 1"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <input
+                      type="text"
+                      value={billFromAddress2}
+                      onChange={(e) => setBillFromAddress2(e.target.value)}
+                      placeholder="Address Line 2"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <input
+                      type="text"
+                      value={billFromAddress3}
+                      onChange={(e) => setBillFromAddress3(e.target.value)}
+                      placeholder="Address Line 3"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={billFromCity}
+                        onChange={(e) => setBillFromCity(e.target.value)}
+                        placeholder="City"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                      <input
+                        type="text"
+                        value={billFromPincode}
+                        onChange={(e) => setBillFromPincode(e.target.value)}
+                        placeholder="Pincode"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
-                  <div>
-                      <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-gray-700 font-bold tracking-wide">
-                              Ship From
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                  type="checkbox"
-                                  checked={cnSameAsBillFrom}
-                                  onChange={(e) => setCnSameAsBillFrom(e.target.checked)}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <span className="text-xs font-bold text-gray-500 uppercase">SAME AS BILL TO ADDRESS</span>
-                          </label>
-                      </div>
-                      <div className="space-y-2">
-                          <input
-                              type="text"
-                              value={shipFromAddress1}
-                              onChange={(e) => setShipFromAddress1(e.target.value)}
-                              placeholder="Address Line 1"
-                              disabled={cnSameAsBillFrom}
-                              className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                          />
-                          <input
-                              type="text"
-                              value={shipFromAddress2}
-                              onChange={(e) => setShipFromAddress2(e.target.value)}
-                              placeholder="Address Line 2"
-                              disabled={cnSameAsBillFrom}
-                              className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                          />
-                          <input
-                              type="text"
-                              value={shipFromAddress3}
-                              onChange={(e) => setShipFromAddress3(e.target.value)}
-                              placeholder="Address Line 3"
-                              disabled={cnSameAsBillFrom}
-                              className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                          />
-                          <div className="grid grid-cols-2 gap-2">
-                              <input
-                                  type="text"
-                                  value={shipFromCity}
-                                  onChange={(e) => setShipFromCity(e.target.value)}
-                                  placeholder="City"
-                                  disabled={cnSameAsBillFrom}
-                                  className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                              />
-                              <input
-                                  type="text"
-                                  value={shipFromPincode}
-                                  onChange={(e) => setShipFromPincode(e.target.value)}
-                                  placeholder="Pincode"
-                                  disabled={cnSameAsBillFrom}
-                                  className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                              />
-                          </div>
-                      </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 font-bold tracking-wide">
+                      Ship From
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={cnSameAsBillFrom}
+                        onChange={(e) => setCnSameAsBillFrom(e.target.checked)}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-xs font-bold text-gray-500 uppercase">SAME AS BILL TO ADDRESS</span>
+                    </label>
                   </div>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={shipFromAddress1}
+                      onChange={(e) => setShipFromAddress1(e.target.value)}
+                      placeholder="Address Line 1"
+                      disabled={cnSameAsBillFrom}
+                      className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                    />
+                    <input
+                      type="text"
+                      value={shipFromAddress2}
+                      onChange={(e) => setShipFromAddress2(e.target.value)}
+                      placeholder="Address Line 2"
+                      disabled={cnSameAsBillFrom}
+                      className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                    />
+                    <input
+                      type="text"
+                      value={shipFromAddress3}
+                      onChange={(e) => setShipFromAddress3(e.target.value)}
+                      placeholder="Address Line 3"
+                      disabled={cnSameAsBillFrom}
+                      className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={shipFromCity}
+                        onChange={(e) => setShipFromCity(e.target.value)}
+                        placeholder="City"
+                        disabled={cnSameAsBillFrom}
+                        className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                      />
+                      <input
+                        type="text"
+                        value={shipFromPincode}
+                        onChange={(e) => setShipFromPincode(e.target.value)}
+                        placeholder="Pincode"
+                        disabled={cnSameAsBillFrom}
+                        className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-               {/* Row 7: Input Type, Foreign Currency */}
+              {/* Row 7: Input Type, Foreign Currency */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end bg-gray-50/50 p-6 pt-4 mt-6 rounded-[4px] border border-gray-100">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
@@ -6808,22 +6845,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="button"
                         onClick={() => {
                           if (cnInForeignCurrency === 'Yes') return;
-                          setCnInputType(prev => 
+                          setCnInputType(prev =>
                             prev.includes(type) ? prev.filter(p => p !== type) : [...prev, type]
                           );
                         }}
-                        className={`px-6 py-2 rounded-[4px] text-[13px] font-medium transition-all ${
-                           (cnInputType.includes(type) || (cnInForeignCurrency === 'Yes' && type === 'IGST'))
-                             ? 'bg-indigo-600 text-white shadow-sm' 
-                             : 'bg-white border border-gray-300 text-gray-600 hover:border-indigo-500 hover:text-indigo-600'
-                        } ${cnInForeignCurrency === 'Yes' && type !== 'IGST' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`px-6 py-2 rounded-[4px] text-[13px] font-medium transition-all ${(cnInputType.includes(type) || (cnInForeignCurrency === 'Yes' && type === 'IGST'))
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-white border border-gray-300 text-gray-600 hover:border-indigo-500 hover:text-indigo-600'
+                          } ${cnInForeignCurrency === 'Yes' && type !== 'IGST' ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {type}
                       </button>
                     ))}
                   </div>
                 </div>
-                 <div className="flex flex-col items-start gap-4">
+                <div className="flex flex-col items-start gap-4">
                   <div className="flex flex-col items-start">
                     <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
                       INVOICE IN FOREIGN CURRENCY
@@ -6840,11 +6876,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               setCreditNoteActiveTab('invoice');
                             }
                           }}
-                          className={`px-8 py-1.5 rounded-[2px] text-[13px] font-medium transition-all ${
-                            cnInForeignCurrency === opt 
-                              ? 'bg-indigo-600 text-white shadow-sm' 
+                          className={`px-8 py-1.5 rounded-[2px] text-[13px] font-medium transition-all ${cnInForeignCurrency === opt
+                              ? 'bg-indigo-600 text-white shadow-sm'
                               : 'text-gray-500 hover:text-gray-700'
-                          }`}
+                            }`}
                         >
                           {opt}
                         </button>
@@ -7117,7 +7152,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           />
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200">
-                           <input
+                          <input
                             type="text"
                             value={row.uom}
                             onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
@@ -7174,8 +7209,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
           {creditNoteActiveTab === 'items_inr' && (
             <div className="space-y-6">
-               {/* Items Table (INR calculated from Foreign) */}
-               <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none">
+              {/* Items Table (INR calculated from Foreign) */}
+              <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none">
                 <table className="w-full text-left">
                   <thead className="bg-[#5c56d6] text-white">
                     <tr>
@@ -7243,8 +7278,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </table>
               </div>
 
-               {/* Totals Summary */}
-               <div className="flex justify-end pt-4">
+              {/* Totals Summary */}
+              <div className="flex justify-end pt-4">
                 <div className="w-full max-w-md space-y-3 p-6 bg-gray-50/80 rounded-[4px] border border-gray-200 shadow-sm backdrop-blur-sm">
                   <div className="flex justify-between items-center text-[10px] text-gray-400 uppercase font-bold tracking-[0.2em] mb-1">
                     <span>INR SUMMARY</span>
@@ -7350,7 +7385,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] bg-gray-50/80 text-right font-black text-gray-900 font-mono text-sm shadow-inner"
                     />
                   </div>
-                   <div>
+                  <div>
                     <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Sales Invoice Amt Applied</label>
                     <input
                       type="text"
@@ -7394,19 +7429,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             key={opt}
                             type="button"
                             onClick={() => {
-                               if (opt === 'Yes') {
-                                  setCnReverseGstTcs('Yes');
-                                  setCnReverseGstTds('Yes');
-                               } else {
-                                  setCnReverseGstTcs('No');
-                                  setCnReverseGstTds('No');
-                               }
+                              if (opt === 'Yes') {
+                                setCnReverseGstTcs('Yes');
+                                setCnReverseGstTds('Yes');
+                              } else {
+                                setCnReverseGstTcs('No');
+                                setCnReverseGstTds('No');
+                              }
                             }}
-                            className={`px-4 py-1 rounded-[3px] text-[9px] font-black uppercase tracking-tighter transition-all ${
-                              (cnReverseGstTcs === opt || cnReverseGstTds === opt)
-                               ? 'bg-indigo-600 text-white shadow-sm' 
-                               : 'text-gray-400 hover:text-gray-600'
-                            }`}
+                            className={`px-4 py-1 rounded-[3px] text-[9px] font-black uppercase tracking-tighter transition-all ${(cnReverseGstTcs === opt || cnReverseGstTds === opt)
+                                ? 'bg-indigo-600 text-white shadow-sm'
+                                : 'text-gray-400 hover:text-gray-600'
+                              }`}
                           >
                             {opt}
                           </button>
@@ -7421,19 +7455,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             key={opt}
                             type="button"
                             onClick={() => {
-                                if (opt === 'Yes') {
-                                   setCnReverseIncomeTaxTcs('Yes');
-                                   setCnReverseIncomeTaxTds('Yes');
-                                } else {
-                                   setCnReverseIncomeTaxTcs('No');
-                                   setCnReverseIncomeTaxTds('No');
-                                }
+                              if (opt === 'Yes') {
+                                setCnReverseIncomeTaxTcs('Yes');
+                                setCnReverseIncomeTaxTds('Yes');
+                              } else {
+                                setCnReverseIncomeTaxTcs('No');
+                                setCnReverseIncomeTaxTds('No');
+                              }
                             }}
-                            className={`px-4 py-1 rounded-[3px] text-[9px] font-black uppercase tracking-tighter transition-all ${
-                              (cnReverseIncomeTaxTcs === opt || cnReverseIncomeTaxTds === opt)
-                               ? 'bg-indigo-600 text-white shadow-sm' 
-                               : 'text-gray-400 hover:text-gray-600'
-                            }`}
+                            className={`px-4 py-1 rounded-[3px] text-[9px] font-black uppercase tracking-tighter transition-all ${(cnReverseIncomeTaxTcs === opt || cnReverseIncomeTaxTds === opt)
+                                ? 'bg-indigo-600 text-white shadow-sm'
+                                : 'text-gray-400 hover:text-gray-600'
+                              }`}
                           >
                             {opt}
                           </button>
@@ -7482,11 +7515,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       }
                                       setCnAppliedInvoices(newApplied);
                                     }}
-                                    className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right font-black font-mono transition-all outline-none ${
-                                       isAllocated 
-                                       ? "border-indigo-400 bg-white ring-2 ring-indigo-50 text-indigo-700 shadow-sm" 
-                                       : "border-gray-200 bg-white/50 text-gray-400 hover:border-gray-300"
-                                    }`}
+                                    className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right font-black font-mono transition-all outline-none ${isAllocated
+                                        ? "border-indigo-400 bg-white ring-2 ring-indigo-50 text-indigo-700 shadow-sm"
+                                        : "border-gray-200 bg-white/50 text-gray-400 hover:border-gray-300"
+                                      }`}
                                   />
                                 </div>
                               </div>
@@ -7510,11 +7542,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <span className="text-[11px] font-black uppercase tracking-widest text-gray-600">Terms & Conditions</span>
                     <button
                       type="button"
-                      className={`px-6 py-2 rounded-[4px] transition-all text-[11px] font-black uppercase tracking-widest border shadow-sm ${
-                        cnCustomer 
-                        ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 hover:shadow-md active:scale-95' 
-                        : 'bg-white text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
-                      }`}
+                      className={`px-6 py-2 rounded-[4px] transition-all text-[11px] font-black uppercase tracking-widest border shadow-sm ${cnCustomer
+                          ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 hover:shadow-md active:scale-95'
+                          : 'bg-white text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                        }`}
                       title={!cnCustomer ? "Please select a customer first" : ""}
                     >
                       Edit Masters
@@ -7522,16 +7553,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
 
                   <div className="flex-1 bg-white border border-gray-200 rounded-[4px] p-4 flex flex-col border-dashed group hover:border-indigo-300 transition-colors">
-                     <p className="text-[10px] text-slate-400 italic mb-4 font-medium flex items-center gap-2">
-                        <Icon name="info" className="w-3.5 h-3.5" />
-                        Select a customer to auto-load their terms & conditions, or click Edit Masters to add manually.
-                     </p>
-                     <textarea
-                       value={cnTermsConditions}
-                       onChange={(e) => setCnTermsConditions(e.target.value)}
-                       className="flex-1 w-full p-2 text-xs text-gray-700 resize-none outline-none font-medium bg-transparent border-none placeholder:text-gray-200"
-                       placeholder="View or edit specific credit terms here..."
-                     />
+                    <p className="text-[10px] text-slate-400 italic mb-4 font-medium flex items-center gap-2">
+                      <Icon name="info" className="w-3.5 h-3.5" />
+                      Select a customer to auto-load their terms & conditions, or click Edit Masters to add manually.
+                    </p>
+                    <textarea
+                      value={cnTermsConditions}
+                      onChange={(e) => setCnTermsConditions(e.target.value)}
+                      className="flex-1 w-full p-2 text-xs text-gray-700 resize-none outline-none font-medium bg-transparent border-none placeholder:text-gray-200"
+                      placeholder="View or edit specific credit terms here..."
+                    />
                   </div>
 
                   <div className="bg-white/60 p-4 rounded-lg flex items-center gap-4 border border-slate-200/50 grayscale opacity-80">
@@ -7766,96 +7797,96 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
-                                <input
-                                  type="date"
-                                  value={cnTransitUptoPortShippingBillDate}
-                                  onChange={(e) => setCnTransitUptoPortShippingBillDate(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortShipPortCode}
-                                  onChange={(e) => setCnTransitUptoPortShipPortCode(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortOriginCity}
-                                  onChange={(e) => setCnTransitUptoPortOriginCity(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortOriginCountry}
-                                  onChange={(e) => setCnTransitUptoPortOriginCountry(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                  placeholder="Country"
-                                />
-                              </div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
+                              <input
+                                type="date"
+                                value={cnTransitUptoPortShippingBillDate}
+                                onChange={(e) => setCnTransitUptoPortShippingBillDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
                             </div>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
-                                <input
-                                  type="date"
-                                  value={cnTransitUptoPortBolDate}
-                                  onChange={(e) => setCnTransitUptoPortBolDate(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortVesselFlightNo}
-                                  onChange={(e) => setCnTransitUptoPortVesselFlightNo(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortPortOfLoading}
-                                  onChange={(e) => setCnTransitUptoPortPortOfLoading(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortPortOfDischarge}
-                                  onChange={(e) => setCnTransitUptoPortPortOfDischarge(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFinalDestCity}
-                                  onChange={(e) => setCnTransitUptoPortFinalDestCity(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFinalDestCountry}
-                                  onChange={(e) => setCnTransitUptoPortFinalDestCountry(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                  placeholder="Country"
-                                />
-                              </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortShipPortCode}
+                                onChange={(e) => setCnTransitUptoPortShipPortCode(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
                             </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortOriginCity}
+                                onChange={(e) => setCnTransitUptoPortOriginCity(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
+                                placeholder="City"
+                              />
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortOriginCountry}
+                                onChange={(e) => setCnTransitUptoPortOriginCountry(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                placeholder="Country"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
+                              <input
+                                type="date"
+                                value={cnTransitUptoPortBolDate}
+                                onChange={(e) => setCnTransitUptoPortBolDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortVesselFlightNo}
+                                onChange={(e) => setCnTransitUptoPortVesselFlightNo(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortPortOfLoading}
+                                onChange={(e) => setCnTransitUptoPortPortOfLoading(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortPortOfDischarge}
+                                onChange={(e) => setCnTransitUptoPortPortOfDischarge(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFinalDestCity}
+                                onChange={(e) => setCnTransitUptoPortFinalDestCity(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
+                                placeholder="City"
+                              />
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFinalDestCountry}
+                                onChange={(e) => setCnTransitUptoPortFinalDestCountry(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                placeholder="Country"
+                              />
+                            </div>
+                          </div>
                         </>
                       )}
 
@@ -7864,105 +7895,105 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <>
                           <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortBolNo}
-                                  onChange={(e) => setCnTransitUptoPortBolNo(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortRrNo}
-                                  onChange={(e) => setCnTransitUptoPortRrNo(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
-                                <input
-                                  type="date"
-                                  value={cnTransitUptoPortRrDate}
-                                  onChange={(e) => setCnTransitUptoPortRrDate(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortOriginCity}
-                                  onChange={(e) => setCnTransitUptoPortOriginCity(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortOriginCountry}
-                                  onChange={(e) => setCnTransitUptoPortOriginCountry(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                  placeholder="Country"
-                                />
-                              </div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortBolNo}
+                                onChange={(e) => setCnTransitUptoPortBolNo(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
                             </div>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
-                                <input
-                                  type="date"
-                                  value={cnTransitUptoPortBolDate}
-                                  onChange={(e) => setCnTransitUptoPortBolDate(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">FNR No.</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFnrNo}
-                                  onChange={(e) => setCnTransitUptoPortFnrNo(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortStationLoading}
-                                  onChange={(e) => setCnTransitUptoPortStationLoading(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortStationDischarge}
-                                  onChange={(e) => setCnTransitUptoPortStationDischarge(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFinalDestCity}
-                                  onChange={(e) => setCnTransitUptoPortFinalDestCity(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFinalDestCountry}
-                                  onChange={(e) => setCnTransitUptoPortFinalDestCountry(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                  placeholder="Country"
-                                />
-                              </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortRrNo}
+                                onChange={(e) => setCnTransitUptoPortRrNo(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
                             </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
+                              <input
+                                type="date"
+                                value={cnTransitUptoPortRrDate}
+                                onChange={(e) => setCnTransitUptoPortRrDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortOriginCity}
+                                onChange={(e) => setCnTransitUptoPortOriginCity(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
+                                placeholder="City"
+                              />
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortOriginCountry}
+                                onChange={(e) => setCnTransitUptoPortOriginCountry(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                placeholder="Country"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
+                              <input
+                                type="date"
+                                value={cnTransitUptoPortBolDate}
+                                onChange={(e) => setCnTransitUptoPortBolDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">FNR No.</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFnrNo}
+                                onChange={(e) => setCnTransitUptoPortFnrNo(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortStationLoading}
+                                onChange={(e) => setCnTransitUptoPortStationLoading(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortStationDischarge}
+                                onChange={(e) => setCnTransitUptoPortStationDischarge(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFinalDestCity}
+                                onChange={(e) => setCnTransitUptoPortFinalDestCity(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
+                                placeholder="City"
+                              />
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFinalDestCountry}
+                                onChange={(e) => setCnTransitUptoPortFinalDestCountry(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                placeholder="Country"
+                              />
+                            </div>
+                          </div>
                         </>
                       )}
                     </div>
@@ -8993,8 +9024,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           value={contraForexGainLoss !== 0 ? (contraForexGainLoss > 0 ? `+${contraForexGainLoss.toFixed(2)}` : contraForexGainLoss.toFixed(2)) : '0.00'}
                           readOnly
                           className={`w-full px-2 py-1 border rounded text-xs text-center font-semibold ${contraForexGainLoss > 0 ? 'border-green-300 bg-green-50 text-green-700'
-                              : contraForexGainLoss < 0 ? 'border-red-300 bg-red-50 text-red-700'
-                                : 'border-gray-200 bg-gray-50 text-gray-600'
+                            : contraForexGainLoss < 0 ? 'border-red-300 bg-red-50 text-red-700'
+                              : 'border-gray-200 bg-gray-50 text-gray-600'
                             }`}
                         />
                         <div className="text-[10px] text-center mt-0.5 font-medium">
@@ -10091,7 +10122,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {voucherType === 'Expenses' && renderExpensesForm()}
             {voucherType === 'Credit Note' && renderCreditNoteForm()}
             {voucherType === 'Debit Note' && (
-              <DebitNoteVoucher 
+              <DebitNoteVoucher
                 prefilledData={localPrefilledData}
                 clearPrefilledData={handleClearPrefilledData}
                 companyDetails={companyDetails}

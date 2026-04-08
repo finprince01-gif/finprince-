@@ -1848,6 +1848,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 outward_slip_id: outwardSlipId,
                 customer_name: customerName,
                 customer_id: customerId,
+                customer_branch: customerBranch,
                 bill_to: JSON.stringify(billTo),
                 ship_to: JSON.stringify(shipTo),
                 gstin,
@@ -2036,7 +2037,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             const payload = {
                 date: formatDate(date), sales_invoice_no: salesInvoiceNo, voucher_name: voucherName, outward_slip_no: outwardSlipNo, outward_slip_id: outwardSlipId,
-                customer_name: customerName, customer_id: customerId, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
+                customer_name: customerName, customer_id: customerId, customer_branch: customerBranch, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
                 state_type: stateType, export_type: exportType, exchange_rate: exchangeRate, supporting_document: supportingDocument,
                 sales_order_no: salesOrderNos.join(', '), place_of_supply: placeOfSupply || null, reverse_charge: reverseCharge, invoice_type: invoiceType,
                 gst_export_type: stateType === 'export' ? gstExportType : null, port_code: stateType === 'export' ? portCode : null,
