@@ -13,7 +13,7 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     queryset = VoucherSalesInvoiceDetails.objects.all().order_by('-date', '-created_at')
     serializer_class = VoucherSalesInvoiceDetailsSerializer
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().prefetch_related('items')
         # Filter for the current tenant
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
@@ -36,10 +36,19 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
                 payment_details__payment_payable__gt=0
             ).select_related('payment_details')
         
-        # Optional: Filter by customer name if provided
+        # Optional: Filter by customer name/branch if provided
         customer_name = self.request.query_params.get('customer_name')
         if customer_name:
             queryset = queryset.filter(customer_name=customer_name)
+        
+        branch = self.request.query_params.get('branch')
+        if branch:
+            queryset = queryset.filter(customer_branch__iexact=branch.strip())
+
+        # Filter by specific invoice number (for fetching full item details)
+        sales_invoice_no = self.request.query_params.get('sales_invoice_no')
+        if sales_invoice_no:
+            queryset = queryset.filter(sales_invoice_no=sales_invoice_no)
         
         return queryset
 

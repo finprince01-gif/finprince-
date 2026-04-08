@@ -57,6 +57,8 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
     // References State
     const [selectedPOs, setSelectedPOs] = useState<string[]>([]);
     const [isPoDropdownOpen, setIsPoDropdownOpen] = useState(false);
+    const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
+    const [isInvoiceDropdownOpen, setIsInvoiceDropdownOpen] = useState(false);
     const [purchaseOrderNo, setPurchaseOrderNo] = useState(''); // Keep for single value inputs if needed
     const [supplierInvoiceNo, setSupplierInvoiceNo] = useState(initialSupplierInvoiceNo);
 
@@ -92,11 +94,12 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
             '#f5f7ff'  // Ghost White
         ];
         const map: Record<string, string> = {};
-        selectedPOs.forEach((po, index) => {
-            map[po] = colors[index % colors.length];
+        const allRefs = [...selectedPOs, ...selectedInvoices];
+        allRefs.forEach((ref, index) => {
+            map[ref] = colors[index % colors.length];
         });
         return map;
-    }, [selectedPOs]);
+    }, [selectedPOs, selectedInvoices]);
 
     // Dynamic Options State
     const [branchOptions, setBranchOptions] = useState<any[]>([]);
@@ -237,6 +240,8 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
         setSelectedPOs([]); // Reset selected POs
         setPurchaseOrderNo('');
         setPoOptions([]);
+        setSelectedInvoices([]);
+        setIsInvoiceDropdownOpen(false);
         setSupplierInvoiceNo('');
         setInvoiceOptions([]);
     };
@@ -398,6 +403,99 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
 
         fetchMultiplePOItems();
     }, [selectedPOs, poOptions, grnType, itemsList]);
+
+    // Auto-fetch items when Invoice(s) are selected
+    useEffect(() => {
+        const fetchMultipleInvoiceItems = async () => {
+            if (selectedInvoices.length === 0 || grnType !== 'sales_return') return;
+
+            try {
+                let allInvItemsRaw: any[] = [];
+
+                for (const invNo of selectedInvoices) {
+                    let selectedInv = customerSalesInvoices.find(inv => (inv.voucher_no || inv.sales_invoice_no) === invNo);
+                    
+                    if (selectedInv) {
+                        // If items are missing (could happen if list view is restricted), fetch detail
+                        if (!Array.isArray(selectedInv.items) || selectedInv.items.length === 0) {
+                            try {
+                                const detailedInv = await httpClient.get<any>(`/api/vouchers/sales/${selectedInv.id}/`);
+                                if (detailedInv && (Array.isArray(detailedInv.items) || Array.isArray(detailedInv.foreign_items))) {
+                                    selectedInv = { ...selectedInv, ...detailedInv };
+                                }
+                            } catch (e) {
+                                console.error(`Failed to fetch detail for invoice ${invNo}:`, e);
+                            }
+                        }
+
+                        // Handle standard items
+                        if (Array.isArray(selectedInv.items)) {
+                            allInvItemsRaw = [...allInvItemsRaw, ...selectedInv.items.map((item: any) => ({ ...item, _invNo: invNo }))];
+                        }
+                        
+                        // Handle foreign items
+                        if (Array.isArray(selectedInv.foreign_items)) {
+                            allInvItemsRaw = [...allInvItemsRaw, ...selectedInv.foreign_items.map((item: any) => ({ 
+                                ...item, 
+                                _invNo: invNo,
+                                // Normalize field names from foreign model
+                                qty: item.quantity,
+                                uom: item.uqc
+                            }))];
+                        }
+                    }
+                }
+
+                if (allInvItemsRaw.length > 0) {
+                    const invItems = allInvItemsRaw.map((item: any) => {
+                        // The items from sales vouchers have item_name and item_code
+                        const fullItem = itemsList.find(i =>
+                            (i.item_name || i.name) === item.item_name || (i.item_code || i.code) === item.item_code
+                        );
+
+                        return {
+                            id: Date.now() + Math.random(),
+                            itemCode: fullItem?.item_code || fullItem?.code || item.item_code || '',
+                            itemName: fullItem?.item_name || fullItem?.name || item.item_name || item.name || '',
+                            hsnCode: fullItem?.hsn_code || fullItem?.hsn_sac_code || fullItem?.sac_code || item.hsn_sac || '',
+                            uom: item.uom || fullItem?.uom || fullItem?.base_unit || '',
+                            refQty: item.qty?.toString() || '',
+                            secondaryQty: '',
+                            receivedQty: '',
+                            acceptedQty: '',
+                            rejectedQty: '0',
+                            shortExcessQty: '',
+                            remarks: '',
+                            boxes: '',
+                            poNumber: item._invNo // Reusing field for styling/grouping
+                        };
+                    });
+                    setItems(invItems);
+                } else if (selectedInvoices.length === 0 && selectedPOs.length === 0) {
+                    // Reset to single empty item if no references selected
+                    setItems([{
+                        id: Date.now(),
+                        itemCode: '',
+                        itemName: '',
+                        hsnCode: '',
+                        uom: '',
+                        refQty: '',
+                        secondaryQty: '',
+                        receivedQty: '',
+                        acceptedQty: '',
+                        rejectedQty: '',
+                        shortExcessQty: '',
+                        remarks: '',
+                        boxes: ''
+                    }]);
+                }
+            } catch (error) {
+                console.error("Error fetching Invoice items:", error);
+            }
+        };
+
+        fetchMultipleInvoiceItems();
+    }, [selectedInvoices, selectedPOs, customerSalesInvoices, grnType, itemsList]);
 
     // Auto-select GRN Series if only 1 is available
     useEffect(() => {
@@ -565,7 +663,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
             address: address,
             gstin: gstin,
 
-            reference_no: grnType === 'purchases' ? selectedPOs.join(', ') : purchaseOrderNo, // Use selectedPOs for purchases
+            reference_no: grnType === 'purchases' ? selectedPOs.join(', ') : selectedInvoices.join(', '),
             secondary_ref_no: supplierInvoiceNo || '',
             reasons_for_return: reasonsForReturn,
             posting_note: postingNote || '',
@@ -691,12 +789,12 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                     value={customerName}
                                     onChange={(e) => {
                                         setCustomerName(e.target.value);
-                                        // Reset dependent fields if needed
                                         setBranch('');
                                         setBranchOptions([]);
                                         setAddress('');
                                         setGstin('');
-                                        // Fetch branches for customer if applicable...
+                                        setSelectedInvoices([]);
+                                        setIsInvoiceDropdownOpen(false);
                                     }}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                 >
@@ -812,18 +910,59 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                     )}
                                 </div>
                             ) : (
-                                <select
-                                    value={purchaseOrderNo}
-                                    onChange={(e) => setPurchaseOrderNo(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                >
-                                    <option value="">Select Invoice</option>
-                                    {customerSalesInvoices.map((inv) => (
-                                        <option key={inv.id} value={inv.voucher_no || inv.sales_invoice_no}>
-                                            {inv.voucher_no || inv.sales_invoice_no} ({inv.date})
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsInvoiceDropdownOpen(!isInvoiceDropdownOpen)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white text-left flex justify-between items-center min-h-[38px]"
+                                    >
+                                        <span className="truncate">
+                                            {selectedInvoices.length > 0 ? selectedInvoices.join(', ') : 'Select Invoices'}
+                                        </span>
+                                        <ChevronDown size={16} className={`text-gray-400 transition-transform ${isInvoiceDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {isInvoiceDropdownOpen && (
+                                        <>
+                                            <div
+                                                className="fixed inset-0 z-10"
+                                                onClick={() => setIsInvoiceDropdownOpen(false)}
+                                            />
+                                            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-60 overflow-y-auto">
+                                                {customerSalesInvoices.length === 0 ? (
+                                                    <div className="px-3 py-2 text-sm text-gray-500">No Invoices available</div>
+                                                ) : (
+                                                    customerSalesInvoices.map((inv) => {
+                                                        const invoiceNo = inv.voucher_no || inv.sales_invoice_no;
+                                                        const isSelected = selectedInvoices.includes(invoiceNo);
+                                                        return (
+                                                            <div
+                                                                key={invoiceNo}
+                                                                className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (isSelected) {
+                                                                        setSelectedInvoices(selectedInvoices.filter(i => i !== invoiceNo));
+                                                                    } else {
+                                                                        setSelectedInvoices([...selectedInvoices, invoiceNo]);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    readOnly
+                                                                    className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                                                />
+                                                                <span>{invoiceNo} ({inv.date})</span>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             )}
                         </div>
                         <div>
@@ -868,66 +1007,72 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                             style={{ backgroundColor: item.poNumber ? poColorMap[item.poNumber] : 'transparent' }}
                                             className="transition-colors"
                                         >
-                                            <td className="p-2">
+                                            <td className="px-3 py-2">
                                                 <select
                                                     value={item.itemCode}
                                                     onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded-[4px] text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 >
                                                     <option value="">Select</option>
                                                     {itemsList.map(i => {
                                                         const code = i.item_code || i.code || '';
                                                         return <option key={i.id} value={code}>{code}</option>;
                                                     })}
+                                                    {item.itemCode && !itemsList.some(i => (i.item_code || i.code) === item.itemCode) && (
+                                                        <option value={item.itemCode}>{item.itemCode}</option>
+                                                    )}
                                                 </select>
                                             </td>
-                                            <td className="p-2">
+                                            <td className="px-3 py-2">
                                                 <select
                                                     value={item.itemName}
                                                     onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded-[4px] text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 >
                                                     <option value="">Select Item</option>
                                                     {itemsList.map(i => {
                                                         const name = i.item_name || i.name || '';
                                                         return <option key={i.id} value={name}>{name}</option>;
                                                     })}
+                                                    {item.itemName && !itemsList.some(i => (i.item_name || i.name) === item.itemName) && (
+                                                        <option value={item.itemName}>{item.itemName}</option>
+                                                    )}
                                                 </select>
                                             </td>
-                                            <td className="p-2">
+                                            <td className="px-3 py-2">
                                                 <input
                                                     type="text"
                                                     value={item.hsnCode}
                                                     readOnly
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-gray-50"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded-[4px] text-xs bg-gray-50 focus:outline-none"
                                                 />
                                             </td>
-                                            <td className="p-2">
+                                            <td className="px-3 py-2">
                                                 <input
                                                     type="text"
                                                     value={item.uom}
                                                     readOnly
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-gray-50"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded-[4px] text-xs bg-gray-50 focus:outline-none"
                                                 />
                                             </td>
-                                            <td className="p-2">
+                                            <td className="px-3 py-2">
                                                 <input
                                                     type="number"
                                                     value={item.refQty}
                                                     readOnly
-                                                    title="Pending PO Quantity (auto-fetched from Purchase Order)"
-                                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-amber-50 cursor-not-allowed text-gray-700 font-medium"
+                                                    title={grnType === 'purchases' ? "Pending PO Quantity (auto-fetched from Purchase Order)" : "Invoice Quantity (auto-fetched from Sales Invoice)"}
+                                                    className={`w-full px-2 py-1 border border-gray-200 rounded-[4px] text-xs bg-amber-50 cursor-not-allowed text-gray-700 font-medium focus:outline-none`}
                                                 />
                                             </td>
-                                            <td className="p-2"><input type="number" value={item.secondaryQty} onChange={(e) => handleItemChange(item.id, 'secondaryQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
-                                            <td className="p-2"><input type="number" value={item.receivedQty} onChange={(e) => handleItemChange(item.id, 'receivedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
-                                            <td className="p-2"><input type="number" value={item.acceptedQty} onChange={(e) => handleItemChange(item.id, 'acceptedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
-                                            <td className="p-2"><input type="number" value={item.rejectedQty} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-red-50" /></td>
-                                            <td className="p-2"><input type="number" value={item.shortExcessQty} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-gray-50" /></td>
-                                            <td className="p-2"><input type="text" value={item.remarks} onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
-                                            <td className="p-2 text-center">
-                                                <button onClick={() => handleRemoveItem(item.id)} className="text-red-500 hover:text-red-700">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                            <td className="px-3 py-2"><input type="number" value={item.secondaryQty} onChange={(e) => handleItemChange(item.id, 'secondaryQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded-[4px] text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" /></td>
+                                            <td className="px-3 py-2"><input type="number" value={item.receivedQty} onChange={(e) => handleItemChange(item.id, 'receivedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded-[4px] text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" /></td>
+                                            <td className="px-3 py-2"><input type="number" value={item.acceptedQty} onChange={(e) => handleItemChange(item.id, 'acceptedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded-[4px] text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" /></td>
+                                            <td className="px-3 py-2"><input type="number" value={item.rejectedQty} readOnly className="w-full px-2 py-1 border border-gray-200 rounded-[4px] text-xs bg-red-50 focus:outline-none" /></td>
+                                            <td className="px-3 py-2"><input type="number" value={item.shortExcessQty} readOnly className="w-full px-2 py-1 border border-gray-200 rounded-[4px] text-xs bg-gray-50 focus:outline-none" /></td>
+                                            <td className="px-3 py-2"><input type="text" value={item.remarks} onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded-[4px] text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" /></td>
+                                            <td className="px-3 py-2 text-center">
+                                                <button onClick={() => handleRemoveItem(item.id)} className="text-red-500 hover:text-red-700 transition-colors p-1">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mx-auto">
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
                                                     </svg>
                                                 </button>

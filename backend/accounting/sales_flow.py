@@ -11,7 +11,7 @@ Handles all business logic for sales voucher operations including:
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import os
 
 from .sales_validation_logic import validate_sales_customer_and_invoice
@@ -303,7 +303,7 @@ def calculate_item_totals(items: List[Dict], tax_type: str) -> Dict:
 
 
 
-def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesVoucher':
+def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> Any:
     """
     Create sales voucher with all validations.
     Supports resolving voucher type from VoucherConfiguration.
@@ -373,6 +373,7 @@ def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesV
             voucher_name=voucher_name,
             sales_invoice_no=invoice_number,
             customer_name=customer_info['customer_name'],
+            customer_branch=data.get('customer_branch'),
             
             bill_to=customer_info['bill_to_address'], 
             # Note: gstin, contact exist in table

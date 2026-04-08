@@ -49,7 +49,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     onAddVouchers
 }) => {
     const [activeTab, setActiveTab] = useState('invoice');
-    
+
     // Form States
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [voucherSeries, setVoucherSeries] = useState<any[]>([]);
@@ -105,9 +105,9 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const totalInvoiceValue = itemRows.reduce((sum, item) => sum + (parseFloat(item.invoiceValue) || 0), 0);
 
     const grossAmountDue = (
-        totalInvoiceValue 
-        + (parseFloat(reverseTcs) || 0) 
-        - (parseFloat(reverseTds) || 0) 
+        totalInvoiceValue
+        + (parseFloat(reverseTcs) || 0)
+        - (parseFloat(reverseTds) || 0)
         - (parseFloat(tdsIt) || 0)
     );
 
@@ -118,13 +118,13 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const [modeOfTransport, setModeOfTransport] = useState('Road');
     const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0]);
     const [dispatchTime, setDispatchTime] = useState('');
-    
+
     const [deliveryType, setDeliveryType] = useState('Self');
     const [transporterIdGstin, setTransporterIdGstin] = useState('');
     const [transporterName, setTransporterName] = useState('');
     const [vehicleNo, setVehicleNo] = useState('');
     const [lrGrConsignmentNo, setLrGrConsignmentNo] = useState('');
-    
+
     // Beyond Port (Air/Sea/Rail) properties
     const [shippingBillNo, setShippingBillNo] = useState('');
     const [shippingBillDate, setShippingBillDate] = useState('');
@@ -132,18 +132,19 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const [vesselFlightNo, setVesselFlightNo] = useState('');
     const [portOfLoading, setPortOfLoading] = useState('');
     const [portOfDischarge, setPortOfDischarge] = useState('');
-    
+
     const [railwayReceiptNo, setRailwayReceiptNo] = useState('');
     const [railwayReceiptDate, setRailwayReceiptDate] = useState('');
     const [fnrNo, setFnrNo] = useState('');
     const [stationOfLoading, setStationOfLoading] = useState('');
     const [stationOfDischarge, setStationOfDischarge] = useState('');
-    
+
     const [originCity, setOriginCity] = useState('');
     const [originCountry, setOriginCountry] = useState('');
     const [destinationCity, setDestinationCity] = useState('');
     const [destinationCountry, setDestinationCountry] = useState('');
-    
+    const [narration, setNarration] = useState('');
+
     // Memoized available items from selected invoices
     const availableItems = useMemo(() => {
         const items: any[] = [];
@@ -161,8 +162,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             });
         return items;
     }, [allPurchaseInvoices, selectedSupplierInvoices]);
-    
-    
+
+
     // Fetch initial data on mount
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -210,9 +211,13 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 const gstDetailsRes = await apiService.getVendorGSTDetails(vendor.id);
                 const gstDetails = Array.isArray(gstDetailsRes) ? gstDetailsRes : ((gstDetailsRes as any).results || []);
                 setBranches(gstDetails);
-                // If only one branch, auto-select it - Pass vendor name directly into handleBranchChange to avoid stale state
+
+                // If only one branch, auto-select it
                 if (gstDetails.length === 1) {
-                    handleBranchChange(gstDetails[0].reference_name, name);
+                    handleBranchChange(gstDetails[0].reference_name, name, vendor.id);
+                } else {
+                    // Pre-fetch transactions for the whole vendor (Procurement Source)
+                    fetchVendorTransactions(vendor.id, name);
                 }
             } catch (error) {
                 console.error("Error fetching vendor GST details:", error);
@@ -220,7 +225,71 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         }
     };
 
-    const handleBranchChange = async (branchName: string, explicitVendorName?: string) => {
+    const fetchVendorTransactions = async (vId: number, vName: string, branchName?: string) => {
+        try {
+            // 1. Fetch from Procurement Source (Unified Transactions)
+            const transactionsRes = await apiService.getVendorTransactions(vId);
+            const transactions = Array.isArray(transactionsRes) ? transactionsRes : ((transactionsRes as any).results || []);
+
+            // 2. Fetch from Voucher Source (Historical Purchase Vouchers)
+            const prevInvoicesRes = await apiService.getVendorPurchaseInvoices(vName, branchName);
+            const prevVouchers = Array.isArray(prevInvoicesRes) ? prevInvoicesRes : ((prevInvoicesRes as any).results || []);
+
+            // Normalize and Merge
+            const allInvsMap = new Map();
+
+            // First source: PROCUREMENT (Reference number priority)
+            // If branch is selected, only keep transactions that match our branch-filtered vouchers
+            const procurementSource = branchName
+                ? transactions.filter((t: any) => {
+                    const invNo = t.reference_number || t.transaction_number || '';
+                    return prevVouchers.some((v: any) => (v.invoice_no === invNo || v.reference_no === invNo || v.supplier_invoice_no === invNo));
+                })
+                : transactions;
+
+            procurementSource
+                .filter((t: any) => (t.transaction_type || '').toLowerCase() === 'purchase')
+                .forEach((t: any) => {
+                    const invNo = t.reference_number || t.transaction_number;
+                    if (invNo) {
+                        allInvsMap.set(invNo, {
+                            invoice_no: invNo,
+                            purchase_voucher_no: t.transaction_number,
+                            date: t.transaction_date,
+                            total: t.total_amount,
+                            due_status: t.due_status,
+                            id: t.id
+                        });
+                    }
+                });
+
+            // Second source: Vouchers (Items data priority)
+            prevVouchers.forEach((inv: any) => {
+                const invNo = inv.invoice_no || inv.supplier_invoice_no || inv.reference_no;
+                if (invNo) {
+                    const existing = allInvsMap.get(invNo) || {};
+                    allInvsMap.set(invNo, {
+                        ...existing,
+                        ...inv,
+                        invoice_no: invNo, // Normalize key
+                    });
+                }
+            });
+
+            const mergedInvoices = Array.from(allInvsMap.values());
+            setAllPurchaseInvoices(mergedInvoices);
+            setSupplierInvoiceNos(mergedInvoices.map(inv => inv.invoice_no).filter(Boolean));
+
+            // Fetch pending outward slips
+            const slipsRes = await apiService.getPendingOutwardSlips(vName);
+            const slips = Array.isArray(slipsRes) ? slipsRes : ((slipsRes as any).results || []);
+            setPendingOutwardSlips(slips);
+        } catch (error) {
+            console.error("Error fetching vendor transactions:", error);
+        }
+    };
+
+    const handleBranchChange = async (branchName: string, explicitVendorName?: string, explicitVendorId?: number) => {
         const vName = explicitVendorName || vendorName;
         setVendorBranch(branchName);
         const branch = branches.find(b => b.reference_name === branchName);
@@ -238,24 +307,15 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             }
             setPlaceOfSupply(branch.gst_state || '');
 
-            try {
-                // Fetch previous purchase invoices for this vendor
-                const prevInvoicesRes = await apiService.getVendorPurchaseInvoices(vName);
-                const prevInvoices = Array.isArray(prevInvoicesRes) ? prevInvoicesRes : ((prevInvoicesRes as any).results || []);
-                
-                if (prevInvoices && prevInvoices.length > 0) {
-                    setAllPurchaseInvoices(prevInvoices);
-                    // Extract invoice numbers for the dropdown
-                    const invNos = prevInvoices.map((inv: any) => inv.invoice_no).filter(Boolean);
-                    setSupplierInvoiceNos(invNos);
-                }
+            // Fetch transactions if we have the ID
+            const vId = explicitVendorId || vendors.find(v => v.vendor_name === vName)?.id;
+            if (vId) {
+                // Clear old data first to ensure clean state
+                setAllPurchaseInvoices([]);
+                setSupplierInvoiceNos([]);
+                setSelectedSupplierInvoices([]);
 
-                // Fetch pending outward slips
-                const slipsRes = await apiService.getPendingOutwardSlips(vName);
-                const slips = Array.isArray(slipsRes) ? slipsRes : ((slipsRes as any).results || []);
-                setPendingOutwardSlips(slips);
-            } catch (error) {
-                console.error("Error fetching vendor data:", error);
+                fetchVendorTransactions(vId, vName, branchName);
             }
         }
     };
@@ -327,7 +387,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const [irn, setIrn] = useState('');
     const [ackNo, setAckNo] = useState('');
     const [ackDate, setAckDate] = useState('');
-    
+
     const updateItemRow = useCallback((index: number, updates: Partial<ItemRow>) => {
         setItemRows(prev => {
             const newRows = [...prev];
@@ -336,8 +396,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
             // Logic for item selection (auto-fill)
             if (updates.itemCode || updates.itemName) {
-                const selectedItem = availableItems.find(it => 
-                    (updates.itemCode && it.itemCode === updates.itemCode) || 
+                const selectedItem = availableItems.find(it =>
+                    (updates.itemCode && it.itemCode === updates.itemCode) ||
                     (updates.itemName && it.itemName === updates.itemName)
                 );
                 if (selectedItem) {
@@ -358,8 +418,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             }
 
             const qty = parseFloat(updatedRow.qty || '0') || 0;
-            const maxQty = updatedRow.maxQty || 0;
-            
+            const maxQty = Number(updatedRow.maxQty || 0);
+
             // Limit quantity to billed quantity
             const finalQty = maxQty > 0 ? Math.min(qty, maxQty) : qty;
             if (finalQty !== qty) {
@@ -414,7 +474,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             // This is a bit inefficient but ensures everything stays in sync
             // A more elegant solution would be to derive these in render, 
             // but the state needs these values for submission.
-            return _; 
+            return _;
         }));
         // Actually, trigger a manual refresh logic or just use derived data.
         // For simplicity, let's just make sure updateItemRow is called on changes.
@@ -426,10 +486,283 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             setShipToAddress(billToAddress);
         }
     }, [sameAsBillTo, billToAddress]);
+    const handleInvoiceSelectionChange = (newSelection: string[]) => {
+        setSelectedSupplierInvoices(newSelection);
+
+        // Auto-fill Purchase Voucher No and Date
+        const selectedInvoicesData = allPurchaseInvoices.filter(inv => newSelection.includes(inv.invoice_no));
+        const vNos = selectedInvoicesData.map(inv => inv.purchase_voucher_no || inv.voucher_no).filter(Boolean);
+        const vDates = selectedInvoicesData.map(inv => inv.date).filter(Boolean);
+
+        setPurchaseVoucherNo(vNos.join(', '));
+        setPurchaseVoucherDate(vDates.join(', '));
+
+        // Extract and set items from selected invoices
+        const newItems: any[] = [];
+        selectedInvoicesData.forEach((inv: any) => {
+            // Very aggressive item search
+            let items: any[] = [];
+            
+            // 1. Try known nested locations
+            if (inv.supply_inr_details?.items) items = inv.supply_inr_details.items;
+            else if (inv.supply_foreign_details?.items) items = inv.supply_foreign_details.items;
+            else if (inv.items_data) items = inv.items_data;
+            else if (inv.items) items = inv.items;
+            else if (inv.Items) items = inv.Items;
+            
+            // 2. Try parsing strings
+            if ((!items || items.length === 0) && typeof inv.supply_inr_details === 'string') {
+                try {
+                    const parsed = JSON.parse(inv.supply_inr_details);
+                    if (parsed.items) items = parsed.items;
+                } catch (e) {}
+            }
+            if ((!items || items.length === 0) && typeof inv.items_data === 'string') {
+                try {
+                    items = JSON.parse(inv.items_data);
+                } catch (e) {}
+            }
+
+            // 3. Fallback: Search all object keys for any array that might be items
+            if (!items || items.length === 0) {
+                Object.keys(inv).forEach(key => {
+                    if (Array.isArray((inv as any)[key]) && (inv as any)[key].length > 0) {
+                        const firstItem = (inv as any)[key][0];
+                        if (firstItem && (firstItem.itemCode || firstItem.itemName || firstItem.code || firstItem.name)) {
+                            items = (inv as any)[key];
+                        }
+                    }
+                });
+            }
+            
+            if (Array.isArray(items)) {
+                items.forEach((item: any) => {
+                    newItems.push({
+                        id: Date.now() + Math.random(),
+                        invoiceRef: inv.invoice_no,
+                        itemCode: item.itemCode || item.code || '',
+                        itemName: item.itemName || item.name || '',
+                        hsnSac: item.hsnSac || item.hsn_sac || '',
+                        qty: item.qty || '0',
+                        uom: item.uom || '',
+                        itemRate: item.itemRate || item.rate || '0',
+                        taxableValue: item.taxableValue || '0',
+                        igst: item.igst || '0',
+                        cgst: item.cgst || '0',
+                        sgst: item.sgst || '0',
+                        cess: item.cess || '0',
+                        invoiceValue: item.invoiceValue || '0',
+                        purchaseLedger: item.purchaseLedger || '',
+                        description: item.description || '',
+                        gstRate: item.gstRate || item.gst_rate || '0',
+                        selected: true,
+                        reasonForReturn: '',
+                        fcRate: item.fcRate || '0',
+                        fcAmount: item.fcAmount || '0',
+                        ledgerNarration: ''
+                    });
+                });
+            }
+        });
+
+        if (newItems.length > 0) {
+            setItemRows(newItems);
+        } else if (newSelection.length === 0) {
+            // Reset to empty default row
+            setItemRows([{
+                id: Date.now(),
+                itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
+                itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
+                invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
+                reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0',
+                ledgerNarration: ''
+            }]);
+        }
+    };
+
+
+    const handlePostDebitNote = async () => {
+        try {
+            if (!vendorName) {
+                showError('Please select a Vendor.');
+                return;
+            }
+            if (!date) {
+                showError('Please select a Date.');
+                return;
+            }
+            if (selectedSupplierInvoices.length === 0) {
+                showError('Please select at least one Supplier Invoice.');
+                return;
+            }
+
+            // Construct FormData for multipart/form-data (required for file upload)
+            const formData = new FormData();
+            
+            // Basic fields (Mapped to VoucherDebitNoteSupplierDetailsSerializer)
+            formData.append('date', date);
+            formData.append('debit_note_series', selectedSeriesId.toString());
+            formData.append('debit_note_no', debitNoteNo);
+            formData.append('vendor_name', vendorName);
+            formData.append('gstin', gstin);
+            formData.append('branch', vendorBranch);
+            
+            // TextField fields in Backend (Comma-separated strings)
+            formData.append('supplier_invoice_nos', selectedSupplierInvoices.join(', '));
+            formData.append('purchase_voucher_nos', purchaseVoucherNo);
+            formData.append('purchase_voucher_dates', purchaseVoucherDate);
+            formData.append('outward_slip_nos', outwardSlipNos.join(', '));
+            
+            formData.append('bill_to', billToAddress);
+            formData.append('ship_to', shipToAddress);
+            
+            formData.append('nature_of_supply', natureOfSupply);
+            formData.append('reverse_charge', reverseCharge);
+            formData.append('place_of_supply', placeOfSupply);
+            
+            formData.append('invoice_in_foreign_currency', natureOfSupply === 'Re-Export' ? 'Yes' : 'No');
+            formData.append('exchange_rate', exchangeRate);
+            formData.append('foreign_currency', foreignCurrency);
+            formData.append('narration', narration);
+
+            // File upload
+            if (document) {
+                formData.append('supporting_document', document);
+            }
+
+            // Nested Supply Details
+            const supplyDetails = {
+                items: itemRows.map(r => ({
+                    ...r,
+                    qty: parseFloat(r.qty) || 0,
+                    itemRate: parseFloat(r.itemRate) || 0,
+                    taxableValue: parseFloat(r.taxableValue) || 0,
+                    igst: parseFloat(r.igst) || 0,
+                    cgst: parseFloat(r.cgst) || 0,
+                    sgst: parseFloat(r.sgst) || 0,
+                    cess: parseFloat(r.cess) || 0,
+                    invoiceValue: parseFloat(r.invoiceValue) || 0
+                })),
+                total_taxable_value: totalTaxable,
+                total_igst: totalIgst,
+                total_cgst: totalCgst,
+                total_sgst: totalSgst,
+                total_cess: totalCess,
+                total_invoice_value: totalInvoiceValue
+            };
+            formData.append('supply_details', JSON.stringify(supplyDetails));
+
+            // Nested Due Details
+            const dueDetails = {
+                reverse_tcs: parseFloat(reverseTcs) || 0,
+                reverse_tds: parseFloat(reverseTds) || 0,
+                tds_it: parseFloat(tdsIt) || 0,
+                purchase_invoice_amount_applied: parseFloat(purchaseInvoiceAmountApplied) || 0,
+                gross_amount_due: grossAmountDue,
+                net_amount_due: netAmountDue,
+                terms_and_conditions: termsAndConditions
+            };
+            formData.append('due_details', JSON.stringify(dueDetails));
+
+            // Nested Transit Details
+            const transitDetails = {
+                dispatch_from: dispatchFrom,
+                mode_of_transport: modeOfTransport,
+                dispatch_date: dispatchDate || null,
+                dispatch_time: dispatchTime || null,
+                delivery_type: deliveryType,
+                transporter_id_gstin: transporterIdGstin,
+                transporter_name: transporterName,
+                vehicle_no: vehicleNo,
+                lr_gr_consignment_no: lrGrConsignmentNo,
+                shipping_details: {
+                    shipping_bill_no: shippingBillNo,
+                    shipping_bill_date: shippingBillDate,
+                    ship_port_code: shipPortCode,
+                    vessel_flight_no: vesselFlightNo,
+                    port_of_loading: portOfLoading,
+                    port_of_discharge: portOfDischarge,
+                    railway_receipt_no: railwayReceiptNo,
+                    railway_receipt_date: railwayReceiptDate,
+                    fnr_no: fnrNo,
+                    station_of_loading: stationOfLoading,
+                    station_of_discharge: stationOfDischarge,
+                    origin_city: originCity,
+                    origin_country: originCountry,
+                    destination_city: destinationCity,
+                    destination_country: destinationCountry
+                }
+            };
+            formData.append('transit_details', JSON.stringify(transitDetails));
+
+            // Send request
+            const response = await httpClient.postFormData<any>('/api/accounting/vouchers/debit-note/', formData);
+
+            showSuccess('Debit Note Saved Successfully!');
+            
+            if (onAddVouchers) {
+                onAddVouchers([response]);
+            }
+            handleCancel(); 
+        } catch (error: any) {
+            console.error('Error posting Debit Note:', error);
+            const serverError = error.response?.data;
+            const message = typeof serverError === 'object' ? JSON.stringify(serverError) : serverError || error.message;
+            showError(`Failed to save Debit Note: ${message}`);
+        }
+    };
+
+    const handleCancel = () => {
+        // Reset local states
+        setVendorName('');
+        setVendorBranch('');
+        setGstin('');
+        setDate(new Date().toISOString().split('T')[0]);
+        setSelectedSupplierInvoices([]);
+        setPurchaseVoucherNo('');
+        setPurchaseVoucherDate('');
+        setDebitNoteNo('');
+        setNarration('');
+        setDocument(null);
+        setOutwardSlipNos([]);
+        setNatureOfSupply('Regular');
+        setReverseCharge('No');
+        setPlaceOfSupply('');
+        setBillToAddress('');
+        setShipToAddress('');
+        setSameAsBillTo(false);
+        setItemRows([{
+            id: Date.now(),
+            itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
+            itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
+            invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
+            reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0',
+            ledgerNarration: ''
+        }]);
+        setExchangeRate('1');
+        setForeignCurrency('USD');
+        setReverseTcs('');
+        setReverseTds('');
+        setTdsIt('');
+        setPurchaseInvoiceAmountApplied('');
+        setTermsAndConditions('');
+        setDispatchFrom('');
+        setModeOfTransport('Road');
+        setDispatchTime('');
+        setDeliveryType('Self');
+        setTransporterIdGstin('');
+        setTransporterName('');
+        setVehicleNo('');
+        setLrGrConsignmentNo('');
+        setIrn('');
+        setAckNo('');
+        setAckDate('');
+        setActiveTab('invoice');
+    };
 
     const tabs = useMemo(() => {
         const baseTabs = [{ id: 'invoice', label: 'Invoice Details' }];
-        
+
         if (natureOfSupply === 'Re-Export') {
             baseTabs.push(
                 { id: 'item_tax_fc', label: 'Item & Tax Details (Foreign Currency)' },
@@ -455,18 +788,17 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`pb-3 text-sm font-medium transition-colors duration-200 relative ${
-                                activeTab === tab.id
-                                    ? 'text-indigo-600 border-b-2 border-indigo-600'
-                                    : 'text-gray-600 hover:text-gray-800'
-                            }`}
+                            className={`pb-3 text-sm font-medium transition-colors duration-200 relative ${activeTab === tab.id
+                                ? 'text-indigo-600 border-b-2 border-indigo-600'
+                                : 'text-gray-600 hover:text-gray-800'
+                                }`}
                         >
                             {tab.label}
                         </button>
                     ))}
                 </div>
             </div>
-            
+
             <div className="min-h-[400px] bg-white">
                 {activeTab === 'invoice' && (
                     <div className="space-y-6">
@@ -488,7 +820,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Debit Note Series
                                 </label>
-                                <select 
+                                <select
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                     value={selectedSeriesId}
                                     onChange={(e) => setSelectedSeriesId(Number(e.target.value))}
@@ -548,15 +880,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                         onChange={(val) => {
                                             if (val) {
                                                 const newSelection = [...selectedSupplierInvoices, val];
-                                                setSelectedSupplierInvoices(newSelection);
-                                                
-                                                // Auto-fill Purchase Voucher No and Date
-                                                const selectedData = allPurchaseInvoices.filter(inv => newSelection.includes(inv.invoice_no));
-                                                const vNos = selectedData.map(inv => inv.purchase_voucher_no || inv.voucher_no).filter(Boolean);
-                                                const vDates = selectedData.map(inv => inv.date).filter(Boolean);
-                                                
-                                                setPurchaseVoucherNo(vNos.join(', '));
-                                                setPurchaseVoucherDate(vDates.join(', '));
+                                                handleInvoiceSelectionChange(newSelection);
                                             }
                                         }}
                                         placeholder="Select Invoice"
@@ -566,23 +890,15 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                             {selectedSupplierInvoices.map((no, idx) => {
                                                 const colors = ['bg-blue-100 text-blue-700 border-blue-200', 'bg-green-100 text-green-700 border-green-200', 'bg-purple-100 text-purple-700 border-purple-200', 'bg-orange-100 text-orange-700 border-orange-200'];
                                                 const colorClass = colors[idx % colors.length];
-                                                
+
                                                 return (
                                                     <div key={no} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${colorClass}`}>
                                                         <span>{no}</span>
-                                                        <button 
+                                                        <button
                                                             type="button"
                                                             onClick={() => {
                                                                 const newSelection = selectedSupplierInvoices.filter(n => n !== no);
-                                                                setSelectedSupplierInvoices(newSelection);
-                                                                
-                                                                // Re-fill Purchase Voucher No and Date
-                                                                const selectedData = allPurchaseInvoices.filter(inv => newSelection.includes(inv.invoice_no));
-                                                                const vNos = selectedData.map(inv => inv.purchase_voucher_no || inv.voucher_no).filter(Boolean);
-                                                                const vDates = selectedData.map(inv => inv.date).filter(Boolean);
-                                                                
-                                                                setPurchaseVoucherNo(vNos.join(', '));
-                                                                setPurchaseVoucherDate(vDates.join(', '));
+                                                                handleInvoiceSelectionChange(newSelection);
                                                             }}
                                                             className="hover:bg-black/10 rounded-full p-0.5"
                                                         >
@@ -644,7 +960,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M16 8l-4-4m0 0L8 8m4-4v12" />
                                             </svg>
                                         </div>
-                                            <input
+                                        <input
                                             type="file"
                                             className="hidden"
                                             accept=".jpg,.pdf,.jpeg"
@@ -740,7 +1056,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Nature of Supply</label>
-                                <select 
+                                <select
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                     value={natureOfSupply}
                                     onChange={(e) => setNatureOfSupply(e.target.value)}
@@ -798,7 +1114,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                         <th className="px-4 py-4 w-24 text-center border-r border-indigo-400">Inv Qty</th>
                                         <th className="px-4 py-4 w-20 border-r border-indigo-400">UQC</th>
                                         <th className="px-4 py-4 w-48 border-r border-indigo-400">Reason for Return</th>
-                                        
+
                                         {activeTab === 'item_tax_fc' ? (
                                             <>
                                                 <th className="px-4 py-4 w-32 text-right border-r border-indigo-400">Rate ({foreignCurrency})</th>
@@ -820,7 +1136,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                 <th className="px-4 py-4 w-32 text-right border-l border-indigo-400 font-semibold bg-indigo-500">Invoice Value</th>
                                             </>
                                         )}
-                                        
+
                                         <th className="px-4 py-4 w-20 text-center">Delete</th>
                                     </tr>
                                 </thead>
@@ -831,11 +1147,11 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                 <tr className="border-b border-gray-100 transition-colors">
                                                     <td className="px-3 py-3 text-center border-l-0">
                                                         <div className="flex items-center justify-center space-x-2">
-                                                            <input 
-                                                                type="checkbox" 
+                                                            <input
+                                                                type="checkbox"
                                                                 checked={row.selected !== false}
                                                                 onChange={(e) => updateItemRow(index, { selected: e.target.checked })}
-                                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" 
+                                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                                             />
                                                             <span className="text-sm font-medium">{index + 1}</span>
                                                         </div>
@@ -863,10 +1179,10 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         <input type="text" value={row.hsnSac} placeholder="HSN/SAC" readOnly className="w-full bg-gray-50 outline-none p-1 border border-gray-200 rounded text-gray-500" />
                                                     </td>
                                                     <td className="px-4 py-3 border-l border-gray-100 text-center">
-                                                        <input type="number" 
-                                                            value={row.qty} 
+                                                        <input type="number"
+                                                            value={row.qty}
                                                             onChange={(e) => updateItemRow(index, { qty: e.target.value })}
-                                                            className="w-20 bg-white text-center outline-none p-1 border border-gray-300 focus:border-indigo-500 rounded" 
+                                                            className="w-20 bg-white text-center outline-none p-1 border border-gray-300 focus:border-indigo-500 rounded"
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3 border-l border-gray-100">
@@ -930,7 +1246,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     )}
 
                                                     <td className="px-4 py-3 border-l border-gray-100 text-center">
-                                                        <button 
+                                                        <button
                                                             onClick={(e) => {
                                                                 e.preventDefault();
                                                                 setItemRows(prev => prev.filter(r => r.id !== row.id));
@@ -954,12 +1270,12 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     </td>
                                                     <td colSpan={2} className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Ledger Narration:</td>
                                                     <td colSpan={3} className="px-2 py-2">
-                                                        <input 
-                                                            type="text" 
-                                                            value={row.ledgerNarration} 
+                                                        <input
+                                                            type="text"
+                                                            value={row.ledgerNarration}
                                                             onChange={(e) => updateItemRow(index, { ledgerNarration: e.target.value })}
                                                             placeholder="Enter ledger narration"
-                                                            className="w-full bg-white outline-none p-1 border border-gray-200 focus:border-indigo-500 rounded text-sm h-8" 
+                                                            className="w-full bg-white outline-none p-1 border border-gray-200 focus:border-indigo-500 rounded text-sm h-8"
                                                         />
                                                     </td>
                                                 </tr>
@@ -1128,8 +1444,17 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                             value={termsAndConditions}
                                             onChange={(e) => setTermsAndConditions(e.target.value)}
                                             className="w-full px-4 py-3 border border-gray-200 rounded-[4px] text-gray-700 resize-none bg-white focus:ring-indigo-500 focus:border-indigo-500"
-                                            rows={12}
+                                            rows={6}
                                             placeholder="Enter terms & conditions..."
+                                        />
+                                    </div>
+                                    <div className="pt-2">
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Narration/Notes:</label>
+                                        <textarea
+                                            value={narration}
+                                            onChange={(e) => setNarration(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-[4px] bg-white text-xs h-24 resize-none placeholder:text-gray-300 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
+                                            placeholder="Enter additional notes about this debit note..."
                                         />
                                     </div>
                                 </div>
@@ -1613,6 +1938,22 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                         </div>
                     </div>
                 )}
+
+                {/* Action Buttons */}
+                <div className="mt-8 pt-6 border-t border-gray-100 flex justify-center gap-4">
+                    <button
+                        onClick={handleCancel}
+                        className="px-10 py-2.5 text-sm font-bold text-gray-700 bg-white border-2 border-gray-300 rounded-[4px] hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
+                    >
+                        CANCEL
+                    </button>
+                    <button
+                        onClick={handlePostDebitNote}
+                        className="px-10 py-2.5 text-sm font-bold text-white bg-indigo-600 border-b-4 border-indigo-800 rounded-[4px] hover:bg-indigo-700 active:border-b-0 active:translate-y-1 transition-all shadow-lg"
+                    >
+                        POST DEBIT NOTE
+                    </button>
+                </div>
             </div>
 
             {isIssueSlipModalOpen && (

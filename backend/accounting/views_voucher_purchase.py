@@ -35,10 +35,14 @@ class VoucherPurchaseViewSet(viewsets.ModelViewSet):
         
         queryset = queryset.exclude(id__in=payment_purchase_ids)
         
-        # Optional: Filter by vendor name if provided
+        # Optional: Filter by vendor name/branch if provided
         vendor_name = self.request.query_params.get('vendor_name')
         if vendor_name:
             queryset = queryset.filter(vendor_name=vendor_name)
+            
+        branch = self.request.query_params.get('branch')
+        if branch:
+            queryset = queryset.filter(branch__iexact=branch.strip())
             
         return queryset.order_by('-date', '-created_at')
 
