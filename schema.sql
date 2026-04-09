@@ -2533,3 +2533,92 @@ CREATE TABLE `voucher_contra` (
   KEY `idx_ioc_issue_slip` (`issue_slip_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+CREATE TABLE `voucher_debit_note_supplier_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `date` date NOT NULL,
+  `debit_note_series` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `debit_note_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vendor_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `vendor_basic_detail_id` bigint NOT NULL,
+  `gstin` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `branch` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `supplier_invoice_nos` longtext COLLATE utf8mb4_unicode_ci,
+  `purchase_voucher_nos` longtext COLLATE utf8mb4_unicode_ci,
+  `purchase_voucher_dates` longtext COLLATE utf8mb4_unicode_ci,
+  `outward_slip_nos` longtext COLLATE utf8mb4_unicode_ci,
+  `bill_to` longtext COLLATE utf8mb4_unicode_ci,
+  `ship_to` longtext COLLATE utf8mb4_unicode_ci,
+  `nature_of_supply` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Regular',
+  `is_financial` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'No',
+  `reverse_charge` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'No',
+  `place_of_supply` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `invoice_in_foreign_currency` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'No',
+  `exchange_rate` decimal(10,4) NOT NULL DEFAULT '1.0000',
+  `foreign_currency` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'USD',
+  `narration` longtext COLLATE utf8mb4_unicode_ci,
+  `supporting_document` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_voucher_debit_note_vendor` (`vendor_basic_detail_id`),
+  CONSTRAINT `fk_voucher_debit_note_vendor` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `voucher_debit_note_supply_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `debit_note_details_id` bigint NOT NULL,
+  `items` json NOT NULL,
+  `total_taxable_value` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `total_igst` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `total_cgst` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `total_sgst` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `total_cess` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `total_invoice_value` decimal(15,2) NOT NULL DEFAULT '0.00',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_debit_note_supply_details` (`debit_note_details_id`),
+  CONSTRAINT `fk_debit_note_supply_details` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `voucher_debit_note_due_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `debit_note_details_id` bigint NOT NULL,
+  `reverse_tcs` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `reverse_tds` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `tds_it` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `purchase_invoice_amount_applied` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `gross_amount_due` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `net_amount_due` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `terms_and_conditions` longtext COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_debit_note_due_details` (`debit_note_details_id`),
+  CONSTRAINT `fk_debit_note_due_details` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `voucher_debit_note_transit_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `debit_note_details_id` bigint NOT NULL,
+  `dispatch_from` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `mode_of_transport` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Road',
+  `dispatch_date` date DEFAULT NULL,
+  `dispatch_time` time DEFAULT NULL,
+  `delivery_type` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `transporter_id_gstin` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `transporter_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vehicle_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lr_gr_consignment_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shipping_details` json DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_debit_note_transit_details` (`debit_note_details_id`),
+  CONSTRAINT `fk_debit_note_transit_details` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

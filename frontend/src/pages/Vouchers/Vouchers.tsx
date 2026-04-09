@@ -10444,7 +10444,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               )
             )}
 
-            {!['Sales', 'Payment', 'Receipt', 'Purchase'].includes(voucherType) && (
+            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Debit Note'].includes(voucherType) && (
               <div className="flex space-x-3">
                 <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                 <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
