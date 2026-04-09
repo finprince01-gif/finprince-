@@ -112,6 +112,8 @@ urlpatterns = [
     path('vouchers/sales/upload-document/', SalesDocumentUploadAPIView.as_view(), name='upload-sales-document'),
     path('vouchers/sales/customers/', CustomerListAPIView.as_view(), name='sales-customers'),
 
+    # Debit Note custom endpoints (router actions handle allocation/ and applied-now/)
+
     # Sales Excel Template – Download, Upload & Schema
     path('vouchers/sales/schema/',         SalesVoucherColumnSchemaView.as_view(),      name='sales-voucher-schema'),
     path('vouchers/sales/excel-template/', SalesExcelTemplateDownloadView.as_view(),   name='sales-excel-template-download'),

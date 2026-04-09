@@ -74,8 +74,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const [natureOfSupply, setNatureOfSupply] = useState('Regular');
     const [reverseCharge, setReverseCharge] = useState('No');
     const [placeOfSupply, setPlaceOfSupply] = useState('');
-    const [billToAddress, setBillToAddress] = useState('');
-    const [shipToAddress, setShipToAddress] = useState('');
+    const [billFromAddress, setBillFromAddress] = useState({ line1: '', line2: '', line3: '', city: '', pincode: '' });
+    const [shipFromAddress, setShipFromAddress] = useState({ line1: '', line2: '', line3: '', city: '', pincode: '' });
     const [sameAsBillTo, setSameAsBillTo] = useState(false);
     const [itemRows, setItemRows] = useState<ItemRow[]>([{
         id: Date.now(),
@@ -203,7 +203,10 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const handleVendorChange = async (name: string) => {
         setVendorName(name);
         setGstin('');
-        setBillToAddress('');
+        setBillFromAddress({ line1: '', line2: '', line3: '', city: '', pincode: '' });
+        setShipFromAddress({ line1: '', line2: '', line3: '', city: '', pincode: '' });
+        setSupplierInvoiceNos([]);
+        setSelectedSupplierInvoices([]);
 
         const vendor = vendors.find(v => v.vendor_name === name);
         if (vendor) {
@@ -301,9 +304,29 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 branch.branch_state,
                 branch.branch_pincode
             ].filter(Boolean).join(', ');
-            setBillToAddress(addr);
+            const fullBillAddr = [
+                branch.branch_address,
+                branch.branch_city,
+                branch.branch_state,
+                branch.branch_pincode
+            ].filter(Boolean).join(', ');
+            
+            setBillFromAddress({
+                line1: branch.branch_address || '',
+                line2: '',
+                line3: '',
+                city: branch.branch_city || '',
+                pincode: branch.branch_pincode || ''
+            });
+
             if (sameAsBillTo) {
-                setShipToAddress(addr);
+                setShipFromAddress({
+                    line1: branch.branch_address || '',
+                    line2: '',
+                    line3: '',
+                    city: branch.branch_city || '',
+                    pincode: branch.branch_pincode || ''
+                });
             }
             setPlaceOfSupply(branch.gst_state || '');
 
@@ -434,7 +457,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             let fcRate = parseFloat(updatedRow.fcRate || '0') || 0;
             let fcAmount = (qty * fcRate).toFixed(2);
 
-            if (natureOfSupply === 'Re-Export') {
+            if (natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export') {
                 itemRate = fcRate * xr;
                 updatedRow.itemRate = itemRate.toFixed(2);
             } else {
@@ -470,22 +493,52 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
     // Recalculate all rows when exchangeRate or global factors change
     useEffect(() => {
-        setItemRows(prev => prev.map((_, idx) => {
-            // This is a bit inefficient but ensures everything stays in sync
-            // A more elegant solution would be to derive these in render, 
-            // but the state needs these values for submission.
-            return _;
+        setItemRows(prev => prev.map((row) => {
+            const qty = parseFloat(row.qty || '0') || 0;
+            const xr = parseFloat(exchangeRate) || 1;
+            const fcRate = parseFloat(row.fcRate || '0') || 0;
+            const gstRate = parseFloat(row.gstRate || '0') || 0;
+            const cessRate = parseFloat(row.cessRate || '0') || 0;
+
+            let itemRate = row.itemRate;
+            if (natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export') {
+                itemRate = (fcRate * xr).toFixed(2);
+            }
+
+            const parsedItemRate = parseFloat(itemRate || '0') || 0;
+            const taxableValue = qty * parsedItemRate;
+            let igst = 0, cgst = 0, sgst = 0;
+
+            if (placeOfSupply === companyDetails.state) {
+                cgst = taxableValue * (gstRate / 100) * 0.5;
+                sgst = taxableValue * (gstRate / 100) * 0.5;
+            } else {
+                igst = taxableValue * (gstRate / 100);
+            }
+
+            const cess = taxableValue * (cessRate / 100);
+            const invoiceValue = taxableValue + igst + cgst + sgst + cess;
+
+            return {
+                ...row,
+                itemRate: itemRate,
+                taxableValue: taxableValue.toFixed(2),
+                igst: igst.toFixed(2),
+                cgst: cgst.toFixed(2),
+                sgst: sgst.toFixed(2),
+                cess: cess.toFixed(2),
+                invoiceValue: invoiceValue.toFixed(2),
+                fcAmount: (qty * fcRate).toFixed(2)
+            };
         }));
-        // Actually, trigger a manual refresh logic or just use derived data.
-        // For simplicity, let's just make sure updateItemRow is called on changes.
-    }, [exchangeRate, natureOfSupply, placeOfSupply]);
+    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state]);
 
     // Add logic to auto-fill when sameAsBillTo changes
     useEffect(() => {
         if (sameAsBillTo) {
-            setShipToAddress(billToAddress);
+            setShipFromAddress(billFromAddress);
         }
-    }, [sameAsBillTo, billToAddress]);
+    }, [sameAsBillTo, billFromAddress]);
     const handleInvoiceSelectionChange = (newSelection: string[]) => {
         setSelectedSupplierInvoices(newSelection);
 
@@ -613,14 +666,16 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             formData.append('purchase_voucher_dates', purchaseVoucherDate);
             formData.append('outward_slip_nos', outwardSlipNos.join(', '));
             
-            formData.append('bill_to', billToAddress);
-            formData.append('ship_to', shipToAddress);
+            const billAddrStr = `${billFromAddress.line1}, ${billFromAddress.line2}, ${billFromAddress.line3}, ${billFromAddress.city}, ${billFromAddress.pincode}`;
+            const shipAddrStr = `${shipFromAddress.line1}, ${shipFromAddress.line2}, ${shipFromAddress.line3}, ${shipFromAddress.city}, ${shipFromAddress.pincode}`;
+            formData.append('bill_to', billAddrStr);
+            formData.append('ship_to', shipAddrStr);
             
             formData.append('nature_of_supply', natureOfSupply);
             formData.append('reverse_charge', reverseCharge);
             formData.append('place_of_supply', placeOfSupply);
             
-            formData.append('invoice_in_foreign_currency', natureOfSupply === 'Re-Export' ? 'Yes' : 'No');
+            formData.append('invoice_in_foreign_currency', (natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export') ? 'Yes' : 'No');
             formData.append('exchange_rate', exchangeRate);
             formData.append('foreign_currency', foreignCurrency);
             formData.append('narration', narration);
@@ -728,8 +783,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         setNatureOfSupply('Regular');
         setReverseCharge('No');
         setPlaceOfSupply('');
-        setBillToAddress('');
-        setShipToAddress('');
+        setBillFromAddress({ line1: '', line2: '', line3: '', city: '', pincode: '' });
+        setShipFromAddress({ line1: '', line2: '', line3: '', city: '', pincode: '' });
         setSameAsBillTo(false);
         setItemRows([{
             id: Date.now(),
@@ -763,7 +818,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const tabs = useMemo(() => {
         const baseTabs = [{ id: 'invoice', label: 'Invoice Details' }];
 
-        if (natureOfSupply === 'Re-Export') {
+        if (natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export') {
             baseTabs.push(
                 { id: 'item_tax_fc', label: 'Item & Tax Details (Foreign Currency)' },
                 { id: 'item_tax_inr', label: 'Item & Tax Details (INR)' }
@@ -991,13 +1046,6 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                             }}
                                         />
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsIssueSlipModalOpen(true)}
-                                        className="px-3 py-2 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-[4px] text-sm font-medium hover:bg-indigo-100 transition-colors whitespace-nowrap"
-                                    >
-                                        Create New
-                                    </button>
                                 </div>
                                 <div className="mt-2 flex flex-wrap gap-2">
                                     {outwardSlipNos.map(no => (
@@ -1011,39 +1059,109 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-200">
-                            <div>
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="block text-sm font-medium text-gray-700">Bill To</label>
+                            <div className="md:col-span-1">
+                                <label className="block text-sm font-bold text-[#2D3748] mb-4 uppercase tracking-wider">
+                                    BILL FROM (FULL ADDRESS)
+                                </label>
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        placeholder="Address Line 1"
+                                        value={billFromAddress.line1}
+                                        onChange={(e) => setBillFromAddress({ ...billFromAddress, line1: e.target.value })}
+                                        className="w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-[#F8FAFC] placeholder-gray-400 text-sm"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Address Line 2"
+                                        value={billFromAddress.line2}
+                                        onChange={(e) => setBillFromAddress({ ...billFromAddress, line2: e.target.value })}
+                                        className="w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-[#F8FAFC] placeholder-gray-400 text-sm"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Address Line 3"
+                                        value={billFromAddress.line3}
+                                        onChange={(e) => setBillFromAddress({ ...billFromAddress, line3: e.target.value })}
+                                        className="w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-[#F8FAFC] placeholder-gray-400 text-sm"
+                                    />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input
+                                            type="text"
+                                            placeholder="City"
+                                            value={billFromAddress.city}
+                                            onChange={(e) => setBillFromAddress({ ...billFromAddress, city: e.target.value })}
+                                            className="w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-[#F8FAFC] placeholder-gray-400 text-sm"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Pincode"
+                                            value={billFromAddress.pincode}
+                                            onChange={(e) => setBillFromAddress({ ...billFromAddress, pincode: e.target.value })}
+                                            className="w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-[#F8FAFC] placeholder-gray-400 text-sm"
+                                        />
+                                    </div>
                                 </div>
-                                <textarea
-                                    value={billToAddress}
-                                    onChange={(e) => setBillToAddress(e.target.value)}
-                                    rows={4}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Billing address..."
-                                ></textarea>
                             </div>
-                            <div>
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="block text-sm font-medium text-gray-700">Ship To</label>
-                                    <label className="flex items-center text-sm text-gray-600">
+                            <div className="md:col-span-1">
+                                <div className="flex justify-between items-center mb-4">
+                                    <label className="block text-sm font-bold text-[#2D3748] uppercase tracking-wider">
+                                        SHIP FROM
+                                    </label>
+                                    <label className="flex items-center text-xs font-bold text-[#4F46E5] cursor-pointer uppercase tracking-tight">
                                         <input
                                             type="checkbox"
                                             checked={sameAsBillTo}
                                             onChange={(e) => setSameAsBillTo(e.target.checked)}
-                                            className="mr-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            className="mr-2 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 shadow-sm"
                                         />
-                                        Same as Bill To
+                                        SAME AS BILL TO ADDRESS
                                     </label>
                                 </div>
-                                <textarea
-                                    value={shipToAddress}
-                                    onChange={(e) => setShipToAddress(e.target.value)}
-                                    rows={4}
-                                    disabled={sameAsBillTo}
-                                    className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 ${sameAsBillTo ? 'bg-gray-50' : ''}`}
-                                    placeholder="Shipping address..."
-                                ></textarea>
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        placeholder="Address Line 1"
+                                        value={shipFromAddress.line1}
+                                        disabled={sameAsBillTo}
+                                        onChange={(e) => setShipFromAddress({ ...shipFromAddress, line1: e.target.value })}
+                                        className={`w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${sameAsBillTo ? 'bg-gray-100' : 'bg-[#F8FAFC]'} placeholder-gray-400 text-sm transition-all`}
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Address Line 2"
+                                        value={shipFromAddress.line2}
+                                        disabled={sameAsBillTo}
+                                        onChange={(e) => setShipFromAddress({ ...shipFromAddress, line2: e.target.value })}
+                                        className={`w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${sameAsBillTo ? 'bg-gray-100' : 'bg-[#F8FAFC]'} placeholder-gray-400 text-sm transition-all`}
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Address Line 3"
+                                        value={shipFromAddress.line3}
+                                        disabled={sameAsBillTo}
+                                        onChange={(e) => setShipFromAddress({ ...shipFromAddress, line3: e.target.value })}
+                                        className={`w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${sameAsBillTo ? 'bg-gray-100' : 'bg-[#F8FAFC]'} placeholder-gray-400 text-sm transition-all`}
+                                    />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input
+                                            type="text"
+                                            placeholder="City"
+                                            value={shipFromAddress.city}
+                                            disabled={sameAsBillTo}
+                                            onChange={(e) => setShipFromAddress({ ...shipFromAddress, city: e.target.value })}
+                                            className={`w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${sameAsBillTo ? 'bg-gray-100' : 'bg-[#F8FAFC]'} placeholder-gray-400 text-sm transition-all`}
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Pincode"
+                                            value={shipFromAddress.pincode}
+                                            disabled={sameAsBillTo}
+                                            onChange={(e) => setShipFromAddress({ ...shipFromAddress, pincode: e.target.value })}
+                                            className={`w-full px-4 py-2 border border-blue-100 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${sameAsBillTo ? 'bg-gray-100' : 'bg-[#F8FAFC]'} placeholder-gray-400 text-sm transition-all`}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Place of Supply (POS)</label>
@@ -1068,6 +1186,41 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     <option value="Deemed Export">Deemed Export</option>
                                 </select>
                             </div>
+                            {(natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export') && (
+                                <>
+                                    <div className="bg-blue-50/50 p-4 rounded-[8px] border border-blue-100 space-y-4 md:col-span-1">
+                                        <label className="block text-sm font-bold text-blue-900 uppercase tracking-wider mb-2">Currency</label>
+                                        <select
+                                            value={foreignCurrency}
+                                            onChange={(e) => setForeignCurrency(e.target.value)}
+                                            className="w-full px-4 py-2 border border-blue-200 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm font-medium"
+                                        >
+                                            <option value="USD">USD - US Dollar</option>
+                                            <option value="EUR">EUR - Euro</option>
+                                            <option value="GBP">GBP - British Pound</option>
+                                            <option value="JPY">JPY - Japanese Yen</option>
+                                            <option value="AUD">AUD - Australian Dollar</option>
+                                            <option value="CAD">CAD - Canadian Dollar</option>
+                                            <option value="INR">INR - Indian Rupee (Special Case)</option>
+                                        </select>
+                                    </div>
+                                    <div className="bg-blue-50/50 p-4 rounded-[8px] border border-blue-100 space-y-4 md:col-span-1">
+                                        <label className="block text-sm font-bold text-blue-900 uppercase tracking-wider mb-2">Exchange Rate</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 font-bold text-xs ring-1 ring-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">1 {foreignCurrency} =</span>
+                                            <input
+                                                type="number"
+                                                step="0.0001"
+                                                value={exchangeRate}
+                                                onChange={(e) => setExchangeRate(e.target.value)}
+                                                className="w-full pl-20 pr-12 py-2 border border-blue-200 rounded-[8px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm font-bold text-right"
+                                                placeholder="1.0000"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs uppercase">INR</span>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Reverse Charge Applicable</label>
                                 <div className="flex items-center space-x-6">
@@ -1100,183 +1253,124 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 )}
 
 
-                {(activeTab === 'item_tax' || activeTab === 'item_tax_fc' || activeTab === 'item_tax_inr') && (
-                    <div className="space-y-4">
-                        <div className="w-full overflow-x-auto border border-gray-200 rounded-[4px]">
-                            <table className="w-full text-sm text-left text-gray-500 whitespace-nowrap min-w-[1500px]">
-                                <thead className="bg-[#4F46E5] text-white uppercase font-semibold">
+                
+                {activeTab === 'item_tax_fc' && (
+                    <div className="space-y-6">
+                        <div className="flex flex-wrap justify-between items-end gap-4">
+                            <div className="flex items-center gap-2 bg-white px-4 py-2 border border-blue-200 rounded-[4px] shadow-none">
+                                <span className="text-sm font-medium text-gray-700">1 {foreignCurrency} =</span>
+                                <input
+                                    type="text"
+                                    value={exchangeRate}
+                                    onChange={(e) => setExchangeRate(e.target.value)}
+                                    className="w-24 border-b-2 border-gray-300 focus:border-indigo-500 focus:outline-none px-2 py-1 text-center font-medium text-indigo-600"
+                                    placeholder="Rate"
+                                />
+                                <span className="text-sm font-medium text-gray-700">INR</span>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
+                            <table className="w-full">
+                                <thead className="bg-indigo-600 text-white">
                                     <tr>
-                                        <th className="px-3 py-4 w-16 text-center border-r border-indigo-400">S. No.</th>
-                                        <th className="px-4 py-4 w-40 border-r border-indigo-400">Invoice Ref</th>
-                                        <th className="px-4 py-4 w-40 border-r border-indigo-400">Item Code</th>
-                                        <th className="px-4 py-4 w-52 border-r border-indigo-400">Item Name</th>
-                                        <th className="px-4 py-4 w-28 border-r border-indigo-400">HSN/SAC</th>
-                                        <th className="px-4 py-4 w-24 text-center border-r border-indigo-400">Inv Qty</th>
-                                        <th className="px-4 py-4 w-20 border-r border-indigo-400">UQC</th>
-                                        <th className="px-4 py-4 w-48 border-r border-indigo-400">Reason for Return</th>
-
-                                        {activeTab === 'item_tax_fc' ? (
-                                            <>
-                                                <th className="px-4 py-4 w-32 text-right border-r border-indigo-400">Rate ({foreignCurrency})</th>
-                                                <th className="px-4 py-4 w-32 text-right border-r border-indigo-400 font-semibold bg-indigo-500">Amount ({foreignCurrency})</th>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <th className="px-4 py-4 w-32 text-right border-r border-indigo-400 font-medium">Item Rate</th>
-                                                <th className="px-4 py-4 w-32 text-right border-r border-indigo-400 font-medium">Taxable Value</th>
-                                                {placeOfSupply === companyDetails.state ? (
-                                                    <>
-                                                        <th className="px-4 py-4 w-28 text-right border-r border-indigo-400 font-medium">CGST</th>
-                                                        <th className="px-4 py-4 w-28 text-right border-r border-indigo-400 font-medium">SGST/UTGST</th>
-                                                    </>
-                                                ) : (
-                                                    <th className="px-4 py-4 w-28 text-right border-r border-indigo-400 font-medium">IGST</th>
-                                                )}
-                                                <th className="px-4 py-4 w-24 text-right border-r border-indigo-400 font-medium">CESS</th>
-                                                <th className="px-4 py-4 w-32 text-right border-l border-indigo-400 font-semibold bg-indigo-500">Invoice Value</th>
-                                            </>
-                                        )}
-
-                                        <th className="px-4 py-4 w-20 text-center">Delete</th>
+                                        <th className="px-3 py-3 text-center w-12 border-r border-blue-400"></th>
+                                        <th className="px-3 py-3 text-sm font-semibold text-center border-r border-blue-400">Description</th>
+                                        <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-blue-400">Quantity</th>
+                                        <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-blue-400">UQC</th>
+                                        <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-blue-400">Rate ({foreignCurrency})</th>
+                                        <th className="px-3 py-3 text-sm font-semibold text-center w-40">Amount ({foreignCurrency})</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody className="bg-white divide-y divide-gray-200">
                                     {itemRows.map((row, index) => {
+                                        const isSelected = row.selected !== false;
                                         return (
                                             <React.Fragment key={row.id}>
-                                                <tr className="border-b border-gray-100 transition-colors">
-                                                    <td className="px-3 py-3 text-center border-l-0">
-                                                        <div className="flex items-center justify-center space-x-2">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={row.selected !== false}
-                                                                onChange={(e) => updateItemRow(index, { selected: e.target.checked })}
-                                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                            />
-                                                            <span className="text-sm font-medium">{index + 1}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 border-l border-gray-100">
-                                                        <input type="text" value={row.invoiceRef} onChange={(e) => updateItemRow(index, { invoiceRef: e.target.value })} className="w-full bg-transparent outline-none p-1 text-xs font-semibold border border-gray-200 rounded" />
-                                                    </td>
-                                                    <td className="px-4 py-3 border-l border-gray-100">
-                                                        <SearchableDropdown
-                                                            value={row.itemCode}
-                                                            onChange={(val) => updateItemRow(index, { itemCode: val })}
-                                                            options={availableItems.map(it => it.itemCode).filter(Boolean)}
-                                                            placeholder="Select"
+                                                <tr className={`hover:bg-gray-50 transition-colors ${!isSelected ? 'opacity-50' : ''}`}>
+                                                    <td className="px-3 py-2 text-center border-r border-gray-200">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => updateItemRow(index, { selected: e.target.checked })}
+                                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
                                                         />
                                                     </td>
-                                                    <td className="px-4 py-3 border-l border-gray-100">
+                                                    <td className="px-3 py-2 border-r border-gray-200">
                                                         <SearchableDropdown
+                                                            options={availableItems.map(it => it.itemName).filter(Boolean)}
                                                             value={row.itemName}
                                                             onChange={(val) => updateItemRow(index, { itemName: val })}
-                                                            options={availableItems.map(it => it.itemName).filter(Boolean)}
-                                                            placeholder="Item"
+                                                            placeholder="Select item description"
                                                         />
                                                     </td>
-                                                    <td className="px-4 py-3 border-l border-gray-100">
-                                                        <input type="text" value={row.hsnSac} placeholder="HSN/SAC" readOnly className="w-full bg-gray-50 outline-none p-1 border border-gray-200 rounded text-gray-500" />
-                                                    </td>
-                                                    <td className="px-4 py-3 border-l border-gray-100 text-center">
-                                                        <input type="number"
+                                                    <td className="px-3 py-2 border-r border-gray-200">
+                                                        <input
+                                                            type="number"
                                                             value={row.qty}
                                                             onChange={(e) => updateItemRow(index, { qty: e.target.value })}
-                                                            className="w-20 bg-white text-center outline-none p-1 border border-gray-300 focus:border-indigo-500 rounded"
+                                                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
+                                                            placeholder="0"
                                                         />
                                                     </td>
-                                                    <td className="px-4 py-3 border-l border-gray-100">
-                                                        <input type="text" value={row.uom} readOnly className="w-full bg-gray-50 border-gray-200 rounded p-1 text-sm text-gray-500" />
-                                                    </td>
-                                                    <td className="px-3 py-2 whitespace-nowrap">
-                                                        <select
-                                                            value={row.reasonForReturn}
-                                                            onChange={(e) => updateItemRow(index, { reasonForReturn: e.target.value })}
-                                                            className="w-[180px] px-2 py-1 border border-gray-300 rounded-[4px] text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                        >
-                                                            <option value="">Select Reason</option>
-                                                            <option value="Sales Return">Sales Return</option>
-                                                            <option value="Post Sale Discount">Post Sale Discount</option>
-                                                            <option value="Deficiency in Service">Deficiency in Service</option>
-                                                            <option value="Correction in Invoice">Correction in Invoice</option>
-                                                            <option value="Change in POS">Change in POS</option>
-                                                            <option value="Finalization of Provisional Assessment">Finalization of Provisional Assessment</option>
-                                                            <option value="Others">Others</option>
-                                                        </select>
-                                                    </td>
-
-                                                    {activeTab === 'item_tax_fc' ? (
-                                                        <>
-                                                            <td className="px-4 py-3 border-l border-gray-100">
-                                                                <input type="number" value={row.fcRate} onChange={(e) => updateItemRow(index, { fcRate: e.target.value })} className="w-full bg-white outline-none p-1 border border-gray-300 focus:border-indigo-500 rounded text-right" />
-                                                            </td>
-                                                            <td className="px-4 py-3 border-l border-gray-100 bg-indigo-50/50">
-                                                                <div className="w-full bg-[#EBF5FF] text-blue-700 font-bold p-1 text-right rounded">{row.fcAmount}</div>
-                                                            </td>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <td className="px-4 py-3 border-l border-gray-100">
-                                                                <input type="number" value={row.itemRate} readOnly className="w-full bg-gray-50 outline-none p-1 border border-gray-200 rounded text-right text-gray-500" />
-                                                            </td>
-                                                            <td className="px-4 py-3 border-l border-gray-100">
-                                                                <div className="w-full bg-[#EBF5FF] text-blue-700 font-bold p-1 text-right rounded px-3">{row.taxableValue}</div>
-                                                            </td>
-                                                            {placeOfSupply === companyDetails.state ? (
-                                                                <>
-                                                                    <td className="px-4 py-3 border-l border-gray-100">
-                                                                        <div className="w-full bg-[#EBF5FF] text-blue-700 font-bold p-1 text-right rounded px-3">{row.cgst}</div>
-                                                                    </td>
-                                                                    <td className="px-4 py-3 border-l border-gray-100">
-                                                                        <div className="w-full bg-[#F0FDF4] text-green-700 font-bold p-1 text-right rounded px-3">{row.sgst}</div>
-                                                                    </td>
-                                                                </>
-                                                            ) : (
-                                                                <td className="px-4 py-3 border-l border-gray-100">
-                                                                    <div className="w-full bg-[#EBF5FF] text-blue-700 font-bold p-1 text-right rounded px-3">{row.igst}</div>
-                                                                </td>
-                                                            )}
-                                                            <td className="px-4 py-3 border-l border-gray-100">
-                                                                <div className="w-full bg-[#F5F3FF] text-purple-700 font-bold p-1 text-right rounded px-3">{row.cess}</div>
-                                                            </td>
-                                                            <td className="px-4 py-3 border-l border-gray-100 bg-indigo-50/30">
-                                                                <div className="w-full bg-transparent outline-none p-1 text-right font-bold text-gray-900">{row.invoiceValue}</div>
-                                                            </td>
-                                                        </>
-                                                    )}
-
-                                                    <td className="px-4 py-3 border-l border-gray-100 text-center">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                setItemRows(prev => prev.filter(r => r.id !== row.id));
-                                                            }}
-                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                                                        >
-                                                            <Trash2 className="w-5 h-5" />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                                {/* Details Sub-row */}
-                                                <tr className="border-b border-gray-200 bg-gray-50/50">
-                                                    <td colSpan={6} className="px-4 py-3 text-right text-xs font-semibold text-gray-600">PURCHASE LEDGER:</td>
-                                                    <td colSpan={2} className="px-2 py-2">
-                                                        <SearchableDropdown
-                                                            value={row.purchaseLedger}
-                                                            onChange={(val) => updateItemRow(index, { purchaseLedger: val })}
-                                                            options={ledgers.map(l => l.name)}
-                                                            placeholder="-- Select Ledger --"
-                                                        />
-                                                    </td>
-                                                    <td colSpan={2} className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Ledger Narration:</td>
-                                                    <td colSpan={3} className="px-2 py-2">
+                                                    <td className="px-3 py-2 border-r border-gray-200">
                                                         <input
                                                             type="text"
-                                                            value={row.ledgerNarration}
-                                                            onChange={(e) => updateItemRow(index, { ledgerNarration: e.target.value })}
-                                                            placeholder="Enter ledger narration"
-                                                            className="w-full bg-white outline-none p-1 border border-gray-200 focus:border-indigo-500 rounded text-sm h-8"
+                                                            value={row.uom}
+                                                            readOnly
+                                                            className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500"
+                                                            placeholder="UQC"
                                                         />
+                                                    </td>
+                                                    <td className="px-3 py-2 border-r border-gray-200">
+                                                        <input
+                                                            type="number"
+                                                            value={row.fcRate}
+                                                            onChange={(e) => updateItemRow(index, { fcRate: e.target.value })}
+                                                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
+                                                            placeholder="0.00"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <input
+                                                            type="text"
+                                                            value={row.fcAmount}
+                                                            readOnly
+                                                            className="w-full px-2 py-1.5 bg-gray-50 border-0 rounded text-sm font-medium text-center text-gray-700"
+                                                            placeholder="0.00"
+                                                        />
+                                                    </td>
+                                                </tr>
+                                                <tr className={`border-b border-gray-200 bg-gray-50 ${!isSelected ? 'opacity-50' : ''}`}>
+                                                    <td colSpan={6} className="px-4 py-3">
+                                                        <div className="flex flex-wrap items-center gap-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Invoice Ref:</label>
+                                                                <input type="text" value={row.invoiceRef} onChange={(e) => updateItemRow(index, { invoiceRef: e.target.value })} className="w-32 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Ref" />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Reason for Return:</label>
+                                                                <select value={row.reasonForReturn} onChange={(e) => updateItemRow(index, { reasonForReturn: e.target.value })} className="w-40 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white">
+                                                                    <option value="">Select Reason</option>
+                                                                    <option value="Sales Return">Sales Return</option>
+                                                                    <option value="Post Sale Discount">Post Sale Discount</option>
+                                                                    <option value="Deficiency in Service">Deficiency in Service</option>
+                                                                    <option value="Correction in Invoice">Correction in Invoice</option>
+                                                                    <option value="Change in POS">Change in POS</option>
+                                                                    <option value="Finalization of Provisional Assessment">Finalization of Provisional Assessment</option>
+                                                                    <option value="Others">Others</option>
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Purchase Ledger:</label>
+                                                                <div className="w-48">
+                                                                    <SearchableDropdown options={ledgers.map(l => l.name)} value={row.purchaseLedger} onChange={(val) => updateItemRow(index, { purchaseLedger: val })} placeholder="Select purchase ledger" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Ledger Narration:</label>
+                                                                <input type="text" value={row.ledgerNarration} onChange={(e) => updateItemRow(index, { ledgerNarration: e.target.value })} className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Enter ledger narration" />
+                                                            </div>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             </React.Fragment>
@@ -1285,32 +1379,193 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                 </tbody>
                             </table>
                         </div>
-
-                        <div className="pt-4 flex justify-between items-center">
+                        <div className="flex items-center justify-between pt-2">
                             <button
                                 type="button"
                                 onClick={() => setItemRows(prev => [...prev, {
-                                    id: Date.now(),
-                                    itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
-                                    itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
-                                    invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
-                                    reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
+                                    id: Date.now(), itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '', itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0', invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true, reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
                                 }])}
-                                className="text-indigo-600 font-bold text-sm uppercase flex items-center hover:text-indigo-800 transition-colors"
+                                className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors"
                             >
-                                <span className="mr-1 text-lg">+</span> ADD ITEM
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg> Add Row
                             </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('payment')}
-                                className="px-10 py-2.5 bg-[#4F46E5] text-white rounded-[4px] font-bold text-sm uppercase shadow-lg hover:bg-indigo-700 transition-all active:scale-95"
-                            >
-                                Next
-                            </button>
+                            <div className="flex items-center gap-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setItemRows(prev => prev.filter(r => r.selected !== false))}
+                                    className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-[4px] transition-colors font-medium flex items-center gap-2"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> Delete Items
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('item_tax_inr')}
+                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium"
+                                >
+                                    NEXT
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
+                {(activeTab === 'item_tax' || activeTab === 'item_tax_inr') && (
+                    <div className="space-y-6">
+                        <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
+                            <table className="w-full text-sm text-left text-gray-500 whitespace-nowrap min-w-[1200px]">
+                                <thead className="bg-[#4F46E5] text-white uppercase font-semibold">
+                                    <tr>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-16">S. No.</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-32">Item Code</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-48">Item Name</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-24">HSN/SAC</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-20">Qty</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-20">UOM</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-24">Alt Unit</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-28">Item Rate</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-32">Taxable Value</th>
+                                        {placeOfSupply === companyDetails.state ? (
+                                            <>
+                                                <th className="px-3 py-2 text-center border-r border-indigo-400 w-28">CGST</th>
+                                                <th className="px-3 py-2 text-center border-r border-indigo-400 w-28">SGST</th>
+                                            </>
+                                        ) : (
+                                            <th className="px-3 py-2 text-center border-r border-indigo-400 w-28">IGST</th>
+                                        )}
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-24">CESS</th>
+                                        <th className="px-3 py-2 text-center w-32 bg-indigo-500">Invoice Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {itemRows.map((row, index) => {
+                                        const isSelected = row.selected !== false;
+                                        return (
+                                            <React.Fragment key={row.id}>
+                                                <tr className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${!isSelected ? 'opacity-50' : ''}`}>
+                                                    <td className="px-2 py-2 text-center text-sm font-medium border-l-0 border-r border-gray-200">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => updateItemRow(index, { selected: e.target.checked })}
+                                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                                                        />
+                                                        <span className="ml-2">{index + 1}</span>
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <SearchableDropdown options={availableItems.map(it => it.itemCode).filter(Boolean)} value={row.itemCode} onChange={(val) => updateItemRow(index, { itemCode: val })} placeholder="Item code" />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <SearchableDropdown options={availableItems.map(it => it.itemName).filter(Boolean)} value={row.itemName} onChange={(val) => updateItemRow(index, { itemName: val })} placeholder="Item name" />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <input type="text" value={row.hsnSac} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="HSN" />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <input type="number" value={row.qty} onChange={(e) => updateItemRow(index, { qty: e.target.value })} className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent" placeholder="0" />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <input type="text" value={row.uom} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="UOM" />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <input type="text" value={row.alternateUnit} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="Alt Unit" />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <input type="number" value={row.itemRate} onChange={(e) => updateItemRow(index, { itemRate: e.target.value })} className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right bg-transparent" placeholder="0.00" />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <input type="text" value={row.taxableValue} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                    </td>
+                                                    {placeOfSupply === companyDetails.state ? (
+                                                        <>
+                                                            <td className="px-2 py-2 border-r border-gray-200">
+                                                                <input type="text" value={row.cgst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                            </td>
+                                                            <td className="px-2 py-2 border-r border-gray-200">
+                                                                <input type="text" value={row.sgst} readOnly className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        <td className="px-2 py-2 border-r border-gray-200">
+                                                            <input type="text" value={row.igst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                        </td>
+                                                    )}
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <input type="text" value={row.cess} readOnly className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                    </td>
+                                                    <td className="px-2 py-2 bg-indigo-50/30">
+                                                        <input type="text" value={row.invoiceValue} readOnly className="w-full px-2 py-1.5 bg-transparent border-0 rounded text-sm font-bold text-right text-gray-900" placeholder="0.00" />
+                                                    </td>
+                                                </tr>
+                                                <tr className={`border-b border-gray-200 bg-gray-50/50 ${!isSelected ? 'opacity-50' : ''}`}>
+                                                    <td colSpan={13} className="px-4 py-2">
+                                                        <div className="flex flex-wrap items-center gap-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Invoice Ref:</label>
+                                                                <input type="text" value={row.invoiceRef} onChange={(e) => updateItemRow(index, { invoiceRef: e.target.value })} className="w-32 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Ref" />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Reason for Return:</label>
+                                                                <select value={row.reasonForReturn} onChange={(e) => updateItemRow(index, { reasonForReturn: e.target.value })} className="w-40 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white">
+                                                                    <option value="">Select Reason</option>
+                                                                    <option value="Sales Return">Sales Return</option>
+                                                                    <option value="Post Sale Discount">Post Sale Discount</option>
+                                                                    <option value="Deficiency in Service">Deficiency in Service</option>
+                                                                    <option value="Correction in Invoice">Correction in Invoice</option>
+                                                                    <option value="Change in POS">Change in POS</option>
+                                                                    <option value="Finalization of Provisional Assessment">Finalization of Provisional Assessment</option>
+                                                                    <option value="Others">Others</option>
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Purchase Ledger:</label>
+                                                                <div className="w-48">
+                                                                    <SearchableDropdown options={ledgers.map(l => l.name)} value={row.purchaseLedger} onChange={(val) => updateItemRow(index, { purchaseLedger: val })} placeholder="Select ledger" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                                                                <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Ledger Narration:</label>
+                                                                <input type="text" value={row.ledgerNarration} onChange={(e) => updateItemRow(index, { ledgerNarration: e.target.value })} className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Enter ledger narration" />
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="flex items-center justify-between pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setItemRows(prev => [...prev, {
+                                    id: Date.now(), itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '', itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0', invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true, reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
+                                }])}
+                                className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg> Add Row
+                            </button>
+                            <div className="flex items-center gap-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setItemRows(prev => prev.filter(r => r.selected !== false))}
+                                    className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-[4px] transition-colors font-medium flex items-center gap-2"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> Delete Items
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('payment')}
+                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium"
+                                >
+                                    NEXT
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
 
                 {activeTab === 'payment' && (
                     <div className="space-y-6">
@@ -1938,23 +2193,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                         </div>
                     </div>
                 )}
-
-                {/* Action Buttons */}
-                <div className="mt-8 pt-6 border-t border-gray-100 flex justify-center gap-4">
-                    <button
-                        onClick={handleCancel}
-                        className="px-10 py-2.5 text-sm font-bold text-gray-700 bg-white border-2 border-gray-300 rounded-[4px] hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
-                    >
-                        CANCEL
-                    </button>
-                    <button
-                        onClick={handlePostDebitNote}
-                        className="px-10 py-2.5 text-sm font-bold text-white bg-indigo-600 border-b-4 border-indigo-800 rounded-[4px] hover:bg-indigo-700 active:border-b-0 active:translate-y-1 transition-all shadow-lg"
-                    >
-                        POST DEBIT NOTE
-                    </button>
-                </div>
             </div>
+
 
             {isIssueSlipModalOpen && (
                 <CreateIssueSlipModal
