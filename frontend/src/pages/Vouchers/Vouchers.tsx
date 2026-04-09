@@ -10574,33 +10574,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               )
             )}
 
-            {voucherType === 'Credit Note' && (
-              creditNoteActiveTab !== 'transit' ? (
-                <button
-                  onClick={() => {
-                    if (creditNoteActiveTab === 'invoice') {
-                      if (cnInForeignCurrency === 'Yes') setCreditNoteActiveTab('items_foreign');
-                      else setCreditNoteActiveTab('items');
-                    }
-                    else if (creditNoteActiveTab === 'items_foreign') setCreditNoteActiveTab('items_inr');
-                    else if (creditNoteActiveTab === 'items_inr') setCreditNoteActiveTab('due');
-                    else if (creditNoteActiveTab === 'items') setCreditNoteActiveTab('due');
-                    else if (creditNoteActiveTab === 'due') setCreditNoteActiveTab('transit');
-                  }}
-                  className="erp-button-primary"
-                >
-                  Next
-                </button>
-              ) : (
-                <div className="flex space-x-3">
-                  <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
-                  <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                  <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
-                </div>
-              )
-            )}
-
-            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Credit Note'].includes(voucherType) && (
+            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Debit Note'].includes(voucherType) && (
               <div className="flex space-x-3">
                 <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                 <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>

@@ -37,6 +37,7 @@ class VoucherDebitNoteSupplierDetails(BaseModel):
     
     # Configuration
     nature_of_supply = models.CharField(max_length=50, default='Regular') 
+    is_financial = models.CharField(max_length=10, default='No')
     reverse_charge = models.CharField(max_length=10, default='No')
     place_of_supply = models.CharField(max_length=255, null=True, blank=True)
     
