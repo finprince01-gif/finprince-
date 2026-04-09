@@ -588,6 +588,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnReverseIncomeTaxTcs, setCnReverseIncomeTaxTcs] = useState<'Yes' | 'No'>('No');
   const [cnReverseIncomeTaxTds, setCnReverseIncomeTaxTds] = useState<'Yes' | 'No'>('No');
   const [cnIncomeTaxTdsTcsAmount, setCnIncomeTaxTdsTcsAmount] = useState('0.00');
+  const [cnAdvanceAmount, setCnAdvanceAmount] = useState('0.00');
+  const [cnPayableAmount, setCnPayableAmount] = useState('0.00');
   const [cnTermsConditions, setCnTermsConditions] = useState('');
   const [cnAppliedInvoices, setCnAppliedInvoices] = useState<any[]>([]); // Data Grid state
 
@@ -2342,6 +2344,43 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setEntries([{ ledger: '', note: '', refNo: '', debit: 0, credit: 0 }, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
     setVendorValidationStatus(null);
     setIsVendorDisabled(false);
+
+    // Credit Note Resets
+    setCnDate(getTodayDate());
+    setCnCustomer('');
+    setCnBranch('');
+    setCnSelectedSalesInvoices([]);
+    setCnSalesInvoiceDate('');
+    setCnCustomerDebitNoteNo('');
+    setCnCustomerDebitNoteDate(getTodayDate());
+    setCnGstin('');
+    setCnGrnRefNo('');
+    setCnBillFrom('');
+    setCnShipFrom('');
+    setCnSameAsBillFrom(true);
+    setCnInputType(['Intrastate']);
+    setCnInForeignCurrency('No');
+    setCnItems([
+      { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: null, financialAmount: 0 }
+    ]);
+    setCnReverseGstTcs('No');
+    setCnReverseGstTds('No');
+    setCnIncomeTaxTdsTcsAmount('0.00');
+    setCnGstTdsTcsAmount('0.00');
+    setCnAdvanceAmount('0.00');
+    setCnPayableAmount('0.00');
+    setCnTermsConditions('');
+    setCnPostingNote('');
+    setCnTransitReceivedIn('');
+    setCnTransitMode('Road');
+    setCnTransitReceiptDate(getTodayDate());
+    setCnTransitReceiptTime('');
+    setCnTransitDeliveryType('Self');
+    setCnTransitTransporterId('');
+    setCnTransitTransporterName('');
+    setCnTransitVehicleNo('');
+    setCnTransitLrGrConsignment('');
+    setCreditNoteActiveTab('invoice');
   }, []);
 
   // Auto-set Inter-State flag based on party ledger's state
@@ -3115,6 +3154,113 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       return;
     }
 
+    if (voucherType === 'Credit Note') {
+      if (!cnCustomer) {
+        showError('Please select a Customer.');
+        return;
+      }
+      if (!selectedCnConfig) {
+        showError('Please select a Credit Note Series.');
+        return;
+      }
+
+      // Find Customer ID
+      const customer = richCustomers.find(c => c.customer_name === cnCustomer);
+      const customerId = customer?.id || null;
+
+      if (!customerId) {
+        showError('Please select a valid Customer from the Master list.');
+        return;
+      }
+
+      try {
+        const totals = calculateCreditNoteTotals();
+
+        const creditNoteData: any = {
+          date: cnDate,
+          credit_note_series: selectedCnConfig,
+          credit_note_no: cnVoucherNumber,
+          customer_name: cnCustomer,
+          customer_id: customerId,
+          branch: cnBranch,
+          sales_invoice_nos: Array.isArray(cnSelectedSalesInvoices) ? cnSelectedSalesInvoices.join(', ') : cnSelectedSalesInvoices,
+          sales_invoice_dates: cnSalesInvoiceDate,
+          customer_debit_note_no: cnCustomerDebitNoteNo,
+          customer_debit_note_date: cnCustomerDebitNoteDate,
+          gstin: cnGstin,
+          grn_ref_no: cnGrnRefNo,
+          bill_from: cnBillFrom,
+          ship_from: cnSameAsBillFrom ? cnBillFrom : cnShipFrom,
+          input_type: cnInputType.join(', '),
+          in_foreign_currency: cnInForeignCurrency,
+          narration: cnPostingNote || '',
+
+          item_details: {
+            items: cnItems,
+            total_taxable_value: totals.taxableValue,
+            total_igst: totals.igst,
+            total_cgst: totals.cgst,
+            total_sgst: totals.sgst,
+            total_cess: totals.cess,
+            total_invoice_value: totals.invoiceValue
+          },
+
+          due_details: {
+            reverse_gst_tcs: cnReverseGstTcs,
+            reverse_gst_tds: cnReverseGstTds,
+            reverse_income_tax_tcs: cnReverseIncomeTaxTcs,
+            reverse_income_tax_tds: cnReverseIncomeTaxTds,
+            income_tax_tds_tcs_amount: cnIncomeTaxTdsTcsAmount || 0,
+            gst_tds_tcs_amount: cnGstTdsTcsAmount || 0,
+            advance_amount: cnAdvanceAmount || 0,
+            payable_amount: cnPayableAmount || 0,
+            terms_conditions: cnTermsConditions || ''
+          },
+
+          transit_details: {
+            received_in: cnTransitReceivedIn,
+            mode_of_transport: cnTransitMode,
+            receipt_date: cnTransitReceiptDate || null,
+            receipt_time: cnTransitReceiptTime || null,
+            delivery_type: cnTransitDeliveryType,
+            transporter_id_gstin: cnTransitTransporterId,
+            transporter_name: cnTransitTransporterName,
+            vehicle_no: cnTransitVehicleNo,
+            lr_gr_consignment_no: cnTransitLrGrConsignment
+          }
+        };
+
+        await httpClient.post('/api/vouchers/credit-note/', creditNoteData);
+        showSuccess('Credit Note Saved Successfully!');
+
+        // Increment number logic if applicable
+        if (selectedCnConfig && cnVoucherConfigs.length > 0) {
+          const config = cnVoucherConfigs.find(c => c.voucher_name === selectedCnConfig);
+          if (config && config.enable_auto_numbering) {
+            await incrementCreditNoteNumber(String(config.id));
+          }
+        }
+
+        if (shouldPrint) {
+          // TODO: Implement Credit Note Print Preview
+          // For now, just close
+          resetForm();
+        } else {
+          resetForm();
+        }
+        refetch();
+
+      } catch (error: any) {
+        console.error('Error saving Credit Note:', error);
+        const serverError = error.response?.data;
+        const errorMessage = serverError
+          ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
+          : error.message;
+        showError(`Failed to save Credit Note.\n${errorMessage}`);
+      }
+      return;
+    }
+
     switch (voucherType) {
       // (Removed Purchase case from switch and handled above)
       case 'Sales':
@@ -3165,35 +3311,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       case 'Expenses':
         voucher = { id: '', type: voucherType, date, account, party, amount: simpleAmount, narration };
         break;
-      case 'Credit Note':
-        if (!cnCustomer) {
-          showError('Please select a Customer.');
-          return;
-        }
-        if (!selectedCnConfig) {
-          showError('Please select a Credit Note Series.');
-          return;
-        }
-        voucher = {
-          id: '',
-          type: voucherType,
-          date: cnDate,
-          voucher_series: selectedCnConfig,
-          voucher_number: cnVoucherNumber,
-          customer_name: cnCustomer,
-          branch: cnBranch,
-          sales_invoice_nos: cnSelectedSalesInvoices,
-          sales_invoice_date: cnSalesInvoiceDate,
-          customer_debit_note_no: cnCustomerDebitNoteNo,
-          customer_debit_note_date: cnCustomerDebitNoteDate,
-          gstin: cnGstin,
-          grn_ref_no: cnGrnRefNo,
-          bill_from: cnBillFrom,
-          ship_from: cnSameAsBillFrom ? cnBillFrom : cnShipFrom,
-          input_type: cnInputType.join(', '),
-          in_foreign_currency: cnInForeignCurrency,
-        } as any;
-        break;
     }
 
     if (voucher) {
@@ -3207,12 +3324,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           incrementContraNumber(String(config.id)).catch(e => console.error(e));
         }
       }
+      /*
       if (voucherType === 'Credit Note' && selectedCnConfig && cnVoucherConfigs.length > 0) {
         const config = cnVoucherConfigs.find(c => c.voucher_name === selectedCnConfig);
         if (config && config.enable_auto_numbering) {
           incrementCreditNoteNumber(String(config.id)).catch(e => console.error(e));
         }
       }
+      */
     }
   };
 
@@ -3223,7 +3342,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     switch (voucherType) {
       case 'Purchase':
       case 'Sales':
-        voucherData = { type: voucherType, party, invoiceNo, total, items };
+      case 'Credit Note':
+      case 'Debit Note':
+        if (voucherType === 'Credit Note') {
+          voucherData = { type: voucherType, party: cnCustomer, invoiceNo: cnVoucherNumber, total: calculateCreditNoteTotals().invoiceValue, items: cnItems };
+        } else {
+          voucherData = { type: voucherType, party, invoiceNo, total, items };
+        }
         break;
       case 'Payment':
       case 'Receipt':
@@ -3234,6 +3359,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         break;
       case 'Journal':
         voucherData = { type: voucherType, entries, totalDebit };
+        break;
+      case 'Expenses':
+        voucherData = { type: voucherType, party, account, amount: simpleAmount };
         break;
     }
 
@@ -6901,10 +7029,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
               </div>
 
-              {/* Row 7: Input Type, Foreign Currency, Financial CN */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end bg-gray-50/50 p-6 pt-4 mt-6 rounded-[4px] border border-gray-100">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
+              {/* Bottom Settings Row: Combined into flex row for perfect alignment */}
+              <div className="flex flex-row flex-wrap items-end gap-x-12 gap-y-6 bg-gray-50/50 p-6 pt-4 mt-6 rounded-[4px] border border-gray-100">
+                <div className="flex flex-col items-start">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
                     INPUT TYPE (GST CATEGORY)
                   </label>
                   <div className="flex flex-wrap gap-4">
@@ -6928,9 +7056,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     ))}
                   </div>
                 </div>
+
                 <div className="flex flex-col items-start gap-4">
                   <div className="flex flex-col items-start">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
                       INVOICE IN FOREIGN CURRENCY
                     </label>
                     <div className="flex bg-white p-1 rounded-[4px] border border-gray-300">
@@ -6966,7 +7095,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
                   {cnInForeignCurrency === 'Yes' && (
                     <div className="flex flex-col items-start w-full">
-                      <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
                         EXCHANGE RATE (1 FC = INR)
                       </label>
                       <input
@@ -6982,25 +7111,52 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
 
                 <div className="flex flex-col items-start gap-4">
-                  <div className="flex flex-col items-start">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
-                      It is financial credit note?
-                    </label>
-                    <div className="flex bg-white p-1 rounded-[4px] border border-gray-300">
-                      {['No', 'Yes'].map(opt => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setCnIsFinancial(opt as any)}
-                          className={`px-8 py-1.5 rounded-[2px] text-[13px] font-bold transition-all ${String(cnIsFinancial).toLowerCase() === opt.toLowerCase()
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                          {opt.toUpperCase()}
-                        </button>
-                      ))}
-                    </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-0 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
+                    It is financial credit note?
+                  </label>
+                  <div className="flex bg-white p-1 rounded-[4px] border border-gray-300">
+                    {['No', 'Yes'].map(opt => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setCnIsFinancial(opt as any)}
+                        className={`px-8 py-1.5 rounded-[2px] text-[13px] font-bold transition-all ${String(cnIsFinancial).toLowerCase() === opt.toLowerCase()
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                      >
+                        {opt.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-start gap-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-0 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
+                    Reverse GST (TCS/TDS)
+                  </label>
+                  <div className="flex bg-white p-1 rounded-[4px] border border-gray-300">
+                    {['No', 'Yes'].map(opt => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          if (opt === 'Yes') {
+                            setCnReverseGstTcs('Yes');
+                            setCnReverseGstTds('Yes');
+                          } else {
+                            setCnReverseGstTcs('No');
+                            setCnReverseGstTds('No');
+                          }
+                        }}
+                        className={`px-8 py-1.5 rounded-[2px] text-[13px] font-bold transition-all ${(cnReverseGstTcs === opt || cnReverseGstTds === opt)
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                      >
+                        {opt.toUpperCase()}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -7702,32 +7858,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div className="flex flex-col h-full border border-gray-300 rounded-[4px] bg-[#f9fafb] p-4 space-y-6 shadow-none">
                   {/* Reversal Toggles (Integrated) */}
                   <div className="bg-white p-4 rounded-[4px] border border-indigo-100 shadow-sm space-y-3">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reverse GST (TCS/TDS)</span>
-                      <div className="flex bg-gray-100 p-1 rounded-[4px] border border-gray-200">
-                        {['No', 'Yes'].map(opt => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => {
-                              if (opt === 'Yes') {
-                                setCnReverseGstTcs('Yes');
-                                setCnReverseGstTds('Yes');
-                              } else {
-                                setCnReverseGstTcs('No');
-                                setCnReverseGstTds('No');
-                              }
-                            }}
-                            className={`px-4 py-1 rounded-[3px] text-[9px] font-black uppercase tracking-tighter transition-all ${(cnReverseGstTcs === opt || cnReverseGstTds === opt)
-                              ? 'bg-indigo-600 text-white shadow-sm'
-                              : 'text-gray-400 hover:text-gray-600'
-                              }`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reverse IT (TCS/TDS)</span>
                       <div className="flex bg-gray-100 p-1 rounded-[4px] border border-gray-200">
@@ -10444,7 +10574,33 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               )
             )}
 
-            {!['Sales', 'Payment', 'Receipt', 'Purchase'].includes(voucherType) && (
+            {voucherType === 'Credit Note' && (
+              creditNoteActiveTab !== 'transit' ? (
+                <button
+                  onClick={() => {
+                    if (creditNoteActiveTab === 'invoice') {
+                      if (cnInForeignCurrency === 'Yes') setCreditNoteActiveTab('items_foreign');
+                      else setCreditNoteActiveTab('items');
+                    }
+                    else if (creditNoteActiveTab === 'items_foreign') setCreditNoteActiveTab('items_inr');
+                    else if (creditNoteActiveTab === 'items_inr') setCreditNoteActiveTab('due');
+                    else if (creditNoteActiveTab === 'items') setCreditNoteActiveTab('due');
+                    else if (creditNoteActiveTab === 'due') setCreditNoteActiveTab('transit');
+                  }}
+                  className="erp-button-primary"
+                >
+                  Next
+                </button>
+              ) : (
+                <div className="flex space-x-3">
+                  <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                  <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                  <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                </div>
+              )
+            )}
+
+            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Credit Note'].includes(voucherType) && (
               <div className="flex space-x-3">
                 <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                 <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
