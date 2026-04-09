@@ -28,7 +28,7 @@ export interface ItemRow {
     gstRate?: string;
     selected?: boolean;
     reasonForReturn?: string;
-    invoiceRef?: string;
+    salesInvoiceNo?: string;
     fcRate?: string;
     fcAmount?: string;
     ledgerNarration?: string;
@@ -82,7 +82,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
         itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
         invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
-        reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0',
+        reasonForReturn: '', salesInvoiceNo: '', fcRate: '0', fcAmount: '0',
         ledgerNarration: ''
     }]);
 
@@ -403,7 +403,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 if (selectedItem) {
                     updatedRow = {
                         ...updatedRow,
-                        invoiceRef: selectedItem.invoice_no,
+                        salesInvoiceNo: selectedItem.invoice_no,
                         itemCode: selectedItem.itemCode,
                         itemName: selectedItem.itemName,
                         hsnSac: selectedItem.hsnSac || selectedItem.hsn_sac || '',
@@ -539,7 +539,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 items.forEach((item: any) => {
                     newItems.push({
                         id: Date.now() + Math.random(),
-                        invoiceRef: inv.invoice_no,
+                        salesInvoiceNo: inv.invoice_no,
                         itemCode: item.itemCode || item.code || '',
                         itemName: item.itemName || item.name || '',
                         hsnSac: item.hsnSac || item.hsn_sac || '',
@@ -574,7 +574,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
                 itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
                 invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
-                reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0',
+                reasonForReturn: '', salesInvoiceNo: '', fcRate: '0', fcAmount: '0',
                 ledgerNarration: ''
             }]);
         }
@@ -736,7 +736,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
             itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
             invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
-            reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0',
+            reasonForReturn: '', salesInvoiceNo: '', fcRate: '0', fcAmount: '0',
             ledgerNarration: ''
         }]);
         setExchangeRate('1');
@@ -871,7 +871,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Supplier Invoice No.
+                                    Sales Invoice No.
                                 </label>
                                 <div className="space-y-2">
                                     <SearchableDropdown
@@ -1107,7 +1107,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                 <thead className="bg-[#4F46E5] text-white uppercase font-semibold">
                                     <tr>
                                         <th className="px-3 py-4 w-16 text-center border-r border-indigo-400">S. No.</th>
-                                        <th className="px-4 py-4 w-40 border-r border-indigo-400">Invoice Ref</th>
+                                        <th className="px-4 py-4 w-40 border-r border-indigo-400">Sales Invoice No.</th>
                                         <th className="px-4 py-4 w-40 border-r border-indigo-400">Item Code</th>
                                         <th className="px-4 py-4 w-52 border-r border-indigo-400">Item Name</th>
                                         <th className="px-4 py-4 w-28 border-r border-indigo-400">HSN/SAC</th>
@@ -1157,7 +1157,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 border-l border-gray-100">
-                                                        <input type="text" value={row.invoiceRef} onChange={(e) => updateItemRow(index, { invoiceRef: e.target.value })} className="w-full bg-transparent outline-none p-1 text-xs font-semibold border border-gray-200 rounded" />
+                                                        <input type="text" value={row.salesInvoiceNo} onChange={(e) => updateItemRow(index, { salesInvoiceNo: e.target.value })} className="w-full bg-transparent outline-none p-1 text-xs font-semibold border border-gray-200 rounded" />
                                                     </td>
                                                     <td className="px-4 py-3 border-l border-gray-100">
                                                         <SearchableDropdown
@@ -1294,7 +1294,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
                                     itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
                                     invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
-                                    reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
+                                    reasonForReturn: '', salesInvoiceNo: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
                                 }])}
                                 className="text-indigo-600 font-bold text-sm uppercase flex items-center hover:text-indigo-800 transition-colors"
                             >
