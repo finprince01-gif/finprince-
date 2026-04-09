@@ -36,6 +36,7 @@ from .views_expense import VoucherExpenseViewSet # pyre-fixme
 from .views_contra_journal import VoucherContraViewSet, VoucherJournalViewSet # pyre-fixme
 from .views_voucher_purchase import VoucherPurchaseViewSet # pyre-fixme
 from .views_voucher_debit_note import VoucherDebitNoteViewSet # pyre-fixme
+from .views_voucher_credit_note import VoucherCreditNoteViewSet
 from .views_gst import GSTR1ViewSet # pyre-fixme
 from .views_bank_reconciliation import BankReconciliationViewSet # pyre-fixme
 from .views_allocation import VoucherAllocationViewSet
@@ -56,6 +57,7 @@ router.register('vouchers/receipt-types', ReceiptVoucherTypeViewSet, basename='r
 router.register('vouchers/sales', SalesVoucherViewSet, basename='sales-vouchers')
 router.register('vouchers/purchase', VoucherPurchaseViewSet, basename='purchase-vouchers')
 router.register('vouchers/debit-note', VoucherDebitNoteViewSet, basename='debit-note-vouchers')
+router.register('vouchers/credit-note', VoucherCreditNoteViewSet, basename='credit-note-vouchers')
 
 # --- Unified endpoint (use this for all new code) ---
 router.register('vouchers/payment', PaymentVoucherViewSet, basename='payment-voucher')
