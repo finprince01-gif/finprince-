@@ -2533,3 +2533,95 @@ CREATE TABLE `voucher_contra` (
   KEY `idx_ioc_issue_slip` (`issue_slip_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+CREATE TABLE `voucher_credit_note_invoice_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `credit_note_series` varchar(100) NOT NULL,
+  `credit_note_no` varchar(50) NOT NULL,
+  `date` date NOT NULL,
+  `customer_name` varchar(255) NOT NULL,
+  `customer_id` bigint DEFAULT NULL,
+  `branch` varchar(100) DEFAULT NULL,
+  `sales_invoice_nos` text,
+  `sales_invoice_dates` text,
+  `customer_debit_note_no` varchar(100) DEFAULT NULL,
+  `customer_debit_note_date` date DEFAULT NULL,
+  `gstin` varchar(15) DEFAULT NULL,
+  `grn_ref_no` varchar(100) DEFAULT NULL,
+  `bill_from` text,
+  `ship_from` text,
+  `input_type` varchar(50) DEFAULT 'Intrastate',
+  `in_foreign_currency` varchar(10) DEFAULT 'No',
+  `narration` text,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `credit_note_no` (`credit_note_no`),
+  KEY `tenant_id` (`tenant_id`),
+  KEY `customer_id` (`customer_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `voucher_credit_note_item_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `credit_note_details_id` bigint NOT NULL,
+  `items` json NOT NULL,
+  `total_taxable_value` decimal(15,2) DEFAULT '0.00',
+  `total_igst` decimal(15,2) DEFAULT '0.00',
+  `total_cgst` decimal(15,2) DEFAULT '0.00',
+  `total_sgst` decimal(15,2) DEFAULT '0.00',
+  `total_cess` decimal(15,2) DEFAULT '0.00',
+  `total_invoice_value` decimal(15,2) DEFAULT '0.00',
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `credit_note_details_id` (`credit_note_details_id`),
+  KEY `tenant_id` (`tenant_id`),
+  CONSTRAINT `fk_cn_invoice_items` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `voucher_credit_note_due_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `credit_note_details_id` bigint NOT NULL,
+  `reverse_gst_tcs` varchar(10) DEFAULT 'No',
+  `reverse_gst_tds` varchar(10) DEFAULT 'No',
+  `reverse_income_tax_tcs` varchar(10) DEFAULT 'No',
+  `reverse_income_tax_tds` varchar(10) DEFAULT 'No',
+  `income_tax_tds_tcs_amount` decimal(15,2) DEFAULT '0.00',
+  `gst_tds_tcs_amount` decimal(15,2) DEFAULT '0.00',
+  `advance_amount` decimal(15,2) DEFAULT '0.00',
+  `payable_amount` decimal(15,2) DEFAULT '0.00',
+  `terms_conditions` text,
+  `applied_invoices` json NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `credit_note_details_id` (`credit_note_details_id`),
+  KEY `tenant_id` (`tenant_id`),
+  CONSTRAINT `fk_cn_invoice_due` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `voucher_credit_note_transit_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `credit_note_details_id` bigint NOT NULL,
+  `received_in` varchar(255) DEFAULT NULL,
+  `mode_of_transport` varchar(50) DEFAULT 'Road',
+  `receipt_date` date DEFAULT NULL,
+  `receipt_time` time(6) DEFAULT NULL,
+  `delivery_type` varchar(100) DEFAULT NULL,
+  `transporter_id_gstin` varchar(15) DEFAULT NULL,
+  `transporter_name` varchar(255) DEFAULT NULL,
+  `vehicle_no` varchar(50) DEFAULT NULL,
+  `lr_gr_consignment_no` varchar(100) DEFAULT NULL,
+  `shipping_details` json NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `credit_note_details_id` (`credit_note_details_id`),
+  KEY `tenant_id` (`tenant_id`),
+  CONSTRAINT `fk_cn_invoice_transit` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+

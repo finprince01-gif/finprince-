@@ -17,6 +17,12 @@ from .models_voucher_purchase import ( # pyre-fixme
     VoucherPurchaseDueDetails, 
     VoucherPurchaseTransitDetails
 )
+from .models_voucher_credit_note import (
+    VoucherCreditNoteInvoiceDetails,
+    VoucherCreditNoteItemDetails,
+    VoucherCreditNoteDueDetails,
+    VoucherCreditNoteTransitDetails
+)
 from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesInvoiceDetails,
     VoucherSalesItems,
@@ -254,6 +260,7 @@ class Voucher(BaseModel):
         ('contra', 'Contra'),
         ('journal', 'Journal'),
         ('debit_note', 'Debit Note'),
+        ('credit_note', 'Credit Note'),
     ]
     type = models.CharField(max_length=20, choices=VOUCHER_TYPES)
     voucher_number = models.CharField(max_length=50)
