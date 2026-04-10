@@ -588,6 +588,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnReverseIncomeTaxTcs, setCnReverseIncomeTaxTcs] = useState<'Yes' | 'No'>('No');
   const [cnReverseIncomeTaxTds, setCnReverseIncomeTaxTds] = useState<'Yes' | 'No'>('No');
   const [cnIncomeTaxTdsTcsAmount, setCnIncomeTaxTdsTcsAmount] = useState('0.00');
+
+
   const [cnAdvanceAmount, setCnAdvanceAmount] = useState('0.00');
   const [cnPayableAmount, setCnPayableAmount] = useState('0.00');
   const [cnTermsConditions, setCnTermsConditions] = useState('');
@@ -664,6 +666,56 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnItems, setCnItems] = useState([
     { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null, salesInvoiceNo: null as string | null, financialAmount: 0 }
   ]);
+
+  // Automatic calculation for Reverse IT (TCS/TDS)
+  useEffect(() => {
+    if (cnReverseIncomeTaxTcs === 'Yes' || cnReverseIncomeTaxTds === 'Yes') {
+      let totalReverseIt = 0;
+
+      cnSelectedSalesInvoices.forEach(invNo => {
+        const cleanInvNo = String(invNo || '').trim().toLowerCase();
+        
+        // Find the original invoice details from the list (which was fetched when customer was selected)
+        const invoice = cnSalesInvoicesList.find(i => 
+          String(i.sales_invoice_no || '').trim().toLowerCase() === cleanInvNo || 
+          String(i.voucher_no || '').trim().toLowerCase() === cleanInvNo
+        );
+        
+        if (invoice) {
+          // Check for nested payment_details (full view) or flattened fields (list view)
+          const origTaxable = parseFloat(String(invoice.payment_details?.payment_taxable_value || invoice.taxable_value || 0)) || 0;
+          // Handles both TCS Payable and TDS Receivable depending on original invoice context
+          const origItAmount = parseFloat(String(invoice.payment_details?.payment_tds_income_tax || invoice.tcs_amount || 0)) || 0;
+
+          if (origTaxable > 0 && origItAmount > 0) {
+            // Find portion of Credit Note taxable value linked to this specific invoice
+            const cnTaxableForThisInv = cnItems
+              .filter(item => {
+                const itemInvNo = String(item.salesInvoiceNo || item.sourcePoNo || '').trim().toLowerCase();
+                return itemInvNo === cleanInvNo;
+              })
+              .reduce((sum, item) => sum + (parseFloat(String(item.taxableValue)) || 0), 0);
+
+            if (cnTaxableForThisInv > 0) {
+              // Formula: (Credit Note Taxable Value / Original Invoice Taxable Value) * Original IT Amount (TCS/TDS)
+              let reverseItValue = (cnTaxableForThisInv / origTaxable) * origItAmount;
+              
+              // Validation: Must be less than or equal to the IT amount linked to the Sales Invoice
+              if (reverseItValue > origItAmount) {
+                reverseItValue = origItAmount;
+              }
+
+              totalReverseIt += reverseItValue;
+            }
+          }
+        }
+      });
+
+      setCnIncomeTaxTdsTcsAmount(totalReverseIt.toFixed(2));
+    } else {
+      setCnIncomeTaxTdsTcsAmount('0.00');
+    }
+  }, [cnReverseIncomeTaxTcs, cnReverseIncomeTaxTds, cnSelectedSalesInvoices, cnSalesInvoicesList, cnItems]);
 
   const salesLedgerOptions = useMemo(() => {
     return Array.from(new Set(ledgers.map(l => l.name))).filter(Boolean);
@@ -2955,9 +3007,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (draftForceMajeure) parts.push(`Force Majeure: ${draftForceMajeure}`);
     if (draftDisputeTerms) parts.push(`Dispute & Redressal: ${draftDisputeTerms}`);
     if (parts.length > 0) {
-      setPurchaseTerms(parts.join('\n\n'));
+      if (voucherType === 'Credit Note') {
+        setCnTermsConditions(parts.join('\n\n'));
+      } else {
+        setPurchaseTerms(parts.join('\n\n'));
+      }
     } else {
-      setPurchaseTerms('');
+      if (voucherType === 'Credit Note') {
+        setCnTermsConditions('');
+      } else {
+        setPurchaseTerms('');
+      }
     }
     setIsTermsModalOpen(false);
   };
@@ -6472,24 +6532,26 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
     // Auto-calculate Taxable Value (Qty * Rate) and Taxes (INR)
-    const selectedStockItem = allItems.find((si: any) =>
-      ((si.item_code || si.code) || '').toLowerCase() === (item.itemCode || '').toLowerCase() ||
-      ((si.name || si.item_name) || '').toLowerCase() === (item.itemName || '').toLowerCase() ||
-      ((si.hsn_sac || si.hsn) || '').toString().trim() === (item.hsnSac || '').toString().trim()
-    );
-    const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
-    const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
-    const totalTax = item.taxableValue * (gstRate / 100);
-    item.cess = totalTax * (cessRate / 100);
+    if (cnReverseGstTcs === 'No') {
+      const selectedStockItem = allItems.find((si: any) =>
+        ((si.item_code || si.code) || '').toLowerCase() === (item.itemCode || '').toLowerCase() ||
+        ((si.name || si.item_name) || '').toLowerCase() === (item.itemName || '').toLowerCase() ||
+        ((si.hsn_sac || si.hsn) || '').toString().trim() === (item.hsnSac || '').toString().trim()
+      );
+      const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
+      const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+      const totalTax = item.taxableValue * (gstRate / 100);
+      item.cess = totalTax * (cessRate / 100);
 
-    if (cnInputType.includes('IGST')) {
-      item.igst = totalTax;
-      item.cgst = 0;
-      item.sgst = 0;
-    } else {
-      item.igst = 0;
-      item.cgst = totalTax / 2;
-      item.sgst = totalTax / 2;
+      if (cnInputType.includes('IGST')) {
+        item.igst = totalTax;
+        item.cgst = 0;
+        item.sgst = 0;
+      } else {
+        item.igst = 0;
+        item.cgst = totalTax / 2;
+        item.sgst = totalTax / 2;
+      }
     }
 
     // update invoice value based on taxes
@@ -6608,12 +6670,30 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         setCnSelectedSalesInvoices([]);
                         setCnGstin('');
                         if (val) {
+                          // Auto-populate Terms & Conditions
+                          const customer = richCustomers.find(c => (c.customer_name || '').toLowerCase() === val.toLowerCase());
+                          if (customer) {
+                            const parts: string[] = [];
+                            if (customer.credit_period) parts.push(`Credit Period: ${customer.credit_period}`);
+                            if (customer.credit_terms) parts.push(`Credit Terms: ${customer.credit_terms}`);
+                            if (customer.penalty_terms) parts.push(`Penalty Terms: ${customer.penalty_terms}`);
+                            if (customer.delivery_terms) parts.push(`Delivery Terms: ${customer.delivery_terms}`);
+                            const warranty = customer.warranty_details || customer.warranty_guarantee_details;
+                            if (warranty) parts.push(`Warranty / Guarantee: ${warranty}`);
+                            if (customer.force_majeure) parts.push(`Force Majeure: ${customer.force_majeure}`);
+                            const dispute = customer.dispute_terms || customer.dispute_redressal_terms;
+                            if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
+                            setCnTermsConditions(parts.join('\n\n'));
+                            setMasterTermsData(customer);
+                          }
                           apiService.getCustomerSalesInvoices(val)
                             .then(data => {
                               setCnSalesInvoicesList(data || []);
                             });
                         } else {
                           setCnSalesInvoicesList([]);
+                          setCnTermsConditions('');
+                          setMasterTermsData(null);
                         }
                       }}
                       options={richCustomers.map(c => ({
@@ -7279,7 +7359,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 type="number"
                                 value={row.cgst}
                                 onChange={(e) => handleCreditNoteItemChange(index, 'cgst', e.target.value)}
-                                className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                                readOnly={cnReverseGstTcs === 'No'}
+                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                                 step="0.01"
                               />
                             </td>
@@ -7288,7 +7369,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 type="number"
                                 value={row.sgst}
                                 onChange={(e) => handleCreditNoteItemChange(index, 'sgst', e.target.value)}
-                                className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                                readOnly={cnReverseGstTcs === 'No'}
+                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                                 step="0.01"
                               />
                             </td>
@@ -7299,7 +7381,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="number"
                               value={row.igst}
                               onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
-                              className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                              readOnly={cnReverseGstTcs === 'No'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                               step="0.01"
                             />
                           </td>
@@ -7309,7 +7392,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="number"
                             value={row.cess}
                             onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                            readOnly={cnReverseGstTcs === 'No'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                             step="0.01"
                           />
                         </td>
@@ -7667,7 +7751,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="number"
                               value={row.igst}
                               onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
-                              className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                              readOnly={cnReverseGstTcs === 'No'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                               step="0.01"
                             />
                           </td>
@@ -7676,7 +7761,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="number"
                               value={row.cess}
                               onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
-                              className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                              readOnly={cnReverseGstTcs === 'No'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                               step="0.01"
                             />
                           </td>
@@ -7805,7 +7891,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number"
                       value={cnIncomeTaxTdsTcsAmount}
                       onChange={(e) => setCnIncomeTaxTdsTcsAmount(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] bg-white text-right font-bold text-indigo-600 font-mono text-sm focus:ring-1 focus:ring-indigo-500 transition-all"
+                      readOnly={cnReverseIncomeTaxTcs === 'No' && cnReverseIncomeTaxTds === 'No'}
+                      className={`w-full px-4 py-2.5 border border-gray-300 rounded-[4px] text-right font-bold font-mono text-sm focus:ring-1 focus:ring-indigo-500 transition-all ${(cnReverseIncomeTaxTcs === 'No' && cnReverseIncomeTaxTds === 'No') ? 'bg-gray-50/80 text-gray-400' : 'bg-white text-indigo-600'}`}
                       placeholder="0.00"
                     />
                   </div>
@@ -7953,9 +8040,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <span className="text-[11px] font-black uppercase tracking-widest text-gray-600">Terms & Conditions</span>
                     <button
                       type="button"
-                      className={`px-6 py-2 rounded-[4px] transition-all text-[11px] font-black uppercase tracking-widest border shadow-sm ${cnCustomer
-                        ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 hover:shadow-md active:scale-95'
-                        : 'bg-white text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                      disabled={!cnCustomer}
+                      onClick={openTermsModal}
+                      className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${!cnCustomer
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
                         }`}
                       title={!cnCustomer ? "Please select a customer first" : ""}
                     >
@@ -7970,7 +8059,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </p>
                     <textarea
                       value={cnTermsConditions}
-                      onChange={(e) => setCnTermsConditions(e.target.value)}
+                      readOnly
                       className="flex-1 w-full p-2 text-xs text-gray-700 resize-none outline-none font-medium bg-transparent border-none placeholder:text-gray-200"
                       placeholder="View or edit specific credit terms here..."
                     />
