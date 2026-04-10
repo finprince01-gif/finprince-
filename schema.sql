@@ -2625,3 +2625,95 @@ CREATE TABLE `voucher_credit_note_transit_details` (
   CONSTRAINT `fk_cn_invoice_transit` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+
+CREATE TABLE voucher_debit_note_supplier_details (
+  id bigint NOT NULL AUTO_INCREMENT,
+  tenant_id varchar(36) NOT NULL,
+  date date NOT NULL,
+  debit_note_series varchar(100) DEFAULT NULL,
+  debit_note_no varchar(100) DEFAULT NULL,
+  vendor_name varchar(255) NOT NULL,
+  vendor_basic_detail_id bigint NOT NULL,
+  gstin varchar(50) DEFAULT NULL,
+  branch varchar(255) DEFAULT NULL,
+  supplier_invoice_nos longtext,
+  purchase_voucher_nos longtext,
+  purchase_voucher_dates longtext,
+  outward_slip_nos longtext,
+  bill_to longtext,
+  ship_to longtext,
+  nature_of_supply varchar(50) NOT NULL DEFAULT 'Regular',
+  is_financial varchar(10) NOT NULL DEFAULT 'No',
+  reverse_charge varchar(10) NOT NULL DEFAULT 'No',
+  place_of_supply varchar(255) DEFAULT NULL,
+  invoice_in_foreign_currency varchar(10) NOT NULL DEFAULT 'No',
+  exchange_rate decimal(10,4) NOT NULL DEFAULT '1.0000',
+  foreign_currency varchar(10) NOT NULL DEFAULT 'USD',
+  narration longtext,
+  supporting_document varchar(100) DEFAULT NULL,
+  created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  CONSTRAINT fk_voucher_debit_note_vendor FOREIGN KEY (vendor_basic_detail_id) REFERENCES vendor_master_vendorcreation_basicdetail (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE voucher_debit_note_supply_details (
+  id bigint NOT NULL AUTO_INCREMENT,
+  tenant_id varchar(36) NOT NULL,
+  debit_note_details_id bigint NOT NULL,
+  items json NOT NULL,
+  total_taxable_value decimal(15,2) NOT NULL DEFAULT '0.00',
+  total_igst decimal(15,2) NOT NULL DEFAULT '0.00',
+  total_cgst decimal(15,2) NOT NULL DEFAULT '0.00',
+  total_sgst decimal(15,2) NOT NULL DEFAULT '0.00',
+  total_cess decimal(15,2) NOT NULL DEFAULT '0.00',
+  total_invoice_value decimal(15,2) NOT NULL DEFAULT '0.00',
+  created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_debit_note_supply_details (debit_note_details_id),
+  CONSTRAINT fk_debit_note_supply_details FOREIGN KEY (debit_note_details_id) REFERENCES voucher_debit_note_supplier_details (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE voucher_debit_note_due_details (
+  id bigint NOT NULL AUTO_INCREMENT,
+  tenant_id varchar(36) NOT NULL,
+  debit_note_details_id bigint NOT NULL,
+  reverse_tcs decimal(15,2) NOT NULL DEFAULT '0.00',
+  reverse_tds decimal(15,2) NOT NULL DEFAULT '0.00',
+  tds_it decimal(15,2) NOT NULL DEFAULT '0.00',
+  purchase_invoice_amount_applied decimal(15,2) NOT NULL DEFAULT '0.00',
+  gross_amount_due decimal(15,2) NOT NULL DEFAULT '0.00',
+  net_amount_due decimal(15,2) NOT NULL DEFAULT '0.00',
+  terms_and_conditions longtext,
+  created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_debit_note_due_details (debit_note_details_id),
+  CONSTRAINT fk_debit_note_due_details FOREIGN KEY (debit_note_details_id) REFERENCES voucher_debit_note_supplier_details (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE voucher_debit_note_transit_details (
+  id bigint NOT NULL AUTO_INCREMENT,
+  tenant_id varchar(36) NOT NULL,
+  debit_note_details_id bigint NOT NULL,
+  dispatch_from varchar(255) DEFAULT NULL,
+  mode_of_transport varchar(50) NOT NULL DEFAULT 'Road',
+  dispatch_date date DEFAULT NULL,
+  dispatch_time time DEFAULT NULL,
+  delivery_type varchar(100) DEFAULT NULL,
+  transporter_id_gstin varchar(100) DEFAULT NULL,
+  transporter_name varchar(255) DEFAULT NULL,
+  vehicle_no varchar(100) DEFAULT NULL,
+  lr_gr_consignment_no varchar(100) DEFAULT NULL,
+  shipping_details json DEFAULT NULL,
+  created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_debit_note_transit_details (debit_note_details_id),
+  CONSTRAINT fk_debit_note_transit_details FOREIGN KEY (debit_note_details_id) REFERENCES voucher_debit_note_supplier_details (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+

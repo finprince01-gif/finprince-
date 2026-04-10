@@ -11,6 +11,7 @@ from accounting.models import (
 )
 from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
 from masters.voucher_master_models import MasterVoucherSales as VoucherConfiguration
+from .serializers_voucher_sales import VoucherSalesPaymentDetailsSerializer
 
 
 class ReceiptVoucherTypeSerializer(serializers.ModelSerializer):
@@ -87,13 +88,16 @@ class SalesVoucherListSerializer(serializers.ModelSerializer):
     # Map grand_total to total_amount for frontend
     total_amount = serializers.FloatField(source='payment_details.payment_invoice_value', default=0.0, read_only=True)
     grand_total = serializers.FloatField(source='payment_details.payment_invoice_value', default=0.0, read_only=True)
+    taxable_value = serializers.FloatField(source='payment_details.payment_taxable_value', default=0.0, read_only=True)
+    tcs_amount = serializers.FloatField(source='payment_details.payment_tds_income_tax', default=0.0, read_only=True)
+    balance_amount = serializers.FloatField(source='payment_details.payment_balance', default=0.0, read_only=True)
     status = serializers.CharField(default='draft', read_only=True)
 
     class Meta:
         model = SalesVoucher
         fields = [
             'id', 'date', 'voucher_no', 'sales_invoice_number', 'customer_name', 
-            'voucher_type_name', 'total_amount', 'grand_total', 'status'
+            'voucher_type_name', 'total_amount', 'grand_total', 'taxable_value', 'tcs_amount', 'balance_amount', 'status'
         ]
         read_only_fields = fields
 
@@ -114,7 +118,8 @@ class SalesVoucherSerializer(serializers.ModelSerializer):
     ship_to_address = serializers.CharField(source='ship_to', read_only=True)
     
     # Missing fields mocking
-    grand_total = serializers.FloatField(default=0.0, read_only=True)
+    payment_details = VoucherSalesPaymentDetailsSerializer(read_only=True)
+    grand_total = serializers.FloatField(source='payment_details.payment_invoice_value', default=0.0, read_only=True)
     status = serializers.CharField(default='draft', read_only=True)
     current_step = serializers.IntegerField(default=1, read_only=True)
     
@@ -137,7 +142,7 @@ class SalesVoucherSerializer(serializers.ModelSerializer):
             'status', 'current_step', 
             # 'total_taxable_amount', 'total_cgst', ... # Missing
             'grand_total', 
-            # 'payment_details', 'dispatch_details', 'einvoice_details', # Missing/JSON in schema? Payment/Dispatch Details are separate tables.
+            'payment_details', 
             'items', 
             # 'documents', 
             'created_at', 'updated_at'
