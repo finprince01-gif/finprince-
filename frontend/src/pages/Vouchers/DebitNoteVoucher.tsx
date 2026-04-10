@@ -56,6 +56,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const [selectedSeriesId, setSelectedSeriesId] = useState<number | string>('');
     const [debitNoteNo, setDebitNoteNo] = useState('');
     const [vendorName, setVendorName] = useState('');
+    const [vendorId, setVendorId] = useState<number | string>('');
     const [vendors, setVendors] = useState<any[]>([]);
     const [ledgers, setLedgers] = useState<any[]>([]);
     const [vendorBranch, setVendorBranch] = useState('');
@@ -89,6 +90,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     // Foreign Currency States
     const [exchangeRate, setExchangeRate] = useState('1');
     const [foreignCurrency, setForeignCurrency] = useState('USD');
+    const [isFinancial, setIsFinancial] = useState('No');
 
     // Payment Tab States
     const [reverseTcs, setReverseTcs] = useState('');
@@ -197,8 +199,126 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 console.error("Error fetching ledgers:", error);
             }
         };
+
         fetchInitialData();
     }, []);
+
+    const handlePost = async (shouldPrint: boolean = false) => {
+        // Basic Validation
+        if (!vendorName) { showError('Please select a Vendor.'); return; }
+        if (!selectedSeriesId) { showError('Please select a Voucher Series.'); return; }
+        if (!debitNoteNo) { showError('Voucher Number is required.'); return; }
+        if (itemRows.length === 0) { showError('Please add at least one item.'); return; }
+
+        // 1. Format addresses as plain strings (backend expects text)
+        const formatAddress = (addr: any) => {
+            return [addr.line1, addr.line2, addr.line3, addr.city, addr.pincode]
+                .filter(Boolean)
+                .join(', ');
+        };
+
+        const payload = {
+            id: '', 
+            type: 'Debit Note',
+            date,
+            debit_note_series: selectedSeriesId,
+            debit_note_no: debitNoteNo,
+            vendor_name: vendorName,
+            vendor_id: vendorId,
+            gstin: gstin,
+            branch: vendorBranch,
+            supplier_invoice_nos: selectedSupplierInvoices.join(','),
+            purchase_voucher_nos: purchaseVoucherNo,
+            purchase_voucher_dates: purchaseVoucherDate,
+            outward_slip_nos: outwardSlipNos.join(','),
+            bill_to: formatAddress(billFromAddress),
+            ship_to: formatAddress(shipFromAddress),
+            nature_of_supply: natureOfSupply,
+            is_financial: isFinancial,
+            reverse_charge: reverseCharge,
+            place_of_supply: placeOfSupply,
+            invoice_in_foreign_currency: (natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export') ? 'Yes' : 'No',
+            exchange_rate: Number(exchangeRate) || 1,
+            foreign_currency: foreignCurrency,
+            narration: narration,
+            
+            // Nested Tab 2: Supply
+            supply_details: {
+                items: itemRows.map(row => ({
+                    ...row,
+                    qty: Number(row.qty) || 0,
+                    itemRate: Number(row.itemRate) || 0,
+                    taxableValue: Number(row.taxableValue) || 0,
+                    igst: Number(row.igst) || 0,
+                    cgst: Number(row.cgst) || 0,
+                    sgst: Number(row.sgst) || 0,
+                    cess: Number(row.cess) || 0,
+                    invoiceValue: Number(row.invoiceValue) || 0
+                })),
+                total_taxable_value: Number(totalTaxable) || 0,
+                total_igst: Number(totalIgst) || 0,
+                total_cgst: Number(totalCgst) || 0,
+                total_sgst: Number(totalSgst) || 0,
+                total_cess: Number(totalCess) || 0,
+                total_invoice_value: Number(totalInvoiceValue) || 0,
+            },
+
+            // Nested Tab 3: Due
+            due_details: {
+                reverse_tcs: Number(reverseTcs) || 0,
+                reverse_tds: Number(reverseTds) || 0,
+                tds_it: Number(tdsIt) || 0,
+                purchase_invoice_amount_applied: Number(purchaseInvoiceAmountApplied) || 0,
+                gross_amount_due: Number(grossAmountDue) || 0,
+                net_amount_due: Number(netAmountDue) || 0,
+                terms_and_conditions: termsAndConditions,
+            },
+
+            // Nested Tab 4: Dispatch
+            transit_details: {
+                dispatch_from: dispatchFrom,
+                mode_of_transport: modeOfTransport,
+                dispatch_date: dispatchDate || null,
+                dispatch_time: dispatchTime || null,
+                delivery_type: deliveryType,
+                transporter_id_gstin: transporterIdGstin,
+                transporter_name: transporterName,
+                vehicle_no: vehicleNo,
+                lr_gr_consignment_no: lrGrConsignmentNo,
+                shipping_details: {
+                    shipping_bill_no: shippingBillNo,
+                    shipping_bill_date: shippingBillDate,
+                    ship_port_code: shipPortCode,
+                    vessel_flight_no: vesselFlightNo,
+                    port_of_loading: portOfLoading,
+                    port_of_discharge: portOfDischarge,
+                    origin_city: originCity,
+                    origin_country: originCountry,
+                    destination_city: destinationCity,
+                    destination_country: destinationCountry,
+                    railway_receipt_no: railwayReceiptNo,
+                    railway_receipt_date: railwayReceiptDate,
+                    fnr_no: fnrNo,
+                    station_of_loading: stationOfLoading,
+                    station_of_discharge: stationOfDischarge
+                }
+            },
+            irn,
+            ack_no: ackNo,
+            ack_date: ackDate,
+            should_print: shouldPrint
+        };
+
+        console.log("Saving Debit Note Payload:", payload);
+
+        try {
+            await onAddVouchers([payload as any]);
+            showSuccess('Debit Note Voucher Saved Successfully!');
+        } catch (error) {
+            console.error('Error saving Debit Note:', error);
+            showError('Failed to save Debit Note Voucher.');
+        }
+    };
 
     const handleVendorChange = async (name: string) => {
         setVendorName(name);
@@ -210,6 +330,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
         const vendor = vendors.find(v => v.vendor_name === name);
         if (vendor) {
+            setVendorId(vendor.id);
             try {
                 const gstDetailsRes = await apiService.getVendorGSTDetails(vendor.id);
                 const gstDetails = Array.isArray(gstDetailsRes) ? gstDetailsRes : ((gstDetailsRes as any).results || []);
@@ -294,6 +415,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
     const handleBranchChange = async (branchName: string, explicitVendorName?: string, explicitVendorId?: number) => {
         const vName = explicitVendorName || vendorName;
+        const vId = explicitVendorId || vendorId;
+        if (explicitVendorId) setVendorId(explicitVendorId);
         setVendorBranch(branchName);
         const branch = branches.find(b => b.reference_name === branchName);
         if (branch) {
@@ -440,6 +563,28 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 }
             }
 
+            if (isFinancial === 'Yes') {
+                updatedRow.qty = '1';
+                // If user directly edits taxableValue, sync itemRate to it
+                if (updates.taxableValue !== undefined) {
+                    updatedRow.itemRate = (parseFloat(updates.taxableValue) || 0).toString();
+                }
+                // If user directly edits igst/cgst/sgst/cess, just recompute invoiceValue
+                if (updates.igst !== undefined || updates.cgst !== undefined ||
+                    updates.sgst !== undefined || updates.cess !== undefined) {
+                    const tv = parseFloat(updatedRow.taxableValue || '0') || 0;
+                    const ig = parseFloat(updatedRow.igst || '0') || 0;
+                    const cg = parseFloat(updatedRow.cgst || '0') || 0;
+                    const sg = parseFloat(updatedRow.sgst || '0') || 0;
+                    const cs = parseFloat(updatedRow.cess || '0') || 0;
+                    newRows[index] = {
+                        ...updatedRow,
+                        invoiceValue: (tv + ig + cg + sg + cs).toFixed(2)
+                    };
+                    return newRows;
+                }
+            }
+
             const qty = parseFloat(updatedRow.qty || '0') || 0;
             const maxQty = Number(updatedRow.maxQty || 0);
 
@@ -489,12 +634,12 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             };
             return newRows;
         });
-    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state]);
+    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state, isFinancial, availableItems]);
 
     // Recalculate all rows when exchangeRate or global factors change
     useEffect(() => {
         setItemRows(prev => prev.map((row) => {
-            const qty = parseFloat(row.qty || '0') || 0;
+            const qty = isFinancial === 'Yes' ? 1 : (parseFloat(row.qty || '0') || 0);
             const xr = parseFloat(exchangeRate) || 1;
             const fcRate = parseFloat(row.fcRate || '0') || 0;
             const gstRate = parseFloat(row.gstRate || '0') || 0;
@@ -531,7 +676,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 fcAmount: (qty * fcRate).toFixed(2)
             };
         }));
-    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state]);
+    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state, isFinancial]);
 
     // Add logic to auto-fill when sameAsBillTo changes
     useEffect(() => {
@@ -678,6 +823,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             formData.append('invoice_in_foreign_currency', (natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export') ? 'Yes' : 'No');
             formData.append('exchange_rate', exchangeRate);
             formData.append('foreign_currency', foreignCurrency);
+            formData.append('is_financial', isFinancial);
             formData.append('narration', narration);
 
             // File upload
@@ -796,6 +942,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         }]);
         setExchangeRate('1');
         setForeignCurrency('USD');
+        setIsFinancial('No');
         setReverseTcs('');
         setReverseTds('');
         setTdsIt('');
@@ -926,7 +1073,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Sales Invoice No.
+                                    Supplier Invoice No.
                                 </label>
                                 <div className="space-y-2">
                                     <SearchableDropdown
@@ -1221,9 +1368,9 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     </div>
                                 </>
                             )}
-                            <div className="md:col-span-2">
+                            <div className="md:col-span-1">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Reverse Charge Applicable</label>
-                                <div className="flex items-center space-x-6">
+                                <div className="flex items-center space-x-6 h-[40px] bg-white border border-blue-200 rounded-[4px] px-4 w-max">
                                     <label className="flex items-center cursor-pointer">
                                         <input
                                             type="radio"
@@ -1248,6 +1395,38 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     </label>
                                 </div>
                             </div>
+                            <div className="md:col-span-1">
+                                <label className="block text-sm font-bold text-indigo-600 mb-2 uppercase tracking-wide">
+                                    IT IS FINANCIAL DEBIT NOTE?
+                                </label>
+                                <div className="flex bg-white p-1 rounded-[4px] border border-blue-200 w-max h-[40px] items-center">
+                                    {['No', 'Yes'].map(opt => (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => setIsFinancial(opt)}
+                                            className={`px-8 py-1 rounded-[2px] text-[13px] font-bold transition-all ${isFinancial === opt
+                                                ? 'bg-indigo-600 text-white shadow-sm'
+                                                : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                        >
+                                            {opt.toUpperCase()}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex justify-end pt-6 border-t border-gray-100">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab(natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export' ? 'item_tax_fc' : 'item_tax')}
+                                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] shadow-sm transition-all flex items-center gap-2 font-semibold tracking-wide"
+                            >
+                                NEXT
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 )}
@@ -1274,6 +1453,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                 <thead className="bg-indigo-600 text-white">
                                     <tr>
                                         <th className="px-3 py-3 text-center w-12 border-r border-blue-400"></th>
+                                        <th className="px-3 py-3 text-sm font-semibold text-center border-r border-blue-400 w-40">Supplier Invoice No.</th>
                                         <th className="px-3 py-3 text-sm font-semibold text-center border-r border-blue-400">Description</th>
                                         <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-blue-400">Quantity</th>
                                         <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-blue-400">UQC</th>
@@ -1293,6 +1473,15 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                             checked={isSelected}
                                                             onChange={(e) => updateItemRow(index, { selected: e.target.checked })}
                                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2 border-r border-gray-200">
+                                                        <input
+                                                            type="text"
+                                                            value={row.salesInvoiceNo || ''}
+                                                            readOnly
+                                                            className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-indigo-700 font-bold"
+                                                            placeholder="Auto"
                                                         />
                                                     </td>
                                                     <td className="px-3 py-2 border-r border-gray-200">
@@ -1340,36 +1529,48 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         />
                                                     </td>
                                                 </tr>
-                                                <tr className={`border-b border-gray-200 bg-gray-50 ${!isSelected ? 'opacity-50' : ''}`}>
-                                                    <td colSpan={6} className="px-4 py-3">
-                                                        <div className="flex flex-wrap items-center gap-4">
-                                                            <div className="flex items-center gap-2">
-                                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Invoice Ref:</label>
-                                                                <input type="text" value={row.invoiceRef} onChange={(e) => updateItemRow(index, { invoiceRef: e.target.value })} className="w-32 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Ref" />
+                                                <tr className={`border-b border-gray-200 bg-gray-50/30 ${!isSelected ? 'opacity-50' : ''}`}>
+                                                    <td colSpan={2} className="px-4 py-2 border-r border-gray-200">
+                                                        <div className="flex items-center gap-3">
+                                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Purchase Ledger:</label>
+                                                            <div className="flex-1">
+                                                                <SearchableDropdown options={ledgers.map(l => l.name)} value={row.purchaseLedger} onChange={(val) => updateItemRow(index, { purchaseLedger: val })} placeholder="Select Purchase Ledger" />
                                                             </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Reason for Return:</label>
-                                                                <select value={row.reasonForReturn} onChange={(e) => updateItemRow(index, { reasonForReturn: e.target.value })} className="w-40 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white">
-                                                                    <option value="">Select Reason</option>
-                                                                    <option value="Sales Return">Sales Return</option>
-                                                                    <option value="Post Sale Discount">Post Sale Discount</option>
-                                                                    <option value="Deficiency in Service">Deficiency in Service</option>
-                                                                    <option value="Correction in Invoice">Correction in Invoice</option>
-                                                                    <option value="Change in POS">Change in POS</option>
-                                                                    <option value="Finalization of Provisional Assessment">Finalization of Provisional Assessment</option>
-                                                                    <option value="Others">Others</option>
-                                                                </select>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Purchase Ledger:</label>
-                                                                <div className="w-48">
-                                                                    <SearchableDropdown options={ledgers.map(l => l.name)} value={row.purchaseLedger} onChange={(val) => updateItemRow(index, { purchaseLedger: val })} placeholder="Select purchase ledger" />
+                                                        </div>
+                                                    </td>
+                                                    <td colSpan={5} className="px-4 py-2">
+                                                        <div className="flex items-center gap-3">
+                                                            {!isFinancial || isFinancial === 'No' ? (
+                                                                <>
+                                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Invoice Ref:</label>
+                                                                    <input type="text" value={row.invoiceRef} onChange={(e) => updateItemRow(index, { invoiceRef: e.target.value })} className="w-28 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors" placeholder="Ref" />
+                                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Reason:</label>
+                                                                    <select value={row.reasonForReturn} onChange={(e) => updateItemRow(index, { reasonForReturn: e.target.value })} className="border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors">
+                                                                        <option value="">Select Reason</option>
+                                                                        <option value="Sales Return">Sales Return</option>
+                                                                        <option value="Post Sale Discount">Post Sale Discount</option>
+                                                                        <option value="Deficiency in Service">Deficiency in Service</option>
+                                                                        <option value="Correction in Invoice">Correction in Invoice</option>
+                                                                        <option value="Change in POS">Change in POS</option>
+                                                                        <option value="Finalization of Provisional Assessment">Finalization of Prov. Assessment</option>
+                                                                        <option value="Others">Others</option>
+                                                                    </select>
+                                                                </>
+                                                            ) : null}
+                                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                                                            <input type="text" value={row.ledgerNarration} onChange={(e) => updateItemRow(index, { ledgerNarration: e.target.value })} className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors" placeholder="Enter ledger narration" />
+                                                            {isFinancial === 'Yes' && (
+                                                                <div className="flex items-center gap-2 ml-4">
+                                                                    <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={row.taxableValue || 0}
+                                                                        onChange={(e) => updateItemRow(index, { taxableValue: e.target.value })}
+                                                                        placeholder="0.00"
+                                                                        className="w-24 border-b border-indigo-200 focus:border-indigo-500 bg-transparent py-1 text-sm font-bold text-indigo-700 outline-none transition-colors text-right"
+                                                                    />
                                                                 </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Ledger Narration:</label>
-                                                                <input type="text" value={row.ledgerNarration} onChange={(e) => updateItemRow(index, { ledgerNarration: e.target.value })} className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Enter ledger narration" />
-                                                            </div>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1416,6 +1617,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                 <thead className="bg-[#4F46E5] text-white uppercase font-semibold">
                                     <tr>
                                         <th className="px-3 py-2 text-center border-r border-indigo-400 w-16">S. No.</th>
+                                        <th className="px-3 py-2 text-center border-r border-indigo-400 w-40">Supplier Invoice No.</th>
                                         <th className="px-3 py-2 text-center border-r border-indigo-400 w-32">Item Code</th>
                                         <th className="px-3 py-2 text-center border-r border-indigo-400 w-48">Item Name</th>
                                         <th className="px-3 py-2 text-center border-r border-indigo-400 w-24">HSN/SAC</th>
@@ -1452,80 +1654,128 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         <span className="ml-2">{index + 1}</span>
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <SearchableDropdown options={availableItems.map(it => it.itemCode).filter(Boolean)} value={row.itemCode} onChange={(val) => updateItemRow(index, { itemCode: val })} placeholder="Item code" />
+                                                        <input
+                                                            type="text"
+                                                            value={row.salesInvoiceNo || ''}
+                                                            readOnly
+                                                            className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-indigo-700 font-bold"
+                                                            placeholder="Auto"
+                                                        />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <SearchableDropdown options={availableItems.map(it => it.itemName).filter(Boolean)} value={row.itemName} onChange={(val) => updateItemRow(index, { itemName: val })} placeholder="Item name" />
+                                                        <SearchableDropdown disabled={isFinancial === 'Yes'} options={availableItems.map(it => it.itemCode).filter(Boolean)} value={row.itemCode} onChange={(val) => updateItemRow(index, { itemCode: val })} placeholder="Item code" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input type="text" value={row.hsnSac} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="HSN" />
+                                                        <SearchableDropdown disabled={isFinancial === 'Yes'} options={availableItems.map(it => it.itemName).filter(Boolean)} value={row.itemName} onChange={(val) => updateItemRow(index, { itemName: val })} placeholder="Item name" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input type="number" value={row.qty} onChange={(e) => updateItemRow(index, { qty: e.target.value })} className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent" placeholder="0" />
+                                                        <input disabled={isFinancial === 'Yes'} type="text" value={row.hsnSac} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="HSN" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input type="text" value={row.uom} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="UOM" />
+                                                        <input disabled={isFinancial === 'Yes'} type="number" value={row.qty} onChange={(e) => updateItemRow(index, { qty: e.target.value })} className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} placeholder="0" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input type="text" value={row.alternateUnit} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="Alt Unit" />
+                                                        <input disabled={isFinancial === 'Yes'} type="text" value={row.uom} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="UOM" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input type="number" value={row.itemRate} onChange={(e) => updateItemRow(index, { itemRate: e.target.value })} className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right bg-transparent" placeholder="0.00" />
+                                                        <input disabled={isFinancial === 'Yes'} type="text" value={row.alternateUnit} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="Alt Unit" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input type="text" value={row.taxableValue} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                        <input disabled={isFinancial === 'Yes'} type="number" value={row.itemRate} onChange={(e) => updateItemRow(index, { itemRate: e.target.value })} className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} placeholder="0.00" />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        {isFinancial === 'Yes' ? (
+                                                            <input
+                                                                type="number"
+                                                                value={row.taxableValue}
+                                                                onChange={(e) => updateItemRow(index, { taxableValue: e.target.value })}
+                                                                className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right"
+                                                                placeholder="0.00"
+                                                                step="0.01"
+                                                            />
+                                                        ) : (
+                                                            <input type="text" value={row.taxableValue} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                        )}
                                                     </td>
                                                     {placeOfSupply === companyDetails.state ? (
                                                         <>
                                                             <td className="px-2 py-2 border-r border-gray-200">
-                                                                <input type="text" value={row.cgst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                                {isFinancial === 'Yes' ? (
+                                                                    <input type="number" value={row.cgst} onChange={(e) => updateItemRow(index, { cgst: e.target.value })} className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
+                                                                ) : (
+                                                                    <input type="text" value={row.cgst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                                )}
                                                             </td>
                                                             <td className="px-2 py-2 border-r border-gray-200">
-                                                                <input type="text" value={row.sgst} readOnly className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                                {isFinancial === 'Yes' ? (
+                                                                    <input type="number" value={row.sgst} onChange={(e) => updateItemRow(index, { sgst: e.target.value })} className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 focus:ring-1 focus:ring-green-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
+                                                                ) : (
+                                                                    <input type="text" value={row.sgst} readOnly className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                                )}
                                                             </td>
                                                         </>
                                                     ) : (
                                                         <td className="px-2 py-2 border-r border-gray-200">
-                                                            <input type="text" value={row.igst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                            {isFinancial === 'Yes' ? (
+                                                                <input type="number" value={row.igst} onChange={(e) => updateItemRow(index, { igst: e.target.value })} className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
+                                                            ) : (
+                                                                <input type="text" value={row.igst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                            )}
                                                         </td>
                                                     )}
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input type="text" value={row.cess} readOnly className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                        {isFinancial === 'Yes' ? (
+                                                            <input type="number" value={row.cess} onChange={(e) => updateItemRow(index, { cess: e.target.value })} className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 focus:ring-1 focus:ring-purple-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
+                                                        ) : (
+                                                            <input type="text" value={row.cess} readOnly className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
+                                                        )}
                                                     </td>
                                                     <td className="px-2 py-2 bg-indigo-50/30">
                                                         <input type="text" value={row.invoiceValue} readOnly className="w-full px-2 py-1.5 bg-transparent border-0 rounded text-sm font-bold text-right text-gray-900" placeholder="0.00" />
                                                     </td>
                                                 </tr>
-                                                <tr className={`border-b border-gray-200 bg-gray-50/50 ${!isSelected ? 'opacity-50' : ''}`}>
-                                                    <td colSpan={13} className="px-4 py-2">
-                                                        <div className="flex flex-wrap items-center gap-4">
-                                                            <div className="flex items-center gap-2">
-                                                                <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Invoice Ref:</label>
-                                                                <input type="text" value={row.invoiceRef} onChange={(e) => updateItemRow(index, { invoiceRef: e.target.value })} className="w-32 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Ref" />
+                                                <tr className={`border-b border-gray-200 bg-gray-50/30 ${!isSelected ? 'opacity-50' : ''}`}>
+                                                    <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
+                                                        <div className="flex items-center gap-3">
+                                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Purchase Ledger:</label>
+                                                            <div className="flex-1">
+                                                                <SearchableDropdown options={ledgers.map(l => l.name)} value={row.purchaseLedger} onChange={(val) => updateItemRow(index, { purchaseLedger: val })} placeholder="Select Purchase Ledger" />
                                                             </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Reason for Return:</label>
-                                                                <select value={row.reasonForReturn} onChange={(e) => updateItemRow(index, { reasonForReturn: e.target.value })} className="w-40 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white">
-                                                                    <option value="">Select Reason</option>
-                                                                    <option value="Sales Return">Sales Return</option>
-                                                                    <option value="Post Sale Discount">Post Sale Discount</option>
-                                                                    <option value="Deficiency in Service">Deficiency in Service</option>
-                                                                    <option value="Correction in Invoice">Correction in Invoice</option>
-                                                                    <option value="Change in POS">Change in POS</option>
-                                                                    <option value="Finalization of Provisional Assessment">Finalization of Provisional Assessment</option>
-                                                                    <option value="Others">Others</option>
-                                                                </select>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Purchase Ledger:</label>
-                                                                <div className="w-48">
-                                                                    <SearchableDropdown options={ledgers.map(l => l.name)} value={row.purchaseLedger} onChange={(val) => updateItemRow(index, { purchaseLedger: val })} placeholder="Select ledger" />
+                                                        </div>
+                                                    </td>
+                                                    <td colSpan={placeOfSupply === companyDetails.state ? 10 : 9} className="px-4 py-2">
+                                                        <div className="flex items-center gap-3">
+                                                            {isFinancial !== 'Yes' && (
+                                                                <>
+                                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Invoice Ref:</label>
+                                                                    <input type="text" value={row.invoiceRef} onChange={(e) => updateItemRow(index, { invoiceRef: e.target.value })} className="w-28 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors" placeholder="Ref" />
+                                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Reason:</label>
+                                                                    <select value={row.reasonForReturn} onChange={(e) => updateItemRow(index, { reasonForReturn: e.target.value })} className="border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors">
+                                                                        <option value="">Select Reason</option>
+                                                                        <option value="Sales Return">Sales Return</option>
+                                                                        <option value="Post Sale Discount">Post Sale Discount</option>
+                                                                        <option value="Deficiency in Service">Deficiency in Service</option>
+                                                                        <option value="Correction in Invoice">Correction in Invoice</option>
+                                                                        <option value="Change in POS">Change in POS</option>
+                                                                        <option value="Finalization of Provisional Assessment">Finalization of Prov. Assessment</option>
+                                                                        <option value="Others">Others</option>
+                                                                    </select>
+                                                                </>
+                                                            )}
+                                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                                                            <input type="text" value={row.ledgerNarration} onChange={(e) => updateItemRow(index, { ledgerNarration: e.target.value })} className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors" placeholder="Enter ledger narration" />
+                                                            {isFinancial === 'Yes' && (
+                                                                <div className="flex items-center gap-2 ml-4">
+                                                                    <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={row.taxableValue || 0}
+                                                                        onChange={(e) => updateItemRow(index, { taxableValue: e.target.value })}
+                                                                        placeholder="0.00"
+                                                                        className="w-24 border-b border-indigo-200 focus:border-indigo-500 bg-transparent py-1 text-sm font-bold text-indigo-700 outline-none transition-colors text-right"
+                                                                    />
                                                                 </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                                                                <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Ledger Narration:</label>
-                                                                <input type="text" value={row.ledgerNarration} onChange={(e) => updateItemRow(index, { ledgerNarration: e.target.value })} className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Enter ledger narration" />
-                                                            </div>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1714,6 +1964,18 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                        <div className="flex justify-end pt-6 border-t border-gray-200 mt-6">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('dispatch')}
+                                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] shadow-sm transition-all flex items-center gap-2 font-semibold tracking-wide"
+                            >
+                                NEXT
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 )}
@@ -1931,6 +2193,18 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                 </div>
                             </div>
                         )}
+                        <div className="flex justify-end pt-6 border-t border-gray-200 mt-6">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('einvoice')}
+                                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] shadow-sm transition-all flex items-center gap-2 font-semibold tracking-wide"
+                            >
+                                NEXT
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -2190,6 +2464,36 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                        <div className="flex justify-end gap-4 pt-8 border-t border-gray-200 mt-8">
+                            <button
+                                type="button"
+                                onClick={() => handlePost(false)}
+                                className="px-10 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-all font-bold shadow-lg shadow-indigo-100 hover:-translate-y-0.5"
+                            >
+                                POST & CLOSE
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handlePost(true)}
+                                className="px-10 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[4px] transition-all font-bold shadow-lg shadow-emerald-100 hover:-translate-y-0.5 flex items-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                POST & PRINT/EMAIL
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
+                                        window.location.reload();
+                                    }
+                                }}
+                                className="px-10 py-3 bg-white text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-all font-bold"
+                            >
+                                CANCEL
+                            </button>
                         </div>
                     </div>
                 )}

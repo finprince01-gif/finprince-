@@ -571,7 +571,8 @@ class ApiService {
         // Group vouchers by type to handle specialized endpoints
         const contraVouchers = data.filter(v => v.type === 'Contra');
         const journalVouchers = data.filter(v => v.type === 'Journal');
-        const otherVouchers = data.filter(v => v.type !== 'Contra' && v.type !== 'Journal');
+        const debitNoteVouchers = data.filter(v => v.type === 'Debit Note');
+        const otherVouchers = data.filter(v => !['Contra', 'Journal', 'Debit Note'].includes(v.type));
 
         const promises = [];
 
@@ -583,6 +584,11 @@ class ApiService {
         // Handle Journal Vouchers
         for (const voucher of journalVouchers) {
             promises.push(httpClient.post('/api/vouchers/journal/', voucher));
+        }
+
+        // Handle Debit Note Vouchers
+        for (const voucher of debitNoteVouchers) {
+            promises.push(this.saveDebitNote(voucher));
         }
 
         // Handle others via bulk endpoint
