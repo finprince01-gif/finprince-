@@ -99,6 +99,13 @@ class VoucherDebitNoteDueDetails(BaseModel):
     reverse_tcs = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     reverse_tds = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     tds_it = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Reverse Tax Toggles
+    reverse_gst_tcs = models.CharField(max_length=10, default='No')
+    reverse_gst_tds = models.CharField(max_length=10, default='No')
+    reverse_income_tax_tcs = models.CharField(max_length=10, default='No')
+    reverse_income_tax_tds = models.CharField(max_length=10, default='No')
+
     purchase_invoice_amount_applied = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     gross_amount_due = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     net_amount_due = models.DecimalField(max_digits=15, decimal_places=2, default=0)

@@ -98,6 +98,15 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     const [tdsIt, setTdsIt] = useState('');
     const [purchaseInvoiceAmountApplied, setPurchaseInvoiceAmountApplied] = useState('');
     const [termsAndConditions, setTermsAndConditions] = useState('');
+    const [isTermsEditable, setIsTermsEditable] = useState(false);
+
+    // Reverse Tax Toggles (Yes/No)
+    const [reverseGstTcs, setReverseGstTcs] = useState<'Yes' | 'No'>('No');
+    const [reverseGstTds, setReverseGstTds] = useState<'Yes' | 'No'>('No');
+    const [reverseIncomeTaxTcs, setReverseIncomeTaxTcs] = useState<'Yes' | 'No'>('No');
+    const [reverseIncomeTaxTds, setReverseIncomeTaxTds] = useState<'Yes' | 'No'>('No');
+
+
 
     const totalTaxable = itemRows.reduce((sum, item) => sum + (parseFloat(item.taxableValue) || 0), 0);
     const totalIgst = itemRows.reduce((sum, item) => sum + (parseFloat(item.igst) || 0), 0);
@@ -268,6 +277,10 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 reverse_tcs: Number(reverseTcs) || 0,
                 reverse_tds: Number(reverseTds) || 0,
                 tds_it: Number(tdsIt) || 0,
+                reverse_gst_tcs: reverseGstTcs,
+                reverse_gst_tds: reverseGstTds,
+                reverse_income_tax_tcs: reverseIncomeTaxTcs,
+                reverse_income_tax_tds: reverseIncomeTaxTds,
                 purchase_invoice_amount_applied: Number(purchaseInvoiceAmountApplied) || 0,
                 gross_amount_due: Number(grossAmountDue) || 0,
                 net_amount_due: Number(netAmountDue) || 0,
@@ -331,6 +344,28 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         const vendor = vendors.find(v => v.vendor_name === name);
         if (vendor) {
             setVendorId(vendor.id);
+            // Auto-fill terms and conditions from vendor master (Detailed Formatting)
+            const parts: string[] = [];
+            if (vendor.credit_period) parts.push(`Credit Period: ${vendor.credit_period}`);
+            if (vendor.credit_terms) parts.push(`Credit Terms: ${vendor.credit_terms}`);
+            if (vendor.penalty_terms) parts.push(`Penalty Terms: ${vendor.penalty_terms}`);
+            if (vendor.delivery_terms) parts.push(`Delivery Terms: ${vendor.delivery_terms}`);
+            
+            const warranty = vendor.warranty_details || vendor.warranty_guarantee_details;
+            if (warranty) parts.push(`Warranty / Guarantee: ${warranty}`);
+            if (vendor.force_majeure) parts.push(`Force Majeure: ${vendor.force_majeure}`);
+            
+            const dispute = vendor.dispute_terms || vendor.dispute_redressal_terms;
+            if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
+
+            if (parts.length > 0) {
+                setTermsAndConditions(parts.join('\n\n'));
+            } else if (vendor.terms_and_conditions) {
+                setTermsAndConditions(vendor.terms_and_conditions);
+            } else {
+                setTermsAndConditions('');
+            }
+
             try {
                 const gstDetailsRes = await apiService.getVendorGSTDetails(vendor.id);
                 const gstDetails = Array.isArray(gstDetailsRes) ? gstDetailsRes : ((gstDetailsRes as any).results || []);
@@ -563,15 +598,18 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 }
             }
 
-            if (isFinancial === 'Yes') {
-                updatedRow.qty = '1';
-                // If user directly edits taxableValue, sync itemRate to it
-                if (updates.taxableValue !== undefined) {
+            const isManualTaxMode = isFinancial === 'Yes' || reverseGstTcs === 'Yes';
+
+            if (isManualTaxMode) {
+                if (isFinancial === 'Yes') updatedRow.qty = '1';
+                
+                // If user directly edits taxableValue, sync itemRate to it if qty is 1
+                if (updates.taxableValue !== undefined && updatedRow.qty === '1') {
                     updatedRow.itemRate = (parseFloat(updates.taxableValue) || 0).toString();
                 }
-                // If user directly edits igst/cgst/sgst/cess, just recompute invoiceValue
+                // If user directly edits any tax field OR taxableValue, just recompute invoiceValue
                 if (updates.igst !== undefined || updates.cgst !== undefined ||
-                    updates.sgst !== undefined || updates.cess !== undefined) {
+                    updates.sgst !== undefined || updates.cess !== undefined || updates.taxableValue !== undefined) {
                     const tv = parseFloat(updatedRow.taxableValue || '0') || 0;
                     const ig = parseFloat(updatedRow.igst || '0') || 0;
                     const cg = parseFloat(updatedRow.cgst || '0') || 0;
@@ -579,7 +617,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                     const cs = parseFloat(updatedRow.cess || '0') || 0;
                     newRows[index] = {
                         ...updatedRow,
-                        invoiceValue: (tv + ig + cg + sg + cs).toFixed(2)
+                        invoiceValue: (tv + ig + cg + sg + cs).toFixed(2),
+                        fcAmount: (parseFloat(updatedRow.qty || '0') * (parseFloat(updatedRow.fcRate || '0') || 0)).toFixed(2)
                     };
                     return newRows;
                 }
@@ -634,12 +673,28 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             };
             return newRows;
         });
-    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state, isFinancial, availableItems]);
+    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state, isFinancial, reverseGstTcs, availableItems]);
 
     // Recalculate all rows when exchangeRate or global factors change
     useEffect(() => {
         setItemRows(prev => prev.map((row) => {
-            const qty = isFinancial === 'Yes' ? 1 : (parseFloat(row.qty || '0') || 0);
+            const isManualTaxMode = isFinancial === 'Yes' || reverseGstTcs === 'Yes';
+            
+            // If in manual mode, don't overwrite user's manual edits for taxes
+            if (isManualTaxMode) {
+                const tv = parseFloat(row.taxableValue || '0') || 0;
+                const ig = parseFloat(row.igst || '0') || 0;
+                const cg = parseFloat(row.cgst || '0') || 0;
+                const sg = parseFloat(row.sgst || '0') || 0;
+                const cs = parseFloat(row.cess || '0') || 0;
+                return {
+                    ...row,
+                    qty: isFinancial === 'Yes' ? '1' : row.qty,
+                    invoiceValue: (tv + ig + cg + sg + cs).toFixed(2)
+                };
+            }
+
+            const qty = parseFloat(row.qty || '0') || 0;
             const xr = parseFloat(exchangeRate) || 1;
             const fcRate = parseFloat(row.fcRate || '0') || 0;
             const gstRate = parseFloat(row.gstRate || '0') || 0;
@@ -676,7 +731,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 fcAmount: (qty * fcRate).toFixed(2)
             };
         }));
-    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state, isFinancial]);
+    }, [exchangeRate, natureOfSupply, placeOfSupply, companyDetails.state, isFinancial, reverseGstTcs]);
 
     // Add logic to auto-fill when sameAsBillTo changes
     useEffect(() => {
@@ -948,6 +1003,10 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         setTdsIt('');
         setPurchaseInvoiceAmountApplied('');
         setTermsAndConditions('');
+        setReverseGstTcs('No');
+        setReverseGstTds('No');
+        setReverseIncomeTaxTcs('No');
+        setReverseIncomeTaxTds('No');
         setDispatchFrom('');
         setModeOfTransport('Road');
         setDispatchTime('');
@@ -1415,6 +1474,62 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     ))}
                                 </div>
                             </div>
+                            <div className="md:col-span-1">
+                                <label className="block text-sm font-bold text-indigo-600 mb-2 uppercase tracking-wide">
+                                    Reverse GST (TCS/TDS)
+                                </label>
+                                <div className="flex bg-white p-1 rounded-[4px] border border-blue-200 w-max h-[40px] items-center">
+                                    {['No', 'Yes'].map(opt => (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => {
+                                                if (opt === 'Yes') {
+                                                    setReverseGstTcs('Yes');
+                                                    setReverseGstTds('Yes');
+                                                } else {
+                                                    setReverseGstTcs('No');
+                                                    setReverseGstTds('No');
+                                                }
+                                            }}
+                                            className={`px-8 py-1 rounded-[2px] text-[13px] font-bold transition-all ${(reverseGstTcs === opt || reverseGstTds === opt)
+                                                ? 'bg-indigo-600 text-white shadow-sm'
+                                                : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                        >
+                                            {opt.toUpperCase()}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="md:col-span-1">
+                                <label className="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-wide">
+                                    Reverse IT (TCS/TDS)
+                                </label>
+                                <div className="flex bg-white p-1 rounded-[4px] border border-blue-200 w-max h-[40px] items-center">
+                                    {['No', 'Yes'].map(opt => (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => {
+                                                if (opt === 'Yes') {
+                                                    setReverseIncomeTaxTcs('Yes');
+                                                    setReverseIncomeTaxTds('Yes');
+                                                } else {
+                                                    setReverseIncomeTaxTcs('No');
+                                                    setReverseIncomeTaxTds('No');
+                                                }
+                                            }}
+                                            className={`px-8 py-1 rounded-[2px] text-[13px] font-bold transition-all ${(reverseIncomeTaxTcs === opt || reverseIncomeTaxTds === opt)
+                                                ? 'bg-indigo-600 text-white shadow-sm'
+                                                : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                        >
+                                            {opt.toUpperCase()}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                         <div className="flex justify-end pt-6 border-t border-gray-100">
                             <button
@@ -1684,7 +1799,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         <input disabled={isFinancial === 'Yes'} type="number" value={row.itemRate} onChange={(e) => updateItemRow(index, { itemRate: e.target.value })} className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} placeholder="0.00" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        {isFinancial === 'Yes' ? (
+                                                        {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
                                                             <input
                                                                 type="number"
                                                                 value={row.taxableValue}
@@ -1700,14 +1815,14 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     {placeOfSupply === companyDetails.state ? (
                                                         <>
                                                             <td className="px-2 py-2 border-r border-gray-200">
-                                                                {isFinancial === 'Yes' ? (
+                                                                {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
                                                                     <input type="number" value={row.cgst} onChange={(e) => updateItemRow(index, { cgst: e.target.value })} className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
                                                                 ) : (
                                                                     <input type="text" value={row.cgst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
                                                                 )}
                                                             </td>
                                                             <td className="px-2 py-2 border-r border-gray-200">
-                                                                {isFinancial === 'Yes' ? (
+                                                                {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
                                                                     <input type="number" value={row.sgst} onChange={(e) => updateItemRow(index, { sgst: e.target.value })} className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 focus:ring-1 focus:ring-green-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
                                                                 ) : (
                                                                     <input type="text" value={row.sgst} readOnly className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
@@ -1716,7 +1831,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         </>
                                                     ) : (
                                                         <td className="px-2 py-2 border-r border-gray-200">
-                                                            {isFinancial === 'Yes' ? (
+                                                            {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
                                                                 <input type="number" value={row.igst} onChange={(e) => updateItemRow(index, { igst: e.target.value })} className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
                                                             ) : (
                                                                 <input type="text" value={row.igst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
@@ -1724,7 +1839,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         </td>
                                                     )}
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        {isFinancial === 'Yes' ? (
+                                                        {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
                                                             <input type="number" value={row.cess} onChange={(e) => updateItemRow(index, { cess: e.target.value })} className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 focus:ring-1 focus:ring-purple-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
                                                         ) : (
                                                             <input type="text" value={row.cess} readOnly className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
@@ -1939,17 +2054,18 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                         <span className="text-sm font-medium text-gray-700">Terms & Conditions</span>
                                         <button
                                             type="button"
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-[4px] transition-colors shadow-sm"
+                                            onClick={() => setIsTermsEditable(!isTermsEditable)}
+                                            className={`px-4 py-2 text-white text-sm font-medium rounded-[4px] transition-colors shadow-sm ${isTermsEditable ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                                         >
-                                            Edit Masters
+                                            {isTermsEditable ? 'Lock Terms' : 'Edit Masters'}
                                         </button>
                                     </div>
                                     <div>
                                         <textarea
                                             value={termsAndConditions}
                                             onChange={(e) => setTermsAndConditions(e.target.value)}
-                                            className="w-full px-4 py-3 border border-gray-200 rounded-[4px] text-gray-700 resize-none bg-white focus:ring-indigo-500 focus:border-indigo-500"
-                                            rows={6}
+                                            readOnly={!isTermsEditable}
+                                            className={`w-full px-4 py-3 border rounded-[4px] text-xs h-32 resize-none placeholder:text-gray-300 focus:ring-1 focus:ring-indigo-500 transition-all font-medium ${!isTermsEditable ? 'bg-gray-100 border-gray-200 cursor-not-allowed text-gray-600' : 'bg-white border-indigo-300'}`}
                                             placeholder="Enter terms & conditions..."
                                         />
                                     </div>
