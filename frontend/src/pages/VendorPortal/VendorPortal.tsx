@@ -12,6 +12,7 @@ import { handleApiError } from '../../utils/errorHandler';
 import { BILLING_CURRENCIES } from '../../constants/customerPortalConstants';
 import { formatDate } from '../../utils/formatting';
 import VendorViewModal from '../../components/VendorViewModal';
+import NetoffProcessModal from '../../components/NetoffProcessModal';
 
 
 type VendorTab = 'Master' | 'Transaction';
@@ -370,6 +371,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
     // View Modal State
     const [viewVendorId, setViewVendorId] = useState<number | null>(null);
+    const [showNetoffModal, setShowNetoffModal] = useState(false);
+
 
     // Fetch ledger data for a selected vendor, enriching Payment/Receipt entries with voucher numbers
     const fetchVendorLedger = async (vendorId: number | string, vendorName: string) => {
@@ -5173,6 +5176,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                     <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
                                                         <h3 className="section-title">{selectedProcurementVendor.name}</h3>
                                                         <div className="flex gap-2">
+                                                            {(!selectedProcurementVendor?.billing_currency || selectedProcurementVendor?.billing_currency === 'INR' || selectedProcurementVendor?.currency === 'INR') && (
+                                                                <button
+                                                                    onClick={() => setShowNetoffModal(true)}
+                                                                    className="px-4 py-2 bg-indigo-600 text-white border border-transparent rounded-[4px] text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
+                                                                >
+                                                                    NET-OFF
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 onClick={() => setProcurementViewMode('journal')}
                                                                 className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
@@ -7312,6 +7323,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 <VendorViewModal
                     vendorId={viewVendorId}
                     onClose={() => setViewVendorId(null)}
+                />
+            )}
+
+            {showNetoffModal && selectedProcurementVendor && (
+                <NetoffProcessModal
+                    isOpen={showNetoffModal}
+                    onClose={() => setShowNetoffModal(false)}
+                    vendorName={selectedProcurementVendor?.name || ''}
+                    runningBalance={totalCredit - totalDebit}
                 />
             )}
         </div >

@@ -38,6 +38,10 @@ class VoucherDebitNoteDueDetailsSerializer(serializers.ModelSerializer):
             "reverse_tcs",
             "reverse_tds",
             "tds_it",
+            "reverse_gst_tcs",
+            "reverse_gst_tds",
+            "reverse_income_tax_tcs",
+            "reverse_income_tax_tds",
             "purchase_invoice_amount_applied",
             "gross_amount_due",
             "net_amount_due",
@@ -238,8 +242,8 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             due_dict = due_data_raw
         if due_instance:
             due_dict.update({
-                "reverseTcs": str(due_instance.reverse_tcs or 0) != "0",
-                "reverseTds": str(due_instance.reverse_tds or 0) != "0",
+                "reverseTcs": due_instance.reverse_gst_tcs,
+                "reverseTds": due_instance.reverse_gst_tds,
             })
 
         try:
@@ -354,8 +358,8 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             due_dict = due_data_raw or {}
             if due_instance:
                 due_dict.update({
-                    "reverseTcs": str(due_instance.reverse_tcs or 0) != "0",
-                    "reverseTds": str(due_instance.reverse_tds or 0) != "0",
+                    "reverseTcs": due_instance.reverse_gst_tcs,
+                    "reverseTds": due_instance.reverse_gst_tds,
                 })
 
             try:
