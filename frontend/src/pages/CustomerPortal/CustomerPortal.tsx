@@ -626,6 +626,26 @@ const CustomerContent: React.FC = () => {
             showError('Please enter customer name');
             return false;
         }
+        if (!customerFormData.pan_number || !customerFormData.pan_number.trim()) {
+            showError('Please enter PAN number');
+            setActiveTab('Basic Details');
+            return false;
+        }
+        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+        if (!panRegex.test(customerFormData.pan_number.toUpperCase())) {
+            showError('Invalid PAN format. Correct format: ABCDE1234F');
+            setActiveTab('Basic Details');
+            return false;
+        }
+
+        if (customerFormData.email_address && customerFormData.email_address.trim()) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(customerFormData.email_address)) {
+                showError('Invalid email format');
+                setActiveTab('Basic Details');
+                return false;
+            }
+        }
 
         try {
             const payload = {
@@ -916,6 +936,27 @@ const CustomerContent: React.FC = () => {
     };
 
     const handleNextToGst = () => {
+        if (!customerFormData.customer_name.trim()) {
+            showError('Please enter customer name');
+            return;
+        }
+        if (!customerFormData.pan_number || !customerFormData.pan_number.trim()) {
+            showError('Please enter PAN number');
+            return;
+        }
+        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+        if (!panRegex.test(customerFormData.pan_number.toUpperCase())) {
+            showError('Invalid PAN format. Correct format: ABCDE1234F');
+            return;
+        }
+
+        if (customerFormData.email_address && customerFormData.email_address.trim()) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(customerFormData.email_address)) {
+                showError('Invalid email format');
+                return;
+            }
+        }
         // Reset GST related states to ensure "Image 2" clean state
         setSelectedGSTINs([]);
         setGstInput('');
@@ -1312,11 +1353,13 @@ const CustomerContent: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">PAN Number</label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">PAN Number <span className="text-red-500">*</span></label>
                                 <input
                                     type="text"
                                     value={customerFormData.pan_number}
-                                    onChange={(e) => handleCustomerFieldChange('pan_number', e.target.value)}
+                                    onChange={(e) => handleCustomerFieldChange('pan_number', e.target.value.toUpperCase())}
+                                    placeholder="ABCDE1234F"
+                                    maxLength={10}
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
@@ -1337,6 +1380,7 @@ const CustomerContent: React.FC = () => {
                                     type="email"
                                     value={customerFormData.email_address}
                                     onChange={(e) => handleCustomerFieldChange('email_address', e.target.value)}
+                                    placeholder="e.g. customer@example.com"
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
@@ -1498,7 +1542,30 @@ const CustomerContent: React.FC = () => {
                             <div className="flex gap-4">
                                 <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
-                                    onClick={() => setActiveTab('GST Details')}
+                                    onClick={() => {
+                                        if (!customerFormData.customer_name.trim()) {
+                                            showError('Please enter customer name');
+                                            return;
+                                        }
+                                        if (!customerFormData.pan_number || !customerFormData.pan_number.trim()) {
+                                            showError('Please enter PAN number');
+                                            return;
+                                        }
+                                        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+                                        if (!panRegex.test(customerFormData.pan_number.toUpperCase())) {
+                                            showError('Invalid PAN format. Expected: ABCDE1234F');
+                                            return;
+                                        }
+
+                                        if (customerFormData.email_address && customerFormData.email_address.trim()) {
+                                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                            if (!emailRegex.test(customerFormData.email_address)) {
+                                                showError('Invalid email format');
+                                                return;
+                                            }
+                                        }
+                                        setActiveTab('GST Details');
+                                    }}
                                     className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
@@ -2701,7 +2768,7 @@ const CustomerContent: React.FC = () => {
                                                             onChange={(e) => {
                                                                 const val = e.target.value;
                                                                 handleBankChange(account.id, 'ifscCode', val);
-                                                                
+
                                                                 // Clear fields if input is emptied
                                                                 if (!val.trim()) {
                                                                     handleBankChange(account.id, 'bankName', '');
@@ -2782,7 +2849,10 @@ const CustomerContent: React.FC = () => {
                                                         {openBranchDropdown === account.id && (
                                                             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                                                                 <div className="p-2 space-y-1">
-                                                                    {['Bangalore HO', 'City Branch', 'Mumbai Branch'].map((branch) => (
+                                                                    {(isUnregistered
+                                                                        ? unregisteredBranches.map(b => b.referenceName)
+                                                                        : registeredBranches.map(b => b.defaultRef)
+                                                                    ).filter(Boolean).map((branch) => (
                                                                         <label key={branch} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
                                                                             <input
                                                                                 type="checkbox"
@@ -5599,8 +5669,8 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 <tbody className="divide-y divide-gray-100">
                                                     {/* Sales & Payments (Debits) */}
                                                     {[
-                                                        ...salesVouchers.filter(v => Object.keys(salesNetOffAmounts).length > 0 ? (salesNetOffAmounts[v.id] || 0) > 0 : selectedSales.includes(v.id)).map(v => ({...v, type: 'Sales', no: v.salesVchNo})),
-                                                        ...paymentVouchers.filter(v => (paymentsNetOffAmounts[v.id] || 0) > 0).map(v => ({...v, type: 'Payment', no: v.voucherNo}))
+                                                        ...salesVouchers.filter(v => Object.keys(salesNetOffAmounts).length > 0 ? (salesNetOffAmounts[v.id] || 0) > 0 : selectedSales.includes(v.id)).map(v => ({ ...v, type: 'Sales', no: v.salesVchNo })),
+                                                        ...paymentVouchers.filter(v => (paymentsNetOffAmounts[v.id] || 0) > 0).map(v => ({ ...v, type: 'Payment', no: v.voucherNo }))
                                                     ].map((voucher) => (
                                                         <tr key={`pnd-${voucher.type}-${voucher.id}`} className="hover:bg-gray-50">
                                                             <td className="px-4 py-3">
@@ -5615,9 +5685,8 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                                 ₹{voucher.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                             </td>
                                                             <td className="px-4 py-3 text-center">
-                                                                <span className={`inline-block px-3 py-1 text-xs font-medium rounded-[4px] ${
-                                                                    voucher.type === 'Sales' ? 'bg-gray-100 text-gray-800' : 'bg-purple-100 text-purple-800'
-                                                                }`}>
+                                                                <span className={`inline-block px-3 py-1 text-xs font-medium rounded-[4px] ${voucher.type === 'Sales' ? 'bg-gray-100 text-gray-800' : 'bg-purple-100 text-purple-800'
+                                                                    }`}>
                                                                     {voucher.type === 'Sales' ? 'Not Due' : 'Paid'}
                                                                 </span>
                                                             </td>
@@ -5648,8 +5717,8 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 <tbody className="divide-y divide-gray-100">
                                                     {/* Purchase & Receipts (Credits) */}
                                                     {[
-                                                        ...purchaseVouchers.filter(v => Object.keys(purchaseNetOffAmounts).length > 0 ? (purchaseNetOffAmounts[v.id] || 0) > 0 : selectedPurchase.includes(v.id)).map(v => ({...v, type: 'Purchase', no: v.supplierInvNo})),
-                                                        ...receiptVouchers.filter(v => (receiptsNetOffAmounts[v.id] || 0) > 0).map(v => ({...v, type: 'Receipt', no: v.voucherNo}))
+                                                        ...purchaseVouchers.filter(v => Object.keys(purchaseNetOffAmounts).length > 0 ? (purchaseNetOffAmounts[v.id] || 0) > 0 : selectedPurchase.includes(v.id)).map(v => ({ ...v, type: 'Purchase', no: v.supplierInvNo })),
+                                                        ...receiptVouchers.filter(v => (receiptsNetOffAmounts[v.id] || 0) > 0).map(v => ({ ...v, type: 'Receipt', no: v.voucherNo }))
                                                     ].map((voucher) => (
                                                         <tr key={`net-${voucher.type}-${voucher.id}`} className="hover:bg-gray-50">
                                                             <td className="px-4 py-3">
@@ -5658,7 +5727,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                             <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                             <td className="px-4 py-3 font-medium text-gray-900">{voucher.no}</td>
                                                             <td className="px-4 py-3 text-right text-gray-900 font-medium">
-                                                                ₹{(voucher.type === 'Purchase' 
+                                                                ₹{(voucher.type === 'Purchase'
                                                                     ? (Object.keys(purchaseNetOffAmounts).length > 0 ? purchaseNetOffAmounts[voucher.id] : voucher.pendingAmount)
                                                                     : receiptsNetOffAmounts[voucher.id]
                                                                 ).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -5667,9 +5736,8 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                                 ₹{voucher.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                             </td>
                                                             <td className="px-4 py-3 text-center">
-                                                                <span className={`inline-block px-3 py-1 text-xs font-medium rounded-[4px] ${
-                                                                    voucher.type === 'Purchase' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                                                                }`}>
+                                                                <span className={`inline-block px-3 py-1 text-xs font-medium rounded-[4px] ${voucher.type === 'Purchase' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                                                                    }`}>
                                                                     {voucher.type === 'Purchase' ? 'Partially Paid' : 'Received'}
                                                                 </span>
                                                             </td>
@@ -5794,7 +5862,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         ledger: 'Sales',
                         status: (inv.status && inv.status.toLowerCase() === 'received') ? 'Received'
                             : (inv.status && inv.status.toLowerCase() === 'partially received') ? 'Partially Received'
-                            : (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
+                                : (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
                         debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
                         credit: 0,
                         runningBalance: 0,
