@@ -149,11 +149,25 @@ const GSTDetailsView = ({ customer }: { customer: any }) => {
         <div className="space-y-8 animate-fadeIn">
             <SectionHeading title="GST & Branch Configuration" />
 
-            {/* Registered/Unregistered Status */}
-            <div className="flex items-center gap-4 mb-6">
-                <span className={`px-3 py-1 rounded-[4px] text-xs font-semibold ${gstins.length > 0 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {gstins.length > 0 ? 'Registered Customer' : 'Unregistered Customer'}
-                </span>
+            {/* Registered/Unregistered Status & Main GSTINs */}
+            <div className="bg-gray-50 rounded-[4px] p-6 border border-gray-100">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <span className={`inline-block px-3 py-1 rounded-[4px] text-xs font-semibold mb-2 ${gstins.length > 0 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {gstins.length > 0 ? 'Registered Customer' : 'Unregistered Customer'}
+                        </span>
+                        <h4 className="text-sm font-bold text-gray-900 uppercase tracking-tight">Main Identification</h4>
+                    </div>
+                    {gstins.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {gstins.map((gst: string) => (
+                                <span key={gst} className="px-3 py-1.5 bg-white border border-indigo-200 rounded text-sm font-mono font-bold text-indigo-700 shadow-sm">
+                                    {gst}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {branches.length > 0 ? (

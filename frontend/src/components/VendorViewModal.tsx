@@ -220,9 +220,24 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
                                     Place of Business
                                     <MapPin className="w-3 h-3" />
                                 </h5>
-                                <p className="text-slate-700 font-semibold leading-relaxed mb-4">
-                                    {record.branch_address || 'Address information not provided for this GSTIN.'}
-                                </p>
+                                <div className="text-slate-700 font-semibold leading-relaxed mb-4">
+                                    {record.branch_address_line1 && (
+                                        <div className="text-sm">{record.branch_address_line1}</div>
+                                    )}
+                                    {record.branch_address_line2 && (
+                                        <div className="text-sm">{record.branch_address_line2}</div>
+                                    )}
+                                    {record.branch_address_line3 && (
+                                        <div className="text-sm">{record.branch_address_line3}</div>
+                                    )}
+                                    {!record.branch_address_line1 && !record.branch_address_line2 && !record.branch_address_line3 && (
+                                        <div className="text-sm">{record.branch_address || 'Address information not provided.'}</div>
+                                    )}
+                                    <div className="text-xs text-slate-500 mt-2">
+                                        {[record.branch_city, record.branch_state, record.branch_country].filter(Boolean).join(', ')}
+                                        {record.branch_pincode && ` - ${record.branch_pincode}`}
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-2 gap-4 border-t border-slate-200 pt-4 mt-2">
                                     <div>
                                         <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Contact</span>

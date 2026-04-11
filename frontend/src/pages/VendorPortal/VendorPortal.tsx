@@ -1,6 +1,7 @@
 // Vendor Portal - Master Configuration
 import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter, ChevronLeft, X } from 'lucide-react';
+import { Country, State, City } from 'country-state-city';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
 import { apiService } from '../../services/api';
@@ -140,6 +141,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         id: string;
         referenceName: string;
         address: string;
+        addressLine1: string;
+        addressLine2: string;
+        addressLine3: string;
         contactPerson: string;
         email: string;
         contactNumber: string;
@@ -418,7 +422,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
                             if (isFullyPaid || t.due_status === 'Paid') return 'Received';
                             if (isPartiallyPaid || t.due_status === 'Partially Received') return 'Partially Received';
-                            
+
                             // If not paid, use the due status calculated from credit period
                             if (t.due_status === 'Due') return 'Due';
                             if (t.due_status === 'Not Due') return 'Not Due';
@@ -460,8 +464,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 const pDebit = typeof entry.debit === 'number' ? entry.debit : 0;
                 balance += pCredit - pDebit;
 
-                const balanceLeft = typeof entry.rawVoucher?.payment_balance === 'number' 
-                    ? entry.rawVoucher.payment_balance 
+                const balanceLeft = typeof entry.rawVoucher?.payment_balance === 'number'
+                    ? entry.rawVoucher.payment_balance
                     : (pCredit - pDebit); // Fallback to basic ledger math
 
                 return {
@@ -845,8 +849,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         }
                         if (g.reference_name) {
                             groupedGst[gstin].placesOfBusiness.push({
-                                id: g.id.toString(),
-                                referenceName: g.reference_name,
+                                id: (g.id || '').toString(),
+                                referenceName: g.reference_name || '',
+                                addressLine1: g.branch_address_line1 || '',
+                                addressLine2: g.branch_address_line2 || '',
+                                addressLine3: g.branch_address_line3 || '',
                                 address: g.branch_address || '',
                                 contactPerson: g.branch_contact_person || '',
                                 email: g.branch_email || '',
@@ -1045,6 +1052,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                             {
                                 id: Date.now().toString() + '_1',
                                 referenceName: 'Main Branch', // Default populated
+                                addressLine1: '123, Business Park',
+                                addressLine2: 'Tech City',
+                                addressLine3: 'India',
                                 address: '123, Business Park, Tech City, India',
                                 contactPerson: 'John Doe',
                                 email: 'john@example.com',
@@ -1058,6 +1068,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                             {
                                 id: Date.now().toString() + '_2',
                                 referenceName: 'Warehouse 1',
+                                addressLine1: '456, Industrial Area',
+                                addressLine2: 'Tech City',
+                                addressLine3: 'India',
                                 address: '456, Industrial Area, Tech City, India',
                                 contactPerson: 'Jane Smith',
                                 email: 'jane@example.com',
@@ -1096,7 +1109,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     };
 
     const updatePobField = (recordId: string, pobId: string, field: keyof PlaceOfBusiness, value: string) => {
-        setGstRecords(gstRecords.map(r => {
+        setGstRecords(prev => prev.map(r => {
             if (r.id === recordId) {
                 return {
                     ...r,
@@ -1119,6 +1132,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         {
                             id: Date.now().toString(),
                             referenceName: '',
+                            addressLine1: '',
+                            addressLine2: '',
+                            addressLine3: '',
                             address: '',
                             contactPerson: '',
                             email: '',
@@ -2045,7 +2061,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
                     const branches = gst.placesOfBusiness && gst.placesOfBusiness.length > 0
                         ? gst.placesOfBusiness
-                        : [{ id: '', referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', pincode: '', city: '', state: '', country: '' } as PlaceOfBusiness];
+                        : [{ id: '', referenceName: '', addressLine1: '', addressLine2: '', addressLine3: '', address: '', contactPerson: '', email: '', contactNumber: '', pincode: '', city: '', state: '', country: '' } as PlaceOfBusiness];
 
                     for (const branch of branches) {
                         const mapRegistrationType = (type: string) => {
@@ -2069,7 +2085,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                             legal_name: gst.legalName || 'N/A',
                             trade_name: gst.tradeName || gst.legalName || 'N/A',
                             reference_name: branch.referenceName || '',
-                            branch_address: branch.address || '',
+                            branch_address: [branch.addressLine1, branch.addressLine2, branch.addressLine3].filter(Boolean).join(', ') || branch.address || '',
+                            branch_address_line1: branch.addressLine1 || '',
+                            branch_address_line2: branch.addressLine2 || '',
+                            branch_address_line3: branch.addressLine3 || '',
                             branch_contact_person: branch.contactPerson || '',
                             branch_email: branch.email || '',
                             branch_contact_no: branch.contactNumber || '',
@@ -3573,7 +3592,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                     <svg className={`w-4 h-4 transition-transform ${pob.isExpanded ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                                                                     </svg>
-                                                                                    <span className="font-medium text-sm text-gray-800">{pob.referenceName || `Branch ${pIndex + 1}`} - {pob.address}</span>
+                                                                                    <span className="font-medium text-sm text-gray-800">{pob.referenceName || `Branch ${pIndex + 1}`} - {[pob.addressLine1, pob.addressLine2, pob.addressLine3].filter(Boolean).join(', ')}</span>
                                                                                 </div>
                                                                                 <button
                                                                                     type="button"
@@ -3588,48 +3607,106 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                             {pob.isExpanded && (
                                                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                                                                                     <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
+                                                                                        <label className="label-text mb-1 uppercase">Reference Name</label>
                                                                                         <input type="text" value={pob.referenceName} onChange={(e) => updatePobField(record.id, pob.id, 'referenceName', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
                                                                                     </div>
-                                                                                    <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
-                                                                                        <textarea
-                                                                                            rows={2}
-                                                                                            value={pob.address}
-                                                                                            onChange={(e) => updatePobField(record.id, pob.id, 'address', e.target.value)}
-                                                                                            className={`w-full px-3 py-1.5 border border-slate-200 rounded text-sm ${record.registrationType !== 'Unregistered' && pob.address && pob.referenceName !== '' ? 'bg-gray-50' : ''}`}
-                                                                                            placeholder="Enter address"
-                                                                                        />
+                                                                                    <div className="col-span-1 md:col-span-2">
+                                                                                        <label className="label-text mb-1 uppercase">Address Line 1</label>
+                                                                                        <input type="text" value={pob.addressLine1 || ''} onChange={(e) => updatePobField(record.id, pob.id, 'addressLine1', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" placeholder="Enter address line 1" />
+                                                                                    </div>
+                                                                                    <div className="col-span-1 md:col-span-2">
+                                                                                        <label className="label-text mb-1 uppercase">Address Line 2</label>
+                                                                                        <input type="text" value={pob.addressLine2 || ''} onChange={(e) => updatePobField(record.id, pob.id, 'addressLine2', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" placeholder="Enter address line 2" />
+                                                                                    </div>
+                                                                                    <div className="col-span-1 md:col-span-2">
+                                                                                        <label className="label-text mb-1 uppercase">Address Line 3</label>
+                                                                                        <input type="text" value={pob.addressLine3 || ''} onChange={(e) => updatePobField(record.id, pob.id, 'addressLine3', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" placeholder="Enter address line 3" />
                                                                                     </div>
                                                                                     <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
-                                                                                        <input type="text" value={pob.contactPerson} onChange={(e) => updatePobField(record.id, pob.id, 'contactPerson', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            value={pob.email}
-                                                                                            onChange={(e) => updatePobField(record.id, pob.id, 'email', e.target.value)}
-                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
-                                                                                            placeholder="branch@example.com"
-                                                                                        />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Contact No</label>
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            value={pob.contactNumber}
+                                                                                        <label className="label-text mb-1 uppercase">Country</label>
+                                                                                        <select
+                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm bg-white"
+                                                                                            value={Country.getAllCountries().find(c => c.name === pob.country)?.isoCode || ''}
                                                                                             onChange={(e) => {
-                                                                                                const val = e.target.value.replace(/\D/g, '');
-                                                                                                updatePobField(record.id, pob.id, 'contactNumber', val);
+                                                                                                const countryCode = e.target.value;
+                                                                                                const countryInfo = Country.getCountryByCode(countryCode);
+                                                                                                updatePobField(record.id, pob.id, 'country', countryInfo?.name || '');
+                                                                                                updatePobField(record.id, pob.id, 'state', '');
+                                                                                                updatePobField(record.id, pob.id, 'city', '');
                                                                                             }}
-                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
-                                                                                            placeholder="Numeric only"
-                                                                                        />
+                                                                                        >
+                                                                                            <option value="">Select Country</option>
+                                                                                            {Country.getAllCountries().map((country) => (
+                                                                                                <option key={country.isoCode} value={country.isoCode}>
+                                                                                                    {country.name}
+                                                                                                </option>
+                                                                                            ))}
+                                                                                        </select>
                                                                                     </div>
                                                                                     <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
+                                                                                        <label className="label-text mb-1 uppercase">State</label>
+                                                                                        <select
+                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm bg-white"
+                                                                                            value={(() => {
+                                                                                                const countryCode = Country.getAllCountries().find(c => c.name === pob.country)?.isoCode;
+                                                                                                if (!countryCode) return '';
+                                                                                                return State.getStatesOfCountry(countryCode).find(s => s.name === pob.state)?.isoCode || '';
+                                                                                            })()}
+                                                                                            onChange={(e) => {
+                                                                                                const countryCode = Country.getAllCountries().find(c => c.name === pob.country)?.isoCode;
+                                                                                                const stateCode = e.target.value;
+                                                                                                if (countryCode) {
+                                                                                                    const stateInfo = State.getStatesOfCountry(countryCode).find(s => s.isoCode === stateCode);
+                                                                                                    updatePobField(record.id, pob.id, 'state', stateInfo?.name || '');
+                                                                                                    updatePobField(record.id, pob.id, 'city', '');
+                                                                                                }
+                                                                                            }}
+                                                                                            disabled={!pob.country}
+                                                                                        >
+                                                                                            <option value="">Select State</option>
+                                                                                            {(() => {
+                                                                                                const countryCode = Country.getAllCountries().find(c => c.name === pob.country)?.isoCode;
+                                                                                                return countryCode ? State.getStatesOfCountry(countryCode).map((state) => (
+                                                                                                    <option key={state.isoCode} value={state.isoCode}>
+                                                                                                        {state.name}
+                                                                                                    </option>
+                                                                                                )) : [];
+                                                                                            })()}
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="label-text mb-1 uppercase">City</label>
+                                                                                        {(() => {
+                                                                                            const countryCode = Country.getAllCountries().find(c => c.name === pob.country)?.isoCode;
+                                                                                            const stateCode = countryCode ? State.getStatesOfCountry(countryCode).find(s => s.name === pob.state)?.isoCode : null;
+                                                                                            const cities = (countryCode && stateCode) ? City.getCitiesOfState(countryCode, stateCode) : [];
+
+                                                                                            return cities.length > 0 ? (
+                                                                                                <select
+                                                                                                    className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm bg-white"
+                                                                                                    value={pob.city || ''}
+                                                                                                    onChange={(e) => updatePobField(record.id, pob.id, 'city', e.target.value)}
+                                                                                                >
+                                                                                                    <option value="">Select City</option>
+                                                                                                    {cities.map((city) => (
+                                                                                                        <option key={city.name} value={city.name}>
+                                                                                                            {city.name}
+                                                                                                        </option>
+                                                                                                    ))}
+                                                                                                </select>
+                                                                                            ) : (
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    value={pob.city || ''}
+                                                                                                    onChange={(e) => updatePobField(record.id, pob.id, 'city', e.target.value)}
+                                                                                                    className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
+                                                                                                    placeholder="Enter city"
+                                                                                                />
+                                                                                            );
+                                                                                        })()}
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="label-text mb-1 uppercase">Pincode</label>
                                                                                         <input
                                                                                             type="text"
                                                                                             value={pob.pincode || ''}
@@ -3643,16 +3720,31 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                         />
                                                                                     </div>
                                                                                     <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
-                                                                                        <input type="text" value={pob.city || ''} onChange={(e) => updatePobField(record.id, pob.id, 'city', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                                        <label className="label-text mb-1 uppercase">Contact Person</label>
+                                                                                        <input type="text" value={pob.contactPerson} onChange={(e) => updatePobField(record.id, pob.id, 'contactPerson', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
                                                                                     </div>
                                                                                     <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
-                                                                                        <input type="text" value={pob.state || ''} onChange={(e) => updatePobField(record.id, pob.id, 'state', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                                        <label className="label-text mb-1 uppercase">Email Address</label>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={pob.email}
+                                                                                            onChange={(e) => updatePobField(record.id, pob.id, 'email', e.target.value)}
+                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
+                                                                                            placeholder="branch@example.com"
+                                                                                        />
                                                                                     </div>
                                                                                     <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
-                                                                                        <input type="text" value={pob.country || ''} onChange={(e) => updatePobField(record.id, pob.id, 'country', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                                        <label className="label-text mb-1 uppercase">Contact No</label>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={pob.contactNumber}
+                                                                                            onChange={(e) => {
+                                                                                                const val = e.target.value.replace(/\D/g, '');
+                                                                                                updatePobField(record.id, pob.id, 'contactNumber', val);
+                                                                                            }}
+                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
+                                                                                            placeholder="Numeric only"
+                                                                                        />
                                                                                     </div>
                                                                                 </div>
                                                                             )}
