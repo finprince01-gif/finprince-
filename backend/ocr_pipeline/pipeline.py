@@ -11,7 +11,7 @@ from accounting.models_voucher_purchase import (
     VoucherPurchaseDueDetails
 )
 from accounting.models import Voucher, MasterLedger
-from core.models import CompanyFullInfo
+from core.models import Branch
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +140,8 @@ def validate_and_process(record: InvoiceTempOCR):
         # 🔹 CREATE PURCHASE VOUCHER (AUTO-SAVE)
         # Using the Pipeline 2 logic refined earlier
         with transaction.atomic():
-            company = CompanyFullInfo.objects.filter(tenant_id=tenant_id).first()
-            company_gstin = company.gstin if company else None
+            branch_record = Branch.objects.filter(id=tenant_id).first()
+            company_gstin = branch_record.gstin if branch_record else None
             is_interstate = gstin[:2] != company_gstin[:2] if company_gstin and len(gstin)>=2 and len(company_gstin)>=2 else False
             
             invoice_date = supplier.get('invoice_date')

@@ -1,19 +1,25 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from core.models import User, Tenant
+from core.models import User, Branch
 from django.utils import timezone
 from datetime import timedelta
 
+from core.permissions import IsMaster
+
 class AdminSubscriptionsView(APIView):
     """
-    Admin panel endpoint to list all users/subscriptions
+    Admin panel endpoint to list all users/subscriptions for tenants owned by this master
     """
-    permission_classes = []  # No authentication required for hardcoded admin
+    permission_classes = [IsMaster]
     
     def get(self, request):
-        """Get all users with their subscription data"""
-        users = User.objects.filter(is_superuser=False)
+        """Get all users with their subscription data, scoped to master's tenants"""
+        my_tenants = Branch.objects.filter(master=request.user)
+        my_tenant_ids = my_tenants.values_list('id', flat=True)
+        
+        # Include all users belonging to these tenants
+        users = User.objects.filter(tenant_id__in=my_tenant_ids)
         
         subscriptions = []
         for user in users:
@@ -39,7 +45,7 @@ class AdminSubscriptionsView(APIView):
                 'subscriptionEndDate': end_date.isoformat(),
                 'uploadsUsed': 0,  # TODO: Track actual uploads
                 'totalUploads': 1000,  # Default limit
-                'tenantId': user.tenant_id if hasattr(user, 'tenant_id') else 'N/A',
+                'tenantId': user.branch_id if hasattr(user, 'tenant_id') else 'N/A',
             })
         
         return Response(subscriptions)
@@ -49,7 +55,7 @@ class AdminUserStatusView(APIView):
     """
     Admin panel endpoint to activate/deactivate users
     """
-    permission_classes = []  # No authentication required for hardcoded admin
+    permission_classes = [IsMaster]
     
     def put(self, request):
         """Update user active status"""

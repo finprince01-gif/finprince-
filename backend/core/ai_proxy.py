@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 from django.core.cache import cache
 from google.api_core import exceptions
 from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 # Ensure environment variables are loaded (especially for GEMINI_API_KEY)
@@ -310,8 +311,10 @@ def process_ai_request(request_data: dict) -> dict:
                     prompt = [
                         prompt_text,
                         {
-                            'mime_type': request_data.get('mime_type', 'image/jpeg'),
-                            'data': image_bytes
+                            'inline_data': {
+                                'mime_type': request_data.get('mime_type', 'image/jpeg'),
+                                'data': image_bytes
+                            }
                         }
                     ]
                 except Exception as e:
@@ -375,28 +378,46 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     base_delay = 2
     api_key_used = api_key
     
-    # VALID MODELS (Updated for 2026 environment)
+    # VALID MODELS (Updated for stability)
     candidate_models = [
-        'gemini-2.5-flash',
-        'gemini-2.5-pro'
+        'gemini-2.0-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-pro-latest'
     ]
 
+    # Get public IP for debugging (Log once or occasionally)
+    try:
+        import urllib.request
+        public_ip = urllib.request.urlopen('https://api.ipify.org').read().decode('utf8')
+    except Exception:
+        public_ip = "unknown"
+
+    # Log prompt size
+    prompt_str = str(prompt)
+    logger.info(f"AI Prompt Size: {len(prompt_str)} chars")
+
     for attempt in range(max_attempts):
-        # Initialize client for this attempt
-        client = genai.Client(api_key=api_key_used)
+        # Initialize client with NO timeout (Let it use defaults)
+        # OR set to a very large value. We'll try None to avoid the 1s bug.
+        client = genai.Client(
+            api_key=api_key_used,
+            http_options=types.HttpOptions(timeout=None)
+        )
         
         # Try each model in the list
         last_error = None
         for model_name in candidate_models:
             try:
-                logger.info(f"AI Call Attempt {attempt+1}: {model_name} (Key: {api_key_used[:6]}...)")
+                logger.info(f"AI Call Attempt {attempt+1}: {model_name} (IP: {public_ip})")
                 
                 t_start = time.monotonic()
-                # google-genai uses 'contents' and 'model'
+                # We do NOT set http_options here to avoid overriding client defaults
                 response = client.models.generate_content(
                     model=model_name,
                     contents=prompt,
-                    config={'http_options': {'timeout': 60}}
+                    config=types.GenerateContentConfig(
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+                    )
                 )
                 t_end = time.monotonic()
                 
@@ -450,9 +471,17 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
         # If we get here, all models in candidate_models failed for this attempt
         if attempt < max_attempts - 1:
             # Check if we should retry based on error type
-            if isinstance(last_error, (exceptions.ResourceExhausted, exceptions.DeadlineExceeded)):
+            # Retry for rate limits, timeouts, and connection issues
+            is_retryable = isinstance(last_error, (exceptions.ResourceExhausted, exceptions.DeadlineExceeded))
+            
+            # Check for generic timeout/connection errors that might not be wrapped in google.api_core.exceptions
+            err_msg = str(last_error).lower()
+            if "timeout" in err_msg or "handshake" in err_msg or "connection" in err_msg:
+                is_retryable = True
+
+            if is_retryable:
                 sleep_time = base_delay * (2 ** attempt)
-                logger.info(f"Retrying AI pipeline in {sleep_time}s due to service busy... (Retry count: {attempt+1})")
+                logger.info(f"Retrying AI pipeline in {sleep_time}s due to service busy or timeout... (Retry count: {attempt+1})")
                 time.sleep(sleep_time)
                 
                 # Try switching key if rate limited or timeout

@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from core.utils import TenantQuerysetMixin, IsTenantMember
+from core.mixins import BranchQuerysetMixin, IsBranchMember
 from core.tenant import get_tenant_from_request
 from .models import Voucher, JournalEntry  # type: ignore
 from .models_voucher_payment import PaymentVoucher, PaymentVoucherItem
@@ -40,8 +40,8 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs = self.queryset
 
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            qs = qs.filter(tenant_id=user.tenant_id)
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            qs = qs.filter(tenant_id=user.branch_id)
 
         # Optional filters
         pay_to_ledger = self.request.query_params.get('pay_to_ledger')
@@ -58,7 +58,7 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
         tenant_id = getattr(request.user, 'tenant_id', None)
         
         if not tenant_id:
-            tenant_id = request.headers.get('X-Tenant-Id')
+            tenant_id = request.headers.get('X-Branch-Id')
 
         if ref_no:
             exists = PaymentVoucherItem.objects.filter(
@@ -92,7 +92,7 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
         tenant_id = getattr(request.user, 'tenant_id', None)
         if not tenant_id:
-            tenant_id = request.headers.get('X-Tenant-Id')
+            tenant_id = request.headers.get('X-Branch-Id')
 
         # 1. Find all Purchase/Sales vouchers involving this ledger via Journal Entries
         # This is the bill-wise lookup source of truth
@@ -191,7 +191,7 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             if bank_transaction_id:
                 try:
                     tenant_id = (
-                        self.request.user.tenant_id
+                        self.request.user.branch_id
                         if hasattr(self.request.user, 'tenant_id')
                         else None
                     )
@@ -256,8 +256,8 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            serializer.save(tenant_id=user.tenant_id)
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            serializer.save(tenant_id=user.branch_id)
         else:
             serializer.save()
 
@@ -325,7 +325,7 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
     """
     queryset = PaymentVoucherItem.objects.all()
     serializer_class = AdvancePaymentSerializer
-    permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
 
     def list(self, request, *args, **kwargs):
         tenant_id = get_tenant_from_request(self.request)

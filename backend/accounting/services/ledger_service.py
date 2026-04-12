@@ -82,7 +82,9 @@ def post_transaction(voucher_type, voucher_id, tenant_id, entries):
                 voucher_id=voucher_id,
                 ledger_id=entry.get('ledger_id'),
                 debit=Decimal(str(entry.get('debit', 0))),
-                credit=Decimal(str(entry.get('credit', 0)))
+                credit=Decimal(str(entry.get('credit', 0))),
+                customer_id=entry.get('customer_id'),
+                vendor_id=entry.get('vendor_id')
             ))
         
         JournalEntry.objects.bulk_create(journal_objects)

@@ -41,7 +41,7 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         """Extract tenant_id from the authenticated user"""
         user = request.user
         if hasattr(user, 'tenant_id'):
-            return str(user.tenant_id)
+            return str(user.branch_id)
         raise PermissionDenied("User has no associated tenant")
     
     def get_queryset(self):

@@ -4,8 +4,9 @@ RBAC Serializers
 Serializers for Role-Based Access Control API endpoints
 """
 
-from rest_framework import serializers
-from django.contrib.auth import get_user_model
+from rest_framework import serializers  # type: ignore
+from django.contrib.auth import get_user_model  # type: ignore
+from django.contrib.auth.hashers import make_password  # type: ignore
 from .models import Role, UserRole
 
 User = get_user_model()
@@ -60,7 +61,7 @@ class RoleSerializer(serializers.ModelSerializer):
         """Create role with tenant_id from request"""
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
-            validated_data['tenant_id'] = request.user.tenant_id
+            validated_data['tenant_id'] = request.user.branch_id
         return super().create(validated_data)
 
 
@@ -74,16 +75,16 @@ class UserRoleSerializer(serializers.ModelSerializer):
         model = UserRole
         fields = [
             'id', 'user', 'role', 'role_name', 'role_description',
-            'user_username', 'username', 'email', 'phone', 
+            'user_username', 'username', 'phone', 
             'assigned_at', 'assigned_by', 'tenant_id'
         ]
-        read_only_fields = ['id', 'assigned_at', 'assigned_by', 'tenant_id', 'username', 'email', 'phone']
+        read_only_fields = ['id', 'assigned_at', 'assigned_by', 'tenant_id', 'username', 'phone']
     
     def create(self, validated_data):
         """Create user role assignment with tenant_id and assigned_by"""
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
-            validated_data['tenant_id'] = request.user.tenant_id
+            validated_data['tenant_id'] = request.user.branch_id
             validated_data['assigned_by'] = request.user
         return super().create(validated_data)
 
@@ -96,8 +97,8 @@ class UserWithRolesSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'company_name', 'phone',
-            'is_active', 'tenant_id', 'roles', 'permissions',
+            'id', 'username', 'company_name', 'phone',
+            'is_active', 'access_expiry', 'tenant_id', 'roles', 'permissions',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -153,9 +154,10 @@ class UserWithRolesSerializer(serializers.ModelSerializer):
 class CreateUserWithRoleSerializer(serializers.Serializer):
     """Serializer for creating a new user with role assignment"""
     username = serializers.CharField(max_length=100)
-    email = serializers.EmailField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, min_length=6)
     phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    is_active = serializers.BooleanField(default=False)
+    access_expiry = serializers.DateTimeField(required=False, allow_null=True)
     role_ids = serializers.ListField(
         child=serializers.IntegerField(),
         required=False,
@@ -167,16 +169,9 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
         """Check if username already exists within the tenant"""
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
-            tenant_id = request.user.tenant_id
+            tenant_id = request.user.branch_id
             if User.objects.filter(username=value, tenant_id=tenant_id).exists():
                 raise serializers.ValidationError("Username already exists in this organization")
-        return value
-    
-    def validate_email(self, value):
-        """Check if email already exists (globally, as email should be unique across all tenants)"""
-        if value and value.strip():  # Only validate if email is provided
-            if User.objects.filter(email=value).exists():
-                raise serializers.ValidationError("This email address is already registered")
         return value
     
     def validate_role_ids(self, value):
@@ -185,7 +180,7 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
         if not request or not hasattr(request, 'user'):
             return value
         
-        tenant_id = request.user.tenant_id
+        tenant_id = request.user.branch_id
         for role_id in value:
             if not Role.objects.filter(id=role_id, tenant_id=tenant_id).exists():
                 raise serializers.ValidationError(
@@ -209,19 +204,20 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
             company_name = getattr(request.user, 'company_name', None)
             
         if not tenant_id:
-            logger.error(f"Cannot create user: Tenant ID missing from request context. User: {request.user if request else 'No Request'}")
-            raise serializers.ValidationError({"detail": "Cannot determine organization (Tenant ID) from your session. Please re-login."})
+            logger.error(f"Cannot create user: Branch ID missing from request context. User: {request.user if request else 'No Request'}")
+            raise serializers.ValidationError({"detail": "Cannot determine organization (Branch ID) from your session. Please re-login."})
 
         try:
             # Create user with tenant_id from request
             user = User.objects.create_user(
                 username=validated_data['username'],
-                email=validated_data.get('email', ''),
                 password=validated_data['password'],
                 phone=validated_data.get('phone', ''),
                 tenant_id=tenant_id,
                 company_name=company_name,
-                is_superuser=False,  # Regular users are not superusers
+                is_active=validated_data.get('is_active', False),
+                access_expiry=validated_data.get('access_expiry'),
+                is_superuser=False,
                 is_staff=False
             )
             
@@ -233,13 +229,11 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
                         user=user,
                         role=role,
                         username=user.username,
-                        email=user.email,
                         phone=user.phone,
                         tenant_id=tenant_id,
                         assigned_by=request.user
                     )
                 except Role.DoesNotExist:
-                    logger.warning(f"Role ID {role_id} not found for tenant {tenant_id} when assigning to user {user.username}")
                     continue
             
             return user

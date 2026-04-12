@@ -43,8 +43,11 @@ urlpatterns = [
     # Login
     path('api/auth/', include('login.urls')),
     
-    # Registration
-    path('api/auth/', include('registration.urls')),
+    # Registration - DISABLED (PUBLIC SIGNUP REMOVED)
+    # path('api/auth/', include('registration.urls')),
+    
+    # Master Admin Domain
+    path('api/master/', include('core.master_urls')),
     
     # Masters
     path('api/masters/', include('masters.urls')),

@@ -38,7 +38,7 @@
  */
 
 // Import HTTP client for making requests
-import { httpClient } from './httpClient';
+import { httpClient, AxiosRequestConfig } from './httpClient';
 
 // Import TypeScript types for type safety
 import type {
@@ -66,11 +66,19 @@ class ApiService {
     // Methods for managing company information (name, address, logo, etc.)
 
     /**
+     * Get validated user session details.
+     * Returns: id, username, email, tenant_id, role, etc.
+     */
+    async getCurrentUser(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any>('/api/auth/me/', undefined, options);
+    }
+
+    /**
      * Get company details for the current tenant
      * Returns: Company name, address, GST, logo URL, etc.
      */
-    async getCompanyDetails() {
-        return httpClient.get<CompanyDetails>('/api/company-settings/');
+    async getCompanyDetails(options: AxiosRequestConfig = {}) {
+        return httpClient.get<CompanyDetails>('/api/company-settings/', undefined, options);
     }
 
     /**
@@ -78,7 +86,7 @@ class ApiService {
      * Handles both JSON data and file uploads (for logo)
      * @param data - Company details including optional logo file
      */
-    async saveCompanyDetails(data: CompanyDetails & { logoFile?: File | null }) {
+    async saveCompanyDetails(data: CompanyDetails & { logoFile?: File | null }, options: AxiosRequestConfig = {}) {
         // If logo file is provided, use FormData for file upload
         if (data.logoFile) {
             const formData = new FormData();
@@ -89,10 +97,10 @@ class ApiService {
             if (data.phone) formData.append('phone', data.phone);
             if (data.email) formData.append('email', data.email);
             if (data.website) formData.append('website', data.website);
-            return httpClient.postFormData<CompanyDetails>('/api/company-settings/', formData);
+            return httpClient.postFormData<CompanyDetails>('/api/company-settings/', formData, options);
         }
         // Otherwise, send JSON data
-        return httpClient.post<CompanyDetails>('/api/company-settings/', data);
+        return httpClient.post<CompanyDetails>('/api/company-settings/', data, options);
     }
 
     // ============================================================================
@@ -105,8 +113,8 @@ class ApiService {
      * Get all ledgers for the current tenant
      * Returns: Array of ledger objects
      */
-    async getLedgers() {
-        return httpClient.get<Ledger[]>('/api/masters/ledgers/?page_size=10000&limit=10000');
+    async getLedgers(options: AxiosRequestConfig = {}) {
+        return httpClient.get<Ledger[]>('/api/masters/ledgers/?page_size=10000&limit=10000', undefined, options);
     }
 
     /**
@@ -153,8 +161,8 @@ class ApiService {
     // MASTERS - LEDGER GROUPS
     // ============================================================================
 
-    async getLedgerGroups() {
-        return httpClient.get<LedgerGroupMaster[]>('/api/masters/ledger-groups/');
+    async getLedgerGroups(options: AxiosRequestConfig = {}) {
+        return httpClient.get<LedgerGroupMaster[]>('/api/masters/ledger-groups/', undefined, options);
     }
 
     async saveLedgerGroup(data: LedgerGroupMaster) {
@@ -175,16 +183,16 @@ class ApiService {
      * Get RICH Vendor Data (Basic Details like email, phone)
      * Used for AI Context
      */
-    async getRichVendors() {
-        return httpClient.get<any[]>('/api/vendors/basic-details/?page_size=10000&limit=10000');
+    async getRichVendors(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/vendors/basic-details/?page_size=10000&limit=10000', undefined, options);
     }
 
     /**
      * Get RICH Customer Data (Email, Phone, GST)
      * Used for AI Context
      */
-    async getRichCustomers() {
-        return httpClient.get<any[]>('/api/customerportal/customer-master/?page_size=10000&limit=10000');
+    async getRichCustomers(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/customerportal/customer-master/?page_size=10000&limit=10000', undefined, options);
     }
 
     /**
@@ -235,8 +243,8 @@ class ApiService {
     }
 
 
-    async getStockItems() {
-        return httpClient.get<StockItem[]>('/api/inventory/items/');
+    async getStockItems(options: AxiosRequestConfig = {}) {
+        return httpClient.get<StockItem[]>('/api/inventory/items/', undefined, options);
     }
 
     async getServices(params?: string | Record<string, any>) {
@@ -416,7 +424,7 @@ class ApiService {
     }
 
     async getHierarchy() {
-        return httpClient.get<any[]>('/api/hierarchy/');
+        return httpClient.get<any[]>('/api/masters/hierarchy/');
     }
 
     // ============================================================================
@@ -506,10 +514,10 @@ class ApiService {
      * @param type - Optional voucher type filter ("Sales", "Purchase", etc.)
      * @returns Array of vouchers with normalized types
      */
-    async getVouchers(type?: string) {
+    async getVouchers(type?: string, options: AxiosRequestConfig = {}) {
         const normalizedType = type ? this.normalizeVoucherType(type) : undefined;
         const endpoint = normalizedType ? `/api/vouchers/?type=${normalizedType}` : '/api/vouchers/';
-        const vouchers = await httpClient.get<Voucher[]>(endpoint);
+        const vouchers = await httpClient.get<Voucher[]>(endpoint, undefined, options);
 
         // Map backend lowercase types to frontend TitleCase
         const typeMap: Record<string, string> = {
@@ -759,7 +767,7 @@ class ApiService {
 
     /**
      * Login user with credentials
-     * @param email - User email
+     * @param email - Branch Email address
      * @param username - Username
      * @param password - Password
      * @returns User data, tokens, and permissions
@@ -767,23 +775,114 @@ class ApiService {
     async login(email: string | null | undefined, username: string | null | undefined, password: string) {
         const data = await httpClient.post<any>('/api/auth/login/', { email, username, password });
 
-        // Save tokens to memory (cleared on refresh)
+        // Store tokens in the COMPANY domain slot
         if (data.access && data.refresh) {
-            httpClient.setTokens(data.access, data.refresh);
-            // Also clear legacy localStorage/sessionStorage tokens if present
-            sessionStorage.removeItem('token');
-            sessionStorage.removeItem('refreshToken');
-            localStorage.removeItem('token');
-            localStorage.removeItem('refreshToken');
+            const { setCompanyTokens, clearTenantContext } = await import('./authService');
+            setCompanyTokens(data.access, data.refresh);
+            // Ensure master tokens don't bleed into company session
+            clearTenantContext(); // reset, then set fresh below
         }
 
-        // Save tenant and company info
+        // Save tenant and company info for company domain
         httpClient.saveAuthData({
             tenant_id: data.tenant_id,
             company_name: data.company_name,
         });
 
         return data;
+    }
+
+    // ─── MASTER DOMAIN API (ISOLATED) ─────────────────────────────────────────
+    // All master API calls go to /api/master/* exclusively.
+    // These methods MUST NOT be called from company-domain components.
+
+    /**
+     * Authenticate a Master (Platform Admin).
+     * Tokens are stored in the MASTER domain slot (master_refresh_token).
+     */
+    async masterLogin(email: string, username: string, password: string) {
+        const data = await httpClient.post<any>('/api/master/auth/login/', { email, username, password });
+
+        if (data.access && data.refresh) {
+            const { setMasterTokens, clearTenantContext } = await import('./authService');
+            setMasterTokens(data.access, data.refresh);
+            // Guarantee no tenant context leaks into master session
+            clearTenantContext();
+        }
+
+        return data;
+    }
+
+    /**
+     * Register a new Master (Platform Admin).
+     * Tokens are stored in the MASTER domain slot.
+     */
+    async masterRegister(data: any) {
+        const response = await httpClient.post<any>('/api/master/auth/register/', data);
+
+        if (response.access && response.refresh) {
+            const { setMasterTokens, clearTenantContext } = await import('./authService');
+            setMasterTokens(response.access, response.refresh);
+            clearTenantContext();
+        }
+
+        return response;
+    }
+
+    async masterRequestResetOTP(email: string) {
+        return httpClient.post<{ success: boolean; message: string }>('/api/master/auth/request-otp/', { email });
+    }
+
+    async masterVerifyOTPOnly(email: string, otp: string) {
+        return httpClient.post<{ success: boolean; message: string }>('/api/master/auth/verify-otp-only/', { email, otp });
+    }
+
+    async masterResetPassword(data: { email: string; otp: string; new_password: string }) {
+        return httpClient.post<{ success: boolean; message: string }>('/api/master/auth/reset-password/', data);
+    }
+
+    /** List all companies owned by this Master Admin (/api/master/* only) */
+    async getMasterCompanies() {
+        return httpClient.get<any[]>('/api/master/companies/');
+    }
+
+    /** 
+     * Create a new company (tenant) and its owner account in a single provisioning step.
+     * Endpoint: POST /api/master/companies/
+     */
+    async createMasterCompany(provisioningData: {
+        company_name: string;
+        gstin: string;
+        business_email: string;
+        phone: string;
+        owner: {
+            username: string;
+            email: string;
+            password: string;
+        }
+    }) {
+        const data = await httpClient.post<any>('/api/master/companies/', provisioningData);
+        return data;
+    }
+
+    async getMasterStats(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any>('/api/master/stats/', undefined, options);
+    }
+
+    async getMasterRecentActivity(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/master/recent-activity/', undefined, options);
+    }
+
+    async getMasterCompanyDetail(tenantId: string, options: AxiosRequestConfig = {}) {
+        return httpClient.get<any>(`/api/master/companies/${tenantId}/`, undefined, options);
+    }
+
+    async getMasterSettings(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any>('/api/master/settings/', undefined, options);
+    }
+
+    async updateMasterSettings(data: any, options: AxiosRequestConfig = {}) {
+        return httpClient.put<any>('/api/master/settings/', data, options);
     }
 
     async register(userData: {

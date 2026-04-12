@@ -16,7 +16,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--tenant-id',
             type=str,
-            help='Tenant ID to delete data for (optional, will delete for all tenants if not provided)',
+            help='Branch ID to delete data for (optional, will delete for all tenants if not provided)',
         )
         parser.add_argument(
             '--confirm',

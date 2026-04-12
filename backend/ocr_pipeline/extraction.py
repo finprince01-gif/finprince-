@@ -1,188 +1,100 @@
-import os
 import json
 import logging
-from google import genai
-from typing import Dict, Any
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-# Reusing environment variable for API Key
-API_KEY = os.getenv("GEMINI_API_KEY")
-
-def extract_invoice(file_bytes: bytes) -> Dict[str, Any]:
+def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.0.0"):
     """
-    Extracts structured data from invoice file bytes using Google Gemini.
-    FINAL High-precision comprehensive extraction model.
+    Extracts invoice data using Gemini 2.0 Flash.
+    Returns a unified JSON object matching the internal schema.
     """
-    if not API_KEY:
-        raise ValueError("GEMINI_API_KEY not configured in environment")
+    prompt = f"""
+Extract invoice data from this {voucher_type} document into the EXACT JSON format below.
 
-    # Initialize Client
-    client = genai.Client(api_key=API_KEY)
-    
-    prompt = """
-You are a high-precision invoice extraction engine.
-
-Your task is to extract structured invoice data from a document into STRICT JSON format.
-
----
-
-# 🎯 CORE OBJECTIVE
-
-Extract ALL relevant invoice fields with HIGH accuracy.
-
-DO NOT skip fields.
-DO NOT rename keys.
-DO NOT return partial data.
-
----
-
-# 🧩 STRICT OUTPUT FORMAT (JSON ONLY)
-
-{
+# 🎯 SCHEMA
+{{
   "vendor_name": "",
   "vendor_address": "",
-  "vendor_city": "",
-  "gstin": "",
-  "invoice_number": "",
+  "vendor_gstin": "",
+  "vendor_state": "",
+  "invoice_no": "",
   "invoice_date": "",
-  "place_of_supply": "",
-  "due_date": "",
-  "payment_terms": "",
-  "transporter_name": "",
-  "vehicle_number": "",
-  "lr_number": "",
-  "ack_number": "",
-  "ack_date": "",
   "total_amount": 0,
   "taxable_value": 0,
   "cgst": 0,
   "sgst": 0,
   "igst": 0,
+  "gst_taxability_type": "Taxable",
+  "gst_nature_of_transaction": "",
   "line_items": [
-    {
+    {{
       "description": "",
       "hsn_code": "",
       "quantity": 0,
       "uom": "",
       "rate": 0,
+      "discount_percent": 0,
       "taxable_value": 0,
-      "cgst": 0,
-      "sgst": 0,
-      "igst": 0,
+      "igst_rate": 0,
+      "igst_amount": 0,
+      "cgst_rate": 0,
+      "cgst_amount": 0,
+      "sgst_rate": 0,
+      "sgst_amount": 0,
+      "cess_rate": 0,
+      "cess_amount": 0,
       "amount": 0
-    }
+    }}
   ]
-}
+}}
 
 ---
 
-# 🧠 EXTRACTION STRATEGY (MANDATORY)
+# 🧠 EXTRACTION STRATEGY
 
-## 1. HEADER PARSING (VERY IMPORTANT)
-The top section contains:
-* Vendor Name (first line)
-* Vendor Address (next lines)
-* Vendor City (derived from address)
+## 1. TAX & TOTALS
+* MANDATORY: If IGST Rate, CGST Rate, or SGST Rate are present at the bottom summary of the invoice, you MUST distribute those rates (e.g. 9.0, 18.0) to every line item in the JSON. NO EXCEPTIONS.
+* Even if it is handwritten symbols like "@", "9 %", or "GST", identify them as tax rates.
+* Taxable Value per item should be the base amount (Rate * Qty) before any Discount. If it is NOT explicitly in the row, you MUST compute it as Qty * Rate.
+* The `total_amount` in the header should be the Grand Total of the invoice.
 
-### RULES:
-* Vendor Name = FIRST prominent line (usually uppercase)
-* Vendor Address = lines immediately after vendor name (full multi-line address)
-* STOP address extraction when: GSTIN appears OR Invoice number appears
-* vendor_city = the city name extracted from vendor_address
-  - Look for patterns: city before PIN code, or city after district
-  - Examples: "Coimbatore", "Chennai", "Mumbai"
-  - DO NOT guess — only extract if clearly present in address
-  - If not found → return empty string ""
+## 2. LINE ITEM ALIGNMENT
+* Extract all items in the table. 
+* Ensure `description` is exactly as written.
+* If `hsn_code` is present, extract it for each row.
 
----
-
-## 2. GSTIN
-* Extract 15-character GSTIN
-* Remove spaces
-* Must be uppercase
+## 3. ADDRESS EXTRACTION
+* Extract the FULL multi-line address for the vendor/supplier.
+* Identify the GSTIN of the vendor.
 
 ---
 
-## 3. INVOICE DETAILS
-Extract:
-* invoice_number → labels like "Invoice No", "Bill No", "Inv No"
-* invoice_date → convert to YYYY-MM-DD
-
----
-
-## 4. DUE DETAILS
-Extract if present: due_date, payment_terms (e.g., "Net 30", "Due in 15 days")
-If not present → return empty string ""
-
----
-
-## 5. TRANSIT DETAILS
-Extract ONLY if clearly present: transporter_name, vehicle_number, lr_number (LR/GR/Consignment No)
-If not present → return empty string ""
-
----
-
-## 6. ACK DETAILS
-Extract: ack_number, ack_date
-If not present → return empty string ""
-
----
-
-## 7. AMOUNT DETAILS
-Extract: total_amount (final invoice value), taxable_value, cgst, sgst, igst
-Convert all to FLOAT. Remove commas.
-
----
-
-## 8. LINE ITEM EXTRACTION (CRITICAL)
-You MUST extract table rows correctly.
-For EACH row: description, hsn_code (HSN/SAC column), quantity, uom (unit), rate, taxable_value, cgst, sgst, igst, amount
-
-### RULES:
-* Each row = one item
-* DO NOT merge rows
-* DO NOT skip HSN code
-* DO NOT shift columns
-* Maintain correct column alignment
-
----
-
-# 🚫 STRICT RULES
-* NO extra keys
-* NO missing keys
-* NO explanations
-* NO text outside JSON
-* DO NOT merge vendor name and address
-* DO NOT hallucinate data
-* If uncertain → return best guess (NOT null unless impossible)
-
----
-
-# ⚠️ IMPORTANT CONSTRAINTS
-* Branch is NOT part of invoice → DO NOT extract it
-* vendor_city is DERIVED from vendor_address, NOT a separate OCR scan
-* If a field is not present → return empty string "" (NOT null)
-* vendor_city must match a real city in the address — no hallucination
-
----
-
-# 🧠 FINAL GOAL
-Return clean, structured, UI-ready data WITHOUT requiring mapping.
+# 🚫 RULES
+* Return ONLY valid JSON.
+* Ensure all numeric fields are numbers (not strings).
+* If a field is missing, use "" for strings or 0 for numbers.
+* DO NOT hallucinate the invoice total into the line item amounts.
 """
     
     # Process blob directly
     try:
+        logger.info(f"AI OCR Call: gemini-2.0-flash | Outbound IP: {public_ip}")
         response = client.models.generate_content(
             model="gemini-2.0-flash", 
             contents=[
                 prompt,
-                {"mime_type": "application/pdf", "data": file_bytes}
-            ]
+                {"inline_data": {"mime_type": "application/pdf", "data": file_bytes}}
+            ],
+            config=types.GenerateContentConfig(
+                http_options=types.HttpOptions(timeout=None)
+            )
         )
         
         # Parse result
         text = response.text.strip()
+        logger.info(f"RAW AI RESPONSE: {text}")
+        
         if "```json" in text:
             text = text.split("```json")[-1].split("```")[0].strip()
         elif "```" in text:

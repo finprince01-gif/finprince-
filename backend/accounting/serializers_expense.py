@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models_voucher_expense import VoucherExpense
+from .models_voucher_expense import VoucherExpense, ExpenseLineItem
 from .models import Voucher, MasterLedger
 from .services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal, InvalidOperation
@@ -12,27 +12,41 @@ def _safe_decimal(value):
     except (InvalidOperation, TypeError, ValueError):
         return Decimal("0")
 
+class ExpenseLineItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExpenseLineItem
+        fields = [
+            'id', 'expense_ledger_name', 'expense_ledger_id', 'post_to_ledger_name', 
+            'post_to_ledger_id', 'amount', 'taxable_value', 'gst_rate', 'cgst', 'sgst', 'igst', 'total_amount'
+        ]
+
 class VoucherExpenseSerializer(serializers.ModelSerializer):
     voucher_number = serializers.CharField(required=False, allow_blank=True)
+    expense_rows = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
+    line_items = ExpenseLineItemSerializer(many=True, read_only=True, source='rel_items')
 
     class Meta:
         model = VoucherExpense
-        fields = '__all__'
-        read_only_fields = ['tenant_id']
+        fields = [
+            'id', 'date', 'voucher_series', 'voucher_number', 'expense_rows', 
+            'posting_note', 'tenant_id', 'created_at', 'updated_at', 'line_items'
+        ]
+        read_only_fields = ['tenant_id', 'created_at', 'updated_at']
     
     def create(self, validated_data):
         request = self.context.get('request')
         tenant_id = None
-        if request and hasattr(request.user, 'tenant_id'):
-            tenant_id = request.user.tenant_id
+        if request and hasattr(request, 'user') and hasattr(request.user, 'tenant_id'):
+            tenant_id = request.user.branch_id
             validated_data['tenant_id'] = tenant_id
+
+        rows = validated_data.pop('expense_rows', [])
 
         if not validated_data.get('voucher_number'):
             validated_data['voucher_number'] = f"EXP-{uuid.uuid4().hex[:6].upper()}"
 
         expense = super().create(validated_data)
 
-        rows = expense.expense_rows if isinstance(expense.expense_rows, list) else []
         total_amount = sum(
             (_safe_decimal(row.get('totalAmount')) for row in rows if isinstance(row, dict)),
             Decimal("0"),
@@ -45,7 +59,6 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
             voucher_number=expense.voucher_number,
             total=total_amount,
             narration=expense.posting_note,
-            items_data=rows or None,
             source='expense_voucher',
             reference_id=expense.id,
         )
@@ -55,9 +68,25 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
             expense.voucher_id = voucher.id
             expense.save(update_fields=['voucher_id'])
 
+        # --- Sync to Normalized Expense Items Table ---
+        self._sync_expense_items(expense, rows)
+
         # --- Double-Entry Posting for Expense (entries table) ---
         try:
             entries = []
+            from customerportal.database import CustomerMasterCustomerBasicDetails
+            from vendors.models import VendorMasterBasicDetail
+
+            def get_ids(led_id):
+                v_id = None
+                c_id = None
+                v = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=led_id).first()
+                if v: v_id = v.id
+                else:
+                    c = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, ledger_id=led_id).first()
+                    if c: c_id = c.id
+                return v_id, c_id
+
             for row in rows:
                 amt = float(_safe_decimal(row.get('totalAmount', 0)))
                 if amt <= 0:
@@ -70,11 +99,11 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
                 post_to_ledger = _resolve_ledger(post_to_val, tenant_id)
                 
                 if exp_ledger:
-                    # Debit Expense
-                    entries.append({"ledger_id": exp_ledger.id, "debit": amt, "credit": 0})
+                    vid, cid = get_ids(exp_ledger.id)
+                    entries.append({"ledger_id": exp_ledger.id, "debit": amt, "credit": 0, "vendor_id": vid, "customer_id": cid})
                 if post_to_ledger:
-                    # Credit Source (Bank/Cash)
-                    entries.append({"ledger_id": post_to_ledger.id, "debit": 0, "credit": amt})
+                    vid, cid = get_ids(post_to_ledger.id)
+                    entries.append({"ledger_id": post_to_ledger.id, "debit": 0, "credit": amt, "vendor_id": vid, "customer_id": cid})
             
             if len(entries) >= 2:
                 post_transaction(voucher_type="EXPENSE", voucher_id=voucher.id, tenant_id=tenant_id, entries=entries)
@@ -83,3 +112,43 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
             print(f"Error posting expense to entries: {str(e)}")
 
         return expense
+
+    def update(self, instance, validated_data):
+        rows = validated_data.pop('expense_rows', None)
+        instance = super().update(instance, validated_data)
+        
+        if rows is not None:
+            self._sync_expense_items(instance, rows)
+            
+        return instance
+
+    def _sync_expense_items(self, expense, rows):
+        """Sync expense_rows JSON to ExpenseLineItem table."""
+        if not rows: return
+        tenant_id = expense.tenant_id
+        
+        ExpenseLineItem.objects.filter(expense_voucher=expense).delete()
+        for row in rows:
+            if not isinstance(row, dict): continue
+            
+            exp_led_val = row.get('expense')
+            post_to_val = row.get('postTo')
+            
+            exp_led_obj = _resolve_ledger(exp_led_val, tenant_id)
+            post_to_led_obj = _resolve_ledger(post_to_val, tenant_id)
+            
+            ExpenseLineItem.objects.create(
+                expense_voucher=expense,
+                tenant_id=tenant_id,
+                expense_ledger_name=str(exp_led_val),
+                expense_ledger_id=exp_led_obj.id if exp_led_obj else None,
+                post_to_ledger_name=str(post_to_val),
+                post_to_ledger_id=post_to_led_obj.id if post_to_led_obj else None,
+                amount=_safe_decimal(row.get('amount', 0)),
+                taxable_value=_safe_decimal(row.get('taxableValue', 0)),
+                gst_rate=_safe_decimal(row.get('gstRate', row.get('taxRate', 0))),
+                cgst=_safe_decimal(row.get('cgst', 0)),
+                sgst=_safe_decimal(row.get('sgst', 0)),
+                igst=_safe_decimal(row.get('igst', 0)),
+                total_amount=_safe_decimal(row.get('totalAmount', 0))
+            )

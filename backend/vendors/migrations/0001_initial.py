@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
             name='VendorMasterBasicDetail',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('vendor_code', models.CharField(blank=True, help_text='Vendor code (auto-generated or manual)', max_length=50, null=True)),
                 ('vendor_name', models.CharField(help_text='Vendor name', max_length=200)),
                 ('pan_no', models.CharField(blank=True, help_text='PAN number', max_length=10, null=True)),
@@ -47,7 +47,7 @@ class Migration(migrations.Migration):
             name='VendorMasterBanking',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('bank_account_no', models.CharField(help_text='Bank Account Number', max_length=50)),
                 ('bank_name', models.CharField(help_text='Bank Name', max_length=200)),
                 ('ifsc_code', models.CharField(help_text='IFSC Code', max_length=11)),
@@ -72,7 +72,7 @@ class Migration(migrations.Migration):
             name='VendorMasterCategory',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('category', models.CharField(help_text='Top-level category (e.g., RAW MATERIAL, Stores and Spares, Packing Material)', max_length=255)),
                 ('group', models.CharField(blank=True, default='', help_text='Group under category (optional)', max_length=255)),
                 ('subgroup', models.CharField(blank=True, default='', help_text='Subgroup under group (optional)', max_length=255)),
@@ -91,7 +91,7 @@ class Migration(migrations.Migration):
             name='Vendor',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('vendor_code', models.CharField(help_text='Unique vendor code', max_length=50, unique=True)),
                 ('vendor_name', models.CharField(help_text='Vendor/Supplier name', max_length=200)),
                 ('display_name', models.CharField(blank=True, help_text='Display name', max_length=200, null=True)),
@@ -145,7 +145,7 @@ class Migration(migrations.Migration):
             name='VendorMasterGSTDetails',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('gstin', models.CharField(help_text='GSTIN number (15 characters)', max_length=15)),
                 ('gst_registration_type', models.CharField(choices=[('regular', 'Regular'), ('composition', 'Composition'), ('unregistered', 'Unregistered'), ('consumer', 'Consumer'), ('overseas', 'Overseas'), ('special_economic_zone', 'Special Economic Zone'), ('deemed_export', 'Deemed Export')], default='regular', help_text='GST registration type', max_length=50)),
                 ('legal_name', models.CharField(help_text='Legal name as per GST', max_length=200)),
@@ -180,7 +180,7 @@ class Migration(migrations.Migration):
             name='VendorMasterPOSettings',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('name', models.CharField(help_text='Name of PO Series', max_length=200)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for PO number (e.g., PO/)', max_length=50, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for PO number (e.g., /24-25)', max_length=50, null=True)),
@@ -202,7 +202,7 @@ class Migration(migrations.Migration):
             name='VendorMasterProductService',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('items', models.JSONField(default=list, help_text='JSON array of product/service items')),
                 ('is_active', models.BooleanField(default=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
@@ -221,7 +221,7 @@ class Migration(migrations.Migration):
             name='VendorMasterTDS',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('tds_section_applicable', models.CharField(blank=True, help_text='TDS Section Applicable', max_length=100, null=True)),
                 ('enable_automatic_tds_posting', models.BooleanField(default=False, help_text='Enable automatic TDS posting')),
                 ('msme_udyam_no', models.CharField(blank=True, help_text='MSME Udyam Registration Number', max_length=50, null=True)),
@@ -257,7 +257,7 @@ class Migration(migrations.Migration):
             name='VendorMasterTerms',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('credit_limit', models.DecimalField(blank=True, decimal_places=2, help_text='Credit limit amount', max_digits=15, null=True)),
                 ('credit_period', models.CharField(blank=True, help_text='Credit period (e.g., 30 days, 60 days)', max_length=100, null=True)),
                 ('credit_terms', models.TextField(blank=True, help_text='Credit terms and conditions', null=True)),
@@ -308,7 +308,7 @@ class Migration(migrations.Migration):
             name='VendorTransactionPO',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('po_number', models.CharField(help_text='Purchase Order Number', max_length=50)),
                 ('po_date', models.DateField(default=django.utils.timezone.now, help_text='Purchase Order Date')),
                 ('vendor_name', models.CharField(blank=True, help_text='Vendor name', max_length=200, null=True)),
@@ -348,7 +348,7 @@ class Migration(migrations.Migration):
             name='VendorTransactionPOItem',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('item_code', models.CharField(blank=True, help_text='Item code', max_length=50, null=True)),
                 ('item_name', models.CharField(blank=True, help_text='Item name', max_length=200, null=True)),
                 ('supplier_item_code', models.CharField(blank=True, help_text='Supplier item code', max_length=50, null=True)),

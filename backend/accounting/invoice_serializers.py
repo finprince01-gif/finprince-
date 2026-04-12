@@ -6,10 +6,10 @@ Handles data transformation for sales invoices.
 from rest_framework import serializers
 from accounting.models import SalesInvoice, MasterLedger
 from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
-from core.utils import TenantModelSerializerMixin
+from core.mixins import BranchModelSerializerMixin
 
 
-class SalesInvoiceSerializer(TenantModelSerializerMixin, serializers.ModelSerializer):
+class SalesInvoiceSerializer(BranchModelSerializerMixin, serializers.ModelSerializer):
     """Serializer for Sales Invoice - Invoice Details"""
     
     customer_name = serializers.CharField(source='customer.name', read_only=True)

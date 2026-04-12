@@ -14,7 +14,7 @@ def create_invoice(tenant_id: str, invoice_data: Dict) -> Dict:
     Create a new sales invoice with validation.
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         invoice_data: Invoice data from API
         
     Returns:
@@ -90,7 +90,7 @@ def update_invoice(invoice_id: int, tenant_id: str, update_data: Dict) -> Dict:
     
     Args:
         invoice_id: Invoice ID
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         update_data: Data to update
         
     Returns:
@@ -144,7 +144,7 @@ def get_invoice(invoice_id: int, tenant_id: str) -> Optional[Dict]:
     
     Args:
         invoice_id: Invoice ID
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         Dict: Invoice data or None
@@ -180,7 +180,7 @@ def list_invoices(tenant_id: str, filters: Optional[Dict] = None) -> list:
     List all invoices for tenant.
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         filters: Optional filters
         
     Returns:
@@ -213,7 +213,7 @@ def determine_tax_type(bill_to_state: str, bill_to_country: str, tenant_id: str)
     Args:
         bill_to_state: Customer state
         bill_to_country: Customer country
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         str: Tax type ('within_state', 'other_state', 'export')
@@ -235,7 +235,7 @@ def cancel_invoice(invoice_id: int, tenant_id: str) -> bool:
     
     Args:
         invoice_id: Invoice ID
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         bool: True if successful

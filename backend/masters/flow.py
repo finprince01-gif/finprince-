@@ -1,5 +1,5 @@
 """
-Masters Flow Layer - Business Logic + RBAC + Tenant Validation
+Masters Flow Layer - Business Logic + RBAC + Branch Validation
 This is the ONLY place for business decisions in the Masters module.
 Every function MUST start with tenant validation and permission checks.
 """
@@ -59,8 +59,8 @@ def list_ledger_groups(user):
     Returns:
         QuerySet of ledger groups
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - fetch data
     return db.get_all_ledger_groups(tenant_id)
@@ -77,8 +77,8 @@ def create_ledger_group(user, data):
     Returns:
         Created ledger group instance
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - create
     return db.create_ledger_group(data, tenant_id)
@@ -96,8 +96,8 @@ def update_ledger_group(user, ledger_group_id, data):
     Returns:
         Updated ledger group instance
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - update
     return db.update_ledger_group(ledger_group_id, data, tenant_id)
@@ -111,8 +111,8 @@ def delete_ledger_group(user, ledger_group_id):
         user: Authenticated user
         ledger_group_id: ID of ledger group to delete
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - delete
     db.delete_ledger_group(ledger_group_id, tenant_id)
@@ -132,8 +132,8 @@ def list_ledgers(user):
     Returns:
         QuerySet of ledgers
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - fetch data
     logger.info(f"🔍 Listing ledgers for tenant {tenant_id}, user: {user}")
@@ -153,15 +153,13 @@ def create_ledger(user, validated_data):
     Returns:
         Created ledger instance
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - create with code generation and retry
     logger.info(f"📝 Creating ledger for tenant {tenant_id} - Data: {validated_data}")
     
-    # Extract question answers before creating ledger
-    question_answers = validated_data.pop('additional_data', {})
-    logger.info(f"📋 Question answers extracted: {question_answers}")
+    # No longer tracking question_answers
     
     # Retry logic for code generation (handles race conditions)
     max_retries = 3
@@ -177,38 +175,12 @@ def create_ledger(user, validated_data):
                     f"(attempt {attempt + 1}/{max_retries})"
                 )
                 
-                # Save with generated code (including additional_data)
-                ledger_data = {**validated_data, 'code': ledger_code, 'additional_data': question_answers}
+                # Save with generated code
+                ledger_data = {**validated_data, 'code': ledger_code}
                 ledger = db.create_ledger(ledger_data, tenant_id)
                 logger.info(f"✅ Ledger saved successfully with code: {ledger_code}")
                 
-                # Save answers to Answer table
-                if question_answers and isinstance(question_answers, dict):
-                    from accounting.models_question import Question, Answer  # type: ignore
-                    logger.info(f"💾 Saving {len(question_answers)} answers to answers table...")
-                    
-                    for q_id, ans_text in question_answers.items():
-                        if not ans_text:
-                            logger.info(f"⏭️  Skipping empty answer for Q_ID: {q_id}")
-                            continue
-                            
-                        try:
-                            question_obj = Question.objects.get(id=q_id)
-                            Answer.objects.create(
-                                ledger_code=ledger.code,
-                                sub_group_1_1=question_obj.sub_group_1_1,
-                                sub_group_1_2=question_obj.sub_group_1_2,
-                                question=question_obj.question,
-                                answer=ans_text,
-                                tenant_id=tenant_id
-                            )
-                            logger.info(f"✅ Saved answer for Q:{q_id} to answers table")
-                        except Question.DoesNotExist:
-                            logger.warning(f"⚠️  Question with ID {q_id} does not exist!")
-                        except Exception as e:
-                            logger.error(f"❌ Failed to save answer for Q:{q_id}: {e}")
-                else:
-                    logger.info("ℹ️  No question answers to save")
+                # Removed legacy models_question logic
                 
                 # Auto-create AmountTransaction for Cash/Bank ledgers (even without opening balance)
                 if _is_cash_or_bank_ledger(ledger):
@@ -216,10 +188,7 @@ def create_ledger(user, validated_data):
                         from accounting.models import AmountTransaction  # type: ignore
                         from datetime import date
                         
-                        # Get opening balance from question_answers or default to 0
                         opening_balance = 0
-                        if question_answers:
-                            opening_balance = question_answers.get('opening_balance', 0)
                         
                         opening_balance_value = float(opening_balance) if opening_balance else 0
                         logger.info(f"💰 Creating transaction for {ledger.name}: {opening_balance_value}")
@@ -280,8 +249,8 @@ def update_ledger(user, ledger_id, data):
     Returns:
         Updated ledger instance
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - update
     logger.info(f"📝 Updating ledger {ledger_id} for tenant {tenant_id} - Data: {data}")
@@ -298,8 +267,8 @@ def delete_ledger(user, ledger_id):
         user: Authenticated user
         ledger_id: ID of ledger to delete
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - delete
     db.delete_ledger(ledger_id, tenant_id)
@@ -319,8 +288,8 @@ def list_voucher_configs(user):
     Returns:
         QuerySet of voucher configs
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - fetch data
     return db.get_all_voucher_configs(tenant_id)
@@ -337,8 +306,8 @@ def create_voucher_config(user, data):
     Returns:
         Created voucher config instance
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - create
     return db.create_voucher_config(data, tenant_id)
@@ -356,8 +325,8 @@ def update_voucher_config(user, config_id, data):
     Returns:
         Updated voucher config instance
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - update
     return db.update_voucher_config(config_id, data, tenant_id)
@@ -371,15 +340,15 @@ def delete_voucher_config(user, config_id):
         user: Authenticated user
         config_id: ID of voucher config to delete
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)    
     # 2. Business logic - delete
     db.delete_voucher_config(config_id, tenant_id)
 
 
 # ============================================================================
-# HIERARCHY OPERATIONS (Global - No Tenant/RBAC)
+# HIERARCHY OPERATIONS (Global - No Branch/RBAC)
 # ============================================================================
 
 def list_hierarchy_data():
@@ -408,7 +377,7 @@ def list_voucher_configurations(user, voucher_type='sales'):
     Returns:
         QuerySet of voucher configurations
     """
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)
     
     # 2. Business logic - fetch data
@@ -426,8 +395,8 @@ def create_voucher_configuration(user, data):
     Returns:
         Created voucher configuration instance
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)
     
     # 2. Business logic - create
@@ -449,8 +418,8 @@ def update_voucher_configuration(user, config_id, data):
     Returns:
         Updated voucher configuration instance
     """
-    # 1. Tenant validation
-    # 1. Tenant validation
+    # 1. Branch validation
+    # 1. Branch validation
     tenant_id = get_tenant_id(user)
     
     # 2. Business logic - update
@@ -687,7 +656,7 @@ def _calculate_balance(tenant_id, ledger_id, debit, credit):
     For Asset accounts: Balance = Previous Balance + Debit - Credit
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         ledger_id: Ledger ID
         debit: Debit amount
         credit: Credit amount

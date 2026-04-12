@@ -60,7 +60,7 @@ class RoleSerializer(serializers.ModelSerializer):
         """Create role with tenant_id from request"""
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
-            validated_data['tenant_id'] = request.user.tenant_id
+            validated_data['tenant_id'] = request.user.branch_id
         return super().create(validated_data)
 
 
@@ -85,11 +85,11 @@ class UserRoleSerializer(serializers.ModelSerializer):
         if not request or not hasattr(request, 'user'):
             return data
             
-        tenant_id = request.user.tenant_id
+        tenant_id = request.user.branch_id
         user = data.get('user')
         role = data.get('role')
         
-        if user and hasattr(user, 'tenant_id') and user.tenant_id != tenant_id:
+        if user and hasattr(user, 'tenant_id') and user.branch_id != tenant_id:
             raise serializers.ValidationError("Cannot assign role to a user from another organization")
             
         if role and role.tenant_id != tenant_id:
@@ -102,7 +102,7 @@ class UserRoleSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             user = validated_data['user']
-            validated_data['tenant_id'] = request.user.tenant_id
+            validated_data['tenant_id'] = request.user.branch_id
             validated_data['assigned_by'] = request.user
             # Populate denormalized fields for quick access
             validated_data['username'] = user.username
@@ -204,7 +204,7 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
         if not request or not hasattr(request, 'user'):
             return value
         
-        tenant_id = request.user.tenant_id
+        tenant_id = request.user.branch_id
         for role_id in value:
             if not Role.objects.filter(id=role_id, tenant_id=tenant_id).exists():
                 raise serializers.ValidationError(
@@ -228,8 +228,8 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
             company_name = getattr(request.user, 'company_name', None)
             
         if not tenant_id:
-            logger.error(f"Cannot create user: Tenant ID missing from request context. User: {request.user if request else 'No Request'}")
-            raise serializers.ValidationError({"detail": "Cannot determine organization (Tenant ID) from your session. Please re-login."})
+            logger.error(f"Cannot create user: Branch ID missing from request context. User: {request.user if request else 'No Request'}")
+            raise serializers.ValidationError({"detail": "Cannot determine organization (Branch ID) from your session. Please re-login."})
 
         try:
             # Create user with tenant_id from request

@@ -14,13 +14,13 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         tenant_id = getattr(self.request.user, 'tenant_id', None)
         if not tenant_id:
-             tenant_id = self.request.headers.get('X-Tenant-Id')
+             tenant_id = self.request.headers.get('X-Branch-Id')
         return self.queryset.filter(tenant_id=tenant_id)
 
     def _get_tenant_id(self, request):
         tenant_id = getattr(request.user, 'tenant_id', None)
         if not tenant_id:
-             tenant_id = request.headers.get('X-Tenant-Id')
+             tenant_id = request.headers.get('X-Branch-Id')
         return tenant_id
 
     @action(detail=False, methods=['get'], url_path='ledger/(?P<ledger_id>[^/.]+)/entries')

@@ -17,7 +17,7 @@ class VendorBasicDetailDatabase:
         Generate the next vendor code for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             
         Returns:
             Generated vendor code (e.g., VEN0001)
@@ -49,7 +49,7 @@ class VendorBasicDetailDatabase:
         in the Pay To / Receive From dropdowns in Payment & Receipt vouchers.
 
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendor_data: Dictionary containing vendor data
             created_by: Username of creator
 
@@ -175,7 +175,7 @@ class VendorBasicDetailDatabase:
         Retrieve a vendor basic detail by vendor code.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendor_code: Vendor code
             
         Returns:
@@ -195,7 +195,7 @@ class VendorBasicDetailDatabase:
         Retrieve all vendor basic details for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             is_active: Filter by active status (default True)
             
         Returns:
@@ -212,7 +212,7 @@ class VendorBasicDetailDatabase:
         Search vendors by name, code, email, or contact number.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             search_term: Search term
             
         Returns:
@@ -296,7 +296,7 @@ class VendorBasicDetailDatabase:
         Check if a vendor code already exists for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendor_code: Vendor code to check
             exclude_id: Optional ID to exclude from check (for updates)
             
@@ -317,7 +317,7 @@ class VendorBasicDetailDatabase:
         Check if an email already exists for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             email: Email to check
             exclude_id: Optional ID to exclude from check (for updates)
             
@@ -338,7 +338,7 @@ class VendorBasicDetailDatabase:
         Check if a PAN number already exists for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             pan_no: PAN number to check
             exclude_id: Optional ID to exclude from check (for updates)
             
@@ -362,7 +362,7 @@ class VendorBasicDetailDatabase:
         Get statistics for vendors in a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             
         Returns:
             Dictionary with statistics
@@ -384,7 +384,7 @@ class VendorBasicDetailDatabase:
         Bulk create vendor basic details.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendors_data: List of dictionaries containing vendor data
             created_by: Username of creator
             

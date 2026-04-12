@@ -3,10 +3,9 @@ from rest_framework import routers # pyre-fixme
 from .views import ( # pyre-fixme
     MasterLedgerGroupViewSet, MasterLedgerViewSet,
     MasterHierarchyRawViewSet, VoucherViewSet, JournalEntryViewSet,
-    PayFromLedgerView, PayToLedgerView
+    PayFromLedgerView, PayToLedgerView, QuestionsBySubgroupView
 )
-from .views_questions import LedgerQuestionsView, LedgerCreateWithQuestionsView # pyre-fixme
-from .views_question import QuestionViewSet # pyre-fixme
+
 from .sales_api import ( # pyre-fixme
     ReceiptVoucherTypeViewSet,
     SalesVoucherViewSet,
@@ -80,8 +79,6 @@ router.register('allocations', VoucherAllocationViewSet, basename='voucher-alloc
 # Journal entries
 router.register('journal-entries', JournalEntryViewSet, basename='journal-entries')
 
-# Questions endpoint
-router.register('questions', QuestionViewSet, basename='questions')
 
 
 # GST Endpoints
@@ -100,9 +97,8 @@ urlpatterns = [
     # Dashboard Analytics
     path('dashboard/analytics/', DashboardAnalyticsView.as_view(), name='dashboard-analytics'),
 
-    # Questions System endpoints
-    path('ledgers/questions/', LedgerQuestionsView.as_view(), name='ledger-questions'),
-    path('ledgers/create-with-questions/', LedgerCreateWithQuestionsView.as_view(), name='ledger-create-with-questions'),
+    path('questions/by_subgroup/', QuestionsBySubgroupView.as_view(), name='questions-by-subgroup'),
+
     path('ledgers/pay-from/', PayFromLedgerView.as_view(), name='ledgers-pay-from'),
     path('ledgers/pay-to/', PayToLedgerView.as_view(), name='ledgers-pay-to'),
     

@@ -6,10 +6,10 @@ from .models_voucher_sales import VoucherSalesInvoiceDetails
 from .serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
 from .models import Voucher, JournalEntry, MasterLedger
 from .models_voucher_receipt import VoucherReceiptSingle
-from core.utils import TenantQuerysetMixin
+from core.mixins import BranchQuerysetMixin
 import datetime
 
-class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class VoucherSalesViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     queryset = VoucherSalesInvoiceDetails.objects.all().order_by('-date', '-created_at')
     serializer_class = VoucherSalesInvoiceDetailsSerializer
     def get_queryset(self):

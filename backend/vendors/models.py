@@ -12,7 +12,7 @@ class VendorMasterCategory(models.Model):
     Stores the vendor category hierarchy (Category -> Group -> Subgroup)
     This is a flat lookup table for vendor category definitions
     """
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     category = models.CharField(
         max_length=255, 
         help_text="Top-level category (e.g., RAW MATERIAL, Stores and Spares, Packing Material)"
@@ -61,8 +61,8 @@ class Vendor(models.Model):
     """
     Main Vendor model for storing vendor/supplier information.
     """
-    # Tenant and identification
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    # Branch and identification
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     vendor_code = models.CharField(max_length=50, unique=True, help_text="Unique vendor code")
     
     # Basic Information
@@ -220,7 +220,7 @@ class VendorMasterPOSettings(models.Model):
     Model for storing Vendor PO Settings configuration.
     This table stores the PO series settings configured in the frontend.
     """
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     name = models.CharField(max_length=200, help_text="Name of PO Series")
     category = models.ForeignKey(
         'VendorMasterCategory',
@@ -272,7 +272,7 @@ class VendorMasterBasicDetail(models.Model):
     Model for storing Vendor Basic Details.
     This table stores the basic vendor information from the Vendor Creation form.
     """
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     vendor_code = models.CharField(max_length=50, blank=True, null=True, help_text="Vendor code (auto-generated or manual)")
     vendor_name = models.CharField(max_length=200, help_text="Vendor name")
     pan_no = models.CharField(max_length=10, blank=True, null=True, help_text="PAN number")
@@ -364,7 +364,7 @@ class VendorMasterGSTDetails(models.Model):
         ('deemed_export', 'Deemed Export'),
     ]
     
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     vendor_basic_detail = models.ForeignKey(
         VendorMasterBasicDetail,
         on_delete=models.CASCADE,
@@ -443,7 +443,7 @@ class VendorMasterProductService(models.Model):
                        "supplier_item_code": "", "supplier_item_name": ""}]
     """
     
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     vendor_basic_detail = models.OneToOneField(
         VendorMasterBasicDetail,
         on_delete=models.CASCADE,
@@ -460,20 +460,42 @@ class VendorMasterProductService(models.Model):
     
     # Metadata
     is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.CharField(max_length=100, blank=True, null=True, help_text="Created by user")
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
 
-        db_table = 'vendor_master_vendorcreation_productservices'
+        db_table = 'vendors_vendormasterproductservice'
         verbose_name = 'Vendor Master Product/Service'
         verbose_name_plural = 'Vendor Master Products/Services'
 
     def __str__(self):
         count = len(self.items) if self.items else 0
         return f"Products for vendor {self.vendor_basic_detail_id} ({count} items)"
+
+
+class VendorProductServiceItem(models.Model):
+    """Normalized items for Vendor Master Product/Service"""
+    product_service = models.ForeignKey(
+        VendorMasterProductService,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='items_rel'
+    )
+    hsn_sac_code = models.CharField(max_length=20, null=True, blank=True)
+    item_code = models.CharField(max_length=100, null=True, blank=True)
+    item_name = models.CharField(max_length=255, null=True, blank=True)
+    supplier_item_code = models.CharField(max_length=100, null=True, blank=True)
+    supplier_item_name = models.CharField(max_length=255, null=True, blank=True)
+    
+    tenant_id = models.CharField(max_length=36, db_index=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'vendor_master_vendorcreation_productservices_items'
 
 
 
@@ -484,7 +506,7 @@ class VendorMasterTDS(models.Model):
     This table stores the TDS and statutory information from the TDS Details form.
     """
     
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     vendor_basic_detail = models.ForeignKey(
         VendorMasterBasicDetail,
         on_delete=models.CASCADE,
@@ -550,7 +572,7 @@ class VendorMasterBanking(models.Model):
     This table stores the banking details from the Banking Info form.
     """
     
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     vendor_basic_detail = models.ForeignKey(
         VendorMasterBasicDetail,
         on_delete=models.CASCADE,
@@ -612,7 +634,7 @@ class VendorMasterTerms(models.Model):
     This table stores the terms and conditions from the Terms & Conditions form.
     """
     
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     vendor_basic_detail = models.ForeignKey(
         VendorMasterBasicDetail,
         on_delete=models.CASCADE,
@@ -667,7 +689,7 @@ class VendorTransactionPO(models.Model):
         ('Closed', 'Closed'),
     ]
     
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     po_number = models.CharField(max_length=50, help_text="Purchase Order Number")
     po_series = models.ForeignKey(
         VendorMasterPOSettings,
@@ -747,7 +769,7 @@ class VendorTransactionPOItem(models.Model):
     This table stores individual items in a purchase order.
     """
     
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     po = models.ForeignKey(
         VendorTransactionPO,
         on_delete=models.CASCADE,

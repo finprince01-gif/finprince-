@@ -1,11 +1,11 @@
-from rest_framework import serializers
-from django.db import transaction
+from rest_framework import serializers  # type: ignore
+from django.db import transaction  # type: ignore
 from .models_voucher_sales import (
     VoucherSalesInvoiceDetails, VoucherSalesItems, VoucherSalesItemsForeign,
     VoucherSalesPaymentDetails, VoucherSalesDispatchDetails,
     VoucherSalesEwayBill
 )
-from core.utils import TenantModelSerializerMixin
+from core.mixins import BranchModelSerializerMixin
 from accounting.services.ledger_service import post_transaction
 from accounting.utils_ledger import get_standard_ledger
 from customerportal.database import CustomerMasterCustomerBasicDetails
@@ -25,6 +25,8 @@ class VoucherSalesItemsForeignSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at')
 
 class VoucherSalesPaymentDetailsSerializer(serializers.ModelSerializer):
+    advance_references = serializers.JSONField(write_only=True, required=False, allow_null=True)
+
     class Meta:
         model = VoucherSalesPaymentDetails
         exclude = ('invoice', 'tenant_id')
@@ -44,7 +46,7 @@ class VoucherSalesEwayBillSerializer(serializers.ModelSerializer):
         exclude = ('invoice', 'tenant_id')
         read_only_fields = ('id', 'created_at', 'updated_at') 
 
-class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serializers.ModelSerializer):
+class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serializers.ModelSerializer):
     items = VoucherSalesItemsSerializer(many=True, required=False)
     foreign_items = VoucherSalesItemsForeignSerializer(many=True, required=False)
     payment_details = VoucherSalesPaymentDetailsSerializer(required=False)
@@ -115,7 +117,9 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             
             # Create Payment Details
             payment_obj = None
+            adv_refs = None
             if payment_data:
+                adv_refs = payment_data.pop('advance_references', None)
                 payment_obj = VoucherSalesPaymentDetails.objects.create(invoice=invoice, tenant_id=tenant_id, **payment_data)
                 
             # Create Dispatch Details
@@ -142,12 +146,11 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             invoice.save(update_fields=['voucher_id'])
 
             # --- Record Advance Allocation Maps (Phase 4C) ---
-            if payment_obj and payment_obj.advance_references:
-                from django.db.models import Q
+            if adv_refs:
+                from django.db.models import Q  # type: ignore
                 from accounting.services.advance_service import write_allocations
                 try:
                     # Parse if string, or use as-is if already list/dict
-                    adv_refs = payment_obj.advance_references
                     if isinstance(adv_refs, str):
                         import json
                         adv_refs = json.loads(adv_refs)
@@ -193,7 +196,8 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
                 entries.append({
                     "ledger_id": customer.ledger_id,
                     "debit": total_amount,
-                    "credit": 0
+                    "credit": 0,
+                    "customer_id": customer.id
                 })
 
                 # Mandatory Entry: Sales (Credit)

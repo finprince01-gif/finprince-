@@ -21,7 +21,7 @@ class POSettingsFlow:
         Create a PO setting with additional business validation.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             data: Dictionary containing PO setting data
             
         Returns:
@@ -82,7 +82,7 @@ class POSettingsFlow:
         Create multiple PO settings in bulk.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             settings_list: List of dictionaries containing PO setting data
             
         Returns:

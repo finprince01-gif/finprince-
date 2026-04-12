@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherContra',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherCreditNote',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
@@ -67,7 +67,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherDebitNote',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
@@ -93,7 +93,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherExpenses',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
@@ -119,7 +119,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherJournal',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
@@ -145,7 +145,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherPayments',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
@@ -171,7 +171,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherPurchases',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
@@ -197,7 +197,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherReceipts',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
@@ -223,7 +223,7 @@ class Migration(migrations.Migration):
             name='MasterVoucherSales',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('voucher_name', models.CharField(help_text='Voucher name', max_length=100)),
                 ('prefix', models.CharField(blank=True, help_text='Prefix for voucher number', max_length=20, null=True)),
                 ('suffix', models.CharField(blank=True, help_text='Suffix for voucher number', max_length=20, null=True)),
