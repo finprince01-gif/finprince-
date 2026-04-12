@@ -643,7 +643,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         <h3 className="section-title text-sm mb-2">Category Preview</h3>
                         <p className="text-xs text-indigo-600 font-medium mb-4">
                             {selectedNode
-                                ? (selectedNode.level === 0 ? (allowCreateGroup ? `Creating New Group under ${selectedNode.name}` : `Select a Group under ${selectedNode.name} to continue`) : `Creating New Subgroup under ${selectedNode.name}`)
+                                ? (selectedNode.level === 0 ? (allowCreateGroup ? `Creating New Group under ${selectedNode.name}` : `Select a Group under ${selectedNode.name} to continue`) : (showSubgroup ? `Creating New Subgroup under ${selectedNode.name}` : `Viewing Group ${selectedNode.name}`))
                                 : "Please select a category to begin"}
                         </p>
                         <form onSubmit={handleSubmit} className="space-y-5">
@@ -877,7 +877,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                         type="submit"
                                         disabled={!selectedNode || (
                                             selectedNode.level === 0 ? (!allowCreateGroup || !formData.group.trim()) :
-                                                (selectedNode.level === 1 && !selectedNode.data.subgroup) ? !formData.subgroup.trim() :
+                                                (selectedNode.level === 1 && showSubgroup && !selectedNode.data.subgroup) ? !formData.subgroup.trim() :
                                                     (selectedNode.data.category === 'Stores and Spares' && allowCreateItem && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) ? !formData.sub_subgroup.trim() :
                                                         true
                                         )}
@@ -890,7 +890,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                             : selectedNode
                                                 ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
                                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                            } ${selectedNode && ((selectedNode.level === 0 && !allowCreateGroup) || (selectedNode.level === 2 && !allowCreateItem)) ? 'hidden' : ''}`}
+                                            } ${selectedNode && ((selectedNode.level === 0 && !allowCreateGroup) || (selectedNode.level === 1 && !showSubgroup) || (selectedNode.level === 2 && !allowCreateItem)) ? 'hidden' : ''}`}
                                     >
                                         {selectedNode ? (selectedNode.level === 0 ? "Create Group" : selectedNode.level === 1 ? "Create Subgroup" : "Create Item") : "Create"}
                                     </button>

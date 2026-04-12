@@ -191,7 +191,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const [activePaymentSubTab, setActivePaymentSubTab] = useState<ProcurementSubTab>('Dashboard');
 
     // Procurement View State (New)
-    const [procurementViewMode, setProcurementViewMode] = useState<'list' | 'ledger' | 'month' | 'journal'>('list');
+    const [procurementViewMode, setProcurementViewMode] = useState<'list' | 'ledger' | 'month' | 'journal' | 'allocation'>('list');
     const [selectedProcurementVendor, setSelectedProcurementVendor] = useState<any>(null);
 
     // Month Filter State
@@ -388,22 +388,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 const isDebit = ['payment', 'debit_note'].includes(transactionType);
                 const amt = parseFloat(t.total_amount || t.total || t.amount || 0);
 
-                // Map backend transaction type to frontend-friendly label
+                // Map backend transaction type to friendly labels requested by user
                 const typeMap: Record<string, string> = {
-                    'purchase': 'Purchase Voucher',
-                    'payment': 'Payment Voucher',
-                    'receipt': 'Receipt Voucher',
+                    'purchase': 'Purchase',
+                    'payment': 'Payment',
+                    'receipt': 'Receipt',
                     'debit_note': 'Debit Note',
                     'credit_note': 'Credit Note',
+                    'sales': 'Sales',
                     'journal': 'Journal'
                 };
-                const type = typeMap[transactionType] || transactionType;
+                const type = typeMap[transactionType] || (transactionType.charAt(0).toUpperCase() + transactionType.slice(1));
 
                 return {
                     id: `t-${t.id}`,
                     date: t.transaction_date || t.date,
                     transferFrom: type,
-                    referenceNo: t.reference_number || t.transaction_number || t.number || '-',
+                    voucherNo: t.transaction_number || t.number || '-',
+                    referenceNo: t.reference_number || '-',
                     ledger: transactionType === 'receipt' ? 'Receipt' : (t.ledger_name || (transactionType === 'purchase' ? 'Purchase A/c' : '-')),
                     status: (() => {
                         const refType = (t.reference_type || '').toUpperCase();
@@ -518,7 +520,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         return (
             isDateMatch &&
             entry.transferFrom.toLowerCase().includes(ledgerFilters.transferFrom.toLowerCase()) &&
-            entry.referenceNo.toLowerCase().includes(ledgerFilters.referenceNo.toLowerCase()) &&
+            (entry.referenceNo.toLowerCase().includes(ledgerFilters.referenceNo.toLowerCase()) || entry.voucherNo.toLowerCase().includes(ledgerFilters.referenceNo.toLowerCase())) &&
             entry.ledger.toLowerCase().includes(ledgerFilters.ledger.toLowerCase()) &&
             entry.status.toLowerCase().includes(ledgerFilters.status.toLowerCase()) &&
             (entry.debit !== '-' ? entry.debit : '').toLowerCase().includes(ledgerFilters.debit.toLowerCase()) &&
@@ -570,6 +572,135 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     : '-'
             };
         });
+    }, [vendorLedgerData]);
+
+    // Computation for the new Allocation View table
+    const allocationRows = useMemo(() => {
+        if (!vendorLedgerData || vendorLedgerData.length === 0) return [];
+
+        // Group entries by reference_number strictly to find linked vouchers
+        const groups: Record<string, any[]> = {};
+        vendorLedgerData.forEach(entry => {
+            // Use the underlying raw reference_number for linking
+            const ref = entry.rawVoucher.reference_number || '-';
+            if (ref === '-') {
+                // Standalone entry (no link) - give it a unique group unless it's a source
+                const uniqueId = `standalone-${entry.id}`;
+                groups[uniqueId] = [entry];
+                return;
+            }
+            if (!groups[ref]) groups[ref] = [];
+            groups[ref].push(entry);
+        });
+
+        const rows: any[] = [];
+
+        // Process groups and sort by source date
+        const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
+            const dateA = groups[aRef][0]?.date || '0000-00-00';
+            const dateB = groups[bRef][0]?.date || '0000-00-00';
+            return new Date(dateB).getTime() - new Date(dateA).getTime();
+        });
+
+        sortedGroupRefs.forEach(ref => {
+            const entries = groups[ref];
+
+            // If it's a standalone group
+            if (ref.startsWith('standalone-')) {
+                const entry = entries[0];
+
+                // USER REQUEST: Only Purchase entries in PROCUREMENT allocation view
+                if (entry.transferFrom !== 'Purchase') return;
+
+                const amt = parseFloat((entry.debit !== '-' ? entry.debit : entry.credit !== '-' ? entry.credit : '0').toString().replace(/,/g, ''));
+                rows.push({
+                    date: entry.date,
+                    postedFrom: entry.transferFrom,
+                    refNo: entry.referenceNo !== '-' ? entry.referenceNo : entry.voucherNo,
+                    netAmount: amt,
+                    appliedDate: '-',
+                    appliedRefNo: '-',
+                    appliedAmount: '-',
+                    pendingBalance: ['Purchase', 'Sales'].includes(entry.transferFrom) ? amt : 0,
+                    status: entry.status,
+                    rowSpan: 1,
+                    isFirstInSource: true
+                });
+                return;
+            }
+
+            // For linked groups
+            const sources = entries.filter(e => ['Purchase', 'Sales'].includes(e.transferFrom))
+                                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            // USER REQUEST: Only Purchase entries. If no source (Purchase/Sales header), skip group main row.
+            if (sources.length === 0) return;
+
+            const applications = entries.filter(e => ['Payment', 'Receipt', 'Debit Note', 'Credit Note'].includes(e.transferFrom))
+                                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            
+            if (sources.length === 0 && applications.length > 0) {
+                // Standalone applications with a shared ref but no source
+                applications.forEach(app => {
+                    const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
+                    rows.push({
+                        date: app.date,
+                        postedFrom: app.transferFrom,
+                        refNo: app.referenceNo !== '-' ? app.referenceNo : app.voucherNo,
+                        netAmount: appAmt,
+                        appliedDate: '-',
+                        appliedRefNo: '-',
+                        appliedAmount: '-',
+                        pendingBalance: 0,
+                        status: app.status,
+                        rowSpan: 1,
+                        isFirstInSource: true
+                    });
+                });
+            } else {
+                // Combine all sources in the group for one span
+                const totalSourceAmt = sources.reduce((sum, s) => sum + parseFloat((s.debit !== '-' ? s.debit : s.credit !== '-' ? s.credit : '0').toString().replace(/,/g, '')), 0);
+                const firstSource = sources[0];
+                
+                if (applications.length === 0) {
+                    rows.push({
+                        date: firstSource.date,
+                        postedFrom: firstSource.transferFrom,
+                        refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : firstSource.voucherNo,
+                        netAmount: totalSourceAmt,
+                        appliedDate: '-',
+                        appliedRefNo: '-',
+                        appliedAmount: '-',
+                        pendingBalance: totalSourceAmt,
+                        status: firstSource.status,
+                        rowSpan: 1,
+                        isFirstInSource: true
+                    });
+                } else {
+                    let lastPending = totalSourceAmt;
+                    applications.forEach((app, appIdx) => {
+                        const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
+                        const currentPending = Math.max(0, lastPending - appAmt);
+                        rows.push({
+                            date: firstSource.date,
+                            postedFrom: firstSource.transferFrom,
+                            refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : firstSource.voucherNo,
+                            netAmount: totalSourceAmt,
+                            appliedDate: app.date,
+                            appliedRefNo: app.voucherNo,
+                            appliedAmount: appAmt,
+                            pendingBalance: currentPending,
+                            status: firstSource.status,
+                            rowSpan: applications.length,
+                            isFirstInSource: appIdx === 0
+                        });
+                        lastPending = currentPending;
+                    });
+                }
+            }
+        });
+
+        return rows;
     }, [vendorLedgerData]);
 
     // Handler: clicking a month row → switch to bill-wise ledger view filtered by that month
@@ -1579,11 +1710,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
 
 
-    // Date formatting helper function
-    const formatDate = (dateString: string): string => {
-        const [year, month, day] = dateString.split('-');
-        return `${day}-${month}-${year}`;
-    };
+    
+    
+    
 
 
 
@@ -2556,7 +2685,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 showSuccess('Category updated successfully!');
             } else {
                 await httpClient.post('/api/vendors/categories/', payload);
-                showSuccess('Category created successfully!');
             }
             fetchCategories();
             resetCategoryForm();
@@ -2764,7 +2892,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             subgroup: data.subgroup,
                                             is_active: true
                                         });
-                                        showSuccess('Category created successfully!');
                                     } catch (error: any) {
                                         // Error propagated to component
                                         throw error;
@@ -5291,6 +5418,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                 </button>
                                                             )}
                                                             <button
+                                                                onClick={() => setProcurementViewMode('allocation')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Allocation View
+                                                            </button>
+                                                            <button
                                                                 onClick={() => setProcurementViewMode('journal')}
                                                                 className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
                                                             >
@@ -5617,6 +5750,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                         <h3 className="section-title">{selectedProcurementVendor.name} - Journal View</h3>
                                                         <div className="flex gap-2">
                                                             <button
+                                                                onClick={() => setProcurementViewMode('allocation')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Allocation View
+                                                            </button>
+                                                            <button
                                                                 onClick={() => setProcurementViewMode('month')}
                                                                 className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
                                                             >
@@ -5634,40 +5773,61 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                         <table className="min-w-full">
                                                             <thead className="border-y border-gray-100 bg-white">
                                                                 <tr>
-                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px]">Date</th>
-                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Transaction Particulars</th>
-                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px]">Type</th>
-                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px]">VCH No.</th>
-                                                                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px]">Debit (₹)</th>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Date</th>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider min-w-[350px] border-r border-gray-50">Transaction Particulars</th>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Type</th>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">VCH No.</th>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Status</th>
+                                                                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[150px] border-r border-gray-50">Running Bal</th>
+                                                                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px] border-r border-gray-50">Debit (₹)</th>
                                                                     <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px]">Credit (₹)</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="bg-white">
                                                                 {filteredLedgerData.map((entry) => (
                                                                     <React.Fragment key={entry.id}>
-                                                                        {/* Header Row */}
-                                                                        <tr className="border-b border-gray-50 hover:bg-gray-50/50">
-                                                                            <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top">
+                                                                        {/* Main Transaction Row */}
+                                                                        <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                                                            <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top border-r border-gray-50">
                                                                                 {formatDate(entry.date)}
                                                                             </td>
-                                                                            <td className="px-6 py-4 text-sm font-bold text-gray-800">
-                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
+                                                                            <td className="px-6 py-4 text-sm font-bold text-gray-800 border-r border-gray-50">
+                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' || entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
                                                                             </td>
-                                                                            <td className="px-6 py-4 text-sm text-gray-500 uppercase">
+                                                                            <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-50">
                                                                                 {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' ? 'PURCHASE' : entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' ? 'PAYMENT' : entry.transferFrom}
                                                                             </td>
-                                                                            <td className="px-6 py-4 text-sm text-gray-500">
+                                                                            <td className="px-6 py-4 text-sm text-gray-500 border-r border-gray-50">
                                                                                 {entry.referenceNo}
                                                                             </td>
-                                                                            <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">
-                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' && entry.debit !== '-' ? `₹${entry.debit}` : '-'}
+                                                                            <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
+                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                                                    entry.status === 'Due' ? 'bg-red-100 text-red-800' :
+                                                                                        entry.status === 'Partially Received' ? 'bg-orange-100 text-orange-700' :
+                                                                                            entry.status === 'Utilized' ? 'bg-blue-100 text-blue-700' :
+                                                                                                entry.status === 'Not Utilized' ? 'bg-purple-100 text-purple-700' :
+                                                                                                    'bg-gray-100 text-gray-600'
+                                                                                    }`}>
+                                                                                    {entry.status}
+                                                                                </span>
                                                                             </td>
-                                                                            <td className="px-6 py-4 text-sm font-medium text-gray-400 text-right">
-                                                                                {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' && entry.credit !== '-' ? <span className="text-gray-900">₹{entry.credit}</span> : '-'}
+                                                                            <td className="px-6 py-4 text-sm text-right font-bold text-gray-900 border-r border-gray-50">
+                                                                                {entry.runningBalance !== '-' ? (
+                                                                                    <span>
+                                                                                        ₹{Math.abs(parseFloat(entry.runningBalance.toString().replace(/,/g, ''))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                                        <span className="ml-1 text-gray-400 text-[10px] font-normal uppercase">{parseFloat(entry.runningBalance.toString().replace(/,/g, '')) >= 0 ? 'Cr' : 'Dr'}</span>
+                                                                                    </span>
+                                                                                ) : '-'}
+                                                                            </td>
+                                                                            <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right border-r border-gray-50">
+                                                                                {entry.debit !== '-' && entry.debit !== 0 ? `₹${entry.debit}` : '-'}
+                                                                            </td>
+                                                                            <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">
+                                                                                {entry.credit !== '-' && entry.credit !== 0 ? `₹${entry.credit}` : '-'}
                                                                             </td>
                                                                         </tr>
 
-                                                                        {/* Purchase Details - Correct Double Entry: Debit side = Purchase A/c + Input GST; Credit side = Vendor A/c + TDS Payable */}
+                                                                        {/* Purchase Details Breakdown */}
                                                                         {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' && (() => {
                                                                             let supplyInrDetails = entry.rawVoucher?.supply_inr_details;
                                                                             if (typeof supplyInrDetails === 'string') {
@@ -5680,8 +5840,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                             const netPayable = dueDetails ? parseFloat(dueDetails.to_pay || 0) : 0;
 
                                                                             return (
-                                                                                <React.Fragment>
-                                                                                    {/* DEBIT rows: Purchase A/c + Input GST accounts */}
+                                                                                <>
+                                                                                    {/* DEBIT rows: Purchase + GST */}
                                                                                     {items.map((item: any, idx: number) => {
                                                                                         const taxable = parseFloat(item.taxableValue) || 0;
                                                                                         const cgst = parseFloat(item.cgst) || 0;
@@ -5689,151 +5849,230 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                         const igst = parseFloat(item.igst) || 0;
                                                                                         const totalGstVal = cgst + sgst + igst;
                                                                                         let gstPct = item.gstPercentage || item.gst_percentage;
-                                                                                        if (!gstPct && taxable > 0 && totalGstVal > 0) {
-                                                                                            gstPct = Math.round((totalGstVal / taxable) * 100);
-                                                                                        }
+                                                                                        if (!gstPct && taxable > 0 && totalGstVal > 0) gstPct = Math.round((totalGstVal / taxable) * 100);
+
                                                                                         return (
                                                                                             <React.Fragment key={idx}>
                                                                                                 {taxable > 0 && (
-                                                                                                    <tr className="border-b border-gray-50/50">
-                                                                                                        <td></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">
-                                                                                                            Purchase A/c {item.itemName ? `(${item.itemName})` : ''} {gstPct ? `@ GST ${gstPct}%` : ''}
+                                                                                                    <tr className="bg-white border-b border-gray-50/30">
+                                                                                                        <td className="border-r border-gray-50"></td>
+                                                                                                        <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
+                                                                                                            <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                                                                <span>Purchase A/c {item.itemName ? `(${item.itemName})` : ''} {gstPct ? `@ ${gstPct}%` : ''}</span>
+                                                                                                                <div className="flex items-center gap-1">
+                                                                                                                    <span className="font-bold">₹{taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                                                    <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                                                </div>
+                                                                                                            </div>
                                                                                                         </td>
+                                                                                                        <td colSpan={4} className="border-r border-gray-50"></td>
                                                                                                         <td colSpan={2}></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })} DR</td>
-                                                                                                        <td className="px-6 py-3 text-right text-gray-400">-</td>
                                                                                                     </tr>
                                                                                                 )}
-                                                                                                {cgst > 0 && (
-                                                                                                    <tr className="border-b border-gray-50/50">
-                                                                                                        <td></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input CGST Account</td>
+                                                                                                {[
+                                                                                                    { val: cgst, label: 'Input CGST Account' },
+                                                                                                    { val: sgst, label: 'Input SGST Account' },
+                                                                                                    { val: igst, label: 'Input IGST Account' }
+                                                                                                ].map((gst, gIdx) => gst.val > 0 && (
+                                                                                                    <tr key={gIdx} className="bg-white border-b border-gray-50/30">
+                                                                                                        <td className="border-r border-gray-50"></td>
+                                                                                                        <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
+                                                                                                            <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                                                                <span>{gst.label}</span>
+                                                                                                                <div className="flex items-center gap-1">
+                                                                                                                    <span className="font-bold">₹{gst.val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                                                    <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        </td>
+                                                                                                        <td colSpan={4} className="border-r border-gray-50"></td>
                                                                                                         <td colSpan={2}></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} DR</td>
-                                                                                                        <td className="px-6 py-3 text-right text-gray-400">-</td>
                                                                                                     </tr>
-                                                                                                )}
-                                                                                                {sgst > 0 && (
-                                                                                                    <tr className="border-b border-gray-50/50">
-                                                                                                        <td></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input SGST Account</td>
-                                                                                                        <td colSpan={2}></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} DR</td>
-                                                                                                        <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                                    </tr>
-                                                                                                )}
-                                                                                                {igst > 0 && (
-                                                                                                    <tr className="border-b border-gray-50/50">
-                                                                                                        <td></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input IGST Account</td>
-                                                                                                        <td colSpan={2}></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} DR</td>
-                                                                                                        <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                                    </tr>
-                                                                                                )}
+                                                                                                ))}
                                                                                             </React.Fragment>
                                                                                         );
                                                                                     })}
 
-                                                                                    {/* CREDIT rows: Vendor A/c (net payable) + TDS Payable */}
+                                                                                    {/* CREDIT rows: Vendor + TDS */}
                                                                                     {netPayable > 0 && (
-                                                                                        <tr className="border-b border-gray-50/50">
-                                                                                            <td></td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
-                                                                                                {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c (Ref: {entry.referenceNo})
+                                                                                        <tr className="bg-white border-b border-gray-50/30">
+                                                                                            <td className="border-r border-gray-50"></td>
+                                                                                            <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
+                                                                                                <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                                                    <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c</span>
+                                                                                                    <div className="flex items-center gap-1">
+                                                                                                        <span className="font-bold">₹{netPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                                        <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                                    </div>
+                                                                                                </div>
                                                                                             </td>
+                                                                                            <td colSpan={4} className="border-r border-gray-50"></td>
                                                                                             <td colSpan={2}></td>
-                                                                                            <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{netPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })} CR</td>
                                                                                         </tr>
                                                                                     )}
-                                                                                    {tdsIt > 0 && (
-                                                                                        <tr className="border-b border-gray-50/50">
-                                                                                            <td></td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">TDS Payable (Income Tax)</td>
-                                                                                            <td colSpan={2}></td>
-                                                                                            <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-800">₹{tdsIt.toLocaleString('en-IN', { minimumFractionDigits: 2 })} CR</td>
-                                                                                        </tr>
-                                                                                    )}
-                                                                                    {tdsGst > 0 && (
-                                                                                        <tr className="border-b border-gray-50/50">
-                                                                                            <td></td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">TDS Payable (GST)</td>
-                                                                                            <td colSpan={2}></td>
-                                                                                            <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-800">₹{tdsGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} CR</td>
-                                                                                        </tr>
-                                                                                    )}
-                                                                                    {/* Fallback: show net payable from entry.credit if no due_details */}
-                                                                                    {netPayable === 0 && entry.credit !== '-' && (
-                                                                                        <tr className="border-b border-gray-50/50">
-                                                                                            <td></td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
-                                                                                                {entry.rawVoucher?.vendor_name || selectedProcurementVendor.name} A/c (Ref: {entry.referenceNo})
+                                                                                    {[
+                                                                                        { val: tdsIt, label: 'TDS Payable (Income Tax)' },
+                                                                                        { val: tdsGst, label: 'TDS Payable (GST)' }
+                                                                                    ].map((tds, tIdx) => tds.val > 0 && (
+                                                                                        <tr key={tIdx} className="bg-white border-b border-gray-50/30">
+                                                                                            <td className="border-r border-gray-50"></td>
+                                                                                            <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
+                                                                                                <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                                                    <span>{tds.label}</span>
+                                                                                                    <div className="flex items-center gap-1">
+                                                                                                        <span className="font-bold">₹{tds.val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                                        <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                                    </div>
+                                                                                                </div>
                                                                                             </td>
+                                                                                            <td colSpan={4} className="border-r border-gray-50"></td>
                                                                                             <td colSpan={2}></td>
-                                                                                            <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{entry.credit} CR</td>
                                                                                         </tr>
-                                                                                    )}
-                                                                                </React.Fragment>
+                                                                                    ))}
+                                                                                </>
                                                                             );
                                                                         })()}
 
-                                                                        {/* Payment Details - Correct Double Entry: Vendor A/c DR, Bank/Cash CR */}
-                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' && entry.rawVoucher && (
-                                                                            <React.Fragment>
+                                                                        {/* Payment Details Breakdown */}
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' && (
+                                                                            <>
                                                                                 {/* DEBIT: Vendor A/c */}
-                                                                                <tr className="border-b border-gray-50/50">
-                                                                                    <td></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">
-                                                                                        {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c
+                                                                                <tr className="bg-white border-b border-gray-50/30">
+                                                                                    <td className="border-r border-gray-50"></td>
+                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
+                                                                                        <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                                            <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c</span>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <span className="font-bold">₹{entry.debit}</span>
+                                                                                                <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                            </div>
+                                                                                        </div>
                                                                                     </td>
+                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
                                                                                     <td colSpan={2}></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{entry.debit} DR</td>
-                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
                                                                                 </tr>
                                                                                 {/* CREDIT: Bank/Cash A/c */}
-                                                                                <tr className="border-b border-gray-100">
-                                                                                    <td></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
-                                                                                        {entry.rawVoucher.pay_from_name || entry.rawVoucher.pay_from || entry.rawVoucher.payment_mode || 'Bank/Cash A/c'} (Agst Ref: {entry.rawVoucher.against_reference || entry.rawVoucher.reference_number || '-'})
+                                                                                <tr className="bg-white border-b border-gray-50/30">
+                                                                                    <td className="border-r border-gray-50"></td>
+                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
+                                                                                        <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                                            <span>{entry.rawVoucher.pay_from_name || entry.rawVoucher.pay_from || entry.rawVoucher.payment_mode || 'Bank/Cash A/c'}</span>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <span className="font-bold">₹{entry.debit}</span>
+                                                                                                <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                            </div>
+                                                                                        </div>
                                                                                     </td>
+                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
                                                                                     <td colSpan={2}></td>
-                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{entry.debit} CR</td>
                                                                                 </tr>
-                                                                            </React.Fragment>
+                                                                            </>
+                                                                        )}
+                                                                        {/* Receipt Details Breakdown */}
+                                                                        {(entry.rawVoucher?.transaction_type?.toLowerCase() === 'receipt' || entry.rawVoucher?.transaction_type?.toLowerCase() === 'advance_receipt') && (
+                                                                            <>
+                                                                                {/* DEBIT: Bank/Cash A/c */}
+                                                                                <tr className="bg-white border-b border-gray-50/30">
+                                                                                    <td className="border-r border-gray-50"></td>
+                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
+                                                                                        <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                                            <span>{entry.rawVoucher.receipt_mode || entry.rawVoucher.pay_from_name || 'Bank/Cash A/c'}</span>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <span className="font-bold">₹{entry.debit !== '-' ? entry.debit : entry.credit}</span>
+                                                                                                <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
+                                                                                    <td colSpan={2}></td>
+                                                                                </tr>
+                                                                                {/* CREDIT: Vendor A/c */}
+                                                                                <tr className="bg-white border-b border-gray-50/30">
+                                                                                    <td className="border-r border-gray-50"></td>
+                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
+                                                                                        <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                                            <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c</span>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <span className="font-bold">₹{entry.debit !== '-' ? entry.debit : entry.credit}</span>
+                                                                                                <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
+                                                                                    <td colSpan={2}></td>
+                                                                                </tr>
+                                                                            </>
                                                                         )}
 
-                                                                        {/* Receipt Details */}
-                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'receipt' && entry.rawVoucher && (
-                                                                            <React.Fragment>
-                                                                                <tr className="border-b border-gray-50/50">
-                                                                                    <td></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">
-                                                                                        {entry.rawVoucher.receipt_mode || 'Cash/Bank'}
+                                                                        {/* Advance Payment Details Breakdown */}
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'advance_payment' && (
+                                                                            <>
+                                                                                {/* DEBIT: Vendor A/c */}
+                                                                                <tr className="bg-white border-b border-gray-50/30">
+                                                                                    <td className="border-r border-gray-50"></td>
+                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
+                                                                                        <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                                            <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c (Advance)</span>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <span className="font-bold">₹{entry.debit}</span>
+                                                                                                <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                            </div>
+                                                                                        </div>
                                                                                     </td>
+                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
                                                                                     <td colSpan={2}></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">
-                                                                                        ₹{entry.credit} DR
-                                                                                    </td>
-                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
                                                                                 </tr>
-                                                                                <tr className="border-b border-gray-100">
-                                                                                    <td></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
-                                                                                        From {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} (Agst Ref: {entry.rawVoucher.against_reference || entry.rawVoucher.reference_number || '-'})
+                                                                                {/* CREDIT: Bank/Cash A/c */}
+                                                                                <tr className="bg-white border-b border-gray-50/30">
+                                                                                    <td className="border-r border-gray-50"></td>
+                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
+                                                                                        <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                                            <span>{entry.rawVoucher.pay_from_name || entry.rawVoucher.payment_mode || 'Bank/Cash A/c'}</span>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <span className="font-bold">₹{entry.debit}</span>
+                                                                                                <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                            </div>
+                                                                                        </div>
                                                                                     </td>
+                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
                                                                                     <td colSpan={2}></td>
-                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">
-                                                                                        ₹{entry.credit} CR
-                                                                                    </td>
                                                                                 </tr>
-                                                                            </React.Fragment>
+                                                                            </>
+                                                                        )}
+                                                                        {/* Debit Note (Purchase Return) Details Breakdown */}
+                                                                        {entry.rawVoucher?.transaction_type?.toLowerCase() === 'debit_note' && (
+                                                                            <>
+                                                                                {/* DEBIT: Vendor A/c */}
+                                                                                <tr className="bg-white border-b border-gray-50/30">
+                                                                                    <td className="border-r border-gray-50"></td>
+                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
+                                                                                        <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                                            <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c</span>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <span className="font-bold">₹{entry.debit}</span>
+                                                                                                <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
+                                                                                    <td colSpan={2}></td>
+                                                                                </tr>
+                                                                                {/* CREDIT: Purchase Return / GST Reversal */}
+                                                                                <tr className="bg-white border-b border-gray-50/30">
+                                                                                    <td className="border-r border-gray-50"></td>
+                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
+                                                                                        <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                                            <span>Purchase Return A/c (incl. Tax)</span>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <span className="font-bold">₹{entry.debit}</span>
+                                                                                                <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
+                                                                                    <td colSpan={2}></td>
+                                                                                </tr>
+                                                                            </>
                                                                         )}
                                                                     </React.Fragment>
                                                                 ))}
@@ -5909,6 +6148,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                 )}
                                                             </div>
                                                             <button
+                                                                onClick={() => setProcurementViewMode('allocation')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Allocation View
+                                                            </button>
+                                                            <button
                                                                 onClick={() => setProcurementViewMode('journal')}
                                                                 className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
                                                             >
@@ -5982,6 +6227,98 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             </div>
                                                         );
                                                     })()}
+                                                </div>
+                                            )}
+                                            {procurementViewMode === 'allocation' && selectedProcurementVendor && (
+                                                <div className="erp-card border border-slate-200 overflow-hidden p-0">
+                                                    <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
+                                                        <h3 className="section-title">{selectedProcurementVendor.name} - Allocation View</h3>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('journal')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Journal View
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('month')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Month View
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('ledger')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Bill-wise View
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="erp-table min-w-full">
+                                                            <thead className="bg-[#F8F9FA] border-b border-slate-200">
+                                                                <tr className="border-b border-slate-200">
+                                                                    <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Date</th>
+                                                                    <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Posted From</th>
+                                                                    <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Reference No.</th>
+                                                                    <th rowSpan={2} className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Net Amount</th>
+                                                                    <th colSpan={4} className="px-6 py-2 border-r border-slate-200 bg-indigo-50/30">
+                                                                        <div className="flex justify-center items-center h-full text-[11px] font-black text-indigo-600 uppercase tracking-widest">
+                                                                            Voucher Applied
+                                                                        </div>
+                                                                    </th>
+                                                                    <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                                                                </tr>
+                                                                <tr>
+                                                                    <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Date</th>
+                                                                    <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Ref No.</th>
+                                                                    <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Amount</th>
+                                                                    <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Pending</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100">
+                                                                {allocationRows.map((row, idx) => (
+                                                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                                        {row.isFirstInSource && (
+                                                                            <>
+                                                                                <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
+                                                                                <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">{row.postedFrom}</td>
+                                                                                <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top">{row.refNo}</td>
+                                                                                <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">
+                                                                                    {row.netAmount !== '-' ? `₹${row.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                </td>
+                                                                            </>
+                                                                        )}
+                                                                        <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">{row.appliedDate !== '-' ? formatDate(row.appliedDate) : '-'}</td>
+                                                                        <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">{row.appliedRefNo}</td>
+                                                                        <td className="px-6 py-4 text-sm text-right font-bold text-emerald-600 border-r border-slate-100">
+                                                                            {row.appliedAmount !== '-' ? `₹${row.appliedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-sm text-right font-bold text-slate-900 border-r border-slate-100">
+                                                                            {row.pendingBalance !== '-' ? `₹${row.pendingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                        </td>
+                                                                        {row.isFirstInSource && (
+                                                                            <td rowSpan={row.rowSpan} className="px-6 py-4 align-top">
+                                                                                <span className={`inline-flex px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${row.status === 'Received' || row.status === 'Utilized' ? 'bg-emerald-50 text-emerald-600' :
+                                                                                        row.status === 'Due' ? 'bg-red-50 text-red-600' :
+                                                                                            'bg-indigo-50 text-indigo-600'
+                                                                                    }`}>
+                                                                                    {row.status}
+                                                                                </span>
+                                                                            </td>
+                                                                        )}
+                                                                    </tr>
+                                                                ))}
+                                                                {allocationRows.length === 0 && (
+                                                                    <tr>
+                                                                        <td colSpan={9} className="px-6 py-20 text-center text-slate-400">
+                                                                            <p className="text-sm font-medium">No allocation data found for this vendor.</p>
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>

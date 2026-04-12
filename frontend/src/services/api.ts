@@ -389,10 +389,13 @@ class ApiService {
      * Get Purchase Invoices (Vouchers) for a specific vendor
      * @param vendorName - Vendor name to filter by
      */
-    async getVendorPurchaseInvoices(vendorName: string, branch?: string) {
+    async getVendorPurchaseInvoices(vendorName: string, branch?: string, showAll?: boolean) {
         let url = `/api/vouchers/purchase/?vendor_name=${encodeURIComponent(vendorName)}`;
         if (branch) {
             url += `&branch=${encodeURIComponent(branch)}`;
+        }
+        if (showAll) {
+            url += `&show_all=true`;
         }
         return httpClient.get<any[]>(url);
     }

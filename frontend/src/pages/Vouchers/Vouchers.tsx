@@ -69,7 +69,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     ? allVoucherTypes
     : allVoucherTypes.filter(v => hasTabAccess('Vouchers', v.perm));
 
-  const defaultVoucherType = availableVoucherTypes.length > 0 ? availableVoucherTypes[0].id : ('Purchase' as VoucherType);
+  const defaultVoucherType = availableVoucherTypes.length > 0 ? availableVoucherTypes[0].id : ('Sales' as VoucherType);
 
   const [voucherType, setVoucherType] = useState<VoucherType>(defaultVoucherType);
 
@@ -1709,17 +1709,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           const data = await httpClient.get<any[]>('/api/masters/master-voucher-purchases/');
           const purchaseConfigs = data || [];
           setPurchaseVoucherConfigs(purchaseConfigs);
-          if (purchaseConfigs && purchaseConfigs.length > 0 && !selectedPurchaseConfig) {
-            const first = purchaseConfigs[0];
-            setSelectedPurchaseConfig(first.voucher_name);
-
-            if (first.enable_auto_numbering) {
-              try {
-                const res: any = await httpClient.get(`/api/masters/master-voucher-purchases/${first.id}/next-number/`);
-                if (res?.invoice_number) setVoucherNumber(res.invoice_number);
-              } catch { }
-            }
-          }
         } catch (error) {
           console.error('Error fetching purchase voucher configurations:', error);
           setPurchaseVoucherConfigs([]);

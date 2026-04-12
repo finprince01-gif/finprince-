@@ -592,6 +592,115 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                     'ledger_name': 'Purchase A/c',
                 }
             )
+
+            # --- ── Handle Advance/Payment Allocations (Phase 4C) ────────────────── ---
+            try:
+                # 1. Idempotency: Restore amounts to source advances from OLD allocations of this purchase.
+                # All allocations from this purchase start with "PUR-{id}-ALLOC-" or similar.
+                existing_allocs = VendorTransaction.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_id=vendor.id,
+                    transaction_number__startswith=f"{tx_number}-ALLOC-"
+                )
+                for ea in existing_allocs:
+                    # Try to find the source ref from the notes or transaction_number
+                    # In our new pattern, transaction_number is f"{tx_number}-ALLOC-{ref_no}"
+                    parts = ea.transaction_number.split("-ALLOC-")
+                    if len(parts) > 1:
+                        source_ref = parts[1]
+                        # Restore balance to the source 'Advance' record
+                        src_adv = VendorTransaction.objects.filter(
+                            tenant_id=tenant_id,
+                            vendor_id=vendor.id,
+                            transaction_type='payment',
+                            reference_number=source_ref,
+                            status='Advance'
+                        ).first()
+                        if src_adv:
+                            src_adv.amount += ea.amount
+                            src_adv.total_amount += ea.amount
+                            src_adv.save()
+                    ea.delete()
+
+                # 2. Apply current allocations
+                due_details = getattr(purchase, 'due_details', None)
+                adv_refs = due_details.advance_references if due_details and due_details.advance_references else []
+                
+                # Normalize refs in case they are JSON strings
+                if isinstance(adv_refs, str):
+                    try:
+                        adv_refs = json.loads(adv_refs)
+                    except:
+                        adv_refs = []
+
+                for ref_item in adv_refs:
+                    ref_no = ref_item.get('refNo') or ref_item.get('reference_number')
+                    applied_amt = Decimal(str(ref_item.get('appliedNow') or ref_item.get('applied_amount') or 0))
+
+                    if not ref_no or applied_amt <= 0:
+                        continue
+
+                    # Create the ALLOCATION record (points to purchase reference)
+                    VendorTransaction.objects.create(
+                        tenant_id=tenant_id,
+                        vendor_id=vendor.id,
+                        transaction_number=f"{tx_number}-ALLOC-{ref_no}",
+                        transaction_type='payment',
+                        transaction_date=purchase.date,
+                        amount=applied_amt,
+                        total_amount=applied_amt,
+                        status='Paid',
+                        reference_number=purchase.supplier_invoice_no, # This links it to the Purchase row
+                        notes=f"Allocated from {ref_no}",
+                        ledger_name=vendor.vendor_name
+                    )
+
+                    # Decrease the source 'Advance' record
+                    src_adv = VendorTransaction.objects.filter(
+                        tenant_id=tenant_id,
+                        vendor_id=vendor.id,
+                        transaction_type='payment',
+                        reference_number=ref_no,
+                        status='Advance'
+                    ).first()
+                    if src_adv:
+                        src_adv.amount -= applied_amt
+                        src_adv.total_amount -= applied_amt
+                        if src_adv.amount <= 0:
+                            # If fully consumed, we can set it to a dummy state or negative etc.
+                            # But setting amount to 0 is enough to exclude it from outstanding.
+                            src_adv.amount = 0
+                            src_adv.total_amount = 0
+                            src_adv.status = 'Fully Utilized' 
+                        src_adv.save()
+
+                # 3. Update the Purchase transaction's status based on total allocations
+                # (Recalculate status: if total_paid >= total_amount -> Paid)
+                # Re-fetch p_tx to be sure
+                p_tx = VendorTransaction.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_id=vendor.id,
+                    transaction_number=tx_number,
+                    transaction_type='purchase'
+                ).first()
+                if p_tx:
+                    total_paid = sum(
+                        Decimal(str(ltx.amount)) 
+                        for ltx in VendorTransaction.objects.filter(
+                            tenant_id=tenant_id,
+                            vendor_id=vendor.id,
+                            reference_number=p_tx.reference_number
+                        ).exclude(id=p_tx.id)
+                    )
+                    if total_paid >= p_tx.total_amount:
+                        p_tx.status = 'Paid'
+                    elif total_paid > 0:
+                        p_tx.status = 'Partially Paid'
+                    p_tx.save(update_fields=['status'])
+
+            except Exception as inner_e:
+                print(f"!!! Error syncing allocations to Vendor Portal: {inner_e}")
+
             print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name} | tx={tx_number} | amt={total_amt}")
         except Exception as e:
             print(f"!!! Vendor Portal Sync Failure (Purchase): {str(e)}")
