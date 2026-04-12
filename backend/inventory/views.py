@@ -161,10 +161,34 @@ class InventoryMasterGRNViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='next-number')
     def next_number(self, request, pk=None):
         """
-        Returns the next auto-generated GRN number for this series from the master preview.
+        Returns the next auto-generated Issue Slip number for this series from the master preview.
+        Exactly like GRN.
         """
         series = self.get_object()
-        return Response({'grn_no': series.preview, 'series_name': series.name})
+        return Response({'outward_slip_no': series.preview, 'series_name': series.name})
+
+def increment_issue_slip_series(tenant_id, series_name):
+    """
+    Utility to increment the preview number for an Issue Slip Series.
+    """
+    if not series_name:
+        return
+    try:
+        series = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, name=series_name).first()
+        if series and series.preview:
+            match = re.search(r'(\d+)$', series.preview)
+            if match:
+                num_str = match.group(1)
+                num = int(num_str) + 1
+                prefix = series.preview[:match.start()]
+                series.preview = f"{prefix}{num:0{len(num_str)}d}"
+            else:
+                series.preview = f"{series.preview}-1"
+            series.save()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger('inventory.increment')
+        logger.error(f"Error incrementing series {series_name}: {str(e)}")
 
 
 class InventoryMasterIssueSlipViewSet(viewsets.ModelViewSet):
@@ -181,6 +205,14 @@ class InventoryMasterIssueSlipViewSet(viewsets.ModelViewSet):
             return queryset.filter(is_active=True)
         return queryset
 
+    @action(detail=True, methods=['get'], url_path='next-number')
+    def next_number(self, request, pk=None):
+        """
+        Returns the next auto-generated Issue Slip number for this series.
+        """
+        series = self.get_object()
+        return Response({'outward_slip_no': series.preview, 'series_name': series.name})
+
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
@@ -192,58 +224,7 @@ class InventoryMasterIssueSlipViewSet(viewsets.ModelViewSet):
         instance.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['get'], url_path='next-number')
-    def next_number(self, request, pk=None):
-        """
-        Returns the next auto-generated Issue Slip number for this series.
-        """
-        series = self.get_object()
-        tenant_id = get_tenant_from_request(request)
 
-        prefix = series.prefix or ''
-        suffix = series.suffix or ''
-        year = series.year or ''
-        required_digits = series.required_digits or 4
-
-        # Use the separator from preview if available, otherwise default to '-'
-        preview = str(series.preview or '')
-        sep: str = '-'
-        for s in ['/', '_', '-', ' ']:
-            if s in preview:
-                sep = s
-                break
-
-        # Build the pattern prefix used in number
-        number_parts: list[str] = []
-        if prefix:
-            number_parts.append(str(prefix))
-        if year:
-            number_parts.append(str(year))
-        
-        number_prefix: str = f"{str(sep).join(number_parts)}{sep}" if number_parts else ''
-
-        # Count existing outward slips for this tenant that match this series pattern
-        existing_count = InventoryOperationOutward.objects.filter(
-            tenant_id=tenant_id,
-            outward_slip_no__startswith=number_prefix
-        ).count()
-
-        next_seq = existing_count + 1
-        seq_str = str(next_seq).zfill(required_digits)
-
-        # Compose the number
-        parts: list[str] = []
-        if prefix:
-            parts.append(str(prefix))
-        if year:
-            parts.append(str(year))
-        parts.append(str(seq_str))
-        if suffix:
-            parts.append(str(suffix))
-
-        slip_no: str = str(sep).join(parts)
-
-        return Response({'outward_slip_no': slip_no, 'series_name': series.name})
 
 # -------------------------------------------------------------------------
 # OPERATION VIEWS
@@ -259,7 +240,17 @@ class InventoryOperationJobWorkViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
+        try:
+            serializer.save(tenant_id=tenant_id)
+            
+            # Increment the preview number in the master series
+            series_name = self.request.data.get('issue_slip_series')
+            increment_issue_slip_series(tenant_id, series_name)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger('inventory.operations')
+            logger.error(f"Error saving JobWork: {str(e)}")
+            raise
 
 class InventoryOperationInterUnitViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationInterUnitSerializer
@@ -272,6 +263,10 @@ class InventoryOperationInterUnitViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
+        
+        # Increment the preview number in the master series
+        series_name = self.request.data.get('issue_slip_series')
+        increment_issue_slip_series(tenant_id, series_name)
 
 class InventoryOperationLocationChangeViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationLocationChangeSerializer
@@ -284,6 +279,10 @@ class InventoryOperationLocationChangeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
+        
+        # Increment the preview number in the master series
+        series_name = self.request.data.get('issue_slip_series')
+        increment_issue_slip_series(tenant_id, series_name)
 
 class InventoryOperationProductionViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationProductionSerializer
@@ -302,22 +301,17 @@ class InventoryOperationProductionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
-
-        # Increment the preview number in the master Issue Slip Series for production
-        series_name = self.request.data.get('issue_slip_series')
-        if series_name:
-            series = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, name=series_name).first()
-            if series and series.preview:
-                match = re.search(r'(\d+)$', series.preview)
-                if match:
-                    num_str = match.group(1)
-                    num = int(num_str) + 1
-                    prefix = series.preview[:match.start()]
-                    series.preview = f"{prefix}{num:0{len(num_str)}d}"
-                else:
-                    series.preview = f"{series.preview}-1"
-                series.save()
+        try:
+            serializer.save(tenant_id=tenant_id)
+            
+            # Increment
+            series_name = self.request.data.get('issue_slip_series')
+            increment_issue_slip_series(tenant_id, series_name)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger('inventory.operations')
+            logger.error(f"Error saving Production: {str(e)}")
+            raise
 
 class InventoryOperationConsumptionViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationConsumptionSerializer
@@ -329,7 +323,17 @@ class InventoryOperationConsumptionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
+        try:
+            serializer.save(tenant_id=tenant_id)
+            
+            # Increment
+            series_name = self.request.data.get('issue_slip_series')
+            increment_issue_slip_series(tenant_id, series_name)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger('inventory.operations')
+            logger.error(f"Error saving Consumption: {str(e)}")
+            raise
 
 class InventoryOperationScrapViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationScrapSerializer
@@ -341,7 +345,17 @@ class InventoryOperationScrapViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
+        try:
+            serializer.save(tenant_id=tenant_id)
+            
+            # Increment
+            series_name = self.request.data.get('issue_slip_series')
+            increment_issue_slip_series(tenant_id, series_name)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger('inventory.operations')
+            logger.error(f"Error saving Scrap: {str(e)}")
+            raise
 
 # InventoryOperationGRNViewSet removed - replaced by InventoryOperationNewGRNViewSet
 
@@ -355,23 +369,17 @@ class InventoryOperationOutwardViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
-
-        # Increment the preview number in the master series
-        series_name = self.request.data.get('issue_slip_series_name')
-        if series_name:
-            import re
-            series = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, name=series_name).first()
-            if series and series.preview:
-                match = re.search(r'(\d+)$', series.preview)
-                if match:
-                    num_str = match.group(1)
-                    num = int(num_str) + 1
-                    prefix = series.preview[:match.start()]
-                    series.preview = f"{prefix}{num:0{len(num_str)}d}"
-                else:
-                    series.preview = f"{series.preview}-1"
-                series.save()
+        try:
+            serializer.save(tenant_id=tenant_id)
+            
+            # Increment
+            series_name = self.request.data.get('issue_slip_series')
+            increment_issue_slip_series(tenant_id, series_name)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger('inventory.operations')
+            logger.error(f"Error saving Outward: {str(e)}")
+            raise
 
     @action(detail=False, methods=['get'], url_path='pending')
     def pending(self, request):
