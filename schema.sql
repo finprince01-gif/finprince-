@@ -2858,4 +2858,13 @@ CREATE TABLE `vouchers` (
 
 ALTER TABLE inventory_operation_outward ADD COLUMN reasons_for_return LONGTEXT NULL;
 
+--ALTER TABLE voucher_debit_note_due_details
+ALTER TABLE voucher_debit_note_due_details 
+ADD COLUMN reverse_gst_tcs VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_gst_tds VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_income_tax_tcs VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_income_tax_tds VARCHAR(10) DEFAULT 'No';
 
+--ALTER TABLE receipt_vouchers 
+ALTER TABLE receipt_vouchers 
+ADD COLUMN amount DECIMAL(15,2) DEFAULT 0.00 NOT NULL;

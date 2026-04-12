@@ -6247,7 +6247,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                     <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Date</th>
                                                                     <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Posted From</th>
                                                                     <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Reference No.</th>
-                                                                    <th rowSpan={2} className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Net Amount</th>
+                                                                    <th rowSpan={2} className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Amount</th>
                                                                     <th colSpan={4} className="px-6 py-2 border-r border-slate-200 bg-indigo-50/30">
                                                                         <div className="flex justify-center items-center h-full text-[11px] font-black text-indigo-600 uppercase tracking-widest">
                                                                             Voucher Applied
@@ -6268,7 +6268,17 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         {row.isFirstInSource && (
                                                                             <>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
-                                                                                <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">{row.postedFrom}</td>
+                                                                                <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
+                                                                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                                                                        row.postedFrom === 'Purchase' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                                                                                        row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                        row.postedFrom === 'Debit Note' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                                                                                        row.postedFrom === 'Credit Note' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                                                                                        'bg-slate-50 text-slate-600 border border-slate-100'
+                                                                                    }`}>
+                                                                                        {row.postedFrom}
+                                                                                    </span>
+                                                                                </td>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top">{row.refNo}</td>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">
                                                                                     {row.netAmount !== '-' ? `₹${row.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
@@ -6284,11 +6294,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                             {row.pendingBalance !== '-' ? `₹${row.pendingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                                         </td>
                                                                         {row.isFirstInSource && (
-                                                                            <td rowSpan={row.rowSpan} className="px-6 py-4 align-top">
-                                                                                <span className={`inline-flex px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${row.status === 'Received' || row.status === 'Utilized' ? 'bg-emerald-50 text-emerald-600' :
-                                                                                        row.status === 'Due' ? 'bg-red-50 text-red-600' :
-                                                                                            'bg-indigo-50 text-indigo-600'
-                                                                                    }`}>
+                                                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
+                                                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                                                                    row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                    row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                                                    row.status?.toLowerCase() === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                                                    'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                                                }`}>
                                                                                     {row.status}
                                                                                 </span>
                                                                             </td>
