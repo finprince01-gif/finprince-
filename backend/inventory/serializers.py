@@ -271,6 +271,31 @@ class InventoryOperationProductionSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
+    # Delivery challan fields that do NOT exist as direct columns on the Production model
+    # They must be stripped out before calling super().create()/update()
+    DELIVERY_CHALLAN_ONLY_FIELDS = [
+        'dispatch_from', 'mode_of_transport', 'dispatch_date', 'dispatch_time',
+        'delivery_type', 'transporter_id', 'transporter_name', 'vehicle_no',
+        'lr_gr_consignment', 'eway_bill'
+    ]
+
+    def _strip_dc_fields(self, validated_data):
+        """Remove delivery-challan-only fields from top-level validated_data.
+        They are already stored inside the delivery_challan JSON column."""
+        for field in self.DELIVERY_CHALLAN_ONLY_FIELDS:
+            validated_data.pop(field, None)
+        return validated_data
+
+    def create(self, validated_data):
+        """Strip delivery-challan-only fields that have NO column on the Production model.
+        These fields are already stored inside the delivery_challan JSON field."""
+        validated_data = self._strip_dc_fields(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data = self._strip_dc_fields(validated_data)
+        return super().update(instance, validated_data)
+
     def validate(self, data):
         """
         Recalculate amount for all items before saving as a safety measure.
@@ -298,63 +323,7 @@ class InventoryOperationProductionSerializer(serializers.ModelSerializer):
                 item['amount'] = round(qty * rate, 2)
         return data
 
-    def create(self, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
 
-        if dc_data:
-            validated_data['dispatch_from'] = dc_data.get('dispatch_from')
-            if not validated_data.get('dispatch_from'):
-                 validated_data['dispatch_from'] = dc_data.get('dispatch_address')
-
-            validated_data['mode_of_transport'] = dc_data.get('mode_of_transport')
-            
-            d_date = dc_data.get('dispatch_date')
-            validated_data['dispatch_date'] = d_date if d_date else None
-            
-            d_time = dc_data.get('dispatch_time')
-            validated_data['dispatch_time'] = d_time if d_time else None
-            
-            validated_data['delivery_type'] = dc_data.get('delivery_type')
-            validated_data['transporter_id'] = dc_data.get('transporter_id')
-            validated_data['transporter_name'] = dc_data.get('transporter_name')
-            validated_data['vehicle_no'] = dc_data.get('vehicle_no')
-
-            if not validated_data.get('vehicle_no'):
-                 validated_data['vehicle_no'] = dc_data.get('vehicle_number')
-
-            validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
-
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
-        
-        if dc_data:
-            instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
-            if not instance.dispatch_from and dc_data.get('dispatch_address'):
-                 instance.dispatch_from = dc_data.get('dispatch_address')
-            
-            instance.mode_of_transport = dc_data.get('mode_of_transport', instance.mode_of_transport)
-            
-            d_date = dc_data.get('dispatch_date')
-            if d_date is not None:
-                instance.dispatch_date = d_date if d_date else None
-            
-            d_time = dc_data.get('dispatch_time')
-            if d_time is not None:
-                instance.dispatch_time = d_time if d_time else None
-            
-            instance.delivery_type = dc_data.get('delivery_type', instance.delivery_type)
-            instance.transporter_id = dc_data.get('transporter_id', instance.transporter_id)
-            instance.transporter_name = dc_data.get('transporter_name', instance.transporter_name)
-            
-            instance.vehicle_no = dc_data.get('vehicle_no', instance.vehicle_no)
-            if not instance.vehicle_no and dc_data.get('vehicle_number'):
-                 instance.vehicle_no = dc_data.get('vehicle_number')
-
-            instance.lr_gr_consignment = dc_data.get('lr_gr_consignment', instance.lr_gr_consignment)
-            
-        return super().update(instance, validated_data)
 
 # --- Consumption ---
 class InventoryOperationConsumptionSerializer(serializers.ModelSerializer):

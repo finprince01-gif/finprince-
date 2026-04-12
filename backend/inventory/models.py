@@ -173,7 +173,8 @@ class InventoryMasterGRN(BaseModel):
     prefix = models.CharField(max_length=50, null=True, blank=True)
     suffix = models.CharField(max_length=50, null=True, blank=True)
     year = models.CharField(max_length=4, help_text="Year", default="2024")
-    required_digits = models.PositiveSmallIntegerField(help_text="Required Digits", default=4)
+    required_digits = models.IntegerField(help_text="Required Digits", default=4)
+    start_from = models.IntegerField(help_text="Start from number", default=1)
     preview = models.CharField(max_length=255, null=True, blank=True)
     
     is_active = models.BooleanField(default=True)
@@ -197,6 +198,7 @@ class InventoryMasterIssueSlip(BaseModel):
     suffix = models.CharField(max_length=50, null=True, blank=True)
     year = models.CharField(max_length=4, help_text="Year", default="2024")
     required_digits = models.IntegerField(help_text="Required Digits", default=4)
+    start_from = models.IntegerField(help_text="Start from number", default=1)
     preview = models.CharField(max_length=255, null=True, blank=True)
     
     is_active = models.BooleanField(default=True)
@@ -323,6 +325,7 @@ class InventoryOperationLocationChange(BaseModel):
     Location Change Operation
     """
     issue_slip_no = models.CharField(max_length=100)
+    issue_slip_series = models.CharField(max_length=100, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Draft')
@@ -426,6 +429,7 @@ class InventoryOperationScrap(BaseModel):
     Scrap Operation
     """
     issue_slip_no = models.CharField(max_length=100)
+    issue_slip_series = models.CharField(max_length=100, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Draft')
