@@ -73,21 +73,35 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     const [ledgerTypeInput, setLedgerTypeInput] = useState('');
     const [questionAnswers, setQuestionAnswers] = useState<Record<number, any>>({});
 
+    // Helper: treat '-', '–', '—', empty as blank
+    const isBlankStr = (v: string | null | undefined): boolean => {
+        if (!v) return true;
+        const t = v.trim();
+        return t === '' || t === '-' || t === '\u2013' || t === '\u2014';
+    };
+
     // Convert tenant ledger to hierarchy row format
     const convertLedgerToHierarchy = (ledger: Ledger, allLedgers: Ledger[]): HierarchyRow => {
+        // Normalise blank dash values to null
+        const normSg1 = isBlankStr(ledger.sub_group_1) ? null : ledger.sub_group_1;
+        const normSg2 = isBlankStr(ledger.sub_group_2) ? null : ledger.sub_group_2;
+        const normSg3 = isBlankStr(ledger.sub_group_3) ? null : ledger.sub_group_3;
+
         // If this ledger has a parent, find the parent and use its hierarchy + name as ledger_type
         if (ledger.parent_ledger_id) {
             const parent = allLedgers.find(l => l.id === ledger.parent_ledger_id);
             if (parent) {
+                const pSg2 = isBlankStr(parent.sub_group_2) ? null : parent.sub_group_2;
+                const pSg3 = isBlankStr(parent.sub_group_3) ? null : parent.sub_group_3;
                 return {
                     id: ledger.id,
                     type_of_business_1: null,
                     financial_reporting_1: null,
                     major_group_1: parent.category,
                     group_1: parent.group,
-                    sub_group_1_1: parent.sub_group_1,
-                    sub_group_2_1: parent.sub_group_2,
-                    sub_group_3_1: parent.sub_group_3,
+                    sub_group_1_1: isBlankStr(parent.sub_group_1) ? null : parent.sub_group_1,
+                    sub_group_2_1: pSg2,
+                    sub_group_3_1: pSg3,
                     ledger_1: parent.name,  // Parent name becomes the "type"
                     custom_ledger: ledger.name,  // Child name goes here!
                     code: null,
@@ -102,9 +116,11 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         let ledgerLevelVal: string | null = ledger.name;
 
         if (!ledger.ledger_type) {
-            if (ledger.sub_group_3 === ledger.name) ledgerLevelVal = null;
-            else if (!ledger.sub_group_3 && ledger.sub_group_2 === ledger.name) ledgerLevelVal = null;
-            else if (!ledger.sub_group_3 && !ledger.sub_group_2 && ledger.sub_group_1 === ledger.name) ledgerLevelVal = null;
+            // If the name is already used in ANY of the subgroup levels, 
+            // don't repeat it at the ledger level. 
+            if (normSg3 === ledger.name || normSg2 === ledger.name || normSg1 === ledger.name) {
+                ledgerLevelVal = null;
+            }
         }
 
         return {
@@ -113,9 +129,9 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             financial_reporting_1: null,
             major_group_1: ledger.category,
             group_1: ledger.group,
-            sub_group_1_1: ledger.sub_group_1,
-            sub_group_2_1: ledger.sub_group_2,
-            sub_group_3_1: ledger.sub_group_3,
+            sub_group_1_1: normSg1,
+            sub_group_2_1: normSg2,
+            sub_group_3_1: normSg3,
             ledger_1: ledgerLevelVal,
             custom_ledger: null,
             code: null,
@@ -165,6 +181,13 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         fetchData();
     }, []);
 
+    // Helper: treat '-', '–', '—', and empty/whitespace as blank (skip as tree node)
+    const isBlankValue = (v: string | null | undefined): boolean => {
+        if (!v) return true;
+        const trimmed = v.trim();
+        return trimmed === '' || trimmed === '-' || trimmed === '\u2013' || trimmed === '\u2014';
+    };
+
     const buildTreeStructure = (data: HierarchyRow[], ledgers: Ledger[]): TreeNode[] => {
         const tree: Map<string, TreeNode> = new Map();
         const ledgerIdToPath: Map<number, string> = new Map(); // Track ledger ID to tree path
@@ -175,20 +198,26 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             if (row.custom_ledger) return;
 
             // Determine deepest level for this row to correctly place the "Custom" marker
+            // Treat blank dash values as absent
+            const sg1 = isBlankValue(row.sub_group_1_1) ? null : row.sub_group_1_1;
+            const sg2 = isBlankValue(row.sub_group_2_1) ? null : row.sub_group_2_1;
+            const sg3 = isBlankValue(row.sub_group_3_1) ? null : row.sub_group_3_1;
+            const led = isBlankValue(row.ledger_1) ? null : row.ledger_1;
+
             let maxLevel = -1;
-            if (row.ledger_1) maxLevel = 5;
-            else if (row.sub_group_3_1) maxLevel = 4;
-            else if (row.sub_group_2_1) maxLevel = 3;
-            else if (row.sub_group_1_1) maxLevel = 2;
+            if (led) maxLevel = 5;
+            else if (sg3) maxLevel = 4;
+            else if (sg2) maxLevel = 3;
+            else if (sg1) maxLevel = 2;
             else if (row.group_1) maxLevel = 1;
 
             const levels = [
                 { key: 'major_group_1', value: row.major_group_1, level: 0 },
                 { key: 'group_1', value: row.group_1, level: 1 },
-                { key: 'sub_group_1_1', value: row.sub_group_1_1, level: 2 },
-                { key: 'sub_group_2_1', value: row.sub_group_2_1, level: 3 },
-                { key: 'sub_group_3_1', value: row.sub_group_3_1, level: 4 },
-                { key: 'ledger_1', value: row.ledger_1, level: 5 },
+                { key: 'sub_group_1_1', value: sg1, level: 2 },
+                { key: 'sub_group_2_1', value: sg2, level: 3 },
+                { key: 'sub_group_3_1', value: sg3, level: 4 },
+                { key: 'ledger_1', value: led, level: 5 },
             ];
 
             let currentPath = '';
@@ -203,7 +232,10 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 if (!tree.has(currentPath)) {
                     // Check if this node is the custom ledger itself
                     // It must be at the deepest level of the row, and the row must be custom
-                    const isCustomLedger = row.isCustom && level.level === maxLevel;
+                    // Only colour as "custom" (red) if at ledger level (≥5).
+                    // Sub_group path nodes created from custom ledgers are structural
+                    // and should display as normal black, not red.
+                    const isCustomLedger = row.isCustom && level.level === maxLevel && level.level >= 5;
                     const ledgerId = isCustomLedger ? row.id : undefined;
 
                     const node: TreeNode = {
@@ -215,10 +247,10 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                         fullPath: {
                             category: row.major_group_1,
                             group: row.group_1,
-                            sub_group_1: row.sub_group_1_1,
-                            sub_group_2: row.sub_group_2_1,
-                            sub_group_3: row.sub_group_3_1,
-                            ledger_type: row.ledger_1,
+                            sub_group_1: sg1,
+                            sub_group_2: sg2,
+                            sub_group_3: sg3,
+                            ledger_type: led,
                         }
                     };
 
@@ -239,42 +271,103 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             });
         });
 
-        // Second pass: Add nested custom ledgers as children of their parents
+        // Second pass: Add nested custom ledgers — smart placement
         ledgers.forEach(ledger => {
-            if (ledger.parent_ledger_id) {
-                const parentPath = ledgerIdToPath.get(ledger.parent_ledger_id);
-                if (parentPath && tree.has(parentPath)) {
+            if (!ledger.parent_ledger_id) return;
+
+            const nSg3 = isBlankValue(ledger.sub_group_3) ? null : ledger.sub_group_3;
+            const nLt  = isBlankValue(ledger.ledger_type)  ? null : ledger.ledger_type;
+            const nSg1 = isBlankValue(ledger.sub_group_1)  ? null : ledger.sub_group_1;
+            const nSg2 = isBlankValue(ledger.sub_group_2)  ? null : ledger.sub_group_2;
+
+            const parentPath = ledgerIdToPath.get(ledger.parent_ledger_id);
+            if (!parentPath || !tree.has(parentPath)) return;
+
+            // --- Smart case: ledger.sub_group_3 === ledger.name ---
+            // e.g. test2.sg3 = "test2", lt = "testing".
+            // This means "test2" is really a sub_group_3 node and "testing" is the leaf ledger.
+            // We should insert a sub_group_3 node ABOVE the parent ("testing") node, then
+            // move the parent ("testing") to be a child of it.
+            if (nSg3 === ledger.name && nLt) {
+                // grandparent path = everything before the parent node
+                const grandparentPath = parentPath.includes('>')
+                    ? parentPath.substring(0, parentPath.lastIndexOf('>'))
+                    : '';
+
+                const sg3NodePath = grandparentPath ? `${grandparentPath}>${nSg3}` : nSg3;
+
+                // Only do this once — check if sg3 node already exists
+                if (!tree.has(sg3NodePath)) {
                     const parentNode = tree.get(parentPath)!;
 
-                    // Create child node
-                    const childNode: TreeNode = {
-                        name: ledger.name,
+                    const sg3Node: TreeNode = {
+                        name: nSg3,
                         children: [],
-                        level: 6, // Nested custom ledger level
-                        isCustom: true,
-                        ledgerId: ledger.id,
+                        level: 4, // sub_group_3 level — black, non-custom
+                        isCustom: false,
+                        ledgerId: undefined,
                         fullPath: {
                             category: ledger.category,
                             group: ledger.group,
-                            sub_group_1: ledger.sub_group_1,
-                            sub_group_2: ledger.sub_group_2,
-                            sub_group_3: ledger.sub_group_3,
-                            ledger_type: ledger.ledger_type,
-                            parent_ledger_id: ledger.parent_ledger_id
+                            sub_group_1: nSg1,
+                            sub_group_2: nSg2,
+                            sub_group_3: nSg3,
+                            ledger_type: null,
                         }
                     };
 
-                    // Add to parent's children if not already there
-                    if (!parentNode.children.find(c => c.name === childNode.name && c.ledgerId === childNode.ledgerId)) {
-                        parentNode.children.push(childNode);
-                    }
+                    // The parent ledger ("testing") becomes a child of this sg3 node
+                    sg3Node.children.push(parentNode);
+                    tree.set(sg3NodePath, sg3Node);
+                    ledgerIdToPath.set(ledger.id, sg3NodePath); // track for potential grand-children
 
-                    // Track this nested ledger's path for potential grandchildren
-                    const childPath = `${parentPath}>${ledger.name}`;
-                    tree.set(childPath, childNode);
-                    ledgerIdToPath.set(ledger.id, childPath);
+                    // Re-parent: remove "testing" from its current grandparent's children,
+                    // add the new sg3 node instead
+                    if (grandparentPath && tree.has(grandparentPath)) {
+                        const grandparent = tree.get(grandparentPath)!;
+                        grandparent.children = grandparent.children.filter(c => c !== parentNode);
+                        if (!grandparent.children.find(c => c.name === sg3Node.name)) {
+                            grandparent.children.push(sg3Node);
+                        }
+                    }
+                } else {
+                    // sg3 node already exists → add parent ledger as child if not already there
+                    const sg3Node = tree.get(sg3NodePath)!;
+                    const parentNode = tree.get(parentPath)!;
+                    if (!sg3Node.children.find(c => c.name === parentNode.name)) {
+                        sg3Node.children.push(parentNode);
+                    }
+                    ledgerIdToPath.set(ledger.id, sg3NodePath);
                 }
+                return;
             }
+
+            // --- Default case: add as a child of the parent ledger node ---
+            const parentNode = tree.get(parentPath)!;
+            const childNode: TreeNode = {
+                name: ledger.name,
+                children: [],
+                level: 6,
+                isCustom: true,
+                ledgerId: ledger.id,
+                fullPath: {
+                    category: ledger.category,
+                    group: ledger.group,
+                    sub_group_1: nSg1,
+                    sub_group_2: nSg2,
+                    sub_group_3: nSg3,
+                    ledger_type: nLt,
+                    parent_ledger_id: ledger.parent_ledger_id
+                }
+            };
+
+            if (!parentNode.children.find(c => c.name === childNode.name && c.ledgerId === childNode.ledgerId)) {
+                parentNode.children.push(childNode);
+            }
+
+            const childPath = `${parentPath}>${ledger.name}`;
+            tree.set(childPath, childNode);
+            ledgerIdToPath.set(ledger.id, childPath);
         });
 
         // Get root nodes (major groups)
@@ -364,11 +457,40 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 selectedNode?.level === node.level &&
                 JSON.stringify(selectedNode?.fullPath) === JSON.stringify(node.fullPath);
 
+            let textStyle = '';
+            let iconStyle = 'text-gray-400';
+
+            if (!hasChildren) {
+                // Last entry (endpoint) is always red and clearly readable
+                const sizeClass = level === 0 ? 'text-sm' : level === 1 ? 'text-[13.5px]' : 'text-[13px]';
+                textStyle = `${sizeClass} text-red-600 font-medium italic`;
+                iconStyle = 'text-red-500';
+            } else if (node.level === 0) {
+                // Category: Blue, Bold, Uppercase, Largest
+                textStyle = 'text-sm text-blue-600 font-bold uppercase tracking-wider';
+                iconStyle = 'text-blue-500';
+            } else if (node.level === 1) {
+                // Group: Black, Bold, Slightly smaller
+                textStyle = 'text-[13.5px] text-black font-bold';
+                iconStyle = 'text-black';
+            } else if (node.level === 2) {
+                // Sub Group 1: Black, Semi-bold
+                textStyle = 'text-[13px] text-gray-900 font-semibold';
+                iconStyle = 'text-gray-800';
+            } else if (node.level === 3) {
+                // Sub Group 2: Black, Medium weight
+                textStyle = 'text-[12px] text-gray-800 font-medium';
+                iconStyle = 'text-gray-700';
+            } else {
+                // Sub Group 3 and others: Normal weight, Smallest
+                textStyle = 'text-[11px] text-gray-700 font-normal';
+                iconStyle = 'text-gray-600';
+            }
+
             return (
                 <div key={nodePath} style={{ marginLeft: `${level * 20}px` }}>
                     <div
-                        className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-indigo-100 text-slate-700 font-medium border-l-2 border-indigo-500' : ''
-                            } ${node.isCustom ? 'text-indigo-600' : ''}`}
+                        className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
                         onClick={() => {
                             selectNodeForPreview(node);
                             // Reset inputs when selection changes
@@ -382,15 +504,15 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                         }}
                     >
                         {hasChildren ? (
-                            <span className="mr-1 text-gray-500 text-xs font-bold select-none">
+                            <span className={`mr-1 text-xs font-bold select-none ${iconStyle}`}>
                                 {isExpanded ? '−' : '+'}
                             </span>
                         ) : (
-                            <span className={`mr-1 text-xs ${node.isCustom ? 'text-indigo-500' : 'text-gray-400'}`}>
+                            <span className={`mr-1 text-xs ${iconStyle}`}>
                                 {node.isCustom ? '★' : '•'}
                             </span>
                         )}
-                        <span className={`text-sm select-none ${node.isCustom ? 'font-medium' : ''}`}>
+                        <span className={`text-sm select-none ${textStyle}`}>
                             {node.name}
                         </span>
                     </div>
@@ -506,10 +628,10 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                             <div className="text-gray-500 text-sm">No hierarchy data available</div>
                         )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">
+                    <p className="text-[13.5px] text-gray-600 mt-4 leading-relaxed bg-blue-50/50 p-2 rounded border border-blue-100/50">
                         <strong>Single click</strong> to select any level. <strong>Double click</strong> to expand/collapse categories.
                         <br />
-                        <span className="text-indigo-600">★ Blue items</span> are your custom ledgers. Click them to create nested ledgers!
+                        <span className="text-red-600 font-semibold italic">★ Red Italic items</span> are your endpoints (ledgers). Click them to create nested entries if needed!
                     </p>
                 </div>
 

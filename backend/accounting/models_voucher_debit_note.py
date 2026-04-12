@@ -37,6 +37,7 @@ class VoucherDebitNoteSupplierDetails(BaseModel):
     
     # Configuration
     nature_of_supply = models.CharField(max_length=50, default='Regular') 
+    is_financial = models.CharField(max_length=10, default='No')
     reverse_charge = models.CharField(max_length=10, default='No')
     place_of_supply = models.CharField(max_length=255, null=True, blank=True)
     
@@ -44,6 +45,9 @@ class VoucherDebitNoteSupplierDetails(BaseModel):
     invoice_in_foreign_currency = models.CharField(max_length=10, default='No')
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=4, default=1.0)
     foreign_currency = models.CharField(max_length=10, default='USD')
+    
+    # Narration
+    narration = models.TextField(null=True, blank=True)
     
     # Document
     supporting_document = models.FileField(upload_to='debit_note_documents/', null=True, blank=True)
@@ -119,6 +123,13 @@ class VoucherDebitNoteDueDetails(BaseModel):
     reverse_tcs = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     reverse_tds = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     tds_it = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Reverse Tax Toggles
+    reverse_gst_tcs = models.CharField(max_length=10, default='No')
+    reverse_gst_tds = models.CharField(max_length=10, default='No')
+    reverse_income_tax_tcs = models.CharField(max_length=10, default='No')
+    reverse_income_tax_tds = models.CharField(max_length=10, default='No')
+
     purchase_invoice_amount_applied = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     gross_amount_due = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     net_amount_due = models.DecimalField(max_digits=15, decimal_places=2, default=0)

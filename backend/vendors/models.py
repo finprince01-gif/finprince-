@@ -391,7 +391,10 @@ class VendorMasterGSTDetails(models.Model):
     
     # Place of Business (Branch) Details
     reference_name = models.CharField(max_length=200, blank=True, null=True, help_text="Branch reference name")
-    branch_address = models.TextField(blank=True, null=True, help_text="Branch address")
+    branch_address = models.TextField(blank=True, null=True, help_text="Branch address (Combined)")
+    branch_address_line1 = models.CharField(max_length=255, blank=True, null=True, help_text="Branch address line 1")
+    branch_address_line2 = models.CharField(max_length=255, blank=True, null=True, help_text="Branch address line 2")
+    branch_address_line3 = models.CharField(max_length=255, blank=True, null=True, help_text="Branch address line 3")
     branch_contact_person = models.CharField(max_length=100, blank=True, null=True, help_text="Branch contact person")
     branch_email = models.CharField(max_length=255, blank=True, null=True, help_text="Branch email")
     branch_contact_no = models.CharField(max_length=20, blank=True, null=True, help_text="Branch contact number")

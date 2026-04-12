@@ -17,6 +17,12 @@ from .models_voucher_purchase import ( # pyre-fixme
     VoucherPurchaseDueDetails, 
     VoucherPurchaseTransitDetails
 )
+from .models_voucher_credit_note import (
+    VoucherCreditNoteInvoiceDetails,
+    VoucherCreditNoteItemDetails,
+    VoucherCreditNoteDueDetails,
+    VoucherCreditNoteTransitDetails
+)
 from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesInvoiceDetails,
     VoucherSalesItems,
@@ -27,6 +33,7 @@ from .models_voucher_sales import ( # pyre-fixme
 )
 from .models_voucher_allocation import VoucherAllocation
 from .models_advance_allocation import AdvanceAllocationMap  # noqa: F401  advance consumption tracking
+from .models_pending_transaction import PendingTransaction, AllocationLink  # noqa: F401  bill allocation lifecycle
 
 
 # ============================================================================
@@ -258,6 +265,7 @@ class Voucher(BaseModel):
         ('contra', 'Contra'),
         ('journal', 'Journal'),
         ('debit_note', 'Debit Note'),
+        ('credit_note', 'Credit Note'),
     ]
     type = models.CharField(max_length=20, choices=VOUCHER_TYPES)
     voucher_number = models.CharField(max_length=50)

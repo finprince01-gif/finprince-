@@ -69,7 +69,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     ? allVoucherTypes
     : allVoucherTypes.filter(v => hasTabAccess('Vouchers', v.perm));
 
-  const defaultVoucherType = availableVoucherTypes.length > 0 ? availableVoucherTypes[0].id : ('Purchase' as VoucherType);
+  const defaultVoucherType = availableVoucherTypes.length > 0 ? availableVoucherTypes[0].id : ('Sales' as VoucherType);
 
   const [voucherType, setVoucherType] = useState<VoucherType>(defaultVoucherType);
 
@@ -554,7 +554,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [originalInvoiceNo, setOriginalInvoiceNo] = useState('');
   const [originalInvoiceDate, setOriginalInvoiceDate] = useState('');
   const [creditNoteReason, setCreditNoteReason] = useState('');
-  
+
   // Credit Note specific states
   const [cnDate, setCnDate] = useState(getTodayDate());
   const [cnVoucherConfigs, setCnVoucherConfigs] = useState<any[]>([]);
@@ -573,6 +573,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnSameAsBillFrom, setCnSameAsBillFrom] = useState(false);
   const [cnInputType, setCnInputType] = useState<string[]>([]); // IGST, CGST, SGST, Cess
   const [cnInForeignCurrency, setCnInForeignCurrency] = useState<'Yes' | 'No'>('No');
+  const [cnIsFinancial, setCnIsFinancial] = useState<'Yes' | 'No'>('No');
   const [cnExchangeRate, setCnExchangeRate] = useState('1.00');
   const [cnUploadFile, setCnUploadFile] = useState<File | null>(null);
   const [cnSalesInvoicesList, setCnSalesInvoicesList] = useState<any[]>([]);
@@ -587,8 +588,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnReverseIncomeTaxTcs, setCnReverseIncomeTaxTcs] = useState<'Yes' | 'No'>('No');
   const [cnReverseIncomeTaxTds, setCnReverseIncomeTaxTds] = useState<'Yes' | 'No'>('No');
   const [cnIncomeTaxTdsTcsAmount, setCnIncomeTaxTdsTcsAmount] = useState('0.00');
+
+
+  const [cnAdvanceAmount, setCnAdvanceAmount] = useState('0.00');
+  const [cnPayableAmount, setCnPayableAmount] = useState('0.00');
   const [cnTermsConditions, setCnTermsConditions] = useState('');
   const [cnAppliedInvoices, setCnAppliedInvoices] = useState<any[]>([]); // Data Grid state
+
+  // Synchronize Credit Note active tab when foreign currency toggle changes
+  useEffect(() => {
+    if (voucherType === 'Credit Note') {
+      if (cnInForeignCurrency === 'Yes' && creditNoteActiveTab === 'items') {
+        setCreditNoteActiveTab('items_foreign');
+      } else if (cnInForeignCurrency === 'No' && (creditNoteActiveTab === 'items_foreign' || creditNoteActiveTab === 'items_inr')) {
+        setCreditNoteActiveTab('items');
+      }
+    }
+  }, [cnInForeignCurrency, voucherType, creditNoteActiveTab]);
 
   // Sync cnAppliedInvoices with cnSelectedSalesInvoices
   useEffect(() => {
@@ -612,7 +628,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         const inv = cnSalesInvoicesList.find(i => i.voucher_no === no);
         return inv ? inv.date : '';
       }).filter(date => date !== '');
-      
+
       setCnSalesInvoiceDate(selectedDates.join(', '));
     } else {
       setCnSalesInvoiceDate('');
@@ -648,8 +664,62 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnTransitUptoPortStationLoading, setCnTransitUptoPortStationLoading] = useState('');
   const [cnTransitUptoPortStationDischarge, setCnTransitUptoPortStationDischarge] = useState('');
   const [cnItems, setCnItems] = useState([
-    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }
+    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null, salesInvoiceNo: null as string | null, financialAmount: 0 }
   ]);
+
+  // Automatic calculation for Reverse IT (TCS/TDS)
+  useEffect(() => {
+    if (cnReverseIncomeTaxTcs === 'Yes' || cnReverseIncomeTaxTds === 'Yes') {
+      let totalReverseIt = 0;
+
+      cnSelectedSalesInvoices.forEach(invNo => {
+        const cleanInvNo = String(invNo || '').trim().toLowerCase();
+        
+        // Find the original invoice details from the list (which was fetched when customer was selected)
+        const invoice = cnSalesInvoicesList.find(i => 
+          String(i.sales_invoice_no || '').trim().toLowerCase() === cleanInvNo || 
+          String(i.voucher_no || '').trim().toLowerCase() === cleanInvNo
+        );
+        
+        if (invoice) {
+          // Check for nested payment_details (full view) or flattened fields (list view)
+          const origTaxable = parseFloat(String(invoice.payment_details?.payment_taxable_value || invoice.taxable_value || 0)) || 0;
+          // Handles both TCS Payable and TDS Receivable depending on original invoice context
+          const origItAmount = parseFloat(String(invoice.payment_details?.payment_tds_income_tax || invoice.tcs_amount || 0)) || 0;
+
+          if (origTaxable > 0 && origItAmount > 0) {
+            // Find portion of Credit Note taxable value linked to this specific invoice
+            const cnTaxableForThisInv = cnItems
+              .filter(item => {
+                const itemInvNo = String(item.salesInvoiceNo || item.sourcePoNo || '').trim().toLowerCase();
+                return itemInvNo === cleanInvNo;
+              })
+              .reduce((sum, item) => sum + (parseFloat(String(item.taxableValue)) || 0), 0);
+
+            if (cnTaxableForThisInv > 0) {
+              // Formula: (Credit Note Taxable Value / Original Invoice Taxable Value) * Original IT Amount (TCS/TDS)
+              let reverseItValue = (cnTaxableForThisInv / origTaxable) * origItAmount;
+              
+              // Validation: Must be less than or equal to the IT amount linked to the Sales Invoice
+              if (reverseItValue > origItAmount) {
+                reverseItValue = origItAmount;
+              }
+
+              totalReverseIt += reverseItValue;
+            }
+          }
+        }
+      });
+
+      setCnIncomeTaxTdsTcsAmount(totalReverseIt.toFixed(2));
+    } else {
+      setCnIncomeTaxTdsTcsAmount('0.00');
+    }
+  }, [cnReverseIncomeTaxTcs, cnReverseIncomeTaxTds, cnSelectedSalesInvoices, cnSalesInvoicesList, cnItems]);
+
+  const salesLedgerOptions = useMemo(() => {
+    return Array.from(new Set(ledgers.map(l => l.name))).filter(Boolean);
+  }, [ledgers]);
 
   const calculateCreditNoteTotals = () => {
     return cnItems.reduce((acc, item) => ({
@@ -840,15 +910,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     // Extract entity name if it's in the format "Name (Branch)"
     const match = value.match(/^(.*) \((.*)\)$/);
     const entityName = match ? match[1] : value;
-    
+
     // Attempt to find the most accurate ledger ID
     const findLedgerId = (name: string) => {
       if (!name) return null;
       const lower = name.toLowerCase().trim();
-      
+
       // 1. Check richVendors for a matching vendor with a ledger_id
-      const vendor = richVendors.find(v => 
-        (v.vendor_name || '').toLowerCase().trim() === lower || 
+      const vendor = richVendors.find(v =>
+        (v.vendor_name || '').toLowerCase().trim() === lower ||
         (v.name || '').toLowerCase().trim() === lower
       );
       // Only return ledger_id if it's actually set; if vendor found but ledger_id is null,
@@ -856,8 +926,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       if (vendor && (vendor.ledger_id || vendor.ledger)) return vendor.ledger_id || vendor.ledger;
 
       // 2. Check richCustomers for a matching customer with a ledger_id
-      const customer = richCustomers.find(c => 
-        (c.customer_name || '').toLowerCase().trim() === lower || 
+      const customer = richCustomers.find(c =>
+        (c.customer_name || '').toLowerCase().trim() === lower ||
         (c.name || '').toLowerCase().trim() === lower
       );
       if (customer && (customer.ledger_id || customer.ledger)) return customer.ledger_id || customer.ledger;
@@ -884,9 +954,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     console.log('[ADV-DEBUG] value:', value, '| entityName:', entityName, '| resolvedLedgerId:', ledgerId);
     const _dbgVendor = richVendors.find((v: any) => (v.vendor_name || '').toLowerCase().trim() === entityName.toLowerCase().trim());
-    console.log('[ADV-DEBUG] richVendors.length:', richVendors.length, '| matched vendor:', _dbgVendor ? {id: _dbgVendor.id, name: _dbgVendor.vendor_name, ledger_id: _dbgVendor.ledger_id} : 'NOT FOUND');
+    console.log('[ADV-DEBUG] richVendors.length:', richVendors.length, '| matched vendor:', _dbgVendor ? { id: _dbgVendor.id, name: _dbgVendor.vendor_name, ledger_id: _dbgVendor.ledger_id } : 'NOT FOUND');
     const _dbgLedger = ledgers.find((l: any) => (l.name || '').toLowerCase().trim() === entityName.toLowerCase().trim());
-    console.log('[ADV-DEBUG] ledgers.length:', ledgers.length, '| matched ledger:', _dbgLedger ? {id: _dbgLedger.id, name: _dbgLedger.name} : 'NOT FOUND');
+    console.log('[ADV-DEBUG] ledgers.length:', ledgers.length, '| matched ledger:', _dbgLedger ? { id: _dbgLedger.id, name: _dbgLedger.name } : 'NOT FOUND');
 
     if (ledgerId) {
       try {
@@ -916,8 +986,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     } else {
       console.warn('[ADV-DEBUG] Could not resolve ledger ID for vendor:', entityName);
-      console.log('[ADV-DEBUG] All richVendors (name + ledger_id):', richVendors.map((v: any) => ({name: v.vendor_name, ledger_id: v.ledger_id})));
-      console.log('[ADV-DEBUG] All ledgers (id + name):', ledgers.map((l: any) => ({id: l.id, name: l.name})));
+      console.log('[ADV-DEBUG] All richVendors (name + ledger_id):', richVendors.map((v: any) => ({ name: v.vendor_name, ledger_id: v.ledger_id })));
+      console.log('[ADV-DEBUG] All ledgers (id + name):', ledgers.map((l: any) => ({ id: l.id, name: l.name })));
       setPurchaseAdvanceRefs([]);
     }
   }, [richVendors, richCustomers, ledgers, setPurchaseAdvanceRefs]);
@@ -1639,17 +1709,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           const data = await httpClient.get<any[]>('/api/masters/master-voucher-purchases/');
           const purchaseConfigs = data || [];
           setPurchaseVoucherConfigs(purchaseConfigs);
-          if (purchaseConfigs && purchaseConfigs.length > 0 && !selectedPurchaseConfig) {
-            const first = purchaseConfigs[0];
-            setSelectedPurchaseConfig(first.voucher_name);
-
-            if (first.enable_auto_numbering) {
-              try {
-                const res: any = await httpClient.get(`/api/masters/master-voucher-purchases/${first.id}/next-number/`);
-                if (res?.invoice_number) setVoucherNumber(res.invoice_number);
-              } catch { }
-            }
-          }
         } catch (error) {
           console.error('Error fetching purchase voucher configurations:', error);
           setPurchaseVoucherConfigs([]);
@@ -2326,6 +2385,43 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setEntries([{ ledger: '', note: '', refNo: '', debit: 0, credit: 0 }, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
     setVendorValidationStatus(null);
     setIsVendorDisabled(false);
+
+    // Credit Note Resets
+    setCnDate(getTodayDate());
+    setCnCustomer('');
+    setCnBranch('');
+    setCnSelectedSalesInvoices([]);
+    setCnSalesInvoiceDate('');
+    setCnCustomerDebitNoteNo('');
+    setCnCustomerDebitNoteDate(getTodayDate());
+    setCnGstin('');
+    setCnGrnRefNo('');
+    setCnBillFrom('');
+    setCnShipFrom('');
+    setCnSameAsBillFrom(true);
+    setCnInputType(['Intrastate']);
+    setCnInForeignCurrency('No');
+    setCnItems([
+      { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: null, financialAmount: 0 }
+    ]);
+    setCnReverseGstTcs('No');
+    setCnReverseGstTds('No');
+    setCnIncomeTaxTdsTcsAmount('0.00');
+    setCnGstTdsTcsAmount('0.00');
+    setCnAdvanceAmount('0.00');
+    setCnPayableAmount('0.00');
+    setCnTermsConditions('');
+    setCnPostingNote('');
+    setCnTransitReceivedIn('');
+    setCnTransitMode('Road');
+    setCnTransitReceiptDate(getTodayDate());
+    setCnTransitReceiptTime('');
+    setCnTransitDeliveryType('Self');
+    setCnTransitTransporterId('');
+    setCnTransitTransporterName('');
+    setCnTransitVehicleNo('');
+    setCnTransitLrGrConsignment('');
+    setCreditNoteActiveTab('invoice');
   }, []);
 
   // Auto-set Inter-State flag based on party ledger's state
@@ -2564,9 +2660,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             };
           });
           if (prefilledData.sellerName) {
-          fetchVendorAdvances(prefilledData.sellerName);
-        }
-        setPurchaseItems(newPurchaseItems);
+            fetchVendorAdvances(prefilledData.sellerName);
+          }
+          setPurchaseItems(newPurchaseItems);
 
         } else {
           setItems([{ name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
@@ -2900,9 +2996,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (draftForceMajeure) parts.push(`Force Majeure: ${draftForceMajeure}`);
     if (draftDisputeTerms) parts.push(`Dispute & Redressal: ${draftDisputeTerms}`);
     if (parts.length > 0) {
-      setPurchaseTerms(parts.join('\n\n'));
+      if (voucherType === 'Credit Note') {
+        setCnTermsConditions(parts.join('\n\n'));
+      } else {
+        setPurchaseTerms(parts.join('\n\n'));
+      }
     } else {
-      setPurchaseTerms('');
+      if (voucherType === 'Credit Note') {
+        setCnTermsConditions('');
+      } else {
+        setPurchaseTerms('');
+      }
     }
     setIsTermsModalOpen(false);
   };
@@ -3099,6 +3203,113 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       return;
     }
 
+    if (voucherType === 'Credit Note') {
+      if (!cnCustomer) {
+        showError('Please select a Customer.');
+        return;
+      }
+      if (!selectedCnConfig) {
+        showError('Please select a Credit Note Series.');
+        return;
+      }
+
+      // Find Customer ID
+      const customer = richCustomers.find(c => c.customer_name === cnCustomer);
+      const customerId = customer?.id || null;
+
+      if (!customerId) {
+        showError('Please select a valid Customer from the Master list.');
+        return;
+      }
+
+      try {
+        const totals = calculateCreditNoteTotals();
+
+        const creditNoteData: any = {
+          date: cnDate,
+          credit_note_series: selectedCnConfig,
+          credit_note_no: cnVoucherNumber,
+          customer_name: cnCustomer,
+          customer_id: customerId,
+          branch: cnBranch,
+          sales_invoice_nos: Array.isArray(cnSelectedSalesInvoices) ? cnSelectedSalesInvoices.join(', ') : cnSelectedSalesInvoices,
+          sales_invoice_dates: cnSalesInvoiceDate,
+          customer_debit_note_no: cnCustomerDebitNoteNo,
+          customer_debit_note_date: cnCustomerDebitNoteDate,
+          gstin: cnGstin,
+          grn_ref_no: cnGrnRefNo,
+          bill_from: cnBillFrom,
+          ship_from: cnSameAsBillFrom ? cnBillFrom : cnShipFrom,
+          input_type: cnInputType.join(', '),
+          in_foreign_currency: cnInForeignCurrency,
+          narration: cnPostingNote || '',
+
+          item_details: {
+            items: cnItems,
+            total_taxable_value: totals.taxableValue,
+            total_igst: totals.igst,
+            total_cgst: totals.cgst,
+            total_sgst: totals.sgst,
+            total_cess: totals.cess,
+            total_invoice_value: totals.invoiceValue
+          },
+
+          due_details: {
+            reverse_gst_tcs: cnReverseGstTcs,
+            reverse_gst_tds: cnReverseGstTds,
+            reverse_income_tax_tcs: cnReverseIncomeTaxTcs,
+            reverse_income_tax_tds: cnReverseIncomeTaxTds,
+            income_tax_tds_tcs_amount: cnIncomeTaxTdsTcsAmount || 0,
+            gst_tds_tcs_amount: cnGstTdsTcsAmount || 0,
+            advance_amount: cnAdvanceAmount || 0,
+            payable_amount: cnPayableAmount || 0,
+            terms_conditions: cnTermsConditions || ''
+          },
+
+          transit_details: {
+            received_in: cnTransitReceivedIn,
+            mode_of_transport: cnTransitMode,
+            receipt_date: cnTransitReceiptDate || null,
+            receipt_time: cnTransitReceiptTime || null,
+            delivery_type: cnTransitDeliveryType,
+            transporter_id_gstin: cnTransitTransporterId,
+            transporter_name: cnTransitTransporterName,
+            vehicle_no: cnTransitVehicleNo,
+            lr_gr_consignment_no: cnTransitLrGrConsignment
+          }
+        };
+
+        await httpClient.post('/api/vouchers/credit-note/', creditNoteData);
+        showSuccess('Credit Note Saved Successfully!');
+
+        // Increment number logic if applicable
+        if (selectedCnConfig && cnVoucherConfigs.length > 0) {
+          const config = cnVoucherConfigs.find(c => c.voucher_name === selectedCnConfig);
+          if (config && config.enable_auto_numbering) {
+            await incrementCreditNoteNumber(String(config.id));
+          }
+        }
+
+        if (shouldPrint) {
+          // TODO: Implement Credit Note Print Preview
+          // For now, just close
+          resetForm();
+        } else {
+          resetForm();
+        }
+        refetch();
+
+      } catch (error: any) {
+        console.error('Error saving Credit Note:', error);
+        const serverError = error.response?.data;
+        const errorMessage = serverError
+          ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
+          : error.message;
+        showError(`Failed to save Credit Note.\n${errorMessage}`);
+      }
+      return;
+    }
+
     switch (voucherType) {
       // (Removed Purchase case from switch and handled above)
       case 'Sales':
@@ -3149,35 +3360,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       case 'Expenses':
         voucher = { id: '', type: voucherType, date, account, party, amount: simpleAmount, narration };
         break;
-      case 'Credit Note':
-        if (!cnCustomer) {
-          showError('Please select a Customer.');
-          return;
-        }
-        if (!selectedCnConfig) {
-          showError('Please select a Credit Note Series.');
-          return;
-        }
-        voucher = {
-          id: '',
-          type: voucherType,
-          date: cnDate,
-          voucher_series: selectedCnConfig,
-          voucher_number: cnVoucherNumber,
-          customer_name: cnCustomer,
-          branch: cnBranch,
-          sales_invoice_nos: cnSelectedSalesInvoices,
-          sales_invoice_date: cnSalesInvoiceDate,
-          customer_debit_note_no: cnCustomerDebitNoteNo,
-          customer_debit_note_date: cnCustomerDebitNoteDate,
-          gstin: cnGstin,
-          grn_ref_no: cnGrnRefNo,
-          bill_from: cnBillFrom,
-          ship_from: cnSameAsBillFrom ? cnBillFrom : cnShipFrom,
-          input_type: cnInputType.join(', '),
-          in_foreign_currency: cnInForeignCurrency,
-        } as any;
-        break;
     }
 
     if (voucher) {
@@ -3191,12 +3373,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           incrementContraNumber(String(config.id)).catch(e => console.error(e));
         }
       }
+      /*
       if (voucherType === 'Credit Note' && selectedCnConfig && cnVoucherConfigs.length > 0) {
         const config = cnVoucherConfigs.find(c => c.voucher_name === selectedCnConfig);
         if (config && config.enable_auto_numbering) {
           incrementCreditNoteNumber(String(config.id)).catch(e => console.error(e));
         }
       }
+      */
     }
   };
 
@@ -3207,7 +3391,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     switch (voucherType) {
       case 'Purchase':
       case 'Sales':
-        voucherData = { type: voucherType, party, invoiceNo, total, items };
+      case 'Credit Note':
+      case 'Debit Note':
+        if (voucherType === 'Credit Note') {
+          voucherData = { type: voucherType, party: cnCustomer, invoiceNo: cnVoucherNumber, total: calculateCreditNoteTotals().invoiceValue, items: cnItems };
+        } else {
+          voucherData = { type: voucherType, party, invoiceNo, total, items };
+        }
         break;
       case 'Payment':
       case 'Receipt':
@@ -3218,6 +3408,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         break;
       case 'Journal':
         voucherData = { type: voucherType, entries, totalDebit };
+        break;
+      case 'Expenses':
+        voucherData = { type: voucherType, party, account, amount: simpleAmount };
         break;
     }
 
@@ -3456,17 +3649,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const handlePurchaseAdvanceRefChange = (index: number, field: string, value: string) => {
     const newRefs = [...purchaseAdvanceRefs];
     const ref = { ...newRefs[index] };
-    
+
     let finalValue = value;
     if (field === 'appliedNow' || field === 'allocatedNow') {
       const available = parseFloat(ref.amount) || 0;
       const current = parseFloat(value) || 0;
-      
+
       // Cap at available amount
       if (current > available) {
-          finalValue = ref.amount;
+        finalValue = ref.amount;
       }
-      
+
       // Update both to keep them synced for totals and API
       ref.appliedNow = finalValue;
       (ref as any).allocatedNow = finalValue;
@@ -5057,11 +5250,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       placeholder="0.00"
                                       title="Enter partial amount to allocate"
                                       onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'allocatedNow', e.target.value)}
-                                      className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right transition-all outline-none ${
-                                        isAllocated 
-                                        ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-100 font-bold text-indigo-950" 
+                                      className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right transition-all outline-none ${isAllocated
+                                        ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-100 font-bold text-indigo-950"
                                         : "bg-gray-50/50 border-gray-200 text-gray-400"
-                                      }`}
+                                        }`}
                                     />
                                   </div>
                                 </div>
@@ -5092,8 +5284,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           disabled={!party}
                           onClick={openTermsModal}
                           className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${!party
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
-                              : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
                             }`}
                           title={!party ? "Please select a vendor first" : ""}
                         >
@@ -6302,19 +6494,52 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const rate = parseFloat(String(item.rate)) || 0;
     const foreignRate = parseFloat(String(item.foreignRate)) || 0;
     const exchangeRate = parseFloat(String(cnExchangeRate)) || 1;
+    const isFinancial = String(cnIsFinancial).toLowerCase() === 'yes';
 
-    if (field === 'qty' || field === 'rate' || field === 'foreignRate') {
+    if (field === 'qty' || field === 'rate' || field === 'foreignRate' || field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
       if (cnInForeignCurrency === 'Yes') {
-         if (field === 'foreignRate' || field === 'qty') {
-            item.foreignAmount = qty * foreignRate;
-            item.rate = foreignRate * exchangeRate;
-            item.taxableValue = qty * item.rate;
-         } else if (field === 'rate') {
-            // If manual INR rate update in CN, it's rare but let's sync
-            item.taxableValue = qty * rate;
-         }
+        if (field === 'foreignRate' || field === 'qty' || field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
+          item.foreignAmount = qty * foreignRate;
+          item.rate = foreignRate * exchangeRate;
+          item.taxableValue = isFinancial ? (item.taxableValue || item.financialAmount || 0) : (qty * item.rate);
+        } else if (field === 'rate') {
+          // If manual INR rate update in CN, it's rare but let's sync
+          item.foreignRate = rate / exchangeRate;
+          item.foreignAmount = qty * item.foreignRate;
+          item.taxableValue = isFinancial ? (item.taxableValue || item.financialAmount || 0) : (qty * rate);
+        }
       } else {
-        item.taxableValue = qty * rate;
+        item.taxableValue = isFinancial ? (item.taxableValue || item.financialAmount || 0) : (qty * rate);
+      }
+    }
+
+    if (field === 'financialAmount' && isFinancial) {
+      const numValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+      item.taxableValue = numValue;
+      item.qty = 1;
+      item.rate = numValue;
+    }
+
+    // Auto-calculate Taxable Value (Qty * Rate) and Taxes (INR)
+    if (cnReverseGstTcs === 'No') {
+      const selectedStockItem = allItems.find((si: any) =>
+        ((si.item_code || si.code) || '').toLowerCase() === (item.itemCode || '').toLowerCase() ||
+        ((si.name || si.item_name) || '').toLowerCase() === (item.itemName || '').toLowerCase() ||
+        ((si.hsn_sac || si.hsn) || '').toString().trim() === (item.hsnSac || '').toString().trim()
+      );
+      const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
+      const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+      const totalTax = item.taxableValue * (gstRate / 100);
+      item.cess = totalTax * (cessRate / 100);
+
+      if (cnInputType.includes('IGST')) {
+        item.igst = totalTax;
+        item.cgst = 0;
+        item.sgst = 0;
+      } else {
+        item.igst = 0;
+        item.cgst = totalTax / 2;
+        item.sgst = totalTax / 2;
       }
     }
 
@@ -6331,14 +6556,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   };
 
   const addCreditNoteItem = () => {
-    setCnItems([...cnItems, { id: Date.now().toString(), itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null }]);
+    setCnItems([...cnItems, { id: Date.now().toString(), itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }]);
   };
 
   const removeCreditNoteItem = (id: string) => {
     if (cnItems.length > 1) {
       setCnItems(cnItems.filter(item => item.id !== id));
     } else {
-      setCnItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null }]);
+      setCnItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }]);
     }
   };
 
@@ -6429,18 +6654,36 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <SearchableSelect
                       value={cnCustomer}
                       onChange={(val) => {
-                      setCnCustomer(val);
-                      setCnBranch('');
-                      setCnSelectedSalesInvoices([]);
-                      setCnGstin('');
-                      if (val) {
-                         apiService.getCustomerSalesInvoices(val)
-                           .then(data => {
-                             setCnSalesInvoicesList(data || []);
-                           });
-                      } else {
-                         setCnSalesInvoicesList([]);
-                      }
+                        setCnCustomer(val);
+                        setCnBranch('');
+                        setCnSelectedSalesInvoices([]);
+                        setCnGstin('');
+                        if (val) {
+                          // Auto-populate Terms & Conditions
+                          const customer = richCustomers.find(c => (c.customer_name || '').toLowerCase() === val.toLowerCase());
+                          if (customer) {
+                            const parts: string[] = [];
+                            if (customer.credit_period) parts.push(`Credit Period: ${customer.credit_period}`);
+                            if (customer.credit_terms) parts.push(`Credit Terms: ${customer.credit_terms}`);
+                            if (customer.penalty_terms) parts.push(`Penalty Terms: ${customer.penalty_terms}`);
+                            if (customer.delivery_terms) parts.push(`Delivery Terms: ${customer.delivery_terms}`);
+                            const warranty = customer.warranty_details || customer.warranty_guarantee_details;
+                            if (warranty) parts.push(`Warranty / Guarantee: ${warranty}`);
+                            if (customer.force_majeure) parts.push(`Force Majeure: ${customer.force_majeure}`);
+                            const dispute = customer.dispute_terms || customer.dispute_redressal_terms;
+                            if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
+                            setCnTermsConditions(parts.join('\n\n'));
+                            setMasterTermsData(customer);
+                          }
+                          apiService.getCustomerSalesInvoices(val)
+                            .then(data => {
+                              setCnSalesInvoicesList(data || []);
+                            });
+                        } else {
+                          setCnSalesInvoicesList([]);
+                          setCnTermsConditions('');
+                          setMasterTermsData(null);
+                        }
                       }}
                       options={richCustomers.map(c => ({
                         value: c.customer_name,
@@ -6479,23 +6722,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           setBillFromPincode(branch.pincode || '');
                           setBillFromState(branch.state || '');
                           if (cnSameAsBillFrom) {
-                             setShipFromAddress1(branch.address_line_1 || '');
-                             setShipFromAddress2(branch.address_line_2 || '');
-                             setShipFromAddress3(branch.address_line_3 || '');
-                             setShipFromCity(branch.city || '');
-                             setShipFromPincode(branch.pincode || '');
-                             setShipFromState(branch.state || '');
+                            setShipFromAddress1(branch.address_line_1 || '');
+                            setShipFromAddress2(branch.address_line_2 || '');
+                            setShipFromAddress3(branch.address_line_3 || '');
+                            setShipFromCity(branch.city || '');
+                            setShipFromPincode(branch.pincode || '');
+                            setShipFromState(branch.state || '');
                           }
                         }
                       }
                       setCnSelectedSalesInvoices([]);
                       if (cnCustomer && e.target.value) {
-                         apiService.getCustomerSalesInvoices(cnCustomer, e.target.value)
-                           .then(data => {
-                             setCnSalesInvoicesList(data || []);
-                           });
+                        apiService.getCustomerSalesInvoices(cnCustomer, e.target.value)
+                          .then(data => {
+                            setCnSalesInvoicesList(data || []);
+                          });
                       } else {
-                         setCnSalesInvoicesList([]);
+                        setCnSalesInvoicesList([]);
                       }
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
@@ -6521,13 +6764,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
               </div>
 
-               {/* Row 3: Sales Invoice No., Sales Invoice Date, Customer's Debit Note No. */}
+              {/* Row 3: Sales Invoice No., Sales Invoice Date, Customer's Debit Note No. */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     SALES INVOICE NO. <span className="text-red-500">*</span>
                   </label>
-                  <div 
+                  <div
                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-white cursor-pointer flex items-center justify-between min-h-[42px]"
                     onClick={() => setIsCnInvoiceDropdownOpen(!isCnInvoiceDropdownOpen)}
                   >
@@ -6536,7 +6779,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         cnSelectedSalesInvoices.map(no => (
                           <span key={no} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded border border-indigo-100 flex items-center gap-1">
                             {no}
-                            <button onClick={(e) => { e.stopPropagation(); setCnSelectedSalesInvoices(prev => prev.filter(p => p !== no)); }} className="hover:text-red-500 font-bold">×</button>
+                            <button onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setCnSelectedSalesInvoices(prev => prev.filter(p => p !== no)); 
+                              setCnItems(prev => {
+                                const filtered = prev.filter(item => item.sourcePoNo !== no);
+                                return filtered.length > 0 ? filtered : [{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }];
+                              });
+                            }} className="hover:text-red-500 font-bold">×</button>
                           </span>
                         ))
                       ) : (
@@ -6545,27 +6795,80 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isCnInvoiceDropdownOpen ? 'rotate-180' : ''}`} />
                   </div>
-                  
+
                   {isCnInvoiceDropdownOpen && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-[4px] shadow-xl max-h-60 overflow-y-auto">
                       {cnSalesInvoicesList.length > 0 ? (
                         cnSalesInvoicesList.map(inv => (
-                          <div 
-                            key={inv.voucher_no} 
+                          <div
+                            key={inv.voucher_no}
                             className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-3 border-b border-gray-50 last:border-0"
-                            onClick={() => {
-                              const alreadySelected = cnSelectedSalesInvoices.includes(inv.voucher_no);
+                            onClick={async () => {
+                              const invNo = inv.voucher_no;
+                              const alreadySelected = cnSelectedSalesInvoices.includes(invNo);
+
                               if (alreadySelected) {
-                                setCnSelectedSalesInvoices(prev => prev.filter(p => p !== inv.voucher_no));
+                                // Deselect: Remove invoice and its items
+                                setCnSelectedSalesInvoices(prev => prev.filter(p => p !== invNo));
+                                setCnItems(prev => {
+                                  const filtered = prev.filter(item => item.sourcePoNo !== invNo);
+                                  return filtered.length > 0 ? filtered : [{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }];
+                                });
                               } else {
-                                setCnSelectedSalesInvoices(prev => [...prev, inv.voucher_no]);
+                                // Select: Add invoice and fetch its items
+                                setCnSelectedSalesInvoices(prev => [...prev, invNo]);
+                                try {
+                                  const fullDetails = await apiService.getSalesInvoiceDetails(invNo);
+                                  if (fullDetails && fullDetails.items && fullDetails.items.length > 0) {
+                                    const newItems = fullDetails.items.map((item: any, index: number) => {
+                                      const qty = parseFloat(item.qty) || 0;
+                                      const rate = parseFloat(item.item_rate) || 0;
+                                      const exchangeRate = parseFloat(cnExchangeRate) || 1;
+
+                                      // Derive foreign rate and amount based on current exchange rate
+                                      const foreignRate = rate / exchangeRate;
+                                      const foreignAmount = qty * foreignRate;
+
+                                      return {
+                                        id: `${invNo}-${Date.now()}-${index}`,
+                                        itemCode: item.item_code || '',
+                                        itemName: item.item_name || '',
+                                        hsnSac: item.hsn_sac || '',
+                                        qty: qty,
+                                        uom: item.uom || '',
+                                        rate: rate,
+                                        foreignRate: foreignRate,
+                                        foreignAmount: foreignAmount,
+                                        taxableValue: parseFloat(item.taxable_value) || (qty * rate),
+                                        igst: parseFloat(item.igst) || 0,
+                                        cgst: parseFloat(item.cgst) || 0,
+                                        sgst: parseFloat(item.sgst) || 0,
+                                        cess: parseFloat(item.cess) || 0,
+                                        invoiceValue: parseFloat(item.invoice_value) || 0,
+                                        description: item.description || '',
+                                        sourcePoNo: invNo, // Track source invoice
+                                        salesInvoiceNo: invNo // Add specifically for display
+                                      };
+                                    });
+
+                                    setCnItems(prev => {
+                                      // If the first row is empty, replace it
+                                      if (prev.length === 1 && !prev[0].itemName && !prev[0].itemCode) {
+                                        return newItems;
+                                      }
+                                      return [...prev, ...newItems];
+                                    });
+                                  }
+                                } catch (error) {
+                                  console.error("Failed to fetch invoice details:", error);
+                                }
                               }
                             }}
                           >
-                            <input 
-                              type="checkbox" 
-                              checked={cnSelectedSalesInvoices.includes(inv.voucher_no)} 
-                              readOnly 
+                            <input
+                              type="checkbox"
+                              checked={cnSelectedSalesInvoices.includes(inv.voucher_no)}
+                              readOnly
                               className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             />
                             <div className="flex flex-col">
@@ -6593,7 +6896,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   />
                 </div>
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     CUSTOMER'S DEBIT NOTE NO.
                   </label>
                   <input
@@ -6606,7 +6909,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
               </div>
 
-               {/* Row 4: Customer's Debit Note Date, GRN Reference No., Upload Document */}
+              {/* Row 4: Customer's Debit Note Date, GRN Reference No., Upload Document */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
@@ -6621,184 +6924,184 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   />
                 </div>
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     GRN REFERENCE NO.
                   </label>
-                    <SearchableSelect
-                      value={cnGrnRefNo === '+ Create GRN' ? '' : cnGrnRefNo}
-                      onChange={(val) => {
-                        if (val === '+ Create GRN') {
-                          setIsCreateGRNModalOpen(true);
-                        } else {
-                          setCnGrnRefNo(val);
-                        }
-                      }}
-                      options={['+ Create GRN', ...pendingGRNs.map(grn => grn.grn_no)]}
-                      placeholder="Select Posted GRN or Create"
-                      className="w-full"
-                    />
-                  </div>
+                  <SearchableSelect
+                    value={cnGrnRefNo === '+ Create GRN' ? '' : cnGrnRefNo}
+                    onChange={(val) => {
+                      if (val === '+ Create GRN') {
+                        setIsCreateGRNModalOpen(true);
+                      } else {
+                        setCnGrnRefNo(val);
+                      }
+                    }}
+                    options={['+ Create GRN', ...pendingGRNs.map(grn => grn.grn_no)]}
+                    placeholder="Select Posted GRN or Create"
+                    className="w-full"
+                  />
+                </div>
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase">
                     UPLOAD SUPPORTING DOCUMENT
                   </label>
-                   {!cnUploadFile ? (
-                      <div className="relative group">
-                          <input
-                              type="file"
-                              id="supporting-doc-cn"
-                              onChange={(e) => setCnUploadFile(e.target.files?.[0] || null)}
-                              className="hidden"
-                              accept=".jpg,.jpeg,.pdf"
-                          />
-                          <button
-                              type="button"
-                              onClick={() => document.getElementById('supporting-doc-cn')?.click()}
-                              className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-all flex items-center justify-center gap-2 shadow-sm uppercase font-medium"
-                          >
-                              <Icon name="upload" className="w-5 h-5 text-white" />
-                              <span className="text-sm">UPLOAD DOCUMENT</span>
-                          </button>
-                          <p className="text-xs text-gray-400 text-center mt-1">Accepted: JPG, JPEG, PDF</p>
-                      </div>
+                  {!cnUploadFile ? (
+                    <div className="relative group">
+                      <input
+                        type="file"
+                        id="supporting-doc-cn"
+                        onChange={(e) => setCnUploadFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                        accept=".jpg,.jpeg,.pdf"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('supporting-doc-cn')?.click()}
+                        className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-all flex items-center justify-center gap-2 shadow-sm uppercase font-medium"
+                      >
+                        <Icon name="upload" className="w-5 h-5 text-white" />
+                        <span className="text-sm">UPLOAD DOCUMENT</span>
+                      </button>
+                      <p className="text-xs text-gray-400 text-center mt-1">Accepted: JPG, JPEG, PDF</p>
+                    </div>
                   ) : (
-                      <div className="relative border-2 border-dashed border-indigo-200 rounded-[4px] p-2 bg-indigo-50/30">
-                          <div className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-100 group/file">
-                              <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
-                                  <Icon name="upload" className="w-6 h-6" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-900 truncate uppercase tracking-tight leading-none">{cnUploadFile.name}</p>
-                              </div>
-                          </div>
-                          <button
-                              type="button"
-                              onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCnUploadFile(null);
-                              }}
-                              className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-colors z-10"
-                              title="Remove file"
-                          >
-                              <Icon name="x" className="w-4 h-4" />
-                          </button>
+                    <div className="relative border-2 border-dashed border-indigo-200 rounded-[4px] p-2 bg-indigo-50/30">
+                      <div className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-100 group/file">
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+                          <Icon name="upload" className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate uppercase tracking-tight leading-none">{cnUploadFile.name}</p>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCnUploadFile(null);
+                        }}
+                        className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-colors z-10"
+                        title="Remove file"
+                      >
+                        <Icon name="x" className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
 
-               {/* Bill From / Ship From */}
+              {/* Bill From / Ship From */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide">
-                          Bill From (Full Address)
-                      </label>
-                      <div className="space-y-2">
-                          <input
-                              type="text"
-                              value={billFromAddress1}
-                              onChange={(e) => setBillFromAddress1(e.target.value)}
-                              placeholder="Address Line 1"
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                          <input
-                              type="text"
-                              value={billFromAddress2}
-                              onChange={(e) => setBillFromAddress2(e.target.value)}
-                              placeholder="Address Line 2"
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                          <input
-                              type="text"
-                              value={billFromAddress3}
-                              onChange={(e) => setBillFromAddress3(e.target.value)}
-                              placeholder="Address Line 3"
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                          <div className="grid grid-cols-2 gap-2">
-                              <input
-                                  type="text"
-                                  value={billFromCity}
-                                  onChange={(e) => setBillFromCity(e.target.value)}
-                                  placeholder="City"
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                              />
-                              <input
-                                  type="text"
-                                  value={billFromPincode}
-                                  onChange={(e) => setBillFromPincode(e.target.value)}
-                                  placeholder="Pincode"
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                              />
-                          </div>
-                      </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide">
+                    Bill From (Full Address)
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={billFromAddress1}
+                      onChange={(e) => setBillFromAddress1(e.target.value)}
+                      placeholder="Address Line 1"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <input
+                      type="text"
+                      value={billFromAddress2}
+                      onChange={(e) => setBillFromAddress2(e.target.value)}
+                      placeholder="Address Line 2"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <input
+                      type="text"
+                      value={billFromAddress3}
+                      onChange={(e) => setBillFromAddress3(e.target.value)}
+                      placeholder="Address Line 3"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={billFromCity}
+                        onChange={(e) => setBillFromCity(e.target.value)}
+                        placeholder="City"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                      <input
+                        type="text"
+                        value={billFromPincode}
+                        onChange={(e) => setBillFromPincode(e.target.value)}
+                        placeholder="Pincode"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
-                  <div>
-                      <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-gray-700 font-bold tracking-wide">
-                              Ship From
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                  type="checkbox"
-                                  checked={cnSameAsBillFrom}
-                                  onChange={(e) => setCnSameAsBillFrom(e.target.checked)}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <span className="text-xs font-bold text-gray-500 uppercase">SAME AS BILL TO ADDRESS</span>
-                          </label>
-                      </div>
-                      <div className="space-y-2">
-                          <input
-                              type="text"
-                              value={shipFromAddress1}
-                              onChange={(e) => setShipFromAddress1(e.target.value)}
-                              placeholder="Address Line 1"
-                              disabled={cnSameAsBillFrom}
-                              className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                          />
-                          <input
-                              type="text"
-                              value={shipFromAddress2}
-                              onChange={(e) => setShipFromAddress2(e.target.value)}
-                              placeholder="Address Line 2"
-                              disabled={cnSameAsBillFrom}
-                              className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                          />
-                          <input
-                              type="text"
-                              value={shipFromAddress3}
-                              onChange={(e) => setShipFromAddress3(e.target.value)}
-                              placeholder="Address Line 3"
-                              disabled={cnSameAsBillFrom}
-                              className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                          />
-                          <div className="grid grid-cols-2 gap-2">
-                              <input
-                                  type="text"
-                                  value={shipFromCity}
-                                  onChange={(e) => setShipFromCity(e.target.value)}
-                                  placeholder="City"
-                                  disabled={cnSameAsBillFrom}
-                                  className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                              />
-                              <input
-                                  type="text"
-                                  value={shipFromPincode}
-                                  onChange={(e) => setShipFromPincode(e.target.value)}
-                                  placeholder="Pincode"
-                                  disabled={cnSameAsBillFrom}
-                                  className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
-                              />
-                          </div>
-                      </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 font-bold tracking-wide">
+                      Ship From
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={cnSameAsBillFrom}
+                        onChange={(e) => setCnSameAsBillFrom(e.target.checked)}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-xs font-bold text-gray-500 uppercase">SAME AS BILL TO ADDRESS</span>
+                    </label>
                   </div>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={shipFromAddress1}
+                      onChange={(e) => setShipFromAddress1(e.target.value)}
+                      placeholder="Address Line 1"
+                      disabled={cnSameAsBillFrom}
+                      className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                    />
+                    <input
+                      type="text"
+                      value={shipFromAddress2}
+                      onChange={(e) => setShipFromAddress2(e.target.value)}
+                      placeholder="Address Line 2"
+                      disabled={cnSameAsBillFrom}
+                      className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                    />
+                    <input
+                      type="text"
+                      value={shipFromAddress3}
+                      onChange={(e) => setShipFromAddress3(e.target.value)}
+                      placeholder="Address Line 3"
+                      disabled={cnSameAsBillFrom}
+                      className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={shipFromCity}
+                        onChange={(e) => setShipFromCity(e.target.value)}
+                        placeholder="City"
+                        disabled={cnSameAsBillFrom}
+                        className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                      />
+                      <input
+                        type="text"
+                        value={shipFromPincode}
+                        onChange={(e) => setShipFromPincode(e.target.value)}
+                        placeholder="Pincode"
+                        disabled={cnSameAsBillFrom}
+                        className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] ${cnSameAsBillFrom ? 'bg-gray-50' : 'focus:ring-indigo-500 focus:border-indigo-500'}`}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-               {/* Row 7: Input Type, Foreign Currency */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end bg-gray-50/50 p-6 pt-4 mt-6 rounded-[4px] border border-gray-100">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
+              {/* Bottom Settings Row: Combined into flex row for perfect alignment */}
+              <div className="flex flex-row flex-wrap items-end gap-x-12 gap-y-6 bg-gray-50/50 p-6 pt-4 mt-6 rounded-[4px] border border-gray-100">
+                <div className="flex flex-col items-start">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
                     INPUT TYPE (GST CATEGORY)
                   </label>
                   <div className="flex flex-wrap gap-4">
@@ -6808,24 +7111,24 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="button"
                         onClick={() => {
                           if (cnInForeignCurrency === 'Yes') return;
-                          setCnInputType(prev => 
+                          setCnInputType(prev =>
                             prev.includes(type) ? prev.filter(p => p !== type) : [...prev, type]
                           );
                         }}
-                        className={`px-6 py-2 rounded-[4px] text-[13px] font-medium transition-all ${
-                           (cnInputType.includes(type) || (cnInForeignCurrency === 'Yes' && type === 'IGST'))
-                             ? 'bg-indigo-600 text-white shadow-sm' 
-                             : 'bg-white border border-gray-300 text-gray-600 hover:border-indigo-500 hover:text-indigo-600'
-                        } ${cnInForeignCurrency === 'Yes' && type !== 'IGST' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`px-6 py-2 rounded-[4px] text-[13px] font-medium transition-all ${(cnInputType.includes(type) || (cnInForeignCurrency === 'Yes' && type === 'IGST'))
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-white border border-gray-300 text-gray-600 hover:border-indigo-500 hover:text-indigo-600'
+                          } ${cnInForeignCurrency === 'Yes' && type !== 'IGST' ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {type}
                       </button>
                     ))}
                   </div>
                 </div>
-                 <div className="flex flex-col items-start gap-4">
+
+                <div className="flex flex-col items-start gap-4">
                   <div className="flex flex-col items-start">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
                       INVOICE IN FOREIGN CURRENCY
                     </label>
                     <div className="flex bg-white p-1 rounded-[4px] border border-gray-300">
@@ -6837,14 +7140,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             setCnInForeignCurrency(opt as any);
                             if (opt === 'Yes') {
                               setCnInputType(['IGST']);
-                              setCreditNoteActiveTab('invoice');
+                              const exRate = parseFloat(String(cnExchangeRate)) || 1;
+                              setCnItems(prev => prev.map(item => {
+                                const fRate = (parseFloat(String(item.rate)) || 0) / exRate;
+                                const q = parseFloat(String(item.qty)) || 0;
+                                return {
+                                  ...item,
+                                  foreignRate: fRate,
+                                  foreignAmount: q * fRate
+                                };
+                              }));
                             }
                           }}
-                          className={`px-8 py-1.5 rounded-[2px] text-[13px] font-medium transition-all ${
-                            cnInForeignCurrency === opt 
-                              ? 'bg-indigo-600 text-white shadow-sm' 
-                              : 'text-gray-500 hover:text-gray-700'
-                          }`}
+                          className={`px-8 py-1.5 rounded-[2px] text-[13px] font-medium transition-all ${cnInForeignCurrency === opt
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                            }`}
                         >
                           {opt}
                         </button>
@@ -6853,7 +7164,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
                   {cnInForeignCurrency === 'Yes' && (
                     <div className="flex flex-col items-start w-full">
-                      <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
                         EXCHANGE RATE (1 FC = INR)
                       </label>
                       <input
@@ -6867,6 +7178,56 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </div>
                   )}
                 </div>
+
+                <div className="flex flex-col items-start gap-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-0 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
+                    It is financial credit note?
+                  </label>
+                  <div className="flex bg-white p-1 rounded-[4px] border border-gray-300">
+                    {['No', 'Yes'].map(opt => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setCnIsFinancial(opt as any)}
+                        className={`px-8 py-1.5 rounded-[2px] text-[13px] font-bold transition-all ${String(cnIsFinancial).toLowerCase() === opt.toLowerCase()
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                      >
+                        {opt.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-start gap-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-0 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
+                    Reverse GST (TCS/TDS)
+                  </label>
+                  <div className="flex bg-white p-1 rounded-[4px] border border-gray-300">
+                    {['No', 'Yes'].map(opt => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          if (opt === 'Yes') {
+                            setCnReverseGstTcs('Yes');
+                            setCnReverseGstTds('Yes');
+                          } else {
+                            setCnReverseGstTcs('No');
+                            setCnReverseGstTds('No');
+                          }
+                        }}
+                        className={`px-8 py-1.5 rounded-[2px] text-[13px] font-bold transition-all ${(cnReverseGstTcs === opt || cnReverseGstTds === opt)
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                      >
+                        {opt.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -6879,6 +7240,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <thead className="bg-indigo-600 text-white">
                     <tr>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500 w-[60px]">S. No.</th>
+                      <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500 w-[140px]">Sales Invoice No.</th>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500 w-[140px]">Item Code</th>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500 min-w-[200px]">Item Name</th>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500 w-[120px]">HSN/SAC</th>
@@ -6901,8 +7263,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </thead>
                   <tbody>
                     {cnItems.map((row, index) => (
-                      <tr key={row.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                        <td className="px-2 py-3 text-center text-sm border-r border-gray-200">
+                      <React.Fragment key={row.id}>
+                        <tr className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                          <td className="px-2 py-3 text-center text-sm border-r border-gray-200">
                           <div className="flex items-center justify-center gap-2">
                             <input type="checkbox" className="w-4 h-4 rounded text-indigo-600" />
                             {index + 1}
@@ -6911,9 +7274,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <td className="px-2 py-2 border-r border-gray-200">
                           <input
                             type="text"
+                            value={row.salesInvoiceNo || row.sourcePoNo || ''}
+                            readOnly
+                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium text-indigo-700 font-bold"
+                            placeholder="Auto"
+                          />
+                        </td>
+                        <td className="px-2 py-2 border-r border-gray-200">
+                          <input
+                            type="text"
                             value={row.itemCode}
                             onChange={(e) => handleCreditNoteItemChange(index, 'itemCode', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm placeholder:text-gray-300"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
                             placeholder="Code"
                           />
                         </td>
@@ -6923,6 +7296,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             options={allItems.map(i => i.name || i.item_name)}
                             onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
                             placeholder="Select/Enter item"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
                           />
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200 text-center text-sm">
@@ -6930,7 +7304,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="text"
                             value={row.hsnSac}
                             onChange={(e) => handleCreditNoteItemChange(index, 'hsnSac', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center placeholder:text-gray-300"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
                             placeholder="HSN"
                           />
                         </td>
@@ -6939,7 +7314,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="number"
                             value={row.qty}
                             onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
                           />
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200">
@@ -6947,7 +7323,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="text"
                             value={row.uom}
                             onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
                             placeholder="Unit"
                           />
                         </td>
@@ -6956,12 +7333,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="number"
                             value={row.rate}
                             onChange={(e) => handleCreditNoteItemChange(index, 'rate', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-medium pr-1"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-medium pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
                             step="0.01"
                           />
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200 text-right text-sm bg-gray-50/30 pr-2">
-                          {row.taxableValue.toFixed(2)}
+                          {(row.taxableValue || 0).toFixed(2)}
                         </td>
                         {cnInputType.includes('CGST & SGST') ? (
                           <>
@@ -6970,7 +7348,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 type="number"
                                 value={row.cgst}
                                 onChange={(e) => handleCreditNoteItemChange(index, 'cgst', e.target.value)}
-                                className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                                readOnly={cnReverseGstTcs === 'No'}
+                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                                 step="0.01"
                               />
                             </td>
@@ -6979,7 +7358,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 type="number"
                                 value={row.sgst}
                                 onChange={(e) => handleCreditNoteItemChange(index, 'sgst', e.target.value)}
-                                className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                                readOnly={cnReverseGstTcs === 'No'}
+                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                                 step="0.01"
                               />
                             </td>
@@ -6990,7 +7370,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="number"
                               value={row.igst}
                               onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
-                              className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                              readOnly={cnReverseGstTcs === 'No'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                               step="0.01"
                             />
                           </td>
@@ -7000,12 +7381,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="number"
                             value={row.cess}
                             onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
+                            readOnly={cnReverseGstTcs === 'No'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                             step="0.01"
                           />
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-gray-50/50 pr-2">
-                          {row.invoiceValue.toFixed(2)}
+                          {(row.invoiceValue || 0).toFixed(2)}
                         </td>
                         <td className="px-2 py-2 text-center">
                           <button
@@ -7016,22 +7398,63 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      {/* Sales Ledger and Description Row */}
+                      <tr className="border-b border-gray-200 bg-gray-50/30">
+                        <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
+                          <div className="flex items-center gap-3">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
+                            <div className="flex-1">
+                              <SearchableDropdown
+                                value={row.salesLedger}
+                                options={salesLedgerOptions}
+                                onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
+                                placeholder="Select Sales Ledger"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td colSpan={cnInputType.includes('CGST & SGST') ? 10 : 9} className="px-4 py-2">
+                          <div className="flex items-center gap-3">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                            <input
+                              type="text"
+                              value={row.description}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
+                              placeholder="Enter ledger narration"
+                              className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
+                            />
+                            {String(cnIsFinancial).toLowerCase() === 'yes' && (
+                              <div className="flex items-center gap-2 ml-4">
+                                <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
+                                <input
+                                  type="number"
+                                  value={row.financialAmount || row.taxableValue || 0}
+                                  onChange={(e) => handleCreditNoteItemChange(index, 'financialAmount', e.target.value)}
+                                  placeholder="0.00"
+                                  className="w-24 border-b border-indigo-200 focus:border-indigo-500 bg-transparent py-1 text-sm font-bold text-indigo-700 outline-none transition-colors text-right"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  ))}
                   </tbody>
                   <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                     <tr>
-                      <td colSpan={7} className="px-4 py-4 text-right text-[10px] uppercase tracking-widest text-gray-500 border-r border-gray-200">Total Amounts</td>
-                      <td className="px-2 py-3 text-right text-[13px] border-r border-gray-200 pr-2">{calculateCreditNoteTotals().taxableValue.toFixed(2)}</td>
+                      <td colSpan={8} className="px-4 py-4 text-right text-[10px] uppercase tracking-widest text-gray-500 border-r border-gray-200">Total Amounts</td>
+                      <td className="px-2 py-3 text-center text-[13px] border-r border-gray-200">{calculateCreditNoteTotals().taxableValue.toFixed(2)}</td>
                       {cnInputType.includes('CGST & SGST') ? (
                         <>
-                          <td className="px-2 py-3 text-right text-[13px] border-r border-gray-200 pr-2">{calculateCreditNoteTotals().cgst.toFixed(2)}</td>
-                          <td className="px-2 py-3 text-right text-[13px] border-r border-gray-200 pr-2">{calculateCreditNoteTotals().sgst.toFixed(2)}</td>
+                          <td className="px-2 py-3 text-center text-[13px] border-r border-gray-200">{calculateCreditNoteTotals().cgst.toFixed(2)}</td>
+                          <td className="px-2 py-3 text-center text-[13px] border-r border-gray-200">{calculateCreditNoteTotals().sgst.toFixed(2)}</td>
                         </>
                       ) : (
-                        <td className="px-2 py-3 text-right text-[13px] border-r border-gray-200 pr-2">{calculateCreditNoteTotals().igst.toFixed(2)}</td>
+                        <td className="px-2 py-3 text-center text-[13px] border-r border-gray-200">{calculateCreditNoteTotals().igst.toFixed(2)}</td>
                       )}
-                      <td className="px-2 py-3 text-right text-[13px] border-r border-gray-200 pr-2">{calculateCreditNoteTotals().cess.toFixed(2)}</td>
-                      <td className="px-2 py-3 text-right text-[13px] text-indigo-700 border-r border-gray-200 pr-2">{calculateCreditNoteTotals().invoiceValue.toFixed(2)}</td>
+                      <td className="px-2 py-3 text-center text-[13px] border-r border-gray-200">{calculateCreditNoteTotals().cess.toFixed(2)}</td>
+                      <td className="px-2 py-3 text-center text-[13px] text-indigo-700 font-bold border-r border-gray-200">{calculateCreditNoteTotals().invoiceValue.toFixed(2)}</td>
                       <td className="bg-gray-50"></td>
                     </tr>
                   </tfoot>
@@ -7076,28 +7499,97 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
           {creditNoteActiveTab === 'items_foreign' && (
             <div className="space-y-6">
+              
+              {/* Floating Exchange Rate Input */}
+              <div className="flex justify-end">
+                <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-[4px] shadow-none">
+                  <span className="text-sm font-medium text-gray-700">1 Foreign Currency =</span>
+                  <input
+                    type="text"
+                    value={cnExchangeRate}
+                    onChange={(e) => {
+                      const exRateVal = e.target.value;
+                      setCnExchangeRate(exRateVal);
+
+                      // Auto-update all INR rates based on the new exchange rate
+                      const exRateNum = parseFloat(exRateVal) || 1; 
+                      const updatedItems = cnItems.map(item => {
+                        const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
+                        const qty = parseFloat(item.qty.toString()) || 0;
+
+                        const newRate = fRate * exRateNum;
+                        const newTaxable = qty * newRate;
+
+                        const selectedStockItem = allItems.find((si: any) =>
+                          (si.item_code || si.code) === item.itemCode ||
+                          (si.name || si.item_name) === item.itemName
+                        );
+                        const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
+                        const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+                        const totalTax = newTaxable * (gstRate / 100);
+                        const newCess = totalTax * (cessRate / 100);
+
+                        let igst = 0, cgst = 0, sgst = 0;
+                        if (cnInputType.includes('IGST')) {
+                          igst = totalTax;
+                        } else {
+                          cgst = totalTax / 2;
+                          sgst = totalTax / 2;
+                        }
+
+                        return {
+                          ...item,
+                          rate: newRate,
+                          taxableValue: newTaxable,
+                          igst,
+                          cgst,
+                          sgst,
+                          cess: newCess,
+                          invoiceValue: newTaxable + igst + cgst + sgst + newCess
+                        };
+                      });
+                      setCnItems(updatedItems);
+                    }}
+                    className="w-24 border-b-2 border-gray-300 focus:border-indigo-500 focus:outline-none px-2 py-1 text-center font-medium text-indigo-600"
+                    placeholder="Rate"
+                  />
+                  <span className="text-sm font-medium text-gray-700">INR</span>
+                </div>
+              </div>
+
               {/* Items Table (Foreign) */}
               <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none">
                 <table className="w-full text-left">
                   <thead className="bg-[#5c56d6] text-white">
                     <tr>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[60px]">S. No.</th>
+                      <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[140px]">Sales Invoice No.</th>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[140px]">Item Code</th>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] min-w-[200px]">Item Name</th>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[80px]">Qty</th>
                       <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[80px]">UQC</th>
-                      <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[120px]">Foreign Rate</th>
-                      <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[140px]">Foreign Amount</th>
+                      <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[120px]">Rate (FC)</th>
+                      <th className="px-3 py-3 text-xs font-semibold text-center border-r border-[#4b45bd] w-[140px]">Amount (FC)</th>
                       <th className="px-3 py-3 text-xs font-semibold text-center w-[60px]">Delete</th>
                     </tr>
                   </thead>
                   <tbody>
                     {cnItems.map((row, index) => (
-                      <tr key={row.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                        <td className="px-2 py-3 text-center text-sm border-r border-gray-200">
-                          {index + 1}
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 uppercase font-mono text-[11px] text-gray-500">
+                      <React.Fragment key={row.id}>
+                        <tr className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                          <td className="px-2 py-3 text-center text-sm border-r border-gray-200">
+                            {index + 1}
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="text"
+                              value={row.salesInvoiceNo || row.sourcePoNo || ''}
+                              readOnly
+                              className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium text-indigo-700"
+                              placeholder="Auto"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 uppercase font-mono text-[11px] text-gray-500">
                           {row.itemCode || '-'}
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200">
@@ -7106,6 +7598,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             options={allItems.map(i => i.name || i.item_name)}
                             onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
                             placeholder="Select item"
+                            disabled={cnIsFinancial === 'Yes'}
                           />
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200">
@@ -7113,15 +7606,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="number"
                             value={row.qty}
                             onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
                           />
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200">
-                           <input
+                          <input
                             type="text"
                             value={row.uom}
                             onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
                             placeholder="Unit"
                           />
                         </td>
@@ -7130,12 +7625,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="number"
                             value={row.foreignRate}
                             onChange={(e) => handleCreditNoteItemChange(index, 'foreignRate', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-bold text-indigo-700 pr-1"
+                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-bold text-indigo-700 pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
                             step="0.01"
                           />
                         </td>
                         <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-indigo-50/20 pr-2">
-                          {row.foreignAmount.toFixed(2)}
+                          {(row.foreignAmount || 0).toFixed(2)}
                         </td>
                         <td className="px-2 py-2 text-center">
                           <button
@@ -7146,12 +7642,43 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      {/* Sales Ledger and Description Row (Foreign Currency Tab) */}
+                      <tr className="border-b border-gray-200 bg-gray-50/20">
+                        <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
+                          <div className="flex items-center gap-3">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
+                            <div className="flex-1">
+                              <SearchableDropdown
+                                value={row.salesLedger}
+                                options={salesLedgerOptions}
+                                onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
+                                placeholder="Select Sales Ledger"
+                                disabled={cnIsFinancial === 'Yes'}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td colSpan={5} className="px-4 py-2">
+                          <div className="flex items-center gap-3">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                            <input
+                              type="text"
+                              value={row.description}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
+                              placeholder="Enter ledger narration"
+                              className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
+                            />
+
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  ))}
                   </tbody>
                   <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                     <tr>
-                      <td colSpan={6} className="px-4 py-4 text-right text-[10px] uppercase tracking-widest text-gray-500 border-r border-gray-200">Total Foreign Amount</td>
-                      <td className="px-2 py-3 text-right text-[13px] text-indigo-700 border-r border-gray-200 pr-2">
+                      <td colSpan={7} className="px-4 py-4 text-right text-[10px] uppercase tracking-widest text-gray-500 border-r border-gray-200">Total Foreign Amount</td>
+                      <td className="px-2 py-3 text-center text-[13px] text-indigo-700 font-bold border-r border-gray-200">
                         {cnItems.reduce((sum, item) => sum + (item.foreignAmount || 0), 0).toFixed(2)}
                       </td>
                       <td className="bg-gray-50"></td>
@@ -7174,8 +7701,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
           {creditNoteActiveTab === 'items_inr' && (
             <div className="space-y-6">
-               {/* Items Table (INR calculated from Foreign) */}
-               <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none">
+              {/* Items Table (INR calculated from Foreign) */}
+              <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none">
                 <table className="w-full text-left">
                   <thead className="bg-[#5c56d6] text-white">
                     <tr>
@@ -7191,44 +7718,64 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </thead>
                   <tbody>
                     {cnItems.map((row, index) => (
-                      <tr key={row.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                        <td className="px-2 py-3 text-center text-sm border-r border-gray-200">
-                          {index + 1}
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-sm font-medium">
-                          {row.itemName || '-'}
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-center text-sm">
-                          {row.qty}
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm text-gray-600 bg-gray-50/50 pr-2">
-                          {row.rate.toFixed(2)}
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold pr-2">
-                          {row.taxableValue.toFixed(2)}
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 pr-1">
-                          <input
-                            type="number"
-                            value={row.igst}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 pr-1">
-                          <input
-                            type="number"
-                            value={row.cess}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1"
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-black text-indigo-700 bg-indigo-50/10 pr-2">
-                          {row.invoiceValue.toFixed(2)}
-                        </td>
-                      </tr>
+                      <React.Fragment key={row.id}>
+                        <tr className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                          <td className="px-2 py-3 text-center text-sm border-r border-gray-200">
+                            {index + 1}
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-sm font-medium">
+                            {row.itemName || '-'}
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-center text-sm">
+                            {row.qty}
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm text-gray-600 bg-gray-50/50 pr-2">
+                            {(row.rate || 0).toFixed(2)}
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold pr-2">
+                            {(row.taxableValue || 0).toFixed(2)}
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 pr-1">
+                            <input
+                              type="number"
+                              value={row.igst}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
+                              readOnly={cnReverseGstTcs === 'No'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 pr-1">
+                            <input
+                              type="number"
+                              value={row.cess}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
+                              readOnly={cnReverseGstTcs === 'No'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-black text-indigo-700 bg-indigo-50/10 pr-2">
+                            {(row.invoiceValue || 0).toFixed(2)}
+                          </td>
+                        </tr>
+                        {String(cnIsFinancial).toLowerCase() === 'yes' && (
+                          <tr className="border-b border-gray-200 bg-indigo-50/30">
+                            <td colSpan={8} className="px-4 py-2">
+                              <div className="flex justify-end items-center gap-3 pr-2">
+                                <label className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider whitespace-nowrap">Amount (INR):</label>
+                                <input
+                                  type="number"
+                                  value={row.financialAmount || row.taxableValue || 0}
+                                  onChange={(e) => handleCreditNoteItemChange(index, 'financialAmount', e.target.value)}
+                                  placeholder="0.00"
+                                  className="w-32 border-b-2 border-indigo-300 focus:border-indigo-600 bg-white py-1 px-2 text-sm font-black text-indigo-700 outline-none transition-colors text-right shadow-sm rounded-t-[4px]"
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                   <tfoot className="bg-[#f8fafc] font-bold border-t border-gray-200">
@@ -7243,8 +7790,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </table>
               </div>
 
-               {/* Totals Summary */}
-               <div className="flex justify-end pt-4">
+              {/* Totals Summary */}
+              <div className="flex justify-end pt-4">
                 <div className="w-full max-w-md space-y-3 p-6 bg-gray-50/80 rounded-[4px] border border-gray-200 shadow-sm backdrop-blur-sm">
                   <div className="flex justify-between items-center text-[10px] text-gray-400 uppercase font-bold tracking-[0.2em] mb-1">
                     <span>INR SUMMARY</span>
@@ -7333,7 +7880,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number"
                       value={cnIncomeTaxTdsTcsAmount}
                       onChange={(e) => setCnIncomeTaxTdsTcsAmount(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] bg-white text-right font-bold text-indigo-600 font-mono text-sm focus:ring-1 focus:ring-indigo-500 transition-all"
+                      readOnly={cnReverseIncomeTaxTcs === 'No' && cnReverseIncomeTaxTds === 'No'}
+                      className={`w-full px-4 py-2.5 border border-gray-300 rounded-[4px] text-right font-bold font-mono text-sm focus:ring-1 focus:ring-indigo-500 transition-all ${(cnReverseIncomeTaxTcs === 'No' && cnReverseIncomeTaxTds === 'No') ? 'bg-gray-50/80 text-gray-400' : 'bg-white text-indigo-600'}`}
                       placeholder="0.00"
                     />
                   </div>
@@ -7350,7 +7898,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] bg-gray-50/80 text-right font-black text-gray-900 font-mono text-sm shadow-inner"
                     />
                   </div>
-                   <div>
+                  <div>
                     <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Sales Invoice Amt Applied</label>
                     <input
                       type="text"
@@ -7387,33 +7935,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   {/* Reversal Toggles (Integrated) */}
                   <div className="bg-white p-4 rounded-[4px] border border-indigo-100 shadow-sm space-y-3">
                     <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reverse GST (TCS/TDS)</span>
-                      <div className="flex bg-gray-100 p-1 rounded-[4px] border border-gray-200">
-                        {['No', 'Yes'].map(opt => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => {
-                               if (opt === 'Yes') {
-                                  setCnReverseGstTcs('Yes');
-                                  setCnReverseGstTds('Yes');
-                               } else {
-                                  setCnReverseGstTcs('No');
-                                  setCnReverseGstTds('No');
-                               }
-                            }}
-                            className={`px-4 py-1 rounded-[3px] text-[9px] font-black uppercase tracking-tighter transition-all ${
-                              (cnReverseGstTcs === opt || cnReverseGstTds === opt)
-                               ? 'bg-indigo-600 text-white shadow-sm' 
-                               : 'text-gray-400 hover:text-gray-600'
-                            }`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reverse IT (TCS/TDS)</span>
                       <div className="flex bg-gray-100 p-1 rounded-[4px] border border-gray-200">
                         {['No', 'Yes'].map(opt => (
@@ -7421,19 +7942,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             key={opt}
                             type="button"
                             onClick={() => {
-                                if (opt === 'Yes') {
-                                   setCnReverseIncomeTaxTcs('Yes');
-                                   setCnReverseIncomeTaxTds('Yes');
-                                } else {
-                                   setCnReverseIncomeTaxTcs('No');
-                                   setCnReverseIncomeTaxTds('No');
-                                }
+                              if (opt === 'Yes') {
+                                setCnReverseIncomeTaxTcs('Yes');
+                                setCnReverseIncomeTaxTds('Yes');
+                              } else {
+                                setCnReverseIncomeTaxTcs('No');
+                                setCnReverseIncomeTaxTds('No');
+                              }
                             }}
-                            className={`px-4 py-1 rounded-[3px] text-[9px] font-black uppercase tracking-tighter transition-all ${
-                              (cnReverseIncomeTaxTcs === opt || cnReverseIncomeTaxTds === opt)
-                               ? 'bg-indigo-600 text-white shadow-sm' 
-                               : 'text-gray-400 hover:text-gray-600'
-                            }`}
+                            className={`px-4 py-1 rounded-[3px] text-[9px] font-black uppercase tracking-tighter transition-all ${(cnReverseIncomeTaxTcs === opt || cnReverseIncomeTaxTds === opt)
+                              ? 'bg-indigo-600 text-white shadow-sm'
+                              : 'text-gray-400 hover:text-gray-600'
+                              }`}
                           >
                             {opt}
                           </button>
@@ -7482,11 +8002,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       }
                                       setCnAppliedInvoices(newApplied);
                                     }}
-                                    className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right font-black font-mono transition-all outline-none ${
-                                       isAllocated 
-                                       ? "border-indigo-400 bg-white ring-2 ring-indigo-50 text-indigo-700 shadow-sm" 
-                                       : "border-gray-200 bg-white/50 text-gray-400 hover:border-gray-300"
-                                    }`}
+                                    className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right font-black font-mono transition-all outline-none ${isAllocated
+                                      ? "border-indigo-400 bg-white ring-2 ring-indigo-50 text-indigo-700 shadow-sm"
+                                      : "border-gray-200 bg-white/50 text-gray-400 hover:border-gray-300"
+                                      }`}
                                   />
                                 </div>
                               </div>
@@ -7510,11 +8029,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <span className="text-[11px] font-black uppercase tracking-widest text-gray-600">Terms & Conditions</span>
                     <button
                       type="button"
-                      className={`px-6 py-2 rounded-[4px] transition-all text-[11px] font-black uppercase tracking-widest border shadow-sm ${
-                        cnCustomer 
-                        ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 hover:shadow-md active:scale-95' 
-                        : 'bg-white text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
-                      }`}
+                      disabled={!cnCustomer}
+                      onClick={openTermsModal}
+                      className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${!cnCustomer
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                        }`}
                       title={!cnCustomer ? "Please select a customer first" : ""}
                     >
                       Edit Masters
@@ -7522,16 +8042,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
 
                   <div className="flex-1 bg-white border border-gray-200 rounded-[4px] p-4 flex flex-col border-dashed group hover:border-indigo-300 transition-colors">
-                     <p className="text-[10px] text-slate-400 italic mb-4 font-medium flex items-center gap-2">
-                        <Icon name="info" className="w-3.5 h-3.5" />
-                        Select a customer to auto-load their terms & conditions, or click Edit Masters to add manually.
-                     </p>
-                     <textarea
-                       value={cnTermsConditions}
-                       onChange={(e) => setCnTermsConditions(e.target.value)}
-                       className="flex-1 w-full p-2 text-xs text-gray-700 resize-none outline-none font-medium bg-transparent border-none placeholder:text-gray-200"
-                       placeholder="View or edit specific credit terms here..."
-                     />
+                    <p className="text-[10px] text-slate-400 italic mb-4 font-medium flex items-center gap-2">
+                      <Icon name="info" className="w-3.5 h-3.5" />
+                      Select a customer to auto-load their terms & conditions, or click Edit Masters to add manually.
+                    </p>
+                    <textarea
+                      value={cnTermsConditions}
+                      readOnly
+                      className="flex-1 w-full p-2 text-xs text-gray-700 resize-none outline-none font-medium bg-transparent border-none placeholder:text-gray-200"
+                      placeholder="View or edit specific credit terms here..."
+                    />
                   </div>
 
                   <div className="bg-white/60 p-4 rounded-lg flex items-center gap-4 border border-slate-200/50 grayscale opacity-80">
@@ -7766,96 +8286,96 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
-                                <input
-                                  type="date"
-                                  value={cnTransitUptoPortShippingBillDate}
-                                  onChange={(e) => setCnTransitUptoPortShippingBillDate(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortShipPortCode}
-                                  onChange={(e) => setCnTransitUptoPortShipPortCode(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortOriginCity}
-                                  onChange={(e) => setCnTransitUptoPortOriginCity(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortOriginCountry}
-                                  onChange={(e) => setCnTransitUptoPortOriginCountry(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                  placeholder="Country"
-                                />
-                              </div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
+                              <input
+                                type="date"
+                                value={cnTransitUptoPortShippingBillDate}
+                                onChange={(e) => setCnTransitUptoPortShippingBillDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
                             </div>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
-                                <input
-                                  type="date"
-                                  value={cnTransitUptoPortBolDate}
-                                  onChange={(e) => setCnTransitUptoPortBolDate(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortVesselFlightNo}
-                                  onChange={(e) => setCnTransitUptoPortVesselFlightNo(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortPortOfLoading}
-                                  onChange={(e) => setCnTransitUptoPortPortOfLoading(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortPortOfDischarge}
-                                  onChange={(e) => setCnTransitUptoPortPortOfDischarge(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFinalDestCity}
-                                  onChange={(e) => setCnTransitUptoPortFinalDestCity(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFinalDestCountry}
-                                  onChange={(e) => setCnTransitUptoPortFinalDestCountry(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                  placeholder="Country"
-                                />
-                              </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortShipPortCode}
+                                onChange={(e) => setCnTransitUptoPortShipPortCode(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
                             </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortOriginCity}
+                                onChange={(e) => setCnTransitUptoPortOriginCity(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
+                                placeholder="City"
+                              />
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortOriginCountry}
+                                onChange={(e) => setCnTransitUptoPortOriginCountry(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                placeholder="Country"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
+                              <input
+                                type="date"
+                                value={cnTransitUptoPortBolDate}
+                                onChange={(e) => setCnTransitUptoPortBolDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortVesselFlightNo}
+                                onChange={(e) => setCnTransitUptoPortVesselFlightNo(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortPortOfLoading}
+                                onChange={(e) => setCnTransitUptoPortPortOfLoading(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortPortOfDischarge}
+                                onChange={(e) => setCnTransitUptoPortPortOfDischarge(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFinalDestCity}
+                                onChange={(e) => setCnTransitUptoPortFinalDestCity(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
+                                placeholder="City"
+                              />
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFinalDestCountry}
+                                onChange={(e) => setCnTransitUptoPortFinalDestCountry(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                placeholder="Country"
+                              />
+                            </div>
+                          </div>
                         </>
                       )}
 
@@ -7864,105 +8384,105 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <>
                           <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortBolNo}
-                                  onChange={(e) => setCnTransitUptoPortBolNo(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortRrNo}
-                                  onChange={(e) => setCnTransitUptoPortRrNo(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
-                                <input
-                                  type="date"
-                                  value={cnTransitUptoPortRrDate}
-                                  onChange={(e) => setCnTransitUptoPortRrDate(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortOriginCity}
-                                  onChange={(e) => setCnTransitUptoPortOriginCity(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortOriginCountry}
-                                  onChange={(e) => setCnTransitUptoPortOriginCountry(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                  placeholder="Country"
-                                />
-                              </div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortBolNo}
+                                onChange={(e) => setCnTransitUptoPortBolNo(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
                             </div>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
-                                <input
-                                  type="date"
-                                  value={cnTransitUptoPortBolDate}
-                                  onChange={(e) => setCnTransitUptoPortBolDate(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">FNR No.</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFnrNo}
-                                  onChange={(e) => setCnTransitUptoPortFnrNo(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortStationLoading}
-                                  onChange={(e) => setCnTransitUptoPortStationLoading(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortStationDischarge}
-                                  onChange={(e) => setCnTransitUptoPortStationDischarge(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFinalDestCity}
-                                  onChange={(e) => setCnTransitUptoPortFinalDestCity(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={cnTransitUptoPortFinalDestCountry}
-                                  onChange={(e) => setCnTransitUptoPortFinalDestCountry(e.target.value)}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                  placeholder="Country"
-                                />
-                              </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortRrNo}
+                                onChange={(e) => setCnTransitUptoPortRrNo(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
                             </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
+                              <input
+                                type="date"
+                                value={cnTransitUptoPortRrDate}
+                                onChange={(e) => setCnTransitUptoPortRrDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortOriginCity}
+                                onChange={(e) => setCnTransitUptoPortOriginCity(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
+                                placeholder="City"
+                              />
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortOriginCountry}
+                                onChange={(e) => setCnTransitUptoPortOriginCountry(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                placeholder="Country"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
+                              <input
+                                type="date"
+                                value={cnTransitUptoPortBolDate}
+                                onChange={(e) => setCnTransitUptoPortBolDate(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">FNR No.</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFnrNo}
+                                onChange={(e) => setCnTransitUptoPortFnrNo(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortStationLoading}
+                                onChange={(e) => setCnTransitUptoPortStationLoading(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortStationDischarge}
+                                onChange={(e) => setCnTransitUptoPortStationDischarge(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFinalDestCity}
+                                onChange={(e) => setCnTransitUptoPortFinalDestCity(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2 text-sm"
+                                placeholder="City"
+                              />
+                              <input
+                                type="text"
+                                value={cnTransitUptoPortFinalDestCountry}
+                                onChange={(e) => setCnTransitUptoPortFinalDestCountry(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                placeholder="Country"
+                              />
+                            </div>
+                          </div>
                         </>
                       )}
                     </div>
@@ -8993,8 +9513,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           value={contraForexGainLoss !== 0 ? (contraForexGainLoss > 0 ? `+${contraForexGainLoss.toFixed(2)}` : contraForexGainLoss.toFixed(2)) : '0.00'}
                           readOnly
                           className={`w-full px-2 py-1 border rounded text-xs text-center font-semibold ${contraForexGainLoss > 0 ? 'border-green-300 bg-green-50 text-green-700'
-                              : contraForexGainLoss < 0 ? 'border-red-300 bg-red-50 text-red-700'
-                                : 'border-gray-200 bg-gray-50 text-gray-600'
+                            : contraForexGainLoss < 0 ? 'border-red-300 bg-red-50 text-red-700'
+                              : 'border-gray-200 bg-gray-50 text-gray-600'
                             }`}
                         />
                         <div className="text-[10px] text-center mt-0.5 font-medium">
@@ -10091,7 +10611,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {voucherType === 'Expenses' && renderExpensesForm()}
             {voucherType === 'Credit Note' && renderCreditNoteForm()}
             {voucherType === 'Debit Note' && (
-              <DebitNoteVoucher 
+              <DebitNoteVoucher
                 prefilledData={localPrefilledData}
                 clearPrefilledData={handleClearPrefilledData}
                 companyDetails={companyDetails}
@@ -10132,7 +10652,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               )
             )}
 
-            {!['Sales', 'Payment', 'Receipt', 'Purchase'].includes(voucherType) && (
+            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Debit Note'].includes(voucherType) && (
               <div className="flex space-x-3">
                 <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                 <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>

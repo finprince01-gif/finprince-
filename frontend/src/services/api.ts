@@ -138,7 +138,7 @@ class ApiService {
         const params: string[] = [];
         if (ledgerId) params.push(`ledger_id=${ledgerId}`);
         if (category) params.push(`category=${encodeURIComponent(category)}`);
-        
+
         if (params.length > 0) {
             url += `?${params.join('&')}`;
         }
@@ -397,9 +397,23 @@ class ApiService {
      * Get Purchase Invoices (Vouchers) for a specific vendor
      * @param vendorName - Vendor name to filter by
      */
-    async getVendorPurchaseInvoices(vendorName: string) {
+    async getVendorPurchaseInvoices(vendorName: string, branch?: string, showAll?: boolean) {
         let url = `/api/vouchers/purchase/?vendor_name=${encodeURIComponent(vendorName)}`;
+        if (branch) {
+            url += `&branch=${encodeURIComponent(branch)}`;
+        }
+        if (showAll) {
+            url += `&show_all=true`;
+        }
         return httpClient.get<any[]>(url);
+    }
+
+    /**
+     * Get unified vendor transactions (Procurement/Ledger data)
+     * @param vendorId - Vendor base detail ID
+     */
+    async getVendorTransactions(vendorId: number) {
+        return httpClient.get<any[]>(`/api/vendors/transactions/by_vendor/?vendor_id=${vendorId}`);
     }
 
     /**
@@ -412,6 +426,16 @@ class ApiService {
             url += `&branch=${encodeURIComponent(branch)}`;
         }
         return httpClient.get<any[]>(url);
+    }
+
+    /**
+     * Get full Sales Invoice details (including items) by invoice number
+     * Used by Credit Note to auto-populate item rows
+     */
+    async getSalesInvoiceDetails(invoiceNo: string) {
+        const url = `/api/voucher-sales-new/?sales_invoice_no=${encodeURIComponent(invoiceNo)}&show_all=true`;
+        const results = await httpClient.get<any[]>(url);
+        return results && results.length > 0 ? results[0] : null;
     }
 
     async getPendingOutwardSlips(vendorName: string) {
@@ -558,7 +582,8 @@ class ApiService {
         // Group vouchers by type to handle specialized endpoints
         const contraVouchers = data.filter(v => v.type === 'Contra');
         const journalVouchers = data.filter(v => v.type === 'Journal');
-        const otherVouchers = data.filter(v => v.type !== 'Contra' && v.type !== 'Journal');
+        const debitNoteVouchers = data.filter(v => v.type === 'Debit Note');
+        const otherVouchers = data.filter(v => !['Contra', 'Journal', 'Debit Note'].includes(v.type));
 
         const promises = [];
 
@@ -570,6 +595,11 @@ class ApiService {
         // Handle Journal Vouchers
         for (const voucher of journalVouchers) {
             promises.push(httpClient.post('/api/vouchers/journal/', voucher));
+        }
+
+        // Handle Debit Note Vouchers
+        for (const voucher of debitNoteVouchers) {
+            promises.push(this.saveDebitNote(voucher));
         }
 
         // Handle others via bulk endpoint

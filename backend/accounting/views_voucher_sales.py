@@ -6,14 +6,19 @@ from .models_voucher_sales import VoucherSalesInvoiceDetails
 from .serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
 from .models import Voucher, JournalEntry, MasterLedger
 from .models_voucher_receipt import VoucherReceiptSingle
+<<<<<<< HEAD
 from core.mixins import BranchQuerysetMixin
+=======
+from core.utils import TenantQuerysetMixin
+from decimal import Decimal
+>>>>>>> origin/main
 import datetime
 
 class VoucherSalesViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     queryset = VoucherSalesInvoiceDetails.objects.all().order_by('-date', '-created_at')
     serializer_class = VoucherSalesInvoiceDetailsSerializer
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().prefetch_related('items')
         # Filter for the current tenant
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
@@ -36,10 +41,19 @@ class VoucherSalesViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 payment_details__payment_payable__gt=0
             ).select_related('payment_details')
         
-        # Optional: Filter by customer name if provided
+        # Optional: Filter by customer name/branch if provided
         customer_name = self.request.query_params.get('customer_name')
         if customer_name:
             queryset = queryset.filter(customer_name=customer_name)
+        
+        branch = self.request.query_params.get('branch')
+        if branch:
+            queryset = queryset.filter(customer_branch__iexact=branch.strip())
+
+        # Filter by specific invoice number (for fetching full item details)
+        sales_invoice_no = self.request.query_params.get('sales_invoice_no')
+        if sales_invoice_no:
+            queryset = queryset.filter(sales_invoice_no=sales_invoice_no)
         
         return queryset
 
@@ -152,10 +166,24 @@ class VoucherSalesViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                     credit=amount
                 )
 
-                # 5. Mark Invoice as Paid (Implicitly by linking)
-                # We'll also update a status if it exists.
-                # For now, the "Due Invoices" query should exclude this.
-                # The user says "Once posted, the due sales invoice is no longer displayed here"
+
+                # 5. Mark Invoice as Paid / Update Balance
+                if hasattr(invoice, 'payment_details'):
+                    payment_details = invoice.payment_details
+                    amount_decimal = Decimal(str(amount))
+                    
+                    # Update received and balance
+                    payment_details.payment_received = (payment_details.payment_received or 0) + amount_decimal
+                    payment_details.payment_payable = max(0, (payment_details.payment_payable or 0) - amount_decimal)
+                    payment_details.payment_balance = payment_details.payment_payable
+                    payment_details.save()
+                    
+                    # Update status
+                    if payment_details.payment_payable <= 0:
+                        invoice.status = 'received'
+                    else:
+                        invoice.status = 'partially received'
+                    invoice.save()
                 
                 return Response({"message": "Receipt posted successfully", "voucher_no": voucher_no}, status=status.HTTP_201_CREATED)
 

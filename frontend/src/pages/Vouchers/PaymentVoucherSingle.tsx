@@ -424,7 +424,29 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     // Update total when advance amount changes
     useEffect(() => {
         calculateTotalPayment(pendingTransactions, singleAdvanceAmount);
-    }, [singleAdvanceAmount]);
+    }, [singleAdvanceAmount, pendingTransactions]);
+
+    const handleTotalAmountChange = (val: number) => {
+        // Auto-allocate logic: First distribute to pending transactions in their current order
+        let remaining = val;
+        const updatedTransactions = pendingTransactions.map(txn => {
+            const payment = Math.min(remaining, txn.amount);
+            remaining -= payment;
+            return { ...txn, payment: Number(payment.toFixed(2)) };
+        });
+
+        setPendingTransactions(updatedTransactions);
+
+        // Any remaining amount goes to advance
+        if (remaining > 0.01) {
+            setSingleAdvanceAmount(Number(remaining.toFixed(2)));
+            if (!showSingleAdvanceSection) setShowSingleAdvanceSection(true);
+        } else {
+            setSingleAdvanceAmount(0);
+        }
+        
+        // calculateTotalPayment will be triggered by states changing
+    };
 
     // Uniqueness Check Logic
     const uniquenessTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -987,6 +1009,20 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                     Advance
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Amount Field Row - Right Aligned */}
+                    <div className="flex justify-end mb-4">
+                        <div className="w-[200px]">
+                            <label className="block text-sm font-medium text-gray-700 mb-1 text-right">Amount</label>
+                            <input
+                                type="number"
+                                value={totalPayment || ''}
+                                onChange={(e) => handleTotalAmountChange(parseFloat(e.target.value) || 0)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-right"
+                                placeholder="0.00"
+                            />
                         </div>
                     </div>
 

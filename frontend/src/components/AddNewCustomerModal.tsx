@@ -11,7 +11,7 @@ import { httpClient } from '../services/httpClient';
 import { showSuccess, showError } from '../utils/toast';
 import { Country, State, City } from 'country-state-city';
 import { BILLING_CURRENCIES } from '../constants/customerPortalConstants';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface AddNewCustomerModalProps {
     isOpen: boolean;
@@ -94,8 +94,10 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
 
     // Banking Info
     const [bankAccounts, setBankAccounts] = useState<{
-        id: number; accountNumber: string; bankName: string; ifscCode: string; branchName: string; swiftCode: string;
+        id: number; accountNumber: string; bankName: string; ifscCode: string; branchName: string; swiftCode: string; associatedBranches: string[];
     }[]>([]);
+
+    const [openBranchDropdown, setOpenBranchDropdown] = useState<number | null>(null);
 
     // Terms & Conditions
     const [terms, setTerms] = useState({
@@ -142,6 +144,26 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
             showError('Customer Name is required');
             setActiveTab('Basic Details');
             return;
+        }
+        if (!formData.pan_number || !formData.pan_number.trim()) {
+            showError('PAN Number is required');
+            setActiveTab('Basic Details');
+            return;
+        }
+        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+        if (!panRegex.test(formData.pan_number.toUpperCase())) {
+            showError('Invalid PAN format. Expected: ABCDE1234F');
+            setActiveTab('Basic Details');
+            return;
+        }
+
+        if (formData.email_address && formData.email_address.trim()) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(formData.email_address)) {
+                showError('Invalid email format');
+                setActiveTab('Basic Details');
+                return;
+            }
         }
         setIsSaving(true);
         try {
@@ -199,7 +221,32 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
     const tabIndex = TABS.findIndex(t => t.name === activeTab);
     const isFirst = tabIndex === 0;
     const isLast = tabIndex === TABS.length - 1;
-    const goNext = () => !isLast && setActiveTab(TABS[tabIndex + 1].name);
+    const goNext = () => {
+        if (activeTab === 'Basic Details') {
+            if (!formData.customer_name.trim()) {
+                showError('Customer Name is required');
+                return;
+            }
+            if (!formData.pan_number || !formData.pan_number.trim()) {
+                showError('PAN Number is required');
+                return;
+            }
+            const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+            if (!panRegex.test(formData.pan_number.toUpperCase())) {
+                showError('Invalid PAN format. Correct format: ABCDE1234F');
+                return;
+            }
+
+            if (formData.email_address && formData.email_address.trim()) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(formData.email_address)) {
+                    showError('Invalid email format');
+                    return;
+                }
+            }
+        }
+        if (!isLast) setActiveTab(TABS[tabIndex + 1].name);
+    };
     const goPrev = () => !isFirst && setActiveTab(TABS[tabIndex - 1].name);
 
     if (!isOpen) return null;
@@ -263,7 +310,23 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                     {TABS.map((tab, i) => (
                         <button
                             key={tab.name}
-                            onClick={() => setActiveTab(tab.name)}
+                            onClick={() => {
+                                // Validate if trying to move away from current tab to a later tab
+                                if (i > tabIndex) {
+                                    if (activeTab === 'Basic Details') {
+                                        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+                                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                        const isEmailValid = !formData.email_address?.trim() || emailRegex.test(formData.email_address);
+
+                                        if (!formData.customer_name.trim() || !formData.pan_number?.trim() || !panRegex.test(formData.pan_number.toUpperCase()) || !isEmailValid) {
+                                            if (!isEmailValid) showError('Please enter a valid email address.');
+                                            else showError('Please enter a valid Customer Name and PAN Number before moving.');
+                                            return;
+                                        }
+                                    }
+                                }
+                                setActiveTab(tab.name);
+                            }}
                             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.name
                                 ? 'border-indigo-600 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -303,9 +366,9 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">PAN Number</label>
-                                <input type="text" value={formData.pan_number} onChange={e => setFormData(p => ({ ...p, pan_number: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="ABCDE1234F" />
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">PAN Number <span className="text-red-500">*</span></label>
+                                <input type="text" value={formData.pan_number} onChange={e => setFormData(p => ({ ...p, pan_number: e.target.value.toUpperCase() }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="ABCDE1234F" maxLength={10} />
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-1">Contact Person</label>
@@ -870,9 +933,79 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                             </div>
                                         ))}
                                     </div>
+                                    {/* Associate to a Customer Branch */}
+                                    <div className="mt-4 pt-4 border-t border-gray-100">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Associate to a Customer Branch</label>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="relative">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOpenBranchDropdown(openBranchDropdown === acc.id ? null : acc.id)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm text-left bg-white flex items-center justify-between hover:border-indigo-400 transition-colors"
+                                                >
+                                                    <span className="text-gray-600">
+                                                        {(acc.associatedBranches || []).length > 0
+                                                            ? `${(acc.associatedBranches || []).length} branch(es) selected`
+                                                            : 'Select Branches'}
+                                                    </span>
+                                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${openBranchDropdown === acc.id ? 'rotate-180' : ''}`} />
+                                                </button>
+
+                                                {openBranchDropdown === acc.id && (
+                                                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-48 overflow-y-auto">
+                                                        <div className="p-2 space-y-1">
+                                                            {(isUnregistered
+                                                                ? unregisteredBranches.map(b => b.referenceName)
+                                                                : registeredBranches.map(b => b.defaultRef)
+                                                            ).filter(Boolean).map((branch) => (
+                                                                <label key={branch} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                                                        checked={(acc.associatedBranches || []).includes(branch)}
+                                                                        onChange={(e) => {
+                                                                            const currentBranches = acc.associatedBranches || [];
+                                                                            const newBranches = e.target.checked
+                                                                                ? [...currentBranches, branch]
+                                                                                : currentBranches.filter(b => b !== branch);
+                                                                            setBankAccounts(p => p.map(a => a.id === acc.id ? { ...a, associatedBranches: newBranches } : a));
+                                                                        }}
+                                                                    />
+                                                                    <span className="text-sm text-gray-700">{branch}</span>
+                                                                </label>
+                                                            ))}
+                                                            {(isUnregistered ? unregisteredBranches : registeredBranches).filter(b => isUnregistered ? !b.referenceName : !b.defaultRef).length > 0 && (
+                                                                <div className="px-2 py-1.5 text-xs text-gray-400 italic">Enter reference names in GST Details to see them here</div>
+                                                            )}
+                                                            {(isUnregistered ? unregisteredBranches : registeredBranches).length === 0 && (
+                                                                <div className="px-2 py-1.5 text-xs text-gray-400 italic">No branches added in GST Details</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="px-3 py-2 border border-gray-200 rounded bg-gray-50 min-h-[38px]">
+                                                {(acc.associatedBranches || []).length > 0 ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {(acc.associatedBranches || []).map((branch, idx) => (
+                                                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded border border-indigo-100">
+                                                                {branch}
+                                                                <button type="button" onClick={() => {
+                                                                    const newBranches = acc.associatedBranches.filter(b => b !== branch);
+                                                                    setBankAccounts(p => p.map(a => a.id === acc.id ? { ...a, associatedBranches: newBranches } : a));
+                                                                }} className="text-indigo-400 hover:text-red-500">×</button>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">Selected branches will appear here</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
-                            <button type="button" onClick={() => setBankAccounts(p => [...p, { id: Date.now(), accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '' }])}
+                            <button type="button" onClick={() => setBankAccounts(p => [...p, { id: Date.now(), accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', associatedBranches: [] }])}
                                 className="w-full py-2 border-2 border-dashed border-gray-300 rounded text-gray-500 hover:border-indigo-400 hover:text-indigo-600 text-sm font-medium transition-colors">
                                 + Add Bank Account
                             </button>

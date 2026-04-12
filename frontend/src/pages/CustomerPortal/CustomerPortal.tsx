@@ -626,6 +626,26 @@ const CustomerContent: React.FC = () => {
             showError('Please enter customer name');
             return false;
         }
+        if (!customerFormData.pan_number || !customerFormData.pan_number.trim()) {
+            showError('Please enter PAN number');
+            setActiveTab('Basic Details');
+            return false;
+        }
+        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+        if (!panRegex.test(customerFormData.pan_number.toUpperCase())) {
+            showError('Invalid PAN format. Correct format: ABCDE1234F');
+            setActiveTab('Basic Details');
+            return false;
+        }
+
+        if (customerFormData.email_address && customerFormData.email_address.trim()) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(customerFormData.email_address)) {
+                showError('Invalid email format');
+                setActiveTab('Basic Details');
+                return false;
+            }
+        }
 
         try {
             const payload = {
@@ -782,6 +802,56 @@ const CustomerContent: React.FC = () => {
         ));
     };
 
+    // Track last fetched IFSC to avoid redundant calls
+    const [lastFetchedIfsc, setLastFetchedIfsc] = useState<Record<number, string>>({});
+
+    const fetchBankDetails = async (id: number, ifsc: string) => {
+        const trimmedIfsc = ifsc ? ifsc.trim().toUpperCase() : '';
+        if (trimmedIfsc.length !== 11) {
+            // If user deletes or changes, we might want to reset the cache for this ID
+            if (trimmedIfsc.length < 11 && lastFetchedIfsc[id]) {
+                setLastFetchedIfsc(prev => ({ ...prev, [id]: '' }));
+            }
+            return;
+        }
+
+        // Avoid redundant calls for the same IFSC
+        if (lastFetchedIfsc[id] === trimmedIfsc) return;
+
+        setLastFetchedIfsc(prev => ({ ...prev, [id]: trimmedIfsc }));
+
+        // Clear existing names to show we are fetching and avoid mismatch
+        setBankAccounts(prev => prev.map(acc =>
+            acc.id === id ? { ...acc, bankName: 'Fetching...', branchName: 'Fetching...' } : acc
+        ));
+
+        try {
+            const response = await fetch(`https://ifsc.razorpay.com/${trimmedIfsc}`);
+            if (response.ok) {
+                const data = await response.json();
+                setBankAccounts(prev => prev.map(acc =>
+                    acc.id === id ? {
+                        ...acc,
+                        bankName: data.BANK || '',
+                        branchName: data.BRANCH || ''
+                    } : acc
+                ));
+            } else {
+                showError('Invalid IFSC Code or lookup failed');
+                // Reset fields on failure to avoid showing "Fetching..." or previous incorrect data
+                setBankAccounts(prev => prev.map(acc =>
+                    acc.id === id ? { ...acc, bankName: '', branchName: '' } : acc
+                ));
+                // Optional: keep lastFetchedIfsc as is to prevent retrying the same invalid code immediately
+            }
+        } catch (error) {
+            console.error('Error fetching bank details:', error);
+            setBankAccounts(prev => prev.map(acc =>
+                acc.id === id ? { ...acc, bankName: '', branchName: '' } : acc
+            ));
+        }
+    };
+
     const handleProductRowChange = (id: number, field: string, value: string) => {
 
         setProductRows(prev => prev.map(row => {
@@ -866,6 +936,8 @@ const CustomerContent: React.FC = () => {
     };
 
     const handleNextToGst = () => {
+        // Validation removed to allow direct tab selection from overview grid as requested.
+        // Form-level validation still exists on the "Next" button in the Basic Details section.
         // Reset GST related states to ensure "Image 2" clean state
         setSelectedGSTINs([]);
         setGstInput('');
@@ -1262,11 +1334,13 @@ const CustomerContent: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">PAN Number</label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">PAN Number <span className="text-red-500">*</span></label>
                                 <input
                                     type="text"
                                     value={customerFormData.pan_number}
-                                    onChange={(e) => handleCustomerFieldChange('pan_number', e.target.value)}
+                                    onChange={(e) => handleCustomerFieldChange('pan_number', e.target.value.toUpperCase())}
+                                    placeholder="ABCDE1234F"
+                                    maxLength={10}
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
@@ -1287,6 +1361,7 @@ const CustomerContent: React.FC = () => {
                                     type="email"
                                     value={customerFormData.email_address}
                                     onChange={(e) => handleCustomerFieldChange('email_address', e.target.value)}
+                                    placeholder="e.g. customer@example.com"
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
@@ -1448,7 +1523,30 @@ const CustomerContent: React.FC = () => {
                             <div className="flex gap-4">
                                 <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
-                                    onClick={() => setActiveTab('GST Details')}
+                                    onClick={() => {
+                                        if (!customerFormData.customer_name.trim()) {
+                                            showError('Please enter customer name');
+                                            return;
+                                        }
+                                        if (!customerFormData.pan_number || !customerFormData.pan_number.trim()) {
+                                            showError('Please enter PAN number');
+                                            return;
+                                        }
+                                        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+                                        if (!panRegex.test(customerFormData.pan_number.toUpperCase())) {
+                                            showError('Invalid PAN format. Expected: ABCDE1234F');
+                                            return;
+                                        }
+
+                                        if (customerFormData.email_address && customerFormData.email_address.trim()) {
+                                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                            if (!emailRegex.test(customerFormData.email_address)) {
+                                                showError('Invalid email format');
+                                                return;
+                                            }
+                                        }
+                                        setActiveTab('GST Details');
+                                    }}
                                     className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
@@ -1462,8 +1560,8 @@ const CustomerContent: React.FC = () => {
                 {/* GST Details Content */}
                 {
                     activeTab === 'GST Details' && (
-                        <div className="max-w-4xl mx-auto">
-                            <div className="flex justify-center mb-10 pt-4">
+                        <div className="max-w-6xl mx-auto">
+                            <div className="flex justify-end mb-10 pt-4">
                                 <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded-[4px] hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200">
                                     <input
                                         type="checkbox"
@@ -1471,13 +1569,13 @@ const CustomerContent: React.FC = () => {
                                         onChange={(e) => setIsUnregistered(e.target.checked)}
                                         className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                     />
-                                    <span className="text-sm font-semibold text-gray-700">Customer is Unregistered</span>
+                                    <span className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Customer is Unregistered</span>
                                 </label>
                             </div>
 
                             {/* Conditional Content based on Registration Status */}
                             {isUnregistered ? (
-                                <div className="space-y-8 animate-fadeIn">
+                                <div className="space-y-8 animate-fadeIn bg-white border border-gray-200 rounded-[4px] p-8">
                                     {/* Unregistered Fields */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <div className="relative">
@@ -1526,6 +1624,16 @@ const CustomerContent: React.FC = () => {
                                         {!addMultipleBranches ? (
                                             // Single Branch - Simple Address
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Reference Name</label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        value={unregisteredBranches[0].referenceName || ''}
+                                                        onChange={(e) => handleManualBranchChange(1, 'referenceName', e.target.value)}
+                                                        placeholder="e.g. Main Office, Warehouse"
+                                                    />
+                                                </div>
                                                 <div className="md:col-span-2">
                                                     <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
                                                     <input
@@ -2125,7 +2233,7 @@ const CustomerContent: React.FC = () => {
                                 {/* Table Header */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr 80px 1fr 1fr', gap: '12px' }} className="px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                     <div>No</div>
-                                    <div>Item Code <span className="text-red-500">*</span></div>
+                                    <div>Item Code</div>
                                     <div>Item Name</div>
                                     <div>HSN/SAC Code</div>
                                     <div>UOM</div>
@@ -2648,7 +2756,21 @@ const CustomerContent: React.FC = () => {
                                                             placeholder="ABCD0123456"
                                                             className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                             value={account.ifscCode}
-                                                            onChange={(e) => handleBankChange(account.id, 'ifscCode', e.target.value)}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                handleBankChange(account.id, 'ifscCode', val);
+
+                                                                // Clear fields if input is emptied
+                                                                if (!val.trim()) {
+                                                                    handleBankChange(account.id, 'bankName', '');
+                                                                    handleBankChange(account.id, 'branchName', '');
+                                                                }
+
+                                                                if (val.length === 11) {
+                                                                    fetchBankDetails(account.id, val);
+                                                                }
+                                                            }}
+                                                            onBlur={(e) => fetchBankDetails(account.id, e.target.value)}
                                                         />
                                                     </div>
                                                     <div>
@@ -2718,7 +2840,10 @@ const CustomerContent: React.FC = () => {
                                                         {openBranchDropdown === account.id && (
                                                             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                                                                 <div className="p-2 space-y-1">
-                                                                    {['Bangalore HO', 'City Branch', 'Mumbai Branch'].map((branch) => (
+                                                                    {(isUnregistered
+                                                                        ? unregisteredBranches.map(b => b.referenceName)
+                                                                        : registeredBranches.map(b => b.defaultRef)
+                                                                    ).filter(Boolean).map((branch) => (
                                                                         <label key={branch} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
                                                                             <input
                                                                                 type="checkbox"
@@ -4778,6 +4903,7 @@ interface PurchaseVoucher {
     date: string;
     supplierInvNo: string;
     amount: number;
+    pendingAmount: number;
 }
 
 interface SalesVoucher {
@@ -4785,6 +4911,7 @@ interface SalesVoucher {
     date: string;
     salesVchNo: string;
     amount: number;
+    pendingAmount: number;
 }
 
 interface NetOffModalProps {
@@ -4798,6 +4925,7 @@ interface PaymentVoucher {
     date: string;
     voucherNo: string;
     amount: number;
+    pendingAmount: number;
 }
 
 interface ReceiptVoucher {
@@ -4805,6 +4933,7 @@ interface ReceiptVoucher {
     date: string;
     voucherNo: string;
     amount: number;
+    pendingAmount: number;
 }
 
 interface EditNetOffPageProps {
@@ -4878,8 +5007,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
         <div className="bg-gray-50 flex flex-col overflow-auto rounded-[4px] min-h-[500px] animate-fadeIn">
             <div className="w-full space-y-8">
                 {/* Top Summary Bar */}
-                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 px-8 py-6 flex justify-between items-center">
-                    <div className="text-gray-600 font-medium">Add amounts for net-off</div>
+                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50">
                     <div className="flex items-center gap-12">
                         <div className="text-right">
                             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Debits</div>
@@ -4926,8 +5054,8 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                         <input
                                             type="number"
                                             className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                                            value={salesNetOff[v.id] ?? v.amount}
-                                            onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setSalesNetOff, salesNetOff)}
+                                            value={salesNetOff[v.id] ?? v.pendingAmount}
+                                            onChange={(e) => handleAmountChange(v.id, e.target.value, v.pendingAmount, setSalesNetOff, salesNetOff)}
                                         />
                                     </td>
                                 </tr>
@@ -4939,7 +5067,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                 {/* Section 2: Payments (Debit) */}
                 <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 overflow-hidden">
                     <div className="bg-white px-6 py-4 border-b border-gray-200">
-                        <h3 className="text-center text-lg font-medium text-gray-900">Payments (Debit)</h3>
+                        <h3 className="text-center text-lg font-medium text-gray-900">Payment (Debit)</h3>
                     </div>
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 text-gray-500 font-medium uppercase text-xs">
@@ -4960,8 +5088,8 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                         <input
                                             type="number"
                                             className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                                            value={paymentNetOff[v.id] ?? v.amount}
-                                            onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setPaymentNetOff, paymentNetOff)}
+                                            value={paymentNetOff[v.id] ?? v.pendingAmount}
+                                            onChange={(e) => handleAmountChange(v.id, e.target.value, v.pendingAmount, setPaymentNetOff, paymentNetOff)}
                                         />
                                     </td>
                                 </tr>
@@ -4994,8 +5122,8 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                         <input
                                             type="number"
                                             className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                                            value={purchaseNetOff[v.id] ?? v.amount}
-                                            onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setPurchaseNetOff, purchaseNetOff)}
+                                            value={purchaseNetOff[v.id] ?? v.pendingAmount}
+                                            onChange={(e) => handleAmountChange(v.id, e.target.value, v.pendingAmount, setPurchaseNetOff, purchaseNetOff)}
                                         />
                                     </td>
                                 </tr>
@@ -5007,7 +5135,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                 {/* Section 4: Receipts (Credit) */}
                 <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 overflow-hidden">
                     <div className="bg-white px-6 py-4 border-b border-gray-200">
-                        <h3 className="text-center text-lg font-medium text-gray-900">Receipts (Credit)</h3>
+                        <h3 className="text-center text-lg font-medium text-gray-900">Receipt (Credit)</h3>
                     </div>
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 text-gray-500 font-medium uppercase text-xs">
@@ -5028,8 +5156,8 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                         <input
                                             type="number"
                                             className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                                            value={receiptNetOff[v.id] ?? v.amount}
-                                            onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setReceiptNetOff, receiptNetOff)}
+                                            value={receiptNetOff[v.id] ?? v.pendingAmount}
+                                            onChange={(e) => handleAmountChange(v.id, e.target.value, v.pendingAmount, setReceiptNetOff, receiptNetOff)}
                                         />
                                     </td>
                                 </tr>
@@ -5055,6 +5183,8 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
     const [activeTab, setActiveTab] = useState('Invoices under Dispute');
     const [selectedPurchase, setSelectedPurchase] = useState<string[]>([]);
     const [selectedSales, setSelectedSales] = useState<string[]>([]);
+    const [selectedPayments, setSelectedPayments] = useState<string[]>([]);
+    const [selectedReceipts, setSelectedReceipts] = useState<string[]>([]);
     const [netOffDate, setNetOffDate] = useState('2026-01-20');
 
     const [viewMode, setViewMode] = useState<'modal' | 'editPage'>('modal');
@@ -5069,23 +5199,23 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
     // Mock data matching the reference image
     const purchaseVouchers: PurchaseVoucher[] = [
-        { id: '1', date: '2025-12-15', supplierInvNo: 'PINV-001', amount: 10000 },
-        { id: '2', date: '2026-01-02', supplierInvNo: 'PINV-005', amount: 5000 },
-        { id: '3', date: '2026-01-10', supplierInvNo: 'PINV-008', amount: 12000 },
+        { id: '1', date: '2025-12-15', supplierInvNo: 'PINV-001', amount: 10000, pendingAmount: 10000 },
+        { id: '2', date: '2026-01-02', supplierInvNo: 'PINV-005', amount: 5000, pendingAmount: 5000 },
+        { id: '3', date: '2026-01-10', supplierInvNo: 'PINV-008', amount: 12000, pendingAmount: 12000 },
     ];
 
     const salesVouchers: SalesVoucher[] = [
-        { id: '1', date: '2025-12-20', salesVchNo: 'INV-2025-050', amount: 15000 },
-        { id: '2', date: '2026-01-05', salesVchNo: 'INV-2026-001', amount: 6000 },
-        { id: '3', date: '2026-01-12', salesVchNo: 'INV-2026-002', amount: 20000 },
+        { id: '1', date: '2025-12-20', salesVchNo: 'INV-2025-050', amount: 15000, pendingAmount: 15000 },
+        { id: '2', date: '2026-01-05', salesVchNo: 'INV-2026-001', amount: 6000, pendingAmount: 6000 },
+        { id: '3', date: '2026-01-12', salesVchNo: 'INV-2026-002', amount: 20000, pendingAmount: 20000 },
     ];
 
     const paymentVouchers: PaymentVoucher[] = [
-        { id: 'p1', date: '2026-01-08', voucherNo: 'PAY-101', amount: 2500 }
+        { id: 'p1', date: '2026-01-08', voucherNo: 'PAY-101', amount: 2500, pendingAmount: 2500 }
     ];
 
     const receiptVouchers: ReceiptVoucher[] = [
-        { id: 'r1', date: '2026-01-15', voucherNo: 'REC-201', amount: 1000 }
+        { id: 'r1', date: '2026-01-15', voucherNo: 'REC-201', amount: 1000, pendingAmount: 1000 }
     ];
 
     const runningBalance = 35000;
@@ -5117,55 +5247,27 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
     }
 
     const handleNext = () => {
-        // FIFO Logic - Only process SELECTED invoices, sorted by date (oldest first)
-        const selectedPurVouchers = purchaseVouchers
-            .filter(v => selectedPurchase.includes(v.id))
-            .sort((a, b) => a.date.localeCompare(b.date)); // Oldest first
+        // Broaden Logic - Combine Sales/Payments (Debit) and Purchase/Receipts (Credit)
+        const debits = [
+            ...salesVouchers.filter(v => selectedSales.includes(v.id)).map(v => ({ id: v.id, no: v.salesVchNo, amount: v.pendingAmount })),
+            ...paymentVouchers.filter(v => selectedPayments.includes(v.id)).map(v => ({ id: v.id, no: v.voucherNo, amount: v.pendingAmount }))
+        ];
 
-        const selectedSalVouchers = salesVouchers
-            .filter(v => selectedSales.includes(v.id))
-            .sort((a, b) => a.date.localeCompare(b.date)); // Oldest first
+        const credits = [
+            ...purchaseVouchers.filter(v => selectedPurchase.includes(v.id)).map(v => ({ id: v.id, no: v.supplierInvNo, amount: v.pendingAmount })),
+            ...receiptVouchers.filter(v => selectedReceipts.includes(v.id)).map(v => ({ id: v.id, no: v.voucherNo, amount: v.pendingAmount }))
+        ];
 
-        if (selectedPurVouchers.length === 0 && selectedSalVouchers.length === 0) {
+        if (debits.length === 0 && credits.length === 0) {
             showError('Please select at least one invoice to proceed with net-off.');
             return;
         }
 
-        // Calculate totals
-        const totalPurchase = selectedPurVouchers.reduce((sum, v) => sum + v.amount, 0);
-        const totalSales = selectedSalVouchers.reduce((sum, v) => sum + v.amount, 0);
+        const totalDebits = debits.reduce((sum, v) => sum + v.amount, 0);
+        const totalCredits = credits.reduce((sum, v) => sum + v.amount, 0);
 
-        // FIFO Net-off Calculation
-        let remainingPurchase = totalPurchase;
-        let remainingSales = totalSales;
-        let nettedAmount = 0;
-        const nettedDetails: string[] = [];
-
-        // Apply FIFO: Match oldest purchase with oldest sales
-        let purIndex = 0;
-        let salIndex = 0;
-
-        while (purIndex < selectedPurVouchers.length && salIndex < selectedSalVouchers.length) {
-            const purVoucher = selectedPurVouchers[purIndex];
-            const salVoucher = selectedSalVouchers[salIndex];
-
-            const matchAmount = Math.min(purVoucher.amount, salVoucher.amount);
-            nettedAmount += matchAmount;
-
-            nettedDetails.push(
-                `${purVoucher.supplierInvNo} (₹${matchAmount.toLocaleString('en-IN')}) ↔ ${salVoucher.salesVchNo} (₹${matchAmount.toLocaleString('en-IN')})`
-            );
-
-            // Adjust remaining amounts
-            purVoucher.amount -= matchAmount;
-            salVoucher.amount -= matchAmount;
-
-            if (purVoucher.amount === 0) purIndex++;
-            if (salVoucher.amount === 0) salIndex++;
-        }
-
-        // Determine result
-        const netDifference = totalPurchase - totalSales;
+        // Determine result based on imbalance
+        const netDifference = totalDebits - totalCredits;
         let resultType = '';
         let resultAmount = 0;
 
@@ -5183,33 +5285,25 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
         // Calculate closing balance
         const closingBalance = runningBalance + netDifference;
 
-        // Display detailed summary
-        let message = `╔════════════════════════════════════════╗\n`;
-        message += `║   NET-OFF SUMMARY (FIFO Applied)      ║\n`;
-        message += `╚════════════════════════════════════════╝\n\n`;
+        const nettedAmount = Math.min(totalDebits, totalCredits);
 
-        message += `📊 SELECTED INVOICES:\n`;
+        // Display summary
+        let message = `🚀 NET-OFF PREVIEW SUMMARY\n`;
         message += `─────────────────────────────────────────\n`;
-        message += `Purchase Vouchers (Debit): ${selectedPurVouchers.length} invoice(s)\n`;
-        selectedPurVouchers.forEach(v => {
-            message += `  • ${v.supplierInvNo} (${v.date}): ₹${v.amount.toLocaleString('en-IN')}\n`;
-        });
-        message += `\nSales Vouchers (Credit): ${selectedSalVouchers.length} invoice(s)\n`;
-        selectedSalVouchers.forEach(v => {
-            message += `  • ${v.salesVchNo} (${v.date}): ₹${v.amount.toLocaleString('en-IN')}\n`;
-        });
+        message += `Selected Customer: ${customerName}\n`;
+        message += `Selected Records: ${debits.length + credits.length} records\n`;
 
         message += `\n💰 AMOUNTS:\n`;
         message += `─────────────────────────────────────────\n`;
-        message += `Total Purchase (Debit):  ₹${totalPurchase.toLocaleString('en-IN')}\n`;
-        message += `Total Sales (Credit):    ₹${totalSales.toLocaleString('en-IN')}\n`;
-        message += `Net-off Amount:          ₹${nettedAmount.toLocaleString('en-IN')}\n`;
+        message += `Total Debits (Sales/Pay):  ₹${totalDebits.toLocaleString('en-IN')}\n`;
+        message += `Total Credits (Pur/Rec):   ₹${totalCredits.toLocaleString('en-IN')}\n`;
+        message += `Net-off Amount:            ₹${nettedAmount.toLocaleString('en-IN')}\n`;
 
         message += `\n📋 NET-OFF RESULT:\n`;
         message += `─────────────────────────────────────────\n`;
         if (resultType === 'FULLY SETTLED') {
             message += `✅ ${resultType}\n`;
-            message += `All selected invoices perfectly balanced!\n`;
+            message += `All selected records perfectly balanced!\n`;
         } else {
             message += `📝 Generate: ${resultType}\n`;
             message += `Amount: ₹${resultAmount.toLocaleString('en-IN')}\n`;
@@ -5219,9 +5313,6 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
         message += `─────────────────────────────────────────\n`;
         message += `Running Balance (Before): ₹${runningBalance.toLocaleString('en-IN')}\n`;
         message += `Closing Balance (After):  ₹${closingBalance.toLocaleString('en-IN')}\n`;
-
-        message += `\n✨ FIFO Logic Applied:\n`;
-        message += `Oldest invoices were matched first\n`;
 
         showInfo(message);
 
@@ -5233,7 +5324,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
         setActiveTab('Net-off');
     };
 
-    const isNextEnabled = selectedPurchase.length > 0 || selectedSales.length > 0;
+    const isNextEnabled = selectedPurchase.length > 0 || selectedSales.length > 0 || selectedPayments.length > 0 || selectedReceipts.length > 0;
 
     return (
         <div className="bg-white flex flex-col rounded-[4px] min-h-[500px] animate-fadeIn">
@@ -5307,13 +5398,13 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                 {/* Main Content - Conditional based on active tab */}
                 <div className="flex-1 overflow-auto p-6">
                     {activeTab === 'Invoices under Dispute' ? (
-                        <div className="grid grid-cols-2 gap-6 h-full">
+                        <div className="grid grid-cols-2 gap-6 pb-6">
                             {/* Purchase Vouchers Card */}
                             <div className="border border-gray-200 rounded-[4px] overflow-hidden flex flex-col bg-white">
                                 <div className="bg-white px-4 py-3 border-b border-gray-200">
                                     <h3 className="text-sm font-medium text-gray-700">Purchase Vouchers</h3>
                                 </div>
-                                <div className="flex-1 overflow-auto">
+                                <div className="h-64 overflow-auto">
                                     <table className="w-full text-sm">
                                         <thead className="bg-white sticky top-0">
                                             <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
@@ -5321,6 +5412,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 <th className="px-4 py-3 font-medium">DATE</th>
                                                 <th className="px-4 py-3 font-medium">SUPPLIER INV NO</th>
                                                 <th className="px-4 py-3 text-right font-medium">AMOUNT</th>
+                                                <th className="px-4 py-3 text-right font-medium">PENDING AMOUNT</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -5343,6 +5435,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                     <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                     <td className="px-4 py-3 font-medium text-gray-900">{voucher.supplierInvNo}</td>
                                                     <td className="px-4 py-3 text-right text-gray-900">₹{voucher.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-3 text-right text-gray-900">₹{voucher.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -5355,7 +5448,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                 <div className="bg-white px-4 py-3 border-b border-gray-200">
                                     <h3 className="text-sm font-medium text-gray-700">Sales Vouchers</h3>
                                 </div>
-                                <div className="flex-1 overflow-auto">
+                                <div className="h-64 overflow-auto">
                                     <table className="w-full text-sm">
                                         <thead className="bg-white sticky top-0">
                                             <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
@@ -5363,6 +5456,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 <th className="px-4 py-3 font-medium">DATE</th>
                                                 <th className="px-4 py-3 font-medium">SALES VCH NO</th>
                                                 <th className="px-4 py-3 text-right font-medium">AMOUNT</th>
+                                                <th className="px-4 py-3 text-right font-medium">PENDING AMOUNT</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -5385,6 +5479,95 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                     <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                     <td className="px-4 py-3 font-medium text-gray-900">{voucher.salesVchNo}</td>
                                                     <td className="px-4 py-3 text-right text-gray-900">₹{voucher.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-3 text-right text-gray-900">₹{voucher.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Payment Vouchers Card */}
+                            <div className="border border-gray-200 rounded-[4px] overflow-hidden flex flex-col bg-white">
+                                <div className="bg-white px-4 py-3 border-b border-gray-200">
+                                    <h3 className="text-sm font-medium text-gray-700">Payment Vouchers</h3>
+                                </div>
+                                <div className="h-64 overflow-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-white sticky top-0">
+                                            <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
+                                                <th className="px-4 py-3 font-medium">SELECT</th>
+                                                <th className="px-4 py-3 font-medium">DATE</th>
+                                                <th className="px-4 py-3 font-medium">VOUCHER NO</th>
+                                                <th className="px-4 py-3 text-right font-medium">AMOUNT</th>
+                                                <th className="px-4 py-3 text-right font-medium">PENDING AMOUNT</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {paymentVouchers.map((voucher) => (
+                                                <tr key={voucher.id} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedPayments.includes(voucher.id)}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedPayments([...selectedPayments, voucher.id]);
+                                                                } else {
+                                                                    setSelectedPayments(selectedPayments.filter(id => id !== voucher.id));
+                                                                }
+                                                            }}
+                                                            className="rounded border-gray-300"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
+                                                    <td className="px-4 py-3 font-medium text-gray-900">{voucher.voucherNo}</td>
+                                                    <td className="px-4 py-3 text-right text-gray-900">₹{voucher.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-3 text-right text-gray-900">₹{voucher.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Receipt Vouchers Card */}
+                            <div className="border border-gray-200 rounded-[4px] overflow-hidden flex flex-col bg-white">
+                                <div className="bg-white px-4 py-3 border-b border-gray-200">
+                                    <h3 className="text-sm font-medium text-gray-700">Receipt Vouchers</h3>
+                                </div>
+                                <div className="h-64 overflow-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-white sticky top-0">
+                                            <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
+                                                <th className="px-4 py-3 font-medium">SELECT</th>
+                                                <th className="px-4 py-3 font-medium">DATE</th>
+                                                <th className="px-4 py-3 font-medium">VOUCHER NO</th>
+                                                <th className="px-4 py-3 text-right font-medium">AMOUNT</th>
+                                                <th className="px-4 py-3 text-right font-medium">PENDING AMOUNT</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {receiptVouchers.map((voucher) => (
+                                                <tr key={voucher.id} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedReceipts.includes(voucher.id)}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedReceipts([...selectedReceipts, voucher.id]);
+                                                                } else {
+                                                                    setSelectedReceipts(selectedReceipts.filter(id => id !== voucher.id));
+                                                                }
+                                                            }}
+                                                            className="rounded border-gray-300"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
+                                                    <td className="px-4 py-3 font-medium text-gray-900">{voucher.voucherNo}</td>
+                                                    <td className="px-4 py-3 text-right text-gray-900">₹{voucher.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-3 text-right text-gray-900">₹{voucher.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -5414,10 +5597,10 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 // Auto calculation based on selection
                                                 const totalPur = purchaseVouchers
                                                     .filter(v => selectedPurchase.includes(v.id))
-                                                    .reduce((sum, v) => sum + v.amount, 0);
+                                                    .reduce((sum, v) => sum + v.pendingAmount, 0);
                                                 const totalSal = salesVouchers
                                                     .filter(v => selectedSales.includes(v.id))
-                                                    .reduce((sum, v) => sum + v.amount, 0);
+                                                    .reduce((sum, v) => sum + v.pendingAmount, 0);
                                                 return Math.min(totalPur, totalSal).toLocaleString('en-IN', { minimumFractionDigits: 2 });
                                             }
                                         })()}
@@ -5437,10 +5620,10 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
                                     const totalPur = purchaseVouchers
                                         .filter(v => selectedPurchase.includes(v.id))
-                                        .reduce((sum, v) => sum + v.amount, 0);
+                                        .reduce((sum, v) => sum + v.pendingAmount, 0);
                                     const totalSal = salesVouchers
                                         .filter(v => selectedSales.includes(v.id))
-                                        .reduce((sum, v) => sum + v.amount, 0);
+                                        .reduce((sum, v) => sum + v.pendingAmount, 0);
                                     const diff = Math.abs(totalPur - totalSal);
 
                                     if (diff > 0.01) {
@@ -5456,146 +5639,105 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                     return null;
                                 })()}
 
-                                {/* Pending Invoices Table */}
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-gray-50">
-                                            <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
-                                                <th className="px-4 py-3 font-medium">VOUCHER TYPE</th>
-                                                <th className="px-4 py-3 font-medium">DATE</th>
-                                                <th className="px-4 py-3 font-medium">SUPPLIER INVOICE NO / SALES VOUCHER NO</th>
-                                                <th className="px-4 py-3 text-right font-medium">DEBIT</th>
-                                                <th className="px-4 py-3 text-right font-medium">CREDIT</th>
-                                                <th className="px-4 py-3 text-center font-medium">STATUS</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {/* Purchase Vouchers - DEBIT */}
-                                            {purchaseVouchers
-                                                .filter(v => Object.keys(purchaseNetOffAmounts).length > 0 ? (purchaseNetOffAmounts[v.id] || 0) > 0 : selectedPurchase.includes(v.id))
-                                                .map((voucher) => (
-                                                    <tr key={`p-${voucher.id}`} className="hover:bg-gray-50">
-                                                        <td className="px-4 py-3">
-                                                            <span className="text-indigo-600 font-medium">Purchase</span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
-                                                        <td className="px-4 py-3 font-medium text-gray-900">{voucher.supplierInvNo}</td>
-                                                        <td className="px-4 py-3 text-right text-gray-900">
-                                                            ₹{(Object.keys(purchaseNetOffAmounts).length > 0 ? purchaseNetOffAmounts[voucher.id] : voucher.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right text-gray-400">-</td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-[4px] bg-yellow-100 text-yellow-800">
-                                                                Partially Paid
-                                                            </span>
-                                                        </td>
+                                {/* List of Pending Invoices Table */}
+                                <div className="space-y-8">
+                                    <div className="bg-white rounded-[4px] border border-gray-200 overflow-hidden">
+                                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                                            <h3 className="text-sm font-semibold text-gray-700">List of Pending Invoices</h3>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-white">
+                                                    <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
+                                                        <th className="px-4 py-3 font-medium">VOUCHER TYPE</th>
+                                                        <th className="px-4 py-3 font-medium">DATE</th>
+                                                        <th className="px-4 py-3 font-medium">REFERENCE NO.</th>
+                                                        <th className="px-4 py-3 text-right font-medium">AMOUNT</th>
+                                                        <th className="px-4 py-3 text-right font-medium">PENDING AMOUNT</th>
+                                                        <th className="px-4 py-3 text-center font-medium">STATUS</th>
                                                     </tr>
-                                                ))}
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {/* Sales & Payments (Debits) */}
+                                                    {[
+                                                        ...salesVouchers.filter(v => Object.keys(salesNetOffAmounts).length > 0 ? (salesNetOffAmounts[v.id] || 0) > 0 : selectedSales.includes(v.id)).map(v => ({ ...v, type: 'Sales', no: v.salesVchNo })),
+                                                        ...paymentVouchers.filter(v => (paymentsNetOffAmounts[v.id] || 0) > 0).map(v => ({ ...v, type: 'Payment', no: v.voucherNo }))
+                                                    ].map((voucher) => (
+                                                        <tr key={`pnd-${voucher.type}-${voucher.id}`} className="hover:bg-gray-50">
+                                                            <td className="px-4 py-3">
+                                                                <span className="text-indigo-600 font-medium">{voucher.type}</span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
+                                                            <td className="px-4 py-3 font-medium text-gray-900">{voucher.no}</td>
+                                                            <td className="px-4 py-3 text-right text-gray-900">
+                                                                ₹{voucher.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-gray-900">
+                                                                ₹{voucher.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                <span className={`inline-block px-3 py-1 text-xs font-medium rounded-[4px] ${voucher.type === 'Sales' ? 'bg-gray-100 text-gray-800' : 'bg-purple-100 text-purple-800'
+                                                                    }`}>
+                                                                    {voucher.type === 'Sales' ? 'Not Due' : 'Paid'}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
 
-                                            {/* Receipts (Credit) - CREDIT (Index 4) */}
-                                            {receiptVouchers
-                                                .filter(v => (receiptsNetOffAmounts[v.id] || 0) > 0)
-                                                .map((voucher) => (
-                                                    <tr key={`r-${voucher.id}`} className="hover:bg-gray-50">
-                                                        <td className="px-4 py-3">
-                                                            <span className="text-indigo-600 font-medium">Receipt</span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
-                                                        <td className="px-4 py-3 font-medium text-gray-900">{voucher.voucherNo}</td>
-                                                        <td className="px-4 py-3 text-right text-gray-400">-</td>
-                                                        <td className="px-4 py-3 text-right text-gray-900">
-                                                            ₹{receiptsNetOffAmounts[voucher.id].toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-[4px] bg-green-100 text-green-800">
-                                                                Received
-                                                            </span>
-                                                        </td>
+                                    {/* List of Invoices Netted-off Table */}
+                                    <div className="bg-white rounded-[4px] border border-gray-200 overflow-hidden">
+                                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                                            <h3 className="text-sm font-semibold text-gray-700">List of Invoices Netted-off</h3>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-white">
+                                                    <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
+                                                        <th className="px-4 py-3 font-medium">VOUCHER TYPE</th>
+                                                        <th className="px-4 py-3 font-medium">DATE</th>
+                                                        <th className="px-4 py-3 font-medium">REFERENCE NO.</th>
+                                                        <th className="px-4 py-3 text-right font-medium">APPLIED AMOUNT</th>
+                                                        <th className="px-4 py-3 text-right font-medium">PENDING AMOUNT</th>
+                                                        <th className="px-4 py-3 text-center font-medium">STATUS</th>
                                                     </tr>
-                                                ))}
-
-                                            {/* Sales Vouchers - CREDIT */}
-                                            {salesVouchers
-                                                .filter(v => Object.keys(salesNetOffAmounts).length > 0 ? (salesNetOffAmounts[v.id] || 0) > 0 : selectedSales.includes(v.id))
-                                                .map((voucher) => (
-                                                    <tr key={`s-${voucher.id}`} className="hover:bg-gray-50">
-                                                        <td className="px-4 py-3">
-                                                            <span className="text-indigo-600 font-medium">Sales</span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
-                                                        <td className="px-4 py-3 font-medium text-gray-900">{voucher.salesVchNo}</td>
-                                                        <td className="px-4 py-3 text-right text-gray-400">-</td>
-                                                        <td className="px-4 py-3 text-right text-gray-900">
-                                                            ₹{(Object.keys(salesNetOffAmounts).length > 0 ? salesNetOffAmounts[voucher.id] : voucher.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-[4px] bg-gray-100 text-gray-800">
-                                                                Not Due
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-
-                                            {/* Payments (Debit) - DEBIT (Index 3) */}
-                                            {paymentVouchers
-                                                .filter(v => (paymentsNetOffAmounts[v.id] || 0) > 0)
-                                                .map((voucher) => (
-                                                    <tr key={`py-${voucher.id}`} className="hover:bg-gray-50">
-                                                        <td className="px-4 py-3">
-                                                            <span className="text-indigo-600 font-medium">Payment</span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
-                                                        <td className="px-4 py-3 font-medium text-gray-900">{voucher.voucherNo}</td>
-                                                        <td className="px-4 py-3 text-right text-gray-900">
-                                                            ₹{paymentsNetOffAmounts[voucher.id].toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right text-gray-400">-</td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-[4px] bg-purple-100 text-purple-800">
-                                                                Paid
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-
-                                            {/* Totals Row */}
-                                            <tr className="bg-gray-50 font-semibold">
-                                                <td colSpan={3} className="px-4 py-3 text-right text-gray-700">Totals:</td>
-                                                <td className="px-4 py-3 text-right text-gray-900">
-                                                    ₹{(() => {
-                                                        const isManual = Object.keys(salesNetOffAmounts).length > 0;
-                                                        if (isManual) {
-                                                            const totalPur = purchaseVouchers.reduce((s, v) => s + (purchaseNetOffAmounts[v.id] || 0), 0);
-                                                            const totalPay = paymentVouchers.reduce((s, v) => s + (paymentsNetOffAmounts[v.id] || 0), 0);
-                                                            return (totalPur + totalPay).toLocaleString('en-IN', { minimumFractionDigits: 2 });
-                                                        }
-
-                                                        // Fallback for auto selection
-                                                        return purchaseVouchers
-                                                            .filter(v => selectedPurchase.includes(v.id))
-                                                            .reduce((sum, v) => sum + v.amount, 0)
-                                                            .toLocaleString('en-IN', { minimumFractionDigits: 2 });
-                                                    })()}
-                                                </td>
-                                                <td className="px-4 py-3 text-right text-gray-900">
-                                                    ₹{(() => {
-                                                        const isManual = Object.keys(salesNetOffAmounts).length > 0;
-                                                        if (isManual) {
-                                                            const totalSal = salesVouchers.reduce((s, v) => s + (salesNetOffAmounts[v.id] || 0), 0);
-                                                            const totalRec = receiptVouchers.reduce((s, v) => s + (receiptsNetOffAmounts[v.id] || 0), 0);
-                                                            return (totalSal + totalRec).toLocaleString('en-IN', { minimumFractionDigits: 2 });
-                                                        }
-
-                                                        return salesVouchers
-                                                            .filter(v => selectedSales.includes(v.id))
-                                                            .reduce((sum, v) => sum + v.amount, 0)
-                                                            .toLocaleString('en-IN', { minimumFractionDigits: 2 });
-                                                    })()}
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {/* Purchase & Receipts (Credits) */}
+                                                    {[
+                                                        ...purchaseVouchers.filter(v => Object.keys(purchaseNetOffAmounts).length > 0 ? (purchaseNetOffAmounts[v.id] || 0) > 0 : selectedPurchase.includes(v.id)).map(v => ({ ...v, type: 'Purchase', no: v.supplierInvNo })),
+                                                        ...receiptVouchers.filter(v => (receiptsNetOffAmounts[v.id] || 0) > 0).map(v => ({ ...v, type: 'Receipt', no: v.voucherNo }))
+                                                    ].map((voucher) => (
+                                                        <tr key={`net-${voucher.type}-${voucher.id}`} className="hover:bg-gray-50">
+                                                            <td className="px-4 py-3">
+                                                                <span className="text-indigo-600 font-medium">{voucher.type}</span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
+                                                            <td className="px-4 py-3 font-medium text-gray-900">{voucher.no}</td>
+                                                            <td className="px-4 py-3 text-right text-gray-900 font-medium">
+                                                                ₹{(voucher.type === 'Purchase'
+                                                                    ? (Object.keys(purchaseNetOffAmounts).length > 0 ? purchaseNetOffAmounts[voucher.id] : voucher.pendingAmount)
+                                                                    : receiptsNetOffAmounts[voucher.id]
+                                                                ).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-gray-900">
+                                                                ₹{voucher.pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                <span className={`inline-block px-3 py-1 text-xs font-medium rounded-[4px] ${voucher.type === 'Purchase' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                                                                    }`}>
+                                                                    {voucher.type === 'Purchase' ? 'Partially Paid' : 'Received'}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Action Buttons */}
@@ -5711,7 +5853,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         ledger: 'Sales',
                         status: (inv.status && inv.status.toLowerCase() === 'received') ? 'Received'
                             : (inv.status && inv.status.toLowerCase() === 'partially received') ? 'Partially Received'
-                            : (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
+                                : (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
                         debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
                         credit: 0,
                         runningBalance: 0,
@@ -6108,9 +6250,11 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                             <thead className="bg-[#F8F9FA]">
                                                 <tr>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Date</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Transaction Particulars</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100 min-w-[350px]">Transaction Particulars</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Status</th>
+                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Running Balance</th>
                                                     <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
                                                     <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Credit (₹)</th>
                                                 </tr>
@@ -6184,7 +6328,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                         </div>
                                                     </th>
                                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Reference No</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200 min-w-[300px]">
                                                         <div className="flex items-center justify-between relative text-gray-400">
                                                             <span>Ledger</span>
                                                             <div className="ml-2">
@@ -6216,33 +6360,13 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-between relative text-gray-400">
                                                             <span>Status</span>
-                                                            <div className="ml-2">
-                                                                <Filter
-                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'status' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
-                                                                    onClick={() => toggleFilter('status')}
-                                                                />
-                                                                {activeFilter === 'status' && (
-                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className="text-xs font-semibold text-gray-700">Filter Status</span>
-                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                        </div>
-                                                                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PurchaseStatus | SalesStatus | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
-                                                                            <option value="">All Statuses</option>
-                                                                            {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                                        </select>
-                                                                        <button
-                                                                            onClick={() => setStatusFilter('')}
-                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
-                                                                        >
-                                                                            Clear Filter
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
                                                         </div>
                                                     </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Posting Status</th>
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                        <div className="flex items-center justify-end relative text-gray-400">
+                                                            <span>Running Balance</span>
+                                                        </div>
+                                                    </th>
                                                     <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-end relative text-gray-400">
                                                             <span>Debit</span>
@@ -6272,7 +6396,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             </div>
                                                         </div>
                                                     </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
                                                         <div className="flex items-center justify-end relative text-gray-400">
                                                             <span>Credit</span>
                                                             <div className="ml-2">
@@ -6301,7 +6425,6 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             </div>
                                                         </div>
                                                     </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
                                                 </tr>
                                             </thead>
                                         )}
@@ -6319,8 +6442,23 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">(as per details)</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">Sales</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{entry.referenceNo || entry.ledger}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-50">
+                                                                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900 border-r border-gray-50">
+                                                                    {entry.runningBalance === 0 ? '-' : (
+                                                                        <span>
+                                                                            {formatCurrency(Math.abs(entry.runningBalance))}
+                                                                            <span className="ml-1 text-gray-500 text-xs font-normal">
+                                                                                {entry.runningBalance >= 0 ? 'Dr' : 'Cr'}
+                                                                            </span>
+                                                                        </span>
+                                                                    )}
+                                                                </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400">-</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold">
+                                                                    {entry.credit !== 0 ? `₹${entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                </td>
                                                             </tr>
                                                             {/* BREAKDOWN ROWS */}
                                                             {entry.originalInv && (
@@ -6329,13 +6467,19 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                     <tr className="bg-white">
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
-                                                                            {customer.name}
+                                                                            <div className="flex justify-between items-center w-full">
+                                                                                <span>{customer.name}</span>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <span className="text-gray-900 font-bold ml-4">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                    <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                                                </div>
+                                                                            </div>
                                                                         </td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700 border-r border-gray-50">
-                                                                            ₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                        </td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                     </tr>
 
@@ -6355,13 +6499,19 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                             <tr key={tds.key} className="bg-white">
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
-                                                                                    {labelWithPerc}
+                                                                                    <div className="flex justify-between items-center w-full">
+                                                                                        <span>{labelWithPerc}</span>
+                                                                                        <div className="flex items-center gap-1">
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700 border-r border-gray-50">
-                                                                                    ₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                                </td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         );
@@ -6371,14 +6521,20 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                     <tr className="bg-white">
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
-                                                                            Sales Ledger
+                                                                            <div className="flex justify-between items-center w-full">
+                                                                                <span>Sales Ledger</span>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <span className="text-gray-900 font-bold ml-4">₹{((entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                    <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                                                </div>
+                                                                            </div>
                                                                         </td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700">
-                                                                            ₹{((entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                        </td>
+                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                     </tr>
 
                                                                     {[
@@ -6399,19 +6555,25 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                             <tr key={tax.key} className="bg-white">
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
-                                                                                    {labelWithPerc}
+                                                                                    <div className="flex justify-between items-center w-full">
+                                                                                        <span>{labelWithPerc}</span>
+                                                                                        <div className="flex items-center gap-1">
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700">
-                                                                                    ₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                                </td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         );
                                                                     })}
                                                                     <tr className="bg-white">
-                                                                        <td className="py-2" colSpan={6}></td>
+                                                                        <td className="py-2" colSpan={8}></td>
                                                                     </tr>
                                                                 </>
                                                             )}
@@ -6429,10 +6591,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.posting_status || '-'}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-semibold">
                                                                 {entry.runningBalance === 0 ? '-' : (
                                                                     <span>
                                                                         {formatCurrency(Math.abs(entry.runningBalance))}
@@ -6442,13 +6601,15 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                     </span>
                                                                 )}
                                                             </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-medium">{formatCurrency(entry.credit)}</td>
                                                         </tr>
                                                     )}
                                                 </React.Fragment>
                                             ))}
                                             {filteredData.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                                                         No ledger entries found for this customer.
                                                     </td>
                                                 </tr>
@@ -6459,7 +6620,6 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                 <td colSpan={6} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
-                                                <td className="px-6 py-4 text-sm text-right text-gray-400 italic"></td>
                                             </tr>
                                         </tfoot>
                                     </table>

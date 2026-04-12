@@ -1,4 +1,4 @@
-SET FOREIGN_KEY_CHECKS=0;
+﻿SET FOREIGN_KEY_CHECKS=0;
 
 CREATE TABLE IF NOT EXISTS `advance_allocations` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -312,12 +312,12 @@ CREATE TABLE IF NOT EXISTS `customer_master` (
   `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `created_by` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `customer_master_customer_code_unique` (`customer_code`),
   KEY `customer_master_tenant_code_idx` (`tenant_id`,`customer_code`),
   KEY `customer_master_tenant_deleted_idx` (`tenant_id`,`is_deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `customer_master_category` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -330,6 +330,7 @@ CREATE TABLE IF NOT EXISTS `customer_master_category` (
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   UNIQUE KEY `customer_category_tenant_unique` (`tenant_id`,`category`(100),`group`(100),`subgroup`(100)),
+  KEY `customer_category_tenant_id_idx` (`tenant_id`),
   KEY `customer_category_is_active_idx` (`tenant_id`,`is_active`),
   KEY `customer_category_category_idx` (`category`(100))
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -389,6 +390,7 @@ CREATE TABLE IF NOT EXISTS `customer_master_customer_basicdetails` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `customer_basic_tenant_code_uniq` (`tenant_id`,`customer_code`),
   UNIQUE KEY `customer_basic_tenant_id_uniq` (`tenant_id`,`id`),
+  KEY `customer_basic_tenant_id_idx` (`tenant_id`),
   KEY `customer_basic_category_idx` (`customer_category_id`),
   KEY `fk_customer_ledger` (`ledger_id`),
   CONSTRAINT `customer_basic_category_fk` FOREIGN KEY (`customer_category_id`) REFERENCES `customer_master_category` (`id`) ON DELETE SET NULL,
@@ -449,6 +451,7 @@ CREATE TABLE IF NOT EXISTS `customer_master_customer_productservice` (
   `customer_basic_detail_id` bigint DEFAULT NULL,
   `item_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Our Item Code',
   `item_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Our Item Name',
+  `hsn_code` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `uom` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Unit of Measure',
   `customer_item_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Customer Item Code',
   `customer_item_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Customer Item Name',
@@ -457,7 +460,6 @@ CREATE TABLE IF NOT EXISTS `customer_master_customer_productservice` (
   `created_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `updated_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `packing_notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `hsn_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `customer_prod_tenant_item_idx` (`tenant_id`,`item_code`),
   KEY `customer_prod_basic_detail_idx` (`customer_basic_detail_id`),
@@ -472,9 +474,9 @@ CREATE TABLE IF NOT EXISTS `customer_master_customer_tds` (
   `fssai_no` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `iec_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `eou_status` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `tcs_section` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tcs_section` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `tcs_enabled` tinyint(1) NOT NULL DEFAULT '0',
-  `tds_section` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tds_section` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `tds_enabled` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -532,10 +534,11 @@ CREATE TABLE IF NOT EXISTS `customer_master_longtermcontracts_basicdetails` (
   `updated_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_basic_tenant_contract_unique` (`tenant_id`,`contract_number`),
+  KEY `cust_ltc_basic_tenant_id_idx` (`tenant_id`),
   KEY `cust_ltc_basic_customer_id_idx` (`tenant_id`,`customer_id`),
   KEY `cust_ltc_basic_validity_idx` (`contract_validity_from`,`contract_validity_to`),
   KEY `cust_ltc_basic_is_deleted_idx` (`tenant_id`,`is_deleted`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Master Long-term Contract Basic Details';
 
 CREATE TABLE IF NOT EXISTS `customer_master_longtermcontracts_productservices` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -558,7 +561,7 @@ CREATE TABLE IF NOT EXISTS `customer_master_longtermcontracts_productservices` (
   KEY `cust_ltc_prod_tenant_item_idx` (`tenant_id`,`item_code`),
   KEY `cust_ltc_prod_contract_idx` (`contract_basic_detail_id`),
   CONSTRAINT `cust_ltc_prod_contract_fk` FOREIGN KEY (`contract_basic_detail_id`) REFERENCES `customer_master_longtermcontracts_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Master Long-term Contract Products/Services';
 
 CREATE TABLE IF NOT EXISTS `customer_master_longtermcontracts_termscondition` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -578,7 +581,7 @@ CREATE TABLE IF NOT EXISTS `customer_master_longtermcontracts_termscondition` (
   UNIQUE KEY `cust_ltc_terms_contract_unique` (`contract_basic_detail_id`),
   KEY `cust_ltc_terms_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_ltc_terms_contract_fk` FOREIGN KEY (`contract_basic_detail_id`) REFERENCES `customer_master_longtermcontracts_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Master Long-term Contract Terms & Conditions';
 
 CREATE TABLE IF NOT EXISTS `customer_masters_salesorder` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -594,13 +597,14 @@ CREATE TABLE IF NOT EXISTS `customer_masters_salesorder` (
   `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `created_by` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `customer_so_tenant_series_unique` (`tenant_id`,`series_name`),
+  KEY `customer_so_tenant_id_idx` (`tenant_id`),
   KEY `customer_so_category_idx` (`customer_category`),
   KEY `customer_so_is_active_idx` (`is_active`),
   KEY `customer_so_is_deleted_idx` (`is_deleted`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `customer_masters_salesquotation` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -619,17 +623,18 @@ CREATE TABLE IF NOT EXISTS `customer_masters_salesquotation` (
   `created_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Created by user',
   PRIMARY KEY (`id`),
   UNIQUE KEY `customer_sq_tenant_series_unique` (`tenant_id`,`series_name`),
+  KEY `customer_sq_tenant_id_idx` (`tenant_id`),
   KEY `customer_sq_category_idx` (`customer_category`),
   KEY `customer_sq_is_active_idx` (`is_active`),
   KEY `customer_sq_is_deleted_idx` (`is_deleted`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Portal - Sales Quotation Series Configuration';
 
 CREATE TABLE IF NOT EXISTS `customer_transaction` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `customer_id` int NOT NULL,
-  `transaction_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `transaction_number` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `transaction_type` varchar(20) NOT NULL,
+  `transaction_number` varchar(50) NOT NULL,
   `transaction_date` date NOT NULL,
   `amount` decimal(15,2) NOT NULL,
   `tax_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
@@ -642,9 +647,8 @@ CREATE TABLE IF NOT EXISTS `customer_transaction` (
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   KEY `customer_transaction_tenant_id_customer_id_idx` (`tenant_id`,`customer_id`),
-  KEY `customer_transaction_date_idx` (`transaction_date`),
-  KEY `idx_customer_tx_tenant_date_id` (`tenant_id`,`transaction_date`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `customer_transaction_date_idx` (`transaction_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=46 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_basicdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -668,9 +672,10 @@ CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_basicdetails` (
   `updated_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_trans_so_basic_so_number_uniq` (`tenant_id`,`so_number`),
+  KEY `cust_trans_so_basic_tenant_idx` (`tenant_id`),
   KEY `cust_trans_so_basic_customer_idx` (`customer_name`),
   KEY `cust_trans_so_basic_date_idx` (`date`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Basic Details';
 
 CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_deliveryterms` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -685,7 +690,7 @@ CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_deliveryterms` (
   UNIQUE KEY `cust_trans_so_delivery_basic_detail_uniq` (`so_basic_detail_id`),
   KEY `cust_trans_so_delivery_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_delivery_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Delivery Terms';
 
 CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -707,7 +712,7 @@ CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_items` (
   KEY `cust_trans_so_items_tenant_idx` (`tenant_id`),
   KEY `cust_trans_so_items_basic_detail_idx` (`so_basic_detail_id`),
   CONSTRAINT `cust_trans_so_items_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Items';
 
 CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_payment_salesperson` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -723,7 +728,7 @@ CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_payment_salesperson`
   UNIQUE KEY `cust_trans_so_pay_sp_basic_detail_uniq` (`so_basic_detail_id`),
   KEY `cust_trans_so_pay_sp_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_pay_sp_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Payment and Salesperson';
 
 CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_quotation_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -737,7 +742,7 @@ CREATE TABLE IF NOT EXISTS `customer_transaction_salesorder_quotation_details` (
   UNIQUE KEY `cust_trans_so_quote_basic_detail_uniq` (`so_basic_detail_id`),
   KEY `cust_trans_so_quote_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_quote_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Quotation Details';
 
 CREATE TABLE IF NOT EXISTS `customer_transaction_salesquotation_general` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -861,8 +866,8 @@ CREATE TABLE IF NOT EXISTS `django_admin_log` (
 
 CREATE TABLE IF NOT EXISTS `django_migrations` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `app` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `app` varchar(255) NOT NULL,
+  `name` varchar(255) NOT NULL,
   `applied` datetime(6) NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=113 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -943,34 +948,34 @@ CREATE TABLE IF NOT EXISTS `extracted_invoices` (
   `msme_number` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `payment_terms` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `delivery_terms` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `ledger_amount` decimal(15,2) DEFAULT NULL,
-  `ledger_rate` decimal(15,2) DEFAULT NULL,
+  `ledger_amount` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ledger_rate` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `ledger_amount_dr_cr` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `ledger_narration` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `description_of_ledger` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `type_of_tax_payment` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `item_code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `item_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `quantity` decimal(15,2) DEFAULT NULL,
+  `quantity` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `quantity_uom` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `item_rate` decimal(15,2) DEFAULT NULL,
+  `item_rate` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `disc_pct` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `item_amount` decimal(15,2) DEFAULT NULL,
+  `item_amount` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `marks` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `no_of_packages` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `freight_charges` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `hsn_sac_details` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `gst_rate` decimal(5,2) DEFAULT NULL,
-  `igst_amount` decimal(15,2) DEFAULT NULL,
-  `cgst_amount` decimal(15,2) DEFAULT NULL,
-  `sgst_utgst_amount` decimal(15,2) DEFAULT NULL,
-  `cess_rate` decimal(5,2) DEFAULT NULL,
-  `cess_amount` decimal(15,2) DEFAULT NULL,
-  `state_cess_rate` decimal(5,2) DEFAULT NULL,
-  `state_cess_amount` decimal(15,2) DEFAULT NULL,
+  `gst_rate` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `igst_amount` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cgst_amount` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sgst_utgst_amount` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cess_rate` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cess_amount` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `state_cess_rate` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `state_cess_amount` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `applicable_for_reverse_charge` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `taxable_value` decimal(15,2) DEFAULT NULL,
-  `invoice_value` decimal(15,2) DEFAULT NULL,
+  `taxable_value` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `invoice_value` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `additional_fields` json DEFAULT NULL,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -985,7 +990,7 @@ CREATE TABLE IF NOT EXISTS `extraction_performance` (
   `processing_time_seconds` double NOT NULL,
   `timestamp` datetime(6) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `gst_apiusagelog` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1002,8 +1007,8 @@ CREATE TABLE IF NOT EXISTS `gst_apiusagelog` (
 
 CREATE TABLE IF NOT EXISTS `hsn_gst_master` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `hsn_code` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
+  `hsn_code` varchar(20) NOT NULL,
+  `description` text,
   `sgst_utgst` decimal(5,2) DEFAULT NULL,
   `igst` decimal(5,2) DEFAULT NULL,
   `cgst` decimal(5,2) DEFAULT NULL,
@@ -1011,7 +1016,7 @@ CREATE TABLE IF NOT EXISTS `hsn_gst_master` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_hsn_code` (`hsn_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=12605 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12605 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `inventory_master_category` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1025,6 +1030,7 @@ CREATE TABLE IF NOT EXISTS `inventory_master_category` (
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   UNIQUE KEY `inventory_master_category_uniq` (`tenant_id`,`category`(100),`group`(100),`subgroup`(100),`sub_subgroup`(100)),
+  KEY `inventory_master_category_tenant_id_idx` (`tenant_id`),
   KEY `inventory_master_category_is_active_idx` (`tenant_id`,`is_active`),
   KEY `inventory_master_category_category_idx` (`category`(100)),
   CONSTRAINT `inventory_master_category_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
@@ -1035,13 +1041,13 @@ CREATE TABLE IF NOT EXISTS `inventory_master_grn` (
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `grn_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `prefix` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `suffix` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `year` char(4) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `name` varchar(255) NOT NULL,
+  `grn_type` varchar(100) NOT NULL,
+  `prefix` varchar(50) DEFAULT NULL,
+  `suffix` varchar(50) DEFAULT NULL,
+  `year` char(4) DEFAULT NULL,
   `required_digits` int NOT NULL DEFAULT '0',
-  `preview` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `preview` varchar(255) DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `idx_img_tenant` (`tenant_id`)
@@ -1068,11 +1074,11 @@ CREATE TABLE IF NOT EXISTS `inventory_master_inventoryitems` (
   `gst_rate` decimal(5,2) DEFAULT NULL,
   `cess_rate` decimal(5,2) DEFAULT NULL,
   `reorder_level` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Reorder Level Information',
+  `reorder_level_2` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `is_saleable` tinyint(1) NOT NULL DEFAULT '0',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `reorder_level_2` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `inv_items_tenant_id_idx` (`tenant_id`),
   KEY `inv_items_category_id_idx` (`category_id`),
@@ -1086,13 +1092,13 @@ CREATE TABLE IF NOT EXISTS `inventory_master_issueslip` (
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `issue_slip_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `prefix` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `suffix` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `year` char(4) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `name` varchar(255) NOT NULL,
+  `issue_slip_type` varchar(100) NOT NULL,
+  `prefix` varchar(50) DEFAULT NULL,
+  `suffix` varchar(50) DEFAULT NULL,
+  `year` char(4) DEFAULT NULL,
   `required_digits` int NOT NULL DEFAULT '0',
-  `preview` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `preview` varchar(255) DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `idx_imi_tenant` (`tenant_id`)
@@ -1117,9 +1123,10 @@ CREATE TABLE IF NOT EXISTS `inventory_master_location` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
+  KEY `inventory_master_location_tenant_id_idx` (`tenant_id`),
   KEY `inventory_master_location_name_idx` (`tenant_id`,`name`),
   CONSTRAINT `inventory_master_location_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Inventory Master Location - Stores warehouse/storage locations';
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_consumption` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1189,6 +1196,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_interunit` (
   `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `issue_slip_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `issue_slip_series` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `date` date DEFAULT NULL,
   `time` time DEFAULT NULL,
   `status` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Draft',
@@ -1280,7 +1288,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork` (
   KEY `idx_jobwork_outward_no` (`job_work_outward_no`),
   KEY `idx_jobwork_receipt_no` (`job_work_receipt_no`),
   KEY `idx_jobwork_vendor` (`vendor_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Inventory Jobwork Operations';
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1329,11 +1337,10 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_locationchange` (
   `transporter_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `vehicle_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `lr_gr_consignment` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `issue_slip_series` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_iolc_tenant` (`tenant_id`),
   KEY `idx_iolc_issue_slip` (`issue_slip_no`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_locationchange_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1461,27 +1468,23 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `outward_slip_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `date` date DEFAULT NULL,
   `time` time DEFAULT NULL,
-  `outward_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'sales' COMMENT 'sales or purchase_return',
+  `outward_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'sales',
   `location_id` bigint DEFAULT NULL,
-  `sales_order_no` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `customer_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `supplier_invoice_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `vendor_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `branch` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `gstin` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `total_boxes` int unsigned DEFAULT NULL,
-  `posting_note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `items` json DEFAULT NULL COMMENT 'List of items: item_code, quantity, hsn, etc.',
+  `sales_order_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `customer_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `supplier_invoice_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vendor_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `branch` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci,
+  `gstin` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `total_boxes` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `posting_note` text COLLATE utf8mb4_unicode_ci,
+  `items` json DEFAULT NULL,
   `delivery_challan` json DEFAULT NULL,
   `eway_bill_details` json DEFAULT NULL,
   `customer_id` bigint DEFAULT NULL,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'PENDING',
-  `linked_sales_voucher_id` bigint DEFAULT NULL,
-  `issue_slip_series` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `reasons_for_return` text COLLATE utf8mb4_unicode_ci,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'PENDING',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `linked_sales_voucher_id` (`linked_sales_voucher_id`),
   KEY `idx_ioo_tenant` (`tenant_id`),
   KEY `idx_ioo_outward_slip` (`outward_slip_no`),
   KEY `idx_ioo_location` (`location_id`),
@@ -1551,7 +1554,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_production` (
   PRIMARY KEY (`id`),
   KEY `idx_iop_tenant` (`tenant_id`),
   KEY `idx_iop_issue_slip` (`issue_slip_no`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_production_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1606,7 +1609,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_scrap` (
   PRIMARY KEY (`id`),
   KEY `idx_ios_tenant` (`tenant_id`),
   KEY `idx_ios_issue_slip` (`issue_slip_no`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_scrap_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1701,7 +1704,7 @@ CREATE TABLE IF NOT EXISTS `inventory_unit` (
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   KEY `inventory_unit_tenant_id_idx` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Inventory Units of Measure';
 
 CREATE TABLE IF NOT EXISTS `invoice_ocr_temp` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1775,22 +1778,22 @@ CREATE TABLE IF NOT EXISTS `journal_voucher_entry_lines` (
 
 CREATE TABLE IF NOT EXISTS `master_chart_of_accounts` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `type_of_business` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `financial_reporting` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `major_group` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `group` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `sub_group_1` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `sub_group_2` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `sub_group_3` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `ledger_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `ledger_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `type_of_business` varchar(255) NOT NULL,
+  `financial_reporting` varchar(255) NOT NULL,
+  `major_group` varchar(255) NOT NULL,
+  `group` varchar(255) NOT NULL,
+  `sub_group_1` varchar(255) DEFAULT NULL,
+  `sub_group_2` varchar(255) DEFAULT NULL,
+  `sub_group_3` varchar(255) DEFAULT NULL,
+  `ledger_name` varchar(255) DEFAULT NULL,
+  `ledger_code` varchar(50) DEFAULT NULL,
   `level_depth` int NOT NULL,
-  `import_version` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `import_version` varchar(20) NOT NULL,
   `imported_at` datetime(6) NOT NULL,
   `is_leaf` tinyint(1) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `ledger_code` (`ledger_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `master_hierarchy_raw` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -1812,17 +1815,17 @@ CREATE TABLE IF NOT EXISTS `master_hierarchy_raw` (
   `type_of_business_2` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `group_2` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=596 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1787 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `master_ledger_groups` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime(6) DEFAULT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
-  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `parent` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `parent_id` int DEFAULT NULL,
-  `group_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `name` varchar(255) NOT NULL,
+  `parent` varchar(255) DEFAULT NULL,
+  `parent_id` bigint DEFAULT NULL,
+  `group_type` varchar(50) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `master_ledger_groups_name_tenant_id_7f67aa3f_uniq` (`name`,`tenant_id`),
   KEY `master_ledger_groups_tenant_id_b55cdb7c` (`tenant_id`)
@@ -2145,6 +2148,17 @@ CREATE TABLE IF NOT EXISTS `payment_vouchers` (
   `bank_reference_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime(6) DEFAULT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
+  `date` date NOT NULL,
+  `voucher_number` varchar(100) NOT NULL,
+  `pay_from_id` bigint DEFAULT NULL,
+  `voucher_type` varchar(100) DEFAULT NULL,
+  `source` varchar(100) DEFAULT 'manual',
+  `narration` longtext,
+  `total_amount` decimal(15,2) DEFAULT '0.00',
+  `bank_reconciled` tinyint(1) DEFAULT '0',
+  `bank_reconcile_date` date DEFAULT NULL,
+  `bank_statement_id` bigint DEFAULT NULL,
+  `bank_reference_number` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `payment_vouchers_tenant_id_voucher_number_ef0ae794_uniq` (`tenant_id`,`voucher_number`),
   KEY `fk_pv_pay_from` (`pay_from_id`),
@@ -2417,7 +2431,7 @@ CREATE TABLE IF NOT EXISTS `payroll_employee_basic_details` (
   KEY `payroll_employee_basic_details_tenant_id_b56eac73` (`tenant_id`),
   KEY `payroll_emp_tenant__3c85ef_idx` (`tenant_id`,`status`),
   KEY `payroll_emp_employe_d77d0c_idx` (`employee_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `payroll_employee_bank_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -2449,7 +2463,7 @@ CREATE TABLE IF NOT EXISTS `payroll_employee_employment` (
   UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
   KEY `idx_tenant` (`tenant_id`),
   CONSTRAINT `payroll_employee_emp_employee_basic_id_362bd41e_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `payroll_employee_salary` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -2463,7 +2477,7 @@ CREATE TABLE IF NOT EXISTS `payroll_employee_salary` (
   UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
   KEY `idx_tenant` (`tenant_id`),
   CONSTRAINT `payroll_employee_sal_employee_basic_id_cdfba561_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `payroll_employee_statutory` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -2709,20 +2723,20 @@ CREATE TABLE IF NOT EXISTS `sales_invoices` (
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime(6) DEFAULT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
-  `invoice_number` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `invoice_number` varchar(50) NOT NULL,
   `invoice_date` date NOT NULL,
   `voucher_type_id` bigint NOT NULL,
   `customer_id` bigint NOT NULL,
-  `bill_to_address` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `bill_to_gstin` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bill_to_contact` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bill_to_state` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bill_to_country` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `ship_to_address` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `ship_to_state` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `ship_to_country` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `tax_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `bill_to_address` longtext NOT NULL,
+  `bill_to_gstin` varchar(15) DEFAULT NULL,
+  `bill_to_contact` varchar(255) DEFAULT NULL,
+  `bill_to_state` varchar(100) DEFAULT NULL,
+  `bill_to_country` varchar(100) NOT NULL,
+  `ship_to_address` longtext NOT NULL,
+  `ship_to_state` varchar(100) DEFAULT NULL,
+  `ship_to_country` varchar(100) NOT NULL,
+  `tax_type` varchar(20) NOT NULL,
+  `status` varchar(20) NOT NULL,
   `current_step` int NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `sales_invoices_tenant_id_invoice_number_196b3ec1_uniq` (`tenant_id`,`invoice_number`),
@@ -2730,10 +2744,9 @@ CREATE TABLE IF NOT EXISTS `sales_invoices` (
   KEY `sales_invoi_tenant__62aed4_idx` (`tenant_id`,`invoice_date`),
   KEY `sales_invoi_custome_aa5d4a_idx` (`customer_id`,`tenant_id`),
   KEY `sales_invoi_voucher_e4d47a_idx` (`voucher_type_id`),
-  KEY `idx_st_tenant_cust_date` (`tenant_id`,`customer_id`,`invoice_date`),
   CONSTRAINT `sales_invoices_customer_id_a0072102_fk_master_ledgers_id` FOREIGN KEY (`customer_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `sales_invoices_voucher_type_id_ae2f21d9_fk_master_vo` FOREIGN KEY (`voucher_type_id`) REFERENCES `master_voucher_receipts` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `service_group` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -2746,7 +2759,7 @@ CREATE TABLE IF NOT EXISTS `service_group` (
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   KEY `idx_tenant` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `service_list` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -2756,9 +2769,9 @@ CREATE TABLE IF NOT EXISTS `service_list` (
   `service_group` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `sac_code` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `gst_rate` decimal(5,2) DEFAULT '0.00',
-  `expense_ledger` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `uom` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `description` longtext COLLATE utf8mb4_unicode_ci,
+  `expense_ledger` varchar(255) DEFAULT NULL,
+  `uom` varchar(50) DEFAULT NULL,
+  `description` longtext,
   `is_active` tinyint(1) DEFAULT '1',
   `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -2767,7 +2780,7 @@ CREATE TABLE IF NOT EXISTS `service_list` (
   KEY `idx_tenant` (`tenant_id`),
   KEY `idx_service_code` (`service_code`),
   KEY `idx_service_group` (`service_group`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `tenant_ledgers` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -2775,14 +2788,14 @@ CREATE TABLE IF NOT EXISTS `tenant_ledgers` (
   `created_at` datetime(6) DEFAULT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
   `master_ledger_id` bigint NOT NULL,
-  `custom_alias` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `custom_alias` varchar(255) DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tenant_ledgers_tenant_id_master_ledger_id_ae62710d_uniq` (`tenant_id`,`master_ledger_id`),
   KEY `tenant_ledgers_master_ledger_id_4dc5dee4_fk_master_ch` (`master_ledger_id`),
   KEY `tenant_ledgers_tenant_id_00603c5e` (`tenant_id`),
   CONSTRAINT `tenant_ledgers_master_ledger_id_4dc5dee4_fk_master_ch` FOREIGN KEY (`master_ledger_id`) REFERENCES `master_chart_of_accounts` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `transcaction_file` (
   `id` bigint NOT NULL,
@@ -2816,7 +2829,7 @@ CREATE TABLE IF NOT EXISTS `transcaction_file` (
   `sgst_rate` decimal(5,2) DEFAULT NULL,
   `igst_rate` decimal(5,2) DEFAULT NULL,
   `is_tds_applicable` tinyint(1) DEFAULT '0',
-  `tds_section` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tds_section` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `tds_rate` decimal(5,2) DEFAULT NULL,
   `contact_person` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `mobile` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2955,7 +2968,7 @@ CREATE TABLE IF NOT EXISTS `vendor_master_vendorcreation_banking` (
   KEY `vendor_banking_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   KEY `vendor_banking_bank_account_no_idx` (`bank_account_no`),
   CONSTRAINT `vendor_banking_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master Banking Information';
 
 CREATE TABLE IF NOT EXISTS `vendor_master_vendorcreation_gstdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -2992,7 +3005,7 @@ CREATE TABLE IF NOT EXISTS `vendor_master_vendorcreation_gstdetails` (
   KEY `vendor_gstdetails_gstin_idx` (`gstin`),
   KEY `vendor_gstdetails_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_gstdetails_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master GST Details';
 
 CREATE TABLE IF NOT EXISTS `vendors_vendormasterproductservice` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -3063,7 +3076,7 @@ CREATE TABLE IF NOT EXISTS `vendor_master_vendorcreation_tds` (
   KEY `vendor_tds_tenant_id_idx` (`tenant_id`),
   KEY `vendor_tds_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_tds_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master TDS & Other Statutory Details';
 
 CREATE TABLE IF NOT EXISTS `vendor_master_vendorcreation_terms` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -3086,17 +3099,17 @@ CREATE TABLE IF NOT EXISTS `vendor_master_vendorcreation_terms` (
   KEY `vendor_terms_tenant_id_idx` (`tenant_id`),
   KEY `vendor_terms_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_terms_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master Terms and Conditions';
 
 CREATE TABLE IF NOT EXISTS `vendor_transaction` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `vendor_id` int NOT NULL,
-  `transaction_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `transaction_number` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `transaction_type` varchar(20) NOT NULL,
+  `transaction_number` varchar(50) NOT NULL,
   `transaction_date` date NOT NULL,
   `amount` decimal(15,2) NOT NULL,
-  `tax_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `tax_amount` decimal(15,2) DEFAULT '0.00',
   `total_amount` decimal(15,2) NOT NULL,
   `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
   `payment_mode` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3106,10 +3119,9 @@ CREATE TABLE IF NOT EXISTS `vendor_transaction` (
   `created_at` datetime(6) NOT NULL,
   `updated_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `vendor_transaction_tenant_id_vendor_id_idx` (`tenant_id`,`vendor_id`),
-  KEY `vendor_transaction_transaction_date_idx` (`transaction_date`),
-  KEY `idx_vendor_tx_tenant_date_id` (`tenant_id`,`transaction_date`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_tenant_vendor` (`tenant_id`,`vendor_id`),
+  KEY `idx_transaction_date` (`transaction_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `vendor_transaction_po` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -3149,7 +3161,7 @@ CREATE TABLE IF NOT EXISTS `vendor_transaction_po` (
   KEY `vendor_po_status_idx` (`status`),
   CONSTRAINT `vendor_po_series_fk` FOREIGN KEY (`po_series_id`) REFERENCES `vendor_master_posettings` (`id`) ON DELETE SET NULL,
   CONSTRAINT `vendor_po_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Purchase Order Transactions';
 
 CREATE TABLE IF NOT EXISTS `vendor_transaction_po_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -3158,7 +3170,7 @@ CREATE TABLE IF NOT EXISTS `vendor_transaction_po_items` (
   `item_name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
   `supplier_item_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `quantity` decimal(10,2) NOT NULL DEFAULT '0.00',
-  `uom` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `uom` varchar(20) NOT NULL,
   `negotiated_rate` decimal(15,2) NOT NULL DEFAULT '0.00',
   `final_rate` decimal(15,2) NOT NULL DEFAULT '0.00',
   `taxable_value` decimal(15,2) NOT NULL DEFAULT '0.00',
