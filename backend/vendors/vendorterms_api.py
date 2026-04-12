@@ -35,7 +35,7 @@ class VendorMasterTermsViewSet(viewsets.ModelViewSet):
         
         # Check if user has tenant_id attribute
         if hasattr(user, 'tenant_id'):
-            return str(user.tenant_id)
+            return str(user.branch_id)
         
         # If not, raise an error
         raise PermissionDenied("User has no associated tenant")

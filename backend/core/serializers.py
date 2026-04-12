@@ -2,7 +2,7 @@ import uuid
 from django.core.files.storage import default_storage
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from .models import CompanyFullInfo, Tenant, User
+from .models import Branch, User
 
 # User model imported inside Meta or methods to avoid AppRegistryNotReady
 
@@ -14,10 +14,11 @@ class UserSignupSerializer(serializers.ModelSerializer):
     selected_plan = serializers.CharField(required=True) # Matched to frontend
     phone = serializers.CharField(required=True, max_length=15)  # Added phone field
     logo = serializers.ImageField(required=False, write_only=True) # Handle file upload
+    company_id = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = 'core.User'
-        fields = ['username', 'email', 'password', 'company_name', 'phone', 'selected_plan', 'logo']
+        fields = ['username', 'email', 'password', 'company_name', 'phone', 'selected_plan', 'logo', 'company_id']
         extra_kwargs = {
             'username': {'validators': []},
             'email': {'validators': []},
@@ -50,7 +51,7 @@ class UserSignupSerializer(serializers.ModelSerializer):
         return value
 
     def validate_company_name(self, value):
-        if Tenant.objects.filter(name=value).exists():
+        if Branch.objects.filter(name=value).exists():
             raise BusinessException(
                 detail="Company name already registered.",
                 error_code="COMPANY_ALREADY_REGISTERED",
@@ -84,7 +85,9 @@ class UserSignupSerializer(serializers.ModelSerializer):
         username = validated_data['username']
 
         tenant_uuid = str(uuid.uuid4())
-        Tenant.objects.create(id=tenant_uuid, name=company_name)
+        
+        # Directly create Branch (one-tier)
+        Branch.objects.create(id=tenant_uuid, name=company_name)
 
         logo_path_str = None
         if logo_file:
@@ -100,26 +103,34 @@ class UserSignupSerializer(serializers.ModelSerializer):
             phone_verified=False,
             selected_plan=plan_name,
             tenant_id=tenant_uuid,
-            logo_path=logo_path_str
+            logo_path=logo_path_str,
+            role='COMPANY_ADMIN' # Primary registrant is the Branch Admin
         )
         return user
 
-class CompanySettingsSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source='company_name', allow_blank=True, allow_null=True, required=False)
+class BranchSettingsSerializer(serializers.ModelSerializer):
+    # Map flat 'address' frontend field -> address_line1
     address = serializers.CharField(source='address_line1', allow_blank=True, allow_null=True, required=False)
     logo = serializers.CharField(source='logo_path', read_only=True)
-    
+    gstin = serializers.CharField(allow_blank=True, allow_null=True, required=False)
+    pan = serializers.CharField(source='pan_number', allow_blank=True, allow_null=True, required=False)
+
     class Meta:
-        model = CompanyFullInfo
+        model = Branch
         fields = [
-            'id', 'name', 'address', 'gstin', 'state', 'pincode', 'country', 
-            'email', 'phone', 'website', 'pan', 'cin', 'tan', 'logo', 
-            'voucher_numbering', 'tenant_id'
+            'id', 'name',
+            'address', 'address_line1', 'address_line2', 'address_line3',
+            'city', 'district', 'state', 'country', 'pincode',
+            'email', 'phone', 'website',
+            'pan', 'gstin', 'cin', 'tan',
+            'logo', 'logo_path',
+            'bank_name', 'bank_account_no', 'bank_ifsc',
         ]
-        read_only_fields = ['id', 'tenant_id']
+        read_only_fields = ['id', 'logo']
 
     def update(self, instance, validated_data):
         return super().update(instance, validated_data)
+
 
 # Registration Flow Serializers
 
@@ -132,6 +143,7 @@ class RegisterInitiateSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=15, required=True)
     selected_plan = serializers.CharField(max_length=50)
     logo = serializers.ImageField(required=False, allow_null=True)
+    company_id = serializers.CharField(required=False, allow_null=True)
     
     def validate_username(self, value):
         from django.contrib.auth import get_user_model
@@ -162,7 +174,7 @@ class RegisterInitiateSerializer(serializers.Serializer):
         return value
     
     def validate_company_name(self, value):
-        if Tenant.objects.filter(name=value).exists():
+        if Branch.objects.filter(name=value).exists():
             raise BusinessException(
                 detail="Company name already registered.",
                 error_code="COMPANY_ALREADY_REGISTERED",
@@ -175,3 +187,13 @@ class RegisterInitiateSerializer(serializers.Serializer):
 class CreateUserSerializer(serializers.Serializer):
     """Serializer for creating user account from pending registration"""
     phone = serializers.CharField(max_length=15)
+
+
+
+
+class TenantSerializer(serializers.ModelSerializer):
+    """Serializer for Branch (Branch/GSTIN Layer)"""
+    class Meta:
+        model = Branch
+        fields = ['id', 'name', 'gstin', 'pan_number', 'email', 'phone', 'created_at']
+        read_only_fields = ['id', 'created_at']

@@ -1,6 +1,7 @@
 import React from 'react';
 
-type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'banking' | 'bank' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'chevron-left' | 'chevron-right' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt' | 'file-text' | 'file-spreadsheet' | 'bar-chart-2' | 'edit-3' | 'user-plus' | 'trash-2' | 'alert-circle' | 'loader' | 'arrow-left' | 'arrow-right' | 'refresh' | 'link' | 'calendar' | 'skip-forward' | 'info';
+type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'banking' | 'bank' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'chevron-left' | 'chevron-right' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt' | 'file-text' | 'file-spreadsheet' | 'bar-chart-2' | 'edit-3' | 'user-plus' | 'trash-2' | 'alert-circle' | 'loader' | 'arrow-left' | 'arrow-right' | 'refresh' | 'link' | 'calendar' | 'skip-forward' | 'info' | 'eye' | 'eye-off' | 'more-vertical' | 'key' | 'slash' | 'location';
+
 
 interface IconProps {
   name: IconName;
@@ -208,6 +209,38 @@ const Icon: React.FC<IconProps> = ({ name, className = '', size, style }) => {
     ),
     'skip-forward': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 4l10 8-10 8V4zm14 0v16" />,
     info: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    eye: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.036 12.322a1.012 1.012 0 010-.644C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+        <circle cx="12" cy="12" r="3" strokeWidth={1.5} />
+      </>
+    ),
+    'eye-off': (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.73 5.08A3 3 0 1014.13 8.48" />
+      </>
+    ),
+    'more-vertical': (
+      <>
+        <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+        <circle cx="12" cy="5" r="1.5" fill="currentColor" />
+        <circle cx="12" cy="19" r="1.5" fill="currentColor" />
+      </>
+    ),
+    key: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L6.5 21H3v-3.5l10.257-10.257A6 6 0 1121 9z" />
+      </>
+    ),
+    slash: (
+      <>
+        <circle cx="12" cy="12" r="10" strokeWidth={2} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.93 4.93l14.14 14.14" />
+      </>
+    ),
+    location: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />,
+
   };
 
   return (

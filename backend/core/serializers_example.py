@@ -20,7 +20,7 @@ class ProfessionalSerializerMixin:
         # This assumes the serializer context has the request
         request = self.context.get('request')
         if request and hasattr(request, 'user') and hasattr(request.user, 'tenant_id'):
-            query['tenant_id'] = request.user.tenant_id
+            query['tenant_id'] = request.user.branch_id
 
         qs = model.objects.filter(**query)
         if instance:

@@ -236,7 +236,7 @@ def list_vendor_tds_by_tenant(tenant_id: str) -> List[Dict]:
     List all vendor TDS records for a tenant.
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         List of dictionaries with TDS record details

@@ -23,7 +23,7 @@ class VendorFlow:
         Create a vendor with comprehensive business validation.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendor_data: Dictionary containing vendor data
             created_by: Username of creator
             
@@ -351,7 +351,7 @@ class VendorFlow:
         Generate vendor aging report.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             days_buckets: List of day ranges for aging (default: [30, 60, 90])
             
         Returns:
@@ -390,7 +390,7 @@ class VendorFlow:
         Bulk import vendors with validation.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendors_data: List of dictionaries containing vendor data
             created_by: Username of creator
             

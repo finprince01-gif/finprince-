@@ -2,11 +2,19 @@ from django.utils.deprecation import MiddlewareMixin
 from core.tenant import get_tenant_from_request
 
 class TenantMiddleware(MiddlewareMixin):
-    """Attach request.tenant_id by checking header X-Tenant-ID first, then JWT claim 'tenant_id'."""
+    """Enforce request.tenant_id validation. Rejects if tenant is missing or mismatched."""
 
     def process_request(self, request):
-        # Use centralized tenant resolution logic
         tenant_id = get_tenant_from_request(request)
+        
+        # We only enforce strict validation if the user is ALREADY authenticated.
+        # This middleware runs after AuthenticationMiddleware.
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            from core.tenant import validate_tenant_access
+            is_valid, error_response = validate_tenant_access(request.user, tenant_id)
+            if not is_valid:
+                return error_response
+                
         request.tenant_id = tenant_id
 
 

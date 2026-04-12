@@ -39,7 +39,7 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
         """Extract tenant_id from authenticated user"""
         user = self.request.user
         if hasattr(user, 'tenant_id'):
-            return user.tenant_id
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
         else:
@@ -101,7 +101,7 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
         
         tenant_id = self.get_tenant_id()
         username = self.get_username()
-        logger.info(f"Tenant ID: {tenant_id}")
+        logger.info(f"Branch ID: {tenant_id}")
         
         serializer = self.get_serializer(data=request.data)
         

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { httpClient } from '../services/httpClient';
 import { hasStoredSession } from '../services/authService';
+import { getUserTypeFromToken } from '../services/jwtUtils';
 
 export interface SubscriptionUsage {
     plan: string;
@@ -57,6 +58,12 @@ export const useSubscriptionUsage = () => {
         // Note: httpClient.get will handle automatic access token refresh if needed.
         const hasSession = hasStoredSession();
         if (!hasSession) return;
+
+        // Skip subscription usage check for Master Admin — it's a company-only feature
+        // and calling it with a Master token triggers a 401 auto-logout.
+        const token = httpClient.getToken();
+        const userType = getUserTypeFromToken(token);
+        if (userType === 'master') return;
 
         fetchUsage();
         // Poll every minute to stay in sync with backend

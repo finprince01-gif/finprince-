@@ -8,7 +8,7 @@ import uuid
 from django.core.files.storage import default_storage
 import logging
 
-from .models import User, Tenant
+from .models import User, Branch
 # REMOVED: Role - no longer using roles table
 from .serializers import RegisterInitiateSerializer, CreateUserSerializer
 
@@ -112,7 +112,7 @@ class CreateUserView(APIView):
                 
                 # Create tenant
                 tenant_uuid = str(uuid.uuid4())
-                tenant = Tenant.objects.create(id=tenant_uuid, name=pending.company_name, created_at=timezone.now())
+                tenant = Branch.objects.create(id=tenant_uuid, name=pending.company_name, created_at=timezone.now())
                 
                 # Move logo to permanent location if exists
                 final_logo_path = None
@@ -156,7 +156,7 @@ class CreateUserView(APIView):
                 pending.delete()
                 
                 # Log successful registration
-                logger.info(f"✅ [{timezone.now()}] New user registered - Tenant: {tenant_uuid} ({pending.company_name}) - User: {user.username}")
+                logger.info(f"✅ [{timezone.now()}] New user registered - Branch: {tenant_uuid} ({pending.company_name}) - User: {user.username}")
 
 
 
@@ -186,7 +186,7 @@ class CreateUserView(APIView):
                         'email': user.email,
                         'company_name': user.company_name,
                         'phone': user.phone,
-                        'tenant_id': user.tenant_id,
+                        'tenant_id': user.branch_id,
                         'selected_plan': user.selected_plan,
                     },
                 }, status=status.HTTP_201_CREATED)

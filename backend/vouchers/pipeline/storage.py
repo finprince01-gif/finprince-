@@ -43,9 +43,10 @@ def download_bytes(key: str) -> bytes:
 
 
 def make_key(job_id: int, filename: str) -> str:
-    """Generate a unique storage key for a file."""
+    """Generate a unique storage key for a file, preserving the original name for the UI."""
     ext = os.path.splitext(filename)[1].lower() or '.bin'
-    return f"jobs/{job_id}/{uuid.uuid4().hex}{ext}"
+    safe_name = "".join([c if c.isalnum() or c in ".-_" else "_" for c in filename])
+    return f"jobs/{job_id}/{uuid.uuid4().hex[:8]}---{safe_name}"
 
 
 def hash_bytes(data: bytes) -> str:

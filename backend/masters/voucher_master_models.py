@@ -20,7 +20,7 @@ class NumberingMixin:
 
 class MasterVoucherSales(models.Model, NumberingMixin):
     """Sales Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
@@ -47,7 +47,7 @@ class MasterVoucherSales(models.Model, NumberingMixin):
 
 class MasterVoucherCreditNote(models.Model, NumberingMixin):
     """Credit Note Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
@@ -74,7 +74,7 @@ class MasterVoucherCreditNote(models.Model, NumberingMixin):
 
 class MasterVoucherReceipts(models.Model, NumberingMixin):
     """Receipts Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
@@ -101,7 +101,7 @@ class MasterVoucherReceipts(models.Model, NumberingMixin):
 
 class MasterVoucherPurchases(models.Model, NumberingMixin):
     """Purchases Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
@@ -128,7 +128,7 @@ class MasterVoucherPurchases(models.Model, NumberingMixin):
 
 class MasterVoucherDebitNote(models.Model, NumberingMixin):
     """Debit Note Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
@@ -155,7 +155,7 @@ class MasterVoucherDebitNote(models.Model, NumberingMixin):
 
 class MasterVoucherPayments(models.Model, NumberingMixin):
     """Payments Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
@@ -182,7 +182,7 @@ class MasterVoucherPayments(models.Model, NumberingMixin):
 
 class MasterVoucherExpenses(models.Model, NumberingMixin):
     """Expenses Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
@@ -209,7 +209,7 @@ class MasterVoucherExpenses(models.Model, NumberingMixin):
 
 class MasterVoucherJournal(models.Model, NumberingMixin):
     """Journal Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
@@ -236,7 +236,7 @@ class MasterVoucherJournal(models.Model, NumberingMixin):
 
 class MasterVoucherContra(models.Model, NumberingMixin):
     """Contra Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
+    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
     prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
     suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")

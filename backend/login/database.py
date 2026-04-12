@@ -45,6 +45,20 @@ def get_user_by_email(email):
         logger.error(f"Error fetching user by email: {e}")
         return None
 
+def get_user_by_email_and_username(email, username):
+    """Get user by email and username."""
+    from django.contrib.auth import get_user_model
+    from core.models import Branch
+    User = get_user_model()
+    try:
+        branch = Branch.objects.get(email=email)
+        return User.objects.get(username=username, tenant_id=branch.id)
+    except (Branch.DoesNotExist, User.DoesNotExist):
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching user by email and username: {e}")
+        return None
+
 
 def get_users_by_identifier(identifier):
     """Get users by email or phone."""

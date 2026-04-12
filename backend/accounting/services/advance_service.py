@@ -18,7 +18,7 @@ def get_allocated_amount(advance_source_id: int, advance_source_type: str, tenan
     ----------
     advance_source_id   : PK of PaymentVoucherItem or ReceiptVoucherItem
     advance_source_type : 'payment' | 'receipt'
-    tenant_id           : Tenant scope
+    tenant_id           : Branch scope
     """
     from accounting.models_advance_allocation import AdvanceAllocationMap
     result = AdvanceAllocationMap.objects.filter(

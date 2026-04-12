@@ -35,7 +35,7 @@ from accounting.sales_serializers import (
 )
 from accounting import sales_flow, sales_database
 from core.tenant import get_tenant_from_request
-from core.utils import TenantQuerysetMixin
+from core.mixins import BranchQuerysetMixin
 
 
 class ReceiptVoucherTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -76,7 +76,7 @@ class ReceiptVoucherTypeViewSet(viewsets.ReadOnlyModelViewSet):
         return sales_database.get_voucher_types(tenant_id)
 
 
-class SalesVoucherViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class SalesVoucherViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     """
     API endpoint for Sales Vouchers.
     """
@@ -92,7 +92,7 @@ class SalesVoucherViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = SalesVoucher.objects.all()
         
-        # Identity-based tenant filtering via TenantQuerysetMixin
+        # Identity-based tenant filtering via BranchQuerysetMixin
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
         if tenant_id:
@@ -125,11 +125,11 @@ class SalesVoucherViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         tenant_id = get_tenant_from_request(request)
         
         # Get company state for tax determination
-        from core.models import CompanyFullInfo
+        from core.models import Branch
         try:
-            company = CompanyFullInfo.objects.get(tenant_id=tenant_id)
-            user_state = company.state or ''
-        except CompanyFullInfo.DoesNotExist:
+            tenant = Branch.objects.filter(id=tenant_id).select_related('company').first()
+            user_state = tenant.company.state if tenant and tenant.company else ''
+        except Exception:
             user_state = ''
         
         # Validate input data

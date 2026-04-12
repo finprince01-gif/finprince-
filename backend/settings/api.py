@@ -8,36 +8,36 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from core.models import CompanyFullInfo
-from core.serializers import CompanySettingsSerializer
+from core.models import Branch
+from core.serializers import BranchSettingsSerializer
 from . import flow
 
 
 # ============================================================================
-# COMPANY SETTINGS VIEWSET
+# BRANCH SETTINGS VIEWSET
 # ============================================================================
 
-class CompanySettingsViewSet(viewsets.ModelViewSet):
+class BranchSettingsViewSet(viewsets.ModelViewSet):
     """
-    API endpoints for company settings.
+    API endpoints for branch settings.
     All logic delegated to flow layer.
     """
-    queryset = CompanyFullInfo.objects.all()
-    serializer_class = CompanySettingsSerializer
+    queryset = Branch.objects.all()
+    serializer_class = BranchSettingsSerializer
     permission_classes = [IsAuthenticated]
 
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     
     def get_queryset(self):
         """Delegate to flow layer."""
-        return flow.list_company_settings(self.request.user)
+        return flow.list_branch_settings(self.request.user)
     
     def create(self, request, *args, **kwargs):
         """Delegate to flow layer."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        settings = flow.create_company_settings(request.user, serializer.validated_data)
+        settings = flow.create_branch_settings(request.user, serializer.validated_data)
         
         response_serializer = self.get_serializer(settings)
         headers = self.get_success_headers(response_serializer.data)
@@ -54,7 +54,7 @@ class CompanySettingsViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         
-        settings = flow.update_company_settings(
+        settings = flow.update_branch_settings(
             request.user,
             instance.id,
             serializer.validated_data
@@ -66,7 +66,7 @@ class CompanySettingsViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """Delegate to flow layer."""
         instance = self.get_object()
-        flow.delete_company_settings(request.user, instance.id)
+        flow.delete_branch_settings(request.user, instance.id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -72,7 +72,7 @@ class MasterChartOfAccounts(models.Model):
 
 class TenantLedger(BaseModel):
     """
-    Tenant-specific selection of ledgers from the master.
+    Branch-specific selection of ledgers from the master.
     """
     master_ledger = models.ForeignKey(MasterChartOfAccounts, on_delete=models.RESTRICT)
     custom_alias = models.CharField(max_length=255, null=True, blank=True)
@@ -158,6 +158,11 @@ class MasterLedger(BaseModel):
         blank=True,
         help_text="Stores answers to dynamic questions (e.g., opening balance, GSTIN, credit limit)"
     )
+
+    # Auto-restored missing columns
+    major_group = models.CharField(max_length=255, null=True, blank=True)
+    financial_reporting = models.CharField(max_length=255, null=True, blank=True)
+    type_of_business = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
 
@@ -288,7 +293,6 @@ class Voucher(BaseModel):
     from_account = models.CharField(max_length=255, null=True, blank=True)
     to_account = models.CharField(max_length=255, null=True, blank=True)
     
-    items_data = models.JSONField(null=True, blank=True, help_text="Line items with qty, rate, etc")
     reference_id = models.BigIntegerField(null=True, blank=True, help_text="ID of the source document (Invoice/Order)")
     dummy_force = models.IntegerField(null=True, blank=True)
 
@@ -527,6 +531,17 @@ class MasterHierarchyRaw(models.Model):
     ledger_1 = models.TextField(db_column='ledger_1', null=True, blank=True)
     code = models.TextField(db_column='code', null=True, blank=True)
     
+    # Auto-restored missing columns
+    major_group_2 = models.CharField(max_length=255, null=True, blank=True)
+    sub_group_3_2 = models.CharField(max_length=255, null=True, blank=True)
+    type_of_business_2 = models.CharField(max_length=255, null=True, blank=True)
+    sub_group_2_2 = models.CharField(max_length=255, null=True, blank=True)
+    financial_reporting_1 = models.CharField(max_length=255, null=True, blank=True)
+    sub_group_1_2 = models.CharField(max_length=255, null=True, blank=True)
+    type_of_business_1 = models.CharField(max_length=255, null=True, blank=True)
+    ledger_2 = models.CharField(max_length=255, null=True, blank=True)
+    financial_reporting_2 = models.CharField(max_length=255, null=True, blank=True)
+
     class Meta:
 
         db_table = 'master_hierarchy_raw'

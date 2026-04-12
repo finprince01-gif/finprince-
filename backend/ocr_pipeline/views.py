@@ -1,8 +1,8 @@
-from rest_framework import views, status
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q
-from django.db import transaction
+from rest_framework import views, status  # type: ignore
+from rest_framework.response import Response  # type: ignore
+from rest_framework.permissions import IsAuthenticated  # type: ignore
+from django.db.models import Q  # type: ignore
+from django.db import transaction  # type: ignore
 import logging
 import json
 
@@ -29,12 +29,12 @@ class CleanOCRStagingView(views.APIView):
         files = request.FILES.getlist('files')
         voucher_type = request.data.get('voucher_type', 'PURCHASE')
         upload_session_id = request.data.get('upload_session_id') or request.query_params.get('upload_session_id')
-        tenant_id = request.user.tenant_id
+        tenant_id = request.user.branch_id
 
         if not files:
             return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
-        print(f"DEBUG: Processing upload for {len(files)} files. Tenant: {tenant_id}")
+        print(f"DEBUG: Processing upload for {len(files)} files. Branch: {tenant_id}")
         results = []
         for uploaded_file in files:
             try:
@@ -64,7 +64,7 @@ class CleanOCRStagingView(views.APIView):
         Enforced per user debug request: Return ALL if no specific filter.
         """
         session_id = request.query_params.get('upload_session_id')
-        tenant_id = request.user.tenant_id
+        tenant_id = request.user.branch_id
         resume = request.query_params.get('resume') == 'true'
         
         print(f"DEBUG: GET OCR Staging. session_id='{session_id}', tenant_id='{tenant_id}', resume='{resume}'")
@@ -73,10 +73,13 @@ class CleanOCRStagingView(views.APIView):
         
         # ── Step 3: Verify API Source (Per Request: Minimal Filtering for Debug) ──
         if file_hash:
-            if file_hash.isdigit():
-                records = InvoiceTempOCR.objects.filter(id=int(file_hash))
+            if str(file_hash).isdigit():
+                records = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=tenant_id)
             else:
-                records = InvoiceTempOCR.objects.filter(Q(file_hash=file_hash) | Q(upload_session_id=file_hash))
+                records = InvoiceTempOCR.objects.filter(
+                    Q(file_hash=file_hash) | Q(upload_session_id=file_hash),
+                    tenant_id=tenant_id
+                )
         elif session_id:
             records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
         elif file_paths:
@@ -169,7 +172,7 @@ class CleanOCRStagingView(views.APIView):
         if not file_hash:
             return Response({'error': 'Id or file_hash required'}, status=400)
             
-        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.tenant_id).first()
+        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).first()
         if not record:
             record = InvoiceTempOCR.objects.filter(id=int(file_hash) if str(file_hash).isdigit() else None).first()
             
@@ -197,11 +200,11 @@ class CleanOCRStagingView(views.APIView):
             record.status = 'EXTRACTED'
             record.supplier_invoice_no = (
                 sections.get('supplier_details', {}).get('supplier_invoice_no') or 
-                normalized.get('supplier_invoice_no')
+                raw_target.get('supplier_invoice_no')
             )
             record.gstin = (
                 sections.get('supplier_details', {}).get('gstin') or 
-                normalized.get('gstin')
+                raw_target.get('gstin')
             )
             record.branch = sections.get('supplier_details', {}).get('branch') or ''
             record.save()
@@ -235,9 +238,9 @@ class CleanOCRStagingView(views.APIView):
             return Response({'error': 'Id or file_hash required'}, status=400)
             
         if str(file_hash).isdigit():
-            deleted, _ = InvoiceTempOCR.objects.filter(id=int(file_hash)).delete()
+            deleted, _ = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=request.user.branch_id).delete()
         else:
-            deleted, _ = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.tenant_id).delete()
+            deleted, _ = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).delete()
             
         return Response({'success': bool(deleted)})
 
@@ -248,7 +251,7 @@ class OCRStagingFinalizeView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        tenant_id = request.user.tenant_id
+        tenant_id = request.user.branch_id
         upload_session_id = request.data.get('upload_session_id')
         
         # ── Step 1: Find processable records (READY ONLY - Exclude Duplicates) ──

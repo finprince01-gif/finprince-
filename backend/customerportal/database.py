@@ -810,6 +810,21 @@ class CustomerTransactionSalesQuotationGeneral(models.Model):
         return self.quote_number
 
 
+class CustomerTransactionSalesQuotationGeneralItem(models.Model):
+    """Normalized items for Sales Quotation General (Rate Contracts)"""
+    quotation = models.ForeignKey(CustomerTransactionSalesQuotationGeneral, on_delete=models.CASCADE, related_name='items_rel')
+    item_code = models.CharField(max_length=50)
+    item_name = models.CharField(max_length=200)
+    uom = models.CharField(max_length=50)
+    effective_rate = models.DecimalField(max_digits=15, decimal_places=2, help_text='Rate specified in quotation')
+    
+    tenant_id = models.CharField(max_length=36, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'customer_transaction_salesquotation_general_items'
+
+
 class CustomerTransactionSalesQuotationSpecific(models.Model):
     """
     Customer Transaction - Sales Quotation Specific Table
@@ -848,6 +863,27 @@ class CustomerTransactionSalesQuotationSpecific(models.Model):
 
     def __str__(self):
         return f"{self.quote_number} - {self.customer_name}"
+
+
+class CustomerTransactionSalesQuotationSpecificItem(models.Model):
+    """Normalized items for Sales Quotation Specific"""
+    quotation = models.ForeignKey(CustomerTransactionSalesQuotationSpecific, on_delete=models.CASCADE, related_name='items_rel')
+    item_code = models.CharField(max_length=50)
+    item_name = models.CharField(max_length=200)
+    hsn_sac = models.CharField(max_length=20, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=15, decimal_places=2)
+    uom = models.CharField(max_length=50)
+    rate = models.DecimalField(max_digits=15, decimal_places=2)
+    taxable_value = models.DecimalField(max_digits=15, decimal_places=2)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    gst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_value = models.DecimalField(max_digits=15, decimal_places=2)
+    
+    tenant_id = models.CharField(max_length=36, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'customer_transaction_salesquotation_specific_items'
 
 
 class CustomerTransactionSalesOrderBasicDetails(models.Model):

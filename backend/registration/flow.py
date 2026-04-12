@@ -14,13 +14,14 @@ from core.token import MyTokenObtainPairSerializer
 
 logger = logging.getLogger(__name__)
 
-def register_user(registration_data):
+def register_user(registration_data, master=None):
     """
     Register a new user and create their tenant.
+    Optionally link to a master user (for platform admin provisioning).
     Returns JWT tokens for auto-login.
     """
     try:
-        from core.models import User, Tenant
+        from core.models import User, Branch
         from core.tenant_seed import seed_tenant_data
         
         # Extract registration data
@@ -30,7 +31,7 @@ def register_user(registration_data):
         company_name = registration_data.get('company_name')
         phone = registration_data.get('phone')
         state = registration_data.get('state', '')
-        logo_file = registration_data.get('logo')
+        logo_file = registration_data.get('logo') or registration_data.get('logoFile')
         selected_plan = registration_data.get('selected_plan', 'Free')
         
         # Generate tenant ID
@@ -43,12 +44,17 @@ def register_user(registration_data):
             file_path = default_storage.save(final_filename, logo_file)
             final_logo_path = default_storage.url(file_path)
         
-        # Create user with transaction
+        # Create user and branch structure with transaction
         with transaction.atomic():
-            # Create Tenant first to satisfy FK constraint
-            Tenant.objects.create(
+            # 1. Create Branch (one-tier)
+            branch = Branch.objects.create(
                 id=tenant_id,
-                name=company_name
+                name=company_name,
+                email=email,
+                phone=phone,
+                state=state,
+                logo_path=final_logo_path,
+                master=master
             )
 
             user = User.objects.create(
@@ -63,23 +69,14 @@ def register_user(registration_data):
                 logo_path=final_logo_path,
                 phone_verified=True,  # No OTP for direct registration
                 is_active=True,
-                is_superuser=True,  # All users are superusers (RBAC removed)
-            )
-
-            # Create CompanyFullInfo record with the provided state
-            from core.models import CompanyFullInfo
-            CompanyFullInfo.objects.create(
-                tenant_id=tenant_id,
-                company_name=company_name,
-                email=email,
-                phone=phone,
-                state=state,
-                logo_path=final_logo_path
+                role='COMPANY_ADMIN', # The primary registrant is the Branch Admin
+                is_superuser=True,    # All business admins have local superuser rights
+                is_master=False,      # Business users are NEVER master (platform) admins
             )
             
             from django.db import connection
             db_name = connection.settings_dict['NAME']
-            logger.info(f"✅ User {user.id} and CompanyFullInfo created successfully with tenant {tenant_id} in DB: {db_name}")
+            logger.info(f"✅ User {user.id} and Branch created successfully with tenant {tenant_id} in DB: {db_name}")
         
         # Seed tenant data (Outside atomic block to prevent rollback on seeding failure)
         # Seeding errors are caught inside the function
@@ -106,7 +103,7 @@ def register_user(registration_data):
                 'company_name': user.company_name,
                 'phone': user.phone,
                 'state': state,
-                'tenant_id': user.tenant_id,
+                'tenant_id': user.branch_id,
                 'selected_plan': user.selected_plan,
             },
         }

@@ -143,21 +143,70 @@ def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
       3. Always editable in the UI after this point
     """
     # ── Line Items ──────────────────────────────────────────────
-    raw_items = data.get("line_items", [])
+    raw_items = data.get("line_items", []) or data.get("items", [])
     normalized_items = []
-    for item in raw_items:
+    for i, item in enumerate(raw_items):
+        # --- Failsafe: Derive Missing Values ---
+        qty = normalize_amount(item.get("quantity"))
+        rate = normalize_amount(item.get("rate"))
+        item_taxable = normalize_amount(item.get("taxable_value") or item.get("taxable_amount"))
+        
+        # If taxable value is missing but we have Qty & Rate, derive it
+        if item_taxable == 0 and qty > 0 and rate > 0:
+            item_taxable = qty * rate
+            
+        # If tax rates are 0 in item but present in header (summary), distribute them
+        igst_r = normalize_amount(item.get("igst_rate"))
+        if igst_r == 0: igst_r = normalize_amount(data.get("igst_rate") or data.get("igst_percent"))
+        
+        cgst_r = normalize_amount(item.get("cgst_rate"))
+        if cgst_r == 0: cgst_r = normalize_amount(data.get("cgst_rate") or data.get("cgst_percent"))
+        
+        sgst_r = normalize_amount(item.get("sgst_rate"))
+        if sgst_r == 0: sgst_r = normalize_amount(data.get("sgst_rate") or data.get("sgst_percent"))
+
+        cess_r = normalize_amount(item.get("cess_rate"))
+        if cess_r == 0: cess_r = normalize_amount(data.get("cess_rate") or data.get("cess_percent"))
+
         normalized_items.append({
+            "si_no": str(item.get("si_no") or (i+1)),
             "description": str(item.get("description") or "").strip(),
             "hsn_sac": str(item.get("hsn_code") or item.get("hsn_sac") or "").strip(),
-            "quantity": normalize_amount(item.get("quantity")),
+            "quantity": qty,
             "uom": str(item.get("uom") or "").strip(),
-            "rate": normalize_amount(item.get("rate")),
-            "taxable_value": normalize_amount(item.get("taxable_value")),
-            "cgst": normalize_amount(item.get("cgst")),
-            "sgst": normalize_amount(item.get("sgst")),
-            "igst": normalize_amount(item.get("igst")),
+            "rate": rate,
+            "discount_percent": normalize_amount(item.get("discount_percent") or item.get("disc")),
+            "taxable_value": item_taxable,
+            "igst_rate": igst_r,
+            "igst_amount": normalize_amount(item.get("igst_amount") or item.get("igst")),
+            "cgst_rate": cgst_r,
+            "cgst_amount": normalize_amount(item.get("cgst_amount") or item.get("cgst")),
+            "sgst_rate": sgst_r,
+            "sgst_amount": normalize_amount(item.get("sgst_amount") or item.get("sgst")),
+            "cess_rate": cess_r,
+            "cess_amount": normalize_amount(item.get("cess_amount") or item.get("cess")),
             "amount": normalize_amount(item.get("amount") or item.get("total"))
         })
+
+    # Header-level tax rates for fallback distribution (Step 4: distribute summary GST)
+    header_igst_r = normalize_amount(data.get("igst_rate") or data.get("igst_percent") or data.get("igst"))
+    header_cgst_r = normalize_amount(data.get("cgst_rate") or data.get("cgst_percent") or data.get("cgst"))
+    header_sgst_r = normalize_amount(data.get("sgst_rate") or data.get("sgst_percent") or data.get("sgst"))
+    header_cess_r = normalize_amount(data.get("cess_rate") or data.get("cess_percent") or data.get("cess"))
+
+    # Only distribute if summary rate looks like a percentage (e.g. 9, 18, 5)
+    # If the summary value is very large, it's probably an amount, not a rate.
+    def is_likely_rate(val): return 0 < val <= 28
+
+    for item in normalized_items:
+        if item["igst_rate"] == 0 and is_likely_rate(header_igst_r): item["igst_rate"] = header_igst_r
+        if item["cgst_rate"] == 0 and is_likely_rate(header_cgst_r): item["cgst_rate"] = header_cgst_r
+        if item["sgst_rate"] == 0 and is_likely_rate(header_sgst_r): item["sgst_rate"] = header_sgst_r
+        if item["cess_rate"] == 0 and is_likely_rate(header_cess_r): item["cess_rate"] = header_cess_r
+        
+        # taxable_value failsafe (Qty * Rate) if still 0
+        if item["taxable_value"] == 0 and item["quantity"] > 0 and item["rate"] > 0:
+            item["taxable_value"] = item["quantity"] * item["rate"]
 
     vendor_address = str(data.get("vendor_address", "")).strip()
 
@@ -199,20 +248,28 @@ def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
             "supplier_details": {
                 "vendor_name": str(data.get("vendor_name", "")).strip(),
                 "vendor_address": vendor_address,
+                "bill_from": vendor_address,
+                "ship_from": vendor_address,
                 "vendor_city": vendor_city,
+                "vendor_state": str(data.get("vendor_state") or data.get("state") or "").strip(),
+                "vendor_country": str(data.get("vendor_country") or "India").strip(),
+                "registration_type": str(data.get("registration_type") or ("Regular" if data.get("gstin") else "")).strip(),
+                "gst_taxability_type": str(data.get("gst_taxability_type") or "Taxable").strip(),
+                "gst_nature_of_transaction": str(data.get("gst_nature_of_transaction") or "").strip(),
+                "gst_classification": str(data.get("gst_classification") or "").strip(),
                 "gstin": str(data.get("gstin", "")).replace(" ", "").upper(),
                 "supplier_invoice_no": str(inv_no).strip(),
                 "invoice_date": normalize_date(inv_date),
-                "place_of_supply": str(data.get("place_of_supply", "")).strip(),
+                "place_of_supply": str(data.get("place_of_supply") or data.get("vendor_state") or "").strip(),
                 # Branch = derived city (editable in UI, never hallucinated)
                 "branch": branch or None
             },
             "supply_details": {
                 "total_invoice_value": normalize_amount(total_amt),
                 "total_taxable_value": normalize_amount(tax_amt),
-                "total_cgst": normalize_amount(data.get("cgst")),
-                "total_sgst": normalize_amount(data.get("sgst")),
-                "total_igst": normalize_amount(data.get("igst")),
+                "total_cgst": normalize_amount(data.get("cgst") or data.get("total_cgst")),
+                "total_sgst": normalize_amount(data.get("sgst") or data.get("total_sgst")),
+                "total_igst": normalize_amount(data.get("igst") or data.get("total_igst")),
                 "ack_no": str(data.get("ack_number", "")).strip(),
                 "ack_date": normalize_date(data.get("ack_date"))
             },

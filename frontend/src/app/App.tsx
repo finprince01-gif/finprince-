@@ -34,8 +34,8 @@ import type { Page, Ledger, Voucher, ExtractedInvoiceData, CompanyDetails, Ledge
 // COMPONENT IMPORTS
 // ============================================================================
 
-// Page Components - Lazy loaded to optimize initial bundle size
-const DashboardPage = React.lazy(() => import('../pages/Dashboard'));
+// Page Components - Essential ones are static for instant entry
+import DashboardPage from '../pages/Dashboard';
 const MastersPage = React.lazy(() => import('../pages/Masters'));
 const InventoryPage = React.lazy(() => import('../pages/Inventory'));
 const VouchersPage = React.lazy(() => import('../pages/Vouchers'));
@@ -49,9 +49,14 @@ const ServicePage = React.lazy(() => import('../pages/Service'));
 const GSTPage = React.lazy(() => import('../pages/GST'));
 const DashboardBuilderPage = React.lazy(() => import('../pages/DashboardBuilder'));
 const BankingPage = React.lazy(() => import('../pages/Banking'));
-const LoginPage = React.lazy(() => import('../pages/Login').then(m => ({ default: m.default })));
+
+// Auth Pages - Static imports for instant first-paint
+import LoginPage from '../pages/Login';
 const ForgotPasswordPage = React.lazy(() => import('../pages/Login').then(m => ({ default: m.ForgotPassword })));
 const SignupPage = React.lazy(() => import('../pages/Register'));
+import MasterDashboardPage from '../pages/MasterDashboard/MasterDashboard';
+import MasterLoginPage from '../pages/MasterDashboard/MasterLogin';
+import AuthPortalPage from '../pages/AuthPortal/AuthPortal';
 
 // Shared UI Components
 import Sidebar from '../components/Sidebar';  // Left navigation sidebar
@@ -73,7 +78,12 @@ import { extractInvoiceDataWithRetry, getAgentResponse, getGroundedAgentResponse
 
 // API Service - Handles all HTTP requests to Django backend
 import { apiService, httpClient } from '../services';
-import { hasStoredSession, getRefreshToken } from '../services/authService';
+import { 
+    hasStoredSession, hasMasterSession, hasCompanySession, 
+    clearTenantContext, getAccessToken,
+    setMasterTokens, setCompanyTokens
+} from '../services/authService';
+import { getUserTypeFromToken, isTokenExpired } from '../services/jwtUtils';
 
 // Initial Data - Default data for new companies (fallback if backend is empty)
 import { initialLedgers, initialLedgerGroups } from '../store/initialData';
@@ -170,7 +180,6 @@ const App: React.FC = () => {
 
   // Router state
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
-  const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -265,8 +274,8 @@ const App: React.FC = () => {
     } finally {
       // Clear all session and local storage related to auth and tenant data
       sessionStorage.clear();
-      localStorage.clear(); // Also clear legacy localStorage
-      httpClient.clearAuthData(); // Clear tokens from in-memory client
+      localStorage.clear();
+      httpClient.clearAuthData(); // Clears BOTH master and company token slots
       setIsLoggedIn(false);
       setIsDataLoaded(false);
       setLedgers([]);
@@ -276,10 +285,11 @@ const App: React.FC = () => {
       setRichVendors([]);
       setRichCustomers([]);
       setCompanyDetails(defaultCompanyDetails);
-      // clearTenantCache(); // Clear any remaining tenant-specific cache
-      window.history.pushState({}, '', '/login');
-      setCurrentPath('/login');
-      setView('login');
+      // Redirect to domain-appropriate login
+      const isMasterPath = window.location.pathname.startsWith('/master');
+      const loginPath = isMasterPath ? '/master/login' : '/login';
+      window.history.pushState({}, '', loginPath);
+      setCurrentPath(loginPath);
       showSuccess('You have been successfully logged out.');
     }
   }, []); // Removed clearTenantCache from dependency array as it's not defined here
@@ -385,21 +395,6 @@ const App: React.FC = () => {
 
     const params = new URLSearchParams(window.location.search);
 
-    // Auth view from query params
-    const viewParam = params.get('view');
-    if (viewParam === 'signup') {
-      setView('signup');
-    } else if (viewParam === 'login') {
-      setView('login');
-    } else if (viewParam === 'forgot-password') {
-      setView('forgot-password');
-    }
-
-    // Auth view from path
-    if (window.location.pathname === '/signup') setView('signup');
-    else if (window.location.pathname === '/login') setView('login');
-    else if (window.location.pathname === '/forgot-password') setView('forgot-password');
-
     // Page navigation
     const pageParam = params.get('page');
     if (pageParam) {
@@ -411,40 +406,89 @@ const App: React.FC = () => {
 
 
 
-  // MAIN INITIALIZATION: Handle Auth & Data Loading in Parallel
+  // MAIN INITIALIZATION — JWT-driven domain routing
   useEffect(() => {
     const initializeApp = async () => {
-      if (!hasStoredSession()) {
+      // Check for tokens using user-requested priority (Master > Company)
+      const masterToken = localStorage.getItem('master_token');
+      const companyToken = localStorage.getItem('company_token');
+
+      if (!masterToken && !companyToken) {
         setIsAuthenticating(false);
         setIsDataLoaded(true);
+        // Priority 6: If no tokens, redirect to /login
+        if (window.location.pathname === '/' || window.location.pathname === '/master') {
+          window.history.replaceState({}, '', '/login');
+          setCurrentPath('/login');
+        }
         return;
       }
 
+      const timeoutId = setTimeout(() => {
+        if (!isDataLoaded) {
+          console.warn('⚠️ Initialization timeout: Forcing data loaded state.');
+          setIsDataLoaded(true);
+          setIsAuthenticating(false);
+        }
+      }, 5000);
+
       try {
-        // 1. Storage Migration & Setup
-        let savedCompanyName = sessionStorage.getItem('companyName') || localStorage.getItem('companyName');
-        let savedTenantId = sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId');
+        console.log('🚀 App: Initializing...');
+        // 1. Validate Session with Backend
+        const userData = await apiService.getCurrentUser();
+        console.log('✅ App: Session validated.', userData?.username);
+        
+        if (!userData) {
+          throw new Error('Invalid user session');
+        }
 
-        if (savedCompanyName) sessionStorage.setItem('companyName', savedCompanyName);
-        if (savedTenantId) sessionStorage.setItem('tenantId', savedTenantId);
+        const isMaster = userData.is_master;
 
-        // 2. Parallel Load: Validate Token (Permissions) + Fetch All Tenant Data
-        // This ensures the shortest possible time to a fully loaded state
-        const [permissions] = await Promise.all([
-          apiService.getMyPermissions(),
-          savedTenantId ? loadTenantData(savedTenantId as string) : Promise.resolve()
-        ]);
+        if (isMaster) {
+          console.log('👑 App: Master context detected.');
+          clearTenantContext();
+          setIsLoggedIn(true);
 
-        setIsLoggedIn(true);
-        // We could set permissions here if we had a dedicated state, 
-        // but usePermissions hook handles its own state for now.
+          if (window.location.pathname === '/') {
+            window.history.replaceState({}, '', '/master/dashboard');
+            setCurrentPath('/master/dashboard');
+          }
+        } else {
+          console.log('🏢 App: Business context detected.');
+          // Restore Business User Context
+          const tenantId = userData.tenant_id;
+          if (tenantId) {
+            sessionStorage.setItem('tenantId', tenantId);
+            localStorage.setItem('tenantId', tenantId);
+          }
+          
+          if (userData.company_name) {
+            sessionStorage.setItem('companyName', userData.company_name);
+            localStorage.setItem('companyName', userData.company_name);
+          }
+
+          // Parallel load application data
+          console.log('📥 App: Syncing background data...');
+          await Promise.all([
+            apiService.getMyPermissions().catch(() => null),
+            tenantId ? loadTenantData(tenantId) : Promise.resolve(),
+          ]);
+
+          setIsLoggedIn(true);
+
+          if (window.location.pathname === '/') {
+            window.history.replaceState({}, '', '/dashboard');
+            setCurrentPath('/dashboard');
+          }
+        }
       } catch (err: any) {
-        console.warn('⚠️ App initialization failed:', err.message || 'Unknown error');
-        // If critical auth fails, send to login
-        if (err.status === 401) handleLogout();
+        console.warn('⚠️ App: Initialization failed (Session Invalid):', err.message || 'Unknown error');
+        handleLogout();
       } finally {
+        clearTimeout(timeoutId);
         setIsAuthenticating(false);
         setIsDataLoaded(true);
+        console.log('✨ App: Initialization complete.');
       }
     };
 
@@ -453,59 +497,61 @@ const App: React.FC = () => {
 
 
 
-  // Handle login: be forgiving about the shape of incoming data (client may pass either full response or just user)
+  // Handle login: JWT-driven domain detection
   const handleLogin = useCallback(async (payload: any) => {
     try {
-      // payload could be:
-      // 1) full response { success: true, user: {...}, permissions: [...] }
-      // 2) user object only (older LoginPage code passed data.user)
-      const user = payload?.user || payload;
+      // Get the JWT access token from the response — this is the ground truth
+      const accessToken = payload?.access;
+      const refreshToken = payload?.refresh;
+      const domain = getUserTypeFromToken(accessToken);
 
-      // Extract tenant ID from user data
-      const tenantId = user?.tenantId || user?.tenant_id || null;
-
-      // Save tenant ID (tokens are already in memory via apiService)
-      if (tenantId) {
-        sessionStorage.setItem('tenantId', tenantId);
+      // Persist tokens to storage immediately
+      if (domain === 'master') {
+        setMasterTokens(accessToken, refreshToken);
+        clearTenantContext(); // Master never has tenant context
+      } else {
+        setCompanyTokens(accessToken, refreshToken);
       }
 
-      // Save user-related data (company name) - always update from user data
-      const userCompanyName = user?.company_name || user?.companyName || 'Your Company';
-      sessionStorage.setItem('companyName', userCompanyName);
-      setCompanyDetails(prev => ({ ...prev, name: userCompanyName }));
-
-      // Save user's plan for access control
-      const userSelectedPlan = user?.selected_plan || user?.selectedPlan || 'Free';
-      sessionStorage.setItem('userPlan', userSelectedPlan);
-
-      // Clear logout flag since user is logging in
       sessionStorage.removeItem('loggedOut');
-      localStorage.removeItem('loggedOut'); // Also clear from legacy localStorage
+      localStorage.removeItem('loggedOut');
 
-      // Set login state first
       setIsLoggedIn(true);
 
-      // Update URL to dashboard after successful login
-      window.history.pushState({}, '', '/dashboard');
-      setCurrentPath('/dashboard');
+      if (domain === 'master') {
+        // ── MASTER DOMAIN ─────────────────────────────────────
+        // Never load tenant data for master
+        const dashboardPath = '/master/dashboard';
+        window.history.pushState({}, '', dashboardPath);
+        setCurrentPath(dashboardPath);
+      } else {
+        // ── COMPANY DOMAIN ────────────────────────────────────
+        const user = payload?.user || payload;
+        const tenantId = user?.tenant_id || user?.tenantId || null;
 
-      setView('login'); // reset view
+        if (tenantId) sessionStorage.setItem('tenantId', tenantId);
+        const companyName = user?.company_name || user?.companyName || 'Your Company';
+        sessionStorage.setItem('companyName', companyName);
+        setCompanyDetails(prev => ({ ...prev, name: companyName }));
 
-      // Immediately load tenant-scoped data after login
-      await loadTenantData(tenantId);
+        const plan = user?.selected_plan || user?.selectedPlan || 'Free';
+        sessionStorage.setItem('userPlan', plan);
 
-      // Show welcome message
-      const displayName = user?.username || user?.first_name || 'User';
-      const capitalizedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+        window.history.pushState({}, '', '/dashboard');
+        setCurrentPath('/dashboard');
 
+        if (tenantId) await loadTenantData(tenantId);
+      }
+
+      const displayName = payload?.user?.username || payload?.username || 'User';
+      const cap = displayName.charAt(0).toUpperCase() + displayName.slice(1);
       showSuccess(
-        `Great to see you! Stay driven, stay focused, and let's turn your vision into reality today.`,
-        `Warm Welcome, ${capitalizedName}! ✨`,
+        `Stay driven, stay focused, and let's turn your vision into reality today.`,
+        `Welcome back, ${cap}! ✨`,
         6000
       );
-
     } catch (err) {
-      console.error('Login implementation error:', err);
+      console.error('Login handler error:', err);
     }
   }, [loadTenantData]);
 
@@ -1133,8 +1179,8 @@ const App: React.FC = () => {
         ledgers={ledgers}
         ledgerGroups={ledgerGroups}
         stockItems={stockItems}
-      /></ErrorBoundary>; // Available for all plans
-      case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />; // Available for all plans
+      /></ErrorBoundary>;
+      case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />;
       case 'Users & Roles': return <UsersAndRolesPage onNavigate={handleNavigate} />;
       case 'Vendor Portal': return <VendorPortalPage onLogout={handleLogout} onNavigate={handleNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
       case 'Customer Portal': return <CustomerPortalPage />;
@@ -1155,59 +1201,151 @@ const App: React.FC = () => {
     </div>
   );
 
-  const isAuthPath = currentPath === '/login' || currentPath === '/signup' || currentPath === '/forgot-password';
+  const isMasterPath = currentPath.startsWith('/master');
+  const isAuthPath =
+    currentPath === '/login' ||
+    currentPath === '/signup' ||
+    currentPath === '/forgot-password' ||
+    currentPath === '/master/login' ||
+    currentPath === '/master/register' ||
+    currentPath === '/auth' ||
+    currentPath === '/login/business' ||
+    currentPath === '/register';
 
-  // 1. Auth Flow (Login/Signup/Forgot Password) - Shown if not authenticating and not logged in
-  if (!isAuthenticating && (!isLoggedIn || isAuthPath)) {
-    let activeAuthView = view;
-    if (currentPath === '/signup') activeAuthView = 'signup';
-    else if (currentPath === '/forgot-password') activeAuthView = 'forgot-password';
-    else if (currentPath === '/login') activeAuthView = 'login';
+  // 0. ROOT REDIRECT
+  if (currentPath === '/' && !isLoggedIn && !isAuthenticating) {
+    window.history.replaceState({}, '', '/auth');
+    setCurrentPath('/auth');
+  }
 
+  // 7. HARD UI PROTECTION
+  // "Company pages: Must NOT render if master_token exists"
+  // "Master pages: Must NOT render if company_token exists"
+  if (isMasterPath && !isAuthPath && hasCompanySession() && !hasMasterSession()) {
+     // User is on master path but ONLY company token exists — redirect to company UI
+     window.history.replaceState({}, '', '/dashboard');
+     setCurrentPath('/dashboard');
+     return (
+        <div className="flex items-center justify-center h-screen erp-main-bg">
+            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+     );
+  }
+
+  if (!isMasterPath && !isAuthPath && hasMasterSession() && !hasCompanySession()) {
+     // User is on company path but ONLY master token exists — redirect to master UI
+     window.history.replaceState({}, '', '/master/dashboard');
+     setCurrentPath('/master/dashboard');
+     return (
+        <div className="flex items-center justify-center h-screen erp-main-bg">
+            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+     );
+  }
+
+  // ── MASTER DOMAIN AUTH PAGES ───────────────────────────────────
+  // /master/login is a standalone page — always rendered if on that path
+  if (currentPath === '/master/login' || currentPath === '/master/register') {
     return (
-      <Suspense fallback={<div className="flex items-center justify-center h-screen erp-main-bg"><div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>}>
-        {activeAuthView === "signup" ? (
-          <SignupPage
-            onSwitchToLogin={() => {
-              window.history.pushState({}, '', '/login');
-              setCurrentPath('/login');
-              setView("login");
-            }}
-            onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
-          />
-        ) : activeAuthView === "forgot-password" ? (
-          <ForgotPasswordPage
-            onBackToLogin={() => {
-              window.history.pushState({}, '', '/login');
-              setCurrentPath('/login');
-              setView("login");
-            }}
-          />
-        ) : (
-          <LoginPage
-            onLogin={handleLogin}
-            onSwitchToSignup={() => {
-              window.history.pushState({}, '', '/signup');
-              setCurrentPath('/signup');
-              setView("signup");
-            }}
-            onForgotPassword={() => {
-              window.history.pushState({}, '', '/forgot-password');
-              setCurrentPath('/forgot-password');
-              setView("forgot-password");
-            }}
-            onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
-          />
-        )}
+      <Suspense fallback={<div className="flex items-center justify-center h-screen" style={{ background: '#0f172a' }}><div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>}>
+        <MasterLoginPage onLogin={handleLogin} />
       </Suspense>
     );
   }
 
-  // 2. Main Application Layout (Sidebar + Header + Content)
-  // Renders immediately if hasStoredSession() is true, even during authentication
+  // ── MASTER DOMAIN APP ──────────────────────────────────────────
+  // Wait for full initialization before rendering dashboard
+  if (isMasterPath && isLoggedIn && isDataLoaded) {
+    // JWT guard: reject if token doesn't prove master domain
+    const currentToken = getAccessToken();
+    const tokenDomain = getUserTypeFromToken(currentToken);
+    if (tokenDomain !== 'master') {
+      // Wrong domain — redirect to company dashboard
+      window.history.replaceState({}, '', '/dashboard');
+      setCurrentPath('/dashboard');
+    } else {
+      return (
+        <MasterDashboardPage onLogout={handleLogout} />
+      );
+    }
+  }
+
+  // Show global loader while initializing master path
+  if (isMasterPath && isAuthenticating && !isDataLoaded) {
+    return <div className="erp-main-bg h-screen flex items-center justify-center"><PageLoader /></div>;
+  }
+
+  if (isMasterPath && !isLoggedIn && !isAuthenticating) {
+    // Not authenticated, trying to reach master path — redirect to master login
+    window.history.replaceState({}, '', '/master/login');
+    return (
+      <Suspense fallback={<div />}>
+        <MasterLoginPage onLogin={handleLogin} />
+      </Suspense>
+    );
+  }
+
+  // ── COMPANY DOMAIN AUTH PAGES ──────────────────────────────────
+  // 1. Auth Flow (Login/Signup/Forgot Password)
+  if (!isAuthenticating && (!isLoggedIn || (isAuthPath && !isMasterPath))) {
+    // 0. Auth Portal (Selection)
+    if (currentPath === '/auth' || currentPath === '/') {
+      return (
+        <Suspense fallback={<div className="flex items-center justify-center h-screen erp-main-bg"><div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <AuthPortalPage />
+        </Suspense>
+      );
+    }
+
+    // 1. Other auth routes
+    if (currentPath === '/signup' || currentPath === '/register') {
+      return (
+        <Suspense fallback={<div className="flex items-center justify-center h-screen erp-main-bg"><div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <SignupPage
+            onSwitchToLogin={() => { window.history.pushState({}, '', '/login'); setCurrentPath('/login'); }}
+            onBack={() => { window.history.pushState({}, '', '/login'); setCurrentPath('/login'); }}
+          />
+        </Suspense>
+      );
+    }
+
+    if (currentPath === '/forgot-password') {
+      return (
+        <Suspense fallback={<div className="flex items-center justify-center h-screen erp-main-bg"><div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <ForgotPasswordPage
+            onBackToLogin={() => { window.history.pushState({}, '', '/login'); setCurrentPath('/login'); }}
+          />
+        </Suspense>
+      );
+    }
+
+    // Default for /login and any other auth paths
+    return (
+      <Suspense fallback={<div className="flex items-center justify-center h-screen erp-main-bg"><div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>}>
+        <LoginPage
+          onLogin={handleLogin}
+          onSwitchToSignup={() => { window.history.pushState({}, '', '/register'); setCurrentPath('/register'); }}
+          onForgotPassword={() => { window.history.pushState({}, '', '/forgot-password'); setCurrentPath('/forgot-password'); }}
+        />
+      </Suspense>
+    );
+  }
+
+  // ── COMPANY DOMAIN APP LAYOUT ────────────────────────────────────
+  // Only renders if JWT does NOT indicate master domain
+  // (Additional guard: if access token says 'master' but we're here, redirect away)
+  const currentToken = getAccessToken();
+  const tokenDomain = getUserTypeFromToken(currentToken);
+  if (tokenDomain === 'master' && isLoggedIn) {
+    // Token says master but we're on a company path — redirect
+    window.history.replaceState({}, '', '/master/dashboard');
+    setCurrentPath('/master/dashboard');
+    return <Suspense fallback={<PageLoader />}><MasterDashboardPage onLogout={handleLogout} /></Suspense>;
+  }
+
   return (
     <div className="flex min-h-screen font-sans erp-main-bg">
-      {/* Sidebar rendered ifLoggedIn OR while authenticating (to prevent layout shift) */}
+      {/* Company sidebar — only shown for company domain sessions */}
       {(isLoggedIn || isAuthenticating) && (
         <Sidebar
           currentPage={currentPage}
