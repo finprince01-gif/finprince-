@@ -19,6 +19,7 @@ import SalesOrderViewModal from './SalesOrderViewModal';
 import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt } from 'lucide-react';
 import CustomerViewModal from './CustomerViewModal';
 import SalesGSTViewModal from './SalesGSTViewModal';
+import { formatDate } from '../../utils/formatting';
 
 type MainTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'Sales Quotation & Order' | 'Customer' | 'Long-term Contracts';
@@ -27,9 +28,9 @@ type TransactionSubTab = 'Sales Quotation' | 'Sales Order' | 'Sales' | 'Receipt'
 type SalesQuotationSubTab = 'General Customer Quote' | 'Specific Customer Quote';
 type SalesOrderSubTab = 'Pending & Cancelled' | 'Executed';
 type SalesCategory = 'Export' | 'Within Country (B2B)' | 'Within Country (B2C)';
-type TransactionType = 'Sales' | 'Receipt' | 'Purchase' | 'Payment' | 'Debit Note' | 'Credit Note';
+type TransactionType = 'Sales' | 'Receipt' | 'Purchase' | 'Payment' | 'Debit Note' | 'Credit Note' | 'Journal' | 'Contra';
 type PurchaseStatus = 'Paid' | 'Unpaid' | 'Partially Paid' | 'Approved';
-type SalesStatus = 'Not Due' | 'Due' | 'Partially Received' | 'Received' | 'Utilized' | 'Not Utilized';
+type SalesStatus = 'Not Due' | 'Due' | 'Due Today' | 'Partially Received' | 'Received' | 'Utilized' | 'Not Utilized' | 'Partially Due';
 
 interface AgingData {
     customerId: string;
@@ -55,7 +56,8 @@ interface LedgerEntry {
     credit: number;
     runningBalance: number;
     posting_status?: string;
-    originalInv?: any; // Added to store full invoice details for detailed view
+    originalInv?: any; 
+    voucherNo?: string; // Own voucher number (e.g., REC0001)
 }
 
 interface Category {
@@ -5808,7 +5810,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     const [statusFilter, setStatusFilter] = useState<PurchaseStatus | SalesStatus | ''>('');
     const [debitFilter, setDebitFilter] = useState('');
     const [creditFilter, setCreditFilter] = useState('');
-    const [viewMode, setViewMode] = useState<'invoice-wise' | 'month-wise'>('invoice-wise');
+    const [viewMode, setViewMode] = useState<'invoice-wise' | 'month-wise' | 'allocation'>('invoice-wise');
     const [showNetOffModal, setShowNetOffModal] = useState(false);
     const [monthFilter, setMonthFilter] = useState<string[]>([]);
     const [selectedMonthView, setSelectedMonthView] = useState<string | null>(null);
@@ -5820,6 +5822,9 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     const [isGSTModalOpen, setIsGSTModalOpen] = useState(false);
     const [isJournalView, setIsJournalView] = useState(false);
     const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+    const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+    const [selectedAdvanceRow, setSelectedAdvanceRow] = useState<any>(null);
+
 
     const toggleFilter = (filterName: string) => setActiveFilter(prev => prev === filterName ? null : filterName);
 
@@ -5853,12 +5858,15 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         ledger: 'Sales',
                         status: (inv.status && inv.status.toLowerCase() === 'received') ? 'Received'
                             : (inv.status && inv.status.toLowerCase() === 'partially received') ? 'Partially Received'
-                                : (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
+                                : (inv.posting_status === 'POSTED' 
+                                    ? (diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due')) 
+                                    : 'Not Utilized') as SalesStatus,
                         debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
                         credit: 0,
                         runningBalance: 0,
                         posting_status: inv.posting_status,
-                        originalInv: inv
+                        originalInv: inv,
+                        voucherNo: inv.sales_invoice_no
                     };
                 });
 
@@ -5903,7 +5911,10 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         credit: c,
                         runningBalance: 0,
                         posting_status: 'POSTED',
-                        originalInv: t
+                        originalInv: t,
+                        voucherNo: (t.transaction_number && t.transaction_number.includes('-') && (transType === 'Receipt' || transType === 'Payment')) 
+                            ? t.transaction_number.substring(0, t.transaction_number.lastIndexOf('-'))
+                            : (t.transaction_number || t.voucher_number || t.id?.toString())
                     };
                 });
 
@@ -6028,12 +6039,353 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     const totalCredit = filteredData.reduce((sum, entry) => sum + entry.credit, 0);
 
     const getStatusBadgeColor = (status: string) => {
-        const colors: Record<string, string> = { 'Paid': 'bg-green-100 text-green-800', 'Unpaid': 'bg-red-100 text-red-800', 'Partially Paid': 'bg-yellow-100 text-yellow-800', 'Approved': 'bg-blue-100 text-indigo-800', 'Not Due': 'bg-gray-100 text-gray-800', 'Due': 'bg-indigo-100 text-indigo-800', 'Partially Received': 'bg-yellow-100 text-yellow-800', 'Received': 'bg-green-100 text-green-800', 'Utilized': 'bg-green-100 text-green-800', 'Not Utilized': 'bg-gray-100 text-gray-800' };
+        const colors: Record<string, string> = { 
+            'Paid': 'bg-green-100 text-green-800', 
+            'Unpaid': 'bg-red-100 text-red-800', 
+            'Partially Paid': 'bg-yellow-100 text-yellow-800', 
+            'Approved': 'bg-blue-100 text-indigo-800', 
+            'Not Due': 'bg-gray-100 text-gray-800', 
+            'Due': 'bg-red-100 text-red-800', 
+            'Due Today': 'bg-red-100 text-red-800',
+            'Partially Due': 'bg-red-100 text-red-800',
+            'Partially Received': 'bg-yellow-100 text-yellow-800', 
+            'Received': 'bg-green-100 text-green-800', 
+            'Utilized': 'bg-green-100 text-green-800', 
+            'Not Utilized': 'bg-gray-100 text-gray-800' 
+        };
         return colors[status] || 'bg-gray-100 text-gray-800';
     };
 
-    const postFromOptions: TransactionType[] = ['Sales', 'Receipt', 'Purchase', 'Payment', 'Debit Note', 'Credit Note'];
-    const statusOptions = ['Not Due', 'Due', 'Partially Received', 'Received', 'Utilized', 'Not Utilized'];
+    const postFromOptions: TransactionType[] = ['Sales', 'Receipt', 'Purchase', 'Payment', 'Debit Note', 'Credit Note', 'Journal'];
+    const statusOptions = ['Not Due', 'Due', 'Due Today', 'Partially Received', 'Received', 'Utilized', 'Not Utilized'];
+
+    const AdvanceAllocationModal: React.FC<{
+        isOpen: boolean;
+        onClose: () => void;
+        row: any;
+        customerName: string;
+        ledgerEntries: any[];
+    }> = ({ isOpen, onClose, row, customerName, ledgerEntries }) => {
+        if (!isOpen || !row) return null;
+
+        // Find the receipts/advances that are linked to this group (refNo)
+        const advances = (ledgerEntries || []).filter(e => 
+            e.postFrom === 'Receipt' && 
+            (e.referenceNo === row.refNo || (e.voucherNo && e.voucherNo === row.refNo))
+        );
+
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div className="bg-white w-[500px] rounded-lg shadow-2xl overflow-hidden border border-gray-200 animate-in fade-in zoom-in duration-200">
+                    <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <Receipt className="w-5 h-5 text-indigo-100" />
+                            <h3 className="text-white font-bold text-lg">Advance Allocation Details</h3>
+                        </div>
+                        <button onClick={onClose} className="text-white hover:text-gray-200 transition-colors">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <div className="p-6">
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Invoice Ref</label>
+                                <div className="text-sm font-bold text-gray-900">{row.refNo}</div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Customer</label>
+                                <div className="text-sm font-bold text-gray-900">{customerName}</div>
+                            </div>
+                        </div>
+
+                        {advances.length > 0 ? (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Linked Advances</h4>
+                                    <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{advances.length} Found</span>
+                                </div>
+                                <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3">
+                                    {advances.map((adv, idx) => (
+                                        <div key={idx} className="flex justify-between items-center p-4 bg-white rounded border border-gray-100 hover:border-indigo-200 hover:shadow-sm transition-all group">
+                                            <div>
+                                                <div className="text-xs font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Vch No: {adv.voucherNo}</div>
+                                                <div className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
+                                                    <Calendar className="w-3 h-3" />
+                                                    {adv.date.split('-').reverse().join('-')}
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-sm font-black text-indigo-600">
+                                                    ₹{adv.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </div>
+                                                <div className="text-[9px] text-gray-400 font-bold uppercase">Advance Amount</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                <p className="text-sm text-gray-500 font-medium">No linked advance receipts found</p>
+                                <p className="text-[10px] text-gray-400 mt-1">Receipts matching reference "{row.refNo}" will appear here.</p>
+                            </div>
+                        )}
+                        
+                        <div className="mt-8 flex gap-3">
+                            <button 
+                                onClick={onClose}
+                                className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors uppercase tracking-widest text-[10px]"
+                            >
+                                Close Window
+                            </button>
+                            {advances.length > 0 && (
+                                <button 
+                                    onClick={() => {
+                                        showInfo("Allocation processing coming soon...");
+                                        onClose();
+                                    }}
+                                    className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded hover:bg-indigo-700 transition-colors uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-200"
+                                >
+                                    Proceed Allocation
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const AllocationLedgerView: React.FC = () => {
+
+        const handleAdvanceClick = (row: any) => {
+            setSelectedAdvanceRow(row);
+            setIsAdvanceModalOpen(true);
+        };
+
+
+        /**
+         * Group ledgerEntries by their reference relationships.
+         * Logic:
+         * 1. Sources: Only 'Sales', 'Debit Note' entries.
+         * 2. Items: 'Receipt', 'Credit Note', 'Journal'.
+         * 3. Match: item.referenceNo === source.referenceNo
+         */
+        const allocationRows = useMemo(() => {
+            if (!ledgerEntries || ledgerEntries.length === 0) return [];
+
+            // Group entries by referenceNo strictly to find linked vouchers
+            const groups: Record<string, any[]> = {};
+            ledgerEntries.forEach(entry => {
+                const ref = entry.referenceNo?.trim() || '-';
+                if (ref === '-') {
+                    const uniqueId = `standalone-${entry.id}`;
+                    groups[uniqueId] = [entry];
+                    return;
+                }
+                const groupKey = ref.toLowerCase();
+                if (!groups[groupKey]) groups[groupKey] = [];
+                groups[groupKey].push(entry);
+            });
+
+            const rows: any[] = [];
+
+            // Process groups and sort by source date
+            const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
+                const dateA = groups[aRef][0]?.date || '0000-00-00';
+                const dateB = groups[bRef][0]?.date || '0000-00-00';
+                return new Date(dateB).getTime() - new Date(dateA).getTime();
+            });
+
+            sortedGroupRefs.forEach(ref => {
+                const entries = groups[ref];
+
+                // If it's a standalone group
+                if (ref.startsWith('standalone-')) {
+                    const entry = entries[0];
+                    if (!['Sales', 'Debit Note'].includes(entry.postFrom)) return;
+
+                    const amt = (entry.debit || 0) - (entry.credit || 0);
+                    rows.push({
+                        date: entry.date,
+                        postedFrom: entry.postFrom,
+                        refNo: entry.referenceNo !== '-' ? entry.referenceNo : (entry.voucherNo || '-'),
+                        netAmount: amt,
+                        appliedDate: '-',
+                        appliedRefNo: '-',
+                        appliedAmount: '-',
+                        pendingBalance: amt,
+                        status: entry.status,
+                        rowSpan: 1,
+                        isFirstInSource: true
+                    });
+                    return;
+                }
+
+                // For linked groups
+                const sources = entries.filter(e => ['Sales', 'Debit Note'].includes(e.postFrom))
+                                     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                if (sources.length === 0) return;
+
+                const applications = entries.filter(e => ['Receipt', 'Credit Note', 'Journal'].includes(e.postFrom))
+                                            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                
+                // Combine all sources in the group for one span
+                const totalSourceAmt = sources.reduce((sum, s) => sum + ((s.debit || 0) - (s.credit || 0)), 0);
+                const firstSource = sources[0];
+                
+                if (applications.length === 0) {
+                    rows.push({
+                        date: firstSource.date,
+                        postedFrom: firstSource.postFrom,
+                        refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : (firstSource.voucherNo || '-'),
+                        netAmount: totalSourceAmt,
+                        appliedDate: '-',
+                        appliedRefNo: '-',
+                        appliedAmount: '-',
+                        pendingBalance: totalSourceAmt,
+                        status: firstSource.status,
+                        rowSpan: 1,
+                        isFirstInSource: true
+                    });
+                } else {
+                    let lastPending = totalSourceAmt;
+                    applications.forEach((app, appIdx) => {
+                        const appAmt = (app.credit || 0) - (app.debit || 0);
+                        const currentPending = Math.max(0, lastPending - appAmt);
+                        rows.push({
+                            date: firstSource.date,
+                            postedFrom: firstSource.postFrom,
+                            refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : (firstSource.voucherNo || '-'),
+                            netAmount: totalSourceAmt,
+                            appliedDate: app.date,
+                            appliedRefNo: app.voucherNo || '-',
+                            appliedAmount: appAmt,
+                            pendingBalance: currentPending,
+                            status: firstSource.status,
+                            rowSpan: applications.length,
+                            isFirstInSource: appIdx === 0
+                        });
+                        lastPending = currentPending;
+                    });
+                }
+            });
+
+            return rows;
+        }, [ledgerEntries]);
+
+        return (
+            <div className="bg-white border border-slate-200 rounded-[4px] overflow-hidden shadow-none">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200">
+                        <thead className="bg-[#F8F9FA] border-b border-slate-200">
+                            <tr className="border-b border-slate-200">
+                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Date</th>
+                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Posted From</th>
+                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Reference No.</th>
+                                <th rowSpan={2} className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Amount</th>
+                                <th colSpan={4} className="px-6 py-2 border-r border-slate-200 bg-indigo-50/30">
+                                    <div className="flex justify-center items-center h-full text-[11px] font-black text-indigo-600 uppercase tracking-widest">
+                                        Voucher Applied
+                                    </div>
+                                </th>
+                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Status</th>
+                                <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest">Actions</th>
+                            </tr>
+                            <tr>
+                                <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Date</th>
+                                <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Ref No.</th>
+                                <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Amount</th>
+                                <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Pending</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                            {allocationRows.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                    {row.isFirstInSource && (
+                                        <>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
+                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
+                                                    row.postedFrom === 'Sales' 
+                                                        ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                                                        : 'bg-amber-50 text-amber-600 border-amber-100'
+                                                }`}>
+                                                    {row.postedFrom}
+                                                </span>
+                                            </td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top">{row.refNo}</td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">
+                                                ₹{row.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                        </>
+                                    )}
+                                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">{row.appliedDate !== '-' ? formatDate(row.appliedDate) : '-'}</td>
+                                    <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">{row.appliedRefNo}</td>
+                                    <td className="px-6 py-4 text-sm text-right font-bold text-emerald-600 border-r border-slate-100">
+                                        {row.appliedAmount !== '-' ? `₹${row.appliedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-right font-bold text-slate-900 border-r border-slate-100">
+                                        ₹{row.pendingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </td>
+                                    {row.isFirstInSource && (
+                                        <>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
+                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold border uppercase tracking-tighter shadow-sm ${
+                                                    row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                    row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'partially due' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                    row.status?.toLowerCase() === 'due' || row.status?.toLowerCase() === 'due today' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                    'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                }`}>
+                                                    {row.status}
+                                                </span>
+                                            </td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center align-top">
+                                                {(row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'due') && (
+                                                    <button 
+                                                        onClick={() => handleAdvanceClick(row)}
+                                                        className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-indigo-700 transition-colors uppercase tracking-widest flex items-center gap-1 mx-auto"
+                                                    >
+                                                        Advance
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </>
+                                    )}
+                                </tr>
+                            ))}
+                            {allocationRows.length === 0 && (
+                                <tr>
+                                    <td colSpan={10} className="px-6 py-16 text-center text-gray-400 text-sm font-medium italic">No sales documents found to allocate.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                        <tfoot className="bg-[#F8F9FA] border-t border-slate-200">
+                            <tr>
+                                <td colSpan={3} className="px-6 py-5 text-[11px] font-black text-gray-400 text-center tracking-widest uppercase">AGGREGATE SALES LEDGER STATUS</td>
+                                <td className="px-6 py-5 text-right text-[14px] font-black text-slate-800">
+                                    ₹{ledgerEntries.filter(e => ['Sales', 'Debit Note'].includes(e.postFrom))
+                                        .reduce((sum, e) => sum + ((e.debit || 0) - (e.credit || 0)), 0)
+                                        .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td colSpan={3} className="bg-indigo-50/10 border-x border-gray-100/50"></td>
+                                <td className="px-6 py-5 text-right text-[14px] font-black text-rose-600 drop-shadow-sm">
+                                    ₹{allocationRows.reduce((sum, r, idx, arr) => {
+                                        const isLastInGroup = (idx === arr.length - 1) || (arr[idx+1].isFirstInSource);
+                                        return isLastInGroup ? sum + r.pendingBalance : sum;
+                                    }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        );
+    };
 
     const MonthLedgerView: React.FC = () => {
         const filteredMonthData = monthLedgerData.filter(entry =>
@@ -6044,7 +6396,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
         const totalCredit = filteredMonthData.reduce((sum, item) => sum + item.credit, 0);
 
         return (
-            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden shadow-none border border-slate-200-none border border-slate-200">
+            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden shadow-none border border-slate-200">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-[#F8F9FA]">
@@ -6179,6 +6531,16 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                     )}
                                 </button>
                                 <button
+                                    onClick={() => setViewMode(viewMode === 'allocation' ? 'invoice-wise' : 'allocation')}
+                                    className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-all shadow-sm ${
+                                        viewMode === 'allocation'
+                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                    }`}
+                                >
+                                    ALLOCATION VIEW
+                                </button>
+                                <button
                                     onClick={() => setShowNetOffModal(true)}
                                     className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm uppercase px-5"
                                 >
@@ -6221,6 +6583,8 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
 
                     {viewMode === 'month-wise' ? (
                         <MonthLedgerView />
+                    ) : viewMode === 'allocation' ? (
+                        <AllocationLedgerView />
                     ) : (
                         isLoading ? (
                             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -6628,7 +6992,17 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         )
                     )}
 
+                    {/* Advance Allocation Modal */}
+                    <AdvanceAllocationModal 
+                        isOpen={isAdvanceModalOpen}
+                        onClose={() => setIsAdvanceModalOpen(false)}
+                        row={selectedAdvanceRow}
+                        customerName={customer.name}
+                        ledgerEntries={ledgerEntries}
+                    />
+
                     {/* GST Details Modal */}
+
                     <SalesGSTViewModal
                         isOpen={isGSTModalOpen}
                         onClose={() => setIsGSTModalOpen(false)}

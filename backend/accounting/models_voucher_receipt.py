@@ -33,6 +33,7 @@ class ReceiptVoucher(BaseModel):
     )
     
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     notes = models.TextField(null=True, blank=True)
     source = models.CharField(max_length=100, default='manual')
 
@@ -41,6 +42,11 @@ class ReceiptVoucher(BaseModel):
     bank_reconcile_date = models.DateField(null=True, blank=True)
     bank_statement_id = models.BigIntegerField(null=True, blank=True)
     bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
+    
+    # Party IDs for explicit tracking
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True) # Matches receive_in_ledger_id
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'receipt_vouchers'
@@ -78,6 +84,12 @@ class ReceiptVoucherItem(BaseModel):
     pending_before = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     received_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     balance_after = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    invoice_date = models.DateField(null=True, blank=True)
+    
+    # Party IDs for explicit tracking
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True) # Matches customer_ledger_id
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
     
     is_advance = models.BooleanField(default=False)
     advance_ref_no = models.CharField(max_length=100, null=True, blank=True)

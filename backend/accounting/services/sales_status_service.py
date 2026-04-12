@@ -26,29 +26,32 @@ def update_sales_invoice_payment_status(tenant_id, invoice_id):
 
             payment_details = invoice.payment_details
             if not payment_details:
-                # Should not happen but safety first
                 payment_details = VoucherSalesPaymentDetails.objects.create(invoice=invoice, tenant_id=tenant_id)
 
-            payable_amount = Decimal(str(payment_details.payment_payable or 0))
+            # --- ANCHOR: Use invoice value minus advance as the fixed starting point ---
+            payable_anchor = Decimal(str(payment_details.payment_invoice_value or 0)) - Decimal(str(payment_details.payment_advance or 0))
 
             # Sum all received amounts across all ReceiptVoucherItems referencing this invoice
-            # reference_id in ReceiptVoucherItem matches the sales invoice No or the string ID
+            # Resolve reference_id from ReceiptVoucherItem. 
+            # We look for matches against the ID (as string) or the Sales Invoice Number.
+            search_ids = [str(invoice.id), str(invoice.sales_invoice_no)]
+            
             receipt_total = ReceiptVoucherItem.objects.filter(
                 tenant_id=tenant_id,
-                reference_id__in=[str(invoice.id), str(invoice.sales_invoice_no)]
+                reference_id__in=search_ids
             ).aggregate(total=Sum('received_amount'))['total'] or Decimal('0.00')
 
             payment_details.payment_received = receipt_total
-            payment_details.payment_balance = payable_amount - receipt_total
+            payment_details.payment_balance = payable_anchor - receipt_total
             payment_details.save(update_fields=['payment_received', 'payment_balance'])
 
             # Update Header Status
-            if receipt_total >= payable_amount > 0:
+            if receipt_total >= payable_anchor and payable_anchor > 0:
                 invoice.status = 'received'
             elif receipt_total > 0:
                 invoice.status = 'partially received'
             else:
-                # Keep existing if no receipts
+                # Keep existing (Due/Not Due) 
                 pass
             
             invoice.save(update_fields=['status'])

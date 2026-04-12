@@ -27,10 +27,29 @@ class VoucherAllocation(BaseModel):
     source_type = models.CharField(max_length=20, choices=SOURCE_TYPE_CHOICES)
     
     # The target being paid (Sales/Purchase Invoice)
-    target_voucher_id = models.BigIntegerField()
+    target_voucher_id = models.BigIntegerField(null=True, blank=True)
     target_type = models.CharField(max_length=20, choices=TARGET_TYPE_CHOICES)
     
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    # Normalized fields for precise 'Voucher Applied' tracking
+    # Target Info (The Invoice being paid)
+    target_voucher_no = models.CharField(max_length=100, null=True, blank=True)
+    target_voucher_date = models.DateField(null=True, blank=True)
+    
+    # Source Info (The Receipt/Payment/CN/JV being applied)
+    source_voucher_no   = models.CharField(max_length=100, null=True, blank=True)
+    source_voucher_date = models.DateField(null=True, blank=True)
+    
+    # Financials
+    pending_amount   = models.DecimalField(max_digits=15, decimal_places=2, default=0) # Before this payment
+    amount           = models.DecimalField(max_digits=15, decimal_places=2) # Amount applied
+    balance_after    = models.DecimalField(max_digits=15, decimal_places=2, default=0) # After this payment
+    
+    # Party IDs for explicit tracking
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+    
+    # Legacy/Meta
+    reference_type   = models.CharField(max_length=50, default='INVOICE') # INVOICE, ADVANCE, etc.
 
     class Meta:
         db_table = 'voucher_allocations'

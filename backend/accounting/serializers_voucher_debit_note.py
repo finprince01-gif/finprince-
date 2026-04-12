@@ -319,8 +319,8 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             due_dict = due_data_raw
         if due_instance:
             due_dict.update({
-                "reverseTcs": due_instance.reverse_gst_tcs,
-                "reverseTds": due_instance.reverse_gst_tds,
+                "reverseTcs": due_instance.reverse_tcs,
+                "reverseTds": due_instance.reverse_tds,
             })
 
         try:
@@ -344,7 +344,61 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
                 "[DebitNoteSerializer] Posting pipeline error: %s", exc
             )
 
+        # Mirror to Vendor Portal
+        self._mirror_to_vendor_portal(instance)
+
         return instance
+
+    def _mirror_to_vendor_portal(self, instance):
+        """
+        Push this Debit Note to the Vendor Portal's transactions table.
+        """
+        try:
+            from vendors.models import VendorMasterBasicDetail, VendorTransaction
+            
+            # Resolve vendor record
+            vendor = None
+            if instance.vendor_basic_detail_id:
+                vendor = VendorMasterBasicDetail.objects.filter(
+                    tenant_id=instance.tenant_id, 
+                    id=instance.vendor_basic_detail_id
+                ).first()
+            if not vendor and instance.vendor_name:
+                vendor = VendorMasterBasicDetail.objects.filter(
+                    tenant_id=instance.tenant_id, 
+                    vendor_name__iexact=instance.vendor_name
+                ).first()
+
+            if not vendor:
+                print(f"!!! Vendor Portal Sync: No vendor found for '{instance.vendor_name}'")
+                return
+
+            # Get amount from due details
+            total_amt = Decimal('0')
+            if hasattr(instance, 'due_details'):
+                total_amt = instance.due_details.net_amount_due
+            
+            dn_number = instance.debit_note_no or f"DN-{instance.id}"
+
+            # Mirror as 'debit_note' in VendorTransaction
+            VendorTransaction.objects.update_or_create(
+                tenant_id=instance.tenant_id,
+                transaction_number=dn_number,
+                transaction_type='debit_note',
+                defaults={
+                    'vendor_id': vendor.id,
+                    'transaction_date': instance.date,
+                    'amount': total_amt,
+                    'total_amount': total_amt,
+                    'status': 'Paid', # Debit notes usually adjust existing debt
+                    'reference_number': instance.supplier_invoice_nos.split(',')[0] if instance.supplier_invoice_nos else '',
+                    'notes': instance.narration or f"Debit Note linked to Purchase Invoices: {instance.supplier_invoice_nos}",
+                    'ledger_name': 'Purchase Return A/c'
+                }
+            )
+            print(f"!!! Vendor Portal Sync OK (Debit Note): {instance.vendor_name} | {dn_number}")
+        except Exception as e:
+            print(f"!!! Vendor Portal Sync Failure (Debit Note): {str(e)}")
 
     # ------------------------------------------------------------------
     # UPDATE
@@ -458,7 +512,13 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
                     "[DebitNoteSerializer] Update posting error: %s", exc
                 )
 
+<<<<<<< HEAD
+        # Mirror to Vendor Portal
+        self._mirror_to_vendor_portal(instance)
+
+=======
 >>>>>>> origin/main
+>>>>>>> main
         return instance
 
     def _sync_debit_note_items(self, supply_instance, items_json):

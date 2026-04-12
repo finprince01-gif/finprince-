@@ -39,6 +39,11 @@ class PaymentVoucher(BaseModel):
     bank_statement_id      = models.BigIntegerField(null=True, blank=True)
     bank_reference_number  = models.CharField(max_length=100, null=True, blank=True)
 
+    # Party IDs for explicit tracking
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True) # Matches pay_from_id
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+
     class Meta:
         db_table = 'payment_vouchers'
         unique_together = ('tenant_id', 'voucher_number')
@@ -83,9 +88,18 @@ class PaymentVoucherItem(models.Model):
     reference_id   = models.BigIntegerField(null=True, blank=True)
     advance_ref_no = models.CharField(max_length=100, null=True, blank=True)
 
-    # Invoice-level transaction breakdown (denormalized JSON blob).
-    # Single  schema: [{date, referenceNumber, amount, payment, pending, advance}]
-    # Bulk    schema: [{date, invoiceNo,       amount, payNow,  pending, advance}]
+    # Normalized fields to replace JSON blob
+    reference_number = models.CharField(max_length=100, null=True, blank=True)
+    pending_amount   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    balance_after    = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    invoice_date     = models.DateField(null=True, blank=True)
+
+    # Party IDs for explicit tracking
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True) # Matches pay_to_ledger_id
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+
+    # Invoice-level transaction breakdown (legacy denormalized JSON blob).
     transaction_details = models.JSONField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
