@@ -71,14 +71,23 @@ def custom_exception_handler(exc, context):
             error_payload["details"] = details
             response.status_code = status.HTTP_400_BAD_REQUEST
 
-        elif isinstance(exc, exceptions.AuthenticationFailed) or isinstance(exc, exceptions.NotAuthenticated):
-            error_payload["error_code"] = "AUTHENTICATION_FAILED"
-            error_payload["message"] = "Authentication credentials were not provided or are invalid."
+        elif isinstance(exc, (exceptions.AuthenticationFailed, exceptions.NotAuthenticated)):
+            # Distinguish between generic failure and specific deactivations
+            auth_code = getattr(exc, 'get_codes', lambda: None)()
+            if isinstance(auth_code, dict):
+                auth_code = auth_code.get('detail')
+            
+            error_payload["error_code"] = auth_code or "AUTHENTICATION_FAILED"
+            error_payload["message"] = str(exc.detail) if hasattr(exc, 'detail') else "Authentication credentials were not provided or are invalid."
             response.status_code = status.HTTP_401_UNAUTHORIZED
 
         elif isinstance(exc, exceptions.PermissionDenied):
-            error_payload["error_code"] = "PERMISSION_DENIED"
-            error_payload["message"] = "You do not have permission to perform this action."
+            perm_code = getattr(exc, 'get_codes', lambda: None)()
+            if isinstance(perm_code, dict):
+                perm_code = perm_code.get('detail')
+            
+            error_payload["error_code"] = perm_code or "PERMISSION_DENIED"
+            error_payload["message"] = str(exc.detail) if hasattr(exc, 'detail') else "You do not have permission to perform this action."
             response.status_code = status.HTTP_403_FORBIDDEN
 
         elif isinstance(exc, (exceptions.NotFound, Http404)):
@@ -93,7 +102,11 @@ def custom_exception_handler(exc, context):
             response.status_code = exc.status_code
 
         elif isinstance(exc, exceptions.APIException):
-            error_payload["error_code"] = getattr(exc, 'default_code', 'API_ERROR').upper()
+            api_code = getattr(exc, 'get_codes', lambda: None)()
+            if isinstance(api_code, dict):
+                api_code = api_code.get('detail')
+            
+            error_payload["error_code"] = api_code or getattr(exc, 'default_code', 'API_ERROR').upper()
             detail = response.data.get('detail') if isinstance(response.data, dict) else response.data
             error_payload["message"] = str(detail)
 

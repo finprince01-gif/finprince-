@@ -32,10 +32,10 @@ class UsageLimitExceeded(BusinessException):
     default_detail = 'Usage limit reached.'
     default_code = 'USAGE_LIMIT_EXCEEDED'
 
-class TenantAccessDenied(BusinessException):
+class BranchAccessDenied(BusinessException):
     status_code = status.HTTP_403_FORBIDDEN
-    default_detail = 'Access denied for this tenant.'
-    default_code = 'TENANT_ACCESS_DENIED'
+    default_detail = 'Access denied for this branch.'
+    default_code = 'BRANCH_ACCESS_DENIED'
 
 class ExternalServiceError(APIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE

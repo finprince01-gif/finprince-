@@ -19,7 +19,7 @@ class InventoryReportBase(APIView):
 class StockSummaryReportView(InventoryReportBase):
     def get(self, request):
         filters = self.get_filters(request)
-        tenant_id = request.user.tenant_id
+        tenant_id = request.user.branch_id
         
         # Base queryset
         items = InventoryStockItem.objects.filter(tenant_id=tenant_id)
@@ -47,7 +47,7 @@ class StockSummaryReportView(InventoryReportBase):
 
 class InventoryValuationSummaryView(InventoryReportBase):
     def get(self, request):
-        tenant_id = request.user.tenant_id
+        tenant_id = request.user.branch_id
         items = InventoryStockItem.objects.filter(tenant_id=tenant_id)
         
         data = []

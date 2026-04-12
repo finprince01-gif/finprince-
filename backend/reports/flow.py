@@ -1,5 +1,5 @@
 """
-Reports Flow Layer - Business Logic + Tenant Validation
+Reports Flow Layer - Business Logic + Branch Validation
 This is the ONLY place for business decisions in the Reports module.
 Every function MUST start with tenant validation.
 """
@@ -27,7 +27,7 @@ def generate_daybook_data(user, start_date=None, end_date=None):
     Returns:
         QuerySet of vouchers
     """
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -52,7 +52,7 @@ def generate_ledger_report_data(user, ledger_name, start_date=None, end_date=Non
     Returns:
         QuerySet of vouchers involving the ledger
     """
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -77,7 +77,7 @@ def generate_trial_balance_data(user):
     Returns:
         List of ledger balances with net debit/credit
     """
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -126,7 +126,7 @@ def generate_stock_summary_data(user, start_date=None, end_date=None):
     Returns:
         Stock items and movements data
     """
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -156,7 +156,7 @@ def generate_gst_report_data(user, start_date=None, end_date=None):
     Returns:
         GST report data
     """
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    

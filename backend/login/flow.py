@@ -5,10 +5,10 @@ All must match the SAME database record.
 """
 
 import logging
-from django.utils import timezone
-from django.conf import settings
-from rest_framework_simplejwt.tokens import RefreshToken
-from core.token import MyTokenObtainPairSerializer
+from django.utils import timezone  # type: ignore
+from django.conf import settings  # type: ignore
+from rest_framework_simplejwt.tokens import RefreshToken  # type: ignore
+from core.token import MyTokenObtainPairSerializer  # type: ignore
 from . import database
 
 logger = logging.getLogger('login.flow')
@@ -73,25 +73,10 @@ def _reset_failed_attempts(email):
 
 def authenticate_user(email, username, password, ip_address='unknown'):
     """
-    Strict 3-field authentication: Email + Username + Password.
+    Strict 3-field authentication: Branch Email + Username + Password.
     ALL THREE must match the same database record.
-
-    Validation order:
-        1. Email must exist
-        2. Username must belong to that email's record
-        3. Password must match that record
-
-    Args:
-        email:      User's email address (required)
-        username:   User's username (required)
-        password:   User's plain-text password (required)
-        ip_address: Requester's IP (for logging/rate-limiting)
-
-    Returns:
-        tuple: (user, token_data) on success
-               (None, error_dict) on failure
     """
-    secure = _is_secure_mode()
+    identifier_for_logs = f"{email}:{username}"
 
     # ── Guard: All three fields are mandatory ────────────────────────────────
     if not email or not username or not password:
@@ -105,47 +90,50 @@ def authenticate_user(email, username, password, ip_address='unknown'):
         }
 
     # ── Step 0: Rate-limit check ─────────────────────────────────────────────
-    is_blocked, block_msg = _check_rate_limit(email, ip_address)
+    is_blocked, block_msg = _check_rate_limit(identifier_for_logs, ip_address)
     if is_blocked:
         return None, {'field': 'general', 'message': block_msg, 'rate_limited': True}
 
-    # ── Step 1: Check Email exists ───────────────────────────────────────────
-    user = database.get_user_by_email(email)
+    # ── Step 1 & 2: Check Branch Email and Username exist ────────────────────
+    user = database.get_user_by_email_and_username(email, username)
     if user is None:
-        _record_failed_attempt(email, ip_address, "Email not found")
-        return None, {'field': 'email', 'message': 'Email not registered.'}
-
-    # ── Step 2: Check Username matches that email record ─────────────────────
-    if user.username != username:
-        _record_failed_attempt(email, ip_address, f"Username mismatch (got '{username}', expected '{user.username}')")
-        return None, {'field': 'username', 'message': 'Username is incorrect.'}
+        _record_failed_attempt(identifier_for_logs, ip_address, "Branch email or Username not found")
+        return None, {'field': 'username', 'message': 'Invalid Branch Email or Username.'}
 
     # ── Step 3: Check Password (always hashed) ───────────────────────────────
     if not user.check_password(password):
-        _record_failed_attempt(email, ip_address, "Wrong password")
+        _record_failed_attempt(identifier_for_logs, ip_address, "Wrong password")
         return None, {'field': 'password', 'message': 'Password is incorrect.'}
 
     # ── Step 4: Account active check ────────────────────────────────────────
     if not user.is_active:
-        _record_failed_attempt(email, ip_address, "Account inactive")
-        return None, {'field': 'general', 'message': 'Account is inactive. Please contact support.'}
+        _record_failed_attempt(identifier_for_logs, ip_address, "Account inactive")
+        return None, {'field': 'general', 'message': 'Account is inactive. Please contact your administrator.'}
+
+    # ── Step 4.5: Account expiry check ──────────────────────────────────────
+    if user.access_expiry and user.access_expiry < timezone.now():
+        _record_failed_attempt(identifier_for_logs, ip_address, f"Account expired (expiry: {user.access_expiry})")
+        return None, {
+            'field': 'general',
+            'message': f'Access expired on {user.access_expiry.strftime("%Y-%m-%d")}. Please contact your administrator.'
+        }
 
     # ── Step 5: SUCCESS ──────────────────────────────────────────────────────
-    _reset_failed_attempts(email)
+    _reset_failed_attempts(identifier_for_logs)
 
     refresh = MyTokenObtainPairSerializer.get_token(user)
     token_data = {
-        'access':       str(refresh.access_token),
-        'refresh':      str(refresh),
-        'username':     user.username,
-        'email':        getattr(user, 'email', ''),
-        'tenant_id':    user.tenant_id,
-        'company_name': getattr(user, 'company_name', ''),
+        'access':        str(refresh.access_token),
+        'refresh':       str(refresh),
+        'username':      user.username,
+        'email':         getattr(user, 'email', ''),
+        'tenant_id':     user.branch_id,
+        'company_name':  getattr(user, 'company_name', ''),
         'selected_plan': getattr(user, 'selected_plan', 'Free'),
     }
 
     logger.info(
-        f"✅ LOGIN SUCCESS | Tenant: {user.tenant_id} | User: {user.username} | "
+        f"✅ LOGIN SUCCESS | Branch: {user.branch_id} | User: {user.username} | "
         f"IP: {ip_address} | Time: {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
@@ -163,7 +151,7 @@ def refresh_access_token(refresh_token):
     Returns:
         dict: New tokens or None if failed
     """
-    from rest_framework_simplejwt.tokens import RefreshToken as JWT_RefreshToken
+    from rest_framework_simplejwt.tokens import RefreshToken as JWT_RefreshToken  # type: ignore
 
     try:
         refresh = JWT_RefreshToken(refresh_token)
@@ -197,7 +185,7 @@ def reset_password(username, identifier, new_password):
     if not user:
         return False, "No matching account found with these details"
 
-    from django.contrib.auth.hashers import make_password
+    from django.contrib.auth.hashers import make_password  # type: ignore
     user.password = make_password(new_password)
     user.save()
 
@@ -211,11 +199,11 @@ def request_reset_otp(email):
     Returns: (success_bool, message)
     """
     import random
-    from django.utils import timezone
+    from django.utils import timezone  # type: ignore
     from datetime import timedelta
-    from django.contrib.auth.hashers import make_password
-    from django.core.mail import send_mail
-    from django.conf import settings
+    from django.contrib.auth.hashers import make_password  # type: ignore
+    from django.core.mail import send_mail  # type: ignore
+    from django.conf import settings  # type: ignore
 
     user = database.get_user_by_email(email)
 
@@ -248,8 +236,8 @@ def verify_reset_otp(email, otp, new_password):
     Verify OTP and reset password.
     Returns: (success_bool, message)
     """
-    from django.contrib.auth.hashers import check_password, make_password
-    from django.utils import timezone
+    from django.contrib.auth.hashers import check_password, make_password  # type: ignore
+    from django.utils import timezone  # type: ignore
 
     user = database.get_user_by_email(email)
     if not user:
@@ -281,7 +269,7 @@ def verify_otp_only(email, otp):
     Verify OTP without resetting password.
     Returns: (success_bool, message)
     """
-    from django.contrib.auth.hashers import check_password
+    from django.contrib.auth.hashers import check_password  # type: ignore
 
     user = database.get_user_by_email(email)
     if not user:

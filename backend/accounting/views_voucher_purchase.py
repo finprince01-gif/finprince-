@@ -51,5 +51,5 @@ class VoucherPurchaseViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-date', '-created_at')
 
     def perform_create(self, serializer):
-        tenant_id = self.request.user.tenant_id
+        tenant_id = self.request.user.branch_id
         serializer.save(tenant_id=tenant_id)

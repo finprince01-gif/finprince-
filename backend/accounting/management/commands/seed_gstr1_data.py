@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from core.models import Tenant
+from core.models import Branch
 from accounting.models import MasterLedger
 from accounting.models_voucher_sales import (
     VoucherSalesInvoiceDetails, VoucherSalesItems, VoucherSalesPaymentDetails,
@@ -15,14 +15,14 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.stdout.write("Seeding GSTR1 Data (All Tables)...")
 
-        # 1. Get Tenant
-        tenant = Tenant.objects.first()
+        # 1. Get Branch
+        tenant = Branch.objects.first()
         if not tenant:
-            self.stdout.write(self.style.ERROR("No Tenant found. Create a tenant first."))
+            self.stdout.write(self.style.ERROR("No Branch found. Create a tenant first."))
             return
         
         tenant_id = tenant.id
-        self.stdout.write(f"Using Tenant: {tenant.name} ({tenant_id})")
+        self.stdout.write(f"Using Branch: {tenant.name} ({tenant_id})")
 
         # 2. Customer Helper
         def get_or_create_customer(name, gstin, state, reg_type):

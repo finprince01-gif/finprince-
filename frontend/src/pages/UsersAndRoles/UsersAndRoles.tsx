@@ -44,9 +44,10 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
     // Form states
     const [userForm, setUserForm] = useState({
         username: '',
-        email: '',
         password: '',
         phone: '',
+        is_active: false,
+        access_expiry: '',
         role_ids: [] as number[]
     });
 
@@ -155,13 +156,28 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
     // USER MANAGEMENT
     // ============================================================================
 
+
+    const toggleUserStatus = async (user: any) => {
+        try {
+            const newStatus = !user.is_active;
+            await apiService.updateUser(user.id, {
+                username: user.username,
+                is_active: newStatus
+            });
+            loadUsers();
+        } catch (error) {
+            console.error('Failed to toggle status:', error);
+        }
+    };
+
     const handleCreateUser = () => {
         setEditingUser(null);
         setUserForm({
             username: '',
-            email: '',
             password: '',
             phone: '',
+            is_active: true,
+            access_expiry: '',
             role_ids: []
         });
         setShowUserModal(true);
@@ -171,9 +187,10 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
         setEditingUser(user);
         setUserForm({
             username: user.username,
-            email: user.email || '',
             password: '',
             phone: user.phone || '',
+            is_active: user.is_active,
+            access_expiry: user.access_expiry ? new Date(user.access_expiry).toISOString().split('T')[0] : '',
             role_ids: user.roles.map((r: any) => r.id)
         });
         setShowUserModal(true);
@@ -186,12 +203,17 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
             if (editingUser) {
                 await apiService.updateUser(editingUser.id, {
                     username: userForm.username,
-                    email: userForm.email,
-                    phone: userForm.phone
+                    phone: userForm.phone,
+                    is_active: userForm.is_active,
+                    access_expiry: userForm.access_expiry || null
                 });
                 await apiService.assignRolesToUser(editingUser.id, userForm.role_ids);
             } else {
-                await apiService.createUserWithRoles(userForm);
+                const payload = {
+                    ...userForm,
+                    access_expiry: userForm.access_expiry || null
+                };
+                await apiService.createUserWithRoles(payload);
             }
             loadUsers();
             showSuccess(editingUser ? 'User updated successfully' : 'User created successfully');
@@ -326,7 +348,15 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
 
             <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
                 {activeTab === 'users' ? (
-                    <UsersTab users={users} roles={roles} loading={loadingUsers} onCreateUser={handleCreateUser} onEditUser={handleEditUser} onDeleteUser={handleDeleteUser} />
+                    <UsersTab 
+                        users={users} 
+                        roles={roles} 
+                        loading={loadingUsers} 
+                        onCreateUser={handleCreateUser} 
+                        onEditUser={handleEditUser} 
+                        onDeleteUser={handleDeleteUser}
+                        onToggleStatus={toggleUserStatus}
+                    />
                 ) : (
                     <RolesTab roles={roles} loading={loadingRoles} onCreateRole={handleCreateRole} onEditRole={handleEditRole} onDeleteRole={handleDeleteRole} />
                 )}
@@ -340,9 +370,10 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
 interface UsersTabProps {
     users: any[]; roles: any[]; loading: boolean;
     onCreateUser: () => void; onEditUser: (user: any) => void; onDeleteUser: (userId: number) => void;
+    onToggleStatus: (user: any) => void;
 }
 
-const UsersTab: React.FC<UsersTabProps> = ({ users, roles, loading, onCreateUser, onEditUser, onDeleteUser }) => (
+const UsersTab: React.FC<UsersTabProps> = ({ users, roles, loading, onCreateUser, onEditUser, onDeleteUser, onToggleStatus }) => (
     <div className="erp-card">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900">Users</h2>
@@ -352,23 +383,63 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, roles, loading, onCreateUser
             <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50 uppercase text-xs font-medium text-gray-500">
                     <tr>
-                        <th className="px-6 py-3 text-left">Username</th>
-                        <th className="px-6 py-3 text-left">Email</th>
+                        <th className="px-6 py-3 text-left">User Details</th>
                         <th className="px-6 py-3 text-left">Roles</th>
+                        <th className="px-6 py-3 text-left">Status</th>
+                        <th className="px-6 py-3 text-left">Access Ends</th>
                         <th className="px-6 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                     {users.map(user => (
-                        <tr key={user.id}>
-                            <td className="px-6 py-4 font-medium">{user.username}</td>
-                            <td className="px-6 py-4">{user.email || '-'}</td>
+                        <tr key={user.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-6 py-4">
-                                {user.roles.map((r: any) => <span key={r.id} className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded mr-1 text-xs">{r.name}</span>)}
+                                <div className="font-bold text-slate-900">{user.username}</div>
                             </td>
-                            <td className="px-6 py-4 text-right space-x-2">
-                                <button onClick={() => onEditUser(user)} className="text-indigo-600 hover:underline">Edit</button>
-                                <button onClick={() => onDeleteUser(user.id)} className="text-red-600 hover:underline">Delete</button>
+                            <td className="px-6 py-4">
+                                <div className="flex flex-wrap gap-1">
+                                    {user.roles.length > 0 ? (
+                                        user.roles.map((r: any) => (
+                                            <span key={r.id} className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-indigo-100">
+                                                {r.name}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span className="text-slate-400 italic text-xs">No roles assigned</span>
+                                    )}
+                                </div>
+                            </td>
+                            <td className="px-6 py-4">
+                                {user.is_active ? (
+                                    <button 
+                                        onClick={() => onToggleStatus(user)} 
+                                        className="px-3 py-1 text-[10px] font-black uppercase tracking-tighter bg-red-50 text-red-600 border border-red-100 rounded-md hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                                        title="Disable Account"
+                                    >
+                                        Deactivate
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => onToggleStatus(user)} 
+                                        className="px-3 py-1 text-[10px] font-black uppercase tracking-tighter bg-green-50 text-green-600 border border-green-100 rounded-md hover:bg-green-600 hover:text-white transition-all shadow-sm"
+                                        title="Enable Account"
+                                    >
+                                        Activate
+                                    </button>
+                                )}
+                            </td>
+                            <td className="px-6 py-4 text-xs">
+                                {user.access_expiry ? (
+                                    <span className={`font-semibold ${new Date(user.access_expiry) < new Date() ? 'text-red-500' : 'text-slate-600'}`}>
+                                        {new Date(user.access_expiry).toLocaleDateString()}
+                                    </span>
+                                ) : (
+                                    <span className="text-slate-400 italic">No limit</span>
+                                )}
+                            </td>
+                            <td className="px-6 py-4 text-right space-x-3">
+                                <button onClick={() => onEditUser(user)} className="text-indigo-600 hover:text-indigo-900 font-semibold transition-colors">Manage</button>
+                                <button onClick={() => onDeleteUser(user.id)} className="text-red-600 hover:text-red-800 transition-colors">Remove</button>
                             </td>
                         </tr>
                     ))}
@@ -404,26 +475,56 @@ const RolesTab: React.FC<RolesTabProps> = ({ roles, loading, onCreateRole, onEdi
 
 interface UserModalProps { user: any; form: any; roles: any[]; onFormChange: (form: any) => void; onSave: () => void; onClose: () => void; }
 const UserModal: React.FC<UserModalProps> = ({ user, form, roles, onFormChange, onSave, onClose }) => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-[4px] w-full max-w-md p-6">
-            <h2 className="text-xl font-bold mb-4">{user ? 'Edit User' : 'Create User'}</h2>
-            <div className="space-y-4">
-                <input className="w-full border p-2 rounded" placeholder="Username" value={form.username} onChange={e => onFormChange({ ...form, username: e.target.value })} disabled={!!user} />
-                <input className="w-full border p-2 rounded" placeholder="Email" value={form.email} onChange={e => onFormChange({ ...form, email: e.target.value })} />
-                <input className="w-full border p-2 rounded" placeholder="Password" type="password" value={form.password} onChange={e => onFormChange({ ...form, password: e.target.value })} />
-                <div className="border rounded p-3 h-32 overflow-auto">
-                    <p className="text-xs font-bold mb-2">Assign Roles</p>
-                    {roles.map(r => (
-                        <label key={r.id} className="flex items-center text-sm mb-1">
-                            <input type="checkbox" className="mr-2" checked={form.role_ids.includes(r.id)} onChange={e => onFormChange({ ...form, role_ids: e.target.checked ? [...form.role_ids, r.id] : form.role_ids.filter((id: any) => id !== r.id) })} />
-                            {r.name}
-                        </label>
-                    ))}
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-50 px-8 py-6 border-b border-slate-100">
+                <h2 className="text-2xl font-bold text-slate-800">{user ? 'Modify Seat Access' : 'Onboard New Employee'}</h2>
+                <p className="text-sm text-slate-500 mt-1">Configure identity and access period</p>
+            </div>
+            
+            <div className="p-8 space-y-6">
+                <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Username</label>
+                        <input className="erp-input w-full" placeholder="john_doe" value={form.username} onChange={e => onFormChange({ ...form, username: e.target.value })} disabled={!!user} />
+                    </div>
+                </div>
+
+                {!user && (
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Password</label>
+                        <input className="erp-input w-full" placeholder="••••••••" type="password" value={form.password} onChange={e => onFormChange({ ...form, password: e.target.value })} />
+                    </div>
+                )}
+
+                <div className="erp-form-section">
+                    <label className="erp-label">Assign Roles</label>
+                    <div className="grid grid-cols-1 gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
+                        {roles.map(role => (
+                            <label key={role.id} className="flex items-center gap-3 p-1 hover:bg-white rounded transition-colors cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={form.role_ids.includes(role.id)}
+                                    onChange={(e) => {
+                                        const newRoles = e.target.checked
+                                            ? [...form.role_ids, role.id]
+                                            : form.role_ids.filter((id: number) => id !== role.id);
+                                        onFormChange({ ...form, role_ids: newRoles });
+                                    }}
+                                    className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                                />
+                                <span className="text-sm font-bold text-slate-700 uppercase tracking-tight group-hover:text-slate-900">{role.name}</span>
+                            </label>
+                        ))}
+                    </div>
                 </div>
             </div>
-            <div className="mt-6 flex justify-end space-x-2">
-                <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
-                <button onClick={onSave} className="px-4 py-2 bg-indigo-600 text-white rounded">Save</button>
+
+            <div className="bg-slate-50 px-8 py-5 flex justify-end gap-3 border-t border-slate-100">
+                <button onClick={onClose} className="px-6 py-2.5 font-bold text-slate-600 hover:text-slate-800 transition-colors">Cancel</button>
+                <button onClick={onSave} className="erp-button-primary px-10 shadow-lg shadow-indigo-200">
+                    {user ? 'Update Access' : 'Activate Seat'}
+                </button>
             </div>
         </div>
     </div>

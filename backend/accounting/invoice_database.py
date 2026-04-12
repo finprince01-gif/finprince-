@@ -14,7 +14,7 @@ def get_invoice_by_id(invoice_id: int, tenant_id: str) -> Optional['SalesInvoice
     
     Args:
         invoice_id: Invoice ID
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         SalesInvoice or None
@@ -35,7 +35,7 @@ def get_invoices(tenant_id: str, filters: Optional[Dict] = None) -> QuerySet:
     Fetch all invoices for a tenant with optional filters.
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         filters: Optional filters (date_from, date_to, customer_id, status)
         
     Returns:
@@ -63,7 +63,7 @@ def create_invoice(tenant_id: str, invoice_data: Dict) -> 'SalesInvoice':
     Create a new sales invoice.
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         invoice_data: Invoice data dictionary
         
     Returns:
@@ -85,7 +85,7 @@ def update_invoice(invoice_id: int, tenant_id: str, update_data: Dict) -> 'Sales
     
     Args:
         invoice_id: Invoice ID
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         update_data: Data to update
         
     Returns:
@@ -108,7 +108,7 @@ def delete_invoice(invoice_id: int, tenant_id: str) -> bool:
     
     Args:
         invoice_id: Invoice ID
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         bool: True if successful
@@ -127,7 +127,7 @@ def generate_invoice_number(tenant_id: str) -> str:
     Generate next invoice number for tenant.
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         str: Generated invoice number
@@ -157,7 +157,7 @@ def get_customer_details(customer_id: int, tenant_id: str) -> Optional[Dict]:
     
     Args:
         customer_id: Customer ledger ID
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         Dict: Customer details or None

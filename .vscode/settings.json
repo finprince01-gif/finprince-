@@ -4,9 +4,7 @@
     "css.lint.unknownAtRules": "ignore",
     "scss.lint.unknownAtRules": "ignore",
     "less.lint.unknownAtRules": "ignore",
-
     "pyre2.enablePyre2": false,
-
     "python.analysis.extraPaths": [
         "backend",
         "D:/finpixe/Ai_Accounting_v1-22/AI-accounting-0.03/backend",

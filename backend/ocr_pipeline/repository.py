@@ -19,11 +19,11 @@ class InvoiceTempOCR(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, null=True, blank=True)
+    status = models.CharField(max_length=20, default='PROCESSING')
     processed = models.BooleanField(default=False)
     
-    validation_status = models.CharField(max_length=50, null=True, blank=True)
-    vendor_status = models.CharField(max_length=50, null=True, blank=True)
+    validation_status = models.CharField(max_length=50, default='PENDING')
+    vendor_status = models.CharField(max_length=50, default='PENDING')
     matched_by = models.CharField(max_length=100, null=True, blank=True)
     conflict_message = models.TextField(null=True, blank=True)
     
@@ -39,10 +39,10 @@ class InvoiceTempOCR(models.Model):
     # Extra fields from schema
     group_id = models.CharField(max_length=64, null=True, blank=True)
     financial_year = models.CharField(max_length=20, null=True, blank=True)
-    selected_by = models.CharField(max_length=50, null=True, blank=True)
-    duplicate_count = models.IntegerField(null=True, blank=True)
-    version_rank = models.IntegerField(null=True, blank=True)
-    is_primary = models.IntegerField(null=True, blank=True)
+    selected_by = models.CharField(max_length=50, default='FALLBACK')
+    duplicate_count = models.IntegerField(default=0)
+    version_rank = models.IntegerField(default=99)
+    is_primary = models.BooleanField(default=False)
 
     class Meta:
         managed = False # Tables are created by external migrations or preexisting

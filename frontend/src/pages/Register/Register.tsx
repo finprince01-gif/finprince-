@@ -1,14 +1,8 @@
-/**
- * ============================================================================
- * REGISTRATION PAGE (Register.tsx)
- * ============================================================================
- * Multi-step user registration form - Premium Fintech Redesign
- */
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import "./Register.css";
 import { apiService } from "../../services";
-import { INDIA_STATE_CODES } from "../../utils/gstConstants";
+import PremiumBackground from "../../components/PremiumBackground";
+import Icon from "../../components/Icon";
 
 interface SignupPageProps {
   onSwitchToLogin: () => void;
@@ -16,19 +10,33 @@ interface SignupPageProps {
 }
 
 const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
-  // Form state
-  const [username, setUsername] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [email, setEmail] = useState('');
+  // Step state: 1: Administrative, 2: Regional, 3: Platform Access
+  const [step, setStep] = useState(1);
+  
+  // Geograhpical Data logic
+  const [geoData, setGeoData] = useState<any[]>([]);
+  
+  // Form state - Step 1
+  const [name, setName] = useState('');
+  const [pan, setPan] = useState('');
   const [phone, setPhone] = useState('');
-  const [state, setState] = useState('');
+
+  // Form state - Step 2
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [addressLine3, setAddressLine3] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState('India');
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [pincode, setPincode] = useState('');
+
+  // Form state - Step 3
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<string>('Starter');
-  const [step, setStep] = useState<'details' | 'plan'>('details');
 
   // UI state
   const [error, setError] = useState('');
@@ -36,23 +44,54 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const planParam = params.get('plan');
-    if (planParam) {
-      if (planParam.toLowerCase() === 'free') setSelectedPlan('Free');
-      else if (planParam.toLowerCase() === 'starter') setSelectedPlan('Starter');
-      else if (planParam.toLowerCase() === 'pro') setSelectedPlan('Pro');
-    }
+    fetchGeoData();
   }, []);
 
-  const handleNext = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!username || !companyName || !email || !phone || !state || !password || !confirmPassword) {
-      setError('Please fill in all required fields.');
-      return;
+  const fetchGeoData = async () => {
+    try {
+      const resp = await fetch('/data/geo.json');
+      const data = await resp.json();
+      setGeoData(data);
+    } catch (err) {
+      console.error("Failed to fetch geo data", err);
     }
+  };
+
+  const validateStep = () => {
+    setError('');
+    if (step === 1) {
+      if (!name || !pan || !phone) {
+        setError('Please complete all identification fields.');
+        return false;
+      }
+      if (pan.length !== 10) {
+        setError('Invalid PAN number. Must be 10 characters.');
+        return false;
+      }
+    } else if (step === 2) {
+      if (!addressLine1 || !selectedState || !selectedDistrict || !pincode) {
+        setError('Please complete the regional context fields.');
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const nextStep = () => {
+    if (validateStep()) setStep(prev => prev + 1);
+  };
+
+  const prevStep = () => {
+    setError('');
+    setStep(prev => prev - 1);
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+    setError('');
+    setSuccessMessage('');
+
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -64,251 +103,294 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
 
     setLoading(true);
     try {
-      const phoneCheck = await apiService.checkPhone(phone);
-      if (phoneCheck.exists) {
-        setError('Phone number already registered. Please Sign In.');
-        setLoading(false);
-        return;
-      }
-      setStep('plan');
-      window.scrollTo(0, 0);
-    } catch (err: any) {
-      setError(err?.message || 'Validation failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async () => {
-    setError('');
-    setSuccessMessage('');
-    setLoading(true);
-
-    try {
-      const response = await apiService.register({
+      const payload = {
+        name,
+        pan_number: pan,
         username,
-        companyName,
         email,
-        password,
         phone,
-        state,
-        selectedPlan,
-        logoFile
-      });
+        address_line1: addressLine1,
+        address_line2: addressLine2,
+        address_line3: addressLine3,
+        country: selectedCountry,
+        state: selectedState,
+        district: selectedDistrict,
+        pincode: pincode,
+        password
+      };
 
-      if ((response as any).access && (response as any).refresh) {
-        // Tokens are handled by apiService
-        if ((response as any).user) {
-          const user = (response as any).user;
-          sessionStorage.setItem('user', JSON.stringify(user));
-          sessionStorage.setItem('companyName', user.company_name || companyName);
-          sessionStorage.setItem('userPlan', user.selected_plan || user.selectedPlan || selectedPlan);
-          sessionStorage.setItem('tenantId', user.tenant_id || user.tenantId);
+      const response = await apiService.masterRegister(payload);
 
-          // Cleanup legacy localStorage
-          localStorage.removeItem('user');
-          localStorage.removeItem('companyName');
-          localStorage.removeItem('userPlan');
-          localStorage.removeItem('tenantId');
-        }
-        if ((response as any).permissions) {
-          sessionStorage.setItem('permissions', JSON.stringify((response as any).permissions));
-          localStorage.removeItem('permissions');
-        }
-        setSuccessMessage((response as any).message || 'Registration successful! Redirecting...');
-        setTimeout(() => { window.location.href = '/'; }, 1500);
+      if (response.access && response.refresh) {
+        setSuccessMessage('Master Admin account created successfully! Accessing platform...');
+        setTimeout(() => { 
+          window.location.href = '/master/dashboard'; 
+        }, 1500);
       } else {
-        setSuccessMessage((response as any).message || 'Account created! Redirecting to login...');
-        sessionStorage.setItem('companyName', companyName);
-        localStorage.removeItem('companyName');
+        setSuccessMessage('Account created! Redirecting to login...');
         setTimeout(() => { onSwitchToLogin(); }, 1500);
       }
     } catch (err: any) {
-      setError(err?.message || 'Registration failed. Please try again.');
+      console.error('Registration failed:', err);
+      setError(err?.message || 'Registration failed. Credentials may already exist.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    if (file) setLogoFile(file);
-  };
+  const currentCountry = geoData.find(c => c.name === selectedCountry);
+  const currentState = currentCountry?.states.find((s: any) => s.name === selectedState);
+  const districtOptions = currentState?.districts || [];
+  
 
-  const PlanCard: React.FC<{ name: string; price: number; features: string[]; popular?: boolean }> = ({
-    name,
-    price,
-    features,
-    popular,
-  }) => {
-    const isSelected = selectedPlan === name;
-    return (
-      <div
-        onClick={() => setSelectedPlan(name)}
-        className={`plan-card ${isSelected ? 'selected' : ''}`}
-      >
-        {popular && <div className="plan-badge">Most Popular</div>}
-        <h3 className="plan-name">{name}</h3>
-        <p className="plan-price">
-          ₹{price}<span>/month</span>
-        </p>
-        <ul className="plan-features">
-          {features.map((feature, index) => (
-            <li key={index} className="plan-feature">
-              <svg className="feature-icon h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              {feature}
-            </li>
-          ))}
-        </ul>
-        <button type="button" className="plan-button">
-          {isSelected ? 'Selected' : 'Choose Plan'}
-        </button>
+  const StepIndicator = () => (
+    <div className="flex items-center gap-10 mb-12 relative overflow-hidden">
+      {[1, 2, 3].map((s) => (
+        <div key={s} className="flex flex-col items-center gap-2 relative z-10 transition-all duration-500">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black shadow-lg transition-all duration-500 border-2 ${step >= s ? 'bg-indigo-600 border-indigo-600 text-white scale-110 shadow-indigo-200' : 'bg-white border-slate-200 text-slate-400'}`}>
+            {step > s ? <Icon name="check" size={14} /> : s}
+          </div>
+          <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-500 ${step >= s ? 'text-indigo-600' : 'text-slate-400'}`}>
+            {s === 1 ? 'Identity' : s === 2 ? 'Regional' : 'Access'}
+          </span>
+        </div>
+      ))}
+      <div className="absolute top-5 left-8 right-8 h-[2px] bg-slate-100 -z-0">
+        <div className="h-full bg-indigo-600 transition-all duration-700" style={{ width: `${(step - 1) * 50}%` }} />
       </div>
-    );
+    </div>
+  );
+
+  const handleEnter = (e: React.KeyboardEvent, nextId?: string, isStepFinal?: boolean) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (nextId) {
+        document.getElementById(nextId)?.focus();
+      } else if (isStepFinal) {
+        if (step < 3) {
+          nextStep();
+        } else {
+          // Final step - handleRegister is called by form submission usually, 
+          // but we can trigger it or focus the submit button.
+          // For consistency with wizard flow:
+          const submitBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+          submitBtn?.click();
+        }
+      }
+    }
   };
 
   return (
-    <div className="register-page-container">
-      {onBack && (
-        <button className="back-button" onClick={onBack}>
-          ← Back
-        </button>
-      )}
+    <PremiumBackground>
+      <div className="z-10 w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-[0.98] duration-700 py-10 px-4">
+        
+        {/* Brand Header */}
+        <div className="text-center mb-10 w-full flex flex-col items-center">
+            <div className="flex items-center justify-center gap-4 mb-4">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-2xl">
+                    <div className="w-7 h-7 rounded-xl bg-white/30 animate-pulse"></div>
+                </div>
+                <h1 className="text-5xl font-black text-slate-900 tracking-tighter">
+                    FINPIXE <span className="text-indigo-600">MASTER</span>
+                </h1>
+            </div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.5em] leading-none">
+                Platform Administrative Architecture Registration
+            </p>
+        </div>
 
-      {step === 'details' ? (
-        <>
-          <header className="brand-section">
-            <h1 className="brand-heading">FINPIXE</h1>
-            <p className="brand-tagline">Smart accounting for modern businesses.</p>
-          </header>
+        <div className="w-full bg-white/95 backdrop-blur-xl rounded-[40px] shadow-[0_22px_70px_rgba(0,0,0,0.1)] border border-white overflow-hidden flex flex-col items-center p-12">
+          
+          <StepIndicator />
 
-          <main className="register-card">
-            <form onSubmit={handleNext} className="register-form">
-              {error && <div className="error-message">{error}</div>}
+          <div className="w-full max-w-2xl">
+            <div className="flex flex-col items-center text-center mb-10">
+              <h2 className="text-3xl font-black text-slate-900 m-0 leading-tight">
+                {step === 1 ? 'Verify Your Identity' : step === 2 ? 'Define Regional Context' : 'Secure Your Access'}
+              </h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mt-3">
+                {step === 1 ? 'Basic administrative credentials to begin initialization' : 
+                 step === 2 ? 'Global location and HQ specifications for local compliance' : 
+                 'Finalize platform security and login credentials'}
+              </p>
+            </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="companyName">COMPANY NAME</label>
-                <input id="companyName" type="text" required className="form-input" placeholder="Your Company Inc." value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-              </div>
+            <form onSubmit={handleRegister} className="space-y-8 min-h-[400px]">
+              {error && (
+                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-xs font-bold flex items-center gap-3 animate-headshake">
+                   <Icon name="x" size={16} /> {error}
+                </div>
+              )}
+              {successMessage && (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600 text-xs font-bold flex items-center gap-3">
+                   <Icon name="check" size={16} /> {successMessage}
+                </div>
+              )}
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="email">EMAIL ADDRESS</label>
-                <input id="email" type="email" required className="form-input" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
+              {/* STEP 1: IDENTITY */}
+              {step === 1 && (
+                <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                  <div className="space-y-6 bg-slate-50/50 p-8 rounded-[32px] border border-slate-100">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="name">Full Legal Name</label>
+                      <input id="name" type="text" autoFocus required className="reg-input-v2 h-14" placeholder="e.g. Johnathan Doe" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => handleEnter(e, 'pan')} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="pan">PAN Number</label>
+                        <input id="pan" type="text" required className="reg-input-v2 h-14" placeholder="10-digit PAN" value={pan} onChange={e => setPan(e.target.value.toUpperCase())} maxLength={10} onKeyDown={e => handleEnter(e, 'phone')} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="phone">Contact Phone</label>
+                        <input id="phone" type="tel" required className="reg-input-v2 h-14" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => handleEnter(e, undefined, true)} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="phone">PHONE NUMBER</label>
-                <input id="phone" type="tel" required className="form-input" placeholder="+1 234 567 890" value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </div>
+              {/* STEP 2: REGIONAL */}
+              {step === 2 && (
+                <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                  <div className="space-y-6 bg-slate-50/50 p-8 rounded-[32px] border border-slate-100">
+                    <div className="space-y-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Address Line 1 <span className="text-rose-500">*</span></label>
+                        <input id="addr1" type="text" autoFocus required className="reg-input-v2 h-14" placeholder="Enter address line 1" value={addressLine1} onChange={e => setAddressLine1(e.target.value)} onKeyDown={e => handleEnter(e, 'addr2')} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Address Line 2</label>
+                        <input id="addr2" type="text" className="reg-input-v2 h-14" placeholder="Enter address line 2" value={addressLine2} onChange={e => setAddressLine2(e.target.value)} onKeyDown={e => handleEnter(e, 'addr3')} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Address Line 3</label>
+                        <input id="addr3" type="text" className="reg-input-v2 h-14" placeholder="Enter address line 3" value={addressLine3} onChange={e => setAddressLine3(e.target.value)} onKeyDown={e => handleEnter(e, 'pincode')} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Country</label>
+                        <select id="country" className="reg-input-v2 h-14" value={selectedCountry} onChange={e => { setSelectedCountry(e.target.value); setSelectedState(''); setSelectedDistrict(''); }} onKeyDown={e => handleEnter(e, 'state')}>
+                          {geoData.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">State / Province</label>
+                        <select id="state" className="reg-input-v2 h-14" value={selectedState} onChange={e => { setSelectedState(e.target.value); setSelectedDistrict(''); }} onKeyDown={e => handleEnter(e, 'district')} required>
+                          <option value="">Select State</option>
+                          {currentCountry?.states.map((s: any) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">District</label>
+                        <select 
+                          id="district"
+                          className="reg-input-v2 h-14" 
+                          value={selectedDistrict} 
+                          onChange={e => setSelectedDistrict(e.target.value)} 
+                          onKeyDown={e => handleEnter(e, 'pincode')}
+                          disabled={!selectedState} 
+                          required
+                        >
+                          <option value="">Select District</option>
+                          {districtOptions.map((d: string) => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Pincode / ZIP</label>
+                        <input id="pincode" type="text" required className="reg-input-v2 h-14" placeholder="e.g. 400001" value={pincode} onChange={e => setPincode(e.target.value)} onKeyDown={e => handleEnter(e, undefined, true)} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="state">STATE</label>
-                <select id="state" required className="form-input" value={state} onChange={(e) => setState(e.target.value)}>
-                  <option value="">Select a State</option>
-                  {INDIA_STATE_CODES.map((st) => (
-                    <option key={st.code} value={st.name}>
-                      {st.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* STEP 3: ACCESS */}
+              {step === 3 && (
+                <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                  <div className="space-y-6 bg-slate-50/50 p-8 rounded-[32px] border border-slate-100">
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">System Username</label>
+                        <input id="username" type="text" autoFocus required className="reg-input-v2 h-14" placeholder="Unique admin ID" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => handleEnter(e, 'email')} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Admin Email</label>
+                        <input id="email" type="email" required className="reg-input-v2 h-14" placeholder="admin@finpixe.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => handleEnter(e, 'pwd')} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Global Password</label>
+                        <div className="relative">
+                          <input id="pwd" type={showPassword ? 'text' : 'password'} required className="reg-input-v2 h-14 pr-10" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => handleEnter(e, 'pwd2')} />
+                          <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-indigo-600 transition-colors" onClick={() => setShowPassword(!showPassword)}>
+                            <Icon name={showPassword ? 'eye-off' : 'eye'} size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm Password</label>
+                        <div className="relative">
+                          <input id="pwd2" type={showConfirmPassword ? 'text' : 'password'} required className="reg-input-v2 h-14 pr-10" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onKeyDown={e => handleEnter(e, undefined, true)} />
+                          <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-indigo-600 transition-colors" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                            <Icon name={showConfirmPassword ? 'eye-off' : 'eye'} size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="username">USERNAME</label>
-                <input id="username" type="text" required className="form-input" placeholder="Choose a username" value={username} onChange={(e) => setUsername(e.target.value)} />
-              </div>
+                  <div className="p-6 rounded-[24px] bg-indigo-50/50 border border-indigo-100 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-lg shadow-sm">🔒</div>
+                    <p className="text-[10px] font-medium text-slate-500 leading-relaxed max-w-sm">Your master admin account holds global authority. Ensure your password is stored securely and MFA is enabled after initialization.</p>
+                  </div>
+                </div>
+              )}
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="password">PASSWORD</label>
-                <div className="input-with-icon">
-                  <input id="password" type={showPassword ? 'text' : 'password'} required className="form-input" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
-                  <button type="button" className="input-icon-button" onClick={() => setShowPassword(!showPassword)}>
-                    {showPassword ? (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+              <div className="pt-6 flex items-center gap-4">
+                {step > 1 && (
+                  <button type="button" onClick={prevStep} className="flex-1 h-16 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-100 flex items-center justify-center gap-2">
+                    <Icon name="arrow-left" size={12} /> Previous Step
+                  </button>
+                )}
+                
+                {step < 3 ? (
+                  <button type="button" onClick={nextStep} className="flex-[2] h-16 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2">
+                    Continue to {step === 1 ? 'Regional Settings' : 'Access Control'}
+                    <Icon name="arrow-right" size={12} />
+                  </button>
+                ) : (
+                  <button type="submit" disabled={loading} className="flex-[2] h-16 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-3">
+                    {loading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Initializing Master...
+                      </>
                     ) : (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      <>
+                        Finalize Platform Initialization
+                        <Icon name="check" size={14} />
+                      </>
                     )}
                   </button>
-                </div>
+                )}
               </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="confirmPassword">CONFIRM PASSWORD</label>
-                <div className="input-with-icon">
-                  <input id="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} required className="form-input" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-                  <button type="button" className="input-icon-button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
-                    {showConfirmPassword ? (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
-                    ) : (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">LOGO (OPTIONAL)</label>
-                <label htmlFor="logo-upload" className="logo-upload-container">
-                  <svg className="upload-icon mx-auto" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <p className="upload-text">
-                    <span className="upload-link">Upload logo</span> or drag and drop
-                  </p>
-                  {logoFile && <p className="text-xs text-indigo-600 mt-2">Selected: {logoFile.name}</p>}
-                  <input id="logo-upload" type="file" className="sr-only" accept="image/*" onChange={handleLogoUpload} />
-                </label>
-              </div>
-
-              <button type="submit" disabled={loading} className="register-button">
-                {loading ? 'Verifying...' : 'Continue to Plans →'}
-              </button>
             </form>
-            <footer className="register-footer">
-              <p className="footer-text">Already have an account? <button onClick={onSwitchToLogin} className="login-link">Sign In</button></p>
-            </footer>
-          </main>
-        </>
-      ) : (
-        <>
-          <header className="brand-section">
-            <h1 className="brand-heading">FINPIXE</h1>
-            <p className="brand-tagline">Choose the plan that fits your business.</p>
-          </header>
+          </div>
 
-          <main className="register-card plan-step">
-            <div className="plans-grid">
-              <PlanCard name="Free" price={0} features={['Up to 5 invoices per month', 'Basic AI assistance', 'Email support', 'Standard templates']} />
-              <PlanCard name="Starter" price={1200} features={['Up to 100 invoices per month', 'Advanced AI processing', 'Priority email support', 'Custom templates', 'Basic reporting']} popular />
-              <PlanCard name="Pro" price={5000} features={['Unlimited invoices', 'Premium AI features', 'Phone & email support', 'Advanced reporting', 'API access', 'Multi-user access']} />
-            </div>
-
-            <div className="text-center max-w-sm mx-auto">
-              {error && <div className="error-message">{error}</div>}
-              {successMessage && <div className="success-message">{successMessage}</div>}
-              <button
-                onClick={handleRegister}
-                disabled={loading}
-                className="register-button"
-                style={{ height: '60px', fontSize: '18px' }}
-              >
-                {loading ? 'Creating Account...' : 'Complete Registration →'}
-              </button>
-              <button
-                className="login-link mt-6"
-                onClick={() => setStep('details')}
-                style={{ fontSize: '14px' }}
-              >
-                ← Back to details
-              </button>
-            </div>
-          </main>
-        </>
-      )}
-    </div>
+          <footer className="mt-12 pt-8 border-t border-slate-100 w-full flex items-center justify-center gap-6">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Already registered? <button onClick={() => { window.location.href = '/master/login'; }} className="text-indigo-600 ml-1 hover:underline font-black">Sign In to Dashboard</button>
+              </p>
+          </footer>
+        </div>
+      </div>
+    </PremiumBackground>
   );
 };
 
 export default SignupPage;
+

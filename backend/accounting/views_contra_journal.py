@@ -4,9 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from .models_voucher_contra import VoucherContra
 from .models_voucher_journal import VoucherJournal
 from .serializers_contra_journal import VoucherContraSerializer, VoucherJournalSerializer
-from core.utils import TenantQuerysetMixin
+from core.mixins import BranchQuerysetMixin
 
-class VoucherContraViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class VoucherContraViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     """
     ViewSet for Contra Vouchers.
     """
@@ -14,7 +14,7 @@ class VoucherContraViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = VoucherContra.objects.all()
 
-class VoucherJournalViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class VoucherJournalViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     """
     ViewSet for Journal Vouchers.
     """

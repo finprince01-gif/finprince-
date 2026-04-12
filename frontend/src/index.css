@@ -54,7 +54,8 @@
     font-weight: 400;
     line-height: 1.5;
     color: var(--color-text-primary);
-    background-color: var(--color-main-bg);
+    background: linear-gradient(135deg, var(--color-main-bg) 0%, #E3E8FD 100%);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -602,7 +603,8 @@
      MAIN CONTENT AREA
      ---------------------------------------------------------- */
   .erp-main-bg {
-    background: var(--color-main-bg);
+    background: linear-gradient(135deg, var(--color-main-bg) 0%, #E3E8FD 100%) !important;
+    background-attachment: fixed !important;
   }
 
   /* ----------------------------------------------------------
@@ -795,7 +797,7 @@ html.dark .min-h-screen.bg-slate-50\/50 {
 }
 
 html.dark .erp-main-bg {
-  background-color: #000000 !important;
+  background: linear-gradient(135deg, #000000 0%, #050b14 100%) !important;
 }
 
 /* Text colors */

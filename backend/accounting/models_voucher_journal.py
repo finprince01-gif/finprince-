@@ -19,9 +19,6 @@ class VoucherJournal(BaseModel):
     bank_statement_id = models.BigIntegerField(null=True, blank=True)
     bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
     
-    # Store entries as JSON: [{ledger: '', debit: 0, credit: 0, note: '', refNo: ''}]
-    # This matches the frontend 'entries' state
-    entries = models.JSONField(default=list, help_text="List of journal entries")
 
     class Meta:
 
@@ -30,3 +27,21 @@ class VoucherJournal(BaseModel):
 
     def __str__(self):
         return f"{self.voucher_number} - {self.total_debit}"
+
+
+class JournalVoucherEntry(BaseModel):
+    """
+    Normalized individual ledger entries for a Journal Voucher.
+    Replaces the 'entries' JSON array in VoucherJournal.
+    """
+    voucher = models.ForeignKey(VoucherJournal, on_delete=models.CASCADE, related_name='entry_lines')
+    
+    ledger_name = models.CharField(max_length=255)
+    ledger_id = models.BigIntegerField(null=True, blank=True)
+    debit_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    credit_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    entry_note = models.TextField(null=True, blank=True)
+    reference_no = models.CharField(max_length=100, null=True, blank=True)
+
+    class Meta:
+        db_table = 'norm_journal_voucher_entries'

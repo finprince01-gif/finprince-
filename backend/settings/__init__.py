@@ -1,8 +1,8 @@
 """
-Settings Module - Company Settings Management
+Settings Module - Branch Settings Management
 Full 3-layer architecture implementation.
 """
 
-from .api import CompanySettingsViewSet
+from .api import BranchSettingsViewSet
 
-__all__ = ['CompanySettingsViewSet']
+__all__ = ['BranchSettingsViewSet']

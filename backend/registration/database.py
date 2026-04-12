@@ -42,7 +42,7 @@ def create_user(username, email, password_hash, company_name, phone, selected_pl
         tenant_id=tenant_id,
         logo_path=logo_path,
         is_active=True,
-        is_superuser=True,  # Tenant owner is superuser
+        is_superuser=True,  # Branch owner is superuser
         is_staff=True  # Also grant staff access
     )
 
@@ -54,9 +54,9 @@ def create_user(username, email, password_hash, company_name, phone, selected_pl
 
 def create_tenant(company_name):
     """Create a new tenant."""
-    from core.models import Tenant
+    from core.models import Branch
     tenant_uuid = str(uuid.uuid4())
-    tenant = Tenant.objects.create(id=tenant_uuid, name=company_name)
+    tenant = Branch.objects.create(id=tenant_uuid, name=company_name)
     return tenant
 
 

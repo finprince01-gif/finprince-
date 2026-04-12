@@ -165,7 +165,7 @@ def delete_voucher_config(config_id, tenant_id):
 
 
 # ============================================================================
-# HIERARCHY QUERIES (Global - No Tenant Filtering)
+# HIERARCHY QUERIES (Global - No Branch Filtering)
 # ============================================================================
 
 def get_all_hierarchy_data():

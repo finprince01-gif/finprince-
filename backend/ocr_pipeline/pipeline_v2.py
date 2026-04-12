@@ -9,7 +9,7 @@ from accounting.models_voucher_purchase import (
     VoucherPurchaseDueDetails
 )
 from accounting.models import Voucher, MasterLedger
-from core.models import CompanyFullInfo
+from core.models import Branch
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +102,8 @@ def finalize_staging_record(record_id: int) -> dict:
                 }
 
             # Determine input type (Interstate vs Intrastate)
-            company = CompanyFullInfo.objects.filter(tenant_id=tenant_id).first()
-            company_gstin = company.gstin if company else None
+            branch_record = Branch.objects.filter(id=tenant_id).first()
+            company_gstin = branch_record.gstin if branch_record else None
             
             is_interstate = False
             if gstin and company_gstin and len(gstin) >= 2 and len(company_gstin) >= 2:

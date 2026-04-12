@@ -1,8 +1,8 @@
 from datetime import datetime
 from django.db.models import F # type: ignore
-from .models import AIUsage, Tenant # type: ignore
+from .models import AIUsage, Branch # type: ignore
 
-def get_or_create_usage(tenant):
+def get_or_create_usage(branch):
     """
     Get current year and month and return existing AIUsage row or create one.
     """
@@ -10,17 +10,17 @@ def get_or_create_usage(tenant):
     year = now.year
     month = now.month
     
-    # Handle both Tenant object or tenant_id string
-    if isinstance(tenant, str):
+    # Handle both Branch object or branch_id string
+    if isinstance(branch, str):
         usage, created = AIUsage.objects.get_or_create(
-            tenant_id=tenant,
+            branch_id=branch,
             year=year,
             month=month,
             defaults={'used_count': 0}
         )
     else:
         usage, created = AIUsage.objects.get_or_create(
-            tenant=tenant,
+            branch=branch,
             year=year,
             month=month,
             defaults={'used_count': 0}

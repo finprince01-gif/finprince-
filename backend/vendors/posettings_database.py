@@ -18,7 +18,7 @@ class POSettingsDatabase:
         Create a new PO setting entry.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             name: Name of the PO series
             category_id: Optional category ID
             prefix: Optional prefix for PO number
@@ -72,7 +72,7 @@ class POSettingsDatabase:
         Retrieve all PO settings for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             is_active: Filter by active status (default True)
             
         Returns:
@@ -170,7 +170,7 @@ class POSettingsDatabase:
         Retrieve PO settings filtered by category.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             category_id: Category ID to filter by
             
         Returns:
@@ -188,7 +188,7 @@ class POSettingsDatabase:
         Check if a PO setting name already exists for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             name: Name to check
             exclude_id: Optional ID to exclude from check (for updates)
             

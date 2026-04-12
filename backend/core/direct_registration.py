@@ -8,7 +8,7 @@ from django.core.files.storage import default_storage
 import logging
 from django.db import transaction
 
-from .models import User, Tenant
+from .models import User, Branch
 from .serializers import CreateUserSerializer
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class DirectRegisterView(APIView):
             with transaction.atomic():
                 # Create tenant
                 tenant_uuid = str(uuid.uuid4())
-                tenant = Tenant.objects.create(id=tenant_uuid, name=company_name)
+                tenant = Branch.objects.create(id=tenant_uuid, name=company_name)
                 
                 # Handle logo upload if present
                 final_logo_path = None
@@ -116,7 +116,7 @@ class DirectRegisterView(APIView):
                     # Continue anyway
                 
                 # Log successful registration
-                logger.info(f"✅ [{timezone.now()}] New user registered - Tenant: {tenant_uuid} ({company_name}) - User: {username}")
+                logger.info(f"✅ [{timezone.now()}] New user registered - Branch: {tenant_uuid} ({company_name}) - User: {username}")
 
 
 
@@ -151,7 +151,7 @@ class DirectRegisterView(APIView):
                         'email': user.email,
                         'company_name': user.company_name,
                         'phone': user.phone,
-                        'tenant_id': user.tenant_id,
+                        'tenant_id': user.branch_id,
                         'selected_plan': user.selected_plan,
                     },
                     'permissions': permissions

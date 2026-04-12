@@ -209,9 +209,6 @@ class VoucherSalesPaymentDetails(BaseModel):
     posting_note = models.TextField(null=True, blank=True)
     terms_conditions = models.TextField(null=True, blank=True)
     
-    # Store dynamic references from frontend
-    advance_references = models.TextField(default="[]", null=True, blank=True)
-
     class Meta:
 
         db_table = 'voucher_sales_paymentdetails'

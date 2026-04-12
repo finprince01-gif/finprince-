@@ -47,24 +47,25 @@ import Icon from './Icon';
  * Props for Modal component
  */
 interface ModalProps {
-  isOpen: boolean;            // Whether modal is visible
-  onClose?: () => void;       // Optional close handler (if provided, shows close button)
-  title: string;              // Modal title text
-  type: 'loading' | 'error' | 'success' | 'warning';  // Modal type (determines icon and colors)
-  children: React.ReactNode;  // Modal content (message, description, etc.)
+  isOpen: boolean;            
+  onClose?: () => void;       
+  title: string;              
+  type: 'loading' | 'error' | 'success' | 'warning';  
+  children: React.ReactNode;  
+  fullScreen?: boolean;
 }
 
 /**
  * Modal Component - Reusable dialog for messages and loading states
  */
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, type, children }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, type, children, fullScreen }) => {
   // Don't render anything if modal is closed
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-md p-6 relative">
-        <div className="flex items-start space-x-4">
+      <div className={`bg-white rounded-[16px] shadow-none border border-slate-200-none border border-slate-200 w-full relative ${fullScreen ? 'max-w-7xl max-h-[95vh]' : 'max-w-md p-6'}`}>
+        <div className={`flex items-start space-x-4 ${fullScreen ? 'p-8 border-b border-slate-100' : ''}`}>
           {type === 'loading' && (
             <div className="w-12 h-12 flex items-center justify-center bg-indigo-100 rounded-[4px]">
               <svg className="animate-spin h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -90,10 +91,10 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, type, children })
           )}
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-            <div className="mt-2 text-sm text-gray-600">
-              {children}
-            </div>
           </div>
+        </div>
+        <div className={`${fullScreen ? 'p-8 overflow-y-auto max-h-[calc(95vh-100px)]' : 'mt-4'}`}>
+          {children}
         </div>
         {onClose && (
           <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">

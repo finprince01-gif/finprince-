@@ -35,7 +35,7 @@ class VendorPOViewSet(viewsets.ModelViewSet):
         
         # Check if user has tenant_id attribute
         if hasattr(user, 'tenant_id'):
-            return str(user.tenant_id)
+            return str(user.branch_id)
         
         # If not, raise an error
         raise PermissionDenied("User has no associated tenant")
@@ -217,7 +217,7 @@ def get_pending_pos(request):
         if not hasattr(user, 'tenant_id'):
             return Response({'error': 'User has no tenant'}, status=status.HTTP_403_FORBIDDEN)
             
-        tenant_id = str(user.tenant_id)
+        tenant_id = str(user.branch_id)
         vendor_id = request.query_params.get('vendor_id')
         vendor_name = request.query_params.get('vendor_name')
         

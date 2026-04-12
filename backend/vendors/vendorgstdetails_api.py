@@ -35,8 +35,8 @@ class VendorGSTDetailsViewSet(viewsets.ModelViewSet):
         if user.is_anonymous:
             return 'default_tenant'
             
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            return user.tenant_id
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id') and user.tenant.tenant_id:
             return user.tenant.tenant_id
             

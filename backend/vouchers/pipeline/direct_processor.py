@@ -43,8 +43,9 @@ def process_bulk_job(job_id: int, voucher_type: str = 'Purchase'):
                 from ocr_pipeline.service import process_invoice_upload
                 import os
                 
-                # Fetch filename or fallback
-                file_name = os.path.basename(item.file_path) if item.file_path else "tally_import.pdf"
+                # Fetch filename (extracting original name from key f"jobs/{job_id}/{uuid}---{name}")
+                raw_filename = os.path.basename(item.file_path)
+                file_name = raw_filename if '---' not in raw_filename else raw_filename.split('---', 1)[1]
                 
                 res = process_invoice_upload(
                     file_bytes=file_bytes,

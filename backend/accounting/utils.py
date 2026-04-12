@@ -17,7 +17,7 @@ def generate_ledger_code(ledger_data, tenant_id, hierarchy_ids=None):
     
     Args:
         ledger_data (dict): Validated ledger data containing hierarchy fields
-        tenant_id (int): Tenant ID for scoping uniqueness
+        tenant_id (int): Branch ID for scoping uniqueness
         hierarchy_ids (dict): Optional explicit IDs
         
     Returns:

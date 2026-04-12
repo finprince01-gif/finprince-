@@ -17,20 +17,37 @@ class CustomJWTAuthentication(JWTAuthentication):
 
             validated_token = self.get_validated_token(raw_token)
             return self.get_user(validated_token), validated_token
-        except Exception:
-            # Permissive: Return None to allow DRF to handle it via permissions.
-            # This prevents expired tokens (e.g., in cookies) from blocking public views (Login/Refresh).
+        except AuthenticationFailed as e:
+            # Re-raise explicit authentication failures (e.g. inactive users)
+            raise e
+        except Exception as e:
+            # For other errors (like invalid crypto tokens), return None to allow standard permissions to handle it
+            if raw_token:
+                print(f"DEBUG: JWT Auth failed for token: {str(e)}")
             return None
 
     def get_user(self, validated_token):
         """
         Attempts to find and return a user using the given validated token.
-        Only supports User (Owner) model.
-        Also attaches tenant_id from token to user object for easy access.
+        Supports both MasterUser and standard User (Owner) models.
         """
         from rest_framework_simplejwt.settings import api_settings
         from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
         from django.contrib.auth import get_user_model
+        from .models import MasterUser
+
+        # Check token type
+        token_type = validated_token.get('type')
+
+        if token_type == 'master':
+            master_id = validated_token.get('master_id')
+            if not master_id:
+                raise InvalidToken("Master token contained no recognizable ID")
+            try:
+                master = MasterUser.objects.get(id=master_id, is_active=True)
+                return master
+            except MasterUser.DoesNotExist:
+                raise AuthenticationFailed("Master User not found", code="user_not_found")
 
         try:
             user_id = validated_token[api_settings.USER_ID_CLAIM]

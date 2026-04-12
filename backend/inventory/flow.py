@@ -1,5 +1,5 @@
 """
-Inventory Flow Layer - Business Logic + RBAC + Tenant Validation
+Inventory Flow Layer - Business Logic + RBAC + Branch Validation
 This is the ONLY place for business decisions in the Inventory module.
 Every function MUST start with tenant validation and permission checks.
 """
@@ -17,7 +17,7 @@ logger = logging.getLogger('inventory.flow')
 
 def list_stock_groups(user):
     """List all stock groups for the user's tenant."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -27,7 +27,7 @@ def list_stock_groups(user):
 
 def create_stock_group(user, data):
     """Create a new stock group."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -37,7 +37,7 @@ def create_stock_group(user, data):
 
 def update_stock_group(user, stock_group_id, data):
     """Update an existing stock group."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -47,7 +47,7 @@ def update_stock_group(user, stock_group_id, data):
 
 def delete_stock_group(user, stock_group_id):
     """Delete a stock group."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -61,7 +61,7 @@ def delete_stock_group(user, stock_group_id):
 
 def list_units(user):
     """List all units for the user's tenant."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -71,7 +71,7 @@ def list_units(user):
 
 def create_unit(user, data):
     """Create a new unit."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -81,7 +81,7 @@ def create_unit(user, data):
 
 def update_unit(user, unit_id, data):
     """Update an existing unit."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -91,7 +91,7 @@ def update_unit(user, unit_id, data):
 
 def delete_unit(user, unit_id):
     """Delete a unit."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -105,7 +105,7 @@ def delete_unit(user, unit_id):
 
 def list_stock_items(user):
     """List all stock items for the user's tenant."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -115,7 +115,7 @@ def list_stock_items(user):
 
 def create_stock_item(user, data):
     """Create a new stock item."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -125,7 +125,7 @@ def create_stock_item(user, data):
 
 def bulk_create_stock_items(user, items_data):
     """Create multiple stock items at once."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -135,7 +135,7 @@ def bulk_create_stock_items(user, items_data):
 
 def update_stock_item(user, stock_item_id, data):
     """Update an existing stock item."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -145,7 +145,7 @@ def update_stock_item(user, stock_item_id, data):
 
 def delete_stock_item(user, stock_item_id):
     """Delete a stock item."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -159,7 +159,7 @@ def delete_stock_item(user, stock_item_id):
 
 def list_stock_movements(user):
     """List all stock movements for the user's tenant."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")
@@ -170,7 +170,7 @@ def list_stock_movements(user):
 
 def create_stock_movement(user, data):
     """Create a new stock movement."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -180,7 +180,7 @@ def create_stock_movement(user, data):
 
 def update_stock_movement(user, movement_id, data):
     """Update an existing stock movement."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    
@@ -190,7 +190,7 @@ def update_stock_movement(user, movement_id, data):
 
 def delete_stock_movement(user, movement_id):
     """Delete a stock movement."""
-    # 1. Tenant validation
+    # 1. Branch validation
     tenant_id = get_user_tenant_id(user)
     if not tenant_id:
         raise PermissionError("User has no associated tenant")    

@@ -35,6 +35,7 @@ class InvoiceProcessingItem(models.Model):
         ('skipped', 'Skipped (blank)'),
     ]
     job = models.ForeignKey(BulkInvoiceJob, on_delete=models.CASCADE, related_name='items')
+    tenant_id = models.CharField(max_length=100, db_index=True)
     file_path = models.CharField(max_length=500)
     file_hash = models.CharField(max_length=64, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -62,6 +63,7 @@ class InvoiceOCRTemp(models.Model):
     upload_session_id = models.CharField(max_length=255, null=True, blank=True)
     voucher_type = models.CharField(max_length=50, default='PURCHASE')
     expires_at = models.DateTimeField(null=True, blank=True)
+    ocr_raw_text = models.TextField(null=True, blank=True)
     extracted_data = models.JSONField(null=True, blank=True)
     processed = models.BooleanField(default=False)
     validation_status = models.CharField(max_length=50, default='PENDING')
