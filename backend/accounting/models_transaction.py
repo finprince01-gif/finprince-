@@ -100,7 +100,7 @@ class TransactionFile(models.Model):
 
     
     class Meta:
-        db_table = 'Transcaction_file'
+        db_table = 'transaction_file'
         managed = False  # Django will not manage this table
         verbose_name = 'Transaction File'
         verbose_name_plural = 'Transaction Files'

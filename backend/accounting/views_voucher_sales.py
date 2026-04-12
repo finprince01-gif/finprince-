@@ -6,12 +6,8 @@ from .models_voucher_sales import VoucherSalesInvoiceDetails
 from .serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
 from .models import Voucher, JournalEntry, MasterLedger
 from .models_voucher_receipt import VoucherReceiptSingle
-<<<<<<< HEAD
 from core.mixins import BranchQuerysetMixin
-=======
-from core.utils import TenantQuerysetMixin
 from decimal import Decimal
->>>>>>> origin/main
 import datetime
 
 class VoucherSalesViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):

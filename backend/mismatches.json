@@ -1,0 +1,476 @@
+[
+    {
+        "type": "UNUSED COLUMN",
+        "app": "core",
+        "model": "Tenant",
+        "table": "tenants",
+        "column": "updated_at"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "core",
+        "model": "User",
+        "table": "users",
+        "column": "first_name"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "core",
+        "model": "User",
+        "table": "users",
+        "column": "last_name"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "core",
+        "model": "User",
+        "table": "users",
+        "column": "date_joined"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "core",
+        "model": "User",
+        "table": "users",
+        "column": "email_verified"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "core",
+        "model": "User",
+        "table": "users",
+        "column": "login_status"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "core",
+        "model": "User",
+        "table": "users",
+        "column": "last_activity"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "core",
+        "model": "AIUsage",
+        "table": "ai_usage",
+        "column": "plan"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "ReceiptVoucher",
+        "table": "receipt_vouchers",
+        "column": "receive_from_name"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "ReceiptVoucher",
+        "table": "receipt_vouchers",
+        "column": "receive_in"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "ReceiptVoucher",
+        "table": "receipt_vouchers",
+        "column": "receive_from"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "ReceiptVoucherItem",
+        "table": "receipt_voucher_items",
+        "column": "receive_from_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "date"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "voucher_type"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "voucher_number"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "advance_ref_no"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "receive_in_ledger_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "receive_from_ledger_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "bank_reconciled"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "bank_reconcile_date"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "bank_statement_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "bank_reference_number"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "source"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptSingle",
+        "table": "voucher_receipt_single",
+        "column": "voucher_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "date"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "voucher_number"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "receipt_rows"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "posting_note"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "advance_ref_no"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "receive_in_ledger_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "bank_reconciled"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "bank_reconcile_date"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "bank_statement_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "bank_reference_number"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherReceiptBulk",
+        "table": "voucher_receipt_bulk",
+        "column": "voucher_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherExpense",
+        "table": "voucher_expenses",
+        "column": "voucher_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherJournal",
+        "table": "voucher_journal",
+        "column": "voucher_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherPurchaseSupplierDetails",
+        "table": "voucher_purchase_supplier_details",
+        "column": "creation_source"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherPurchaseSupplierDetails",
+        "table": "voucher_purchase_supplier_details",
+        "column": "voucher_id"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "VoucherCreditNoteInvoiceDetails",
+        "table": "voucher_credit_note_invoice_details",
+        "column": "input_type"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "MasterLedger",
+        "table": "master_ledgers",
+        "column": "ledger"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "accounting",
+        "model": "MasterHierarchyRaw",
+        "table": "master_hierarchy_raw",
+        "column": "group_2"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationInterUnit",
+        "table": "inventory_operation_interunit",
+        "column": "hsn_sac"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationProduction",
+        "table": "inventory_operation_production",
+        "column": "items"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationProduction",
+        "table": "inventory_operation_production",
+        "column": "delivery_challan"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationProduction",
+        "table": "inventory_operation_production",
+        "column": "eway_bill_details"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationScrap",
+        "table": "inventory_operation_scrap",
+        "column": "items"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationScrap",
+        "table": "inventory_operation_scrap",
+        "column": "delivery_challan"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationScrap",
+        "table": "inventory_operation_scrap",
+        "column": "eway_bill_details"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationOutward",
+        "table": "inventory_operation_outward",
+        "column": "items"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationOutward",
+        "table": "inventory_operation_outward",
+        "column": "delivery_challan"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationOutward",
+        "table": "inventory_operation_outward",
+        "column": "eway_bill_details"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "InventoryOperationNewGRN",
+        "table": "inventory_operation_new_grn",
+        "column": "items"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "HsnGstMaster",
+        "table": "hsn_gst_master",
+        "column": "created_at"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "inventory",
+        "model": "HsnGstMaster",
+        "table": "hsn_gst_master",
+        "column": "updated_at"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "vendors",
+        "model": "VendorMasterCategory",
+        "table": "vendor_master_category",
+        "column": "is_system"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "vendors",
+        "model": "VendorMasterCategory",
+        "table": "vendor_master_category",
+        "column": "sub_subgroup"
+    },
+    {
+        "type": "UNUSED COLUMN",
+        "app": "services",
+        "model": "Service",
+        "table": "service_list",
+        "column": "service_group_id"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "answers"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "company_informations"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "gst_apiusagelog"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "journal_voucher_entry_lines"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "norm_debit_note_line_items"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "norm_debit_note_supply_headers"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "payment_allocation_details"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "payment_allocation_line_details"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "questions"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "receipt_allocation_details"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "vendor_master_vendorcreation_productservices"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "voucher_debit_note_due_details"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "voucher_debit_note_supplier_details"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "voucher_debit_note_transit_details"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "voucher_journal_entries"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "voucher_payment_bulk"
+    },
+    {
+        "type": "UNUSED TABLE",
+        "table": "voucher_payment_single"
+    }
+]

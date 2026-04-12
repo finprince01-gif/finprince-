@@ -99,9 +99,6 @@ class PaymentVoucherItem(models.Model):
     party_customer_id = models.BigIntegerField(null=True, blank=True)
     party_vendor_id   = models.BigIntegerField(null=True, blank=True)
 
-    # Invoice-level transaction breakdown (legacy denormalized JSON blob).
-    transaction_details = models.JSONField(null=True, blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True,     null=True, blank=True)
 
@@ -121,26 +118,6 @@ class PaymentVoucherItem(models.Model):
 
     def __str__(self):
         return f"Item {self.id} → {self.pay_to_ledger} = {self.amount}"
-
-
-class PaymentAllocationDetail(models.Model):
-    """
-    Normalized transaction details for PaymentVoucherItem.
-    Tracks which specific invoices/bills this payment is covering.
-    Matches schema in migration 0014.
-    """
-    payment_item = models.ForeignKey(PaymentVoucherItem, on_delete=models.CASCADE, related_name='allocations')
-    invoice_date = models.DateField(null=True, blank=True)
-    invoice_no = models.CharField(max_length=100, null=True, blank=True)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    pending_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    is_advance = models.BooleanField(default=False)
-    
-    tenant_id = models.CharField(max_length=36, db_index=True, null=True, blank=True)
-
-    class Meta:
-        db_table = 'norm_payment_allocations'
 
 
 # ---------------------------------------------------------------------------

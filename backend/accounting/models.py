@@ -33,7 +33,7 @@ from .models_voucher_sales import ( # pyre-fixme
 )
 from .models_voucher_allocation import VoucherAllocation
 from .models_advance_allocation import AdvanceAllocationMap  # noqa: F401  advance consumption tracking
-from .models_pending_transaction import PendingTransaction, AllocationLink  # noqa: F401  bill allocation lifecycle
+from .models_pending_transaction import PendingTransaction, AllocationLink, VoucherPendingTransaction  # noqa: F401  bill allocation lifecycle
 
 
 # ============================================================================

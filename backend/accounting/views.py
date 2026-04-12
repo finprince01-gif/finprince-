@@ -176,12 +176,11 @@ class MasterHierarchyRawViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = MasterHierarchyRawSerializer
     permission_classes = [IsAuthenticated]
     
-    def get_queryset(self):
-        # Additional safety: Only allow staff or MasterUser
-        from core.models import MasterUser
-        if self.request.user.is_staff or isinstance(self.request.user, MasterUser):
-            return super().get_queryset()
-        return super().get_queryset().none()
+    def list(self, request, *args, **kwargs):
+        """Builds and returns a hierarchical tree structure from raw CSV data."""
+        from .hierarchy_service import build_ledger_hierarchy_tree
+        tree = build_ledger_hierarchy_tree()
+        return Response(tree)
 
 
 # ============================================================================

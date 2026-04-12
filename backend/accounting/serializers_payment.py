@@ -1,14 +1,10 @@
 import uuid
 from rest_framework import serializers  # type: ignore[import]
-<<<<<<< HEAD
-from .models_voucher_payment import PaymentVoucher, PaymentVoucherItem  # type: ignore[import]
-from .models_voucher_allocation import VoucherAllocation
-=======
 from .models_voucher_payment import (  # type: ignore[import]
-    PaymentVoucher, PaymentVoucherItem, PaymentAllocationDetail
+    PaymentVoucher, PaymentVoucherItem
 )
-
->>>>>>> main
+from .models_pending_transaction import VoucherPendingTransaction
+from .models_voucher_allocation import VoucherAllocation
 from .models import MasterLedger, Voucher, JournalEntry  # type: ignore[import]
 from accounting.services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal, InvalidOperation
@@ -23,10 +19,10 @@ def _safe_decimal(value):
 
 class PaymentAllocationDetailSerializer(serializers.ModelSerializer):
     class Meta:
-        model = PaymentAllocationDetail
+        model = VoucherPendingTransaction
         fields = [
             'id', 'invoice_no', 'invoice_date', 'total_amount',
-            'paid_amount', 'pending_amount', 'is_advance'
+            'amount_applied', 'pending_amount', 'balance_after', 'is_advance'
         ]
 
 # ---------------------------------------------------------------------------
@@ -43,16 +39,17 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
     pay_to_ledger_name = serializers.CharField(source='pay_to_ledger.name', read_only=True)
     vendor_name = serializers.SerializerMethodField()
     customer_name = serializers.SerializerMethodField()
-    allocations = PaymentAllocationDetailSerializer(many=True, read_only=True, source='allocation_lines')
+    allocations = PaymentAllocationDetailSerializer(many=True, read_only=True, source='pending_transactions')
+    transaction_details = serializers.JSONField(write_only=True, required=False)
 
     class Meta:
         model = PaymentVoucherItem
         fields = [
             'id', 'amount', 'reference_type', 'reference_id', 
             'reference_number', 'pending_amount', 'balance_after', 'invoice_date',
-            'transaction_details', 'pay_to_ledger', 'pay_to_ledger_name',
+            'pay_to_ledger', 'pay_to_ledger_name',
             'type', 'id_ref', 'vendor_name', 'customer_name',
-            'advance_ref_no', 'allocations'
+            'advance_ref_no', 'allocations', 'transaction_details'
         ]
         extra_kwargs = {
             'pay_to_ledger': {'required': False, 'allow_null': True},
@@ -125,6 +122,14 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
 
     def _get_party_ids(self, ledger):
         if not ledger: return None, None, None
+        
+        # If passed as ID, resolve the object first
+        if isinstance(ledger, (int, str)):
+            try:
+                ledger = MasterLedger.objects.get(pk=ledger)
+            except:
+                return self._safe_int(ledger), None, None
+
         try:
             vendor = getattr(ledger, 'vendors_basic', None)
             vid = vendor.first().id if vendor and vendor.exists() else None
@@ -255,6 +260,20 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
     def get_total_payment(self, obj):
         return obj.total_amount
 
+    def validate_voucher_number(self, value):
+        if not value:
+            return value
+        request = self.context.get('request')
+        tenant_id = getattr(getattr(request, 'user', None), 'tenant_id', None)
+        
+        qs = PaymentVoucher.objects.filter(tenant_id=tenant_id, voucher_number=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        
+        if qs.exists():
+            raise serializers.ValidationError(f"Voucher number {value} is already in use for this branch.")
+        return value
+
     def validate(self, attrs):
         request = self.context.get('request')
         tenant_id = getattr(getattr(request, 'user', None), 'tenant_id', None)
@@ -302,14 +321,21 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
         
         validated_data['total_amount'] = total
 
-        # Populate master party IDs
-        pay_from = validated_data.get('pay_from')
-        l_id, c_id, v_id = self._get_party_ids(pay_from)
-        validated_data['ledger_id_val'] = l_id
-        validated_data['party_customer_id'] = c_id
-        validated_data['party_vendor_id'] = v_id
+        # We'll resolve party IDs for the Master record.
+        # RATIONALE: Master ledger_id_val logic was showing Bank ID. 
+        # User wants to see Vendor/Customer ID in the master record too.
+        main_l_id, main_c_id, main_v_id = None, None, None
+        if items_data:
+            first_item = items_data[0]
+            pay_to_raw = first_item.get('pay_to_ledger') or first_item.get('pay_to')
+            if pay_to_raw:
+                main_l_id, main_c_id, main_v_id = self._get_party_ids(pay_to_raw)
 
-        voucher = PaymentVoucher.objects.create(**validated_data)
+        validated_data['ledger_id_val'] = main_l_id
+        validated_data['party_customer_id'] = main_c_id
+        validated_data['party_vendor_id'] = main_v_id
+
+        voucher = super().create(validated_data)
 
         # Create child items (Strictly one row per logic)
         for item_data in items_data:
@@ -332,7 +358,6 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                     if not txn_details: txn_details = {}
                     txn_details['reference_no'] = adv_ref
 
-<<<<<<< HEAD
                 # Extract date for normalization
                 item_date_raw = txn_details.get('date')
                 item_date = None
@@ -348,10 +373,7 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
 
                 p_l_id, p_c_id, p_v_id = self._get_party_ids(pay_to_ledger)
 
-                pvi = PaymentVoucherItem.objects.create(
-=======
                 item_instance = PaymentVoucherItem.objects.create(
->>>>>>> main
                     voucher=voucher, 
                     tenant_id=tenant_id,
                     pay_to_ledger=pay_to_ledger, 
@@ -363,31 +385,12 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                     balance_after=item_data.get('balance_after') or txn_details.get('pending') or 0,
                     invoice_date=item_date,
                     advance_ref_no=adv_ref,
-                    transaction_details=txn_details,
                     ledger_id_val=p_l_id,
                     party_customer_id=p_c_id,
                     party_vendor_id=p_v_id
                 )
 
-                # NEW: Save to separate VoucherAllocation table for full normalization
-                VoucherAllocation.objects.create(
-                    tenant_id=tenant_id,
-                    ledger=pay_to_ledger,
-                    party_customer_id=p_c_id,
-                    party_vendor_id=p_v_id,
-                    source_voucher_id=voucher.id,
-                    source_type='PAYMENT',
-                    source_voucher_no=voucher.voucher_number,
-                    source_voucher_date=voucher.date,
-                    target_voucher_id=self._safe_int(item_data.get('reference_id')),
-                    target_type='PURCHASE', 
-                    target_voucher_no=pvi.reference_number,
-                    target_voucher_date=pvi.invoice_date,
-                    reference_type=pvi.reference_type,
-                    pending_amount=pvi.pending_amount,
-                    amount=pvi.amount,
-                    balance_after=pvi.balance_after
-                )
+                # Use normalized logic for both Payment and Receipt
                 self._sync_allocations(item_instance, txn_details)
 
         self._post_to_global_voucher(voucher)
@@ -422,8 +425,9 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
         return instance
 
     def _sync_allocations(self, item_instance, details):
-        """Sync transaction_details JSON to PaymentAllocationDetail table."""
+        """Sync transaction_details breakdown to common VoucherPendingTransaction table."""
         if not details: return
+        import json
         if isinstance(details, str):
             try: details = json.loads(details)
             except: return
@@ -431,19 +435,22 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
         if isinstance(details, dict): details = [details]
         if not isinstance(details, list): return
 
-        PaymentAllocationDetail.objects.filter(payment_item=item_instance).delete()
+        # Delete existing common allocations
+        VoucherPendingTransaction.objects.filter(payment_item=item_instance).delete()
         
         for d in details:
             if not isinstance(d, dict): continue
-            PaymentAllocationDetail.objects.create(
+            VoucherPendingTransaction.objects.create(
                 payment_item=item_instance,
                 tenant_id=item_instance.tenant_id,
                 invoice_no=d.get('referenceNumber', d.get('invoiceNo', d.get('invoice_no', ''))),
                 invoice_date=d.get('date'),
                 total_amount=_safe_decimal(d.get('amount', 0)),
-                paid_amount=_safe_decimal(d.get('payment', d.get('payNow', d.get('paid_amount', 0)))),
+                amount_applied=_safe_decimal(d.get('payment', d.get('payNow', d.get('paid_amount', 0)))),
                 pending_amount=_safe_decimal(d.get('pending', 0)),
-                is_advance=d.get('advance', d.get('is_advance', False))
+                balance_after=_safe_decimal(d.get('balance_after', 0)),
+                is_advance=d.get('advance', d.get('is_advance', False)),
+                advance_ref_no=d.get('reference_no') or d.get('advanceRefNo')
             )
 
     # ------------------------------------------------------------------
@@ -502,9 +509,6 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                 amt = _safe_decimal(item.amount)
                 if amt > 0 and item.pay_to_ledger_id:
                     total_debit += amt  # type: ignore
-<<<<<<< HEAD
-=======
-                    
                     # Resolve vendor or customer ID for this ledger
                     v_id = None
                     c_id = None
@@ -516,19 +520,15 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                         if customer:
                             c_id = customer.id
                     
->>>>>>> main
                     entries.append({
                         "ledger_id": item.pay_to_ledger_id, 
                         "debit": float(amt), 
                         "credit": 0,
-<<<<<<< HEAD
                         "ledger_id_val": item.ledger_id_val,
                         "party_customer_id": item.party_customer_id,
-                        "party_vendor_id": item.party_vendor_id
-=======
+                        "party_vendor_id": item.party_vendor_id,
                         "vendor_id": v_id,
                         "customer_id": c_id
->>>>>>> main
                     })
 
             if total_debit > 0 and voucher.pay_from_id:  # type: ignore

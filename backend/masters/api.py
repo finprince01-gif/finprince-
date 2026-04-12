@@ -272,15 +272,37 @@ class MasterVoucherConfigViewSet(viewsets.ModelViewSet):
 class MasterHierarchyRawViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Global hierarchy data - no authentication required, no tenant filtering.
-    All logic delegated to flow layer.
+    Returns flat rows that match the frontend HierarchyRow TypeScript interface.
+    The frontend (LedgerCreationWizard, HierarchicalDropdown) builds its own
+    tree client-side from these flat rows.
     """
-    queryset = MasterHierarchyRaw.objects.all()
+    queryset = MasterHierarchyRaw.objects.none()  # Unused - raw SQL used instead
     serializer_class = MasterHierarchyRawSerializer
     permission_classes = [AllowAny]  # Global data, accessible to all
-    
-    def get_queryset(self):
-        """Delegate to flow layer."""
-        return flow.list_hierarchy_data()
+
+    def list(self, request, *args, **kwargs):
+        """
+        Returns flat rows from master_hierarchy_raw with field names that
+        match the frontend HierarchyRow interface:
+        [
+            {
+                "id": 1,
+                "type_of_business_1": "Company",
+                "financial_reporting_1": "Balance Sheet",
+                "major_group_1": "Owners' Funds",
+                "group_1": "Share capital",
+                "sub_group_1_1": "Equity Share Capital",
+                "sub_group_2_1": null,
+                "sub_group_3_1": null,
+                "ledger_1": null,
+                "code": "..."
+            },
+            ...
+        ]
+        """
+        from accounting.hierarchy_service import get_flat_hierarchy_rows
+        rows = get_flat_hierarchy_rows()
+        return Response(rows)
 
 
 # ============================================================================

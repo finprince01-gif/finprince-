@@ -134,3 +134,49 @@ class AllocationLink(BaseModel):
             f"→ {self.target_reference_type}:{self.target_reference_number} "
             f"₹{self.amount_applied}"
         )
+
+
+class VoucherPendingTransaction(BaseModel):
+    """
+    Common table for pending transaction details in Payment and Receipt vouchers.
+    Replaces JSON fields and module-specific allocation tables.
+    """
+    # Links to the source item (one of these must be set)
+    payment_item = models.ForeignKey(
+        'accounting.PaymentVoucherItem', 
+        on_delete=models.CASCADE, 
+        related_name='pending_transactions',
+        null=True, blank=True
+    )
+    receipt_item = models.ForeignKey(
+        'accounting.ReceiptVoucherItem', 
+        on_delete=models.CASCADE, 
+        related_name='pending_transactions',
+        null=True, blank=True
+    )
+
+    # Normalized fields from the allocation logic
+    invoice_no = models.CharField(max_length=150, null=True, blank=True)
+    invoice_date = models.DateField(null=True, blank=True)
+    
+    # Financials
+    total_amount   = models.DecimalField(max_digits=15, decimal_places=2, default=0) # Total value of the invoice
+    pending_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0) # Pending before this transaction
+    amount_applied = models.DecimalField(max_digits=15, decimal_places=2, default=0) # Amount being paid/received now
+    balance_after  = models.DecimalField(max_digits=15, decimal_places=2, default=0) # Balance remaining after this
+    
+    # Advance tracking
+    is_advance     = models.BooleanField(default=False)
+    advance_ref_no = models.CharField(max_length=150, null=True, blank=True)
+
+    class Meta:
+        db_table = 'voucher_pending_transactions'
+        indexes = [
+            models.Index(fields=['tenant_id', 'invoice_no']),
+            models.Index(fields=['payment_item']),
+            models.Index(fields=['receipt_item']),
+        ]
+
+    def __str__(self):
+        source = f"PaymentItem:{self.payment_item_id}" if self.payment_item_id else f"ReceiptItem:{self.receipt_item_id}"
+        return f"PendingTxn for {source} -> {self.invoice_no} ({self.amount_applied})"
