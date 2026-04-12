@@ -936,27 +936,8 @@ const CustomerContent: React.FC = () => {
     };
 
     const handleNextToGst = () => {
-        if (!customerFormData.customer_name.trim()) {
-            showError('Please enter customer name');
-            return;
-        }
-        if (!customerFormData.pan_number || !customerFormData.pan_number.trim()) {
-            showError('Please enter PAN number');
-            return;
-        }
-        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-        if (!panRegex.test(customerFormData.pan_number.toUpperCase())) {
-            showError('Invalid PAN format. Correct format: ABCDE1234F');
-            return;
-        }
-
-        if (customerFormData.email_address && customerFormData.email_address.trim()) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(customerFormData.email_address)) {
-                showError('Invalid email format');
-                return;
-            }
-        }
+        // Validation removed to allow direct tab selection from overview grid as requested.
+        // Form-level validation still exists on the "Next" button in the Basic Details section.
         // Reset GST related states to ensure "Image 2" clean state
         setSelectedGSTINs([]);
         setGstInput('');
@@ -1579,8 +1560,8 @@ const CustomerContent: React.FC = () => {
                 {/* GST Details Content */}
                 {
                     activeTab === 'GST Details' && (
-                        <div className="max-w-4xl mx-auto">
-                            <div className="flex justify-center mb-10 pt-4">
+                        <div className="max-w-6xl mx-auto">
+                            <div className="flex justify-end mb-10 pt-4">
                                 <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded-[4px] hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200">
                                     <input
                                         type="checkbox"
@@ -1588,13 +1569,13 @@ const CustomerContent: React.FC = () => {
                                         onChange={(e) => setIsUnregistered(e.target.checked)}
                                         className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                     />
-                                    <span className="text-sm font-semibold text-gray-700">Customer is Unregistered</span>
+                                    <span className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Customer is Unregistered</span>
                                 </label>
                             </div>
 
                             {/* Conditional Content based on Registration Status */}
                             {isUnregistered ? (
-                                <div className="space-y-8 animate-fadeIn">
+                                <div className="space-y-8 animate-fadeIn bg-white border border-gray-200 rounded-[4px] p-8">
                                     {/* Unregistered Fields */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <div className="relative">
@@ -1643,6 +1624,16 @@ const CustomerContent: React.FC = () => {
                                         {!addMultipleBranches ? (
                                             // Single Branch - Simple Address
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Reference Name</label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        value={unregisteredBranches[0].referenceName || ''}
+                                                        onChange={(e) => handleManualBranchChange(1, 'referenceName', e.target.value)}
+                                                        placeholder="e.g. Main Office, Warehouse"
+                                                    />
+                                                </div>
                                                 <div className="md:col-span-2">
                                                     <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
                                                     <input
@@ -2242,7 +2233,7 @@ const CustomerContent: React.FC = () => {
                                 {/* Table Header */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr 80px 1fr 1fr', gap: '12px' }} className="px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                     <div>No</div>
-                                    <div>Item Code <span className="text-red-500">*</span></div>
+                                    <div>Item Code</div>
                                     <div>Item Name</div>
                                     <div>HSN/SAC Code</div>
                                     <div>UOM</div>
@@ -6259,9 +6250,11 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                             <thead className="bg-[#F8F9FA]">
                                                 <tr>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Date</th>
-                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Transaction Particulars</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100 min-w-[350px]">Transaction Particulars</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Status</th>
+                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Running Balance</th>
                                                     <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
                                                     <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Credit (₹)</th>
                                                 </tr>
@@ -6335,7 +6328,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                         </div>
                                                     </th>
                                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Reference No</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200 min-w-[300px]">
                                                         <div className="flex items-center justify-between relative text-gray-400">
                                                             <span>Ledger</span>
                                                             <div className="ml-2">
@@ -6367,33 +6360,13 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-between relative text-gray-400">
                                                             <span>Status</span>
-                                                            <div className="ml-2">
-                                                                <Filter
-                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'status' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
-                                                                    onClick={() => toggleFilter('status')}
-                                                                />
-                                                                {activeFilter === 'status' && (
-                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className="text-xs font-semibold text-gray-700">Filter Status</span>
-                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                        </div>
-                                                                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PurchaseStatus | SalesStatus | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
-                                                                            <option value="">All Statuses</option>
-                                                                            {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                                        </select>
-                                                                        <button
-                                                                            onClick={() => setStatusFilter('')}
-                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
-                                                                        >
-                                                                            Clear Filter
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
                                                         </div>
                                                     </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Posting Status</th>
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                        <div className="flex items-center justify-end relative text-gray-400">
+                                                            <span>Running Balance</span>
+                                                        </div>
+                                                    </th>
                                                     <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-end relative text-gray-400">
                                                             <span>Debit</span>
@@ -6423,7 +6396,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             </div>
                                                         </div>
                                                     </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
                                                         <div className="flex items-center justify-end relative text-gray-400">
                                                             <span>Credit</span>
                                                             <div className="ml-2">
@@ -6452,7 +6425,6 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             </div>
                                                         </div>
                                                     </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
                                                 </tr>
                                             </thead>
                                         )}
@@ -6470,8 +6442,23 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">(as per details)</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">Sales</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{entry.referenceNo || entry.ledger}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-50">
+                                                                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900 border-r border-gray-50">
+                                                                    {entry.runningBalance === 0 ? '-' : (
+                                                                        <span>
+                                                                            {formatCurrency(Math.abs(entry.runningBalance))}
+                                                                            <span className="ml-1 text-gray-500 text-xs font-normal">
+                                                                                {entry.runningBalance >= 0 ? 'Dr' : 'Cr'}
+                                                                            </span>
+                                                                        </span>
+                                                                    )}
+                                                                </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400">-</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold">
+                                                                    {entry.credit !== 0 ? `₹${entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                </td>
                                                             </tr>
                                                             {/* BREAKDOWN ROWS */}
                                                             {entry.originalInv && (
@@ -6480,13 +6467,19 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                     <tr className="bg-white">
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
-                                                                            {customer.name}
+                                                                            <div className="flex justify-between items-center w-full">
+                                                                                <span>{customer.name}</span>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <span className="text-gray-900 font-bold ml-4">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                    <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                                                </div>
+                                                                            </div>
                                                                         </td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700 border-r border-gray-50">
-                                                                            ₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                        </td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                     </tr>
 
@@ -6506,13 +6499,19 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                             <tr key={tds.key} className="bg-white">
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
-                                                                                    {labelWithPerc}
+                                                                                    <div className="flex justify-between items-center w-full">
+                                                                                        <span>{labelWithPerc}</span>
+                                                                                        <div className="flex items-center gap-1">
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700 border-r border-gray-50">
-                                                                                    ₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                                </td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         );
@@ -6522,14 +6521,20 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                     <tr className="bg-white">
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
-                                                                            Sales Ledger
+                                                                            <div className="flex justify-between items-center w-full">
+                                                                                <span>Sales Ledger</span>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <span className="text-gray-900 font-bold ml-4">₹{((entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                    <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                                                </div>
+                                                                            </div>
                                                                         </td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700">
-                                                                            ₹{((entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                        </td>
+                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                     </tr>
 
                                                                     {[
@@ -6550,19 +6555,25 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                             <tr key={tax.key} className="bg-white">
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
-                                                                                    {labelWithPerc}
+                                                                                    <div className="flex justify-between items-center w-full">
+                                                                                        <span>{labelWithPerc}</span>
+                                                                                        <div className="flex items-center gap-1">
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700">
-                                                                                    ₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                                </td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         );
                                                                     })}
                                                                     <tr className="bg-white">
-                                                                        <td className="py-2" colSpan={6}></td>
+                                                                        <td className="py-2" colSpan={8}></td>
                                                                     </tr>
                                                                 </>
                                                             )}
@@ -6580,10 +6591,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.posting_status || '-'}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-semibold">
                                                                 {entry.runningBalance === 0 ? '-' : (
                                                                     <span>
                                                                         {formatCurrency(Math.abs(entry.runningBalance))}
@@ -6593,13 +6601,15 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                     </span>
                                                                 )}
                                                             </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-medium">{formatCurrency(entry.credit)}</td>
                                                         </tr>
                                                     )}
                                                 </React.Fragment>
                                             ))}
                                             {filteredData.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                                                         No ledger entries found for this customer.
                                                     </td>
                                                 </tr>
@@ -6610,7 +6620,6 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                 <td colSpan={6} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
-                                                <td className="px-6 py-4 text-sm text-right text-gray-400 italic"></td>
                                             </tr>
                                         </tfoot>
                                     </table>

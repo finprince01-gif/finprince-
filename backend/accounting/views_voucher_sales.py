@@ -7,6 +7,7 @@ from .serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
 from .models import Voucher, JournalEntry, MasterLedger
 from .models_voucher_receipt import VoucherReceiptSingle
 from core.utils import TenantQuerysetMixin
+from decimal import Decimal
 import datetime
 
 class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
@@ -161,10 +162,24 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
                     credit=amount
                 )
 
-                # 5. Mark Invoice as Paid (Implicitly by linking)
-                # We'll also update a status if it exists.
-                # For now, the "Due Invoices" query should exclude this.
-                # The user says "Once posted, the due sales invoice is no longer displayed here"
+
+                # 5. Mark Invoice as Paid / Update Balance
+                if hasattr(invoice, 'payment_details'):
+                    payment_details = invoice.payment_details
+                    amount_decimal = Decimal(str(amount))
+                    
+                    # Update received and balance
+                    payment_details.payment_received = (payment_details.payment_received or 0) + amount_decimal
+                    payment_details.payment_payable = max(0, (payment_details.payment_payable or 0) - amount_decimal)
+                    payment_details.payment_balance = payment_details.payment_payable
+                    payment_details.save()
+                    
+                    # Update status
+                    if payment_details.payment_payable <= 0:
+                        invoice.status = 'received'
+                    else:
+                        invoice.status = 'partially received'
+                    invoice.save()
                 
                 return Response({"message": "Receipt posted successfully", "voucher_no": voucher_no}, status=status.HTTP_201_CREATED)
 

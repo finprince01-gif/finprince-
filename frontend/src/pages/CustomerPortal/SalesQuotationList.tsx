@@ -110,12 +110,11 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
     // Filtering Logic
     const filterQuotations = (quotations: any[]) => {
         if (activeSubTab === 'Pending & Cancelled') {
-            // For now showing all, can add logic: return quotations.filter(q => q.status !== 'Executed');
-            return quotations;
+            // Show all that are not Executed
+            return quotations.filter(q => (q.status || '').toLowerCase() !== 'executed');
         } else {
-            // Executed tab
-            // For now return empty or specific status: return quotations.filter(q => q.status === 'Executed');
-            return [];
+            // Executed tab - Show only executed ones
+            return quotations.filter(q => (q.status || '').toLowerCase() === 'executed');
         }
     };
 

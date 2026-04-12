@@ -678,8 +678,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 
                 items = products_services_data.get('items', [])
                 for item in items:
-                    if item.get('itemCode'):
-                        CustomerMasterCustomerProductService.objects.create(
+                    CustomerMasterCustomerProductService.objects.create(
                             customer_basic_detail=instance,
                             tenant_id=instance.tenant_id,
                             item_code=item.get('itemCode'),

@@ -32,6 +32,7 @@ interface SalesOrder {
     delivery_terms?: {
         delivery_date: string;
     };
+    status: string;
     is_active: boolean;
     is_deleted: boolean;
 }
@@ -56,6 +57,7 @@ const SalesOrderList: React.FC<SalesOrderListProps> = ({ onCreateOrder, onEditOr
                 customer_name: order.customer_name,
                 items: order.items || [],
                 delivery_terms: order.delivery_terms,
+                status: order.status || (order.is_active ? 'pending' : 'cancelled'),
                 is_active: order.is_active,
                 is_deleted: order.is_deleted
             }));
@@ -81,12 +83,17 @@ const SalesOrderList: React.FC<SalesOrderListProps> = ({ onCreateOrder, onEditOr
     };
 
     const filteredOrders = orders.filter(order => {
+        const lowerStatus = (order.status || '').toLowerCase();
         if (activeTab === 'Pending & Cancelled') {
-            return !order.is_deleted && order.is_active;
+            // Show all except completed/executed
+            return !order.is_deleted && lowerStatus !== 'completed' && lowerStatus !== 'executed';
         } else {
-            return false;
+            // Executed/Completed tab
+            return !order.is_deleted && (lowerStatus === 'completed' || lowerStatus === 'executed');
         }
     });
+    // Fallback: If status field isn't matching perfectly, use is_active/is_completed logic
+    // but the above is safer as we just fixed the backend.
 
     const handleCardClick = (tab: SalesOrderSubTab) => {
         setActiveTab(tab);

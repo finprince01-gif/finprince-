@@ -28,6 +28,8 @@ from typing import Any
 from django.db import transaction as db_transaction
 
 logger = logging.getLogger(__name__)
+from accounting.models_pending_transaction import PendingTransaction, AllocationLink
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -533,11 +535,10 @@ def _get_or_create_pending_tx(
     amount: Decimal,
     vendor_id: int,
     purchase_voucher_id: int | None,
-) -> "PendingTransaction":
+) -> PendingTransaction:
     """
     Get or create a PendingTransaction row for the given voucher reference.
     """
-    from accounting.models_pending_transaction import PendingTransaction
 
     obj, _ = PendingTransaction.objects.get_or_create(
         tenant_id=tenant_id,
@@ -575,15 +576,6 @@ def write_bill_allocation(
        - Reduce the Purchase Invoice pending balance.
        - If Purchase Invoice goes negative → reverse linked Payments (LIFO).
     """
-    try:
-        from accounting.models_pending_transaction import PendingTransaction, AllocationLink
-    except ImportError:
-        # Models not yet migrated — skip gracefully
-        logger.warning(
-            "[DebitNoteService] PendingTransaction model not found; skipping bill allocation."
-        )
-        return
-
     with db_transaction.atomic():
         dn_number = voucher_obj.voucher_number
         dn_date   = debit_note_instance.date
@@ -672,7 +664,7 @@ def write_bill_allocation(
 
 def _release_payments_lifo(
     *,
-    purchase_tx: "PendingTransaction",
+    purchase_tx: PendingTransaction,
     excess_amount: Decimal,
     tenant_id: str,
     dn_number: str,
@@ -686,11 +678,6 @@ def _release_payments_lifo(
     - Restore the payment's pending balance.
     - Update payment status to Partially Utilized / Unutilized.
     """
-    try:
-        from accounting.models_pending_transaction import PendingTransaction, AllocationLink
-    except ImportError:
-        return
-
     inv_no = purchase_tx.reference_number
 
     # Get all payment allocations linked to this purchase invoice, LIFO order
@@ -741,11 +728,22 @@ def _release_payments_lifo(
 # STEP 10 — Mirror to Vendor Portal (VendorTransaction)
 # ===========================================================================
 
-def mirror_to_vendor_portal(debit_note_instance, voucher_obj, net_amount: Decimal) -> None:
+def mirror_to_vendor_portal(
+    debit_note_instance,
+    voucher_obj,
+    net_amount: Decimal,
+    items: list[dict],
+    tcs_by_invoice: dict[str, Decimal],
+    tds_by_invoice: dict[str, Decimal],
+) -> None:
     """
     Sync the Debit Note to the VendorTransaction table so the Vendor Portal
     ledger displays it correctly.
+
+    To support the "Allocation View", we create one record per linked invoice
+    if allocations exist. This allows the frontend to group them by reference_number.
     """
+    logger.info(f"[DebitNoteService] mirror_to_vendor_portal starting for DN: {voucher_obj.voucher_number}")
     try:
         from vendors.models import VendorMasterBasicDetail, VendorTransaction
 
@@ -753,41 +751,142 @@ def mirror_to_vendor_portal(debit_note_instance, voucher_obj, net_amount: Decima
         dn_number = voucher_obj.voucher_number
 
         vendor = None
-        if debit_note_instance.vendor_basic_detail_id:
-            vendor = VendorMasterBasicDetail.objects.filter(
-                tenant_id=tenant_id,
-                id=debit_note_instance.vendor_basic_detail_id,
-            ).first()
+        # Try finding by explicit ID first
+        v_id = getattr(debit_note_instance, 'vendor_basic_detail_id', None)
+        if v_id:
+            vendor = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, id=v_id).first()
+            if vendor:
+                logger.info(f"[DebitNoteService] Found vendor by ID {v_id}: {vendor.vendor_name}")
+
+        # Fallback to name search if ID failed or was missing
         if not vendor and debit_note_instance.vendor_name:
+            v_name = debit_note_instance.vendor_name.strip()
             vendor = VendorMasterBasicDetail.objects.filter(
                 tenant_id=tenant_id,
-                vendor_name__iexact=debit_note_instance.vendor_name,
+                vendor_name__iexact=v_name,
             ).first()
+            if vendor:
+                logger.info(f"[DebitNoteService] Found vendor by name '{v_name}': {vendor.id}")
+            else:
+                # Try a broader search if exact name failed
+                vendor = VendorMasterBasicDetail.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_name__icontains=v_name,
+                ).first()
+                if vendor:
+                    logger.info(f"[DebitNoteService] Found vendor by partial name '{v_name}': {vendor.id}")
 
         if not vendor:
-            logger.warning(
-                "[DebitNoteService] Vendor not found for portal sync: %s",
-                debit_note_instance.vendor_name,
+            logger.error(
+                "[DebitNoteService] ABORT Portal sync - Vendor not found: '%s' (Tenant: %s)",
+                debit_note_instance.vendor_name, tenant_id
             )
             return
 
-        tx_status = "Utilized" if net_amount == 0 else "Unutilized"
-
-        VendorTransaction.objects.update_or_create(
+        # Cleanup existing transactions for this voucher to avoid stale data
+        deleted_count, _ = VendorTransaction.objects.filter(
             tenant_id=tenant_id,
             vendor_id=vendor.id,
             transaction_number=dn_number,
             transaction_type="debit_note",
-            defaults={
-                "transaction_date": debit_note_instance.date,
-                "amount": net_amount,
-                "total_amount": net_amount,
-                "status": tx_status,
-                "reference_number": debit_note_instance.supplier_invoice_nos,
-                "notes": f"Debit Note from {debit_note_instance.vendor_name}",
-                "ledger_name": "Vendor A/c",
-            },
-        )
+        ).delete()
+        if deleted_count > 0:
+            logger.info(f"[DebitNoteService] Cleaned up {deleted_count} old transaction records for {dn_number}")
+
+
+        # Calculate breakdown per invoice for precise allocation mirroring
+        applied_now_map = calculate_applied_now_by_invoice(items, tcs_by_invoice, tds_by_invoice)
+        logger.info(f"[DebitNoteService] Applied Now map: {applied_now_map}")
+        
+        if not applied_now_map:
+            # Fallback to single row if no invoices are tagged
+            tx_status = "Utilized" if net_amount == 0 else "Unutilized"
+            VendorTransaction.objects.update_or_create(
+                tenant_id=tenant_id,
+                vendor_id=vendor.id,
+                transaction_number=dn_number,
+                transaction_type="debit_note",
+                defaults={
+                    "transaction_date": debit_note_instance.date,
+                    "amount": net_amount,
+                    "total_amount": net_amount,
+                    "status": tx_status,
+                    "reference_number": debit_note_instance.supplier_invoice_nos,
+                    "notes": f"Debit Note from {debit_note_instance.vendor_name}",
+                    "ledger_name": "Vendor A/c",
+                },
+            )
+        else:
+            # Create one transaction row per allocation for "Allocation View" consistency
+            total_allocated = Decimal("0")
+            for inv_no, amt in applied_now_map.items():
+                total_allocated += amt
+                # Ensure each allocation has a unique transaction_number handle if needed,
+                # but many views group by transaction_number anyway.
+                # Here we use a composite to avoid duplicate record issues on re-post.
+                VendorTransaction.objects.update_or_create(
+                    tenant_id=tenant_id,
+                    vendor_id=vendor.id,
+                    transaction_number=dn_number,
+                    reference_number=inv_no, # Match exactly for frontend grouping
+                    transaction_type="debit_note",
+                    defaults={
+                        "transaction_date": debit_note_instance.date,
+                        "amount": amt,
+                        "total_amount": amt,
+                        "status": "Utilized",
+                        "notes": f"Debit Note against {inv_no}",
+                        "ledger_name": "Vendor A/c",
+                    },
+                )
+                
+                # Update the linked Purchase transaction status to Paid/Partially Paid
+                # This affects the "Allocation View" status column
+                p_txn = VendorTransaction.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_id=vendor.id,
+                    transaction_type="purchase",
+                    # Match reference_number to the invoice_no
+                    reference_number=inv_no,
+                ).exclude(status="Paid").first()
+
+                if p_txn:
+                    # Logic: total paid = (original purchase amount) - (purchase pending balance)
+                    # We can use the information from PendingTransaction if accessible,
+                    # or simple logic for now. 
+                    from accounting.models_pending_transaction import PendingTransaction
+                    pt = PendingTransaction.objects.filter(
+                        tenant_id=tenant_id,
+                        reference_number=inv_no,
+                        reference_type="PURCHASE",
+                    ).first()
+                    
+                    if pt:
+                        if pt.pending_balance <= 0:
+                            p_txn.status = "Paid"
+                        elif pt.pending_balance < pt.original_amount:
+                            p_txn.status = "Partially Paid"
+                        p_txn.save(update_fields=["status"])
+            
+            # If the DN has an unallocated balance, create a standalone row
+            unallocated = net_amount - total_allocated
+            if unallocated > 0:
+                VendorTransaction.objects.update_or_create(
+                    tenant_id=tenant_id,
+                    vendor_id=vendor.id,
+                    transaction_number=dn_number,
+                    reference_number=None,
+                    transaction_type="debit_note",
+                    defaults={
+                        "transaction_date": debit_note_instance.date,
+                        "amount": unallocated,
+                        "total_amount": unallocated,
+                        "status": "Unutilized",
+                        "notes": f"Debit Note Balance (Unutilized)",
+                        "ledger_name": "Vendor A/c",
+                    },
+                )
+
         logger.info(
             "[DebitNoteService] Vendor Portal synced: %s | %s | ₹%s",
             debit_note_instance.vendor_name, dn_number, net_amount,
@@ -926,7 +1025,14 @@ def post_debit_note(
     )
 
     # 5. Vendor Portal sync
-    mirror_to_vendor_portal(debit_note_instance, voucher_obj, vendor_debit)
+    mirror_to_vendor_portal(
+        debit_note_instance=debit_note_instance,
+        voucher_obj=voucher_obj,
+        net_amount=vendor_debit,
+        items=items,
+        tcs_by_invoice=tcs_by_invoice,
+        tds_by_invoice=tds_by_invoice
+    )
 
     logger.info(
         "[DebitNoteService] Complete. DN=%s Vendor Debit=₹%s TCS_rev=₹%s TDS_rev=₹%s",

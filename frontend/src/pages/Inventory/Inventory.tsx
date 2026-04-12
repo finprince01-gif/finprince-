@@ -401,9 +401,9 @@ const InventoryPage: React.FC = () => {
     if (!showIssueSlipForm || issueSlipSeriesList.length === 0 || selectedIssueSlipSeriesName) return;
 
     if (issueSlipTab === 'inter-unit') {
-      const interUnitSeries = issueSlipSeriesList.filter(s => 
-        (s.issueSlipType || '').toLowerCase().includes('inter_unit') || 
-        (s.issueSlipType || '').toLowerCase().includes('inter-unit') || 
+      const interUnitSeries = issueSlipSeriesList.filter(s =>
+        (s.issueSlipType || '').toLowerCase().includes('inter_unit') ||
+        (s.issueSlipType || '').toLowerCase().includes('inter-unit') ||
         (s.issueSlipType || '').toLowerCase().includes('inter unit')
       );
       if (interUnitSeries.length === 1) {
@@ -417,8 +417,8 @@ const InventoryPage: React.FC = () => {
         setIssueSlipNumber(outwardSeries[0].preview || '');
       }
     } else if (issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'outward') {
-      const jwSeries = issueSlipSeriesList.filter(s => 
-        (s.issueSlipType || '').toLowerCase().includes('jobwork') || 
+      const jwSeries = issueSlipSeriesList.filter(s =>
+        (s.issueSlipType || '').toLowerCase().includes('jobwork') ||
         (s.issueSlipType || '').toLowerCase().includes('job work')
       );
       if (jwSeries.length === 1) {
@@ -432,9 +432,9 @@ const InventoryPage: React.FC = () => {
         setIssueSlipNumber(consumptionSeries[0].preview || '');
       }
     } else if (issueSlipTab === 'location-change') {
-      const locSeries = issueSlipSeriesList.filter(s => 
-        (s.issueSlipType || '').toLowerCase().includes('location-change') || 
-        (s.issueSlipType || '').toLowerCase().includes('location_change') || 
+      const locSeries = issueSlipSeriesList.filter(s =>
+        (s.issueSlipType || '').toLowerCase().includes('location-change') ||
+        (s.issueSlipType || '').toLowerCase().includes('location_change') ||
         (s.issueSlipType || '').toLowerCase().includes('location change')
       );
       if (locSeries.length === 1) {
@@ -1223,269 +1223,269 @@ const InventoryPage: React.FC = () => {
           </h3>
           <form onSubmit={handleLocationSubmit} className="space-y-4">
             <fieldset disabled={isViewModeLocation} className="contents">
-            {/* ... Location inputs ... */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Location Name <span className="text-red-500">*</span></label>
-              <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter location name" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Location Type <span className="text-red-500">*</span></label>
-              <select value={locationType} onChange={(e) => {
-                const value = e.target.value;
-                setLocationType(value);
-              }} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
-                <option value="">Select location type</option>
-                {locationTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-              </select>
-              {isCustomLocationType && (
-                <div className="mt-3">
-                  <input type="text" value={customLocationTypeValue} onChange={(e) => setCustomLocationTypeValue(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter custom location type" required />
-                </div>
-              )}
-            </div>
-
-            {/* Conditional fields based on location type */}
-            {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location' || locationType === 'job_worker_location') && (
+              {/* ... Location inputs ... */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{locationType === 'job_worker_location' ? 'Job Worker Name' : 'Vendor/Agent Name'} <span className="text-red-500">*</span></label>
-                <select
-                  value={selectedVendorId || ''}
-                  onChange={async (e) => {
-                    const vId = Number(e.target.value);
-                    setSelectedVendorId(vId);
-                    const v = vendors.find(ven => ven.id === vId);
-                    setVendorName(v ? v.vendor_name : '');
+                <label className="block text-sm font-medium text-gray-700 mb-2">Location Name <span className="text-red-500">*</span></label>
+                <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter location name" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Location Type <span className="text-red-500">*</span></label>
+                <select value={locationType} onChange={(e) => {
+                  const value = e.target.value;
+                  setLocationType(value);
+                }} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                  <option value="">Select location type</option>
+                  {locationTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                </select>
+                {isCustomLocationType && (
+                  <div className="mt-3">
+                    <input type="text" value={customLocationTypeValue} onChange={(e) => setCustomLocationTypeValue(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter custom location type" required />
+                  </div>
+                )}
+              </div>
 
-                    // Fetch addresses
-                    if (vId) {
-                      try {
-                        const details = await apiService.getVendorGSTDetails(vId);
-                        // Map to common structure
-                        const mapped = Array.isArray(details) ? details.map((d: any) => ({
-                          id: d.id,
-                          reference_name: d.reference_name || 'Main Branch',
-                          address: d.branch_address || '',
-                          gstin: d.gstin,
-                          state: d.gst_state_code || d.gst_state || '',
-                          fullObj: d
-                        })) : [];
-                        setVendorAddresses(mapped);
-                      } catch (err) {
-                        console.error("Error fetching vendor addresses");
+              {/* Conditional fields based on location type */}
+              {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location' || locationType === 'job_worker_location') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{locationType === 'job_worker_location' ? 'Job Worker Name' : 'Vendor/Agent Name'} <span className="text-red-500">*</span></label>
+                  <select
+                    value={selectedVendorId || ''}
+                    onChange={async (e) => {
+                      const vId = Number(e.target.value);
+                      setSelectedVendorId(vId);
+                      const v = vendors.find(ven => ven.id === vId);
+                      setVendorName(v ? v.vendor_name : '');
+
+                      // Fetch addresses
+                      if (vId) {
+                        try {
+                          const details = await apiService.getVendorGSTDetails(vId);
+                          // Map to common structure
+                          const mapped = Array.isArray(details) ? details.map((d: any) => ({
+                            id: d.id,
+                            reference_name: d.reference_name || 'Main Branch',
+                            address: d.branch_address || '',
+                            gstin: d.gstin,
+                            state: d.gst_state_code || d.gst_state || '',
+                            fullObj: d
+                          })) : [];
+                          setVendorAddresses(mapped);
+                        } catch (err) {
+                          console.error("Error fetching vendor addresses");
+                          setVendorAddresses([]);
+                        }
+                      } else {
                         setVendorAddresses([]);
                       }
-                    } else {
-                      setVendorAddresses([]);
-                    }
-                  }}
-                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                >
-                  <option value="">Select {locationType === 'job_worker_location' ? 'Job Worker' : 'Vendor/Agent'}</option>
-                  {vendors
-                    .filter(v => locationType !== 'job_worker_location' || (v.vendor_category || '').toLowerCase().includes('jobwork'))
-                    .map(v => (
-                      <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</option>
-                    ))}
-                </select>
-              </div>
-            )}
-
-            {(locationType === 'customer_location') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name <span className="text-red-500">*</span></label>
-                <select
-                  value={selectedCustomerId || ''}
-                  onChange={(e) => {
-                    const cId = Number(e.target.value);
-                    setSelectedCustomerId(cId);
-                    const c = customers.find(cus => cus.id === cId);
-                    setCustomerName(c ? c.customer_name : '');
-
-                    // Extract addresses from customer object
-                    if (c && c.gst_details && Array.isArray(c.gst_details.branches)) {
-                      setCustomerAddresses(c.gst_details.branches.map((b: any) => ({
-                        id: b.id,
-                        reference_name: b.defaultRef || b.branch_reference_name || 'Main Branch',
-                        address: b.addressLine1 || b.address || '',
-                        addressLine1: b.addressLine1 || '',
-                        addressLine2: b.addressLine2 || '',
-                        addressLine3: b.addressLine3 || '',
-                        city: b.city || '',
-                        pincode: b.pincode || '',
-                        state: b.state || '',
-                        country: b.country || 'India',
-                        gstin: b.gstin || ''
-                      })));
-                    } else {
-                      setCustomerAddresses([]);
-                    }
-                  }}
-                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                >
-                  <option value="">Select customer</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.customer_name} ({c.customer_code})</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Location Address - conditional based on type */}
-            {(locationType === 'company_premises' || locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location') && locationType === 'company_premises' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
-                <select
-                  value={locationAddress}
-                  onChange={(e) => {
-                    const selectedAddr = e.target.value;
-                    setLocationAddress(selectedAddr);
-                    if (selectedAddr && companyDetails) {
-                      // If user selects an address from company profile, auto-fill details
-                      setLocAddressLine1(selectedAddr);
-                      // We don't split further blindly, but we can assume state/country from company details
-                      if (companyDetails.state) setLocState(companyDetails.state);
-                      if (companyDetails.country) setLocCountry(companyDetails.country);
-                      if (companyDetails.pincode) setLocPincode(companyDetails.pincode);
-                      if (companyDetails.gstin) setLocationGstin(companyDetails.gstin);
-                    }
-                  }}
-                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">Select address</option>
-                  {companyDetails?.address && companyDetails.address.split('\n').map((addrLine, idx) => (
-                    addrLine.trim() && <option key={idx} value={addrLine.trim()}>{addrLine.trim()}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Location Address for other types */}
-            {/* Location Address for other types */}
-            {(locationType !== 'company_premises' && locationType !== '' && locationType !== 'custom' && !isCustomLocationType) && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
-                <select
-                  value={locationAddress}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setLocationAddress(val);
-
-                    // Try to find more details
-                    if (locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') {
-                      // Check for both address match or reference name match (legacy vs new)
-                      const addrObj = customerAddresses.find(a => a.address === val || a.reference_name === val);
-                      if (addrObj) {
-                        setLocAddressLine1(addrObj.addressLine1 || addrObj.address || '');
-                        setLocAddressLine2(addrObj.addressLine2 || '');
-                        setLocAddressLine3(addrObj.addressLine3 || '');
-                        setLocCity(addrObj.city || '');
-                        setLocState(addrObj.state || '');
-                        setLocCountry(addrObj.country || 'India');
-                        setLocPincode(addrObj.pincode || '');
-                        if (addrObj.gstin) setLocationGstin(addrObj.gstin);
-                      }
-                    } else if (locationType.includes('vendor') || locationType.includes('agent') || locationType.includes('job') || locationType.includes('distributor')) {
-                      const addrObj = vendorAddresses.find(a => a.reference_name === val || a.address === val);
-                      if (addrObj) {
-                        setLocAddressLine1(addrObj.address || '');
-                        if (addrObj.gstin) setLocationGstin(addrObj.gstin);
-                        if (addrObj.state) setLocState(addrObj.state);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">Select address</option>
-                  {/* Vendor Addresses */}
-                  {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location' || locationType === 'job_worker_location') &&
-                    vendorAddresses.map((addr, idx) => (
-                      <option key={addr.id || idx} value={addr.reference_name}>{addr.reference_name} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
-                    ))}
-                  {/* Customer Addresses */}
-                  {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') &&
-                    customerAddresses.map((addr, idx) => (
-                      <option key={addr.id || idx} value={addr.reference_name}>{addr.reference_name} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
-                    ))}
-                </select>
-              </div>
-            )}
-
-            {/* Manual address entry for Customer Location */}
-            {(locationType === 'customer_location') && (
-              <>
-                <div className="bg-indigo-50/50 border border-slate-200 rounded p-3 text-sm text-slate-700">
-                  📌 Manual Address Entry
+                    }}
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  >
+                    <option value="">Select {locationType === 'job_worker_location' ? 'Job Worker' : 'Vendor/Agent'}</option>
+                    {vendors
+                      .filter(v => locationType !== 'job_worker_location' || (v.vendor_category || '').toLowerCase().includes('jobwork'))
+                      .map(v => (
+                        <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</option>
+                      ))}
+                  </select>
                 </div>
-              </>
-            )}
+              )}
 
-            {/* Country & State */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="relative z-20">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Country <span className="text-red-500">*</span></label>
-                <SearchableDropdown
-                  options={getCountries()}
-                  value={locCountry}
-                  onChange={(val) => {
-                    setLocCountry(val);
-                    setLocState('');
-                    setLocCity('');
-                  }}
-                  placeholder="Select Country"
-                  required
-                />
-              </div>
-              <div className="relative z-20">
-                <label className="block text-sm font-medium text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
-                <SearchableDropdown
-                  options={getStates(locCountry)}
-                  value={locState}
-                  onChange={(val) => {
-                    setLocState(val);
-                    setLocCity('');
-                  }}
-                  placeholder="Select State"
-                  disabled={!locCountry}
-                  required
-                />
-              </div>
-            </div>
+              {(locationType === 'customer_location') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name <span className="text-red-500">*</span></label>
+                  <select
+                    value={selectedCustomerId || ''}
+                    onChange={(e) => {
+                      const cId = Number(e.target.value);
+                      setSelectedCustomerId(cId);
+                      const c = customers.find(cus => cus.id === cId);
+                      setCustomerName(c ? c.customer_name : '');
 
-            {/* City & Pincode */}
-            <div className="grid grid-cols-2 gap-4 relative z-10">
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
-                <SearchableDropdown
-                  options={getCities(locCountry, locState)}
-                  value={locCity}
-                  onChange={(val) => setLocCity(val)}
-                  placeholder="Select City"
-                  disabled={!locState}
-                  required
-                />
+                      // Extract addresses from customer object
+                      if (c && c.gst_details && Array.isArray(c.gst_details.branches)) {
+                        setCustomerAddresses(c.gst_details.branches.map((b: any) => ({
+                          id: b.id,
+                          reference_name: b.defaultRef || b.branch_reference_name || 'Main Branch',
+                          address: b.addressLine1 || b.address || '',
+                          addressLine1: b.addressLine1 || '',
+                          addressLine2: b.addressLine2 || '',
+                          addressLine3: b.addressLine3 || '',
+                          city: b.city || '',
+                          pincode: b.pincode || '',
+                          state: b.state || '',
+                          country: b.country || 'India',
+                          gstin: b.gstin || ''
+                        })));
+                      } else {
+                        setCustomerAddresses([]);
+                      }
+                    }}
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  >
+                    <option value="">Select customer</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id}>{c.customer_name} ({c.customer_code})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Location Address - conditional based on type */}
+              {(locationType === 'company_premises' || locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location') && locationType === 'company_premises' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
+                  <select
+                    value={locationAddress}
+                    onChange={(e) => {
+                      const selectedAddr = e.target.value;
+                      setLocationAddress(selectedAddr);
+                      if (selectedAddr && companyDetails) {
+                        // If user selects an address from company profile, auto-fill details
+                        setLocAddressLine1(selectedAddr);
+                        // We don't split further blindly, but we can assume state/country from company details
+                        if (companyDetails.state) setLocState(companyDetails.state);
+                        if (companyDetails.country) setLocCountry(companyDetails.country);
+                        if (companyDetails.pincode) setLocPincode(companyDetails.pincode);
+                        if (companyDetails.gstin) setLocationGstin(companyDetails.gstin);
+                      }
+                    }}
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">Select address</option>
+                    {companyDetails?.address && companyDetails.address.split('\n').map((addrLine, idx) => (
+                      addrLine.trim() && <option key={idx} value={addrLine.trim()}>{addrLine.trim()}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Location Address for other types */}
+              {/* Location Address for other types */}
+              {(locationType !== 'company_premises' && locationType !== '' && locationType !== 'custom' && !isCustomLocationType) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
+                  <select
+                    value={locationAddress}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setLocationAddress(val);
+
+                      // Try to find more details
+                      if (locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') {
+                        // Check for both address match or reference name match (legacy vs new)
+                        const addrObj = customerAddresses.find(a => a.address === val || a.reference_name === val);
+                        if (addrObj) {
+                          setLocAddressLine1(addrObj.addressLine1 || addrObj.address || '');
+                          setLocAddressLine2(addrObj.addressLine2 || '');
+                          setLocAddressLine3(addrObj.addressLine3 || '');
+                          setLocCity(addrObj.city || '');
+                          setLocState(addrObj.state || '');
+                          setLocCountry(addrObj.country || 'India');
+                          setLocPincode(addrObj.pincode || '');
+                          if (addrObj.gstin) setLocationGstin(addrObj.gstin);
+                        }
+                      } else if (locationType.includes('vendor') || locationType.includes('agent') || locationType.includes('job') || locationType.includes('distributor')) {
+                        const addrObj = vendorAddresses.find(a => a.reference_name === val || a.address === val);
+                        if (addrObj) {
+                          setLocAddressLine1(addrObj.address || '');
+                          if (addrObj.gstin) setLocationGstin(addrObj.gstin);
+                          if (addrObj.state) setLocState(addrObj.state);
+                        }
+                      }
+                    }}
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">Select address</option>
+                    {/* Vendor Addresses */}
+                    {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location' || locationType === 'job_worker_location') &&
+                      vendorAddresses.map((addr, idx) => (
+                        <option key={addr.id || idx} value={addr.reference_name}>{addr.reference_name} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
+                      ))}
+                    {/* Customer Addresses */}
+                    {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') &&
+                      customerAddresses.map((addr, idx) => (
+                        <option key={addr.id || idx} value={addr.reference_name}>{addr.reference_name} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Manual address entry for Customer Location */}
+              {(locationType === 'customer_location') && (
+                <>
+                  <div className="bg-indigo-50/50 border border-slate-200 rounded p-3 text-sm text-slate-700">
+                    📌 Manual Address Entry
+                  </div>
+                </>
+              )}
+
+              {/* Country & State */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="relative z-20">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Country <span className="text-red-500">*</span></label>
+                  <SearchableDropdown
+                    options={getCountries()}
+                    value={locCountry}
+                    onChange={(val) => {
+                      setLocCountry(val);
+                      setLocState('');
+                      setLocCity('');
+                    }}
+                    placeholder="Select Country"
+                    required
+                  />
+                </div>
+                <div className="relative z-20">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
+                  <SearchableDropdown
+                    options={getStates(locCountry)}
+                    value={locState}
+                    onChange={(val) => {
+                      setLocState(val);
+                      setLocCity('');
+                    }}
+                    placeholder="Select State"
+                    disabled={!locCountry}
+                    required
+                  />
+                </div>
               </div>
+
+              {/* City & Pincode */}
+              <div className="grid grid-cols-2 gap-4 relative z-10">
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
+                  <SearchableDropdown
+                    options={getCities(locCountry, locState)}
+                    value={locCity}
+                    onChange={(val) => setLocCity(val)}
+                    placeholder="Select City"
+                    disabled={!locState}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Pincode <span className="text-red-500">*</span></label>
+                  <input type="text" value={locPincode} onChange={(e) => setLocPincode(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Pincode/Zip Code" required />
+                </div>
+              </div>
+
+              {/* Address Lines */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Pincode <span className="text-red-500">*</span></label>
-                <input type="text" value={locPincode} onChange={(e) => setLocPincode(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Pincode/Zip Code" required />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
+                <input type="text" value={locAddressLine1} onChange={(e) => setLocAddressLine1(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Building/Street/Area" required />
               </div>
-            </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label><input type="text" value={locAddressLine2} onChange={(e) => setLocAddressLine2(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Landmark (Optional)" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 3</label><input type="text" value={locAddressLine3} onChange={(e) => setLocAddressLine3(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Additional Info (Optional)" /></div>
+              </div>
 
-            {/* Address Lines */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
-              <input type="text" value={locAddressLine1} onChange={(e) => setLocAddressLine1(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Building/Street/Area" required />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label><input type="text" value={locAddressLine2} onChange={(e) => setLocAddressLine2(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Landmark (Optional)" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 3</label><input type="text" value={locAddressLine3} onChange={(e) => setLocAddressLine3(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Additional Info (Optional)" /></div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN (Optional)</label>
-              <input type="text" value={locationGstin} onChange={(e) => setLocationGstin(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter GSTIN (15 characters)" maxLength={15} />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN (Optional)</label>
+                <input type="text" value={locationGstin} onChange={(e) => setLocationGstin(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter GSTIN (15 characters)" maxLength={15} />
+              </div>
             </fieldset>
             <div className="flex gap-3 pt-4">
               {isViewModeLocation ? (
@@ -2072,7 +2072,7 @@ const InventoryPage: React.FC = () => {
       return;
     }
 
-    const selectedOrders = outwardSalesOrderOptions.filter(o => 
+    const selectedOrders = outwardSalesOrderOptions.filter(o =>
       selectedIds.includes(o.id?.toString()) || selectedIds.includes(o.so_number)
     );
 
@@ -2333,9 +2333,9 @@ const InventoryPage: React.FC = () => {
 
       try {
         // Fetch Sales Vouchers for the customer
-        const salesVouchers = await apiService.getSalesVouchers({ 
+        const salesVouchers = await apiService.getSalesVouchers({
           customer_id: customer.id,
-          customer_name: customer.customer_name 
+          customer_name: customer.customer_name
         });
         if (Array.isArray(salesVouchers)) {
           setGrnReferenceNoOptions(salesVouchers);
@@ -2362,7 +2362,7 @@ const InventoryPage: React.FC = () => {
 
   const handleGrnReferenceNoChange = async (selectedPOList: string[]) => {
     setGrnSelectedPOs(selectedPOList);
-    
+
     if (selectedPOList.length === 0) {
       setGrnItems([{
         itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: ''
@@ -2400,7 +2400,7 @@ const InventoryPage: React.FC = () => {
           }
         }
       }
-      
+
       if (allNewItems.length > 0) {
         setGrnItems(allNewItems);
       }
@@ -2678,7 +2678,7 @@ const InventoryPage: React.FC = () => {
     if (field === 'quantity' || field === 'rate') {
       const qty = parseFloat(updatedItems[index].quantity) || 0;
       const rate = parseFloat(updatedItems[index].rate) || 0;
-      
+
       // Stock Balance Validation
       const balanceStock = parseFloat(updatedItems[index].remainingQty) || 0;
       if (field === 'quantity' && qty > balanceStock && balanceStock > 0) {
@@ -3355,8 +3355,8 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select Series</option>
-                            {issueSlipSeriesList.filter((s: any) => 
-                              (s.issueSlipType || '').toLowerCase().includes('jobwork') || 
+                            {issueSlipSeriesList.filter((s: any) =>
+                              (s.issueSlipType || '').toLowerCase().includes('jobwork') ||
                               (s.issueSlipType || '').toLowerCase().includes('job work')
                             ).map((s: any) => (
                               <option key={s.id} value={s.name}>{s.name}</option>
@@ -4484,55 +4484,55 @@ const InventoryPage: React.FC = () => {
 
                                 return (
                                   <tr key={index} className={`${rowBgClass} ${borderClass}`}>
-                                  <td className="px-3 py-2">
-                                    <select
-                                      value={item.itemCode}
-                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
-                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[120px]"
-                                    >
-                                      <option value="">Code</option>
-                                      {items.map(i => (<option key={i.id} value={i.item_code}>{i.item_code}</option>))}
-                                    </select>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <select
-                                      value={item.itemName}
-                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
-                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[150px]"
-                                    >
-                                      <option value="">Item</option>
-                                      {items.map(i => (<option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>))}
-                                    </select>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <input type="text" value={item.hsnCode || ''} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50" />
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <select
-                                      value={item.uom || ''}
-                                      onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
-                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
-                                    >
-                                      <option value="">Unit</option>
-                                      {(() => {
-                                        const selectedItem = items.find(i => i.item_code === item.itemCode);
-                                        const units = [];
-                                        if (selectedItem) {
-                                          const u1 = selectedItem.uom || selectedItem.unit;
-                                          const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
-                                          if (u1) units.push(u1);
-                                          if (u2 && u2 !== u1) units.push(u2);
-                                        }
-                                        return units.map(u => (<option key={u} value={u}>{u}</option>));
-                                      })()}
-                                    </select>
-                                  </td>
-                                  <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="number" min="0" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        value={item.itemCode}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[120px]"
+                                      >
+                                        <option value="">Code</option>
+                                        {items.map(i => (<option key={i.id} value={i.item_code}>{i.item_code}</option>))}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        value={item.itemName}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[150px]"
+                                      >
+                                        <option value="">Item</option>
+                                        {items.map(i => (<option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>))}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input type="text" value={item.hsnCode || ''} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50" />
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        value={item.uom || ''}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                                      >
+                                        <option value="">Unit</option>
+                                        {(() => {
+                                          const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                          const units = [];
+                                          if (selectedItem) {
+                                            const u1 = selectedItem.uom || selectedItem.unit;
+                                            const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                            if (u1) units.push(u1);
+                                            if (u2 && u2 !== u1) units.push(u2);
+                                          }
+                                          return units.map(u => (<option key={u} value={u}>{u}</option>));
+                                        })()}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2"><input type="number" min="0" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2"><input type="text" value={item.remarks || ''} onChange={(e) => handleIssueSlipItemChange(index, 'remarks', e.target.value)} placeholder="Remarks" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2 text-center">
-                                    <button onClick={() => handleRemoveIssueSlipItem(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
-                                  </td>
+                                    <td className="px-3 py-2 text-center">
+                                      <button onClick={() => handleRemoveIssueSlipItem(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -4800,7 +4800,7 @@ const InventoryPage: React.FC = () => {
                                   </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="number" min="0" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                    <td className="px-3 py-2"><input type="text" value={item.remarks || ''} onChange={(e) => handleIssueSlipItemChange(index, 'remarks', e.target.value)} placeholder="Remarks" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2"><input type="text" value={item.remarks || ''} onChange={(e) => handleIssueSlipItemChange(index, 'remarks', e.target.value)} placeholder="Remarks" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2 text-center">
                                     <button onClick={() => handleRemoveIssueSlipItem(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
                                   </td>
@@ -6071,13 +6071,13 @@ const InventoryPage: React.FC = () => {
                             <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
                               DATE
                             </label>
-                              <input
-                                type="date"
-                                value={issueSlipDate}
-                                onChange={(e) => setIssueSlipDate(e.target.value)}
-                                max={todayStr}
-                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
-                              />
+                            <input
+                              type="date"
+                              value={issueSlipDate}
+                              onChange={(e) => setIssueSlipDate(e.target.value)}
+                              max={todayStr}
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                            />
                           </div>
                           <div>
                             <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
@@ -6138,109 +6138,109 @@ const InventoryPage: React.FC = () => {
 
                       {/* Items Grid */}
                       <div className="space-y-4">
-                      {/* Items Grid */}
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                          <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">ITEMS</h4>
-                          <button
-                            onClick={handleAddIssueSlipItem}
-                            className="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase transition-colors"
-                          >
-                            + ADD ITEM
-                          </button>
-                        </div>
+                        {/* Items Grid */}
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                            <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">ITEMS</h4>
+                            <button
+                              onClick={handleAddIssueSlipItem}
+                              className="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase transition-colors"
+                            >
+                              + ADD ITEM
+                            </button>
+                          </div>
 
-                        <div className="overflow-x-auto border border-gray-200 rounded">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Code</th>
-                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Name</th>
-                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">UOM</th>
-                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Qty</th>
-                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Rate</th>
-                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Value</th>
-                                <th className="px-3 py-3 text-center text-[11px] font-bold text-gray-500">Action</th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {issueSlipItems.map((item, index) => (
-                                <tr key={index}>
-                                  <td className="px-3 py-2">
-                                    <select
-                                      value={item.itemCode}
-                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
-                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white"
-                                    >
-                                      <option value="">Select Code</option>
-                                      {items.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
-                                    </select>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <select
-                                      value={item.itemName}
-                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
-                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white"
-                                    >
-                                      <option value="">Select Item</option>
-                                      {items.map(i => <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>)}
-                                    </select>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <input
-                                      type="text"
-                                      value={item.uom || ''}
-                                      readOnly
-                                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500"
-                                    />
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <input
-                                      type="number"
-                                      value={item.quantity}
-                                      onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)}
-                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500"
-                                      placeholder="Qty"
-                                    />
-                                    {item.remainingQty !== undefined && parseFloat(item.quantity) > item.remainingQty && (
-                                      <p className="text-[9px] text-red-500 mt-1">Stock: {item.remainingQty}</p>
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <input
-                                      type="number"
-                                      value={item.rate}
-                                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500"
-                                      readOnly
-                                    />
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <input
-                                      type="text"
-                                      value={`₹${(item.value || 0).toFixed(2)}`}
-                                      readOnly
-                                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold"
-                                    />
-                                  </td>
-                                  <td className="px-3 py-2 text-center">
-                                    <button
-                                      onClick={() => handleRemoveIssueSlipItem(index)}
-                                      className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase transition-colors"
-                                    >
-                                      REMOVE
-                                    </button>
-                                  </td>
+                          <div className="overflow-x-auto border border-gray-200 rounded">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Code</th>
+                                  <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Name</th>
+                                  <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">UOM</th>
+                                  <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Qty</th>
+                                  <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Rate</th>
+                                  <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Value</th>
+                                  <th className="px-3 py-3 text-center text-[11px] font-bold text-gray-500">Action</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="flex justify-end pt-2">
-                          <div className="text-right">
-                            <span className="text-xs font-bold text-gray-900">Total Value: ₹{getTotalValue().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {issueSlipItems.map((item, index) => (
+                                  <tr key={index}>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        value={item.itemCode}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white"
+                                      >
+                                        <option value="">Select Code</option>
+                                        {items.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        value={item.itemName}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white"
+                                      >
+                                        <option value="">Select Item</option>
+                                        {items.map(i => <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>)}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="text"
+                                        value={item.uom || ''}
+                                        readOnly
+                                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="number"
+                                        value={item.quantity}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500"
+                                        placeholder="Qty"
+                                      />
+                                      {item.remainingQty !== undefined && parseFloat(item.quantity) > item.remainingQty && (
+                                        <p className="text-[9px] text-red-500 mt-1">Stock: {item.remainingQty}</p>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="number"
+                                        value={item.rate}
+                                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500"
+                                        readOnly
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="text"
+                                        value={`₹${(item.value || 0).toFixed(2)}`}
+                                        readOnly
+                                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                      <button
+                                        onClick={() => handleRemoveIssueSlipItem(index)}
+                                        className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase transition-colors"
+                                      >
+                                        REMOVE
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="flex justify-end pt-2">
+                            <div className="text-right">
+                              <span className="text-xs font-bold text-gray-900">Total Value: ₹{getTotalValue().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
                       </div>
 
                       {/* Narration */}
@@ -6690,7 +6690,7 @@ const InventoryPage: React.FC = () => {
                                       if (code && !uniqueMap.has(code)) uniqueMap.set(code, i);
                                     });
                                     const allUniqueItems = Array.from(uniqueMap.values());
-                                    
+
                                     const scrapOnlyItems = allUniqueItems.filter(i => {
                                       const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
                                       const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
@@ -6701,13 +6701,13 @@ const InventoryPage: React.FC = () => {
                                       <tr key={idx}>
                                         <td className="px-3 py-2">
                                           <select value={item.itemCode} onChange={(e) => {
-                                            const v = e.target.value; 
-                                            const ni = [...scrapProdItems]; 
+                                            const v = e.target.value;
+                                            const ni = [...scrapProdItems];
                                             ni[idx].itemCode = v;
                                             const si = scrapOnlyItems.find(i => (i.item_code || i.itemCode) === v);
-                                            if (si) { 
-                                              ni[idx].itemName = si.name || si.item_name || si.itemName; 
-                                              ni[idx].uom = si.uom || si.unit; 
+                                            if (si) {
+                                              ni[idx].itemName = si.name || si.item_name || si.itemName;
+                                              ni[idx].uom = si.uom || si.unit;
                                               ni[idx].stockBalance = 100; // Mock balance
                                             } else {
                                               ni[idx].itemName = '';
@@ -6724,13 +6724,13 @@ const InventoryPage: React.FC = () => {
                                         </td>
                                         <td className="px-3 py-2">
                                           <select value={item.itemName} onChange={(e) => {
-                                            const v = e.target.value; 
-                                            const ni = [...scrapProdItems]; 
+                                            const v = e.target.value;
+                                            const ni = [...scrapProdItems];
                                             ni[idx].itemName = v;
                                             const si = scrapOnlyItems.find(i => (i.name || i.item_name || i.itemName) === v);
-                                            if (si) { 
-                                              ni[idx].itemCode = si.item_code || si.itemCode; 
-                                              ni[idx].uom = si.uom || si.unit; 
+                                            if (si) {
+                                              ni[idx].itemCode = si.item_code || si.itemCode;
+                                              ni[idx].uom = si.uom || si.unit;
                                               ni[idx].stockBalance = 100;
                                             } else {
                                               ni[idx].itemCode = '';
@@ -6749,31 +6749,31 @@ const InventoryPage: React.FC = () => {
                                         <td className="px-3 py-2">
                                           <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapProdItems]; ni[idx].uom = e.target.value; setScrapProdItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Unit</option>
-                                            {(() => { 
-                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode); 
-                                              const us: string[] = []; 
-                                              if (si) { 
-                                                const u1 = si.uom || si.unit; 
-                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit; 
-                                                if (u1) us.push(u1); 
-                                                if (u2 && u2 !== u1) us.push(u2); 
-                                              } 
-                                              return us.map(u => <option key={u} value={u}>{u}</option>); 
+                                            {(() => {
+                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode);
+                                              const us: string[] = [];
+                                              if (si) {
+                                                const u1 = si.uom || si.unit;
+                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit;
+                                                if (u1) us.push(u1);
+                                                if (u2 && u2 !== u1) us.push(u2);
+                                              }
+                                              return us.map(u => <option key={u} value={u}>{u}</option>);
                                             })()}
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
-                                          <input type="number" value={item.quantityGenerated} onChange={(e) => { 
+                                          <input type="number" value={item.quantityGenerated} onChange={(e) => {
                                             const v = e.target.value;
                                             const val = parseFloat(v) || 0;
-                                            const ni = [...scrapProdItems]; 
+                                            const ni = [...scrapProdItems];
                                             const totalOfItem = ni.reduce((acc, curr, i) => acc + ((curr.itemCode === item.itemCode) ? (i === idx ? val : (parseFloat(curr.quantityGenerated) || 0)) : 0), 0);
                                             const balance = item.stockBalance ?? 999999;
                                             if (totalOfItem > balance) {
                                               showError(`Insufficient stock at dispatch location. Available: ${balance}`);
                                             }
-                                            ni[idx].quantityGenerated = v; 
-                                            setScrapProdItems(ni); 
+                                            ni[idx].quantityGenerated = v;
+                                            setScrapProdItems(ni);
                                           }} placeholder="Qty" className={`w-full px-2 py-1.5 border rounded text-[11px] focus:ring-1 focus:ring-indigo-500 ${parseFloat(item.quantityGenerated) > (item.stockBalance || 999999) ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} />
                                         </td>
                                         <td className="px-3 py-2 text-center">
@@ -6863,7 +6863,7 @@ const InventoryPage: React.FC = () => {
                                   </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                   {scrapOtherItemsScrapped.map((item, idx) => {
+                                  {scrapOtherItemsScrapped.map((item, idx) => {
                                     const sourcePool = [...inventoryItems, ...items];
                                     const uniqueMap = new Map();
                                     sourcePool.forEach(i => {
@@ -6881,13 +6881,13 @@ const InventoryPage: React.FC = () => {
                                       <tr key={idx}>
                                         <td className="px-3 py-2">
                                           <select value={item.itemCode} onChange={(e) => {
-                                            const v = e.target.value; 
-                                            const ni = [...scrapOtherItemsScrapped]; 
-                                            ni[idx].itemCode = v; 
-                                            const si = scrapOnlyItems.find(i => (i.item_code || i.itemCode) === v); 
-                                            if (si) { 
-                                              ni[idx].itemName = si.name || si.item_name || si.itemName; 
-                                              ni[idx].uom = si.uom || si.unit; 
+                                            const v = e.target.value;
+                                            const ni = [...scrapOtherItemsScrapped];
+                                            ni[idx].itemCode = v;
+                                            const si = scrapOnlyItems.find(i => (i.item_code || i.itemCode) === v);
+                                            if (si) {
+                                              ni[idx].itemName = si.name || si.item_name || si.itemName;
+                                              ni[idx].uom = si.uom || si.unit;
                                               ni[idx].stockBalance = 100;
                                             } else {
                                               ni[idx].itemName = '';
@@ -6904,13 +6904,13 @@ const InventoryPage: React.FC = () => {
                                         </td>
                                         <td className="px-3 py-2">
                                           <select value={item.itemName} onChange={(e) => {
-                                            const v = e.target.value; 
-                                            const ni = [...scrapOtherItemsScrapped]; 
-                                            ni[idx].itemName = v; 
-                                            const si = scrapOnlyItems.find(i => (i.name || i.item_name || i.itemName) === v); 
-                                            if (si) { 
-                                              ni[idx].itemCode = si.item_code || si.itemCode; 
-                                              ni[idx].uom = si.uom || si.unit; 
+                                            const v = e.target.value;
+                                            const ni = [...scrapOtherItemsScrapped];
+                                            ni[idx].itemName = v;
+                                            const si = scrapOnlyItems.find(i => (i.name || i.item_name || i.itemName) === v);
+                                            if (si) {
+                                              ni[idx].itemCode = si.item_code || si.itemCode;
+                                              ni[idx].uom = si.uom || si.unit;
                                               ni[idx].stockBalance = 100;
                                             } else {
                                               ni[idx].itemCode = '';
@@ -6929,34 +6929,34 @@ const InventoryPage: React.FC = () => {
                                         <td className="px-3 py-2">
                                           <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapOtherItemsScrapped]; ni[idx].uom = e.target.value; setScrapOtherItemsScrapped(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Unit</option>
-                                            {(() => { 
-                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode); 
-                                              const us: string[] = []; 
-                                              if (si) { 
-                                                const u1 = si.uom || si.unit; 
-                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit; 
-                                                if (u1) us.push(u1); 
-                                                if (u2 && u2 !== u1) us.push(u2); 
-                                              } 
-                                              return us.map(u => <option key={u} value={u}>{u}</option>); 
+                                            {(() => {
+                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode);
+                                              const us: string[] = [];
+                                              if (si) {
+                                                const u1 = si.uom || si.unit;
+                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit;
+                                                if (u1) us.push(u1);
+                                                if (u2 && u2 !== u1) us.push(u2);
+                                              }
+                                              return us.map(u => <option key={u} value={u}>{u}</option>);
                                             })()}
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
-                                          <input type="number" value={item.quantity} onChange={(e) => { 
+                                          <input type="number" value={item.quantity} onChange={(e) => {
                                             const v = e.target.value;
                                             const val = parseFloat(v) || 0;
-                                            const ni = [...scrapOtherItemsScrapped]; 
-                                            
+                                            const ni = [...scrapOtherItemsScrapped];
+
                                             // Stock Validation
                                             const totalOfItem = ni.reduce((acc, curr, i) => acc + ((curr.itemCode === item.itemCode) ? (i === idx ? val : (parseFloat(curr.quantity) || 0)) : 0), 0);
                                             const balance = item.stockBalance ?? 999999;
                                             if (totalOfItem > balance) {
                                               showError(`Insufficient stock at dispatch location. Available: ${balance}`);
                                             }
-                                            
-                                            ni[idx].quantity = v; 
-                                            setScrapOtherItemsScrapped(ni); 
+
+                                            ni[idx].quantity = v;
+                                            setScrapOtherItemsScrapped(ni);
                                           }} placeholder="Qty" className={`w-full px-2 py-1.5 border rounded text-[11px] focus:ring-1 focus:ring-indigo-500 ${parseFloat(item.quantity) > (item.stockBalance || 999999) ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} />
                                         </td>
                                         <td className="px-3 py-2 text-center">
@@ -7007,19 +7007,19 @@ const InventoryPage: React.FC = () => {
                                     return (
                                       <tr key={idx}>
                                         <td className="px-3 py-2">
-                                          <select value={item.itemCode} onChange={(e) => { 
-                                            const v = e.target.value; 
-                                            const ni = [...scrapOtherResultingItems]; 
-                                            ni[idx].itemCode = v; 
-                                            const si = scrapItems.find(i => (i.item_code || i.itemCode) === v); 
-                                            if (si) { 
-                                              ni[idx].itemName = si.name || si.item_name || si.itemName; 
-                                              ni[idx].uom = si.uom || si.unit; 
+                                          <select value={item.itemCode} onChange={(e) => {
+                                            const v = e.target.value;
+                                            const ni = [...scrapOtherResultingItems];
+                                            ni[idx].itemCode = v;
+                                            const si = scrapItems.find(i => (i.item_code || i.itemCode) === v);
+                                            if (si) {
+                                              ni[idx].itemName = si.name || si.item_name || si.itemName;
+                                              ni[idx].uom = si.uom || si.unit;
                                             } else {
                                               ni[idx].itemName = '';
                                               ni[idx].uom = '';
                                             }
-                                            setScrapOtherResultingItems(ni); 
+                                            setScrapOtherResultingItems(ni);
                                           }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Select Code</option>
                                             {scrapItems.map(i => {
@@ -7029,19 +7029,19 @@ const InventoryPage: React.FC = () => {
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
-                                          <select value={item.itemName} onChange={(e) => { 
-                                            const v = e.target.value; 
-                                            const ni = [...scrapOtherResultingItems]; 
-                                            ni[idx].itemName = v; 
-                                            const si = scrapItems.find(i => (i.name || i.item_name || i.itemName) === v); 
-                                            if (si) { 
-                                              ni[idx].itemCode = si.item_code || si.itemCode; 
-                                              ni[idx].uom = si.uom || si.unit; 
+                                          <select value={item.itemName} onChange={(e) => {
+                                            const v = e.target.value;
+                                            const ni = [...scrapOtherResultingItems];
+                                            ni[idx].itemName = v;
+                                            const si = scrapItems.find(i => (i.name || i.item_name || i.itemName) === v);
+                                            if (si) {
+                                              ni[idx].itemCode = si.item_code || si.itemCode;
+                                              ni[idx].uom = si.uom || si.unit;
                                             } else {
                                               ni[idx].itemCode = '';
                                               ni[idx].uom = '';
                                             }
-                                            setScrapOtherResultingItems(ni); 
+                                            setScrapOtherResultingItems(ni);
                                           }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Select Item</option>
                                             {scrapItems.map(i => {
@@ -7054,16 +7054,16 @@ const InventoryPage: React.FC = () => {
                                         <td className="px-3 py-2">
                                           <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapOtherResultingItems]; ni[idx].uom = e.target.value; setScrapOtherResultingItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Unit</option>
-                                            {(() => { 
-                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode); 
-                                              const us: string[] = []; 
-                                              if (si) { 
-                                                const u1 = si.uom || si.unit; 
-                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit; 
-                                                if (u1) us.push(u1); 
-                                                if (u2 && u2 !== u1) us.push(u2); 
-                                              } 
-                                              return us.map(u => <option key={u} value={u}>{u}</option>); 
+                                            {(() => {
+                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode);
+                                              const us: string[] = [];
+                                              if (si) {
+                                                const u1 = si.uom || si.unit;
+                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit;
+                                                if (u1) us.push(u1);
+                                                if (u2 && u2 !== u1) us.push(u2);
+                                              }
+                                              return us.map(u => <option key={u} value={u}>{u}</option>);
                                             })()}
                                           </select>
                                         </td>
@@ -7175,19 +7175,19 @@ const InventoryPage: React.FC = () => {
                                     return (
                                       <tr key={idx}>
                                         <td className="px-3 py-2">
-                                          <select value={item.itemCode} onChange={(e) => { 
-                                            const v = e.target.value; 
-                                            const ni = [...scrapDispItems]; 
-                                            ni[idx].itemCode = v; 
-                                            const si = scrapOnlyItems.find(i => (i.item_code || i.itemCode) === v); 
-                                            if (si) { 
-                                              ni[idx].itemName = si.name || si.item_name || si.itemName; 
-                                              ni[idx].uom = si.uom || si.unit; 
+                                          <select value={item.itemCode} onChange={(e) => {
+                                            const v = e.target.value;
+                                            const ni = [...scrapDispItems];
+                                            ni[idx].itemCode = v;
+                                            const si = scrapOnlyItems.find(i => (i.item_code || i.itemCode) === v);
+                                            if (si) {
+                                              ni[idx].itemName = si.name || si.item_name || si.itemName;
+                                              ni[idx].uom = si.uom || si.unit;
                                             } else {
                                               ni[idx].itemName = '';
                                               ni[idx].uom = '';
                                             }
-                                            setScrapDispItems(ni); 
+                                            setScrapDispItems(ni);
                                           }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Select Code</option>
                                             {scrapOnlyItems.map(i => {
@@ -7197,19 +7197,19 @@ const InventoryPage: React.FC = () => {
                                           </select>
                                         </td>
                                         <td className="px-3 py-2">
-                                          <select value={item.itemName} onChange={(e) => { 
-                                            const v = e.target.value; 
-                                            const ni = [...scrapDispItems]; 
-                                            ni[idx].itemName = v; 
-                                            const si = scrapOnlyItems.find(i => (i.name || i.item_name || i.itemName) === v); 
-                                            if (si) { 
-                                              ni[idx].itemCode = si.item_code || si.itemCode; 
-                                              ni[idx].uom = si.uom || si.unit; 
+                                          <select value={item.itemName} onChange={(e) => {
+                                            const v = e.target.value;
+                                            const ni = [...scrapDispItems];
+                                            ni[idx].itemName = v;
+                                            const si = scrapOnlyItems.find(i => (i.name || i.item_name || i.itemName) === v);
+                                            if (si) {
+                                              ni[idx].itemCode = si.item_code || si.itemCode;
+                                              ni[idx].uom = si.uom || si.unit;
                                             } else {
                                               ni[idx].itemCode = '';
                                               ni[idx].uom = '';
                                             }
-                                            setScrapDispItems(ni); 
+                                            setScrapDispItems(ni);
                                           }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Select Item</option>
                                             {scrapOnlyItems.map(i => {
@@ -7222,16 +7222,16 @@ const InventoryPage: React.FC = () => {
                                         <td className="px-3 py-2">
                                           <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapDispItems]; ni[idx].uom = e.target.value; setScrapDispItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
                                             <option value="">Unit</option>
-                                            {(() => { 
-                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode); 
-                                              const us: string[] = []; 
-                                              if (si) { 
-                                                const u1 = si.uom || si.unit; 
-                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit; 
-                                                if (u1) us.push(u1); 
-                                                if (u2 && u2 !== u1) us.push(u2); 
-                                              } 
-                                              return us.map(u => <option key={u} value={u}>{u}</option>); 
+                                            {(() => {
+                                              const si = allUniqueItems.find(i => (i.item_code || i.itemCode) === item.itemCode);
+                                              const us: string[] = [];
+                                              if (si) {
+                                                const u1 = si.uom || si.unit;
+                                                const u2 = si.alternate_uom || si.alternative_unit || si.altUnit;
+                                                if (u1) us.push(u1);
+                                                if (u2 && u2 !== u1) us.push(u2);
+                                              }
+                                              return us.map(u => <option key={u} value={u}>{u}</option>);
                                             })()}
                                           </select>
                                         </td>
@@ -7448,13 +7448,13 @@ const InventoryPage: React.FC = () => {
                             </div>
                             <div className="w-1/2 flex flex-wrap gap-2 pt-1">
                               {grnSelectedPOs.map((po, idx) => (
-                                <span 
-                                  key={po} 
+                                <span
+                                  key={po}
                                   className={`px-2 py-1 rounded text-xs font-bold text-white shadow-sm border border-black/10`}
-                                  style={{ 
+                                  style={{
                                     backgroundColor: [
                                       '#4F46E5', '#0891B2', '#059669', '#D97706', '#DC2626', '#7C3AED'
-                                    ][idx % 6] 
+                                    ][idx % 6]
                                   }}
                                 >
                                   {po}
@@ -8611,10 +8611,10 @@ const InventoryPage: React.FC = () => {
                   onSelect={async (selection) => {
                     handleFormChange('category', selection.id);
                     handleFormChange('categoryPath', selection.fullPath);
-                    setSelectedCategoryId(String(selection.id));
+                    setSelectedCategoryId(typeof selection.id === 'number' ? selection.id : null);
                     // Subgroup fetching logic removed as it's no longer used
                   }}
-                  value={editFormData?.categoryPath || editFormData?.category || ''}
+                  value={String(editFormData?.categoryPath || editFormData?.category || '')}
                 />
               </div>
 

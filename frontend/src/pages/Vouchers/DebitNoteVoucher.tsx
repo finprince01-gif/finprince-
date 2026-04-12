@@ -28,7 +28,8 @@ export interface ItemRow {
     gstRate?: string;
     selected?: boolean;
     reasonForReturn?: string;
-    salesInvoiceNo?: string;
+    supplierInvoiceNo?: string;
+    invoiceRef?: string;
     fcRate?: string;
     fcAmount?: string;
     ledgerNarration?: string;
@@ -83,7 +84,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
         itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
         invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
-        reasonForReturn: '', salesInvoiceNo: '', fcRate: '0', fcAmount: '0',
+        reasonForReturn: '', supplierInvoiceNo: '', invoiceRef: '', fcRate: '0', fcAmount: '0',
         ledgerNarration: ''
     }]);
 
@@ -391,7 +392,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             const transactions = Array.isArray(transactionsRes) ? transactionsRes : ((transactionsRes as any).results || []);
 
             // 2. Fetch from Voucher Source (Historical Purchase Vouchers)
-            const prevInvoicesRes = await apiService.getVendorPurchaseInvoices(vName, branchName);
+            // For Debit Note, we want to see ALL invoices even if fully paid (showAll: true)
+            const prevInvoicesRes = await apiService.getVendorPurchaseInvoices(vName, branchName, true);
             const prevVouchers = Array.isArray(prevInvoicesRes) ? prevInvoicesRes : ((prevInvoicesRes as any).results || []);
 
             // Normalize and Merge
@@ -406,31 +408,32 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 })
                 : transactions;
 
-            procurementSource
-                .filter((t: any) => (t.transaction_type || '').toLowerCase() === 'purchase')
-                .forEach((t: any) => {
-                    const invNo = t.reference_number || t.transaction_number;
-                    if (invNo) {
-                        allInvsMap.set(invNo, {
-                            invoice_no: invNo,
-                            purchase_voucher_no: t.transaction_number,
-                            date: t.transaction_date,
-                            total: t.total_amount,
-                            due_status: t.due_status,
-                            id: t.id
-                        });
-                    }
-                });
-
-            // Second source: Vouchers (Items data priority)
-            prevVouchers.forEach((inv: any) => {
-                const invNo = inv.invoice_no || inv.supplier_invoice_no || inv.reference_no;
+            procurementSource.forEach((t: any) => {
+                const invNo = (t.reference_number || t.transaction_number || '').trim();
                 if (invNo) {
-                    const existing = allInvsMap.get(invNo) || {};
-                    allInvsMap.set(invNo, {
+                    const key = invNo.toUpperCase();
+                    allInvsMap.set(key, {
+                        invoice_no: invNo,
+                        purchase_voucher_no: t.transaction_number,
+                        date: t.transaction_date,
+                        total_amount: t.total_amount,
+                        due_status: t.due_status,
+                        id: t.id,
+                        items_data: []
+                    });
+                }
+            });
+
+            // Second pass: Merge historical vouchers for items & details
+            prevVouchers.forEach((inv: any) => {
+                const invNo = (inv.invoice_no || inv.supplier_invoice_no || inv.reference_no || '').trim();
+                if (invNo) {
+                    const key = invNo.toUpperCase();
+                    const existing = allInvsMap.get(key) || {};
+                    allInvsMap.set(key, {
                         ...existing,
                         ...inv,
-                        invoice_no: invNo, // Normalize key
+                        invoice_no: (inv.invoice_no || inv.supplier_invoice_no || invNo), // Keep best display name
                     });
                 }
             });
@@ -584,7 +587,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 if (selectedItem) {
                     updatedRow = {
                         ...updatedRow,
-                        salesInvoiceNo: selectedItem.invoice_no,
+                        supplierInvoiceNo: selectedItem.invoice_no,
                         itemCode: selectedItem.itemCode,
                         itemName: selectedItem.itemName,
                         hsnSac: selectedItem.hsnSac || selectedItem.hsn_sac || '',
@@ -792,7 +795,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 items.forEach((item: any) => {
                     newItems.push({
                         id: Date.now() + Math.random(),
-                        salesInvoiceNo: inv.invoice_no,
+                        supplierInvoiceNo: inv.invoice_no,
                         itemCode: item.itemCode || item.code || '',
                         itemName: item.itemName || item.name || '',
                         hsnSac: item.hsnSac || item.hsn_sac || '',
@@ -810,6 +813,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                         gstRate: item.gstRate || item.gst_rate || '0',
                         selected: true,
                         reasonForReturn: '',
+                        invoiceRef: inv.invoice_no || '',
                         fcRate: item.fcRate || '0',
                         fcAmount: item.fcAmount || '0',
                         ledgerNarration: ''
@@ -827,7 +831,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
                 itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
                 invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
-                reasonForReturn: '', salesInvoiceNo: '', fcRate: '0', fcAmount: '0',
+                reasonForReturn: '', supplierInvoiceNo: '', invoiceRef: '', fcRate: '0', fcAmount: '0',
                 ledgerNarration: ''
             }]);
         }
@@ -857,6 +861,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             formData.append('debit_note_series', selectedSeriesId.toString());
             formData.append('debit_note_no', debitNoteNo);
             formData.append('vendor_name', vendorName);
+            formData.append('vendor_id', vendorId.toString());
             formData.append('gstin', gstin);
             formData.append('branch', vendorBranch);
             
@@ -890,6 +895,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             const supplyDetails = {
                 items: itemRows.map(r => ({
                     ...r,
+                    supplierInvoiceNo: r.supplierInvoiceNo || '',
                     qty: parseFloat(r.qty) || 0,
                     itemRate: parseFloat(r.itemRate) || 0,
                     taxableValue: parseFloat(r.taxableValue) || 0,
@@ -907,6 +913,13 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 total_invoice_value: totalInvoiceValue
             };
             formData.append('supply_details', JSON.stringify(supplyDetails));
+
+            // Nested Payment Details (needed for Allocation Link in Vendor Portal)
+            const paymentDetails = selectedSupplierInvoices.map(invNo => ({
+                supplierInvoiceNo: invNo,
+                appliedNow: 0 // Backend will auto-compute based on item mapping
+            }));
+            formData.append('payment_details', JSON.stringify(paymentDetails));
 
             // Nested Due Details
             const dueDetails = {
@@ -992,7 +1005,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
             itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
             invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true,
-            reasonForReturn: '', salesInvoiceNo: '', fcRate: '0', fcAmount: '0',
+            reasonForReturn: '', supplierInvoiceNo: '', fcRate: '0', fcAmount: '0',
             ledgerNarration: ''
         }]);
         setExchangeRate('1');
@@ -1593,7 +1606,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     <td className="px-3 py-2 border-r border-gray-200">
                                                         <input
                                                             type="text"
-                                                            value={row.salesInvoiceNo || ''}
+                                                            value={row.supplierInvoiceNo || ''}
                                                             readOnly
                                                             className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-indigo-700 font-bold"
                                                             placeholder="Auto"
@@ -1699,7 +1712,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                             <button
                                 type="button"
                                 onClick={() => setItemRows(prev => [...prev, {
-                                    id: Date.now(), itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '', itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0', invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true, reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
+                                    id: Date.now(), itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '', itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0', invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true, reasonForReturn: '', invoiceRef: '', supplierInvoiceNo: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
                                 }])}
                                 className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors"
                             >
@@ -1771,7 +1784,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     <td className="px-2 py-2 border-r border-gray-200">
                                                         <input
                                                             type="text"
-                                                            value={row.salesInvoiceNo || ''}
+                                                            value={row.supplierInvoiceNo || ''}
                                                             readOnly
                                                             className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-indigo-700 font-bold"
                                                             placeholder="Auto"
@@ -1904,7 +1917,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                             <button
                                 type="button"
                                 onClick={() => setItemRows(prev => [...prev, {
-                                    id: Date.now(), itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '', itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0', invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true, reasonForReturn: '', invoiceRef: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
+                                    id: Date.now(), itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '', itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0', invoiceValue: '0', purchaseLedger: '', description: '', gstRate: '0', selected: true, reasonForReturn: '', invoiceRef: '', supplierInvoiceNo: '', fcRate: '0', fcAmount: '0', ledgerNarration: ''
                                 }])}
                                 className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors"
                             >
