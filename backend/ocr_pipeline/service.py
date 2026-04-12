@@ -28,46 +28,30 @@ def process_invoice_upload(
     """
     file_hash = generate_file_hash(file_bytes)
     
-    # 2. Duplicate Detection
+    # 2. Duplicate Detection / Lifecycle Management
     existing = repo.find_by_hash_and_tenant(file_hash, tenant_id)
+    if existing and existing.extracted_data and existing.upload_session_id == upload_session_id:
+        # Scenario A: Exact same file in same session — skip
+        logger.info(f"Duplicate detect within session: Reusing {existing.id}")
+        return {
+            "id": existing.id,
+            "file_hash": existing.file_hash,
+            "status": existing.status,
+            "data": existing.extracted_data,
+            "is_duplicate": True,
+            "vendor_id": existing.vendor_id,
+            "validation_status": existing.validation_status
+        }
+    
+    # Otherwise, create or update record and RUN PIPELINE freshly
     if existing:
-        # Crucial: Update session ID to current upload, so UI can find it
-        if upload_session_id:
-            existing.upload_session_id = upload_session_id
-        
-        # Scenario A: Already has data — just refresh and return
-        if existing.extracted_data:
-            # Re-validate vendor (cheap refresh)
-            sections = existing.extracted_data.get("sections", {})
-            supplier = sections.get("supplier_details", {})
-            v_res = validate_vendor(
-                tenant_id=str(tenant_id),
-                vendor_name=supplier.get("vendor_name"),
-                gstin=supplier.get("gstin"),
-                supplier_invoice_no=supplier.get("supplier_invoice_no")
-            )
-            existing.vendor_id = v_res.get('vendor_id')
-            existing.validation_status = v_res.get('status')
-            existing.save()
-
-            logger.info(f"Duplicate detect: Reusing existing record {existing.id} for tenant {tenant_id}. Status: {existing.status}")
-            return {
-                "id": existing.id,
-                "file_hash": existing.file_hash,
-                "status": existing.status,
-                "data": existing.extracted_data,
-                "is_duplicate": True,
-                "vendor_id": existing.vendor_id,
-                "validation_status": existing.validation_status or 'NEED_VENDOR'
-            }
-        
-        # Scenario B: Exists but no data (e.g. interrupted previous upload)
-        # We FALL THROUGH to step 3, but we must use the existing record ID
-        logger.info(f"Duplicate detect: Found empty record {existing.id}, resuming extraction...")
         record = existing
+        record.status = 'PROCESSING'
+        record.file_path = file_name # Update to latest name
+        record.upload_session_id = upload_session_id
+        record.save()
     else:
-        # 3. Create fresh record
-        record = repo.create_record(file_hash, file_name, voucher_type, tenant_id, upload_session_id=upload_session_id)
+        record = repo.create_record(file_hash, file_name, voucher_type, tenant_id, upload_session_id)
 
 
     try:

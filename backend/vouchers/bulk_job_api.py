@@ -44,7 +44,7 @@ class BulkUploadAPIView(APIView):
             return self._busy(reason, 'infrastructure')
 
 
-        # ── GATE 3: Tenant active job limit ──────────────────────────────────
+        # ── GATE 3: Branch active job limit ──────────────────────────────────
         max_jobs = getattr(settings, 'BULK_MAX_ACTIVE_JOBS_PER_TENANT', 5)
         active = BulkInvoiceJob.objects.filter(
             tenant_id=tenant_id, status__in=['pending', 'processing']
@@ -64,8 +64,8 @@ class BulkUploadAPIView(APIView):
             all_file_hashes.append(fh)
         
         # Sort hashes to ensure order-independence for the batch fingerprint
-        all_file_hashes.sort()
-        batch_fingerprint = hashlib.sha256("".join(all_file_hashes).encode()).hexdigest()
+        new_session = request.data.get('upload_session_id', 'legacy')
+        batch_fingerprint = hashlib.sha256(f'{"".join(all_file_hashes)}_{new_session}'.encode()).hexdigest()
         print(f"DEBUG: BATCH FINGERPRINT: {batch_fingerprint}")
 
         lock = IdempotencyLock(batch_fingerprint, ttl=300)

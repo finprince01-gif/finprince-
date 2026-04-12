@@ -6,14 +6,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background:
-        radial-gradient(circle at 50% 35%, rgba(99, 102, 241, 0.20), transparent 55%),
-        radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.25), transparent 45%),
-        radial-gradient(circle at 70% 80%, rgba(79, 70, 229, 0.18), transparent 50%),
-        linear-gradient(180deg, #EEF2FF 0%, #E0E7FF 100%);
     font-family: 'Outfit', sans-serif !important;
-    padding: 40px 20px;
-    transition: all 0.2s ease;
+    padding: 0;
 }
 
 .brand-section {
@@ -402,76 +396,121 @@
     transform: translateY(-1px);
 }
 
-/* Dark Mode Support */
-.dark .register-page-container {
-    background:
-        radial-gradient(circle at 50% 35%, rgba(99, 102, 241, 0.15), transparent 55%),
-        radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.1), transparent 45%),
-        linear-gradient(135deg, #0F172A 0%, #111827 100%);
+/* Register V2 Premium Inputs */
+.reg-input-v2 {
+    width: 100%;
+    height: 48px;
+    background: #FFFFFF;
+    border: 1.5px solid #F1F5F9;
+    border-radius: 16px;
+    padding: 0 18px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0F172A;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
-.dark .register-card,
-.dark .plan-card {
-    background: #1E293B;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow:
-        0 25px 60px rgba(0, 0, 0, 0.4),
-        0 10px 25px rgba(99, 102, 241, 0.1);
+.reg-input-v2:focus {
+    border-color: #6366F1;
+    background: #FFFFFF;
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.12);
+    transform: translateY(-1px);
 }
 
-.dark .brand-tagline,
-.dark .form-label,
-.dark .upload-text,
-.dark .footer-text,
-.dark .plan-price span,
-.dark .plan-feature {
+.reg-input-v2:disabled {
+    background: #F8FAFC;
     color: #94A3B8;
+    cursor: not-allowed;
+    border-color: #F1F5F9;
 }
 
-.dark .form-input {
-    background: rgba(15, 23, 42, 0.6);
-    border-color: #334155;
-    color: #F1F5F9;
-}
-
-.dark .form-input:focus {
-    border-color: #6366F1;
-}
-
-.dark .form-input::placeholder {
-    color: #64748B;
-}
-
-.dark .logo-upload-container {
-    border-color: #334155;
-}
-
-.dark .logo-upload-container:hover {
-    border-color: #6366F1;
-    background: rgba(99, 102, 241, 0.04);
-}
-
-.dark .plan-name,
-.dark .plan-price {
-    color: #F1F5F9;
-}
-
-.dark .plan-card:not(.selected) .plan-button {
-    background: #334155;
+.reg-input-v2::placeholder {
     color: #CBD5E1;
+    font-weight: 500;
 }
 
-.dark .plan-card:not(.selected):hover .plan-button {
-    background: #475569;
+/* Scrollbar styling for large forms */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #E2E8F0;
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #CBD5E1;
 }
 
-.dark .login-link,
-.dark .upload-link {
-    color: #818CF8;
+@keyframes headshake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-4px) rotate(-1deg); }
+    50% { transform: translateX(4px) rotate(1deg); }
+    75% { transform: translateX(-4px) rotate(-1deg); }
+    100% { transform: translateX(0); }
 }
 
-.dark .back-button {
-    background: #1E293B;
-    border-color: #334155;
-    color: #CBD5E1;
+.animate-headshake {
+    animation: headshake 0.4s ease-in-out;
 }
+
+/* Animations from Tailwind-like utilities */
+.animate-in {
+    animation-duration: 0.5s;
+    animation-fill-mode: both;
+}
+
+.fade-in {
+    animation-name: fadeIn;
+}
+
+.zoom-in-\[0\.98\] {
+    animation-name: zoomIn;
+}
+
+.slide-in-from-right-4 {
+    animation: slideInRight 0.5s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(1rem);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Ensure progress bar transition is smooth */
+.transition-all {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 500ms;
+}
+
+.duration-700 {
+    animation-duration: 700ms;
+}
+
+/* Scaling utility for active step */
+.scale-110 {
+    transform: scale(1.1);
+}
+
+/* Shadow utilities for premium look */
+.shadow-indigo-200 {
+    box-shadow: 0 10px 15px -3px rgba(165, 180, 252, 0.4), 0 4px 6px -4px rgba(165, 180, 252, 0.4);
+}
+
+/* Layout helpers for StepIndicator */
+.z-0 { z-index: 0; }
+.z-10 { z-index: 10; }
+.top-5 { top: 1.25rem; }
+.left-8 { left: 2rem; }
+.right-8 { right: 2rem; }

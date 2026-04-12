@@ -236,31 +236,28 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     useEffect(() => {
         if (activeTransactionSubTab === 'Procurement') {
             const fetchProcurementData = async () => {
-                if (activeProcurementSubTab === 'Dashboard') {
-                    // Fetch all advances for dashboard tiles using UNIFIED API
-                    try {
-                        const advRes = await apiService.getAdvances();
-                        const advList: any[] = Array.isArray(advRes) ? advRes : ((advRes as any)?.results || []);
-                        setAllAdvancePayments(advList);
-                    } catch (error) {
-                        console.error('Error fetching dashboard advances:', error);
+                setLoadingProcurementAging(true);
+                try {
+                    const [pvRes, advResAll, advResSpecific] = await Promise.all([
+                        httpClient.get('/api/vouchers/purchase/'),
+                        apiService.getAdvances(),
+                        activeProcurementSubTab !== 'Dashboard' ? apiService.getAdvances(undefined, activeProcurementSubTab) : Promise.resolve([])
+                    ]);
+
+                    const pvList: any[] = Array.isArray(pvRes) ? pvRes : ((pvRes as any)?.results || []);
+                    setPurchaseVouchers(pvList);
+
+                    const advListAll: any[] = Array.isArray(advResAll) ? advResAll : ((advResAll as any)?.results || []);
+                    setAllAdvancePayments(advListAll);
+
+                    if (activeProcurementSubTab !== 'Dashboard') {
+                         const advListSpec: any[] = Array.isArray(advResSpecific) ? advResSpecific : ((advResSpecific as any)?.results || []);
+                         setAdvancePayments(advListSpec);
                     }
-                } else {
-                    setLoadingProcurementAging(true);
-                    try {
-                        const [pvRes, advRes] = await Promise.all([
-                            httpClient.get('/api/vouchers/purchase/'),
-                            apiService.getAdvances(undefined, activeProcurementSubTab)
-                        ]);
-                        const pvList: any[] = Array.isArray(pvRes) ? pvRes : ((pvRes as any)?.results || []);
-                        const advList: any[] = Array.isArray(advRes) ? advRes : ((advRes as any)?.results || []);
-                        setPurchaseVouchers(pvList);
-                        setAdvancePayments(advList);
-                    } catch (error) {
-                        handleApiError(error, 'Fetch Procurement Data');
-                    } finally {
-                        setLoadingProcurementAging(false);
-                    }
+                } catch (error) {
+                    handleApiError(error, 'Fetch Procurement Data');
+                } finally {
+                    setLoadingProcurementAging(false);
                 }
             };
             fetchProcurementData();
@@ -881,6 +878,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     receiveBy: po.receive_by,
                     receiveAt: po.receive_at,
                     deliveryTerms: po.delivery_terms,
+                    category: po.category_name || po.category || po.po_category || '',
                     amount: po.total_value ? po.total_value.toString() : '0.00'
                 }));
                 // Combine with hardcoded if needed, or just replace
@@ -5214,14 +5212,22 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                 {allDisplayCategories.map(name => ({ name, desc: `Manage ${name.toLowerCase()} procurement` }))
                                                     .map((item) => {
-                                                        const activeOrders = purchaseOrders.filter(po =>
-                                                            po.category === item.name &&
-                                                            ['Draft', 'Pending Approval', 'Approved', 'Mailed'].includes(po.status)
-                                                        ).length;
+                                                        const activeOrders = purchaseOrders.filter(po => {
+                                                            let poCat = po.category;
+                                                            if (!poCat && po.vendorName) {
+                                                                const vendor = vendorList.find(v => v.vendor_name === po.vendorName);
+                                                                if (vendor) poCat = (vendor as any).vendor_category_name || (vendor as any).vendor_category || '';
+                                                            }
+                                                            return (poCat || '').toLowerCase().includes(item.name.toLowerCase()) &&
+                                                                ['Draft', 'Pending Approval', 'Approved', 'Mailed'].includes(po.status);
+                                                        }).length;
 
                                                         const activeAdvances = allAdvancePayments.filter(adv =>
                                                             (adv.category || '').toLowerCase() === (item.name || '').toLowerCase()
                                                         ).length;
+
+                                                        const categoryVendors = getVendorAgingData(item.name);
+                                                        const totalDueAmount = categoryVendors.reduce((sum, v) => sum + v.days0to45 + v.days45to90 + v.months6 + v.year1, 0);
 
                                                         return (
                                                             <div
@@ -5246,6 +5252,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                             <p className="text-lg font-bold text-gray-800">{activeAdvances}</p>
                                                                             <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wider">Advances</p>
                                                                         </div>
+                                                                        {totalDueAmount > 0 && (
+                                                                             <div className="text-right mr-2">
+                                                                                <p className="text-lg font-bold text-gray-800">
+                                                                                    {totalDueAmount >= 1000 ? `₹${(totalDueAmount / 1000).toFixed(1)}k` : `₹${Math.round(totalDueAmount)}`}
+                                                                                </p>
+                                                                                <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Due</p>
+                                                                            </div>
+                                                                        )}
                                                                         <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                                                                     </div>
                                                                 </div>

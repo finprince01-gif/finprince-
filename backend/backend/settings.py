@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'masters', # Masters Module (Voucher configs etc)
     'core',
+    'company',  # Parent of one or more Tenants (Branches)
+    'transactions', # Vouchers and Entries
     'accounting',
     'inventory',
     'vendors',  # Vendor Portal
@@ -36,6 +38,10 @@ INSTALLED_APPS = [
     'payroll',  # Payroll Management
     'services',  # Services Management
     'rbac',  # Role-Based Access Control
+    'dashboard', # Dashboard UI
+    'users', # User profiles and auth extensions
+    'login', # Authentication Logic
+    'registration', # Signup Logic
     'rest_framework_simplejwt',
     'reports',
     'drf_spectacular',
@@ -395,4 +401,3 @@ MIGRATION_MODULES = {}
 # BANK RECONCILIATION SETTINGS
 # ============================================================================
 BANK_MATCH_TOLERANCE = 1
-

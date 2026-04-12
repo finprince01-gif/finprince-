@@ -8,7 +8,7 @@ from django.db.models import Q
 # TODO: Update reports to query new split tables
 # from accounting.models import Voucher, Ledger
 # from inventory.models import StockItem
-from .utils import IsTenantMember
+from .mixins import IsBranchMember
 import io
 import os
 import json
@@ -23,7 +23,7 @@ except ImportError:
     genai = None
 
 class BaseExcelView(APIView):
-    permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
 
     def get_filtered_vouchers(self, request):
         """Fetch vouchers from all split tables and combine them"""

@@ -123,6 +123,26 @@ class PaymentVoucherItem(models.Model):
         return f"Item {self.id} → {self.pay_to_ledger} = {self.amount}"
 
 
+class PaymentAllocationDetail(models.Model):
+    """
+    Normalized transaction details for PaymentVoucherItem.
+    Tracks which specific invoices/bills this payment is covering.
+    Matches schema in migration 0014.
+    """
+    payment_item = models.ForeignKey(PaymentVoucherItem, on_delete=models.CASCADE, related_name='allocations')
+    invoice_date = models.DateField(null=True, blank=True)
+    invoice_no = models.CharField(max_length=100, null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    pending_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    is_advance = models.BooleanField(default=False)
+    
+    tenant_id = models.CharField(max_length=36, db_index=True, null=True, blank=True)
+
+    class Meta:
+        db_table = 'norm_payment_allocations'
+
+
 # ---------------------------------------------------------------------------
 # Backward-compatibility aliases
 # ---------------------------------------------------------------------------

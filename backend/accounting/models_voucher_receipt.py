@@ -104,6 +104,26 @@ class ReceiptVoucherItem(BaseModel):
             )
         ]
 
+
+class ReceiptAllocationDetail(BaseModel):
+    """
+    Normalized transaction details for ReceiptVoucherItem.
+    Tracks which specific sales invoices this receipt is covering.
+    Matches schema in migration 0014.
+    """
+    receipt_item = models.ForeignKey(ReceiptVoucherItem, on_delete=models.CASCADE, related_name='allocations')
+    invoice_no = models.CharField(max_length=100, null=True, blank=True)
+    invoice_date = models.DateField(null=True, blank=True)
+    amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    pending_before = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    received_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    balance_after = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    is_advance = models.BooleanField(default=False)
+    advance_ref_no = models.CharField(max_length=100, null=True, blank=True)
+    
+    class Meta:
+        db_table = 'norm_receipt_allocations'
+
 # --- DEPRECATED MODELS (Maintained for Migration reference only) ---
 class VoucherReceiptSingle(BaseModel):
     class Meta:

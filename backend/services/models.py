@@ -63,11 +63,11 @@ class Service(models.Model):
     Aligned with service_list table structure.
     """
     
-    # Tenant field for multi-tenancy
+    # Branch field for multi-tenancy
     tenant_id = models.CharField(
         max_length=36,
         db_index=True,
-        help_text="Tenant ID for multi-tenancy"
+        help_text="Branch ID for multi-tenancy"
     )
     
     # Required fields

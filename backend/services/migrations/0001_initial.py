@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             name='Service',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('tenant_id', models.CharField(db_index=True, help_text='Tenant ID for multi-tenancy', max_length=36)),
+                ('tenant_id', models.CharField(db_index=True, help_text='Branch ID for multi-tenancy', max_length=36)),
                 ('service_code', models.CharField(db_index=True, help_text='Unique service code identifier', max_length=50, unique=True)),
                 ('service_name', models.CharField(help_text='Service name', max_length=255)),
                 ('service_group', models.CharField(db_index=True, help_text='Service group/category', max_length=100)),

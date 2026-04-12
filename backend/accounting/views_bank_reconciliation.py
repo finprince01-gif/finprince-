@@ -350,7 +350,7 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def _get_tenant_id(self, request):
-        return str(request.user.tenant_id)
+        return str(request.user.branch_id)
 
     def _generate_voucher_number(self, tenant_id: str, is_payment: bool, voucher_name: Optional[str] = None) -> str:
         """

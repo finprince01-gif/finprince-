@@ -191,6 +191,7 @@ const InventoryPage: React.FC = () => {
   const [grnSuffix, setGrnSuffix] = useState('');
   const [grnYear, setGrnYear] = useState('');
   const [grnRequiredDigits, setGrnRequiredDigits] = useState('');
+  const [grnStartFrom, setGrnStartFrom] = useState('1');
   const [grnPreview, setGrnPreview] = useState('');
   const [isEditModeGRNSeries, setIsEditModeGRNSeries] = useState(false);
   const [grnSeriesList, setGrnSeriesList] = useState<any[]>([]);
@@ -204,6 +205,7 @@ const InventoryPage: React.FC = () => {
   const [issueSlipSuffix, setIssueSlipSuffix] = useState('');
   const [issueSlipYear, setIssueSlipYear] = useState('');
   const [issueSlipRequiredDigits, setIssueSlipRequiredDigits] = useState('');
+  const [issueSlipStartFrom, setIssueSlipStartFrom] = useState('1');
   const [issueSlipPreview, setIssueSlipPreview] = useState('');
   const [isEditModeIssueSlipSeries, setIsEditModeIssueSlipSeries] = useState(false);
   const [issueSlipSeriesList, setIssueSlipSeriesList] = useState<any[]>([]);
@@ -419,7 +421,9 @@ const InventoryPage: React.FC = () => {
     } else if (issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'outward') {
       const jwSeries = issueSlipSeriesList.filter(s =>
         (s.issueSlipType || '').toLowerCase().includes('jobwork') ||
-        (s.issueSlipType || '').toLowerCase().includes('job work')
+        (s.issueSlipType || '').toLowerCase().includes('job work') ||
+        (s.issueSlipType || '').toLowerCase().includes('job_work') ||
+        (s.issueSlipType || '').toLowerCase().includes('job-work')
       );
       if (jwSeries.length === 1) {
         setSelectedIssueSlipSeriesName(jwSeries[0].name);
@@ -664,7 +668,7 @@ const InventoryPage: React.FC = () => {
   const fetchVendors = async () => {
     try {
       const data = await apiService.getRichVendors();
-      setVendors(Array.isArray(data) ? data : []);
+      setVendors(Array.isArray(data) ? data : (data as any)?.results || []);
     } catch (error) {
       console.error('Error fetching vendors:');
     }
@@ -673,7 +677,7 @@ const InventoryPage: React.FC = () => {
   const fetchCustomers = async () => {
     try {
       const data = await apiService.getRichCustomers();
-      setCustomers(Array.isArray(data) ? data : []);
+      setCustomers(Array.isArray(data) ? data : (data as any)?.results || []);
     } catch (error) {
       console.error('Error fetching customers:');
     }
@@ -776,6 +780,10 @@ const InventoryPage: React.FC = () => {
         fetchItems();
         fetchLocations(); // For dropdown
         fetchVendors();
+      } else if (activeMasterSubTab === 'GRN & Issue Slip') {
+        fetchLocations();
+        fetchVendors();
+        fetchCustomers();
       }
     }
   }, [activeTab, activeMasterSubTab]);
@@ -1545,6 +1553,7 @@ const InventoryPage: React.FC = () => {
       if (issueSlipTab === 'outward') {
         const outwardPayload = {
           outward_slip_no: issueSlipNumber,
+          issue_slip_series: selectedIssueSlipSeriesName,
           date: issueSlipDate || null,
           time: issueSlipTime || null,
           outward_type: outwardType,
@@ -1556,7 +1565,7 @@ const InventoryPage: React.FC = () => {
           branch: outwardBranch,
           address: outwardAddress,
           gstin: outwardGstin,
-          total_boxes: outwardTotalBoxes,
+          total_boxes: outwardTotalBoxes ? Number(outwardTotalBoxes) : null,
           posting_note: postingNote,
           items: issueSlipItems.map(item => ({
             item_code: item.itemCode,
@@ -1756,7 +1765,7 @@ const InventoryPage: React.FC = () => {
         }
 
         const productionPayload = {
-          issue_slip_no: productionType === 'materials_issued' ? materialIssueSlipNo : (productionType === 'inter_process' ? processTransferSlipNo : fgReceiptSlipNo), // Use correct slip no. state based on type
+          issue_slip_no: (productionType === 'materials_issued' ? materialIssueSlipNo : (productionType === 'inter_process' ? processTransferSlipNo : fgReceiptSlipNo)) || issueSlipNumber || 'AUTO',
           issue_slip_series: productionType === 'materials_issued' ? selectedIssueSlipSeriesName : '',
           date: issueSlipDate || null,
           time: issueSlipTime || null,
@@ -1768,7 +1777,7 @@ const InventoryPage: React.FC = () => {
           production_type: productionType,
           material_issue_slip_no: productionType === 'inter_process' ? selectedMaterialIssueSlips.join(',') : '',
           process_transfer_slip_no: productionType === 'finished_goods' ? selectedProcessTransferSlips.join(',') : (productionType === 'inter_process' ? processTransferSlipNo : ''),
-          // finished_goods_production_no: ... (add if variable exists, else map to issueSlipNumber)
+          finished_goods_production_no: productionType === 'finished_goods' ? fgReceiptSlipNo : '',
 
           items: productionItems,
 
@@ -1872,6 +1881,7 @@ const InventoryPage: React.FC = () => {
           status: 'Posted',
           goods_from_location: goodsFromLocation,
           goods_to_location: issueSlipTab === 'consumption' ? null : goodsToLocation, // NIL for consumption
+          issue_slip_series: selectedIssueSlipSeriesName,
           posting_note: postingNote,
           items: issueSlipItems.map(item => ({
             item_code: item.itemCode,
@@ -1886,7 +1896,6 @@ const InventoryPage: React.FC = () => {
         // Add Consumption Specific fields
         if (issueSlipTab === 'consumption') {
           commonPayload.consumption_type = consumptionType;
-          commonPayload.issue_slip_series = selectedIssueSlipSeriesName;
           if (consumptionType === 'fixed_assets') {
             commonPayload.fixed_asset_ledger = fixedAssetLedger;
           } else {
@@ -1995,14 +2004,16 @@ const InventoryPage: React.FC = () => {
       showSuccess('Operation saved successfully!');
       setShowIssueSlipForm(false);
       // Optional: Reset form fields here if needed
-    } catch (error) {
-      console.error('Error saving operation:');
-      showError('Failed to save operation. Please check your inputs.');
+    } catch (error: any) {
+      console.error('Error saving operation:', error);
+      const detail = error.response?.data?.detail || error.response?.data?.error || (error.response?.data ? JSON.stringify(error.response.data) : '');
+      showError(`Failed to save operation: ${detail || 'Please check your inputs and try again.'}`);
     }
   };
 
   const handleOutwardVendorChange = async (selectedVendorName: string) => {
-    setOutwardVendorName(selectedVendorName);
+    const trimmedName = selectedVendorName.trim();
+    setOutwardVendorName(trimmedName);
     setOutwardBranch('');
     setOutwardBranchOptions([]);
     setOutwardAddress('');
@@ -2010,15 +2021,22 @@ const InventoryPage: React.FC = () => {
     setJobWorkOrderNo('');
     setJobWorkOrderNoOptions([]);
 
-    const vendor = vendors.find(v => v.vendor_name === selectedVendorName);
+    if (!trimmedName) return;
+
+    const vendor = vendors.find(v => (v.vendor_name || '').trim() === trimmedName);
     if (vendor) {
       try {
+        // Fetch branches/GST details
         const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
-        const mappedBranches = Array.isArray(branchResponse) ? branchResponse.map((b: any) => ({
+        const rawBranches = Array.isArray(branchResponse) ? branchResponse : 
+                           (branchResponse && (branchResponse as any).data && Array.isArray((branchResponse as any).data)) ? (branchResponse as any).data : [];
+        
+        const mappedBranches = rawBranches.map((b: any) => ({
           ...b,
-          reference_name: b.reference_name || b.defaultRef || b.branch_name || b.name || b.gstin || `Branch ${b.id}` || 'Main',
-          branch_address: b.branch_address || b.address
-        })) : [];
+          reference_name: b.reference_name || b.branch_name || b.name || b.gstin || `Branch ${b.id}` || 'Main',
+          branch_address: b.branch_address || b.address || ''
+        }));
+        
         setOutwardBranchOptions(mappedBranches);
 
         // Auto-select first branch if available
@@ -2029,15 +2047,14 @@ const InventoryPage: React.FC = () => {
           setOutwardGstin(defaultBranch.gstin || '');
         }
 
-        // Fetch PENDING POs for this vendor using the new specific endpoint
+        // Fetch PENDING POs for this vendor
         const poResponse = await apiService.getPendingPOs(vendor.id);
-        if (Array.isArray(poResponse)) {
-          setJobWorkOrderNoOptions(poResponse);
-        } else if (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) {
-          setJobWorkOrderNoOptions((poResponse as any).data);
-        }
+        const rawPOs = Array.isArray(poResponse) ? poResponse : 
+                      (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) ? (poResponse as any).data : [];
+        
+        setJobWorkOrderNoOptions(rawPOs);
       } catch (error) {
-        handleApiError(error, "Fetching vendor details");
+        console.error("Error fetching vendor details:", error);
       }
     }
   };
@@ -2260,6 +2277,34 @@ const InventoryPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching next GRN number:', error);
+    }
+  };
+
+  const handleIssueSlipSeriesChange = async (
+    seriesName: string, 
+    seriesNameSetter: React.Dispatch<React.SetStateAction<string>>,
+    slipNoSetter: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    seriesNameSetter(seriesName);
+    if (!seriesName) {
+      slipNoSetter('');
+      return;
+    }
+    const series = issueSlipSeriesList.find((s: any) => s.name === seriesName);
+    if (series) {
+      const defaultVal = series.preview || '';
+      slipNoSetter(defaultVal);
+      
+      try {
+        const response = await httpClient.get<{ outward_slip_no: string }>(
+          `/api/inventory/master-voucher-issue-slip/${series.id}/next-number/`
+        );
+        if (response && response.outward_slip_no) {
+          slipNoSetter(response.outward_slip_no);
+        }
+      } catch (error) {
+        console.error('Error fetching next issue slip number:', error);
+      }
     }
   };
 
@@ -2724,7 +2769,8 @@ const InventoryPage: React.FC = () => {
   };
 
   const getTotalValue = () => {
-    return issueSlipItems.reduce((sum, item) => sum + (item.value || 0), 0);
+    if (!issueSlipItems || !Array.isArray(issueSlipItems)) return 0;
+    return issueSlipItems.reduce((sum, item) => sum + Number(item.value || 0), 0);
   };
 
   const renderOperations = () => {
@@ -3346,18 +3392,15 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Job-work Series</label>
                           <select
                             value={selectedIssueSlipSeriesName}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setSelectedIssueSlipSeriesName(v);
-                              const s = issueSlipSeriesList.find((x: any) => x.name === v);
-                              setIssueSlipNumber(s ? (s.preview || '') : '');
-                            }}
+                            onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setSelectedIssueSlipSeriesName, setIssueSlipNumber)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select Series</option>
                             {issueSlipSeriesList.filter((s: any) =>
                               (s.issueSlipType || '').toLowerCase().includes('jobwork') ||
-                              (s.issueSlipType || '').toLowerCase().includes('job work')
+                              (s.issueSlipType || '').toLowerCase().includes('job work') ||
+                              (s.issueSlipType || '').toLowerCase().includes('job_work') ||
+                              (s.issueSlipType || '').toLowerCase().includes('job-work')
                             ).map((s: any) => (
                               <option key={s.id} value={s.name}>{s.name}</option>
                             ))}
@@ -3368,9 +3411,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            readOnly
-                            placeholder="Auto-generated"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500 font-bold cursor-not-allowed"
+                            onChange={(e) => setIssueSlipNumber(e.target.value)}
+                            readOnly={!!selectedIssueSlipSeriesName}
+                            placeholder="Enter Slip No. or select series above"
+                            className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedIssueSlipSeriesName ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`}
                           />
                         </div>
                       </div>
@@ -3407,7 +3451,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                            {locations.map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -3427,12 +3471,9 @@ const InventoryPage: React.FC = () => {
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
-                              {vendors
-                                .filter(v => (v.vendor_category || '').toLowerCase().includes('jobwork'))
-                                .map(vendor => (
+                              {vendors.map(vendor => (
                                   <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
-                                ))
-                              }
+                                ))}
                             </select>
                           </div>
                           <div>
@@ -3572,7 +3613,7 @@ const InventoryPage: React.FC = () => {
                                     </td>
                                     <td className="px-3 py-2"><input type="number" value={slipItem.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2"><input type="number" value={slipItem.rate} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm cursor-not-allowed" /></td>
-                                    <td className="px-3 py-2"><input type="text" value={slipItem.value ? slipItem.value.toFixed(2) : ''} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2"><input type="text" value={slipItem.value ? Number(slipItem.value).toFixed(2) : ''} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 text-center">
                                       <button onClick={() => handleRemoveIssueSlipItem(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
                                     </td>
@@ -3583,7 +3624,7 @@ const InventoryPage: React.FC = () => {
                           </table>
                         </div>
                         <div className="mt-2 text-right text-sm font-bold text-gray-900">
-                          Total Value: ₹{getTotalValue().toFixed(2)}
+                          Total Value: ₹{Number(getTotalValue()).toFixed(2)}
                         </div>
                       </div>
 
@@ -3929,7 +3970,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                            {locations.map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -3961,9 +4002,7 @@ const InventoryPage: React.FC = () => {
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
-                              {vendors
-                                .filter(v => (v.vendor_category || '').toLowerCase().includes('jobwork'))
-                                .map(vendor => (
+                              {vendors.map(vendor => (
                                   <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
                                 ))}
                             </select>
@@ -4284,18 +4323,7 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Issue Slip Series</label>
                           <select
                             value={selectedIssueSlipSeriesName}
-                            onChange={(e) => {
-                              const seriesName = e.target.value;
-                              setSelectedIssueSlipSeriesName(seriesName);
-                              if (!seriesName) {
-                                setIssueSlipNumber('');
-                                return;
-                              }
-                              const seriesObj = issueSlipSeriesList.find((s: any) => s.name === seriesName);
-                              if (seriesObj) {
-                                setIssueSlipNumber(seriesObj.preview || '');
-                              }
-                            }}
+                            onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setSelectedIssueSlipSeriesName, setIssueSlipNumber)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select Series</option>
@@ -4309,9 +4337,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            readOnly
-                            placeholder="Auto-generated"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500 font-bold cursor-not-allowed"
+                            onChange={(e) => setIssueSlipNumber(e.target.value)}
+                            readOnly={!!selectedIssueSlipSeriesName}
+                            placeholder="Enter Slip No. or select series above"
+                            className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedIssueSlipSeriesName ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`}
                           />
                         </div>
                         <div>
@@ -4337,11 +4366,11 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
                           <select
                             value={itemLocation || ''}
-                            onChange={(e) => setItemLocation(Number(e.target.value))}
+                            onChange={(e) => setItemLocation(e.target.value ? Number(e.target.value) : null)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                            {locations.map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -4589,18 +4618,7 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Issue Slip Series</label>
                           <select
                             value={selectedIssueSlipSeriesName}
-                            onChange={(e) => {
-                              const seriesName = e.target.value;
-                              setSelectedIssueSlipSeriesName(seriesName);
-                              if (!seriesName) {
-                                setIssueSlipNumber('');
-                                return;
-                              }
-                              const seriesObj = issueSlipSeriesList.find((s: any) => s.name === seriesName);
-                              if (seriesObj) {
-                                setIssueSlipNumber(seriesObj.preview || '');
-                              }
-                            }}
+                            onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setSelectedIssueSlipSeriesName, setIssueSlipNumber)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select Series</option>
@@ -4614,9 +4632,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            readOnly
-                            placeholder="Auto-generated"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500 font-bold cursor-not-allowed"
+                            onChange={(e) => setIssueSlipNumber(e.target.value)}
+                            readOnly={!!selectedIssueSlipSeriesName}
+                            placeholder="Enter Slip No. or select series above"
+                            className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedIssueSlipSeriesName ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`}
                           />
                         </div>
                         <div>
@@ -4646,7 +4665,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                            {locations.map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -4913,16 +4932,7 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Issue Slip Series</label>
                           <select
                             value={selectedIssueSlipSeriesName}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setSelectedIssueSlipSeriesName(val);
-                              const series = issueSlipSeriesList.find(s => s.name === val);
-                              if (series) {
-                                setMaterialIssueSlipNo(series.preview || '');
-                              } else {
-                                setMaterialIssueSlipNo('');
-                              }
-                            }}
+                            onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setSelectedIssueSlipSeriesName, setMaterialIssueSlipNo)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Series</option>
@@ -4936,8 +4946,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             value={materialIssueSlipNo}
-                            readOnly
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-100 cursor-not-allowed font-semibold text-gray-600"
+                            onChange={(e) => setMaterialIssueSlipNo(e.target.value)}
+                            readOnly={!!selectedIssueSlipSeriesName}
+                            placeholder="Enter Slip No. or select series above"
+                            className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedIssueSlipSeriesName ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`}
                           />
                         </div>
                       </div>
@@ -5347,9 +5359,9 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
-                              <option key={loc.id} value={loc.id}>{loc.name}</option>
-                            ))}
+                             {locations.map(loc => (
+                               <option key={loc.id} value={loc.id}>{loc.name}</option>
+                             ))}
                           </select>
                         </div>
                       </div>
@@ -5713,9 +5725,9 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
-                              <option key={loc.id} value={loc.id}>{loc.name}</option>
-                            ))}
+                             {locations.map(loc => (
+                               <option key={loc.id} value={loc.id}>{loc.name}</option>
+                             ))}
                           </select>
                         </div>
                       </div>
@@ -6036,16 +6048,7 @@ const InventoryPage: React.FC = () => {
                           </label>
                           <select
                             value={selectedIssueSlipSeriesName}
-                            onChange={(e) => {
-                              const seriesName = e.target.value;
-                              setSelectedIssueSlipSeriesName(seriesName);
-                              const series = issueSlipSeriesList.find(s => s.name === seriesName);
-                              if (series) {
-                                setIssueSlipNumber(series.preview || '');
-                              } else {
-                                setIssueSlipNumber('');
-                              }
-                            }}
+                            onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setSelectedIssueSlipSeriesName, setIssueSlipNumber)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select Series</option>
@@ -6061,9 +6064,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            readOnly
-                            placeholder="Auto/Manual"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-slate-50 font-bold text-gray-500 cursor-not-allowed"
+                            onChange={(e) => setIssueSlipNumber(e.target.value)}
+                            readOnly={!!selectedIssueSlipSeriesName}
+                            placeholder="Enter Slip No. or select series above"
+                            className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedIssueSlipSeriesName ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`}
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -6129,9 +6133,9 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
-                              <option key={loc.id} value={loc.id}>{loc.name}</option>
-                            ))}
+                             {locations.map(loc => (
+                               <option key={loc.id} value={loc.id}>{loc.name}</option>
+                             ))}
                           </select>
                         </div>
                       </div>
@@ -6217,7 +6221,7 @@ const InventoryPage: React.FC = () => {
                                     <td className="px-3 py-2">
                                       <input
                                         type="text"
-                                        value={`₹${(item.value || 0).toFixed(2)}`}
+                                        value={`₹${Number(item.value || 0).toFixed(2)}`}
                                         readOnly
                                         className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold"
                                       />
@@ -6237,7 +6241,7 @@ const InventoryPage: React.FC = () => {
                           </div>
                           <div className="flex justify-end pt-2">
                             <div className="text-right">
-                              <span className="text-xs font-bold text-gray-900">Total Value: ₹{getTotalValue().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                              <span className="text-xs font-bold text-gray-900">Total Value: ₹{Number(getTotalValue()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                             </div>
                           </div>
                         </div>
@@ -6281,18 +6285,7 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2 uppercase tracking-tight">Issue Slip Series</label>
                           <select
                             value={selectedIssueSlipSeriesName}
-                            onChange={(e) => {
-                              const seriesName = e.target.value;
-                              setSelectedIssueSlipSeriesName(seriesName);
-                              if (!seriesName) {
-                                setIssueSlipNumber('');
-                                return;
-                              }
-                              const seriesObj = issueSlipSeriesList.find((s: any) => s.name === seriesName);
-                              if (seriesObj) {
-                                setIssueSlipNumber(seriesObj.preview || '');
-                              }
-                            }}
+                            onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setSelectedIssueSlipSeriesName, setIssueSlipNumber)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select Series</option>
@@ -6315,9 +6308,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             value={issueSlipNumber}
-                            readOnly
-                            placeholder="Auto-generated"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500 font-bold cursor-not-allowed"
+                            onChange={(e) => setIssueSlipNumber(e.target.value)}
+                            readOnly={!!selectedIssueSlipSeriesName}
+                            placeholder="Enter Slip No. or select series above"
+                            className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedIssueSlipSeriesName ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`}
                           />
                         </div>
                         <div>
@@ -6352,9 +6346,9 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select location</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
-                              <option key={loc.id} value={loc.id}>{loc.name}</option>
-                            ))}
+                             {locations.map(loc => (
+                               <option key={loc.id} value={loc.id}>{loc.name}</option>
+                             ))}
                           </select>
                         </div>
                         <div>
@@ -6366,9 +6360,9 @@ const InventoryPage: React.FC = () => {
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select location</option>
-                              {locations.filter(l => l.location_type === 'company_premises').map(loc => (
-                                <option key={loc.id} value={loc.id}>{loc.name}</option>
-                              ))}
+                               {locations.map(loc => (
+                                 <option key={loc.id} value={loc.id}>{loc.name}</option>
+                               ))}
                             </select>
                           ) : (
                             <input
@@ -6461,7 +6455,7 @@ const InventoryPage: React.FC = () => {
                                   </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} placeholder="Qty" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="number" value={item.rate} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm cursor-not-allowed" /></td>
-                                  <td className="px-3 py-2 text-sm font-medium">₹{item.value.toFixed(2)}</td>
+                                  <td className="px-3 py-2 text-sm font-medium">₹{Number(item.value || 0).toFixed(2)}</td>
                                   <td className="px-3 py-2 text-center">
                                     <button
                                       onClick={() => handleRemoveIssueSlipItem(index)}
@@ -6476,7 +6470,7 @@ const InventoryPage: React.FC = () => {
                           </table>
                         </div>
                         <div className="mt-2 text-right text-sm font-bold text-gray-900">
-                          Total Value: ₹{getTotalValue().toFixed(2)}
+                          Total Value: ₹{Number(getTotalValue()).toFixed(2)}
                         </div>
                       </div>
 
@@ -6574,12 +6568,7 @@ const InventoryPage: React.FC = () => {
                               <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip Series</label>
                               <select
                                 value={scrapProdSlipSeries}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  setScrapProdSlipSeries(v);
-                                  const s = issueSlipSeriesList.find((x: any) => x.name === v);
-                                  setScrapProdSlipNo(s ? (s.preview || '') : '');
-                                }}
+                                onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setScrapProdSlipSeries, setScrapProdSlipNo)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                               >
                                 <option value="">Select Series</option>
@@ -6691,11 +6680,7 @@ const InventoryPage: React.FC = () => {
                                     });
                                     const allUniqueItems = Array.from(uniqueMap.values());
 
-                                    const scrapOnlyItems = allUniqueItems.filter(i => {
-                                      const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
-                                      const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
-                                      return cat.includes('scrap') || name.includes('scrap');
-                                    });
+                                    const scrapOnlyItems = allUniqueItems;
 
                                     return (
                                       <tr key={idx}>
@@ -6808,14 +6793,14 @@ const InventoryPage: React.FC = () => {
                           <div className="grid grid-cols-3 gap-5">
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip Series</label>
-                              <select value={scrapOtherSlipSeries} onChange={(e) => { const v = e.target.value; setScrapOtherSlipSeries(v); const s = issueSlipSeriesList.find((x: any) => x.name === v); setScrapOtherSlipNo(s ? (s.preview || '') : ''); }} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                              <select value={scrapOtherSlipSeries} onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setScrapOtherSlipSeries, setScrapOtherSlipNo)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
                                 <option value="">Select Series</option>
                                 {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase().includes('scrap')).map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
                               </select>
                             </div>
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip No.</label>
-                              <input type="text" value={scrapOtherSlipNo} readOnly placeholder="Auto-generated" className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-slate-50 text-gray-500 cursor-not-allowed font-bold" />
+                              <input type="text" value={scrapOtherSlipNo} onChange={(e) => setScrapOtherSlipNo(e.target.value)} readOnly={!!scrapOtherSlipSeries} placeholder="Enter Slip No. or select series above" className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${scrapOtherSlipSeries ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`} />
                             </div>
                           </div>
 
@@ -6871,11 +6856,7 @@ const InventoryPage: React.FC = () => {
                                       if (code && !uniqueMap.has(code)) uniqueMap.set(code, i);
                                     });
                                     const allUniqueItems = Array.from(uniqueMap.values());
-                                    const scrapOnlyItems = allUniqueItems.filter(i => {
-                                      const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
-                                      const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
-                                      return cat.includes('scrap') || name.includes('scrap');
-                                    });
+                                    const scrapOnlyItems = allUniqueItems;
 
                                     return (
                                       <tr key={idx}>
@@ -6998,11 +6979,7 @@ const InventoryPage: React.FC = () => {
                                       if (code && !uniqueMap.has(code)) uniqueMap.set(code, i);
                                     });
                                     const allUniqueItems = Array.from(uniqueMap.values());
-                                    const scrapItems = allUniqueItems.filter(i => {
-                                      const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
-                                      const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
-                                      return cat.includes('scrap') || name.includes('scrap');
-                                    });
+                                    const scrapItems = allUniqueItems;
 
                                     return (
                                       <tr key={idx}>
@@ -7074,7 +7051,7 @@ const InventoryPage: React.FC = () => {
                                           <input type="number" value={item.rate} onChange={(e) => { const ni = [...scrapOtherResultingItems]; const rate = parseFloat(e.target.value) || 0; const qty = parseFloat(ni[idx].quantity) || 0; ni[idx].rate = e.target.value; ni[idx].value = parseFloat((qty * rate).toFixed(2)); setScrapOtherResultingItems(ni); }} placeholder="Rate" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
                                         </td>
                                         <td className="px-3 py-2">
-                                          <input type="text" value={`₹${(item.value || 0).toFixed(2)}`} readOnly className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold" />
+                                          <input type="text" value={`₹${Number(item.value || 0).toFixed(2)}`} readOnly className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold" />
                                         </td>
                                         <td className="px-3 py-2 text-center">
                                           <button onClick={() => setScrapOtherResultingItems(scrapOtherResultingItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
@@ -7108,14 +7085,14 @@ const InventoryPage: React.FC = () => {
                           <div className="grid grid-cols-3 gap-5">
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip Series</label>
-                              <select value={scrapDispSlipSeries} onChange={(e) => { const v = e.target.value; setScrapDispSlipSeries(v); const s = issueSlipSeriesList.find((x: any) => x.name === v); setScrapDispSlipNo(s ? (s.preview || '') : ''); }} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                              <select value={scrapDispSlipSeries} onChange={(e) => handleIssueSlipSeriesChange(e.target.value, setScrapDispSlipSeries, setScrapDispSlipNo)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
                                 <option value="">Select Series</option>
                                 {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase().includes('scrap')).map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
                               </select>
                             </div>
                             <div>
                               <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Disposal Slip No.</label>
-                              <input type="text" value={scrapDispSlipNo} readOnly placeholder="Auto-generated" className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-slate-50 text-gray-500 cursor-not-allowed font-bold" />
+                              <input type="text" value={scrapDispSlipNo} onChange={(e) => setScrapDispSlipNo(e.target.value)} readOnly={!!scrapDispSlipSeries} placeholder="Enter Slip No. or select series above" className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${scrapDispSlipSeries ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`} />
                             </div>
                           </div>
 
@@ -7242,7 +7219,7 @@ const InventoryPage: React.FC = () => {
                                           <input type="number" value={item.rate} readOnly placeholder="Auto" className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500 cursor-not-allowed" />
                                         </td>
                                         <td className="px-3 py-2">
-                                          <input type="text" value={`₹${(item.value || 0).toFixed(2)}`} readOnly className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold" />
+                                          <input type="text" value={`₹${Number(item.value || 0).toFixed(2)}`} readOnly className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold" />
                                         </td>
                                         <td className="px-3 py-2 text-center">
                                           <button onClick={() => setScrapDispItems(scrapDispItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
@@ -7356,7 +7333,7 @@ const InventoryPage: React.FC = () => {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
                       <select value={grnLocation} onChange={(e) => setGrnLocation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">Select Location</option>
-                        {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                        {locations.map(loc => (
                           <option key={loc.id} value={loc.id}>{loc.name}</option>
                         ))}
                       </select>
@@ -7377,7 +7354,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select GRN Series</option>
-                            {grnSeriesList.map((series: any) => (
+                            {grnSeriesList.filter((s: any) => s.grnType === 'purchase').map((series: any) => (
                               <option key={series.id} value={series.id}>{series.name}</option>
                             ))}
                           </select>
@@ -7528,7 +7505,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select GRN Series</option>
-                            {grnSeriesList.map((series: any) => (
+                            {grnSeriesList.filter((s: any) => s.grnType === 'sales_return').map((series: any) => (
                               <option key={series.id} value={series.id}>{series.name}</option>
                             ))}
                           </select>
@@ -8894,6 +8871,7 @@ const InventoryPage: React.FC = () => {
         suffix: grnSuffix,
         year: grnYear || new Date().getFullYear().toString(),
         required_digits: parseInt(grnRequiredDigits),
+        start_from: parseInt(grnStartFrom) || 1,
         preview: preview
       };
 
@@ -8932,6 +8910,19 @@ const InventoryPage: React.FC = () => {
         <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <h3 className="text-lg font-semibold text-gray-800 mb-6">{isEditModeGRNSeries ? 'Edit GRN Series' : 'Create GRN Series'}</h3>
           <form onSubmit={handleGRNSeriesSave} className="space-y-4">
+            {/* GST Limit Warning Banner */}
+            {(() => {
+              const totalLen = (grnPrefix || '').length + (parseInt(grnRequiredDigits) || 0) + (grnSuffix || '').length;
+              if (totalLen > 16) {
+                return (
+                  <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    <strong>⚠ Total length ({totalLen}) exceeds 16 characters limit</strong>
+                    {' '}(Prefix: {(grnPrefix || '').length} + Digits: {parseInt(grnRequiredDigits) || 0} + Suffix: {(grnSuffix || '').length}). GST allows max 16 digits.
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">GRN Series Name <span className="text-red-500">*</span></label>
               <input
@@ -8978,7 +8969,7 @@ const InventoryPage: React.FC = () => {
                 />
               </div>
             </div>
-            <div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Digits <span className="text-red-500">*</span></label>
                 <input
@@ -8996,13 +8987,33 @@ const InventoryPage: React.FC = () => {
                   required
                 />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Start From</label>
+                <input
+                  type="number"
+                  value={grnStartFrom}
+                  onChange={(e) => setGrnStartFrom(e.target.value || '1')}
+                  min="1"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g., 1"
+                />
+              </div>
             </div>
 
-            <div className="mt-6 bg-slate-50 p-6 rounded text-center">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Sample Preview</label>
-              <div className="text-2xl font-bold text-gray-800">
-                {grnPrefix + (grnRequiredDigits ? '1'.padStart(parseInt(grnRequiredDigits), '0') : '0001') + grnSuffix}
+            <div className="mt-6 bg-indigo-50 border border-indigo-100 p-6 rounded-lg text-center">
+              <label className="block text-xs font-bold text-indigo-400 uppercase tracking-wider mb-3">Sample Preview</label>
+              <div className="text-3xl font-bold text-indigo-700 tracking-wide">
+                {(() => {
+                  const digits = parseInt(grnRequiredDigits) || 4;
+                  const num = parseInt(grnStartFrom) || 1;
+                  const padded = String(num).padStart(digits, '0');
+                  return (grnPrefix || '') + padded + (grnSuffix || '');
+                })()}
               </div>
+              {grnRequiredDigits && (() => {
+                const tl = (grnPrefix || '').length + parseInt(grnRequiredDigits) + (grnSuffix || '').length;
+                return <p className={`text-xs mt-2 font-semibold ${tl > 16 ? 'text-red-500' : 'text-indigo-400'}`}>Total Length: {tl}/16 (GST Limit){tl > 16 ? ' ⚠ Exceeds limit!' : ''}</p>;
+              })()}
             </div>
             <div className="flex gap-3 pt-4">
               <button
@@ -9020,6 +9031,7 @@ const InventoryPage: React.FC = () => {
                   setGrnSuffix('');
                   setGrnYear('');
                   setGrnRequiredDigits('');
+                  setGrnStartFrom('1');
                   setGrnPreview('');
                   setIsEditModeGRNSeries(false);
                   setSelectedGrnSeries(null);
@@ -9135,6 +9147,7 @@ const InventoryPage: React.FC = () => {
         suffix: issueSlipSuffix,
         year: issueSlipYear || new Date().getFullYear().toString(),
         required_digits: parseInt(issueSlipRequiredDigits),
+        start_from: parseInt(issueSlipStartFrom) || 1,
         preview: preview
       };
 
@@ -9173,6 +9186,19 @@ const InventoryPage: React.FC = () => {
         <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <h3 className="text-lg font-semibold text-gray-800 mb-6">{isEditModeIssueSlipSeries ? 'Edit Issue Slip Series' : 'Create Issue Slip Series'}</h3>
           <form onSubmit={handleIssueSlipSeriesSave} className="space-y-4">
+            {/* GST Limit Warning Banner */}
+            {(() => {
+              const totalLen = (issueSlipPrefix || '').length + (parseInt(issueSlipRequiredDigits) || 0) + (issueSlipSuffix || '').length;
+              if (totalLen > 16) {
+                return (
+                  <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    <strong>⚠ Total length ({totalLen}) exceeds 16 characters limit</strong>
+                    {' '}(Prefix: {(issueSlipPrefix || '').length} + Digits: {parseInt(issueSlipRequiredDigits) || 0} + Suffix: {(issueSlipSuffix || '').length}). GST allows max 16 digits.
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Issue Slip Series Name <span className="text-red-500">*</span></label>
               <input
@@ -9224,7 +9250,7 @@ const InventoryPage: React.FC = () => {
                 />
               </div>
             </div>
-            <div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Digits <span className="text-red-500">*</span></label>
                 <input
@@ -9242,13 +9268,33 @@ const InventoryPage: React.FC = () => {
                   required
                 />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Start From</label>
+                <input
+                  type="number"
+                  value={issueSlipStartFrom}
+                  onChange={(e) => setIssueSlipStartFrom(e.target.value || '1')}
+                  min="1"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g., 1"
+                />
+              </div>
             </div>
 
-            <div className="mt-6 bg-slate-50 p-6 rounded text-center">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Sample Preview</label>
-              <div className="text-2xl font-bold text-gray-800">
-                {issueSlipPrefix + (issueSlipRequiredDigits ? '1'.padStart(parseInt(issueSlipRequiredDigits), '0') : '0001') + issueSlipSuffix}
+            <div className="mt-6 bg-indigo-50 border border-indigo-100 p-6 rounded-lg text-center">
+              <label className="block text-xs font-bold text-indigo-400 uppercase tracking-wider mb-3">Sample Preview</label>
+              <div className="text-3xl font-bold text-indigo-700 tracking-wide">
+                {(() => {
+                  const digits = parseInt(issueSlipRequiredDigits) || 4;
+                  const num = parseInt(issueSlipStartFrom) || 1;
+                  const padded = String(num).padStart(digits, '0');
+                  return (issueSlipPrefix || '') + padded + (issueSlipSuffix || '');
+                })()}
               </div>
+              {issueSlipRequiredDigits && (() => {
+                const tl = (issueSlipPrefix || '').length + parseInt(issueSlipRequiredDigits) + (issueSlipSuffix || '').length;
+                return <p className={`text-xs mt-2 font-semibold ${tl > 16 ? 'text-red-500' : 'text-indigo-400'}`}>Total Length: {tl}/16 (GST Limit){tl > 16 ? ' ⚠ Exceeds limit!' : ''}</p>;
+              })()}
             </div>
             <div className="flex gap-3 pt-4">
               <button
@@ -9266,6 +9312,7 @@ const InventoryPage: React.FC = () => {
                   setIssueSlipSuffix('');
                   setIssueSlipYear('');
                   setIssueSlipRequiredDigits('');
+                  setIssueSlipStartFrom('1');
                   setIssueSlipPreview('');
                   setIsEditModeIssueSlipSeries(false);
                   setSelectedIssueSlipSeries(null);

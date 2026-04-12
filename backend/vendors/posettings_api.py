@@ -42,7 +42,7 @@ class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
         """Extract tenant_id from authenticated user"""
         user = self.request.user
         if hasattr(user, 'tenant_id'):
-            return user.tenant_id
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
         else:
@@ -87,7 +87,7 @@ class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
         logger.info(f"Request user: {request.user}")
         
         tenant_id = self.get_tenant_id()
-        logger.info(f"Tenant ID: {tenant_id}")
+        logger.info(f"Branch ID: {tenant_id}")
         
         # Handle resolving 'system_N' virtual IDs to real category objects or PKs
         data = request.data.copy()

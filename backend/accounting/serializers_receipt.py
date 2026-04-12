@@ -1,12 +1,30 @@
 import uuid
 from decimal import Decimal, InvalidOperation
 from rest_framework import serializers # type: ignore
+<<<<<<< HEAD
 from .models_voucher_receipt import ReceiptVoucher, ReceiptVoucherItem # type: ignore
 from .models_voucher_allocation import VoucherAllocation
 from .models import MasterLedger, Voucher, JournalEntry # type: ignore
+=======
+from .models_voucher_receipt import (  # type: ignore
+    ReceiptVoucher, 
+    ReceiptVoucherItem,
+    ReceiptAllocationDetail
+)
+from .models import MasterLedger, Voucher, JournalEntry  # type: ignore
+>>>>>>> main
 from accounting.services.ledger_service import post_transaction, _resolve_ledger
 import datetime
 from accounting.services.sales_status_service import update_sales_invoice_payment_status
+
+class ReceiptAllocationDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReceiptAllocationDetail
+        fields = [
+            'id', 'invoice_no', 'invoice_date', 'amount',
+            'pending_before', 'received_amount', 'balance_after',
+            'is_advance', 'advance_ref_no'
+        ]
 
 def _safe_decimal(value):
     try:
@@ -16,14 +34,20 @@ def _safe_decimal(value):
 
 class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
     customer = serializers.CharField(required=False, allow_null=True)
+    # Read-only display fields
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    allocations = ReceiptAllocationDetailSerializer(many=True, read_only=True, source='allocation_lines')
 
     class Meta:
         model = ReceiptVoucherItem
         fields = [
             'id', 'customer', 'customer_name', 'reference_id', 'reference_type', 
             'pending_transaction', 'amount', 'pending_before', 'received_amount', 
+<<<<<<< HEAD
             'balance_after', 'is_advance', 'advance_ref_no', 'invoice_date'
+=======
+            'balance_after', 'is_advance', 'advance_ref_no', 'allocations'
+>>>>>>> main
         ]
         extra_kwargs = {
             'amount': {'max_digits': 20, 'decimal_places': 2},
@@ -34,7 +58,7 @@ class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
 
     def validate_customer(self, value):
         request = self.context.get('request')
-        tenant_id = request.user.tenant_id if request and hasattr(request.user, 'tenant_id') else None
+        tenant_id = request.user.branch_id if request and hasattr(request.user, 'tenant_id') else None
         
         if value and not isinstance(value, MasterLedger):
             ledger = _resolve_ledger(value, tenant_id)
@@ -124,7 +148,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context.get('request')
-        tenant_id = request.user.tenant_id if request and hasattr(request.user, 'tenant_id') else None
+        tenant_id = request.user.branch_id if request and hasattr(request.user, 'tenant_id') else None
 
         if 'receive_in' in attrs and not isinstance(attrs['receive_in'], MasterLedger):
             attrs['receive_in'] = _resolve_ledger(attrs['receive_in'], tenant_id)
@@ -165,7 +189,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         request = self.context.get('request')
-        tenant_id = request.user.tenant_id if request and hasattr(request.user, 'tenant_id') else None
+        tenant_id = request.user.branch_id if request and hasattr(request.user, 'tenant_id') else None
         
         # Ensure tenant_id is in validated_data before super().create
         validated_data['tenant_id'] = tenant_id
@@ -205,6 +229,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
             if customer_data:
                 item_data['customer'] = customer_data
             
+<<<<<<< HEAD
             # Extract date for normalization if it exists in JSON
             txn_details = item_data.get('pending_transaction') or {}
             item_date_raw = txn_details.get('date')
@@ -234,6 +259,9 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
             
             
             rvi = ReceiptVoucherItem.objects.create(
+=======
+            item_instance = ReceiptVoucherItem.objects.create(
+>>>>>>> main
                 voucher=receipt, 
                 tenant_id=receipt.tenant_id,
                 invoice_date=item_date,
@@ -264,6 +292,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                 amount=rvi.received_amount,
                 balance_after=rvi.balance_after
             )
+            self._sync_allocations(item_instance, item_data.get('pending_transaction'))
             
             # Post-save: Update Sales Invoice payment status if we have a reference_id
             if ref_id_val:
@@ -276,6 +305,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
 
         return receipt
 
+<<<<<<< HEAD
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         instance = super().update(instance, validated_data)
@@ -304,6 +334,34 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
         self._post_journal_entries(instance)
         
         return instance
+=======
+    def _sync_allocations(self, item_instance, details):
+        """Sync pending_transaction JSON to ReceiptAllocationDetail table."""
+        if not details: return
+        if isinstance(details, str):
+            try: details = json.loads(details)
+            except: return
+        
+        if isinstance(details, dict): details = [details]
+        if not isinstance(details, list): return
+
+        ReceiptAllocationDetail.objects.filter(receipt_item=item_instance).delete()
+        
+        for d in details:
+            if not isinstance(d, dict): continue
+            ReceiptAllocationDetail.objects.create(
+                receipt_item=item_instance,
+                tenant_id=item_instance.tenant_id,
+                invoice_no=d.get('invoiceNo', d.get('referenceNumber', d.get('invoice_no', ''))),
+                invoice_date=d.get('date'),
+                amount=_safe_decimal(d.get('amount', 0)),
+                pending_before=_safe_decimal(d.get('pendingBefore', d.get('pending', 0))),
+                received_amount=_safe_decimal(d.get('receivedAmount', d.get('payment', 0))),
+                balance_after=_safe_decimal(d.get('balanceAfter', 0)),
+                is_advance=d.get('isAdvance', d.get('advance', False)),
+                advance_ref_no=d.get('advanceRefNo', '')
+            )
+>>>>>>> main
 
     def _mirror_to_generic_voucher(self, receipt):
         """Unified voucher for cross-module reports"""
@@ -490,6 +548,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                     }
                 customer_data_map[lid]["amount"] += amt
 
+<<<<<<< HEAD
             for lid, data in customer_data_map.items():
                 amt = data["amount"]
                 if amt > 0:
@@ -500,6 +559,29 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                         "ledger_id_val": lid,
                         "party_customer_id": data["c_id"],
                         "party_vendor_id": data["v_id"]
+=======
+            from customerportal.database import CustomerMasterCustomerBasicDetails
+            from vendors.models import VendorMasterBasicDetail
+
+            for cid, amt in customer_totals.items():
+                if amt > 0:
+                    v_id = None
+                    c_id = None
+                    customer = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=receipt.tenant_id, ledger_id=cid).first()
+                    if customer:
+                        c_id = customer.id
+                    else:
+                        vendor = VendorMasterBasicDetail.objects.filter(tenant_id=receipt.tenant_id, ledger_id=cid).first()
+                        if vendor:
+                            v_id = vendor.id
+
+                    entries.append({
+                        "ledger_id": cid, 
+                        "debit": 0, 
+                        "credit": float(amt),
+                        "customer_id": c_id,
+                        "vendor_id": v_id
+>>>>>>> main
                     })
             
             if len(entries) >= 2:
