@@ -113,13 +113,14 @@ class MasterLedger(BaseModel):
         ('Composition', 'Composition'),
     ]
     name = models.CharField(max_length=255)
-    group = models.CharField(max_length=255, help_text="Ledger group name")
+    group = models.CharField(max_length=255, null=True, blank=True, help_text="Ledger group name")
     
     # NEW: Proper group linking
     group_id = models.ForeignKey(MasterLedgerGroup, on_delete=models.RESTRICT, null=True, blank=True, related_name='ledgers', db_column='group_id')
     
     # Hierarchy fields (Migration 0004+)
-    category = models.CharField(max_length=255, null=True, blank=True)
+    # NOTE: category is NOT NULL in the actual DB — use default='' to prevent IntegrityError on null inserts
+    category = models.CharField(max_length=255, null=False, blank=True, default='', help_text="Major group / category (e.g. Asset, Liability)")
     sub_group_1 = models.CharField(max_length=255, null=True, blank=True)
     sub_group_2 = models.CharField(max_length=255, null=True, blank=True)
     sub_group_3 = models.CharField(max_length=255, null=True, blank=True)

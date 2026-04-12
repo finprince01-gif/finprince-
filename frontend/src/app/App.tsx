@@ -608,17 +608,21 @@ const App: React.FC = () => {
     try {
       const response = await apiService.saveLedger(ledger);
       if (response && response.id) {
-
         setLedgers(prev => [...prev, response].sort((a, b) => a.name.localeCompare(b.name)));
+        showSuccess(`Ledger "${response.name}" saved successfully.`);
       } else {
-        console.error(`Failed to save ledger ${ledger.name}`);
-        setLedgers(prev => [...prev, ledger].sort((a, b) => a.name.localeCompare(b.name)));
+        console.error(`Failed to save ledger ${ledger.name}: No ID in response`, response);
+        showError(`Failed to save ledger "${ledger.name}". Please try again.`);
       }
     } catch (err: any) {
-      console.error(`Error saving ledger ${ledger.name}:`);
-      setLedgers(prev => [...prev, ledger].sort((a, b) => a.name.localeCompare(b.name)));
+      console.error(`Error saving ledger ${ledger.name}:`, err);
+      const detail = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : (err?.message || 'Unknown error');
+      showError(`Failed to save ledger "${ledger.name}": ${detail}`);
     }
   }, []);
+
 
   const handleUpdateLedger = useCallback(async (idOrName: number | string, ledger: Partial<Ledger>) => {
     try {

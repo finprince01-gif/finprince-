@@ -46,7 +46,8 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
         ]
         read_only_fields = ['id', 'code', 'balance', 'tenant_id', 'created_at', 'updated_at']
         extra_kwargs = {
-            'category': {'required': False, 'allow_null': True, 'allow_blank': True},
+            # NOTE: category is NOT NULL in DB — do NOT allow null here
+            'category': {'required': False, 'allow_blank': True, 'default': ''},
             'group': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_1': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_2': {'required': False, 'allow_null': True, 'allow_blank': True},
@@ -123,12 +124,19 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
 
 
     def create(self, validated_data):
-        # Create the ledger first
+        # Guard: category is NOT NULL in DB — never allow null to reach Django ORM
+        if not validated_data.get('category'):
+            validated_data['category'] = ''
+        # Guard: group is nullable in DB but let's keep consistent
+        if validated_data.get('group') is None:
+            validated_data['group'] = ''
         instance = super().create(validated_data)
         return instance
 
     def update(self, instance, validated_data):
         # Update Master Ledger fields
+        if 'category' in validated_data and validated_data['category'] is None:
+            validated_data['category'] = ''
         instance = super().update(instance, validated_data)
         return instance
 
