@@ -274,83 +274,10 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             )
 
         # Sync legacy JSON to new relational tables
-        self._sync_relational_data(supplier_instance, supply_inr_data, supply_foreign_data, due_data)
+        self._sync_relational_data(supplier_instance, supply_inr_data, supply_inr_data, due_data)
 
         # --- Double-Entry Posting for Purchase (entries table) ---
-
-        # --- Double-Entry Posting for Purchase (entries table) ---
-        try:
-            total_amt = float(purchase_total)
-            if total_amt > 0:
-                entries = []
-                # 1. Credit the Vendor
-                vendor_ledger = (
-                    supplier_instance.vendor_basic_detail.ledger
-                    if supplier_instance.vendor_basic_detail
-                    else None
-                )
-                if vendor_ledger:
-                    entries.append({
-                        "ledger_id": vendor_ledger.id, 
-                        "debit": 0, 
-                        "credit": total_amt,
-                        "vendor_id": supplier_instance.vendor_basic_detail.id
-                    })
-
-                # 2. Debit the Purchase Ledger
-                p_ledger_name = None
-                if supply_inr_data is not None:
-                    p_ledger_name = supply_inr_data.get('purchase_ledger')
-                elif supply_foreign_data is not None:
-                    p_ledger_name = supply_foreign_data.get('purchase_ledger')
-
-                p_ledger_obj = _resolve_ledger(p_ledger_name or 'Purchase', tenant_id)
-                
-                # If no Purchase ledger exists, the double-entry would fail.
-                # Create a default one if it's missing to ensure it shows up in entries.
-                if not p_ledger_obj:
-                    # Find a group or fallback to 'Purchase Accounts'
-                    from accounting.models import MasterLedgerGroup
-                    p_group = MasterLedgerGroup.objects.filter(name__icontains='Purchase', tenant_id=tenant_id).first()
-                    if not p_group:
-                        p_group = MasterLedgerGroup.objects.create(name='Purchase Accounts', tenant_id=tenant_id)
-                    p_ledger_obj = MasterLedger.objects.create(
-                        name=p_ledger_name or 'Purchase Account',
-                        group=p_group.name,
-                        group_id=p_group,
-                        tenant_id=tenant_id,
-                        category='Expense'
-                    )
-
-                if p_ledger_obj:
-                    entries.append({"ledger_id": p_ledger_obj.id, "debit": total_amt, "credit": 0})
-
-                if len(entries) == 2:
-                    post_transaction(
-                        voucher_type="PURCHASE",
-                        voucher_id=voucher.id,
-                        tenant_id=tenant_id,
-                        entries=entries,
-                    )
-                    
-                    # --- Record Advance Allocation Maps (Phase 4B) ---
-                    from accounting.services.advance_service import write_allocations
-                    adv_refs = due_data.get('advance_references', []) if due_data else []
-                    if adv_refs:
-                        try:
-                            write_allocations(
-                                tenant_id=tenant_id,
-                                voucher_id=voucher.id,
-                                voucher_type='purchase',
-                                advance_refs=adv_refs,
-                                ledger_id=vendor_ledger.id if vendor_ledger else None
-                            )
-                        except Exception as ex:
-                            print(f"[PurchaseSerializer] Advance allocation failed: {ex}")
-                            # In serious production, we might raise a validation error here.
-                            # For now, we log it to avoid breaking the main voucher save if a ref is slightly off.
-        except Exception as e:
-            print(f"Error posting purchase to entries: {str(e)}")
+        self._post_journal_entries(supplier_instance, voucher.id, purchase_total, supply_inr_data, supply_foreign_data, due_data)
 
         self._mirror_to_vendor_portal(supplier_instance)
 
@@ -399,158 +326,47 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
 
                 purchase_total = due_data.get('to_pay') if due_data is not None else voucher.total
 
-                total_taxable = 0.0
-                total_cgst = 0.0
-                total_sgst = 0.0
                 total_igst = 0.0
-                items_list = None
-
-                if supply_inr_data is not None and 'items' in supply_inr_data:
-                    items_list = supply_inr_data['items']
-                    for item in items_list:
-                        total_taxable += float(item.get('taxableValue', 0))
-                        total_cgst += float(item.get('cgst', 0))
-                        total_sgst += float(item.get('sgst', 0))
-                        total_igst += float(item.get('igst', 0))
-
+                
                 voucher.date = instance.date
-                voucher.voucher_number = (
-                    instance.purchase_voucher_no
-                    or instance.supplier_invoice_no
-                    or voucher.voucher_number
-                )
-                voucher.invoice_no = instance.supplier_invoice_no
-                voucher.party = instance.vendor_name
                 voucher.total = purchase_total
-                voucher.is_inter_state = instance.input_type == 'Interstate'
-                voucher.total_taxable_amount = total_taxable
-                voucher.total_cgst = total_cgst
-                voucher.total_sgst = total_sgst
-                voucher.total_igst = total_igst
                 voucher.save()
             except Voucher.DoesNotExist:
                 pass
-
         # Update or Create Nested Relations
         if supply_foreign_data is not None:
-            valid_fields = {'purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description'}
-            filtered_data = {k: v for k, v in supply_foreign_data.items() if k in valid_fields}
             VoucherPurchaseSupplyForeignDetails.objects.update_or_create(
                 supplier_details=instance,
-                defaults={**filtered_data, 'tenant_id': tenant_id},
+                defaults={**supply_foreign_data, 'tenant_id': tenant_id},
             )
 
         if supply_inr_data is not None:
-            valid_fields = {'purchase_order_no', 'purchase_ledger', 'description'}
-            filtered_data = {k: v for k, v in supply_inr_data.items() if k in valid_fields}
             VoucherPurchaseSupplyINRDetails.objects.update_or_create(
                 supplier_details=instance,
-                defaults={**filtered_data, 'tenant_id': tenant_id},
+                defaults={**supply_inr_data, 'tenant_id': tenant_id},
             )
 
         if due_data is not None:
-            valid_fields = {'tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms'}
-            filtered_data = {k: v for k, v in due_data.items() if k in valid_fields}
             VoucherPurchaseDueDetails.objects.update_or_create(
                 supplier_details=instance,
-                defaults={**filtered_data, 'tenant_id': tenant_id},
+                defaults={**due_data, 'tenant_id': tenant_id},
             )
 
         if transit_data is not None:
-            valid_fields = {
-                'mode', 'received_in', 'receipt_date', 'receipt_time',
-                'received_quantity', 'uqc', 'delivery_type', 'self_third_party',
-                'transporter_id', 'transporter_name', 'vehicle_no',
-                'lr_gr_consignment', 'extra_details', 'document',
-                'beyond_port_port_of_loading', 'upto_port_fnr_no', 'upto_port_origin_country', 'rail_beyond_station_loading', 'upto_port_rr_no', 'beyond_port_port_of_discharge', 'rail_beyond_rail_no', 'rail_upto_transporter_name', 'upto_port_final_dest_city', 'rail_beyond_origin_country', 'upto_port_origin_city', 'beyond_port_sb_no', 'rail_upto_delivery_type', 'rail_beyond_rr_date', 'upto_port_port_of_loading', 'rail_beyond_origin', 'upto_port_station_discharge', 'rail_upto_transporter_id', 'beyond_port_vessel_flight_no', 'beyond_port_sb_date', 'beyond_port_final_dest', 'beyond_port_dest_country', 'rail_beyond_dest_country', 'rail_beyond_final_dest', 'beyond_port_origin_country', 'upto_port_vessel_flight_no', 'rail_beyond_rr_no', 'beyond_port_ship_port_code', 'rail_beyond_station_discharge', 'upto_port_final_dest_country', 'upto_port_rr_date', 'upto_port_station_loading', 'upto_port_port_of_discharge',
-            }
-            filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
             if transit_document:
-                filtered_data['document'] = transit_document
+                transit_data['document'] = transit_document
             VoucherPurchaseTransitDetails.objects.update_or_create(
                 supplier_details=instance,
-                defaults={**filtered_data, 'tenant_id': tenant_id},
+                defaults={**transit_data, 'tenant_id': tenant_id},
             )
 
         # Sync legacy JSON to new relational tables
         self._sync_relational_data(instance, supply_inr_data, supply_foreign_data, due_data)
-
-        # NOTE: _mirror_to_vendor_portal is already called below in the main body
+        
         self._mirror_to_vendor_portal(instance)
 
-        # --- Double-Entry Posting Update for Purchase (entries table) ---
-        try:
-            total_amt = float(purchase_total)
-            if total_amt > 0 and voucher_id:
-                # Clear existing entries for this voucher first to avoid duplicates
-                from accounting.models import JournalEntry
-                JournalEntry.objects.filter(tenant_id=tenant_id, voucher_type='PURCHASE', voucher_id=voucher_id).delete()
-                
-                entries = []
-                # 1. Credit the Vendor
-                vendor_ledger = (
-                    instance.vendor_basic_detail.ledger
-                    if instance.vendor_basic_detail
-                    else None
-                )
-                if vendor_ledger:
-                    entries.append({
-                        "ledger_id": vendor_ledger.id, 
-                        "debit": 0, 
-                        "credit": total_amt,
-                        "vendor_id": instance.vendor_basic_detail.id
-                    })
-
-                # 2. Debit the Purchase Ledger
-                p_ledger_name = None
-                if supply_inr_data is not None:
-                    p_ledger_name = supply_inr_data.get('purchase_ledger')
-                elif supply_foreign_data is not None:
-                    p_ledger_name = supply_foreign_data.get('purchase_ledger')
-
-                p_ledger_obj = _resolve_ledger(p_ledger_name or 'Purchase', tenant_id)
-                
-                # If no Purchase ledger exists, ensure one is created
-                if not p_ledger_obj:
-                    from accounting.models import MasterLedgerGroup
-                    p_group = MasterLedgerGroup.objects.filter(name__icontains='Purchase', tenant_id=tenant_id).first()
-                    if not p_group:
-                        p_group = MasterLedgerGroup.objects.create(name='Purchase Accounts', tenant_id=tenant_id)
-                    p_ledger_obj = MasterLedger.objects.create(
-                        name=p_ledger_name or 'Purchase Account',
-                        group=p_group.name,
-                        group_id=p_group,
-                        tenant_id=tenant_id,
-                        category='Expense'
-                    )
-
-                if p_ledger_obj:
-                    entries.append({"ledger_id": p_ledger_obj.id, "debit": total_amt, "credit": 0})
-
-                if len(entries) == 2:
-                    post_transaction(
-                        voucher_type="PURCHASE",
-                        voucher_id=voucher_id,
-                        tenant_id=tenant_id,
-                        entries=entries,
-                    )
-                    
-                    # --- Record Advance Allocation Maps Update (Phase 4B) ---
-                    from accounting.services.advance_service import write_allocations
-                    adv_refs = due_data.get('advance_references', []) if due_data else []
-                    if adv_refs:
-                        try:
-                            write_allocations(
-                                tenant_id=tenant_id,
-                                voucher_id=voucher_id,
-                                voucher_type='purchase',
-                                advance_refs=adv_refs,
-                                ledger_id=vendor_ledger.id if vendor_ledger else None
-                            )
-                        except Exception as ex:
-                            print(f"[PurchaseSerializer] Advance allocation update failed: {ex}")
-        except Exception as e:
-            print(f"Error updating purchase accounting entries: {str(e)}")
+        # Refresh double-entry posting
+        self._post_journal_entries(instance, voucher_id, purchase_total, supply_inr_data, supply_foreign_data, due_data)
 
         return instance
 
@@ -797,3 +613,67 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name} | tx={tx_number} | amt={total_amt}")
         except Exception as e:
             print(f"!!! Vendor Portal Sync Failure (Purchase): {str(e)}")
+
+    def _post_journal_entries(self, supplier_instance, voucher_id, purchase_total, supply_inr_data, supply_foreign_data, due_data):
+        """Unified double-entry posting for purchase invoice."""
+        try:
+            tenant_id = supplier_instance.tenant_id
+            total_amt = float(purchase_total)
+            if total_amt <= 0 or not voucher_id: 
+                return
+
+            entries = []
+            # 1. Credit the Vendor
+            vendor_ledger = supplier_instance.vendor_basic_detail.ledger if supplier_instance.vendor_basic_detail else None
+            if vendor_ledger:
+                entries.append({"ledger_id": vendor_ledger.id, "debit": 0, "credit": total_amt})
+
+            # 2. Debit the Purchase Ledger
+            p_ledger_name = None
+            if supply_inr_data: p_ledger_name = supply_inr_data.get('purchase_ledger')
+            elif supply_foreign_data: p_ledger_name = supply_foreign_data.get('purchase_ledger')
+
+            p_ledger_obj = _resolve_ledger(p_ledger_name or 'Purchase', tenant_id)
+            if not p_ledger_obj:
+                # Fallback creation
+                from accounting.models import MasterLedgerGroup
+                p_group = MasterLedgerGroup.objects.filter(name__icontains='Purchase', tenant_id=tenant_id).first()
+                if not p_group:
+                    p_group = MasterLedgerGroup.objects.create(name='Purchase Accounts', tenant_id=tenant_id)
+                p_ledger_obj = MasterLedger.objects.create(
+                    name=p_ledger_name or 'Purchase Account',
+                    group=p_group.name,
+                    group_id=p_group,
+                    tenant_id=tenant_id,
+                    category='Expense'
+                )
+
+            if p_ledger_obj:
+                entries.append({"ledger_id": p_ledger_obj.id, "debit": total_amt, "credit": 0})
+
+            if len(entries) == 2:
+                post_transaction(
+                    voucher_type="PURCHASE",
+                    voucher_id=voucher_id,
+                    tenant_id=tenant_id,
+                    entries=entries,
+                    transaction_date=supplier_instance.date,
+                    voucher_number=supplier_instance.purchase_voucher_no or supplier_instance.supplier_invoice_no
+                )
+                
+                # Advance Allocations
+                from accounting.services.advance_service import write_allocations
+                adv_refs = due_data.get('advance_references', []) if due_data else []
+                if adv_refs:
+                    try:
+                        write_allocations(
+                            tenant_id=tenant_id,
+                            voucher_id=voucher_id,
+                            voucher_type='purchase',
+                            advance_refs=adv_refs,
+                            ledger_id=vendor_ledger.id if vendor_ledger else None
+                        )
+                    except Exception as ex:
+                        print(f"[PurchaseSerializer] Advance allocation update failed: {ex}")
+        except Exception as e:
+            print(f"Error posting purchase entries: {str(e)}")

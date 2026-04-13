@@ -6,46 +6,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
-// Hardcoded groups and ledgers for dropdown
-const hardcodedGroups = [
-  "Bank Accounts",
-  "Cash-in-Hand",
-  "Duties & Taxes",
-  "Provisions",
-  "Reserves & Surplus",
-  "Secured Loans",
-  "Sundry Creditors",
-  "Sundry Debtors",
-  "Unsecured Loans",
-  "Stock-in-Hand",
-  "Bank OD A/c"
-];
-
-const hardcodedLedgers = [
-  "Cash",
-  "HDFC Bank",
-  "Sales",
-  "Purchases",
-  "Consulting Income",
-  "CGST",
-  "SGST",
-  "IGST",
-  "Balamurugan Fabricators",
-  "Local Supplier",
-  "Global Tech Supplies",
-  "Local Customer",
-  "Prime Retail Customer",
-  "Rent Expense",
-  "Office Supplies",
-  "Owner Capital"
-];
 
 // Ledger Selector Component
 interface LedgerSelectorProps {
   selectedValue: string;
   onChange: (value: string) => void;
-  groups: string[];
-  ledgers: string[];
+  groups: LedgerGroupMaster[];
+  ledgers: Ledger[];
 }
 
 const LedgerSelector: React.FC<LedgerSelectorProps> = ({
@@ -60,12 +27,12 @@ const LedgerSelector: React.FC<LedgerSelectorProps> = ({
       onChange={(e) => onChange(e.target.value)}
       className="erp-select"
     >
-      <option value="">All Ledgers</option>
+      <option value="all">All Ledgers</option>
       <optgroup label="Groups">
-        {groups.map(g => <option key={g} value={`group:${g}`}>{g}</option>)}
+        {groups.map(g => <option key={g.id || g.name} value={`group:${g.name}`}>{g.name}</option>)}
       </optgroup>
       <optgroup label="Ledgers">
-        {ledgers.map(l => <option key={l} value={`ledger:${l}`}>{l}</option>)}
+        {ledgers.map(l => <option key={l.id || l.name} value={`ledger:${l.name}`}>{l.name}</option>)}
       </optgroup>
     </select>
   );
@@ -73,6 +40,7 @@ const LedgerSelector: React.FC<LedgerSelectorProps> = ({
 
 interface ReportsPageProps {
   vouchers: Voucher[];
+  entries?: any[];
   ledgers: Ledger[];
   ledgerGroups: LedgerGroupMaster[];
   stockItems: StockItem[];
@@ -84,7 +52,7 @@ type GSTForm = 'GSTR-1' | 'GSTR-2' | 'GSTR-2A' | 'GSTR-2B' | 'GSTR-3B' | 'GSTR-4
 
 type GSTTab = 'B2B' | 'B2C-L' | 'B2C-S' | 'Exports' | 'CDN' | 'Advances' | 'ITC-Eligible' | 'ITC-Ineligible' | 'RCM-Liability' | 'ITC-Available' | 'ITC-Reversal' | 'Outward' | 'ITC' | 'Payment';
 
-const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
+const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
   // Report Options Mapping
   const { hasTabAccess, isSuperuser } = usePermissions();
 
@@ -130,7 +98,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
     }
   }, [availableReports, reportType]);
 
-  const [selectedLedger, setSelectedLedger] = useState<string>('');
+  const [selectedLedger, setSelectedLedger] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
@@ -154,7 +122,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      if (reportType === 'LedgerReport' && selectedLedger) {
+      if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
         // Extract actual name if it has prefix
         const cleanName = selectedLedger.includes(':') ? selectedLedger.split(':')[1] : selectedLedger;
         params.append('ledger', cleanName);
@@ -969,18 +937,24 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
     let filtered = vouchers;
 
-    if (reportType === 'LedgerReport' && selectedLedger) {
+    if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
+      const [prefix, name] = selectedLedger.split(':');
+      
+      const filteredLedgers = prefix === 'group' 
+        ? ledgers.filter(l => l.group === name).map(l => l.name)
+        : [name];
+
       filtered = filtered.filter(v => {
         switch (v.type) {
           case 'Purchase':
           case 'Sales':
           case 'Payment':
           case 'Receipt':
-            return v.party === selectedLedger || ('account' in v && v.account === selectedLedger);
+            return filteredLedgers.includes(v.party) || ('account' in v && filteredLedgers.includes(v.account));
           case 'Contra':
-            return v.fromAccount === selectedLedger || v.toAccount === selectedLedger;
+            return filteredLedgers.includes(v.fromAccount) || filteredLedgers.includes(v.toAccount);
           case 'Journal':
-            return v.entries && Array.isArray(v.entries) && v.entries.some(e => e && e.ledger === selectedLedger);
+            return v.entries && Array.isArray(v.entries) && v.entries.some(e => e && filteredLedgers.includes(e.ledger));
           default:
             return false;
         }
@@ -999,7 +973,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
     }
 
     return filtered;
-  }, [vouchers, reportType, selectedLedger, startDate, endDate]);
+  }, [vouchers, reportType, selectedLedger, startDate, endDate, ledgers]);
 
   const getVoucherAmount = (v: Voucher) => {
     if ('total' in v && v.total != null) {
@@ -1015,7 +989,168 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
   const getVoucherParty = (v: Voucher) => ('party' in v ? v.party : 'N/A');
 
   const ledgerEntries = useMemo(() => {
-    if (reportType !== 'LedgerReport' || !selectedLedger || !filteredVouchers.length) return [];
+    const [prefix, nameOrId] = (selectedLedger || '').split(':');
+    
+    // If we have direct journal entries, use them as the source of truth for Ledger Report
+    if (entries && entries.length > 0) {
+      let balance = 0;
+      let targetEntries = entries;
+      
+      // Filter by ledger if selected
+      if (selectedLedger && selectedLedger !== 'all' && prefix === 'ledger') {
+        targetEntries = entries.filter(e => e.ledger === nameOrId || String(e.ledger_id) === nameOrId);
+      } else if (selectedLedger && selectedLedger !== 'all' && prefix === 'group') {
+        const groupLedgers = ledgers.filter(l => l.group === nameOrId).map(l => l.name);
+        targetEntries = entries.filter(e => groupLedgers.includes(e.ledger));
+      }
+
+      // Apply date filters if set
+      if (startDate) {
+        const s = new Date(startDate);
+        targetEntries = targetEntries.filter(e => new Date(e.date || e.transaction_date) >= s);
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        targetEntries = targetEntries.filter(e => new Date(e.date || e.transaction_date) <= e);
+      }
+
+      return targetEntries.map(e => {
+        const dr = Number(e.debit) || 0;
+        const cr = Number(e.credit) || 0;
+        balance += dr - cr;
+        return {
+          id: e.id,
+          date: e.date || e.transaction_date,
+          type: e.type || e.voucher_type,
+          particulars: e.ledger || 'N/A',
+          debit: dr,
+          credit: cr,
+          balance
+        };
+      });
+    }
+
+    // Fallback to deriving from vouchers if entries prop is empty
+    if (!filteredVouchers.length) return [];
+
+        // Handle ALL Ledgers case
+        if (selectedLedger === 'all') {
+          let balance = 0;
+          const allEntries: any[] = [];
+          
+          filteredVouchers.forEach(v => {
+            // Check if voucher has entries property before accessing it
+            if ('entries' in v && v.entries && Array.isArray(v.entries)) {
+              (v as any).entries.forEach((e: any) => {
+                const dr = Number(e.debit) || 0;
+                const cr = Number(e.credit) || 0;
+                balance += dr - cr;
+                allEntries.push({
+                  id: v.id,
+                  date: v.date,
+                  type: v.type,
+                  particulars: e.ledger || 'N/A',
+                  debit: dr,
+                  credit: cr,
+                  balance
+                });
+              });
+            } else {
+              // For simple vouchers, show both sides
+              const amount = getVoucherAmount(v);
+              if (v.type === 'Payment' || v.type === 'Receipt') {
+                // Two entries for double entry
+                balance -= amount;
+                allEntries.push({
+                  id: `${v.id}-1`,
+                  date: v.date,
+                  type: v.type,
+                  particulars: 'party' in v ? v.party : 'N/A',
+                  debit: v.type === 'Payment' ? amount : 0,
+                  credit: v.type === 'Receipt' ? amount : 0,
+                  balance
+                });
+                balance += amount;
+                allEntries.push({
+                  id: `${v.id}-2`,
+                  date: v.date,
+                  type: v.type,
+                  particulars: ('account' in v ? v.account : 'N/A') || 'N/A',
+                  debit: v.type === 'Receipt' ? amount : 0,
+                  credit: v.type === 'Payment' ? amount : 0,
+                  balance
+                });
+              } else if (v.type === 'Contra') {
+                // Contra voucher
+                balance -= amount;
+                allEntries.push({
+                  id: `${v.id}-1`,
+                  date: v.date,
+                  type: v.type,
+                  particulars: 'fromAccount' in v ? v.fromAccount : 'N/A',
+                  debit: 0,
+                  credit: amount,
+                  balance
+                });
+                balance += amount;
+                allEntries.push({
+                  id: `${v.id}-2`,
+                  date: v.date,
+                  type: v.type,
+                  particulars: 'toAccount' in v ? v.toAccount : 'N/A',
+                  debit: amount,
+                  credit: 0,
+                  balance
+                });
+              } else {
+                balance += amount;
+                allEntries.push({
+                  id: v.id,
+                  date: v.date,
+                  type: v.type,
+                  particulars: getVoucherParty(v),
+                  debit: v.type === 'Sales' ? amount : 0,
+                  credit: v.type === 'Purchase' ? amount : 0,
+                  balance
+                });
+              }
+            }
+          });
+          
+          return allEntries;
+        }
+
+    // Single Ledger view
+    const name = nameOrId;
+      if (prefix === 'group') {
+        // Handle group view
+        const groupLedgers = ledgers.filter(l => l.group === name).map(l => l.name);
+        let balance = 0;
+        const groupEntries: any[] = [];
+        
+        filteredVouchers.forEach(v => {
+          if ('entries' in v && v.entries && Array.isArray(v.entries)) {
+            (v as any).entries.forEach((e: any) => {
+              if (groupLedgers.includes(e.ledger)) {
+                const dr = Number(e.debit) || 0;
+                const cr = Number(e.credit) || 0;
+                balance += dr - cr;
+                groupEntries.push({
+                  id: v.id,
+                  date: v.date,
+                  type: v.type,
+                  particulars: e.ledger,
+                  debit: dr,
+                  credit: cr,
+                  balance
+                });
+              }
+            });
+          }
+        });
+        
+        return groupEntries;
+      }
 
     let balance = 0;
     return filteredVouchers.map(v => {
@@ -1023,57 +1158,57 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
       switch (v.type) {
         case 'Purchase':
-          if (v.party === selectedLedger) {
+          if (v.party === name) {
             credit = v.total || 0;
             particulars = 'Purchases';
-          } else if ('account' in v && v.account === selectedLedger) {
+          } else if ('account' in v && v.account === name) {
             debit = v.total || 0;
             particulars = v.party;
           }
           break;
         case 'Sales':
-          if (v.party === selectedLedger) {
+          if (v.party === name) {
             debit = v.total || 0;
             particulars = 'Sales';
-          } else if ('account' in v && v.account === selectedLedger) {
+          } else if ('account' in v && v.account === name) {
             credit = v.total || 0;
             particulars = v.party;
           }
           break;
         case 'Payment':
-          if (v.party === selectedLedger) {
+          if (v.party === name) {
             debit = v.amount || 0;
             particulars = v.account;
-          } else if (v.account === selectedLedger) {
+          } else if (v.account === name) {
             credit = v.amount || 0;
             particulars = v.party;
           }
           break;
         case 'Receipt':
-          if (v.party === selectedLedger) {
+          if (v.party === name) {
             credit = v.amount || 0;
             particulars = v.account;
-          } else if (v.account === selectedLedger) {
+          } else if (v.account === name) {
             debit = v.amount || 0;
             particulars = v.party;
           }
           break;
         case 'Contra':
-          if (v.fromAccount === selectedLedger) {
+          if (v.fromAccount === name) {
             credit = v.amount || 0;
             particulars = v.toAccount;
-          } else if (v.toAccount === selectedLedger) {
+          } else if (v.toAccount === name) {
             debit = v.amount || 0;
             particulars = v.fromAccount;
           }
           break;
         case 'Journal':
           if (v.entries && Array.isArray(v.entries)) {
-            const entry = v.entries.find(e => e.ledger === selectedLedger);
+            const entry = v.entries.find(e => e.ledger === name);
             if (entry) {
               debit = entry.debit || 0;
               credit = entry.credit || 0;
-              particulars = v.entries.filter(e => e.ledger !== selectedLedger).map(e => e.ledger).join(', ') || 'Journal Entry';
+              particulars = v.entries.filter(e => e.ledger !== name).map(e => e.ledger).join(', ') || 'Journal Entry';
             }
           }
           break;
@@ -1091,7 +1226,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         balance
       };
     });
-  }, [reportType, selectedLedger, filteredVouchers]);
+  }, [reportType, selectedLedger, filteredVouchers, entries, startDate, endDate, ledgers]);
 
   const renderDayBook = () => (
     <div className="erp-table-container">
@@ -1150,7 +1285,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
           )) : (
             <tr>
               <td colSpan={6} className="px-6 py-12 text-sm text-center text-gray-500">
-                {!selectedLedger ? 'Please select a ledger.' :
+                {(!selectedLedger && (!entries || entries.length === 0)) ? 'Please select a ledger.' :
                   (startDate || endDate) ? 'No transactions found for the selected filter.' :
                     'No transactions found.'
                 }
@@ -1561,8 +1696,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                 <LedgerSelector
                   selectedValue={selectedLedger}
                   onChange={setSelectedLedger}
-                  groups={hardcodedGroups}
-                  ledgers={hardcodedLedgers}
+                  groups={ledgerGroups}
+                  ledgers={ledgers}
                 />
               </div>
               <div className="min-w-[200px]">

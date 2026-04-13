@@ -65,4 +65,8 @@ export const masterApiService = {
     /** Update branch-specific profile settings */
     updateBranchSettings: (tenantId: string, data: any, options: any = {}) => 
         httpClient.put<any>(`/api/master/branches/${tenantId}/settings/`, data, options),
+
+    /** Get unique business types from hierarchy */
+    getBusinessTypes: (options: any = {}) =>
+        httpClient.get<string[]>('/api/masters/hierarchy/business-types/', undefined, options),
 };

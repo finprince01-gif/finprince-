@@ -72,46 +72,39 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
         self._sync_expense_items(expense, rows)
 
         # --- Double-Entry Posting for Expense (entries table) ---
-        try:
-            entries = []
-            from customerportal.database import CustomerMasterCustomerBasicDetails
-            from vendors.models import VendorMasterBasicDetail
+        self._post_journal_entries(expense)
 
-            def get_ids(led_id):
-                v_id = None
-                c_id = None
-                v = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=led_id).first()
-                if v: v_id = v.id
-                else:
-                    c = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, ledger_id=led_id).first()
-                    if c: c_id = c.id
-                return v_id, c_id
+        return expense
+
+    def _post_journal_entries(self, expense):
+        """Post double-entry journal records for expense."""
+        try:
+            tenant_id = expense.tenant_id
+            rows = expense.get_items()
+            entries = []
 
             for row in rows:
-                amt = float(_safe_decimal(row.get('totalAmount', 0)))
+                amt = float(row.total_amount or 0)
                 if amt <= 0:
                     continue
                 
-                exp_ledger_val = row.get('expense')
-                post_to_val = row.get('postTo')
-                
-                exp_ledger = _resolve_ledger(exp_ledger_val, tenant_id)
-                post_to_ledger = _resolve_ledger(post_to_val, tenant_id)
-                
-                if exp_ledger:
-                    vid, cid = get_ids(exp_ledger.id)
-                    entries.append({"ledger_id": exp_ledger.id, "debit": amt, "credit": 0, "vendor_id": vid, "customer_id": cid})
-                if post_to_ledger:
-                    vid, cid = get_ids(post_to_ledger.id)
-                    entries.append({"ledger_id": post_to_ledger.id, "debit": 0, "credit": amt, "vendor_id": vid, "customer_id": cid})
+                if row.expense_ledger_id:
+                    entries.append({"ledger_id": row.expense_ledger_id, "debit": amt, "credit": 0})
+                if row.post_to_ledger_id:
+                    entries.append({"ledger_id": row.post_to_ledger_id, "debit": 0, "credit": amt})
             
             if len(entries) >= 2:
-                post_transaction(voucher_type="EXPENSE", voucher_id=voucher.id, tenant_id=tenant_id, entries=entries)
+                post_transaction(
+                    voucher_type="EXPENSE", 
+                    voucher_id=expense.id, 
+                    tenant_id=tenant_id, 
+                    entries=entries, 
+                    transaction_date=expense.date, 
+                    voucher_number=expense.voucher_number
+                )
                 
         except Exception as e:
             print(f"Error posting expense to entries: {str(e)}")
-
-        return expense
 
     def update(self, instance, validated_data):
         rows = validated_data.pop('expense_rows', None)
@@ -119,6 +112,7 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
         
         if rows is not None:
             self._sync_expense_items(instance, rows)
+            self._post_journal_entries(instance)
             
         return instance
 

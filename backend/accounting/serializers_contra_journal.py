@@ -92,41 +92,39 @@ class VoucherContraSerializer(serializers.ModelSerializer):
             contra.save(update_fields=['voucher_id'])
 
         # --- Double-Entry Posting for Contra (entries table) ---
-        try:
-            total_amt = float(contra.amount)
-            if total_amt > 0:
-                entries = []
-                from_ledger = _resolve_ledger(contra.from_account, tenant_id)
-                to_ledger = _resolve_ledger(contra.to_account, tenant_id)
-                
-                from customerportal.database import CustomerMasterCustomerBasicDetails
-                from vendors.models import VendorMasterBasicDetail
-
-                def get_ids(led_id):
-                    v_id = None
-                    c_id = None
-                    v = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=led_id).first()
-                    if v: v_id = v.id
-                    else:
-                        c = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, ledger_id=led_id).first()
-                        if c: c_id = c.id
-                    return v_id, c_id
-
-                if to_ledger:
-                    # Debit: Destination
-                    vid, cid = get_ids(to_ledger.id)
-                    entries.append({"ledger_id": to_ledger.id, "debit": total_amt, "credit": 0, "vendor_id": vid, "customer_id": cid})
-                if from_ledger:
-                    # Credit: Source
-                    vid, cid = get_ids(from_ledger.id)
-                    entries.append({"ledger_id": from_ledger.id, "debit": 0, "credit": total_amt, "vendor_id": vid, "customer_id": cid})
-                
-                if len(entries) == 2:
-                    post_transaction(voucher_type="CONTRA", voucher_id=voucher.id, tenant_id=tenant_id, entries=entries)
-        except Exception as e:
-            print(f"Error posting contra to entries: {str(e)}")
+        self._post_contra_journal_entries(contra)
 
         return contra
+
+    def _post_contra_journal_entries(self, contra):
+        """Post double-entry journal records for contra."""
+        try:
+            tenant_id = contra.tenant_id
+            from_ledger = _resolve_ledger(contra.from_account, tenant_id)
+            to_ledger = _resolve_ledger(contra.to_account, tenant_id)
+            total_amt = float(contra.amount)
+            entries = []
+
+            if to_ledger:
+                # Debit: Destination
+                entries.append({"ledger_id": to_ledger.id, "debit": total_amt, "credit": 0})
+            if from_ledger:
+                # Credit: Source
+                entries.append({"ledger_id": from_ledger.id, "debit": 0, "credit": total_amt})
+            
+            if len(entries) == 2:
+                # Use the referenced generic voucher ID for consistent tracking if available
+                v_id = getattr(contra, 'voucher_id', None) or contra.id
+                post_transaction(
+                    voucher_type="CONTRA", 
+                    voucher_id=v_id, 
+                    tenant_id=tenant_id, 
+                    entries=entries, 
+                    transaction_date=contra.date, 
+                    voucher_number=contra.voucher_number
+                )
+        except Exception as e:
+            print(f"Error posting contra entries: {str(e)}")
 
 class JournalVoucherEntrySerializer(serializers.ModelSerializer):
     class Meta:
@@ -180,46 +178,41 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
         self._sync_journal_entries(journal, entries_data)
 
         # --- Double-Entry Posting for Journal (entries table) ---
-        try:
-            entries_to_post = []
-            rows = entries_data if isinstance(entries_data, list) else []
-            
-            from customerportal.database import CustomerMasterCustomerBasicDetails
-            from vendors.models import VendorMasterBasicDetail
-
-            def get_ids(led_id):
-                v_id = None
-                c_id = None
-                v = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=led_id).first()
-                if v: v_id = v.id
-                else:
-                    c = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, ledger_id=led_id).first()
-                    if c: c_id = c.id
-                return v_id, c_id
-
-            for row in rows:
-                ledger_val = row.get('ledger')
-                dr = float(row.get('debit', 0))
-                cr = float(row.get('credit', 0))
-                
-                if dr > 0 or cr > 0:
-                    ledger_obj = _resolve_ledger(ledger_val, tenant_id)
-                    if ledger_obj:
-                        vid, cid = get_ids(ledger_obj.id)
-                        entries_to_post.append({
-                            "ledger_id": ledger_obj.id,
-                            "debit": dr,
-                            "credit": cr,
-                            "vendor_id": vid,
-                            "customer_id": cid
-                        })
-            
-            if len(entries_to_post) >= 2:
-                post_transaction(voucher_type="JOURNAL", voucher_id=voucher.id, tenant_id=tenant_id, entries=entries_to_post)
-        except Exception as e:
-            print(f"Error posting journal to entries: {str(e)}")
+        self._post_journal_voucher_entries(journal)
 
         return journal
+
+    def _post_journal_voucher_entries(self, journal):
+        """Post double-entry journal records for journal voucher."""
+        try:
+            tenant_id = journal.tenant_id
+            rows = journal.get_items()
+            entries_to_post = []
+            
+            for row in rows:
+                dr = float(row.debit_amount or 0)
+                cr = float(row.credit_amount or 0)
+                
+                if (dr > 0 or cr > 0) and row.ledger_id:
+                    entries_to_post.append({
+                        "ledger_id": row.ledger_id,
+                        "debit": dr,
+                        "credit": cr
+                    })
+            
+            if len(entries_to_post) >= 2:
+                # Use referenced generic voucher ID
+                v_id = getattr(journal, 'voucher_id', None) or journal.id
+                post_transaction(
+                    voucher_type="JOURNAL", 
+                    voucher_id=v_id, 
+                    tenant_id=tenant_id, 
+                    entries=entries_to_post, 
+                    transaction_date=journal.date, 
+                    voucher_number=journal.voucher_number
+                )
+        except Exception as e:
+            print(f"Error posting journal entries: {str(e)}")
 
     def update(self, instance, validated_data):
         entries_data = validated_data.pop('entries', None)
@@ -227,6 +220,7 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
         
         if entries_data is not None:
             self._sync_journal_entries(instance, entries_data)
+            self._post_journal_voucher_entries(instance)
             
         return instance
 

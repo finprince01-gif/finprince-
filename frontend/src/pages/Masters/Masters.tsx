@@ -815,7 +815,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
                 sub_group_3: data.sub_group_3 || undefined,
                 ledger_type: data.ledger_type || undefined,
                 parent_ledger_id: data.parent_ledger_id || undefined,
-                question_answers: data.question_answers
+                question_answers: data.question_answers,
+                // Direct opening balance fields (saved to DB columns, not additional_data)
+                ...(data.opening_balance !== undefined ? { opening_balance: data.opening_balance } : {}),
+                ...(data.opening_balance_type !== undefined ? { opening_balance_type: data.opening_balance_type } : {}),
               };
 
               // Directly add the ledger

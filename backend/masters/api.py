@@ -283,26 +283,32 @@ class MasterHierarchyRawViewSet(viewsets.ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         """
         Returns flat rows from master_hierarchy_raw with field names that
-        match the frontend HierarchyRow interface:
-        [
-            {
-                "id": 1,
-                "type_of_business_1": "Company",
-                "financial_reporting_1": "Balance Sheet",
-                "major_group_1": "Owners' Funds",
-                "group_1": "Share capital",
-                "sub_group_1_1": "Equity Share Capital",
-                "sub_group_2_1": null,
-                "sub_group_3_1": null,
-                "ledger_1": null,
-                "code": "..."
-            },
-            ...
-        ]
+        match the frontend HierarchyRow interface.
+        If a tenant is detected, filters by the tenant's business_type.
         """
         from accounting.hierarchy_service import get_flat_hierarchy_rows
-        rows = get_flat_hierarchy_rows()
+        from core.models import Tenant
+        
+        business_type = None
+        # Use request.tenant_id set by TenantMiddleware
+        tenant_id = getattr(request, 'tenant_id', None)
+        
+        if tenant_id:
+            try:
+                tenant = Tenant.objects.get(id=tenant_id)
+                business_type = tenant.business_type
+            except Tenant.DoesNotExist:
+                pass
+        
+        rows = get_flat_hierarchy_rows(business_type=business_type)
         return Response(rows)
+
+    @action(detail=False, methods=['get'], url_path='business-types')
+    def business_types(self, request):
+        """Get unique list of business types from hierarchy."""
+        from accounting.hierarchy_service import get_business_types
+        types = get_business_types()
+        return Response(types)
 
 
 # ============================================================================

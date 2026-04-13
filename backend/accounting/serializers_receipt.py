@@ -419,7 +419,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 account=receipt.receive_in.name if receipt.receive_in else None,
                 amount=receipt.amount,
                 total=receipt.total_amount,
-                source=receipt.source or 'manual',
+                source=getattr(receipt, 'source', 'manual'),
                 reference_id=receipt.id,
                 items_data=items_data,
                 ledger_id_val=receipt.ledger_id_val,
@@ -596,7 +596,9 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     voucher_type="RECEIPT", 
                     voucher_id=receipt.id, 
                     tenant_id=receipt.tenant_id, 
-                    entries=entries
+                    entries=entries,
+                    transaction_date=receipt.date,
+                    voucher_number=receipt.voucher_number
                 )
         except Exception:
             pass

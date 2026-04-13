@@ -104,6 +104,7 @@ class Tenant(models.Model):
     id = models.CharField(max_length=36, primary_key=True)
     name = models.CharField(max_length=200, unique=True)
     branch_name = models.CharField(max_length=200, null=True, blank=True)
+    business_type = models.CharField(max_length=200, null=True, blank=True)
     
     gstin = models.CharField(max_length=15, null=True, blank=True, unique=True)
     pan_number = models.CharField(max_length=10, null=True, blank=True, db_index=True)
@@ -269,4 +270,4 @@ class ExtractionPerformance(models.Model):
 
 
 # Alias for architecture transition
-Tenant = Branch
+Branch = Tenant

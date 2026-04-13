@@ -156,6 +156,21 @@ class MasterLedger(BaseModel):
         help_text="Stores answers to dynamic questions (e.g., opening balance, GSTIN, credit limit)"
     )
 
+    # Opening balance fields — these columns exist in the MySQL schema
+    # They must be declared here so Django includes them in INSERT statements
+    opening_balance = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=0.00,
+        help_text="Opening balance amount for this ledger"
+    )
+    opening_balance_type = models.CharField(
+        max_length=2,
+        default='Dr',
+        blank=True,
+        help_text="Opening balance type: 'Dr' or 'Cr'"
+    )
+
     # Auto-restored missing columns
     major_group = models.CharField(max_length=255, null=True, blank=True)
     financial_reporting = models.CharField(max_length=255, null=True, blank=True)
