@@ -11,11 +11,15 @@ import { ChevronDown } from 'lucide-react';
 
 interface PurchaseVoucherProps {
     prefilledData?: ExtractedInvoiceData | null;
-    clearPrefilledData?: () => void;
-    isLimitReached?: boolean;
-    onLimitReached?: () => void;
+    clearPrefilledData: () => void;
+    isLimitReached: boolean;
+    onLimitReached: () => void;
     onAddVouchers: (vouchers: Voucher[]) => void;
     companyDetails: CompanyDetails;
+    ledgers: Ledger[];
+    stockItems: StockItem[];
+    richVendors: any[];
+    vendorGstDetails: any[];
 }
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -26,37 +30,62 @@ const PurchaseVoucher: React.FC<PurchaseVoucherProps> = ({
     isLimitReached,
     onLimitReached,
     onAddVouchers,
-    companyDetails
+    companyDetails,
+    ledgers,
+    stockItems,
+    richVendors,
+    vendorGstDetails
 }) => {
     // Move all Purchase-related state from Vouchers.tsx here
     const [date, setDate] = useState(getTodayDate());
     const [invoiceNo, setInvoiceNo] = useState('');
     const [party, setParty] = useState('');
-    const [vendorId, setVendorId] = useState<number | null>(null);
-    const [narration, setNarration] = useState('');
-    const [isInterState, setIsInterState] = useState(false);
-    const [purchaseActiveTab, setPurchaseActiveTab] = useState<'supplier' | 'supply' | 'supply_foreign' | 'supply_inr' | 'due' | 'transit'>('supplier');
+    const [purchaseLedger, setPurchaseLedger] = useState('');
+    const [purchaseDescription, setPurchaseDescription] = useState('');
 
-    // ... (Many more states will be copied from Vouchers.tsx)
+    const isCashBank = useCallback((l: Ledger) => {
+        const g = (l.group || '').toLowerCase();
+        return g.includes('cash') || g.includes('bank') || g.includes('od') || g.includes('cc');
+    }, []);
+
+    const purchasePartyOptions = useMemo(() => {
+        return [...new Set([
+            ...ledgers.filter(l => !isCashBank(l)).map(l => l.name),
+            ...richVendors.map(v => v.vendor_name)
+        ])].filter(Boolean);
+    }, [ledgers, richVendors, isCashBank]);
+
+    const allLedgerOptions = useMemo(() => {
+        return [...new Set(ledgers.map(l => l.name))].filter(Boolean);
+    }, [ledgers]);
 
     // For now, just a placeholder to resolve the import error
     return (
-        <div className="p-8 text-center bg-white rounded-lg border border-gray-200">
-            <h2 className="text-xl font-bold mb-4">Purchase Voucher Component</h2>
-            <p className="text-gray-600 mb-6">Component architecture ready. Migrating logic from Vouchers.tsx...</p>
-            <div className="animate-pulse flex space-x-4 justify-center">
-                <div className="rounded-full bg-slate-200 h-10 w-10"></div>
-                <div className="flex-1 space-y-6 py-1 max-w-[200px]">
-                    <div className="h-2 bg-slate-200 rounded"></div>
-                    <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="h-2 bg-slate-200 rounded col-span-2"></div>
-                            <div className="h-2 bg-slate-200 rounded col-span-1"></div>
-                        </div>
-                        <div className="h-2 bg-slate-200 rounded"></div>
-                    </div>
+        <div className="p-8 bg-white rounded-lg border border-gray-200">
+            <h2 className="text-xl font-bold mb-4">Purchase Voucher</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-left">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
+                    <SearchableDropdown
+                        options={purchasePartyOptions}
+                        value={party}
+                        onChange={setParty}
+                        placeholder="Select Vendor"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Ledger</label>
+                    <SearchableDropdown
+                        options={allLedgerOptions}
+                        value={purchaseLedger}
+                        onChange={setPurchaseLedger}
+                        placeholder="Select Purchase Ledger"
+                    />
                 </div>
             </div>
+
+            <p className="text-gray-600 mb-6">Component architecture ready. Migrating full logic from Vouchers.tsx...</p>
         </div>
     );
 };

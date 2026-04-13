@@ -8,6 +8,7 @@ class VoucherJournal(BaseModel):
     """
     date = models.DateField()
     voucher_number = models.CharField(max_length=100)
+    voucher_series = models.CharField(max_length=255, null=True, blank=True)
     
     total_debit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
