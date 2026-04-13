@@ -12,6 +12,7 @@ class VoucherExpense(BaseModel):
     """
     date = models.DateField()
     voucher_number = models.CharField(max_length=100)
+    voucher_series = models.CharField(max_length=255, null=True, blank=True)  # links to master config
     
     posting_note = models.TextField(null=True, blank=True)
     

@@ -326,11 +326,11 @@ class ApiService {
     /**
      * Get Pending GRNs for reference in Vouchers
      */
-    async getPendingGRNs(vendorName?: string) {
-        let url = '/api/inventory/operations/pending-grns/';
-        if (vendorName) {
-            url += `?vendor_name=${encodeURIComponent(vendorName)}`;
-        }
+    async getPendingGRNs(params: { vendor_name?: string, customer_name?: string, grn_type?: 'purchases' | 'sales_return' } = {}) {
+        let url = '/api/inventory/operations/pending-grns/?';
+        if (params.vendor_name) url += `vendor_name=${encodeURIComponent(params.vendor_name)}&`;
+        if (params.customer_name) url += `customer_name=${encodeURIComponent(params.customer_name)}&`;
+        if (params.grn_type) url += `grn_type=${params.grn_type}&`;
         return httpClient.get<any[]>(url);
     }
 
@@ -602,8 +602,9 @@ class ApiService {
         // Group vouchers by type to handle specialized endpoints
         const contraVouchers = data.filter(v => v.type === 'Contra');
         const journalVouchers = data.filter(v => v.type === 'Journal');
+        const expensesVouchers = data.filter(v => v.type === 'Expenses');
         const debitNoteVouchers = data.filter(v => v.type === 'Debit Note');
-        const otherVouchers = data.filter(v => !['Contra', 'Journal', 'Debit Note'].includes(v.type));
+        const otherVouchers = data.filter(v => !['Contra', 'Journal', 'Expenses', 'Debit Note'].includes(v.type));
 
         const promises = [];
 
@@ -615,6 +616,11 @@ class ApiService {
         // Handle Journal Vouchers
         for (const voucher of journalVouchers) {
             promises.push(httpClient.post('/api/vouchers/journal/', voucher));
+        }
+
+        // Handle Expenses Vouchers
+        for (const voucher of expensesVouchers) {
+            promises.push(httpClient.post('/api/vouchers/expenses/', voucher));
         }
 
         // Handle Debit Note Vouchers

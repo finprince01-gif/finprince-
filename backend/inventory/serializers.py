@@ -74,7 +74,7 @@ class InventoryMasterIssueSlipSerializer(serializers.ModelSerializer):
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
 
-class InventoryOperationItemSyncMixin:
+class InventoryOperationItemSyncMixin(serializers.Serializer):
     items = serializers.JSONField(write_only=True, required=False)
     eway_bill_details = serializers.JSONField(write_only=True, required=False)
     delivery_challan = serializers.JSONField(write_only=True, required=False)
@@ -645,6 +645,11 @@ class InventoryOperationOutwardSerializer(InventoryOperationItemSyncMixin, seria
              self._sync_delivery_challan(instance, 'outward', dc_data)
         return instance
 
+    def to_representation(self, instance):
+        repr = super().to_representation(instance)
+        repr['items'] = InventoryOperationOutwardItemSerializer(instance.items_rel.all(), many=True).data
+        return repr
+
     class Meta:
         model = InventoryOperationOutward
         fields = '__all__'
@@ -674,6 +679,11 @@ class InventoryOperationNewGRNSerializer(InventoryOperationItemSyncMixin, serial
         if dc_data is not None:
              self._sync_delivery_challan(instance, 'grn', dc_data)
         return instance
+
+    def to_representation(self, instance):
+        repr = super().to_representation(instance)
+        repr['items'] = InventoryOperationNewGRNItemSerializer(instance.items_rel.all(), many=True).data
+        return repr
 
     class Meta:
         model = InventoryOperationNewGRN

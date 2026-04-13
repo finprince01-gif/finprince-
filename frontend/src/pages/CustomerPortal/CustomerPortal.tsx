@@ -6776,9 +6776,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Status</th>
-                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Running Balance</th>
                                                     <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
-                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Credit (₹)</th>
+                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Credit (₹)</th>
+                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
                                                 </tr>
                                             </thead>
                                         ) : (
@@ -6886,11 +6886,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                     </th>
                                                     <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-end relative text-gray-400">
-                                                            <span>Running Balance</span>
-                                                        </div>
-                                                    </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
-                                                        <div className="flex items-center justify-end relative text-gray-400">
                                                             <span>Debit</span>
                                                             <div className="ml-2">
                                                                 <Filter
@@ -6918,7 +6913,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                             </div>
                                                         </div>
                                                     </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-end relative text-gray-400">
                                                             <span>Credit</span>
                                                             <div className="ml-2">
@@ -6947,6 +6942,11 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                             </div>
                                                         </div>
                                                     </th>
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                                        <div className="flex items-center justify-end relative text-gray-400">
+                                                            <span>Running Balance</span>
+                                                        </div>
+                                                    </th>
                                                 </tr>
                                             </thead>
                                         )}
@@ -6967,7 +6967,11 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-50">
                                                                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900 border-r border-gray-50">
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold border-r border-gray-50">
+                                                                    {entry.credit !== 0 ? `₹${entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
                                                                     {entry.runningBalance === 0 ? '-' : (
                                                                         <span>
                                                                             {formatCurrency(Math.abs(entry.runningBalance))}
@@ -6976,10 +6980,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                             </span>
                                                                         </span>
                                                                     )}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold">
-                                                                    {entry.credit !== 0 ? `₹${entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                                 </td>
                                                             </tr>
                                                             {/* BREAKDOWN ROWS */}
@@ -7001,7 +7001,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                     </tr>
 
@@ -7033,7 +7033,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         );
@@ -7055,7 +7055,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                     </tr>
 
@@ -7113,7 +7113,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-semibold">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">
                                                                 {entry.runningBalance === 0 ? '-' : (
                                                                     <span>
                                                                         {formatCurrency(Math.abs(entry.runningBalance))}
@@ -7123,8 +7125,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                     </span>
                                                                 )}
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-medium">{formatCurrency(entry.credit)}</td>
                                                         </tr>
                                                     )}
                                                 </React.Fragment>
@@ -7139,9 +7139,10 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                         </tbody>
                                         <tfoot className="bg-gray-50 font-semibold">
                                             <tr>
-                                                <td colSpan={6} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
+                                                <td colSpan={5} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200"></td>
                                             </tr>
                                         </tfoot>
                                     </table>

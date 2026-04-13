@@ -12,6 +12,7 @@ from .models_voucher_purchase import (  # type: ignore[import]
 )
 from .models import Voucher, MasterLedger  # type: ignore[import]
 from .services.ledger_service import post_transaction, _resolve_ledger  # type: ignore[import]
+from accounting.services.inventory_sync import sync_purchase_to_grn
 from decimal import Decimal  # noqa: F401
 
 
@@ -280,6 +281,9 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         self._post_journal_entries(supplier_instance, voucher.id, purchase_total, supply_inr_data, supply_foreign_data, due_data)
 
         self._mirror_to_vendor_portal(supplier_instance)
+
+        # Auto-sync to Inventory > Operations > GRN
+        sync_purchase_to_grn(supplier_instance, supply_inr_data, supply_foreign_data)
 
         return supplier_instance
 

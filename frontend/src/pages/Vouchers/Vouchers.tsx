@@ -113,6 +113,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [inventoryLocations, setInventoryLocations] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  // Fresh ledgers fetched directly from API (supplements the prop to ensure completeness)
+  const [freshLedgers, setFreshLedgers] = useState<Ledger[]>([]);
+  // Hierarchy data (default/pre-built master ledger chart of accounts)
+  const [hierarchy, setHierarchy] = useState<any[]>([]);
+
+  // Fetch ledgers + hierarchy fresh on mount so dropdowns show ALL master ledgers (same as Sales Voucher)
+  useEffect(() => {
+    Promise.all([
+      apiService.getLedgers().catch(() => []),
+      apiService.getHierarchy().catch(() => [])
+    ]).then(([ledgerData, hierarchyData]) => {
+      const arr = Array.isArray(ledgerData) ? ledgerData : ((ledgerData as any)?.results ?? []);
+      if (arr.length > 0) setFreshLedgers(arr);
+      if (Array.isArray(hierarchyData) && hierarchyData.length > 0) setHierarchy(hierarchyData);
+    }).catch(() => {});
+  }, []);
 
   const fetchRichData = useCallback(async () => {
     // 1. Rich Vendors & Customers
@@ -169,9 +185,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       console.warn('Failed to fetch Stock Items', err);
     }
 
-    // 5. Pending GRNs
+    // 5. Pending GRNs (Default load for Purchases)
     try {
-      const grns = await apiService.getPendingGRNs();
+      const grns = await apiService.getPendingGRNs({ grn_type: 'purchases' });
       setPendingGRNs(Array.isArray(grns) ? grns : ((grns as any).results || []));
     } catch (err) {
       console.warn('Failed to fetch Pending GRNs', err);
@@ -1206,13 +1222,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     fetchMultiplePODetails();
   }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty, exchangeRate, allItems, wasPartyAutoSet]);
 
-  // Fetch Pending GRNs based on selected vendor for Purchase Vouchers
+  // Fetch Pending GRNs based on selected vendor for Purchase Vouchers or customer for Credit Note
   useEffect(() => {
-    const fetchPendingGRNsForVendor = async () => {
-      if (voucherType !== 'Purchase') return;
+    const fetchPendingGRNsForEntity = async () => {
+      if (voucherType !== 'Purchase' && voucherType !== 'Credit Note') return;
 
-      const match = party?.match(/^(.*) \((.*)\)$/);
-      const entityName = match ? match[1] : party;
+      const isPurchase = voucherType === 'Purchase';
+      const entityToMatch = isPurchase ? party : cnCustomer;
+
+      const match = entityToMatch?.match(/^(^(.*) \((.*)\)$)|(^(.*)$)/);
+      const entityName = (match ? (match[2] || match[5]) : entityToMatch)?.trim();
 
       if (!entityName) {
         setPendingGRNs([]);
@@ -1220,7 +1239,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
 
       try {
-        const res = await apiService.getPendingGRNs(entityName);
+        const params = isPurchase 
+          ? { vendor_name: entityName, grn_type: 'purchases' as const }
+          : { customer_name: entityName, grn_type: 'sales_return' as const };
+
+        const res = await apiService.getPendingGRNs(params);
         if (res && Array.isArray(res)) {
           setPendingGRNs(res);
         } else {
@@ -1232,8 +1255,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     };
 
-    fetchPendingGRNsForVendor();
-  }, [party, voucherType]);
+    fetchPendingGRNsForEntity();
+  }, [party, cnCustomer, voucherType]);
 
   // Logic to auto-fill items from GRN when selected
   useEffect(() => {
@@ -1490,6 +1513,124 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     return voucherNumber;
   }, [voucherNumber]);
 
+  const incrementJournalNumber = useCallback(async (seriesId: string): Promise<string> => {
+    try {
+      const res: any = await httpClient.post(`/api/masters/master-voucher-journal/${seriesId}/increment-number/`, {});
+      return res.next_invoice_number || '';
+    } catch (e) {
+      console.error('Failed to increment journal number', e);
+      return '';
+    }
+  }, []);
+
+  const incrementExpensesNumber = useCallback(async (seriesId: string): Promise<string> => {
+    try {
+      const res: any = await httpClient.post(`/api/masters/master-voucher-expenses/${seriesId}/increment-number/`, {});
+      return res.next_invoice_number || '';
+    } catch (e) {
+      console.error('Failed to increment expenses number', e);
+      return '';
+    }
+  }, []);
+
+
+  // ── Journal Voucher Configuration ────────────────────────────────────────
+  const [journalVoucherConfigs, setJournalVoucherConfigs] = useState<any[]>([]);
+  const [selectedJournalConfig, setSelectedJournalConfig] = useState<string>('');
+
+  useEffect(() => {
+    if (voucherType === 'Journal') {
+      httpClient.get<any[]>('/api/masters/master-voucher-journal/')
+        .then(configs => {
+          setJournalVoucherConfigs(configs || []);
+          if (configs && configs.length >= 1 && !selectedJournalConfig) {
+            setSelectedJournalConfig(configs[0].voucher_name);
+          }
+        })
+        .catch(err => console.error('Failed to fetch journal configs', err));
+    }
+  }, [voucherType]);
+
+  // Generate voucher number when journal config selected
+  useEffect(() => {
+    if (voucherType === 'Journal') {
+      if (selectedJournalConfig && journalVoucherConfigs.length > 0) {
+        const config = journalVoucherConfigs.find(c => c.voucher_name === selectedJournalConfig);
+        if (config && config.enable_auto_numbering) {
+          const fetchNextNumber = async () => {
+            try {
+              const res: any = await httpClient.get(`/api/masters/master-voucher-journal/${config.id}/next-number/`);
+              if (res?.invoice_number) {
+                setVoucherNumber(res.invoice_number);
+              } else {
+                const num = config.current_number || config.start_from || 1;
+                const digits = config.required_digits || 4;
+                const prefix = config.prefix || '';
+                const suffix = config.suffix || '';
+                setVoucherNumber(`${prefix}${String(num).padStart(digits, '0')}${suffix}`);
+              }
+            } catch {
+              setVoucherNumber('Auto-generated');
+            }
+          };
+          fetchNextNumber();
+        } else {
+          setVoucherNumber('Manual Input');
+        }
+      } else {
+        setVoucherNumber('Auto-generated');
+      }
+    }
+  }, [selectedJournalConfig, journalVoucherConfigs, voucherType]);
+
+  // ── Expenses Voucher Configuration ────────────────────────────────────────
+  const [expensesVoucherConfigs, setExpensesVoucherConfigs] = useState<any[]>([]);
+  const [selectedExpensesConfig, setSelectedExpensesConfig] = useState<string>('');
+
+  useEffect(() => {
+    if (voucherType === 'Expenses') {
+      httpClient.get<any[]>('/api/masters/master-voucher-expenses/')
+        .then(configs => {
+          setExpensesVoucherConfigs(configs || []);
+          if (configs && configs.length >= 1 && !selectedExpensesConfig) {
+            setSelectedExpensesConfig(configs[0].voucher_name);
+          }
+        })
+        .catch(err => console.error('Failed to fetch expenses configs', err));
+    }
+  }, [voucherType]);
+
+  // Generate voucher number when expenses config selected
+  useEffect(() => {
+    if (voucherType === 'Expenses') {
+      if (selectedExpensesConfig && expensesVoucherConfigs.length > 0) {
+        const config = expensesVoucherConfigs.find(c => c.voucher_name === selectedExpensesConfig);
+        if (config && config.enable_auto_numbering) {
+          const fetchNextNumber = async () => {
+            try {
+              const res: any = await httpClient.get(`/api/masters/master-voucher-expenses/${config.id}/next-number/`);
+              if (res?.invoice_number) {
+                setVoucherNumber(res.invoice_number);
+              } else {
+                const num = config.current_number || config.start_from || 1;
+                const digits = config.required_digits || 4;
+                const prefix = config.prefix || '';
+                const suffix = config.suffix || '';
+                setVoucherNumber(`${prefix}${String(num).padStart(digits, '0')}${suffix}`);
+              }
+            } catch {
+              setVoucherNumber('Auto-generated');
+            }
+          };
+          fetchNextNumber();
+        } else {
+          setVoucherNumber('Manual Input');
+        }
+      } else {
+        setVoucherNumber('Auto-generated');
+      }
+    }
+  }, [selectedExpensesConfig, expensesVoucherConfigs, voucherType]);
 
   // Receipt Voucher specific state - Transaction List
   interface ReceiptTransaction {
@@ -1562,32 +1703,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     fetchCashBankLedgers();
   }, [ledgers]);
 
-  // Contra specific ledgers — only ledgers under:
-  // "Cash-in-hand", "Bank Accounts", "Bank OD Account"
-  // Actual DB values: sub_group_1 = 'Cash', 'Bank', 'Bank OD/CC Accounts'
-  //                  group = 'Cash and bank balances'
-  const contraLedgers = useMemo(() => {
-    return ledgers.filter(l => {
-      const sg1 = (l.sub_group_1 || '').toLowerCase().trim();
-      const grp = (l.group || '').toLowerCase().trim();
-      const cat = (l.category || '').toLowerCase().trim();
-      // Match any ledger whose sub_group_1 mentions cash or bank,
-      // OR whose group is "Cash and bank balances" (the actual stored value)
-      return (
-        sg1 === 'cash' ||
-        sg1 === 'bank' ||
-        sg1.includes('bank od') ||
-        sg1.includes('bank occ') ||
-        sg1.includes('cash-in-hand') ||
-        sg1.includes('cash in hand') ||
-        grp.includes('cash and bank') ||
-        grp === 'bank accounts' ||
-        grp === 'cash-in-hand' ||
-        grp === 'cash in hand' ||
-        grp.includes('bank od')
-      );
-    });
-  }, [ledgers]);
 
   // Sync Contra balances
   useEffect(() => {
@@ -2736,7 +2851,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     });
   }, [party, ledgers, companyDetails, invoiceInForeignCurrency]);
 
-  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions } = useMemo(() => {
+  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions } = useMemo(() => {
+    // Merge the prop ledgers with freshly-fetched ledgers so we always have the full set
+    // The prop is the reliable source; freshLedgers supplements with any newly created ledgers
+    const mergedMap = new Map<string, Ledger>();
+    ledgers.forEach(l => mergedMap.set(String(l.id ?? l.name), l));
+    freshLedgers.forEach(l => mergedMap.set(String(l.id ?? l.name), l));
+    const effectiveLedgers = Array.from(mergedMap.values());
+
     // Helper to identify cash/bank accounts robustly
     const isCashBank = (l: Ledger) => {
       const g = (l.group || '').toLowerCase();
@@ -2745,23 +2867,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     const accountLedgers = cashBankLedgers.length > 0
       ? cashBankLedgers
-      : ledgers.filter(isCashBank);
+      : effectiveLedgers.filter(isCashBank);
 
-    const allLedgers = [...ledgers];
+    const allLedgers = [...effectiveLedgers];
 
-    // partyLedgers (excluding cash/bank for Receipt/Payment party selection if needed)
-    // For now, keeping it as all ledgers but we can filter it in the UI or here
-    const partyLedgers = ledgers.filter(l => !isCashBank(l));
+    const partyLedgers = effectiveLedgers.filter(l => !isCashBank(l));
 
-    // Combine Ledgers with rich Vendor/Customer names only (no combined branch names)
-    // Filter out cash/bank accounts from party options to avoid accounting errors
     const partyOptions = [...new Set([
-      ...ledgers.filter(l => !isCashBank(l)).map(l => l.name),
+      ...effectiveLedgers.filter(l => !isCashBank(l)).map(l => l.name),
       ...richVendors.map(v => v.vendor_name),
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);
 
     const purchasePartyOptions = [...new Set([
+      ...effectiveLedgers.filter(l => !isCashBank(l)).map(l => l.name),
       ...richVendors.map(v => v.vendor_name)
     ])].filter(Boolean);
 
@@ -2769,8 +2888,25 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);
 
-    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions };
-  }, [ledgers, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
+    // Build the complete ledger options list:
+    // 1. User-created + fresh fetched ledgers
+    const userLedgerNames = effectiveLedgers.map(l => l.name);
+    // 2. Default/pre-built hierarchy ledgers (same logic as SalesVoucher)
+    const hierarchyLedgers = new Set<string>();
+    hierarchy.forEach(row => {
+      if (row.ledger_1) hierarchyLedgers.add(row.ledger_1);
+      if (row.sub_group_3_1) hierarchyLedgers.add(row.sub_group_3_1);
+      if (row.sub_group_2_1) hierarchyLedgers.add(row.sub_group_2_1);
+      if (row.sub_group_1_1) hierarchyLedgers.add(row.sub_group_1_1);
+      if (row.group_1) hierarchyLedgers.add(row.group_1);
+      if (row.major_group_1) hierarchyLedgers.add(row.major_group_1);
+    });
+    const allLedgerOptions = Array.from(
+      new Set([...userLedgerNames, ...Array.from(hierarchyLedgers)])
+    ).filter(Boolean);
+
+    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions };
+  }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
     setParty(value);
@@ -3351,14 +3487,47 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         break;
       case 'Journal':
         if (isJournalBalanced) {
-          voucher = { id: '', type: voucherType, date, entries, totalDebit, totalCredit, narration };
+          voucher = {
+            id: '',
+            type: voucherType,
+            date,
+            entries,
+            totalDebit,
+            totalCredit,
+            narration,
+            voucher_number: voucherNumber || undefined,
+            voucher_series: selectedJournalConfig || undefined
+          } as any;
         } else {
           showError("Journal entries are not balanced!");
-
         }
         break;
       case 'Expenses':
-        voucher = { id: '', type: voucherType, date, account, party, amount: simpleAmount, narration };
+        voucher = {
+          id: '',
+          type: voucherType,
+          date,
+          // Expenses use expense_rows instead of account/party/amount
+          expense_rows: expenseRows.map(row => ({
+            id: row.id,
+            expense: row.expense,
+            postTo: row.postTo,
+            billRefNo: row.billRefNo || '',
+            entryNote: row.entryNote || '',
+            totalAmount: row.totalAmount,
+            gstRate: row.gstRate,
+            taxableValue: row.taxableValue,
+            igst: row.igst,
+            cgst: row.cgst,
+            sgst: row.sgst,
+            cess: row.cess,
+            showTax: row.showTax
+          })),
+          posting_note: narration,
+          voucher_number: voucherNumber || undefined,
+          voucher_series: selectedExpensesConfig || undefined,
+          uploaded_files: uploadedFiles.map(f => f.name)
+        } as any;
         break;
     }
 
@@ -3371,6 +3540,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         const config = contraVoucherConfigs.find(c => c.voucher_name === selectedContraConfig);
         if (config && config.enable_auto_numbering) {
           incrementContraNumber(String(config.id)).catch(e => console.error(e));
+        }
+      }
+      if (voucherType === 'Journal' && selectedJournalConfig && journalVoucherConfigs.length > 0) {
+        const config = journalVoucherConfigs.find(c => c.voucher_name === selectedJournalConfig);
+        if (config && config.enable_auto_numbering) {
+          incrementJournalNumber(String(config.id)).catch(e => console.error(e));
+        }
+      }
+      if (voucherType === 'Expenses' && selectedExpensesConfig && expensesVoucherConfigs.length > 0) {
+        const config = expensesVoucherConfigs.find(c => c.voucher_name === selectedExpensesConfig);
+        if (config && config.enable_auto_numbering) {
+          incrementExpensesNumber(String(config.id)).catch(e => console.error(e));
         }
       }
       /*
@@ -4688,23 +4869,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           {/* Purchase Ledger Dropdown */}
                           <div className="flex items-center gap-2 min-w-[260px]">
                             <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Purchase Ledger:</label>
-                            <select
-                              value={purchaseLedger}
-                              onChange={(e) => setPurchaseLedger(e.target.value)}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            >
-                              <option value="">-- Select Ledger --</option>
-                              {(() => {
-                                const purchaseLedgers = ledgers.filter(l => {
-                                  const g = (l.group || '').toLowerCase();
-                                  return g.includes('purchase') || g.includes('direct expense');
-                                });
-                                const displayList = purchaseLedgers.length > 0 ? purchaseLedgers : ledgers;
-                                return displayList.map(l => (
-                                  <option key={l.id ?? l.name} value={l.name}>{l.name}</option>
-                                ));
-                              })()}
-                            </select>
+                            <div className="flex-1">
+                              <SearchableDropdown
+                                options={allLedgerOptions}
+                                value={purchaseLedger}
+                                onChange={(val) => setPurchaseLedger(val)}
+                                placeholder="Select purchase ledger"
+                              />
+                            </div>
                           </div>
 
                           {/* Ledger Narration */}
@@ -5039,23 +5211,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             {/* Purchase Ledger Dropdown */}
                             <div className="flex items-center gap-2 min-w-[260px]">
                               <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Purchase Ledger:</label>
-                              <select
-                                value={purchaseLedger}
-                                onChange={(e) => setPurchaseLedger(e.target.value)}
-                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm bg-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                              >
-                                <option value="">-- Select Ledger --</option>
-                                {(() => {
-                                  const purchaseLedgers = ledgers.filter(l => {
-                                    const g = (l.group || '').toLowerCase();
-                                    return g.includes('purchase') || g.includes('direct expense');
-                                  });
-                                  const displayList = purchaseLedgers.length > 0 ? purchaseLedgers : ledgers;
-                                  return displayList.map(l => (
-                                    <option key={l.id ?? l.name} value={l.name}>{l.name}</option>
-                                  ));
-                                })()}
-                              </select>
+                              <div className="flex-1">
+                                <SearchableDropdown
+                                  options={allLedgerOptions}
+                                  value={purchaseLedger}
+                                  onChange={(val) => setPurchaseLedger(val)}
+                                  placeholder="Select purchase ledger"
+                                />
+                              </div>
                             </div>
                             {/* Description */}
                             <div className="flex items-center gap-2 flex-1">
@@ -9230,8 +9393,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       // ── Currency Detection ─────────────────────────────────────────────────
       // A ledger is "foreign currency" when its extended_data.currency is set &
       // is not 'INR'. We get this from the full ledger object fetched earlier.
-      const fromLedgerObj = contraLedgers.find(l => l.name === fromAccount);
-      const toLedgerObj = contraLedgers.find(l => l.name === toAccount);
+      const fromAccountVal = typeof fromAccount === 'object' ? (fromAccount as any).name : fromAccount;
+      const toAccountVal = typeof toAccount === 'object' ? (toAccount as any).name : toAccount;
+      const fromLedgerObj = accountLedgers.find(l => l.name === fromAccountVal);
+      const toLedgerObj = accountLedgers.find(l => l.name === toAccountVal);
 
       const getLedgerCurrency = (l: any): string => {
         if (!l) return 'INR';
@@ -9309,7 +9474,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 setContraReceiptAmtForeign(''); setContraReceiptRate(0); setContraReceiptAmtINR('');
                 setContraForexGainLoss(0); setSimpleAmount(0);
               }}
-                options={contraLedgers.map(l => l.name)} placeholder="Select Account" />
+                options={accountLedgers.map(l => l.name)} placeholder="Select Account" />
               <div className="text-right">
                 <div className="text-xs text-gray-500 mb-1">Running Balance</div>
                 <input type="text" value={fromAccountBalance.toFixed(2)} readOnly
@@ -9326,7 +9491,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 setContraReceiptAmtForeign(''); setContraReceiptRate(0); setContraReceiptAmtINR('');
                 setContraForexGainLoss(0); setSimpleAmount(0);
               }}
-                options={contraLedgers.map(l => l.name)} placeholder="Select Account" />
+                options={accountLedgers.map(l => l.name)} placeholder="Select Account" />
               <div className="text-right">
                 <div className="text-xs text-gray-500 mb-1">&nbsp;</div>
                 <input type="text" value={toAccountBalance.toFixed(2)} readOnly
@@ -9674,47 +9839,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // GST Rate options
   const gstRateOptions = [0, 0.5, 1.5, 3, 5, 7.5, 12, 18, 28, 40];
 
-  // Get expense ledgers
-  const expenseLedgers = useMemo(() => {
-    return allLedgers.filter(l => {
-      const searchFields = [
-        l.category,
-        l.group,
-        l.sub_group_1,
-        l.sub_group_2,
-        l.sub_group_3,
-        l.ledger_type
-      ].map(f => (f || '').toLowerCase());
+  // Expenses and PostTo use the full allLedgerOptions (including hierarchy) so all master ledgers appear
+  const expenseLedgers = useMemo(() => allLedgerOptions.map(name => ({ name })), [allLedgerOptions]);
+  const postToLedgers = useMemo(() => allLedgerOptions.map(name => ({ name })), [allLedgerOptions]);
 
-      return searchFields.some(f =>
-        f.includes('expense') ||
-        f.includes('indirect') ||
-        f.includes('expenditure')
-      );
-    });
-  }, [allLedgers]);
-
-  // Get Post To ledgers (Liabilities + Cash & Bank)
-  const postToLedgers = useMemo(() => {
-    return allLedgers.filter(l => {
-      const searchFields = [
-        l.category,
-        l.group,
-        l.sub_group_1,
-        l.sub_group_2,
-        l.sub_group_3,
-        l.ledger_type
-      ].map(f => (f || '').toLowerCase());
-
-      return searchFields.some(f =>
-        f.includes('liabilit') ||
-        f.includes('bank') ||
-        f.includes('cash') ||
-        f.includes('od') ||
-        f.includes('cc')
-      );
-    });
-  }, [allLedgers]);
 
   // Handle expense row change
   const handleExpenseRowChange = (id: string, field: keyof ExpenseRow, value: any) => {
@@ -9831,6 +9959,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const payload = {
       date,
       voucher_number: voucherNumber,
+      voucher_series: selectedExpensesConfig || undefined,
       posting_note: narration,
       expense_rows: expenseRows.map(row => ({
         id: row.id,
@@ -9847,7 +9976,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         cess: row.cess,
         showTax: row.showTax
       })),
-      uploaded_files: uploadedFiles.map(f => f.name) // In a real app, you'd handle file uploads separately/first
+      uploaded_files: uploadedFiles.map(f => f.name)
     };
 
 
@@ -9883,7 +10012,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const renderExpensesForm = () => (
     <>
       {/* Header Section */}
-      <div className="grid grid-cols-2 gap-6 mb-6 max-w-2xl">
+      <div className="grid grid-cols-3 gap-6 mb-6 max-w-3xl">
         <div>
           <label className="erp-label">
             Date <span className="text-red-500">*</span>
@@ -9894,6 +10023,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             max={getTodayDate()}
             onChange={e => setDate(e.target.value)}
             className="erp-input"
+          />
+        </div>
+        <div>
+          <label className="erp-label">Voucher Type</label>
+          <SearchableSelect
+            value={selectedExpensesConfig}
+            onChange={setSelectedExpensesConfig}
+            options={expensesVoucherConfigs.map(c => c.voucher_name)}
+            placeholder="Select Voucher Type"
           />
         </div>
         <div>
@@ -10161,28 +10299,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         />
       </div>
 
-      {/* Action Buttons */}
-      <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end gap-3">
-        <button
-          onClick={resetForm}
-          className="erp-button-secondary px-8"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSaveExpenseVoucher}
-          className="erp-button-primary px-10"
-        >
-          Post Voucher
-        </button>
-      </div>
     </>
   );
 
   const renderJournalForm = () => (
     <>
-      {/* Top Row: Date and Voucher Number */}
-      <div className="grid grid-cols-2 gap-6 mb-6 max-w-2xl">
+      {/* Top Row: Date, Voucher Type, Voucher Number */}
+      <div className="grid grid-cols-3 gap-6 mb-6 max-w-3xl">
         <div>
           <label className="erp-label">Date</label>
           <input
@@ -10191,6 +10314,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             max={getTodayDate()}
             onChange={e => setDate(e.target.value)}
             className="erp-input"
+          />
+        </div>
+        <div>
+          <label className="erp-label">Voucher Type</label>
+          <SearchableSelect
+            value={selectedJournalConfig}
+            onChange={setSelectedJournalConfig}
+            options={journalVoucherConfigs.map(c => c.voucher_name)}
+            placeholder="Select Voucher Type"
           />
         </div>
         <div>
@@ -10228,7 +10360,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <SearchableSelect
                       value={entry.ledger}
                       onChange={(val) => handleEntryChange(index, 'ledger', val)}
-                      options={allLedgers.map(l => l.name)}
+                      options={allLedgerOptions}
                       placeholder="Select Ledger"
                     />
                   </td>
@@ -10930,15 +11062,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {/* Create GRN Modal */}
           {isCreateGRNModalOpen && (
             <CreateGRNModal
-              mainVendorName={cnCustomer}
-              mainBranch={cnBranch}
-              mainGstin={cnGstin}
-              context="Credit Note"
+              mainVendorName={voucherType === 'Purchase' ? party : cnCustomer}
+              mainBranch={voucherType === 'Purchase' ? selectedBranch : cnBranch}
+              mainGstin={voucherType === 'Purchase' ? gstin : cnGstin}
+              context={voucherType === 'Purchase' ? 'Purchase' : 'Credit Note'}
               onClose={() => setIsCreateGRNModalOpen(false)}
               onSave={async (data) => {
                 try {
                   const response = await apiService.createInventoryOperationGRN(data);
-                  setGrnRefNo(response.grn_no);
+                  if (voucherType === 'Purchase') {
+                    setGrnRefNo(response.grn_no);
+                  } else {
+                    setCnGrnRefNo(response.grn_no);
+                  }
                   showSuccess('GRN Created Successfully!');
 
                   if (data.items && data.items.length > 0) {
@@ -10976,7 +11112,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   // Add to pending list and select it
                   if (response.grn_no) {
                     setPendingGRNs(prev => [...prev, response]);
-                    setGrnRefNo(response.grn_no);
+                    if (voucherType === 'Purchase') {
+                      setGrnRefNo(response.grn_no);
+                    } else {
+                      setCnGrnRefNo(response.grn_no);
+                    }
                   }
 
                   setIsCreateGRNModalOpen(false);

@@ -11,6 +11,7 @@ from accounting.utils_ledger import get_standard_ledger
 from customerportal.database import CustomerMasterCustomerBasicDetails
 from .models import Voucher
 from inventory.models import InventoryOperationOutward
+from accounting.services.inventory_sync import sync_sales_to_outward
 import json
 import decimal
 
@@ -170,6 +171,8 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
 
 
         self._mirror_to_customer_portal(invoice)
+        # Auto-sync to Inventory > Operations > Outward Slip
+        sync_sales_to_outward(invoice)
         print(f"Voucher {invoice.sales_invoice_no} saved successfully (ID: {invoice.id})")
 
         # --- Double-Entry Posting for Sales (entries table) ---
