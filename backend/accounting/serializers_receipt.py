@@ -313,7 +313,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
         
         if items_data is not None:
-            instance.items.all().delete()
+            instance.delete_items()
             for item_data in items_data:
                 customer_data = item_data.pop('customer', None)
                 customer_ledger = customer_data if isinstance(customer_data, MasterLedger) else None
@@ -340,7 +340,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
     def _mirror_to_generic_voucher(self, receipt):
         """Unified voucher for cross-module reports"""
         try:
-            items_qs = receipt.items.all()
+            items_qs = receipt.get_items()
             items_data = []
             party_names = set()
             for item in items_qs:
@@ -377,7 +377,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
         """Mirror Vendor specific receipts to the Vendor Portal ledger"""
         from vendors.models import VendorMasterBasicDetail, VendorTransaction
         try:
-            items_qs = receipt.items.all()
+            items_qs = receipt.get_items()
             for item in items_qs:
                 party = item.customer
                 if not party:
@@ -425,21 +425,36 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
         try:
             from customerportal.models import CustomerTransaction, CustomerMasterCustomer
             
-            for item in receipt.items.all():
-                metadata = item.pending_transaction if isinstance(item.pending_transaction, dict) else {}
+            for item in receipt.get_items():
+                metadata = item.pending_transaction if hasattr(item, 'pending_transaction') and isinstance(item.pending_transaction, dict) else {}
                 metadata_name = metadata.get('customer_name')
-                lookup_name = metadata_name if metadata_name else (str(item.customer.name).strip() if item.customer else None)
                 
-                if not lookup_name:
-                    continue
-
-                try:
+                # Robust customer lookup
+                portal_customer = None
+                
+                # 1. Try by direct FK
+                if hasattr(item, 'customer') and item.customer:
                     portal_customer = CustomerMasterCustomer.objects.filter(
                         tenant_id=receipt.tenant_id, 
-                        customer_name__iexact=lookup_name
+                        customer_name__iexact=item.customer.name
                     ).first()
-                    
-                    if portal_customer:
+                
+                # 2. Try by ledger_id (most reliable for core engine)
+                if not portal_customer and hasattr(item, 'ledger_id_val') and item.ledger_id_val:
+                    portal_customer = CustomerMasterCustomer.objects.filter(
+                        tenant_id=receipt.tenant_id, 
+                        ledger_id=item.ledger_id_val
+                    ).first()
+                
+                # 3. Try by metadata name
+                if not portal_customer and metadata_name:
+                    portal_customer = CustomerMasterCustomer.objects.filter(
+                        tenant_id=receipt.tenant_id, 
+                        customer_name__iexact=metadata_name
+                    ).first()
+                
+                if portal_customer:
+                    try:
                         ref_no = metadata.get('invoiceNo') or metadata.get('sales_invoice_no')
                         if not ref_no and item.reference_id and str(item.reference_id).isdigit():
                             from .models_voucher_sales import VoucherSalesInvoiceDetails
@@ -450,25 +465,31 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                         if not ref_no:
                             ref_no = item.reference_id or receipt.voucher_number
                         
-                        is_adv = (item.is_advance or item.reference_type == 'advance' or not item.reference_id)
-                        p_status = 'Advance' if is_adv else 'Received'
+                        is_adv = (getattr(item, 'is_advance', False) or (getattr(item, 'reference_type', '').upper() == 'ADVANCE') or not getattr(item, 'reference_id', None))
                         
+                        # Use 'item.reference_number' if it's 'ADVANCE', otherwise fallback to voucher number
+                        ref_no_to_use = getattr(item, 'reference_number', None)
+                        if not ref_no_to_use or (ref_no_to_use.upper() != 'ADVANCE' and not is_adv):
+                            ref_no_to_use = receipt.voucher_number
+                        elif is_adv:
+                            ref_no_to_use = 'ADVANCE'
+
                         CustomerTransaction.objects.update_or_create(
                             tenant_id=receipt.tenant_id,
                             customer_id=portal_customer.id,
                             transaction_number=f"{receipt.voucher_number}-{item.id}",
-                            transaction_type='RECEIPT',
+                            transaction_type='receipt',
                             defaults={
                                 'transaction_date': receipt.date,
                                 'amount': item.received_amount,
                                 'total_amount': item.received_amount,
-                                'payment_status': p_status,
-                                'reference_number': ref_no,
-                                'notes': receipt.notes or f"Receipt for {item.reference_id}"
+                                'payment_status': 'Advance' if is_adv else 'Partially Utilized',
+                                'reference_number': ref_no_to_use,
+                                'notes': receipt.narration
                             }
                         )
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -489,7 +510,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
             })
             
             customer_data_map = {}
-            for item in receipt.items.all():
+            for item in receipt.get_items():
                 if not item.ledger_id_val: continue
                 lid = item.ledger_id_val
                 amt = Decimal(str(item.received_amount))

@@ -5873,11 +5873,16 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     postFrom: 'Sales' as TransactionType,
                     referenceNo: inv.sales_invoice_no,
                     ledger: 'Sales',
-                    status: (inv.status && inv.status.toLowerCase() === 'received') ? 'Received'
-                        : (inv.status && inv.status.toLowerCase() === 'partially received') ? 'Partially Received'
-                            : (inv.posting_status === 'POSTED'
-                                ? (diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due'))
-                                : 'Not Utilized') as SalesStatus,
+                    status: (() => {
+                        const total_val = parseFloat(inv.payment_details?.payment_invoice_value || 0);
+                        const balance_val = parseFloat(inv.payment_details?.payment_balance ?? total_val);
+                        if (inv.status?.toLowerCase() === 'received' || (balance_val <= 0 && total_val > 0)) return 'Received';
+                        if (inv.status?.toLowerCase() === 'partially received' || (balance_val < total_val && balance_val > 0)) return 'Partially Received';
+                        if (inv.posting_status === 'POSTED') {
+                            return diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due');
+                        }
+                        return 'Not Utilized';
+                    })() as SalesStatus,
                     debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
                     credit: 0,
                     runningBalance: 0,
@@ -5981,17 +5986,51 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     };
 
     const processedEntries = useMemo(() => {
+        // 1. Build Reference Balance Map to determine real-time status
+        const refBalances: Record<string, { total: number, paid: number }> = {};
+        ledgerEntries.forEach(entry => {
+            const ref = entry.referenceNo?.trim()?.toLowerCase();
+            if (!ref || ref === '-' || ref === 'n/a') return;
+            if (!refBalances[ref]) refBalances[ref] = { total: 0, paid: 0 };
+
+            if (['Sales', 'Debit Note'].includes(entry.postFrom)) {
+                refBalances[ref].total += (entry.debit || 0) - (entry.credit || 0);
+            } else if (['Receipt', 'Credit Note', 'Journal'].includes(entry.postFrom)) {
+                refBalances[ref].paid += (entry.credit || 0) - (entry.debit || 0);
+            }
+        });
+
         let balance = 0;
         return [...ledgerEntries].sort((a, b) => {
             const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
             if (dateDiff !== 0) return dateDiff;
             // Fallback for same date: compare IDs (handling 'T-' prefix)
-            const idA = parseInt(a.id.replace('T-', ''));
-            const idB = parseInt(b.id.replace('T-', ''));
+            const idA = parseInt(a.id.toString().replace('T-', '')) || 0;
+            const idB = parseInt(b.id.toString().replace('T-', '')) || 0;
             return idA - idB;
         }).map(entry => {
-            balance += entry.debit - entry.credit;
-            return { ...entry, runningBalance: balance };
+            balance += (entry.debit || 0) - (entry.credit || 0);
+
+            // 2. Update status for Sales/Debit Note based on global reference balance
+            let updatedStatus = entry.status;
+            if (['Sales', 'Debit Note', 'invoice', 'debit_note'].includes((entry.postFrom as string).toLowerCase()) || entry.postFrom === 'Sales' || entry.postFrom === 'Debit Note') {
+                const ref = entry.referenceNo?.trim()?.toLowerCase();
+                if (ref && refBalances[ref]) {
+                    const { total, paid } = refBalances[ref];
+                    
+                    // Use a small epsilon for float comparison
+                    const totalRounded = Math.round((total || 0) * 100);
+                    const paidRounded = Math.round((paid || 0) * 100);
+
+                    if (paidRounded >= totalRounded && totalRounded > 0) {
+                        updatedStatus = 'Received';
+                    } else if (paidRounded > 0) {
+                        updatedStatus = 'Partially Received';
+                    }
+                }
+            }
+
+            return { ...entry, runningBalance: balance, status: updatedStatus as SalesStatus };
         });
     }, [ledgerEntries]);
 

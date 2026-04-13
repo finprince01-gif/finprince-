@@ -199,6 +199,13 @@ class HttpClient {
         });
     }
 
+    public async patchFormData<T>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
+        return this.patch<T>(url, formData, {
+            ...config,
+            headers: { ...config?.headers, 'Content-Type': 'multipart/form-data' }
+        });
+    }
+
     // --- MANAGEMENT ---
     public logout() {
         clearTokens();
