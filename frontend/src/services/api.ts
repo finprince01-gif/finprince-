@@ -354,6 +354,26 @@ class ApiService {
     }
 
     /**
+     * Get Stock Movement Summary Report
+     * Returns aggregated stock data (Inward, Outward, Closing) per item
+     */
+    async getStockMovementSummary() {
+        return httpClient.get<any[]>('/api/inventory/reports/stock-movement/');
+    }
+
+    /**
+     * Get Detailed Stock Movements for a specific item
+     * @param itemCode - Code of the item to filter results
+     */
+    async getStockMovementDetails(itemCode?: string) {
+        let url = '/api/inventory/reports/stock-movement/details/';
+        if (itemCode) {
+            url += `?itemCode=${encodeURIComponent(itemCode)}`;
+        }
+        return httpClient.get<any[]>(url);
+    }
+
+    /**
      * Get Purchase Orders for a specific vendor
      * @param vendorName - Vendor name to filter by (optional)
      * @param status - Optional status filter (e.g. 'Draft', 'Pending', 'Closed')

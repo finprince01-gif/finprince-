@@ -72,7 +72,7 @@ class VoucherDebitNoteViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
 
         try:
-            from .models_pending_transaction import PendingTransaction, AllocationLink
+            from .models import PendingTransaction, AllocationLink
             from .models import Voucher
 
             dn_number  = instance.debit_note_no or f"DN-{instance.id}"

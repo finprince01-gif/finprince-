@@ -205,6 +205,9 @@ class VoucherSalesPaymentDetails(BaseModel):
     payment_received = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     payment_balance = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     
+    # Store applied references for dashboard/quick access
+    advance_references = models.JSONField(null=True, blank=True)
+    
     # Notes
     posting_note = models.TextField(null=True, blank=True)
     terms_conditions = models.TextField(null=True, blank=True)

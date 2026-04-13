@@ -87,6 +87,21 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         const normSg2 = isBlankStr(ledger.sub_group_2) ? null : ledger.sub_group_2;
         const normSg3 = isBlankStr(ledger.sub_group_3) ? null : ledger.sub_group_3;
 
+        // Normalize Category
+        const normalizeCategory = (cat: string | null): string | null => {
+            if (!cat) return null;
+            const c = cat.trim().toLowerCase();
+            if (c === 'expense' || c === 'expenses') return 'Expenditure';
+            if (c === 'asset' || c === 'assets') return 'Asset';
+            if (c === 'liability' || c === 'liabilities') return 'Liability';
+            if (c === 'income') return 'Income';
+            if (c.includes("owner") && c.includes("fund")) return "Owners'  Funds";
+            if (c.includes("npo")) return "NPO Funds";
+            return cat;
+        };
+
+        const finalCategory = normalizeCategory(ledger.category);
+
         // If this ledger has a parent, find the parent and use its hierarchy + name as ledger_type
         if (ledger.parent_ledger_id) {
             const parent = allLedgers.find(l => l.id === ledger.parent_ledger_id);
@@ -97,7 +112,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     id: ledger.id,
                     type_of_business_1: null,
                     financial_reporting_1: null,
-                    major_group_1: parent.category,
+                    major_group_1: normalizeCategory(parent.category),
                     group_1: parent.group,
                     sub_group_1_1: isBlankStr(parent.sub_group_1) ? null : parent.sub_group_1,
                     sub_group_2_1: pSg2,
@@ -127,7 +142,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             id: ledger.id,
             type_of_business_1: null,
             financial_reporting_1: null,
-            major_group_1: ledger.category,
+            major_group_1: finalCategory,
             group_1: ledger.group,
             sub_group_1_1: normSg1,
             sub_group_2_1: normSg2,
@@ -376,8 +391,15 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
         tree.forEach((node, path) => {
             if (!path.includes('>')) {
-                // Normalize name to handle duplicates (Asset/Assets, Liability/Liabilities, etc.)
-                const normalizedName = node.name.toLowerCase().replace(/s$/, '');
+                // Normalize name to handle duplicates (Asset/Assets, Liability/Liabilities, Expense/Expenditure etc.)
+                const catMap: { [key: string]: string } = {
+                    'expense': 'expenditure',
+                    'expenses': 'expenditure',
+                    'assets': 'asset',
+                    'liabilities': 'liability'
+                };
+                const rawName = node.name.toLowerCase().trim();
+                const normalizedName = catMap[rawName] || rawName.replace(/s$/, '');
 
                 if (!seenNames.has(normalizedName)) {
                     seenNames.add(normalizedName);

@@ -100,6 +100,7 @@ class VoucherPurchaseDueDetails(BaseModel):
     tds_it = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     advance_paid = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     to_pay = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    advance_references = models.JSONField(null=True, blank=True)
     posting_note = models.TextField(null=True, blank=True)
     terms = models.CharField(max_length=255, null=True, blank=True)
     

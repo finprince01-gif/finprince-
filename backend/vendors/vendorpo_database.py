@@ -285,9 +285,12 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
         SELECT 
             po.id, po.po_number, DATE(po.created_at) as po_date, po.vendor_name, po.branch, po.receive_by,
             po.total_value, po.status, po.created_at,
+            cat.category as category_name,
             COUNT(items.id) as item_count
         FROM vendor_transaction_po po
         LEFT JOIN vendor_transaction_po_items items ON po.id = items.po_id AND items.is_active = 1
+        LEFT JOIN vendor_master_posettings pos ON po.po_series_id = pos.id
+        LEFT JOIN vendor_master_category cat ON pos.category_id = cat.id
         WHERE po.tenant_id = %s AND po.is_active = 1
     """
     
@@ -306,7 +309,7 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
         params.append(vendor_name)
     
     # Group by id and po_number to handle non-unique ids
-    query += " GROUP BY po.id, po.po_number, po.vendor_name, po.branch, po.receive_by, po.total_value, po.status, po.created_at ORDER BY po.created_at DESC"
+    query += " GROUP BY po.id, po.po_number, po.vendor_name, po.branch, po.receive_by, po.total_value, po.status, po.created_at, cat.category ORDER BY po.created_at DESC"
     
     with connection.cursor() as cursor:
         cursor.execute(query, params)

@@ -15,7 +15,7 @@ def get_allocated_amount(advance_source_id: int, advance_source_type: str, tenan
     Return the total amount already allocated from a specific advance source.
     In the new system, allocations are tracked in PendingTransaction.
     """
-    from accounting.models_pending_transaction import PendingTransaction
+    from accounting.models import PendingTransaction
     # In the new system, we don't have a direct 'advance_source_id' link in PendingTransaction yet,
     # but we can resolve it via reference_number if needed. 
     # For now, we'll try to sum based on common patterns.
@@ -23,7 +23,7 @@ def get_allocated_amount(advance_source_id: int, advance_source_type: str, tenan
     result = PendingTransaction.objects.filter(
         tenant_id=tenant_id,
         reference_type='advance',
-    ).aggregate(total=Sum('amount_applied'))['total']
+    ).aggregate(total=Sum('allocated_amount'))['total']
     return result or Decimal('0')
 
 
@@ -61,7 +61,7 @@ def write_allocations(*, tenant_id, voucher_id: int, voucher_type: str,
     -------
     list of created AdvanceAllocationMap instances, or raises ValueError on validation fail.
     """
-    from accounting.models_advance_allocation import AdvanceAllocationMap
+    from accounting.models import AdvanceAllocation as AdvanceAllocationMap
     from accounting.models import PaymentVoucherItem
     from accounting.models import ReceiptVoucherItem
 
@@ -102,7 +102,7 @@ def write_allocations(*, tenant_id, voucher_id: int, voucher_type: str,
             continue
 
         # ── Step 2: Resolve source from AdvanceAllocation ─────────────
-        from accounting.models_advance_allocation import AdvanceAllocation
+        from accounting.models import AdvanceAllocation
         source = AdvanceAllocation.objects.filter(
             tenant_id=tenant_id,
             advance_ref_no=ref_no
@@ -129,7 +129,7 @@ def write_allocations(*, tenant_id, voucher_id: int, voucher_type: str,
             )
 
         # ── Step 4: Insert Allocation in PendingTransaction ───────────
-        from accounting.models_pending_transaction import PendingTransaction
+        from accounting.models import PendingTransaction
         alloc = PendingTransaction.objects.create(
             tenant_id=tenant_id,
             type=voucher_type,

@@ -572,17 +572,9 @@ const InventoryPage: React.FC = () => {
   const [railBeyondPortFinalDestination, setRailBeyondPortFinalDestination] = useState('');
   const [railBeyondPortDestCountry, setRailBeyondPortDestCountry] = useState('');
 
-  const [operationsStockData, setOperationsStockData] = useState<any[]>([
-    { id: 1, category: 'Electronics', subCategory: 'Mobile', itemCode: 'IT001', itemName: 'Product A', uom: 'Nos', openingQty: 100, openingValue: 150000, inwardQty: 50, inwardValue: 75000, outwardQty: 30, outwardValue: 45000, closingQty: 120, closingValue: 180000 },
-    { id: 2, category: 'Furniture', subCategory: 'Chairs', itemCode: 'IT002', itemName: 'Product B', uom: 'Nos', openingQty: 200, openingValue: 1000000, inwardQty: 100, inwardValue: 500000, outwardQty: 50, outwardValue: 250000, closingQty: 250, closingValue: 1250000 },
-    { id: 3, category: 'Textiles', subCategory: 'Fabric', itemCode: 'IT003', itemName: 'Product C', uom: 'Mtr', openingQty: 1000, openingValue: 250000, inwardQty: 500, inwardValue: 125000, outwardQty: 300, outwardValue: 75000, closingQty: 1200, closingValue: 300000 },
-  ]);
-
-  const [stockDetailsData, setStockDetailsData] = useState<any[]>([
-    { id: 1, date: '2024-01-01', particulars: 'Purchase', refNo: 'GRN-2024-001', location: 'Main Store', uom: 'Nos', openingQty: 100, openingValue: 150000, inwardQty: 50, inwardValue: 75000, outwardQty: 0, outwardValue: 0, closingQty: 150, closingValue: 225000 },
-    { id: 2, date: '2024-01-05', particulars: 'Job Work', refNo: 'ISS-2024-005', location: 'Floor 1', uom: 'Nos', openingQty: 150, openingValue: 225000, inwardQty: 0, inwardValue: 0, outwardQty: 20, outwardValue: 30000, closingQty: 130, closingValue: 195000 },
-    { id: 3, date: '2024-01-10', particulars: 'Sales Return', refNo: 'GRN-2024-010', location: 'Main Store', uom: 'Nos', openingQty: 130, openingValue: 195000, inwardQty: 10, inwardValue: 15000, outwardQty: 0, outwardValue: 0, closingQty: 140, closingValue: 210000 },
-  ]);
+  const [operationsStockData, setOperationsStockData] = useState<any[]>([]);
+  const [stockDetailsData, setStockDetailsData] = useState<any[]>([]);
+  const [loadingStockData, setLoadingStockData] = useState(false);
 
   const [detailsFilters, setDetailsFilters] = useState({
     date: '',
@@ -768,6 +760,45 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  // Methods for Stock Movement
+  const fetchStockMovementSummary = async () => {
+    try {
+      setLoadingStockData(true);
+      const data = await apiService.getStockMovementSummary();
+      setOperationsStockData(data);
+    } catch (error) {
+      console.error('Error fetching stock movement summary:', error);
+    } finally {
+      setLoadingStockData(false);
+    }
+  };
+
+  const fetchStockMovementDetails = async (itemCode: string) => {
+    try {
+      setLoadingStockData(true);
+      const data = await apiService.getStockMovementDetails(itemCode);
+      setStockDetailsData(data);
+    } catch (error) {
+      console.error('Error fetching stock movement details:', error);
+    } finally {
+      setLoadingStockData(false);
+    }
+  };
+
+  const recalculateStock = async () => {
+    try {
+      setLoadingStockData(true);
+      await httpClient.post('/api/inventory/reports/stock-movement/recalculate/', {});
+      showSuccess('Stock values recalculated successfully');
+      fetchStockMovementSummary();
+    } catch (error) {
+      console.error('Error recalculating stock:', error);
+      showError('Failed to recalculate stock');
+    } finally {
+      setLoadingStockData(false);
+    }
+  };
+
   // Effects
   useEffect(() => {
     if (activeTab === 'Master') {
@@ -785,6 +816,11 @@ const InventoryPage: React.FC = () => {
         fetchVendors();
         fetchCustomers();
       }
+    } else if (activeTab === 'Operations') {
+      fetchStockMovementSummary();
+      fetchLocations();
+      fetchVendors();
+      fetchCustomers();
     }
   }, [activeTab, activeMasterSubTab]);
 
@@ -2003,6 +2039,8 @@ const InventoryPage: React.FC = () => {
 
       showSuccess('Operation saved successfully!');
       setShowIssueSlipForm(false);
+      fetchStockMovementSummary();
+      fetchStockMovementSummary();
       // Optional: Reset form fields here if needed
     } catch (error: any) {
       console.error('Error saving operation:', error);
@@ -2675,6 +2713,7 @@ const InventoryPage: React.FC = () => {
       await httpClient.post('/api/inventory/operations/new-grn/', payload);
       showSuccess('GRN saved successfully!');
       setShowGRNForm(false);
+      fetchStockMovementSummary();
       setGrnDocument(null);
       setGrnDocumentPreview(null);
     } catch (error) {
@@ -3105,6 +3144,14 @@ const InventoryPage: React.FC = () => {
 
               {/* Top Action Buttons */}
               <div className="flex gap-4">
+                <button
+                  onClick={recalculateStock}
+                  disabled={loadingStockData}
+                  className="inline-flex items-center px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] text-indigo-600 bg-white hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <i className={`fas fa-sync-alt mr-2 ${loadingStockData ? 'fa-spin' : ''}`}></i>
+                  🔄 Recalculate Stock
+                </button>
                 {canCreateIssue && (
                   <button
                     onClick={() => setShowIssueSlipForm(true)}
@@ -3131,7 +3178,6 @@ const InventoryPage: React.FC = () => {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Category</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Sub-Cat</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Item Code</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Item Name</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">UOM</th>
@@ -3142,8 +3188,7 @@ const InventoryPage: React.FC = () => {
                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Action</th>
                       </tr>
                       <tr className="bg-gray-50 border-t border-gray-200">
-                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.category} onChange={(e) => setStockFilters({ ...stockFilters, category: e.target.value })} className="w-20 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.subCategory} onChange={(e) => setStockFilters({ ...stockFilters, subCategory: e.target.value })} className="w-20 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.category} onChange={(e) => setStockFilters({ ...stockFilters, category: e.target.value })} className="w-24 px-2 py-1 border rounded text-xs" /></th>
                         <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.itemCode} onChange={(e) => setStockFilters({ ...stockFilters, itemCode: e.target.value })} className="w-20 px-2 py-1 border rounded text-xs" /></th>
                         <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.itemName} onChange={(e) => setStockFilters({ ...stockFilters, itemName: e.target.value })} className="w-24 px-2 py-1 border rounded text-xs" /></th>
                         <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.uom} onChange={(e) => setStockFilters({ ...stockFilters, uom: e.target.value })} className="w-16 px-2 py-1 border rounded text-xs" /></th>
@@ -3162,7 +3207,6 @@ const InventoryPage: React.FC = () => {
                       {filteredStockData.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 text-sm text-gray-900">{item.category}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{item.subCategory}</td>
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{item.itemCode}</td>
                           <td className="px-4 py-3 text-sm text-gray-900">{item.itemName}</td>
                           <td className="px-4 py-3 text-sm text-gray-900">{item.uom}</td>
@@ -3179,6 +3223,7 @@ const InventoryPage: React.FC = () => {
                               onClick={() => {
                                 setSelectedItemForOps(item);
                                 setShowItemDetail(true);
+                                fetchStockMovementDetails(item.itemCode);
                               }}
                               className="text-indigo-600 hover:text-indigo-800 font-medium text-sm"
                             >

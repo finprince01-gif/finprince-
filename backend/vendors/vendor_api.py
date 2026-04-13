@@ -30,8 +30,8 @@ from .models import (
     VendorMasterProductService
 )
 from .vendor_database import VendorDatabase
-from accounting.models import PaymentVoucherItem
-from accounting.serializers import PaymentVoucherItemSerializer
+from accounting.models import TransactionAllocation as PaymentVoucherItem
+from accounting.serializers_payment import PaymentVoucherItemSerializer
 
 
 class VendorViewSet(viewsets.ModelViewSet):

@@ -15,7 +15,8 @@ from .views import (
     InventoryOperationScrapViewSet,
     InventoryOperationOutwardViewSet,
     InventoryOperationNewGRNViewSet,
-    PendingGRNListView
+    PendingGRNListView,
+    StockMovementSummaryViewSet
 )
 
 router = DefaultRouter()
@@ -36,6 +37,7 @@ router.register('operations/scrap', InventoryOperationScrapViewSet, basename='in
 # Old GRN endpoint removed - use 'operations/new-grn' instead
 router.register('operations/outward', InventoryOperationOutwardViewSet, basename='inventory-operation-outward')
 router.register('operations/new-grn', InventoryOperationNewGRNViewSet, basename='inventory-operation-new-grn')
+router.register('reports/stock-movement', StockMovementSummaryViewSet, basename='inventory-report-stock-movement')
 
 urlpatterns = [
     path('', include(router.urls)),
