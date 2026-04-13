@@ -19,7 +19,7 @@ class VendorDatabase:
         Generate a unique vendor code.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             prefix: Prefix for vendor code (default: "VEN")
             
         Returns:
@@ -49,7 +49,7 @@ class VendorDatabase:
         Create a new vendor.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendor_data: Dictionary containing vendor data
             created_by: Username of creator
             
@@ -103,7 +103,7 @@ class VendorDatabase:
         Retrieve a vendor by vendor code.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendor_code: Vendor code
             
         Returns:
@@ -123,7 +123,7 @@ class VendorDatabase:
         Retrieve all vendors for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             is_active: Filter by active status (default True, None for all)
             filters: Additional filters dictionary
             
@@ -152,7 +152,7 @@ class VendorDatabase:
         Search vendors by name, code, email, or phone.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             search_term: Search string
             
         Returns:
@@ -266,7 +266,7 @@ class VendorDatabase:
         Retrieve vendors filtered by category.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             category_id: Category ID to filter by
             
         Returns:
@@ -284,7 +284,7 @@ class VendorDatabase:
         Get vendors with outstanding balance greater than specified amount.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             min_balance: Minimum balance threshold (default 0)
             
         Returns:
@@ -302,7 +302,7 @@ class VendorDatabase:
         Check if a vendor code already exists for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendor_code: Vendor code to check
             exclude_id: Optional ID to exclude from check (for updates)
             
@@ -320,7 +320,7 @@ class VendorDatabase:
         Check if an email already exists for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             email: Email to check
             exclude_id: Optional ID to exclude from check (for updates)
             
@@ -345,7 +345,7 @@ class VendorDatabase:
         Get vendor statistics for a tenant.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             
         Returns:
             Dictionary with statistics
@@ -370,7 +370,7 @@ class VendorDatabase:
         Create multiple vendors in bulk.
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             vendors_data: List of dictionaries containing vendor data
             created_by: Username of creator
             

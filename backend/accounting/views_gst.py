@@ -8,13 +8,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Sum, Q, Count, Min, Max
 from accounting.models_voucher_sales import VoucherSalesInvoiceDetails, VoucherSalesItems
-from core.utils import IsTenantMember
+from core.mixins import IsBranchMember
 
 class GSTR1ViewSet(viewsets.ViewSet):
     """
     ViewSet for generating GSTR1 return data.
     """
-    permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
     # permission_classes = [AllowAny] # Uncomment for testing if auth issues
 
     def get_queryset(self):
@@ -732,7 +732,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
                         "inv": [item]
                      })
 
-        filename = f"GSTR1_{year}_{month}.json"
+        filename = f"GSTR1_{year_str}_{month_name}.json"
         response = HttpResponse(json.dumps(data, default=str), content_type='application/json')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response

@@ -1,214 +1,210 @@
-/**
- * ============================================================================
- * LOGIN PAGE (Login.tsx)
- * ============================================================================
- * User authentication page - allows users to sign in to the application.
- */
+import React, { useState } from 'react';
+import { apiService } from '../../services';
+import PremiumBackground from '../../components/PremiumBackground';
+import Icon from '../../components/Icon';
 
-// Import React and hooks
-import React, { useState } from "react";
-import "./Login.css";
-
-// Import API service for authentication
-import { apiService } from "../../services";
-
-/**
- * Props for LoginPage component
- */
 interface LoginPageProps {
-  onLogin: (payload: any) => void;     // Callback when login succeeds (passes user data to App.tsx)
-  onSwitchToSignup: () => void;        // Callback to switch to signup page
-  onForgotPassword: () => void;        // Callback to switch to forgot password page
-  onBack?: () => void;                 // Optional callback for back button (to landing page)
+    onLogin: (payload: any) => void;
+    onSwitchToSignup: () => void;
+    onForgotPassword: () => void;
 }
 
-/**
- * LoginPage Component - User authentication form
- */
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForgotPassword, onBack }) => {
-  // Form input states (Login)
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForgotPassword }) => {
+    const [branchEmail, setBranchEmail] = useState('');
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
 
-  // UI states
-  const [error, setError] = useState("");         // Error message to display
-  const [emailError, setEmailError] = useState("");
-  const [usernameError, setUsernameError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [loading, setLoading] = useState(false);  // Loading state during API call
+    const [fieldErrors, setFieldErrors] = useState<{ email?: string; username?: string; password?: string }>({});
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-  /**
-   * Handle login form submission
-   */
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();  // Prevent default form submission
-    setError("");        // Clear previous errors
-    setEmailError("");
-    setUsernameError("");
-    setPasswordError("");
-    setLoading(true);    // Show loading state
+    const validate = () => {
+        const errors: { email?: string; username?: string; password?: string } = {};
+        if (!branchEmail) errors.email = 'Branch email is required.';
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(branchEmail)) errors.email = 'Enter a valid email address.';
+        if (!username) errors.username = 'Username is required.';
+        if (!password) errors.password = 'Password is required.';
+        setFieldErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
 
-    let hasClientError = false;
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (!validate()) return;
 
-    // Validate: all three fields are absolutely required for strict auth
-    if (!email) {
-      setEmailError("Email is required.");
-      hasClientError = true;
-    }
-    if (!username) {
-      setUsernameError("Username is required.");
-      hasClientError = true;
-    }
-    if (!password) {
-      setPasswordError("Password is required.");
-      hasClientError = true;
-    }
+        setLoading(true);
+        try {
+            const data = await apiService.login(branchEmail, username, password);
+            if (!data) throw new Error('Invalid response.');
 
-    if (hasClientError) {
-      setLoading(false);
-      return;
-    }
+            if (data.user?.tenant_id || data.user?.tenantId) {
+                const tid = data.user.tenant_id ?? data.user.tenantId;
+                sessionStorage.setItem('tenantId', tid);
+            }
+            if (data.user?.company_name) {
+                sessionStorage.setItem('companyName', data.user.company_name);
+            }
 
-    try {
-      // Call login API
-      const data = await apiService.login(email, username, password);
+            onLogin(data);
+        } catch (err: any) {
+            const errorData = err?.data || err?.response?.data || err;
+            const msg = errorData?.message || errorData?.detail || err?.message || 'Authentication failed.';
+            setError(msg);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-      // Validate response
-      if (!data) {
-        throw new Error("Invalid login response from server.");
-      }
+    const handleBackToPortal = () => {
+        window.history.pushState({}, '', '/auth');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+    };
 
-      // Save tenant ID to sessionStorage (for data isolation)
-      if (data.user?.tenant_id || data.user?.tenantId) {
-        const tid = data.user.tenant_id ?? data.user.tenantId;
-        sessionStorage.setItem("tenantId", tid);
-        localStorage.removeItem("tenantId"); // Ensure it's not in localStorage
-      }
+    const handleEnter = (e: React.KeyboardEvent, nextId: string) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById(nextId)?.focus();
+        }
+    };
 
-      // Save company name to sessionStorage (for display)
-      if (data.user?.company_name) {
-        sessionStorage.setItem("companyName", data.user.company_name);
-        localStorage.removeItem("companyName"); // Ensure it's not in localStorage
-      }
+    const inputClass = (hasError?: string) =>
+        `w-full h-[42px] bg-white border rounded-xl px-3.5 text-xs font-bold text-slate-900 placeholder:text-slate-300 focus:outline-none transition-all ${
+            hasError
+                ? 'border-rose-400 focus:border-rose-500 bg-rose-50/30'
+                : 'border-[#C9CCFF]/40 focus:border-[#4B3CFF]/50'
+        }`;
 
+    return (
+        <PremiumBackground>
+            <div className="z-10 w-full max-w-[440px] flex flex-col items-center animate-in fade-in zoom-in-[0.98] duration-700">
 
+                {/* Compact Brand Header */}
+                <div className="text-center mb-6 w-full flex flex-col items-center">
+                    <div className="flex items-center justify-center gap-2.5 mb-2.5 scale-[0.9]">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#4B3CFF] to-[#6A5CFF] flex items-center justify-center shadow-lg relative overflow-hidden">
+                            <div className="w-6 h-6 rounded-lg bg-white/20 animate-pulse"></div>
+                        </div>
+                        <h1 className="text-4xl font-black text-[#1a1a2e] tracking-widest">
+                            FINPIXE
+                        </h1>
+                    </div>
+                    <p className="text-[9px] font-black text-[#5a5f9e] uppercase tracking-[0.4em] leading-none">
+                        Advanced Accounting
+                    </p>
+                </div>
 
-      // Notify parent component (App.tsx) of successful login
-      onLogin(data);
-    } catch (err: any) {
-      console.error("❌ Login error:", err);
+                {/* Login Card */}
+                <div className="w-full p-[1.5px] rounded-[16px] bg-gradient-to-br from-[#4B3CFF] via-[#7A6CFF] to-[#A5A8FF] shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
+                    <div className="bg-white/90 backdrop-blur-md rounded-[14.5px] p-7 w-full flex flex-col items-start">
+                        {/* Domain badge */}
+                        <div className="flex items-center gap-2 px-2.5 py-1 bg-indigo-50 border border-indigo-100 rounded-lg mb-5 w-fit">
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                            <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">
+                                Business Portal Access
+                            </span>
+                        </div>
 
-      // Extract error message from structured response
-      const errorData = err?.data || err?.response?.data || err;
-      const msg = errorData?.message || errorData?.detail || err?.message || "Network error. Please try again.";
-      const field = errorData?.field;
+                        <form className="w-full space-y-4 text-left" onSubmit={handleLogin} noValidate>
+                            {error && (
+                                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-[10px] font-bold animate-in slide-in-from-top-2 flex items-center gap-2">
+                                    <Icon name="x" size={12} />
+                                    {error}
+                                </div>
+                            )}
 
-      if (field === 'email') setEmailError(msg);
-      else if (field === 'username') setUsernameError(msg);
-      else if (field === 'password') setPasswordError(msg);
-      else setEmailError(msg); // Fallback generic errors to the first field
-    } finally {
-      setLoading(false);  // Hide loading state
-    }
-  };
+                            {/* Branch Email */}
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-0.5" htmlFor="branchEmail">
+                                    BRANCH EMAIL
+                                </label>
+                                <input
+                                    id="branchEmail"
+                                    type="email"
+                                    className={inputClass(fieldErrors.email)}
+                                    placeholder="branch@company.com"
+                                    value={branchEmail}
+                                    onChange={e => { setBranchEmail(e.target.value); setFieldErrors(p => ({ ...p, email: undefined })); }}
+                                    onKeyDown={(e) => handleEnter(e, 'username')}
+                                    autoFocus
+                                />
+                                {fieldErrors.email && (
+                                    <p className="text-[9px] text-rose-500 font-bold ml-0.5">{fieldErrors.email}</p>
+                                )}
+                            </div>
 
-  return (
-    <div className="login-page-container">
-      <header className="brand-section">
-        <h1 className="brand-heading">FINPIXE</h1>
-        <p className="brand-tagline">Smart accounting for modern businesses.</p>
-      </header>
+                            {/* Username */}
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-0.5" htmlFor="username">
+                                    USERNAME
+                                </label>
+                                <input
+                                    id="username"
+                                    type="text"
+                                    className={inputClass(fieldErrors.username)}
+                                    placeholder="Username"
+                                    value={username}
+                                    onChange={e => { setUsername(e.target.value); setFieldErrors(p => ({ ...p, username: undefined })); }}
+                                    onKeyDown={(e) => handleEnter(e, 'password')}
+                                />
+                                {fieldErrors.username && (
+                                    <p className="text-[9px] text-rose-500 font-bold ml-0.5">{fieldErrors.username}</p>
+                                )}
+                            </div>
 
-      <main className="login-card">
-        <form className="login-form" onSubmit={handleLogin}>
+                            {/* Password */}
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-0.5" htmlFor="password">
+                                    PASSWORD
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        id="password"
+                                        type={showPassword ? 'text' : 'password'}
+                                        className={inputClass(fieldErrors.password) + ' pr-10'}
+                                        placeholder="••••••••"
+                                        value={password}
+                                        onChange={e => { setPassword(e.target.value); setFieldErrors(p => ({ ...p, password: undefined })); }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-[#4B3CFF] transition-colors"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                    >
+                                        <Icon name={showPassword ? "eye-off" : "eye"} className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                {fieldErrors.password && (
+                                    <p className="text-[9px] text-rose-500 font-bold ml-0.5">{fieldErrors.password}</p>
+                                )}
+                            </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="email">EMAIL</label>
-            <input
-              id="email"
-              type="email"
-              className="form-input"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setEmailError("");
-              }}
-            />
-            {emailError && <div className="field-error-message">{emailError}</div>}
-          </div>
+                            <div className="pt-1">
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full h-[46px] bg-[#4B3CFF] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#3d31d4] hover:scale-[1.01] active:scale-[0.98] transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                                >
+                                    {loading ? 'Authenticating...' : 'Sign In Now'}
+                                </button>
+                            </div>
+                        </form>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="username">USERNAME</label>
-            <input
-              id="username"
-              type="text"
-              className="form-input"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value);
-                setUsernameError("");
-              }}
-            />
-            {usernameError && <div className="field-error-message">{usernameError}</div>}
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="password">PASSWORD</label>
-            <div className="input-with-icon">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                className="form-input"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setPasswordError("");
-                }}
-              />
-              <button type="button" className="input-icon-button" onClick={() => setShowPassword(!showPassword)}>
-                {showPassword ? (
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
-                ) : (
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                )}
-              </button>
+                        <footer className="w-full pt-1 mt-1 text-center">
+                            <button
+                                onClick={handleBackToPortal}
+                                className="w-full py-3 rounded-xl bg-slate-50 border border-slate-100 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] hover:bg-slate-100 hover:text-[#4B3CFF] transition-all flex items-center justify-center gap-2"
+                            >
+                                <Icon name="arrow-left" size={14} />
+                                Back to Portal Selection
+                            </button>
+                        </footer>
+                    </div>
+                </div>
             </div>
-            {passwordError && <div className="field-error-message">{passwordError}</div>}
-          </div>
-
-          <button
-            type="button"
-            onClick={onForgotPassword}
-            className="forgot-password-link"
-          >
-            Forgot password?
-          </button>
-
-          <button
-            type="submit"
-            disabled={loading || !email.trim() || !username.trim() || !password}
-            className={`sign-in-button ${(loading || !email.trim() || !username.trim() || !password) ? 'disabled' : ''}`}
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
-      </main>
-
-      <footer className="login-footer">
-        <p className="footer-text">
-          Don't have an account?{" "}
-          <button onClick={onSwitchToSignup} className="signup-link">
-            Sign Up
-          </button>
-        </p>
-      </footer>
-    </div>
-  );
+        </PremiumBackground>
+    );
 };
 
 export default LoginPage;

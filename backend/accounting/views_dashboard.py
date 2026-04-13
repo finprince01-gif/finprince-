@@ -9,11 +9,14 @@ from collections import defaultdict
 import datetime
 
 from .models import MasterLedger
-from .models_voucher_sales import VoucherSalesInvoiceDetails as SalesVoucher
-from .models_voucher_purchase import VoucherPurchaseSupplierDetails
-from .models_voucher_expense import VoucherExpense
-from .models_voucher_payment import PaymentVoucher
-from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk
+from .models import (
+    VoucherSalesInvoiceDetails as SalesVoucher,
+    VoucherPurchaseSupplierDetails,
+    VoucherExpense,
+    PaymentVoucher,
+    VoucherReceiptSingle, 
+    VoucherReceiptBulk
+)
 
 class DashboardAnalyticsView(APIView):
     permission_classes = [IsAuthenticated]

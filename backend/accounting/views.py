@@ -4,7 +4,7 @@ from rest_framework.response import Response # pyre-fixme
 from rest_framework.permissions import IsAuthenticated, AllowAny # pyre-fixme
 from rest_framework.views import APIView # pyre-fixme
 from django.db import connection # pyre-fixme
-from core.utils import TenantQuerysetMixin, IsTenantMember # pyre-fixme
+from core.mixins import BranchQuerysetMixin, IsBranchMember
 from .models import (
     MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
     Voucher, JournalEntry
@@ -20,21 +20,17 @@ from .serializers import ( # pyre-fixme
 # MASTER VIEWSETS
 # ============================================================================
 
-class MasterLedgerGroupViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class MasterLedgerGroupViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     queryset = MasterLedgerGroup.objects.all()
     serializer_class = MasterLedgerGroupSerializer
-    # TEMPORARY: Disabled authentication for development
-    permission_classes = [AllowAny]
-    # permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'MASTERS_LEDGER_GROUPS'
 
 
-class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class MasterLedgerViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     queryset = MasterLedger.objects.all()
     serializer_class = MasterLedgerSerializer
-    # TEMPORARY: Disabled authentication for development
-    permission_classes = [AllowAny]
-    # permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'MASTERS_LEDGERS'
     
     def get_queryset(self):
@@ -56,7 +52,7 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         import logging
         logger = logging.getLogger('accounting.views')
         try:
-            logger.info(f"🔍 MasterLedgerViewSet.list called - User: {request.user}, Tenant: {getattr(request.user, 'tenant_id', None)}")
+            logger.info(f"🔍 MasterLedgerViewSet.list called - User: {request.user}, Branch: {getattr(request.user, 'tenant_id', None)}")
             queryset = self.get_queryset()
             logger.info(f"🔍 Queryset count: {queryset.count()} (Filters: group={request.query_params.get('group')}, category={request.query_params.get('category')})")
             serializer = self.get_serializer(queryset, many=True)
@@ -79,8 +75,11 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             
             # Auto-generate ledger code based on hierarchy
-            # TEMPORARY: Use default tenant_id if user is not authenticated
-            tenant_id = getattr(request.user, 'tenant_id', 1)
+            # Enforce tenant isolation from authenticated user
+            tenant_id = request.user.branch_id
+            if not tenant_id:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Authentication with a valid Branch ID is required.")
             
             # Retry logic for code generation (handles race conditions)
             max_retries = 3
@@ -172,21 +171,27 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
 
 
 class MasterHierarchyRawViewSet(viewsets.ReadOnlyModelViewSet):
-    """Global hierarchy data - no authentication required, no tenant filtering"""
+    """Global hierarchy data - restricted to authenticated staff/master users"""
     queryset = MasterHierarchyRaw.objects.all()
     serializer_class = MasterHierarchyRawSerializer
-    permission_classes = [AllowAny]  # Global data, accessible to all
+    permission_classes = [IsAuthenticated]
+    
+    def list(self, request, *args, **kwargs):
+        """Builds and returns a hierarchical tree structure from raw CSV data."""
+        from .hierarchy_service import build_ledger_hierarchy_tree
+        tree = build_ledger_hierarchy_tree()
+        return Response(tree)
 
 
 # ============================================================================
 # VOUCHER VIEWSETS - Unified
 # ============================================================================
 
-class VoucherViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class VoucherViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     """Unified viewset for all voucher types"""
     queryset = Voucher.objects.all()
     serializer_class = VoucherSerializer
-    permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'ACCOUNTING_VOUCHERS'
     
     def get_queryset(self):
@@ -235,10 +240,10 @@ class VoucherViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         return Response({'success': True, 'count': len(vouchers_data)}, status=status.HTTP_201_CREATED)
 
 
-class JournalEntryViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     queryset = JournalEntry.objects.all()
     serializer_class = JournalEntrySerializer
-    permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'ACCOUNTING_VOUCHERS'
 
 
@@ -249,15 +254,14 @@ class PayFromLedgerView(APIView):
     - Assets: Cash and bank balances, Cash and cash equivalents
     - Liabilities: Short term borrowings, Loans
     """
-    permission_classes = [AllowAny] # TEMPORARY: disabled IsAuthenticated
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         tenant_id = getattr(request.user, 'tenant_id', None)
-        if not tenant_id:
-            tenant_id = request.headers.get('X-Tenant-Id')
         
         if not tenant_id:
-            return Response({"error": "Tenant ID not found. Please log in again."}, status=400)
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Branch context missing. Please log in again.")
             
         from django.db.models import Q
         
@@ -298,11 +302,10 @@ class PayToLedgerView(APIView):
 
     def get(self, request):
         tenant_id = getattr(request.user, 'tenant_id', None)
-        if not tenant_id:
-            tenant_id = request.headers.get('X-Tenant-Id')
 
         if not tenant_id:
-            return Response({"error": "Tenant ID missing"}, status=400)
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Branch context missing.")
 
         # Map to store our final results by ledger_id to ensure deduplication
         results_map = {}
@@ -358,3 +361,13 @@ class PayToLedgerView(APIView):
 
         # Convert map to list and return
         return Response(list(results_map.values()))
+
+class QuestionsBySubgroupView(APIView):
+    """
+    Dummy view returning empty questions since Question model was deprecated/removed.
+    Returns format expected by DynamicQuestions.tsx and LedgerQuestions.tsx.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({"questions": []})

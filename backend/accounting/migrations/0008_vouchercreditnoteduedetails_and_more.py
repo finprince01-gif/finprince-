@@ -234,20 +234,20 @@ class Migration(migrations.Migration):
             new_name='pending_tra_tenant__e96444_idx',
             old_name='pending_tx_type_status_idx',
         ),
-        migrations.RemoveField(
-            model_name='amounttransaction',
-            name='vendor',
-        ),
-        migrations.AddField(
-            model_name='journalentry',
-            name='vendor',
-            field=models.ForeignKey(blank=True, db_column='vendor_id', null=True, on_delete=django.db.models.deletion.SET_NULL, to='vendors.vendormasterbasicdetail'),
-        ),
-        migrations.AlterField(
-            model_name='advanceallocationmap',
-            name='advance_source_type',
-            field=models.CharField(choices=[('payment', 'Payment Voucher Item'), ('receipt', 'Receipt Voucher Item')], default='payment', help_text="'payment' or 'receipt'", max_length=20),
-        ),
+        # migrations.RemoveField(
+        #     model_name='amounttransaction',
+        #     name='vendor',
+        # ),
+        # migrations.AddField(
+        #     model_name='journalentry',
+        #     name='vendor',
+        #     field=models.ForeignKey(blank=True, db_column='vendor_id', null=True, on_delete=django.db.models.deletion.SET_NULL, to='vendors.vendormasterbasicdetail'),
+        # ),
+        # migrations.AlterField(
+        #     model_name='advanceallocationmap',
+        #     name='advance_source_type',
+        #     field=models.CharField(choices=[('payment', 'Payment Voucher Item'), ('receipt', 'Receipt Voucher Item')], default='payment', help_text="'payment' or 'receipt'", max_length=20),
+        # ),
         migrations.AlterField(
             model_name='advanceallocationmap',
             name='created_at',

@@ -7,13 +7,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from core.utils import TenantQuerysetMixin, IsTenantMember
+from core.mixins import BranchQuerysetMixin, IsBranchMember
 from accounting.models import SalesInvoice
 from . import invoice_flow as flow
 from .invoice_serializers import SalesInvoiceSerializer, SalesInvoiceListSerializer
 
 
-class SalesInvoiceViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
+class SalesInvoiceViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     """
     API ViewSet for Sales Invoices
     
@@ -25,7 +25,7 @@ class SalesInvoiceViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     - DELETE /api/invoices/{id}/ - Cancel invoice
     """
     queryset = SalesInvoice.objects.all()
-    permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
     
     def get_serializer_class(self):
         """Use lightweight serializer for list view"""
@@ -44,7 +44,7 @@ class SalesInvoiceViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """Create new invoice using flow layer"""
         try:
-            tenant_id = request.user.tenant_id
+            tenant_id = request.user.branch_id
             
             # Prepare data
             invoice_data = {
@@ -75,7 +75,7 @@ class SalesInvoiceViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         """Update invoice using flow layer"""
         try:
-            tenant_id = request.user.tenant_id
+            tenant_id = request.user.branch_id
             invoice_id = kwargs.get('pk')
             
             # Update via flow layer
@@ -92,7 +92,7 @@ class SalesInvoiceViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """Cancel invoice"""
         try:
-            tenant_id = request.user.tenant_id
+            tenant_id = request.user.branch_id
             invoice_id = kwargs.get('pk')
             
             # Cancel via flow layer

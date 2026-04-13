@@ -30,7 +30,7 @@ from .models import (
     VendorMasterProductService
 )
 from .vendor_database import VendorDatabase
-from accounting.models_voucher_payment import PaymentVoucherItem
+from accounting.models import PaymentVoucherItem
 from accounting.serializers import PaymentVoucherItemSerializer
 
 
@@ -48,7 +48,7 @@ class VendorViewSet(viewsets.ModelViewSet):
         """Extract tenant_id from authenticated user"""
         user = self.request.user
         if hasattr(user, 'tenant_id'):
-            return user.tenant_id
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
         else:
@@ -515,8 +515,8 @@ class PurchaseVendorCreateView(APIView):
 
     def get_tenant_id(self):
         user = self.request.user
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            return user.tenant_id
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
         return None
@@ -680,7 +680,7 @@ class PurchaseVendorValidateView(APIView):
     def get_tenant_id(self):
         user = self.request.user
         if hasattr(user, 'tenant_id'):
-            return user.tenant_id
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
         else:
@@ -730,7 +730,7 @@ class PurchaseVendorResolveConflictView(APIView):
     def get_tenant_id(self):
         user = self.request.user
         if hasattr(user, 'tenant_id'):
-            return user.tenant_id
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
         return getattr(user, 'id', 'default_tenant')

@@ -12,7 +12,7 @@ def get_voucher_types(tenant_id: str) -> QuerySet:
     Fetch all active receipt voucher types for a tenant.
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         QuerySet: Active receipt voucher types
@@ -31,7 +31,7 @@ def get_voucher_configurations(tenant_id: str, voucher_type: Optional[str] = Non
     Used for populating voucher type dropdown based on configurations.
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         voucher_type: Optional type filter (e.g. 'sales')
         
     Returns:
@@ -58,7 +58,7 @@ def get_customers(tenant_id: str) -> QuerySet:
     Customers are ledgers from specific groups (Sundry Debtors, etc.)
     
     Args:
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         QuerySet: Customer ledgers
@@ -81,7 +81,7 @@ def get_sales_voucher(voucher_id: int, tenant_id: str) -> Optional['SalesVoucher
     
     Args:
         voucher_id: Sales voucher ID
-        tenant_id: Tenant ID
+        tenant_id: Branch ID
         
     Returns:
         SalesVoucher or None

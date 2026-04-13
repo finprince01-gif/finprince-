@@ -37,7 +37,7 @@ from .serializers import (
     CustomerMastersSalesOrderSerializer
 )
 import logging
-from accounting.models_voucher_payment import PaymentVoucherItem
+from accounting.models import PaymentVoucherItem
 from accounting.serializers import PaymentVoucherItemSerializer
 
 logger = logging.getLogger(__name__)
@@ -247,7 +247,7 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
         logger.info("CUSTOMER CREATE REQUEST RECEIVED")
         logger.info("=" * 80)
         logger.info(f"User: {request.user.username}")
-        logger.info(f"Tenant ID: {getattr(request.user, 'tenant_id', 'NOT SET')}")
+        logger.info(f"Branch ID: {getattr(request.user, 'tenant_id', 'NOT SET')}")
         logger.info(f"Request Data Keys: {list(request.data.keys())}")
         logger.info(f"Full Request Data: {request.data}")
         

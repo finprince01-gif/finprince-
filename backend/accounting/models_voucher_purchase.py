@@ -62,10 +62,6 @@ class VoucherPurchaseSupplyForeignDetails(BaseModel):
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=4, default=1.0)
     description = models.TextField(null=True, blank=True) # Maybe unused but good to have
     
-    # Items for Foreign Supply
-    # Structure: [{description, qty, uom, rate, amount}]
-    items = models.JSONField(default=list)
-
     class Meta:
 
         db_table = 'voucher_purchase_supply_foreign_details'
@@ -85,10 +81,6 @@ class VoucherPurchaseSupplyINRDetails(BaseModel):
     purchase_ledger = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     
-    # Items for INR Supply
-    # Structure: [{itemCode, itemName, hsnSac, qty, uom, rate, taxableValue, igst, cgst, sgst, cess, invoiceValue}]
-    items = models.JSONField(default=list)
-
     class Meta:
 
         db_table = 'voucher_purchase_supply_inr_details'
@@ -111,10 +103,6 @@ class VoucherPurchaseDueDetails(BaseModel):
     posting_note = models.TextField(null=True, blank=True)
     terms = models.CharField(max_length=255, null=True, blank=True)
     
-    # Advance References
-    # Structure: [{date, refNo, amount, appliedNow}]
-    advance_references = models.JSONField(default=list, null=True, blank=True)
-
     class Meta:
 
         db_table = 'voucher_purchase_due_details'
@@ -149,8 +137,112 @@ class VoucherPurchaseTransitDetails(BaseModel):
     # Document
     document = models.FileField(upload_to='purchase_transit_documents/', null=True, blank=True)
     
-    extra_details = models.JSONField(default=dict, blank=True)
-
+    beyond_port_port_of_loading = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_fnr_no = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_origin_country = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_station_loading = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_rr_no = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_port_of_discharge = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_rail_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_upto_transporter_name = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_final_dest_city = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_origin_country = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_origin_city = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_sb_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_upto_delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_rr_date = models.DateField(null=True, blank=True)
+    upto_port_port_of_loading = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_origin = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_station_discharge = models.CharField(max_length=100, null=True, blank=True)
+    rail_upto_transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_vessel_flight_no = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_sb_date = models.DateField(null=True, blank=True)
+    beyond_port_final_dest = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_dest_country = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_dest_country = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_final_dest = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_origin_country = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_vessel_flight_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_rr_no = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_ship_port_code = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_station_discharge = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_final_dest_country = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_rr_date = models.DateField(null=True, blank=True)
+    upto_port_station_loading = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_port_of_discharge = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_port_of_loading = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_fnr_no = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_origin_country = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_station_loading = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_rr_no = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_port_of_discharge = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_rail_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_upto_transporter_name = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_final_dest_city = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_origin_country = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_origin_city = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_sb_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_upto_delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_rr_date = models.DateField(null=True, blank=True)
+    upto_port_port_of_loading = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_origin = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_station_discharge = models.CharField(max_length=100, null=True, blank=True)
+    rail_upto_transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_vessel_flight_no = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_sb_date = models.DateField(null=True, blank=True)
+    beyond_port_final_dest = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_dest_country = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_dest_country = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_final_dest = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_origin_country = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_vessel_flight_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_rr_no = models.CharField(max_length=100, null=True, blank=True)
+    beyond_port_ship_port_code = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_station_discharge = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_final_dest_country = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_rr_date = models.DateField(null=True, blank=True)
+    upto_port_station_loading = models.CharField(max_length=100, null=True, blank=True)
+    upto_port_port_of_discharge = models.CharField(max_length=100, null=True, blank=True)
     class Meta:
 
         db_table = 'voucher_purchase_transit_details'
+
+
+class VoucherPurchaseItem(BaseModel):
+    """Normalized line items for Purchase Vouchers (INR and Foreign)"""
+    supplier_details = models.ForeignKey(VoucherPurchaseSupplierDetails, on_delete=models.CASCADE, related_name='line_items')
+    
+    item_code = models.CharField(max_length=100)
+    item_name = models.CharField(max_length=255)
+    hsn_sac = models.CharField(max_length=20, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    uom = models.CharField(max_length=50, null=True, blank=True)
+    rate = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Tax fields (using _amount suffix for consistency with other voucher models)
+    igst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cess_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    invoice_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Currency details (inherited from SupplyForeignDetails if applicable)
+    currency = models.CharField(max_length=10, default='INR')
+    exchange_rate = models.DecimalField(max_digits=10, decimal_places=4, default=1.0)
+
+    class Meta:
+        db_table = 'voucher_purchase_items'
+
+
+class VoucherPurchaseAdvanceLink(BaseModel):
+    """Normalized advance references linked to Purchase Vouchers"""
+    due_details = models.ForeignKey(VoucherPurchaseDueDetails, on_delete=models.CASCADE, related_name='advance_links')
+    date = models.DateField()
+    ref_no = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    applied_now = models.DecimalField(max_digits=15, decimal_places=2)
+
+    class Meta:
+        db_table = 'voucher_purchase_advance_links'

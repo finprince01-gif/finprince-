@@ -37,8 +37,8 @@ class VendorMasterBankingViewSet(viewsets.ModelViewSet):
     def get_tenant_id(self):
         """Extract tenant_id from authenticated user"""
         user = self.request.user
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            return user.tenant_id
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
         return None

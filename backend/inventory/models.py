@@ -2,6 +2,37 @@ from django.db import models
 from django.utils import timezone
 from core.models import BaseModel
 
+# ============================================================================
+# BASE ITEM MODEL (Abstract)
+# ============================================================================
+
+class BaseInventoryOperationItem(BaseModel):
+    """
+    Abstract base class for all inventory operation line items.
+    """
+    item_code = models.CharField(max_length=100)
+    item_name = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    quantity = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    uom = models.CharField(max_length=50, null=True, blank=True)
+    rate = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Tax fields
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cgst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    sgst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    igst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cess = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    total_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Helper for migration/verification
+    original_idx = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
 class InventoryMasterCategory(BaseModel):
     """
     Inventory Master Category Model
@@ -173,7 +204,8 @@ class InventoryMasterGRN(BaseModel):
     prefix = models.CharField(max_length=50, null=True, blank=True)
     suffix = models.CharField(max_length=50, null=True, blank=True)
     year = models.CharField(max_length=4, help_text="Year", default="2024")
-    required_digits = models.PositiveSmallIntegerField(help_text="Required Digits", default=4)
+    required_digits = models.IntegerField(help_text="Required Digits", default=4)
+    start_from = models.IntegerField(help_text="Start from number", default=1)
     preview = models.CharField(max_length=255, null=True, blank=True)
     
     is_active = models.BooleanField(default=True)
@@ -197,6 +229,7 @@ class InventoryMasterIssueSlip(BaseModel):
     suffix = models.CharField(max_length=50, null=True, blank=True)
     year = models.CharField(max_length=4, help_text="Year", default="2024")
     required_digits = models.IntegerField(help_text="Required Digits", default=4)
+    start_from = models.IntegerField(help_text="Start from number", default=1)
     preview = models.CharField(max_length=255, null=True, blank=True)
     
     is_active = models.BooleanField(default=True)
@@ -248,13 +281,6 @@ class InventoryOperationJobWork(BaseModel):
     vendor_address = models.TextField(null=True, blank=True)
     vendor_gstin = models.CharField(max_length=20, null=True, blank=True)
     
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
-
-    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
-    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
-
-    # Additional Info
     posting_note = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Draft')
 
@@ -271,9 +297,22 @@ class InventoryOperationJobWork(BaseModel):
     vehicle_no = models.CharField(max_length=100, null=True, blank=True)
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
+    # Auto-restored missing columns
+    is_active = models.BooleanField(default=False)
+    created_by = models.CharField(max_length=255, null=True, blank=True)
+    updated_by = models.CharField(max_length=255, null=True, blank=True)
+
     class Meta:
 
         db_table = 'inventory_operation_jobwork'
+
+
+class InventoryOperationJobWorkItem(BaseInventoryOperationItem):
+    """Normalized items for Job Work operation"""
+    parent = models.ForeignKey(InventoryOperationJobWork, on_delete=models.CASCADE, related_name='items_rel')
+    
+    class Meta:
+        db_table = 'inventory_operation_jobwork_items'
 
 
 class InventoryOperationInterUnit(BaseModel):
@@ -294,11 +333,7 @@ class InventoryOperationInterUnit(BaseModel):
     irn = models.CharField(max_length=255, null=True, blank=True)
     ack_no = models.CharField(max_length=100, null=True, blank=True)
 
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
     
-    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
-    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
 
 
@@ -318,11 +353,20 @@ class InventoryOperationInterUnit(BaseModel):
         db_table = 'inventory_operation_interunit'
 
 
+class InventoryOperationInterUnitItem(BaseInventoryOperationItem):
+    """Normalized items for Inter Unit operation"""
+    parent = models.ForeignKey(InventoryOperationInterUnit, on_delete=models.CASCADE, related_name='items_rel')
+    
+    class Meta:
+        db_table = 'inventory_operation_interunit_items'
+
+
 class InventoryOperationLocationChange(BaseModel):
     """
     Location Change Operation
     """
     issue_slip_no = models.CharField(max_length=100)
+    issue_slip_series = models.CharField(max_length=100, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Draft')
@@ -332,11 +376,7 @@ class InventoryOperationLocationChange(BaseModel):
     
     posting_note = models.TextField(null=True, blank=True)
 
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
 
-    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
-    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
 
 
@@ -351,9 +391,20 @@ class InventoryOperationLocationChange(BaseModel):
     vehicle_no = models.CharField(max_length=100, null=True, blank=True)
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
+    # Auto-restored missing columns
+    issue_slip_series = models.CharField(max_length=255, null=True, blank=True)
+
     class Meta:
 
         db_table = 'inventory_operation_locationchange'
+
+
+class InventoryOperationLocationChangeItem(BaseInventoryOperationItem):
+    """Normalized items for Location Change operation"""
+    parent = models.ForeignKey(InventoryOperationLocationChange, on_delete=models.CASCADE, related_name='items_rel')
+    
+    class Meta:
+        db_table = 'inventory_operation_locationchange_items'
 
 
 class InventoryOperationProduction(BaseModel):
@@ -379,19 +430,34 @@ class InventoryOperationProduction(BaseModel):
     batch_no = models.CharField(max_length=50, null=True, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
 
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
     
-    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
-    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
 
 
 
+
+    # Auto-restored missing columns
+    vehicle_no = models.CharField(max_length=255, null=True, blank=True)
+    delivery_type = models.CharField(max_length=255, null=True, blank=True)
+    dispatch_from = models.CharField(max_length=255, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    dispatch_time = models.CharField(max_length=255, null=True, blank=True)
+    transporter_id = models.CharField(max_length=255, null=True, blank=True)
+    dispatch_date = models.CharField(max_length=255, null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=255, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
 
         db_table = 'inventory_operation_production'
+
+
+class InventoryOperationProductionItem(BaseInventoryOperationItem):
+    """Normalized items for Production operation"""
+    parent = models.ForeignKey(InventoryOperationProduction, on_delete=models.CASCADE, related_name='items_rel')
+    
+    class Meta:
+        db_table = 'inventory_operation_production_items'
 
 
 class InventoryOperationConsumption(BaseModel):
@@ -407,8 +473,7 @@ class InventoryOperationConsumption(BaseModel):
     
     posting_note = models.TextField(null=True, blank=True)
 
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
+    # Consumption Specific Details
     
     # Consumption Specific Details
     consumption_type = models.CharField(max_length=50, null=True, blank=True)
@@ -420,12 +485,21 @@ class InventoryOperationConsumption(BaseModel):
         db_table = 'inventory_operation_consumption'
 
 
+class InventoryOperationConsumptionItem(BaseInventoryOperationItem):
+    """Normalized items for Consumption operation"""
+    parent = models.ForeignKey(InventoryOperationConsumption, on_delete=models.CASCADE, related_name='items_rel')
+    
+    class Meta:
+        db_table = 'inventory_operation_consumption_items'
+
+
 
 class InventoryOperationScrap(BaseModel):
     """
     Scrap Operation
     """
     issue_slip_no = models.CharField(max_length=100)
+    issue_slip_series = models.CharField(max_length=100, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Draft')
@@ -435,11 +509,7 @@ class InventoryOperationScrap(BaseModel):
     
     posting_note = models.TextField(null=True, blank=True)
 
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
     
-    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
-    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
 
 
@@ -457,6 +527,14 @@ class InventoryOperationScrap(BaseModel):
     class Meta:
 
         db_table = 'inventory_operation_scrap'
+
+
+class InventoryOperationScrapItem(BaseInventoryOperationItem):
+    """Normalized items for Scrap operation"""
+    parent = models.ForeignKey(InventoryOperationScrap, on_delete=models.CASCADE, related_name='items_rel')
+    
+    class Meta:
+        db_table = 'inventory_operation_scrap_items'
 
 
 # InventoryOperationGRN removed - replaced by InventoryOperationNewGRN
@@ -500,14 +578,18 @@ class InventoryOperationOutward(BaseModel):
     status = models.CharField(max_length=20, default='PENDING')
     linked_sales_voucher_id = models.BigIntegerField(null=True, blank=True, unique=True)
 
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
 
-    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
-    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
     class Meta:
         db_table = 'inventory_operation_outward'
+
+
+class InventoryOperationOutwardItem(BaseInventoryOperationItem):
+    """Normalized items for Outward operation"""
+    parent = models.ForeignKey(InventoryOperationOutward, on_delete=models.CASCADE, related_name='items_rel')
+    
+    class Meta:
+        db_table = 'inventory_operation_outward_items'
 
 
 
@@ -541,12 +623,111 @@ class InventoryOperationNewGRN(BaseModel):
     posting_note = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Posted')
 
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
+    # Auto-restored missing columns
     
+    # Auto-restored missing columns
+    secondary_ref_no = models.CharField(max_length=255, null=True, blank=True)
+
     class Meta:
 
         db_table = 'inventory_operation_new_grn'
+
+
+class InventoryOperationNewGRNItem(BaseInventoryOperationItem):
+    """Normalized items for New GRN operation"""
+    parent = models.ForeignKey(InventoryOperationNewGRN, on_delete=models.CASCADE, related_name='items_rel')
+    
+    class Meta:
+        db_table = 'inventory_operation_new_grn_items'
+
+class InventoryOperationEWayBill(BaseModel):
+    """
+    Normalized E-Way Bill details for inventory operations.
+    Replaces the 'eway_bill_details' JSON list.
+    """
+    OPERATION_TYPES = [
+        ('jobwork', 'Job Work'),
+        ('interunit', 'Inter Unit'),
+        ('location_change', 'Location Change'),
+        ('production', 'Production'),
+        ('scrap', 'Scrap'),
+        ('outward', 'Outward'),
+        ('grn', 'New GRN'),
+    ]
+    operation_type = models.CharField(max_length=20, choices=OPERATION_TYPES)
+    operation_id = models.BigIntegerField()
+    
+    eway_bill_no = models.CharField(max_length=50)
+    eway_bill_date = models.DateField(null=True, blank=True)
+    distance = models.CharField(max_length=50, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=50, null=True, blank=True)
+    validity = models.CharField(max_length=50, null=True, blank=True)
+    status = models.CharField(max_length=50, default='Active')
+
+    class Meta:
+        db_table = 'inventory_operation_ewaybills'
+        indexes = [
+            models.Index(fields=['operation_type', 'operation_id']),
+        ]
+
+class InventoryOperationDeliveryChallan(BaseModel):
+    """
+    Normalized Delivery Challan / Dispatch Details for inventory operations.
+    """
+    OPERATION_TYPES = [
+        ('jobwork', 'Job Work'),
+        ('interunit', 'Inter Unit'),
+        ('location_change', 'Location Change'),
+        ('production', 'Production'),
+        ('scrap', 'Scrap'),
+        ('outward', 'Outward'),
+        ('grn', 'New GRN'),
+    ]
+    operation_type = models.CharField(max_length=20, choices=OPERATION_TYPES)
+    operation_id = models.BigIntegerField()
+    
+    # Core Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True) # Road, Air, Sea, Rail, Courier
+    dispatch_date = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    
+    delivery_type = models.CharField(max_length=100, null=True, blank=True) # Self, Third Party, Courier
+    transporter_id = models.CharField(max_length=15, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
+    
+    # Beyond Port / Shipping Details (Air/Sea)
+    shipping_bill_no = models.CharField(max_length=100, null=True, blank=True)
+    shipping_bill_date = models.DateField(null=True, blank=True)
+    ship_port_code = models.CharField(max_length=100, null=True, blank=True)
+    vessel_flight_no = models.CharField(max_length=100, null=True, blank=True)
+    port_of_loading = models.CharField(max_length=255, null=True, blank=True)
+    port_of_discharge = models.CharField(max_length=255, null=True, blank=True)
+    final_destination = models.CharField(max_length=255, null=True, blank=True)
+    origin_city = models.CharField(max_length=255, null=True, blank=True)
+    origin_country = models.CharField(max_length=255, null=True, blank=True)
+    dest_country = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Rail Specific
+    railway_receipt_no = models.CharField(max_length=100, null=True, blank=True)
+    railway_receipt_date = models.DateField(null=True, blank=True)
+    fnr_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_no = models.CharField(max_length=100, null=True, blank=True)
+    station_of_loading = models.CharField(max_length=255, null=True, blank=True)
+    station_of_discharge = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Document Reference
+    dispatch_document = models.FileField(upload_to='inventory_dispatch/', null=True, blank=True)
+    
+    status = models.CharField(max_length=50, default='Active')
+
+    class Meta:
+        db_table = 'inventory_operation_delivery_challans'
+        indexes = [
+            models.Index(fields=['operation_type', 'operation_id']),
+        ]
 
 class HsnGstMaster(models.Model):
     hsn_code = models.CharField(max_length=20, null=True, blank=True)

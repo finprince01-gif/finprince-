@@ -2,16 +2,17 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from core.utils import TenantQuerysetMixin, IsTenantMember
+from core.mixins import BranchQuerysetMixin, IsBranchMember
 from core.tenant import get_tenant_from_request
-from .models import Voucher, JournalEntry  # type: ignore
-from .models_voucher_payment import PaymentVoucher, PaymentVoucherItem
+from .models import Voucher, JournalEntry, PaymentVoucher, PaymentVoucherItem  # type: ignore
 from .serializers_payment import (
     PaymentVoucherSerializer, 
     VoucherPaymentSingleSerializer, 
     VoucherPaymentBulkSerializer,
     AdvancePaymentSerializer
 )
+from .models_advance_allocation import AdvanceAllocation
+from .models_pending_transaction import PendingTransaction
 from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink  # type: ignore
 from django.utils import timezone  # type: ignore
 from django.db import transaction as db_transaction  # type: ignore
@@ -40,8 +41,8 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs = self.queryset
 
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            qs = qs.filter(tenant_id=user.tenant_id)
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            qs = qs.filter(tenant_id=user.branch_id)
 
         # Optional filters
         pay_to_ledger = self.request.query_params.get('pay_to_ledger')
@@ -58,20 +59,21 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
         tenant_id = getattr(request.user, 'tenant_id', None)
         
         if not tenant_id:
-            tenant_id = request.headers.get('X-Tenant-Id')
+            tenant_id = request.headers.get('X-Branch-Id')
 
         if ref_no:
-            exists = PaymentVoucherItem.objects.filter(
+            # Check for standard advance ref no
+            exists = AdvanceAllocation.objects.filter(
                 tenant_id=tenant_id,
                 advance_ref_no=ref_no
             ).exclude(advance_ref_no='').exists()
             return Response({'is_unique': not exists})
             
         if v_num:
-            exists = PaymentVoucher.objects.filter(
-                tenant_id=tenant_id,
-                voucher_number=v_num
-            ).exists()
+            exists = (
+                PaymentVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists() or
+                AdvanceAllocation.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists()
+            )
             return Response({'is_unique': not exists})
 
         return Response({'is_unique': True})
@@ -92,7 +94,7 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
         tenant_id = getattr(request.user, 'tenant_id', None)
         if not tenant_id:
-            tenant_id = request.headers.get('X-Tenant-Id')
+            tenant_id = request.headers.get('X-Branch-Id')
 
         # 1. Find all Purchase/Sales vouchers involving this ledger via Journal Entries
         # This is the bill-wise lookup source of truth
@@ -144,6 +146,29 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             if v_amt == 0:
                  v_amt = v.total_debit if v.total_debit > 0 else v.total_credit
 
+            pending_amt = v_amt
+            v_type_lower = (v.type or '').lower()
+            
+            if 'sales' in v_type_lower:
+                from .models_voucher_sales import VoucherSalesInvoiceDetails
+                sale = VoucherSalesInvoiceDetails.objects.filter(tenant_id=tenant_id, sales_invoice_no=v.voucher_number).select_related('payment_details').first()
+                if sale and hasattr(sale, 'payment_details') and sale.payment_details:
+                    pending_amt = sale.payment_details.payment_balance if sale.payment_details.payment_balance is not None else v_amt
+            elif 'purchase' in v_type_lower:
+                from .models_voucher_purchase import VoucherPurchaseDetails
+                purch = VoucherPurchaseDetails.objects.filter(tenant_id=tenant_id, purchase_invoice_no=v.voucher_number).select_related('payment_details').first()
+                if purch and hasattr(purch, 'payment_details') and purch.payment_details:
+                    pending_amt = purch.payment_details.payment_balance if purch.payment_details.payment_balance is not None else v_amt
+            else:
+                 from .models_pending_transaction import PendingTransaction
+                 from django.db.models import Sum
+                 applied = PendingTransaction.objects.filter(tenant_id=tenant_id, reference_number=v.voucher_number).aggregate(t=Sum('amount_applied'))['t'] or 0
+                 pending_amt = float(v_amt) - float(applied)
+                 
+            # If the invoice is fully paid, skip it
+            if float(pending_amt) <= 0.01:
+                 continue
+
             due_date = v.date + timedelta(days=credit_period_days) if v.date else None
             due_status = "Not Due"
             days_to_due = 0
@@ -162,7 +187,7 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                     'date': v.date.strftime('%Y-%m-%d') if v.date else '',
                     'reference_number': v.voucher_number or v.invoice_no or f"V-{v.id}",
                     'amount': float(v_amt),
-                    'pending': float(v_amt), 
+                    'pending': float(pending_amt), 
                     'type': v.type,
                     'credit_period': credit_period_days,
                     'due_date': due_date.strftime('%Y-%m-%d') if due_date else '',
@@ -191,7 +216,7 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             if bank_transaction_id:
                 try:
                     tenant_id = (
-                        self.request.user.tenant_id
+                        self.request.user.branch_id
                         if hasattr(self.request.user, 'tenant_id')
                         else None
                     )
@@ -256,8 +281,8 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            serializer.save(tenant_id=user.tenant_id)
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            serializer.save(tenant_id=user.branch_id)
         else:
             serializer.save()
 
@@ -292,16 +317,16 @@ def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
     Common function to fetch advance payments for a specific ledger.
     Optionally filters by category (for Portal tiles).
     """
-    qs = PaymentVoucherItem.objects.filter(
-        reference_type='ADVANCE',
-        amount__gt=0
-    ).select_related('voucher', 'pay_to_ledger')
+    # Advances are exclusively stored in AdvanceAllocation in the new system
+    qs = AdvanceAllocation.objects.filter(
+        advance_amount__gt=0
+    ).select_related('pay_to_ledger')
     
     if ledger_id:
         qs = qs.filter(pay_to_ledger_id=ledger_id)
 
     if tenant_id:
-        qs = qs.filter(voucher__tenant_id=tenant_id)
+        qs = qs.filter(tenant_id=tenant_id)
         
     if category:
         from django.db.models.functions import Trim, Upper
@@ -325,22 +350,16 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
     """
     queryset = PaymentVoucherItem.objects.all()
     serializer_class = AdvancePaymentSerializer
-    permission_classes = [IsAuthenticated, IsTenantMember]
+    permission_classes = [IsAuthenticated, IsBranchMember]
 
     def list(self, request, *args, **kwargs):
         tenant_id = get_tenant_from_request(self.request)
         ledger_id = self.request.query_params.get('ledger_id')
         category = self.request.query_params.get('category')
 
-        # 1. Fetch Payment Advances
-        payment_items = get_advances_by_ledger(ledger_id, tenant_id, category)
-        
-        # 2. Fetch Receipt Advances
-        receipt_items = self._get_receipt_advances(ledger_id, tenant_id, category)
-        
-        # Merge results into a list (or use chain for larger sets)
-        from itertools import chain
-        combined = list(chain(payment_items, receipt_items))
+        # 1. Fetch Advances (AdvanceAllocation now stores both payment and receipt advances)
+        combined = list(get_advances_by_ledger(ledger_id, tenant_id, category))
+
         
         # 3. Calculate Remaining and Filter (Phase 3 & 4A)
         from decimal import Decimal
@@ -348,11 +367,12 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
         
         final_list = []
         for adv in combined:
-            source_type = 'payment' if isinstance(adv, PaymentVoucherItem) else 'receipt'
-            total_amt = Decimal(str(getattr(adv, 'amount', 0)))
-            if source_type == 'receipt':
-                # ReceiptVoucherItem might have received_amount or amount
-                total_amt = Decimal(str(getattr(adv, 'received_amount', 0) or getattr(adv, 'amount', 0)))
+            # Type is stored in AdvanceAllocation as payment_single, receipt_bulk, etc.
+            is_payment = 'payment' in str(adv.type).lower()
+            source_type = 'payment' if is_payment else 'receipt'
+            
+            # Amount is now definitively stored in advance_amount
+            total_amt = Decimal(str(adv.advance_amount or 0))
             
             allocated = get_allocated_amount(adv.id, source_type, tenant_id)
             remaining = total_amt - allocated
@@ -365,8 +385,9 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
             if remaining > Decimal('0.01'):
                 final_list.append(adv)
         
-        # Sort by date descending (vouchers must be Prefetched)
-        final_list.sort(key=lambda x: x.voucher.date, reverse=True)
+        # Sort by date descending
+        import datetime
+        final_list.sort(key=lambda x: getattr(x, 'voucher_date', getattr(getattr(x, 'voucher', None), 'date', None)) or datetime.date.min, reverse=True)
 
         serializer = self.get_serializer(final_list, many=True)
         return Response(serializer.data)

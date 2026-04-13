@@ -26,6 +26,7 @@
 
 import { useState, useEffect } from 'react';
 import { apiService } from '../services';
+import { hasMasterSession } from '../services/authService';
 import type { Permissions } from '../types/types';
 
 interface UsePermissionsReturn {
@@ -53,6 +54,15 @@ export const usePermissions = (): UsePermissionsReturn => {
      * Load user permissions from the backend
      */
     const loadPermissions = async () => {
+        // 0. MASTER DOMAIN BYPASS: Master admins are platform-level superusers 
+        // and should not hit company-specific RBAC endpoints.
+        if (hasMasterSession()) {
+            setIsSuperuser(true);
+            setPermissions({});
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         setError(null);
 

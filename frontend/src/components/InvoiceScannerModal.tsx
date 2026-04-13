@@ -299,6 +299,14 @@ const Icon: React.FC<{ name: string; className?: string }> = ({ name, className 
 // ────────────────────────────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────────────────────────────
+// Tally Item Columns helper
+// ────────────────────────────────────────────────────────────────────────────────
+const TALLY_ITEM_HEADERS = [
+    'Item Name', 'Item Description', 'Actual Quantity', 'Billed Quantity',
+    'Quantity UOM', 'Item Rate', 'Item Rate per', 'Disc%', 'Item Amount',
+    'MRP/Marginal', 'HSN/SAC', 'GST Classification', 'IGST Rate', 'CGST Rate',
+    'SGST/UTGST Rate', 'Cess Rate', 'Taxable Value', 'HSN Description'
+];
 
 const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'ai_native', scanType = 'single', onExtractionSuccess }) => {
     // ── Columns definitions based on extractionMode & voucherType ──
@@ -311,6 +319,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const HEADER_FIELDS = Object.entries(schema.sections)
         .filter(([name]) => name !== 'items')
         .flatMap(([, fields]) => (fields as SchemaField[]).map(f => f.label));
+
+    const isItemField = (col: string) => {
+        return LINE_ITEM_FIELDS.includes(col) || (extractionMode === 'tally' && TALLY_ITEM_HEADERS.includes(col));
+    };
     const fileInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
     const processedFilesRef = useRef<FileList | File[] | null>(null);
@@ -323,6 +335,21 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [stagedFilePaths, setStagedFilePaths] = useState<string[]>([]); // SCOPE: Current batch only
     const [estimatedExtractionTime, setEstimatedExtractionTime] = useState<number | null>(null);
     const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
+
+    // -- Countdown Timer Effect --
+    useEffect(() => {
+        let timer: any;
+        if (isExtracting && estimatedExtractionTime !== null) {
+            setCountdownSeconds(estimatedExtractionTime);
+            timer = setInterval(() => {
+                setCountdownSeconds(prev => (prev !== null && prev > 0) ? prev - 1 : prev);
+            }, 1000);
+        } else {
+            setCountdownSeconds(null);
+            setEstimatedExtractionTime(null);
+        }
+        return () => { if (timer) clearInterval(timer); };
+    }, [isExtracting, estimatedExtractionTime]);
 
     // ── Auto-Validate Vendor for Purchase Vouchers ───────────────────────────────
     const [vendorValidation, setVendorValidation] = useState<'IDLE' | 'VALIDATING' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT'>('IDLE');
@@ -411,23 +438,42 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             'invoice_no': ['Supplier Invoice No.', 'Supplier Invoice No', 'Voucher Number', 'Inv No', 'Bill No', 'Reference No.'],
             'reference_no': ['Reference No.', 'Reference', 'Ref No', 'Supplier Invoice No.'],
             'vendor_name': ['Vendor Name', 'Supplier Name', 'Party Name', 'Party', 'Customer Name', 'Buyer/Supplier - Mailing Name'],
+            'vendor_address': ['Vendor Address', 'Address', 'Supplier Address', 'Bill From', 'Buyer/Supplier - Address', 'Buyer/Supplier - Bill to/from', 'Bill From Address', 'Ship From Address', 'Consignee Address'],
+            'bill_from': ['Bill From Address', 'Bill From', 'Office Address', 'Dispatch from Name'],
+            'ship_from': ['Ship From Address', 'Ship From', 'Dispatch From Address'],
+            'address_type': ['Address Type', 'Buyer/Supplier - Address Type'],
+            'vendor_state': ['Vendor State', 'State', 'Supplier State', 'Buyer/Supplier - State'],
+            'vendor_country': ['Vendor Country', 'Country', 'Supplier Country', 'Buyer/Supplier - Country'],
             'vendor_gstin': ['GSTIN', 'Supplier GSTIN', 'Party GSTIN', 'Buyer/Supplier - GSTIN/UIN'],
+            'registration_type': ['GST Registration Type', 'Registration Type', 'Buyer/Supplier - GST Registration Type'],
+            'gst_taxability_type': ['GST - Classification', 'GST Taxability Type', 'GST - Taxability Type', 'GST Taxability'],
+            'gst_nature_of_transaction': ['GST - Nature of Transaction', 'GST Nature of Transaction', 'Nature of Transaction'],
+            'gst_classification': ['GST - Classification', 'GST Classification', 'Classification'],
             'voucher_type': ['Voucher Type Name', 'Transaction Type', 'Voucher Type'],
+            'file_name': ['File Name', 'Source File', 'Uploaded File'],
             'voucher_series': ['Voucher Number Series Name', 'Voucher Series'],
             'narration': ['Voucher Narration', 'Narration', 'Remarks', 'Notes'],
-            'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type'],
+            'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type', 'Buyer/Supplier - State', 'Buyer/Supplier - Place of Supply'],
             
             // Items / Ledgers
             'item_name': ['Item Name', 'Description', 'Particulars', 'Item Description', 'Ledger Name'],
             'item_code': ['Item Code', 'Part No', 'Code'],
             'hsn_sac': ['HSN/SAC', 'HSN', 'HSN Code'],
             'quantity': ['Qty', 'Quantity', 'Billed Quantity', 'Actual Quantity'],
+            'uom': ['UOM', 'Unit', 'Units', 'Quantity UOM'],
             'rate': ['Item Rate', 'Rate', 'Unit Price', 'Price'],
-            'taxable_amount': ['Taxable Value', 'Assessable Value', 'Taxable Amount'],
+            'item_rate': ['Item Rate', 'Rate', 'Item Rate per'],
+            'discount_percent': ['Disc%', 'Discount %', 'Discount', 'Disc %'],
+            'taxable_value': ['Taxable Value', 'Assessable Value', 'Taxable Amount'],
             'total_amount': ['Invoice Value', 'Item Amount', 'Amount', 'Total Invoice Value', 'Grand Total', 'Ledger Amount'],
-            'cgst_amount': ['CGST', 'Central Tax'],
-            'sgst_amount': ['SGST', 'SGST/UTGST', 'State Tax'],
-            'igst_amount': ['IGST', 'Integrated Tax'],
+            'cgst_amount': ['CGST', 'Central Tax', 'CGST Amount', 'Total CGST'],
+            'cgst_rate': ['CGST RATE', 'CGST %', 'Central Tax %'],
+            'sgst_amount': ['SGST', 'SGST/UTGST', 'State Tax', 'SGST Amount', 'Total SGST', 'Total SGST/UTGST'],
+            'sgst_rate': ['SGST/UTGST RATE', 'SGST %', 'State Tax %'],
+            'igst_amount': ['IGST', 'Integrated Tax', 'IGST Amount', 'Total IGST'],
+            'igst_rate': ['IGST RATE', 'IGST %', 'Integrated Tax %'],
+            'cess_amount': ['Cess', 'CESS', 'Cess Amount'],
+            'cess_rate': ['Cess Rate', 'CESS RATE', 'Cess %'],
         };
 
         for (const [key, altList] of Object.entries(ALIASES)) {
@@ -508,6 +554,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     pending: response.total_files,
                     status: 'processing'
                 });
+                setEstimatedExtractionTime(response.total_files * 12);
                 startPolling(response.job_id);
             }
         } catch (error) {
@@ -535,19 +582,34 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 // The new structure has a 'sections' key or flattened top-level
                 const resData = extData;
                 
-                // If it's sectioned, we use the flattened top-level or specific sections
-                const rawData = resData.sections ? resData : resData.data || resData;
+                // FLATTEN nested sections for the mapping engine (supplier_details, supply_details)
+                const flattenedHeader = {
+                    ...(resData.sections?.supplier_details || {}),
+                    ...(resData.sections?.supply_details || {}),
+                    ...(resData.data || resData)
+                };
+                
                 const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
 
                 const normalizedHeader: Record<string, string> = {};
-                HEADER_FIELDS.forEach(field => {
-                    normalizedHeader[field] = getCellValue(rawData, field);
+                const colsToMap = extractionMode === 'tally' ? ALL_COLUMNS : HEADER_FIELDS;
+                
+                colsToMap.forEach(field => {
+                    normalizedHeader[field] = getCellValue(flattenedHeader, field);
                 });
+                // Map the source filename to the "Voucher Type Name" column as requested
+                const fileName = item.file_path?.split(/[\\/]/).pop() || 'Invoice.pdf';
+                normalizedHeader['Voucher Type Name'] = fileName;
+                normalizedHeader['File Name'] = fileName;
 
                 const normalizedItems = rawItems.map((ritem: any) => {
+                    // Items are usually already flat, but check if there's an 'item' wrapper
+                    const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
                     const ni: any = {};
-                    LINE_ITEM_FIELDS.forEach(f => {
-                        ni[f] = getCellValue(ritem, f);
+                    const itemColsToMap = extractionMode === 'tally' ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
+                    
+                    itemColsToMap.forEach(f => {
+                        ni[f] = getCellValue(flatItem, f);
                     });
                     return ni;
                 });
@@ -802,7 +864,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             items.forEach((item) => {
                 const row: Record<string, string> = {};
                 ALL_COLUMNS.forEach((col) => {
-                    row[col] = LINE_ITEM_FIELDS.includes(col)
+                    row[col] = isItemField(col)
                         ? getCellValue(item, col)
                         : getCellValue(res.invoice, col);
                 });
@@ -840,6 +902,16 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     };
 
     // ── File upload & extraction ────────────────────────────────────────────────
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (isExtracting && countdownSeconds !== null && countdownSeconds > 0) {
+            timer = setInterval(() => {
+                setCountdownSeconds(prev => (prev !== null ? prev - 1 : null));
+            }, 1000);
+        }
+        return () => clearInterval(timer);
+    }, [isExtracting, countdownSeconds]);
+
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
@@ -876,7 +948,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             const next = [...prev];
             const res = { ...next[invoiceIdx] };
 
-            if (LINE_ITEM_FIELDS.includes(col)) {
+            if (isItemField(col)) {
                 const items = [...res.items];
                 // If we're editing a fallback empty row
                 if (items.length === 0 && itemIdx === 0) {
@@ -1036,11 +1108,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                                     style={{ width: `${((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100}%` }}
                                                 ></div>
                                             </div>
-                                            <div className="flex justify-between text-[10px] text-gray-500 font-medium">
-                                                <span>Total: {bulkStatus.total}</span>
-                                                <span className="text-emerald-600">Processed: {bulkStatus.processed}</span>
-                                                <span className="text-red-500">Failed: {bulkStatus.failed}</span>
-                                                <span>Pending: {bulkStatus.pending}</span>
+                                            <div className="flex justify-between items-center text-[10px] text-gray-500 font-medium">
+                                                <div className="flex gap-3">
+                                                    <span>Total: {bulkStatus.total}</span>
+                                                    <span className="text-emerald-600">Processed: {bulkStatus.processed}</span>
+                                                    <span className="text-red-500">Failed: {bulkStatus.failed}</span>
+                                                </div>
+                                                {countdownSeconds !== null && (
+                                                    <div className="flex items-center gap-1 text-indigo-600 font-bold tabular-nums">
+                                                        <span>⏱</span>
+                                                        <span>{Math.floor(countdownSeconds / 60)}:{(countdownSeconds % 60).toString().padStart(2, '0')}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ) : (
@@ -1139,14 +1218,17 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                 <table className="min-w-[1500px] w-full divide-y divide-gray-200 border-collapse">
                                     <thead className="sticky top-0 z-20">
                                         <tr className="bg-gray-50">
-                                            {visibleColumns.map((col) => (
-                                                <th
-                                                    key={col}
-                                                    className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-r border-gray-200 last:border-r-0 whitespace-nowrap min-w-[150px]"
-                                                >
-                                                    {col}
-                                                </th>
-                                            ))}
+                                            {visibleColumns.map((col) => {
+                                                const displayCol = col === 'Voucher Type Name' ? 'File Name' : col;
+                                                return (
+                                                    <th
+                                                        key={col}
+                                                        className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-r border-gray-200 last:border-r-0 whitespace-nowrap min-w-[150px]"
+                                                    >
+                                                        {displayCol}
+                                                    </th>
+                                                );
+                                            })}
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white">
@@ -1161,14 +1243,14 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
 
                                                 {visibleColumns.map((col) => {
-                                                    const isItemField = LINE_ITEM_FIELDS.includes(col);
-                                                    const cellValue = isItemField
+                                                    const isFieldItem = isItemField(col);
+                                                    const cellValue = isFieldItem
                                                         ? getCellValue(row.item, col)
                                                         : getCellValue(row.header, col);
 
                                                     // Check if field was mapped confidently
                                                     const currentRes = invoiceResults[row.invoiceIdx];
-                                                    const isMapped = isItemField
+                                                    const isMapped = isFieldItem
                                                         ? (col === 'S.No' || !!currentRes?.itemMapping?.[col])
                                                         : !!currentRes?.headerMapping?.[col];
 

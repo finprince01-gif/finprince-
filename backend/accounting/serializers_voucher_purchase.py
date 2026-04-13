@@ -7,36 +7,50 @@ from .models_voucher_purchase import (  # type: ignore[import]
     VoucherPurchaseSupplyINRDetails,
     VoucherPurchaseDueDetails,
     VoucherPurchaseTransitDetails,
+    VoucherPurchaseItem,
+    VoucherPurchaseAdvanceLink
 )
 from .models import Voucher, MasterLedger  # type: ignore[import]
 from .services.ledger_service import post_transaction, _resolve_ledger  # type: ignore[import]
 from decimal import Decimal  # noqa: F401
 
 
-# ---------------------------------------------------------------------------
-# Nested child serializers
-# ---------------------------------------------------------------------------
+class VoucherPurchaseItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VoucherPurchaseItem
+        fields = [
+            'id', 'item_code', 'item_name', 'hsn_sac', 'quantity', 'uom', 'rate',
+            'taxable_value', 'igst_amount', 'cgst_amount', 'sgst_amount', 'cess_amount',
+            'invoice_value', 'currency', 'exchange_rate'
+        ]
+
+class VoucherPurchaseAdvanceLinkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VoucherPurchaseAdvanceLink
+        fields = ['id', 'ref_no', 'date', 'amount', 'applied_now']
 
 class VoucherPurchaseSupplyForeignDetailsSerializer(serializers.ModelSerializer):  # type: ignore[misc]
     purchase_order_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     purchase_ledger = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    items = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=True)
+    items = serializers.JSONField(write_only=True, required=False)
+    line_items = VoucherPurchaseItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = VoucherPurchaseSupplyForeignDetails
-        fields = ['purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description', 'items']
+        fields = ['purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description', 'items', 'line_items']
 
 
 class VoucherPurchaseSupplyINRDetailsSerializer(serializers.ModelSerializer):  # type: ignore[misc]
     purchase_order_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     purchase_ledger = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    items = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=True)
+    items = serializers.JSONField(write_only=True, required=False)
+    line_items = VoucherPurchaseItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = VoucherPurchaseSupplyINRDetails
-        fields = ['purchase_order_no', 'purchase_ledger', 'description', 'items']
+        fields = ['purchase_order_no', 'purchase_ledger', 'description', 'items', 'line_items']
 
 
 class VoucherPurchaseDueDetailsSerializer(serializers.ModelSerializer):  # type: ignore[misc]
@@ -46,11 +60,12 @@ class VoucherPurchaseDueDetailsSerializer(serializers.ModelSerializer):  # type:
     to_pay = serializers.DecimalField(max_digits=15, decimal_places=2, required=False)
     posting_note = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     terms = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    advance_references = serializers.JSONField(required=False, default=list)
+    advance_references = serializers.JSONField(write_only=True, required=False)
+    advance_links = VoucherPurchaseAdvanceLinkSerializer(many=True, read_only=True)
 
     class Meta:
         model = VoucherPurchaseDueDetails
-        fields = ['tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms', 'advance_references']
+        fields = ['tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms', 'advance_references', 'advance_links']
 
 
 class VoucherPurchaseTransitDetailsSerializer(serializers.ModelSerializer):  # type: ignore[misc]
@@ -66,7 +81,7 @@ class VoucherPurchaseTransitDetailsSerializer(serializers.ModelSerializer):  # t
     transporter_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     vehicle_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     lr_gr_consignment = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    extra_details = serializers.JSONField(required=False, default=dict)
+    extra_details = serializers.JSONField(write_only=True, required=False)
 
     class Meta:
         model = VoucherPurchaseTransitDetails
@@ -74,6 +89,7 @@ class VoucherPurchaseTransitDetailsSerializer(serializers.ModelSerializer):  # t
             'mode', 'received_in', 'receipt_date', 'receipt_time',
             'received_quantity', 'uqc', 'delivery_type', 'self_third_party',
             'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment',
+            'beyond_port_port_of_loading', 'upto_port_fnr_no', 'upto_port_origin_country', 'rail_beyond_station_loading', 'upto_port_rr_no', 'beyond_port_port_of_discharge', 'rail_beyond_rail_no', 'rail_upto_transporter_name', 'upto_port_final_dest_city', 'rail_beyond_origin_country', 'upto_port_origin_city', 'beyond_port_sb_no', 'rail_upto_delivery_type', 'rail_beyond_rr_date', 'upto_port_port_of_loading', 'rail_beyond_origin', 'upto_port_station_discharge', 'rail_upto_transporter_id', 'beyond_port_vessel_flight_no', 'beyond_port_sb_date', 'beyond_port_final_dest', 'beyond_port_dest_country', 'rail_beyond_dest_country', 'rail_beyond_final_dest', 'beyond_port_origin_country', 'upto_port_vessel_flight_no', 'rail_beyond_rr_no', 'beyond_port_ship_port_code', 'rail_beyond_station_discharge', 'upto_port_final_dest_country', 'upto_port_rr_date', 'upto_port_station_loading', 'upto_port_port_of_discharge',
             'document', 'extra_details',
         ]
 
@@ -100,7 +116,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             self.fields['vendor_id'].queryset = VendorMasterBasicDetail.objects.filter(
-                tenant_id=request.user.tenant_id
+                tenant_id=request.user.branch_id
             )
 
     class Meta:
@@ -213,7 +229,6 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             total_cgst=total_cgst,
             total_sgst=total_sgst,
             total_igst=total_igst,
-            items_data=supply_inr_data.get('items') if supply_inr_data is not None else None,
         )
 
         setattr(supplier_instance, '_accounting_voucher_id', voucher.id)
@@ -249,6 +264,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 'received_quantity', 'uqc', 'delivery_type', 'self_third_party',
                 'transporter_id', 'transporter_name', 'vehicle_no',
                 'lr_gr_consignment', 'extra_details', 'document',
+                'beyond_port_port_of_loading', 'upto_port_fnr_no', 'upto_port_origin_country', 'rail_beyond_station_loading', 'upto_port_rr_no', 'beyond_port_port_of_discharge', 'rail_beyond_rail_no', 'rail_upto_transporter_name', 'upto_port_final_dest_city', 'rail_beyond_origin_country', 'upto_port_origin_city', 'beyond_port_sb_no', 'rail_upto_delivery_type', 'rail_beyond_rr_date', 'upto_port_port_of_loading', 'rail_beyond_origin', 'upto_port_station_discharge', 'rail_upto_transporter_id', 'beyond_port_vessel_flight_no', 'beyond_port_sb_date', 'beyond_port_final_dest', 'beyond_port_dest_country', 'rail_beyond_dest_country', 'rail_beyond_final_dest', 'beyond_port_origin_country', 'upto_port_vessel_flight_no', 'rail_beyond_rr_no', 'beyond_port_ship_port_code', 'rail_beyond_station_discharge', 'upto_port_final_dest_country', 'upto_port_rr_date', 'upto_port_station_loading', 'upto_port_port_of_discharge',
             }
             filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
             if transit_document:
@@ -256,6 +272,11 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             VoucherPurchaseTransitDetails.objects.create(
                 supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
             )
+
+        # Sync legacy JSON to new relational tables
+        self._sync_relational_data(supplier_instance, supply_inr_data, supply_foreign_data, due_data)
+
+        # --- Double-Entry Posting for Purchase (entries table) ---
 
         # --- Double-Entry Posting for Purchase (entries table) ---
         try:
@@ -406,8 +427,6 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 voucher.total_cgst = total_cgst
                 voucher.total_sgst = total_sgst
                 voucher.total_igst = total_igst
-                if items_list is not None:
-                    voucher.items_data = items_list
                 voucher.save()
             except Voucher.DoesNotExist:
                 pass
@@ -443,6 +462,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 'received_quantity', 'uqc', 'delivery_type', 'self_third_party',
                 'transporter_id', 'transporter_name', 'vehicle_no',
                 'lr_gr_consignment', 'extra_details', 'document',
+                'beyond_port_port_of_loading', 'upto_port_fnr_no', 'upto_port_origin_country', 'rail_beyond_station_loading', 'upto_port_rr_no', 'beyond_port_port_of_discharge', 'rail_beyond_rail_no', 'rail_upto_transporter_name', 'upto_port_final_dest_city', 'rail_beyond_origin_country', 'upto_port_origin_city', 'beyond_port_sb_no', 'rail_upto_delivery_type', 'rail_beyond_rr_date', 'upto_port_port_of_loading', 'rail_beyond_origin', 'upto_port_station_discharge', 'rail_upto_transporter_id', 'beyond_port_vessel_flight_no', 'beyond_port_sb_date', 'beyond_port_final_dest', 'beyond_port_dest_country', 'rail_beyond_dest_country', 'rail_beyond_final_dest', 'beyond_port_origin_country', 'upto_port_vessel_flight_no', 'rail_beyond_rr_no', 'beyond_port_ship_port_code', 'rail_beyond_station_discharge', 'upto_port_final_dest_country', 'upto_port_rr_date', 'upto_port_station_loading', 'upto_port_port_of_discharge',
             }
             filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
             if transit_document:
@@ -451,6 +471,9 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 supplier_details=instance,
                 defaults={**filtered_data, 'tenant_id': tenant_id},
             )
+
+        # Sync legacy JSON to new relational tables
+        self._sync_relational_data(instance, supply_inr_data, supply_foreign_data, due_data)
 
         # NOTE: _mirror_to_vendor_portal is already called below in the main body
         self._mirror_to_vendor_portal(instance)
@@ -530,6 +553,76 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             print(f"Error updating purchase accounting entries: {str(e)}")
 
         return instance
+
+    def _sync_relational_data(self, supplier_instance, inr_data, foreign_data, due_data):
+        """Bridge between legacy JSON arrays and normalized child tables."""
+        tenant_id = supplier_instance.tenant_id
+        
+        # 1. Clear existing relational items/links for this supplier (clean replace)
+        VoucherPurchaseItem.objects.filter(supplier_details=supplier_instance).delete()
+        if hasattr(supplier_instance, 'due_details'):
+            VoucherPurchaseAdvanceLink.objects.filter(due_details=supplier_instance.due_details).delete()
+
+        # 2. Sync INR Items
+        if inr_data and 'items' in inr_data:
+            for item in inr_data['items']:
+                if not isinstance(item, dict): continue
+                VoucherPurchaseItem.objects.create(
+                    supplier_details=supplier_instance,
+                    tenant_id=tenant_id,
+                    item_code=item.get('itemCode', ''),
+                    item_name=item.get('itemName', ''),
+                    hsn_sac=item.get('hsnSac', ''),
+                    quantity=Decimal(str(item.get('qty', 0))),
+                    uom=item.get('uom', ''),
+                    rate=Decimal(str(item.get('itemRate', 0))),
+                    taxable_value=Decimal(str(item.get('taxableValue', 0))),
+                    igst_amount=Decimal(str(item.get('igst', 0))),
+                    cgst_amount=Decimal(str(item.get('cgst', 0))),
+                    sgst_amount=Decimal(str(item.get('sgst', 0))),
+                    cess_amount=Decimal(str(item.get('cess', 0))),
+                    invoice_value=Decimal(str(item.get('invoiceValue', 0))),
+                    currency='INR',
+                    exchange_rate=1.0
+                )
+
+        # 3. Sync Foreign Items
+        if foreign_data and 'items' in foreign_data:
+            ex_rate = Decimal(str(foreign_data.get('exchange_rate', 1.0)))
+            cur = supplier_instance.invoice_in_foreign_currency # This might need better lookup
+            for item in foreign_data['items']:
+                if not isinstance(item, dict): continue
+                VoucherPurchaseItem.objects.create(
+                    supplier_details=supplier_instance,
+                    tenant_id=tenant_id,
+                    item_code=item.get('itemCode', item.get('item_code', '')),
+                    item_name=item.get('itemName', item.get('item_name', '')),
+                    quantity=Decimal(str(item.get('qty', item.get('quantity', 0)))),
+                    rate=Decimal(str(item.get('itemRate', item.get('rate', 0))),),
+                    invoice_value=Decimal(str(item.get('amount', 0))),
+                    currency=cur,
+                    exchange_rate=ex_rate
+                )
+
+        # 4. Sync Advance Links
+        if due_data and 'advance_references' in due_data:
+            due_details = supplier_instance.due_details
+            refs = due_data['advance_references']
+            if isinstance(refs, str):
+                try: refs = json.loads(refs)
+                except: refs = []
+            
+            if isinstance(refs, list):
+                for adv in refs:
+                    if not isinstance(adv, dict): continue
+                    VoucherPurchaseAdvanceLink.objects.create(
+                        due_details=due_details,
+                        tenant_id=tenant_id,
+                        ref_no=adv.get('refNo', ''),
+                        date=adv.get('date'),
+                        amount=Decimal(str(adv.get('amount', 0))),
+                        applied_now=Decimal(str(adv.get('appliedNow', 0)))
+                    )
 
     def _mirror_to_vendor_portal(self, purchase):
         """

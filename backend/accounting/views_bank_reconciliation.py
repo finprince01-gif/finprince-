@@ -50,8 +50,8 @@ def flexible_parse_date(date_str):
 
 from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink  # type: ignore[import]
 from .models import AmountTransaction, MasterLedger, Voucher, JournalEntry  # type: ignore[import]
-from .models_voucher_payment import VoucherPaymentSingle  # type: ignore[import]
-from .models_voucher_receipt import VoucherReceiptSingle  # type: ignore[import]
+from .models import VoucherPaymentSingle  # type: ignore[import]
+from .models import VoucherReceiptSingle  # type: ignore[import]
 from .serializers_bank_reconciliation import (  # type: ignore[import]
     BankStatementTransactionSerializer,
     BankReconciliationLinkSerializer,
@@ -350,7 +350,7 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def _get_tenant_id(self, request):
-        return str(request.user.tenant_id)
+        return str(request.user.branch_id)
 
     def _generate_voucher_number(self, tenant_id: str, is_payment: bool, voucher_name: Optional[str] = None) -> str:
         """

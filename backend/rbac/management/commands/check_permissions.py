@@ -26,12 +26,12 @@ class Command(BaseCommand):
             
             self.stdout.write(self.style.SUCCESS(f'\n=== User: {user.username} ==='))
             self.stdout.write(f'Email: {user.email}')
-            self.stdout.write(f'Tenant ID: {user.tenant_id}')
+            self.stdout.write(f'Branch ID: {user.branch_id}')
             self.stdout.write(f'Is Superuser: {user.is_superuser}')
             self.stdout.write(f'Is Active: {user.is_active}')
             
             # Get user's roles
-            user_roles = UserRole.objects.filter(user=user, tenant_id=user.tenant_id)
+            user_roles = UserRole.objects.filter(user=user, tenant_id=user.branch_id)
             
             self.stdout.write(self.style.SUCCESS(f'\n=== Roles ({user_roles.count()}) ==='))
             
@@ -46,7 +46,7 @@ class Command(BaseCommand):
                 self.stdout.write(json.dumps(ur.role.permissions, indent=2))
             
             # Show all available roles
-            all_roles = Role.objects.filter(tenant_id=user.tenant_id)
+            all_roles = Role.objects.filter(tenant_id=user.branch_id)
             self.stdout.write(self.style.SUCCESS(f'\n=== All Available Roles ({all_roles.count()}) ==='))
             for role in all_roles:
                 self.stdout.write(f'\n{role.id}. {role.name} - {role.description}')

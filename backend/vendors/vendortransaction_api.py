@@ -31,7 +31,7 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
         """Extract tenant_id from the authenticated user"""
         user = self.request.user
         if hasattr(user, 'tenant_id'):
-            return user.tenant_id
+            return user.branch_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
         else:
@@ -58,7 +58,7 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
             )
         
         tenant_id = self.get_tenant_id()
-        logger.info(f"Tenant: {tenant_id}, Vendor ID: {vendor_id}")
+        logger.info(f"Branch: {tenant_id}, Vendor ID: {vendor_id}")
         
         transactions = self.get_queryset().filter(vendor_id=vendor_id)
         count_vendor = transactions.count()

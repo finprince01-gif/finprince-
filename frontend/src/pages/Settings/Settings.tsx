@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { CompanyDetails } from '../../types';
-import { apiService } from '../../services';
+import { apiService, masterApiService, AxiosRequestConfig } from '../../services';
+import { getUserTypeFromToken } from '../../services/jwtUtils';
+import { getAccessToken } from '../../services/authService';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useTheme } from '../../context/ThemeContext';
 import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
@@ -11,30 +13,28 @@ import { handleApiError } from '../../utils/errorHandler';
 interface SettingsPageProps {
   companyDetails: CompanyDetails;
   onSave: (details: CompanyDetails) => void;
+  tenantId?: string; // Optional tenantId for Master Admin mode
 }
 
-const indianStates = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
-  "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh",
-  "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan",
-  "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttarakhand", "Uttar Pradesh", "West Bengal",
-  "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli", "Daman and Diu", "Delhi",
-  "Lakshadweep", "Puducherry"
-];
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave, tenantId }) => {
   const { theme, toggleTheme } = useTheme();
   const { hasTabAccess, isSuperuser } = usePermissions();
+  const userType = getUserTypeFromToken(getAccessToken());
+  const isMaster = userType === 'master';
 
-  const allTabs = ['Company Profile', 'Tax Settings', 'Regional Settings', 'Subscription'];
+  const allTabs = isMaster 
+    ? ['Company Profile', 'Tax Settings', 'Regional Settings']
+    : ['Company Profile', 'Tax Settings', 'Regional Settings', 'Subscription'];
+
   const availableTabs = useMemo(() => {
     return isSuperuser ? allTabs : allTabs.filter(tab => tab === 'Subscription' || hasTabAccess('Settings', tab));
-  }, [hasTabAccess, isSuperuser]);
+  }, [hasTabAccess, isSuperuser, isMaster]); // added isMaster dependency just in case
 
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['Company Profile', 'Tax Settings', 'Regional Settings', 'Subscription'].includes(tabParam)) {
+    if (tabParam && allTabs.includes(tabParam)) {
       return tabParam;
     }
     return availableTabs.length > 0 ? availableTabs[0] : 'Company Profile';
@@ -82,10 +82,23 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
 
   // Load existing company settings from database
   useEffect(() => {
-    const loadCompanySettings = async () => {
+    const loadSettings = async () => {
       try {
         setIsLoading(true);
-        const existingSettings = await apiService.getCompanyDetails();
+        let existingSettings;
+        
+        if (isMaster) {
+          if (tenantId && tenantId !== 'all') {
+            existingSettings = await masterApiService.getBranchSettings(tenantId);
+          } else {
+            existingSettings = await masterApiService.getSettings();
+          }
+        } else {
+          const options: AxiosRequestConfig = tenantId ? {
+            headers: { 'X-Tenant-ID': tenantId === 'all' ? '' : tenantId }
+          } : {};
+          existingSettings = await apiService.getCompanyDetails(options);
+        }
 
         if (existingSettings && Object.keys(existingSettings).length > 0) {
           // Use existing settings from database but fill missing email/phone from signup if still missing
@@ -94,38 +107,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
 
           setDetails({
             ...existingSettings,
-            name: existingSettings.name || signupCompanyName,
+            name: existingSettings.name || (isMaster ? existingSettings.username : signupCompanyName),
             email: existingSettings.email || signupEmail,
           });
-        } else {
-          // Pre-fill with signup data if no settings exist
-          const signupCompanyName = sessionStorage.getItem('companyName') || localStorage.getItem('companyName') || '';
-          const signupEmail = sessionStorage.getItem('signupEmail') || localStorage.getItem('signupEmail') || '';
-
-          setDetails(prev => ({
-            ...prev,
-            name: prev.name || signupCompanyName,
-            email: prev.email || signupEmail,
-          }));
         }
       } catch (error) {
-
-        // Pre-fill with signup data as fallback
-        const signupCompanyName = sessionStorage.getItem('companyName') || localStorage.getItem('companyName') || '';
-        const signupEmail = sessionStorage.getItem('signupEmail') || localStorage.getItem('signupEmail') || '';
-
-        setDetails(prev => ({
-          ...prev,
-          name: prev.name || signupCompanyName,
-          email: prev.email || signupEmail,
-        }));
+        console.error('Failed to load settings:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadCompanySettings();
-  }, []);
+    loadSettings();
+  }, [tenantId, isMaster]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -133,6 +127,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       ...details,
       [name]: value
     });
+  };
+
+  const handleEnter = (e: React.KeyboardEvent, nextId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById(nextId)?.focus();
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,16 +145,21 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (logoFile) {
-        // If there's a logo, we must Use FormData
-        // The current apiService.saveCompanyDetails uses JSON.stringify, so we can't use it directly for files.
-        // We'll create a FormData object and call a new/modified method or handle it here if direct access.
-
-        // But apiService is available. Let's assume we update apiService to handle FormData for company settings.
-        await apiService.saveCompanyDetails({ ...details, logoFile });
+      if (isMaster) {
+        if (tenantId && tenantId !== 'all') {
+          await masterApiService.updateBranchSettings(tenantId, details);
+        } else {
+          await masterApiService.updateSettings(details);
+        }
       } else {
-        // JSON update
-        await apiService.saveCompanyDetails(details);
+        const options: AxiosRequestConfig = tenantId ? {
+          headers: { 'X-Tenant-ID': tenantId === 'all' ? '' : tenantId }
+        } : {};
+        if (logoFile) {
+          await apiService.saveCompanyDetails({ ...details, logoFile }, options);
+        } else {
+          await apiService.saveCompanyDetails(details, options);
+        }
       }
       onSave(details);
       setIsSaved(true);
@@ -181,8 +187,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       {/* Page Header */}
       <div className="erp-section-title flex items-center justify-between">
         <div>
-          <h1 className="page-title">System Settings</h1>
-          <p className="helper-text mb-0">Configure your company profile and preferences</p>
+          <h1 className="page-title">{isMaster ? (tenantId && tenantId !== 'all' ? `Entity Configuration: ${details.name || ''}` : 'Master Profile Settings') : 'System Settings'}</h1>
+          <p className="helper-text mb-0">{isMaster ? (tenantId && tenantId !== 'all' ? 'Modify company-specific metadata and defaults' : 'Manage your administrator account') : 'Configure your company profile and preferences'}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="helper-text">Dark Mode</span>
@@ -226,10 +232,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     Company Name
                   </label>
                   <input
+                    id="sett-name"
                     type="text"
                     name="name"
                     value={details.name || ''}
                     onChange={handleChange}
+                    onKeyDown={e => handleEnter(e, 'sett-address')}
                     disabled={!isEditMode}
                     className="erp-input"
                   />
@@ -251,10 +259,16 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     Address
                   </label>
                   <textarea
+                    id="sett-address"
                     name="address"
                     rows={4}
                     value={details.address || ''}
                     onChange={handleChange}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        handleEnter(e, 'sett-email');
+                      }
+                    }}
                     className="erp-input resize-none"
                     placeholder="Enter company address"
                   />
@@ -273,10 +287,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     Email
                   </label>
                   <input
+                    id="sett-email"
                     type="email"
                     name="email"
                     value={details.email || ''}
                     onChange={handleChange}
+                    onKeyDown={e => handleEnter(e, 'sett-phone')}
                     disabled={!isEditMode}
                     className="erp-input"
                     placeholder="company@example.com"
@@ -287,10 +303,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     Phone
                   </label>
                   <input
+                    id="sett-phone"
                     type="tel"
                     name="phone"
                     value={details.phone || ''}
                     onChange={handleChange}
+                    onKeyDown={e => handleEnter(e, 'sett-website')}
                     className="erp-input"
                     placeholder="+91 9876543210"
                   />
@@ -300,10 +318,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     Website
                   </label>
                   <input
+                    id="sett-website"
                     type="url"
                     name="website"
                     value={details.website || ''}
                     onChange={handleChange}
+                    onKeyDown={e => handleEnter(e, 'sett-gstin')}
                     className="erp-input"
                     placeholder="https://www.company.com"
                   />
@@ -322,10 +342,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     GSTIN
                   </label>
                   <input
+                    id="sett-gstin"
                     type="text"
                     name="gstin"
                     value={details.gstin || ''}
                     onChange={handleChange}
+                    onKeyDown={e => handleEnter(e, 'sett-state')}
                     className="erp-input"
                     placeholder="22AAAAA0000A1Z5"
                   />
@@ -334,27 +356,29 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                   <label className="label-text">
                     State
                   </label>
-                  <select
+                  <input
+                    id="sett-state"
+                    type="text"
                     name="state"
                     value={details.state || ''}
                     onChange={handleChange}
-                    className="erp-select"
-                  >
-                    <option value="">Select State</option>
-                    {indianStates.map(state => (
-                      <option key={state} value={state}>{state}</option>
-                    ))}
-                  </select>
+                    onKeyDown={e => handleEnter(e, 'sett-pan')}
+                    className="erp-input"
+                    placeholder="Enter state"
+                    disabled={!isEditMode}
+                  />
                 </div>
                 <div>
                   <label className="label-text">
                     PAN
                   </label>
                   <input
+                    id="sett-pan"
                     type="text"
                     name="pan"
                     value={details.pan || ''}
                     onChange={handleChange}
+                    onKeyDown={e => handleEnter(e, 'sett-cin')}
                     className="erp-input"
                     placeholder="AAAAA0000A"
                   />
@@ -364,10 +388,17 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     CIN
                   </label>
                   <input
+                    id="sett-cin"
                     type="text"
                     name="cin"
                     value={details.cin || ''}
                     onChange={handleChange}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSubmit(e);
+                      }
+                    }}
                     className="erp-input"
                     placeholder="U12345MH2020PLC123456"
                   />

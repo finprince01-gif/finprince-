@@ -439,6 +439,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     const handleTotalAmountChange = (val: number) => {
         // Only update the top-level amount field — do NOT auto-allocate to pending transactions
         setTotalPayment(val);
+
     };
 
     // Uniqueness Check Logic

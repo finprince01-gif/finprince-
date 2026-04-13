@@ -60,19 +60,15 @@ class VoucherDebitNoteSupplierDetails(BaseModel):
         return f"{self.debit_note_no} - {self.vendor_name}"
 
 
-class VoucherDebitNoteSupplyDetails(BaseModel):
+class VoucherDebitNoteItemDetails(BaseModel):
     """
-    Stores Supply Details for Debit Note Voucher (Tab 2)
+    Stores Item Details for Debit Note Voucher (Tab 2)
     """
     debit_note_details = models.OneToOneField(
         VoucherDebitNoteSupplierDetails, 
         on_delete=models.CASCADE, 
-        related_name='supply_details'
+        related_name='item_details'
     )
-    
-    # Items
-    # Structure: [{id, itemCode, itemName, hsnSac, qty, uom, itemRate, taxableValue, igst, cgst, sgst, cess, invoiceValue, reasonForReturn, ...}]
-    items = models.JSONField(default=list)
     
     # Totals
     total_taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
@@ -83,7 +79,36 @@ class VoucherDebitNoteSupplyDetails(BaseModel):
     total_invoice_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
     class Meta:
-        db_table = 'voucher_debit_note_supply_details'
+        db_table = 'voucher_debit_note_item_details'
+
+
+class VoucherDebitNoteItemLine(BaseModel):
+    """
+    Individual line items for a Debit Note.
+    """
+    item_details = models.ForeignKey(VoucherDebitNoteItemDetails, on_delete=models.CASCADE, related_name='item_lines')
+    
+    item_code = models.CharField(max_length=100, null=True, blank=True)
+    item_name = models.CharField(max_length=255, null=True, blank=True)
+    hsn_sac = models.CharField(max_length=50, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=18, decimal_places=4, default=0)
+    uom = models.CharField(max_length=50, null=True, blank=True)
+    rate = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    taxable_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    
+    igst_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    cess_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    
+    invoice_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    reason_for_return = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'voucher_debit_note_item_lines'
+
+
+
 
 
 class VoucherDebitNoteDueDetails(BaseModel):

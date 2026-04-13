@@ -4,19 +4,19 @@ logger = logging.getLogger(__name__)
 from rest_framework import viewsets, status, generics, views  # type: ignore
 from rest_framework.response import Response  # type: ignore
 from rest_framework.permissions import IsAuthenticated, AllowAny  # type: ignore
-from rest_framework.decorators import api_view, permission_classes, authentication_classes  # type: ignore
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, action  # type: ignore
 from django.utils.decorators import method_decorator  # type: ignore
 from django.views.decorators.csrf import csrf_exempt  # type: ignore
 from django.utils import timezone  # type: ignore
 from datetime import timedelta
 # User model imported inside views to avoid AppRegistryNotReady
 
-from .models import CompanyFullInfo  # type: ignore
+from .models import Branch  # type: ignore
 from .serializers import (  # type: ignore
     UserSignupSerializer,
-    CompanySettingsSerializer
+    TenantSerializer
 )
-from .utils import TenantQuerysetMixin, IsTenantMember  # type: ignore
+from .mixins import BranchQuerysetMixin, IsBranchMember
 from .exceptions import UsageLimitExceeded, BusinessException, ExternalServiceError  # type: ignore
 
 class SignupView(generics.CreateAPIView):
@@ -26,54 +26,7 @@ class SignupView(generics.CreateAPIView):
 
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser  # type: ignore
 
-class CompanySettingsViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
-    serializer_class = CompanySettingsSerializer
-    permission_classes = [IsAuthenticated, IsTenantMember]
-    required_permission = 'SETTINGS_COMPANY'
-    queryset = CompanyFullInfo.objects.all()
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        if queryset.exists():
-            instance = queryset.first()
-            serializer = self.get_serializer(instance)
-            data = serializer.data
-            # User model might have the correct data while CompanyFullInfo has empty strings or nulls
-            if not data.get('email') or str(data.get('email')).strip() in ('', 'None'):
-                if getattr(request.user, 'email', None):
-                    data['email'] = request.user.email
-            if not data.get('phone') or str(data.get('phone')).strip() in ('', 'None'):
-                if getattr(request.user, 'phone', None):
-                    data['phone'] = request.user.phone
-            return Response(data)
-            
-        return Response({
-            'name': getattr(request.user, 'company_name', ''),
-            'email': getattr(request.user, 'email', ''),
-            'phone': getattr(request.user, 'phone', '')
-        })
-
-    def create(self, request, *args, **kwargs):
-        tid = request.user.tenant_id
-        instance = CompanyFullInfo.objects.filter(tenant_id=tid).first()
-        serializer = self.get_serializer(instance, data=request.data, partial=True) if instance else self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        logo_file = request.FILES.get('logo')
-        if logo_file:
-            from django.core.files.storage import default_storage  # type: ignore
-            file_path = default_storage.save(f"logos/{tid}_{logo_file.name}", logo_file)
-            logo_path_str = default_storage.url(file_path)
-            serializer.save(tenant_id=tid, logo_path=logo_path_str)
-        else:
-            serializer.save(tenant_id=tid)
-            
-        return Response(serializer.data)
-
-    def perform_create(self, serializer):
-        tid = self.request.user.tenant_id
-        serializer.save(tenant_id=tid)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -329,13 +282,13 @@ class AIProxyView(views.APIView):
         if not request.user.is_authenticated:
             return Response({'error': 'AI service busy. Please try again later.'}, status=429)
 
-        # Extract user and tenant info
         user_id = str(request.user.id)
         tenant_id = getattr(request.user, 'tenant_id', None)
-        if tenant_id:
-            tenant_id = str(tenant_id)
-        else:
-            tenant_id = 'default' # Fallback to default tenant if not set
+        if not tenant_id:
+            from rest_framework.exceptions import PermissionDenied  # type: ignore
+            raise PermissionDenied("Valid Branch context is required for AI operations.")
+        
+        tenant_id = str(tenant_id)
 
         if action == 'extract-invoice':
             # Handle file upload for invoice extraction
@@ -532,8 +485,10 @@ class AIProxyView(views.APIView):
         return Response({'error': 'Unknown action'}, status=400)
 
 
+from rest_framework.permissions import IsAdminUser  # type: ignore
+
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def extraction_average_time(request):
     from .models import ExtractionPerformance  # type: ignore
     from django.db.models import Avg  # type: ignore
@@ -573,7 +528,8 @@ class OCRCacheUpdateView(views.APIView):
 
         tenant_id = getattr(request.user, 'tenant_id', None)
         if not tenant_id:
-            return Response({'error': 'Tenant not identified.'}, status=400)
+            from rest_framework.exceptions import PermissionDenied  # type: ignore
+            raise PermissionDenied("Authentication with a valid tenant is required.")
 
         # Validate request body
         extracted_data = request.data.get('extracted_data')
@@ -611,4 +567,26 @@ class OCRCacheUpdateView(views.APIView):
         if success:
             return Response({'success': True})
         return Response({'error': 'Failed to update OCR cache record.'}, status=500)
+
+
+
+
+
+class BranchViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for managing Branches (Branch level)
+    """
+    queryset = Branch.objects.all()
+    serializer_class = TenantSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from .models import MasterUser
+        queryset = Branch.objects.all()
+        
+        if isinstance(self.request.user, MasterUser):
+            return queryset.order_by('name')
+            
+        # Standard user sees only their own branch
+        return queryset.filter(id=self.request.user.tenant_id)
 

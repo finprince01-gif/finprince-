@@ -69,7 +69,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
             tenant_id = getattr(request.user, 'tenant_id', None)
             if not tenant_id:
                 return Response(
-                    {'error': 'Tenant ID not found for user'},
+                    {'error': 'Branch ID not found for user'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -219,12 +219,12 @@ class ServiceGroupViewSet(viewsets.ModelViewSet):
             
             # Get tenant_id from authenticated user
             tenant_id = getattr(request.user, 'tenant_id', None)
-            logger.info(f"Tenant ID: {tenant_id}")
+            logger.info(f"Branch ID: {tenant_id}")
             
             if not tenant_id:
                 logger.error("No tenant_id found for user")
                 return Response(
-                    {'error': 'Tenant ID not found for user'},
+                    {'error': 'Branch ID not found for user'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             

@@ -5,9 +5,11 @@ from django.db import transaction as db_transaction # type: ignore
 from django.utils import timezone # type: ignore
 import datetime
 
-from .models_voucher_receipt import ReceiptVoucher, ReceiptVoucherItem # type: ignore
+from .models import ReceiptVoucher, ReceiptVoucherItem, Voucher, JournalEntry # type: ignore
 from .serializers_receipt import ReceiptVoucherSerializer # type: ignore
 from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink # type: ignore
+from .models_advance_allocation import AdvanceAllocation
+from .models_pending_transaction import PendingTransaction
 
 class ReceiptVoucherViewSet(viewsets.ModelViewSet):
     """
@@ -20,8 +22,8 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = self.queryset
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            queryset = queryset.filter(tenant_id=user.tenant_id)
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            queryset = queryset.filter(tenant_id=user.branch_id)
 
         customer_name = self.request.query_params.get('customer')
         if customer_name:
@@ -111,19 +113,19 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            serializer.save(tenant_id=user.tenant_id)
+        if hasattr(user, 'tenant_id') and user.branch_id:
+            serializer.save(tenant_id=user.branch_id)
         else:
             serializer.save()
 
     @action(detail=False, methods=['get'], url_path='check-uniqueness')
     def check_uniqueness(self, request):
         ref_no = request.query_params.get('ref_no')
-        tenant_id = self.request.user.tenant_id if hasattr(self.request.user, 'tenant_id') else None
+        tenant_id = self.request.user.branch_id if hasattr(self.request.user, 'tenant_id') else None
         
-        # Unique check for Voucher Number and Advance Reference (now in Items)
-        exists_voucher = ReceiptVoucher.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists()
-        exists_advance = ReceiptVoucherItem.objects.filter(advance_ref_no=ref_no, tenant_id=tenant_id).exists()
+        # Unique check for Voucher Number and Advance Reference
+        exists_voucher = Voucher.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists()
+        exists_advance = AdvanceAllocation.objects.filter(advance_ref_no=ref_no, tenant_id=tenant_id).exists()
         
         is_unique = not (exists_voucher or exists_advance)
         return Response({"is_unique": is_unique, "ref_no": ref_no})

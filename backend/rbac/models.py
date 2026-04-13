@@ -5,8 +5,8 @@ This module defines the database models for implementing granular RBAC
 with page-level and tab-level permissions.
 """
 
-from django.db import models
-from django.contrib.auth import get_user_model
+from django.db import models  # type: ignore
+from django.contrib.auth import get_user_model  # type: ignore
 from core.models import BaseModel
 
 User = get_user_model()

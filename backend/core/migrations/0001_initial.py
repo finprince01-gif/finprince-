@@ -123,7 +123,7 @@ class Migration(migrations.Migration):
                 ('year', models.IntegerField()),
                 ('month', models.IntegerField()),
                 ('used_count', models.IntegerField(default=0)),
-                ('tenant', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.tenant')),
+                ('tenant', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.Tenant')),
             ],
             options={
                 'db_table': 'ai_usage',

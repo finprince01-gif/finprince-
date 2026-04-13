@@ -573,12 +573,11 @@ def _get_or_create_pending_tx(
         reference_number=voucher_number,
         reference_type=voucher_type,
         defaults={
-            "reference_date": voucher_date,
+            "invoice_date": voucher_date,
             "vendor_id": vendor_id,
             "original_amount": amount,
-            "pending_balance": amount,
-            "status": "Open",
-            "purchase_voucher_id": purchase_voucher_id,
+            "pending_amount": amount,
+            "status": "pending",
         },
     )
     return obj
@@ -613,13 +612,13 @@ def write_bill_allocation(
         dn_tx, _ = PendingTransaction.objects.get_or_create(
             tenant_id=tenant_id,
             reference_number=dn_number,
-            reference_type="DEBIT_NOTE",
+            reference_type="debit_note",
             defaults={
-                "reference_date": dn_date,
+                "voucher_date": dn_date,
                 "vendor_id": vendor_id,
                 "original_amount": vendor_debit_amount,
-                "pending_balance": vendor_debit_amount,
-                "status": "Open",
+                "pending_amount": vendor_debit_amount,
+                "status": "pending",
             },
         )
 
@@ -669,18 +668,18 @@ def write_bill_allocation(
             )
 
             # Reduce Debit Note pending balance
-            dn_tx.pending_balance = (dn_tx.pending_balance - applied_now).quantize(TWO_PLACES)
-            if dn_tx.pending_balance <= 0:
-                dn_tx.status = "Utilized"
-            dn_tx.save(update_fields=["pending_balance", "status"])
+            dn_tx.pending_amount = (dn_tx.pending_amount - applied_now).quantize(TWO_PLACES)
+            if dn_tx.pending_amount <= 0:
+                dn_tx.status = "paid"
+            dn_tx.save(update_fields=["pending_amount", "status"])
 
             # Reduce Purchase Invoice pending balance
-            old_purchase_balance = purchase_tx.pending_balance
-            purchase_tx.pending_balance = (purchase_tx.pending_balance - applied_now).quantize(TWO_PLACES)
+            old_purchase_balance = purchase_tx.pending_amount
+            purchase_tx.pending_amount = (purchase_tx.pending_amount - applied_now).quantize(TWO_PLACES)
 
             # ── 3. Payment Release (LIFO) if purchase goes negative ────
-            if purchase_tx.pending_balance < 0:
-                excess = abs(purchase_tx.pending_balance)
+            if purchase_tx.pending_amount < 0:
+                excess = abs(purchase_tx.pending_amount)
                 _release_payments_lifo(
                     purchase_tx=purchase_tx,
                     excess_amount=excess,
@@ -688,14 +687,14 @@ def write_bill_allocation(
                     dn_number=dn_number,
                     dn_date=dn_date,
                 )
-                purchase_tx.pending_balance = Decimal("0")
+                purchase_tx.pending_amount = Decimal("0")
 
             # Update Purchase Invoice status
-            if purchase_tx.pending_balance <= 0:
-                purchase_tx.status = "Paid"
-            elif purchase_tx.pending_balance < purchase_tx.original_amount:
-                purchase_tx.status = "Partially Paid"
-            purchase_tx.save(update_fields=["pending_balance", "status"])
+            if purchase_tx.pending_amount <= 0:
+                purchase_tx.status = "paid"
+            elif purchase_tx.pending_amount < purchase_tx.original_amount:
+                purchase_tx.status = "partially_paid"
+            purchase_tx.save(update_fields=["pending_amount", "status"])
 
 
 def _release_payments_lifo(

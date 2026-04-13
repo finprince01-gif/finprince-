@@ -1,136 +1,179 @@
 """
 models_pending_transaction.py
 ==============================
-Pending Transaction & Allocation Link models for Bill Allocation Lifecycle.
+PendingTransaction — unified invoice-level allocation table for
+Payment and Receipt vouchers.
 
-PendingTransaction
-------------------
-Stores one row per voucher reference (Purchase Invoice, Debit Note, Payment)
-with a running `pending_balance` and `status`.
+Replaces:
+  - PaymentVoucherItem          (payment_voucher_items)
+  - ReceiptVoucherItem          (receipt_voucher_items)
+  - VoucherPendingTransaction   (voucher_pending_transactions)
+  - AllocationLink              (allocation_links)
 
-AllocationLink
---------------
-Records every time one reference is applied against another
-(e.g., Debit Note applied against Purchase Invoice,
- Payment applied against Purchase Invoice,
- Reversal of a payment).
+One row = one invoice-level allocation line inside a Payment or Receipt voucher.
+Use the `type` field to identify the voucher kind and mode.
+
+type choices:
+  'payment_single'  — Single payment invoice allocation
+  'payment_bulk'    — Bulk payment invoice allocation
+  'receipt_single'  — Single receipt invoice allocation
+  'receipt_bulk'    — Bulk receipt invoice allocation
 """
 
 from django.db import models
 from core.models import BaseModel
 
 
+TYPE_CHOICES = [
+    ('payment_single', 'Payment – Single'),
+    ('payment_bulk',   'Payment – Bulk'),
+    ('receipt_single', 'Receipt – Single'),
+    ('receipt_bulk',   'Receipt – Bulk'),
+]
+
+REFERENCE_TYPE_CHOICES = [
+    ('invoice',     'Invoice'),
+    ('advance',     'Advance'),
+    ('on_account',  'On Account'),
+    ('debit_note',  'Debit Note'),
+    ('credit_note', 'Credit Note'),
+]
+
+STATUS_CHOICES = [
+    ('pending',            'Pending'),
+    ('partially_paid',     'Partially Paid'),
+    ('paid',               'Paid'),
+    ('partially_received', 'Partially Received'),
+    ('received',           'Received'),
+    ('cancelled',          'Cancelled'),
+]
+
+
 class PendingTransaction(BaseModel):
     """
-    One row per voucher reference in the Bill Allocation ledger.
+    Unified pending (invoice-level) transaction for Payment and Receipt vouchers.
 
-    Typical lifecycle for a Debit Note
-    -----------------------------------
-    1. Debit Note created  → Row inserted (status=Open, pending_balance=gross_amount_due)
-    2. DN applied vs Inv   → pending_balance decreases (status → Utilized when 0)
-    3. If Inv's balance <0 → Payment rows are released (LIFO)
+    Covers:
+      - Invoice payments in Single Payment  (type='payment_single')
+      - Invoice payments in Bulk   Payment  (type='payment_bulk')
+      - Invoice receipts in Single Receipt  (type='receipt_single')
+      - Invoice receipts in Bulk   Receipt  (type='receipt_bulk')
 
-    Typical lifecycle for a Purchase Invoice
-    -----------------------------------------
-    1. Purchase Voucher saved → Row inserted (status=Unpaid, pending_balance=total)
-    2. Payment applied       → pending_balance decreases
-    3. Debit Note applied    → pending_balance decreases further
-    4. Fully settled         → status=Paid
+    Fields
+    ------
+    type                    Identifies the voucher kind and mode.
+    voucher_number          Parent voucher number.
+    voucher_date            Date of the parent voucher.
+    voucher_type            Config name (e.g. 'Payment-01').
+
+    pay_from_ledger_*       Cash/Bank account used (Payment=debit, Receipt=credit).
+    pay_to_ledger_*         Party ledger (Payment=Pay To, Receipt=Receive From).
+
+    vendor_id/name          Set when party is a vendor.
+    customer_id/name        Set when party is a customer.
+
+    reference_number        The invoice/PO/DN number being settled.
+    reference_type          'invoice' | 'advance' | 'on_account' | ...
+    invoice_date            Date of the referenced invoice.
+
+    original_amount         Total invoice value.
+    pending_amount          Amount outstanding before THIS allocation.
+    amount_applied          Amount being paid/received in this row.
+    balance_after           Remaining balance after this allocation.
+
+    status                  Lifecycle status of the invoice.
+    due_date / days_to_due  Payment due details.
+    narration               Line-level note.
     """
 
-    REFERENCE_TYPES = [
-        ("PURCHASE",   "Purchase Invoice"),
-        ("DEBIT_NOTE", "Debit Note"),
-        ("PAYMENT",    "Payment Voucher"),
-        ("RECEIPT",    "Receipt Voucher"),
-        ("REVERSAL",   "Reversal Entry"),
-    ]
+    # ── Type ─────────────────────────────────────────────────────────────────
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, db_index=True)
 
-    STATUS_CHOICES = [
-        # Purchase Invoice statuses
-        ("Unpaid",         "Unpaid"),
-        ("Partially Paid", "Partially Paid"),
-        ("Paid",           "Paid"),
-        # Debit Note statuses
-        ("Open",           "Open"),
-        ("Utilized",       "Utilized"),
-        # Payment statuses
-        ("Unutilized",       "Unutilized"),
-        ("Partially Utilized", "Partially Utilized"),
-        ("Fully Utilized",    "Fully Utilized"),
-    ]
+    # ── Parent Voucher ────────────────────────────────────────────────────────
+    voucher_number = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    voucher_date   = models.DateField(null=True, blank=True)
+    voucher_type   = models.CharField(max_length=100, null=True, blank=True)
 
-    reference_number = models.CharField(max_length=150, db_index=True)
-    reference_type   = models.CharField(max_length=20, choices=REFERENCE_TYPES)
-    reference_date   = models.DateField(null=True, blank=True)
+    # ── Pay From / Receive In  (Cash/Bank Ledger) ─────────────────────────────
+    pay_from_ledger = models.ForeignKey(
+        'MasterLedger',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='pending_pay_from',
+        db_column='pay_from_ledger_id',
+    )
+    # ── Pay To / Receive From  (Party Ledger) ────────────────────────────────
+    pay_to_ledger = models.ForeignKey(
+        'MasterLedger',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='pending_pay_to',
+        db_column='pay_to_ledger_id',
+    )
 
-    # Party
-    vendor_id   = models.IntegerField(null=True, blank=True, db_index=True)
-    customer_id = models.IntegerField(null=True, blank=True, db_index=True)
+    # ── Party Identity ────────────────────────────────────────────────────────
+    vendor_id   = models.BigIntegerField(null=True, blank=True, db_index=True)
+    customer_id = models.BigIntegerField(null=True, blank=True, db_index=True)
 
-    # Back-reference to source document
-    purchase_voucher_id = models.BigIntegerField(null=True, blank=True)
+    # ── Invoice / Reference ───────────────────────────────────────────────────
+    reference_number = models.CharField(
+        max_length=150, null=True, blank=True, db_index=True
+    )
+    reference_type = models.CharField(
+        max_length=30,
+        choices=REFERENCE_TYPE_CHOICES,
+        default='invoice',
+    )
+    invoice_date = models.DateField(null=True, blank=True)
 
-    # Amounts
-    original_amount  = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    pending_balance  = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    # ── Amounts ───────────────────────────────────────────────────────────────
+    original_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    pending_amount  = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    amount_applied  = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    balance_after   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
-    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="Open")
+    # ── Status & Due ──────────────────────────────────────────────────────────
+    status      = models.CharField(
+        max_length=30, choices=STATUS_CHOICES, default='pending', db_index=True
+    )
+    due_date    = models.DateField(null=True, blank=True)
+    days_to_due = models.IntegerField(null=True, blank=True)
+
+    # ── Misc ──────────────────────────────────────────────────────────────────
+    narration = models.TextField(null=True, blank=True)
 
     class Meta:
-        db_table = "pending_transactions"
-        unique_together = ("tenant_id", "reference_number", "reference_type")
+        db_table = 'pending_transactions'
         indexes = [
-            models.Index(fields=["tenant_id", "vendor_id"]),
-            models.Index(fields=["tenant_id", "customer_id"]),
-            models.Index(fields=["tenant_id", "reference_type", "status"]),
+            models.Index(fields=['tenant_id', 'type'],            name='pt_tenant_type_idx'),
+            models.Index(fields=['tenant_id', 'voucher_number'],  name='pt_voucher_idx'),
+            models.Index(fields=['tenant_id', 'voucher_date'],    name='pt_date_idx'),
+            models.Index(fields=['tenant_id', 'vendor_id'],       name='pt_vendor_idx'),
+            models.Index(fields=['tenant_id', 'customer_id'],     name='pt_customer_idx'),
+            models.Index(fields=['tenant_id', 'reference_number'],name='pt_refno_idx'),
+            models.Index(fields=['tenant_id', 'status'],          name='pt_status_idx'),
+            models.Index(fields=['pay_from_ledger'],              name='pt_payfrom_idx'),
+            models.Index(fields=['pay_to_ledger'],                name='pt_payto_idx'),
         ]
 
-    def __str__(self):
-        return f"{self.reference_type}:{self.reference_number} – balance={self.pending_balance}"
-
-
-class AllocationLink(BaseModel):
-    """
-    Records every allocation event between two voucher references.
-
-    Examples
-    --------
-    - Payment PAY-001 applied against Purchase INV/001 → amount=100000
-    - Debit Note DN-001 applied against Purchase INV/001 → amount=30000
-    - Reversal of PAY-001 due to DN-001 → amount=-30000
-    """
-
-    REFERENCE_TYPES = [
-        ("PURCHASE",   "Purchase Invoice"),
-        ("DEBIT_NOTE", "Debit Note"),
-        ("PAYMENT",    "Payment Voucher"),
-        ("RECEIPT",    "Receipt Voucher"),
-        ("REVERSAL",   "Reversal Entry"),
-    ]
-
-    # Source (what is being applied)
-    source_reference_number = models.CharField(max_length=150)
-    source_reference_type   = models.CharField(max_length=20, choices=REFERENCE_TYPES)
-    source_reference_date   = models.DateField(null=True, blank=True)
-
-    # Target (what it is applied against)
-    target_reference_number = models.CharField(max_length=150)
-    target_reference_type   = models.CharField(max_length=20, choices=REFERENCE_TYPES)
-
-    # Amount can be negative for reversals
-    amount_applied = models.DecimalField(max_digits=15, decimal_places=2)
-
-    class Meta:
-        db_table = "allocation_links"
-        indexes = [
-            models.Index(fields=["tenant_id", "source_reference_number", "source_reference_type"]),
-            models.Index(fields=["tenant_id", "target_reference_number", "target_reference_type"]),
-        ]
+    @property
+    def amount(self): return self.amount_applied
+    @property
+    def received_amount(self): return self.amount_applied
+    @property
+    def ledger(self): return self.pay_to_ledger
+    @property
+    def pay_to(self): return self.pay_to_ledger
+    @property
+    def customer(self): return self.pay_to_ledger
 
     def __str__(self):
         return (
-            f"{self.source_reference_type}:{self.source_reference_number} "
-            f"→ {self.target_reference_type}:{self.target_reference_number} "
-            f"₹{self.amount_applied}"
+            f"[{self.type}] {self.voucher_number} | "
+            f"{self.reference_number} ₹{self.amount_applied}"
         )
+
+
+# ── Backward-compat aliases ───────────────────────────────────────────────────
+AllocationLink            = PendingTransaction   # DEPRECATED
+VoucherPendingTransaction = PendingTransaction   # DEPRECATED

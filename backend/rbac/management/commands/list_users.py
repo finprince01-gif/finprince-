@@ -21,7 +21,7 @@ class Command(BaseCommand):
         for user in users:
             self.stdout.write(f'Username: {user.username}')
             self.stdout.write(f'  Email: {user.email}')
-            self.stdout.write(f'  Tenant ID: {user.tenant_id}')
+            self.stdout.write(f'  Branch ID: {user.branch_id}')
             self.stdout.write(f'  Is Superuser: {user.is_superuser}')
             self.stdout.write(f'  Is Active: {user.is_active}')
             self.stdout.write('')

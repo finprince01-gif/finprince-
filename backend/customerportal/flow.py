@@ -25,7 +25,7 @@ class CustomerFlow:
         Create a new customer with validation
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             customer_data: Dictionary containing customer information
             
         Returns:
@@ -95,7 +95,7 @@ class QuotationFlow:
         Create a new sales quotation
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             customer_id: Customer identifier
             quotation_data: Dictionary containing quotation details
             
@@ -196,7 +196,7 @@ class OrderFlow:
         Create a new sales order
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             customer_id: Customer identifier
             order_data: Dictionary containing order details
             
@@ -279,7 +279,7 @@ class TransactionFlow:
         Create a customer transaction and update balance
         
         Args:
-            tenant_id: Tenant identifier
+            tenant_id: Branch identifier
             customer_id: Customer identifier
             transaction_data: Dictionary containing transaction details
             

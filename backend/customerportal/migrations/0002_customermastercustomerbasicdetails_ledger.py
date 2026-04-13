@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounting', '0008_vouchercreditnoteduedetails_and_more'),
+        ('accounting', '0007_remove_amounttransaction_vendor_journalentry_vendor_and_more'),
         ('customerportal', '0001_initial'),
     ]
 

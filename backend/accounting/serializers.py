@@ -2,11 +2,14 @@ import uuid
 import logging
 from rest_framework import serializers
 from .models import (
-    MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
-    Voucher, JournalEntry, AmountTransaction
+    MasterLedgerGroup,
+    MasterLedger,
+    MasterHierarchyRaw,
+    Voucher,
+    JournalEntry,
+    AmountTransaction,
+    PaymentVoucherItem
 )
-from .models_question import Answer, Question
-from .models_voucher_payment import PaymentVoucherItem
 from .services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal
 
@@ -16,9 +19,9 @@ logger = logging.getLogger(__name__)
 # MASTER SERIALIZERS
 # ============================================================================
 
-from core.utils import TenantModelSerializerMixin
+from core.mixins import BranchModelSerializerMixin
 
-class MasterLedgerGroupSerializer(TenantModelSerializerMixin, serializers.ModelSerializer):
+class MasterLedgerGroupSerializer(BranchModelSerializerMixin, serializers.ModelSerializer):
     under = serializers.CharField(source='parent', required=False, allow_blank=True, allow_null=True)
     
     class Meta:
@@ -27,7 +30,7 @@ class MasterLedgerGroupSerializer(TenantModelSerializerMixin, serializers.ModelS
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
 
 
-class MasterLedgerSerializer(TenantModelSerializerMixin, serializers.ModelSerializer):
+class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerializer):
     question_answers = serializers.JSONField(source='additional_data', required=False, allow_null=True)
     balance = serializers.SerializerMethodField()
 
@@ -47,7 +50,8 @@ class MasterLedgerSerializer(TenantModelSerializerMixin, serializers.ModelSerial
         ]
         read_only_fields = ['id', 'code', 'balance', 'tenant_id', 'created_at', 'updated_at']
         extra_kwargs = {
-            'category': {'required': False, 'allow_null': True, 'allow_blank': True},
+            # NOTE: category is NOT NULL in DB — do NOT allow null here
+            'category': {'required': False, 'allow_blank': True, 'default': ''},
             'group': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_1': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_2': {'required': False, 'allow_null': True, 'allow_blank': True},
@@ -124,84 +128,20 @@ class MasterLedgerSerializer(TenantModelSerializerMixin, serializers.ModelSerial
 
 
     def create(self, validated_data):
-        # Extract question answers (mapped from 'question_answers' to 'additional_data' via source)
-        question_answers = validated_data.get('additional_data', {})
-
-
-
-        
-        # Create the ledger first
+        # Guard: category is NOT NULL in DB — never allow null to reach Django ORM
+        if not validated_data.get('category'):
+            validated_data['category'] = ''
+        # Guard: group is nullable in DB but let's keep consistent
+        if validated_data.get('group') is None:
+            validated_data['group'] = ''
         instance = super().create(validated_data)
-
-        
-        # Save answers to Answer table
-        if question_answers and isinstance(question_answers, dict):
-            tenant_id = instance.tenant_id
-
-            
-            for q_id, ans_text in question_answers.items():
-
-                
-                if not ans_text:
-
-                    continue
-                    
-                try:
-                    # Frontend keys are expected to be Question IDs (strings)
-
-                    question_obj = Question.objects.get(id=q_id)
-
-                    
-                    # Refresh to ensure code is populated if assigned by signals
-                    if not instance.code:
-                        instance.refresh_from_db()
-
-                        
-                    Answer.objects.create(
-                        ledger_code=instance.code,
-                        sub_group_1_1=question_obj.sub_group_1_1,
-                        sub_group_1_2=question_obj.sub_group_1_2,
-                        question=question_obj.question,
-                        answer=ans_text,
-                        tenant_id=tenant_id
-                    )
-
-                    
-                except Question.DoesNotExist:
-                    pass
-                except Exception as e:
-                    import traceback
-                    traceback.print_exc()
-                    
         return instance
 
     def update(self, instance, validated_data):
-        question_answers = validated_data.get('additional_data', {})
-
-        
         # Update Master Ledger fields
+        if 'category' in validated_data and validated_data['category'] is None:
+            validated_data['category'] = ''
         instance = super().update(instance, validated_data)
-        
-        # Update Answers
-        if question_answers and isinstance(question_answers, dict):
-            tenant_id = instance.tenant_id
-            for q_id, ans_text in question_answers.items():
-                if not ans_text: continue
-                try:
-                    question_obj = Question.objects.get(id=q_id)
-                    Answer.objects.update_or_create(
-                        ledger_code=instance.code,
-                        sub_group_1_2=question_obj.sub_group_1_2,
-                        defaults={
-                            'sub_group_1_1': question_obj.sub_group_1_1,
-                            'question': question_obj.question,
-                            'answer': ans_text,
-                            'tenant_id': tenant_id
-                        }
-                    )
-                except Exception as e:
-
-                    pass
         return instance
 
 
@@ -225,7 +165,7 @@ class MasterHierarchyRawSerializer(serializers.ModelSerializer):
 
 
 
-class AmountTransactionSerializer(TenantModelSerializerMixin, serializers.ModelSerializer):
+class AmountTransactionSerializer(BranchModelSerializerMixin, serializers.ModelSerializer):
     """Serializer for Amount Transaction with debit/credit columns"""
     ledger_name = serializers.CharField(source='ledger.name', read_only=True)
     ledger_code = serializers.CharField(source='ledger.code', read_only=True)
@@ -271,7 +211,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class VoucherSerializer(TenantModelSerializerMixin, serializers.ModelSerializer):
+class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer):
     """Unified serializer for all voucher types with type-specific validation"""
     
     # Frontend compatibility fields (camelCase)
@@ -366,7 +306,7 @@ class VoucherSerializer(TenantModelSerializerMixin, serializers.ModelSerializer)
         # Inject tenant_id from request user
         request = self.context.get('request')
         if request and hasattr(request, 'user') and request.user.is_authenticated:
-            validated_data['tenant_id'] = request.user.tenant_id
+            validated_data['tenant_id'] = request.user.branch_id
         
         # Store items_data for sales/purchase
         if voucher_type in ['sales', 'purchase']:
@@ -479,6 +419,9 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
     
     # Matching IDs for frontend (Mapped to ledger_id as per Step 2/7)
     reference_no = serializers.CharField(source='voucher.voucher_number', read_only=True)
+
+    # Backward-compat amount field
+    amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, read_only=True)
 
     class Meta:
         model = PaymentVoucherItem

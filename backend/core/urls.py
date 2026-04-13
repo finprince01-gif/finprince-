@@ -1,34 +1,38 @@
 from django.urls import path, include  # type: ignore
 from rest_framework import routers  # type: ignore
 from .auth_views import (
-    CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView,
-    ForgotUserIDView, ForgotPasswordView
+    CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, MeView,
+    ForgotUserIDView, ForgotPasswordView, SwitchBranchView
 )
 from .views import (
-    CompanySettingsViewSet, health_check, check_status, check_phone,
+    health_check, check_status, check_phone,
     AgentMessageView, AIProxyView,
     ai_metrics, health_with_metrics, AdminPaymentsView,
-    extraction_average_time, OCRCacheUpdateView
+    extraction_average_time, OCRCacheUpdateView,
+    BranchViewSet
 )
 from .admin_views import AdminSubscriptionsView, AdminUserStatusView
 from .direct_registration import DirectRegisterView
+from .company_settings_views import CompanySettingsView
 from .reports_views import (
     DayBookExcelView, LedgerExcelView, TrialBalanceExcelView, 
     StockSummaryExcelView, GSTReportExcelView
 )
 
 router = routers.DefaultRouter()
-router.register('company-settings', CompanySettingsViewSet, basename='company-settings')
+router.register('branches', BranchViewSet, basename='branches')
 
 urlpatterns = [
-    # Direct Registration (no OTP) -- MOVED TO REGISTRATION MODULE
-    # path('auth/register/', DirectRegisterView.as_view(), name='register'),
-    
+    path('auth/me/', MeView.as_view(), name='auth-me'),
     path('auth/check-status/', check_status, name='check-status'),
     path('auth/check-phone/', check_phone, name='check-phone'),
     path('auth/forgot-userid/', ForgotUserIDView.as_view(), name='forgot-userid'),
     path('auth/forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
+    path('auth/forgot-userid/', ForgotUserIDView.as_view(), name='forgot-userid'),
+    path('auth/forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
+    path('auth/switch-branch/', SwitchBranchView.as_view(), name='switch-branch'),
     path('health/', health_with_metrics, name='health'), # /api/health
+    path('company-settings/', CompanySettingsView.as_view(), name='company-settings'),
 
     # Reports
     path('reports/daybook/excel/', DayBookExcelView.as_view(), name='report-daybook-excel'),

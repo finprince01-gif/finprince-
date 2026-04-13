@@ -32,6 +32,7 @@ type TransactionType = 'Sales' | 'Receipt' | 'Purchase' | 'Payment' | 'Debit Not
 type PurchaseStatus = 'Paid' | 'Unpaid' | 'Partially Paid' | 'Approved' | 'Advance' | 'Partially Advanced' | 'Partially Utilized';
 type SalesStatus = 'Not Due' | 'Due' | 'Due Today' | 'Partially Received' | 'Received' | 'Utilized' | 'Not Utilized' | 'Partially Due' | 'Advance' | 'Partially Advanced' | 'Partially Utilized';
 
+
 interface AgingData {
     customerId: string;
     customerCode: string;
@@ -59,6 +60,7 @@ interface LedgerEntry {
     originalInv?: any;
     voucherNo?: string; // Own voucher number (e.g., REC0001)
     amount?: number;
+
 }
 
 interface Category {
@@ -5952,6 +5954,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     };
 
     useEffect(() => {
+
         fetchLedgerData();
     }, [customer.id]);
 
@@ -6102,6 +6105,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             'Advance': 'bg-indigo-100 text-indigo-800',
             'Partially Advanced': 'bg-indigo-50 text-indigo-700',
             'Partially Utilized': 'bg-yellow-100 text-yellow-800'
+
         };
         return colors[status] || 'bg-gray-100 text-gray-800';
     };
@@ -6130,11 +6134,13 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             e.postFrom === 'Receipt' &&
             (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced') &&
             (!e.originalInv?.reference_number || e.originalInv.reference_number.toUpperCase() === 'ADVANCE' || e.originalInv.reference_number.trim() === '')
+
         );
 
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
                 <div className="bg-white w-[800px] max-w-[90vw] rounded-lg shadow-2xl overflow-hidden border border-gray-200 animate-in fade-in zoom-in duration-200">
+
                     <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <Receipt className="w-5 h-5 text-indigo-100" />
@@ -6146,6 +6152,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     </div>
                     <div className="p-6">
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
                             <div className="bg-gray-50 p-3 rounded border border-gray-100">
                                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Invoice Ref</label>
                                 <div className="text-sm font-bold text-gray-900">{row.refNo}</div>
@@ -6161,6 +6168,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                             <div className="bg-gray-50 p-3 rounded border border-gray-100">
                                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Pending</label>
                                 <div className="text-sm font-bold text-red-600">₹{row.pendingBalance?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+
                             </div>
                         </div>
 
@@ -6219,9 +6227,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                 <p className="text-[10px] text-gray-400 mt-1">Receipts matching reference "{row.refNo}" will appear here.</p>
                             </div>
                         )}
-
                         <div className="mt-8 flex gap-3">
                             <button
+
                                 onClick={onClose}
                                 className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors uppercase tracking-widest text-[10px]"
                             >

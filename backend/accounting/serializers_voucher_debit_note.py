@@ -4,30 +4,34 @@ from rest_framework import serializers
 from vendors.models import VendorMasterBasicDetail
 from .models_voucher_debit_note import (
     VoucherDebitNoteSupplierDetails,
-    VoucherDebitNoteSupplyDetails,
+    VoucherDebitNoteItemDetails,
     VoucherDebitNoteDueDetails,
     VoucherDebitNoteTransitDetails,
+    VoucherDebitNoteItemLine,
 )
 from .models import Voucher
-
 
 # ---------------------------------------------------------------------------
 # Nested serializers
 # ---------------------------------------------------------------------------
 
-class VoucherDebitNoteSupplyDetailsSerializer(serializers.ModelSerializer):
-    items = serializers.JSONField(required=False, default=list)
-
+class VoucherDebitNoteItemLineSerializer(serializers.ModelSerializer):
     class Meta:
-        model = VoucherDebitNoteSupplyDetails
+        model = VoucherDebitNoteItemLine
         fields = [
-            "items",
-            "total_taxable_value",
-            "total_igst",
-            "total_cgst",
-            "total_sgst",
-            "total_cess",
-            "total_invoice_value",
+            'id', 'item_code', 'item_name', 'hsn_sac', 'quantity', 'uom', 'rate',
+            'taxable_value', 'igst_amount', 'cgst_amount', 'sgst_amount', 'cess_amount',
+            'invoice_value'
+        ]
+
+class VoucherDebitNoteItemDetailsSerializer(serializers.ModelSerializer):
+    items = serializers.JSONField(required=False, default=list, write_only=True)
+    line_items = VoucherDebitNoteItemLineSerializer(many=True, read_only=True, source='item_lines')
+    class Meta:
+        model = VoucherDebitNoteItemDetails
+        fields = [
+            'items', 'line_items', 'total_taxable_value', 'total_igst', 'total_cgst', 
+            'total_sgst', 'total_cess', 'total_invoice_value'
         ]
 
 
@@ -78,7 +82,7 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
         source="vendor_basic_detail",
         required=True,
     )
-    supply_details  = VoucherDebitNoteSupplyDetailsSerializer(required=False, allow_null=True)
+    item_details    = VoucherDebitNoteItemDetailsSerializer(required=False, allow_null=True)
     due_details     = VoucherDebitNoteDueDetailsSerializer(required=False, allow_null=True)
     transit_details = VoucherDebitNoteTransitDetailsSerializer(required=False, allow_null=True)
 
@@ -117,7 +121,7 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             "foreign_currency",
             "narration",
             "supporting_document",
-            "supply_details",
+            "item_details",
             "due_details",
             "transit_details",
             # write-only helpers
@@ -143,7 +147,7 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
         if hasattr(data, "dict"):
             data = data.dict()
         data = dict(data)
-        for field in ["supply_details", "due_details", "transit_details", "payment_details"]:
+        for field in ["item_details", "due_details", "transit_details", "payment_details"]:
             if field in data and isinstance(data[field], str):
                 try:
                     data[field] = json.loads(data[field])
@@ -156,7 +160,7 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
     # ------------------------------------------------------------------
 
     def create(self, validated_data):
-        supply_data      = validated_data.pop("supply_details", None)
+        item_data        = validated_data.pop("item_details", None)
         due_data_raw     = validated_data.pop("due_details", None)
         transit_data     = validated_data.pop("transit_details", None)
         payment_details  = validated_data.pop("payment_details", []) or []
@@ -173,12 +177,13 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
         instance = VoucherDebitNoteSupplierDetails.objects.create(**validated_data)
 
         # ── Persist nested tabs ───────────────────────────────────────
-        supply_instance = None
-        if supply_data:
-            supply_instance = VoucherDebitNoteSupplyDetails.objects.create(
-                debit_note_details=instance, tenant_id=tenant_id, **supply_data
+        item_instance = None
+        if item_data:
+            item_instance = VoucherDebitNoteItemDetails.objects.create(
+                debit_note_details=instance, tenant_id=tenant_id, **{k: v for k, v in item_data.items() if k != 'items'}
             )
-
+            # Sync to Normalized Debit Note Items Table
+            self._sync_debit_note_items(item_instance, item_data.get('items'))
         due_instance = None
         if due_data_raw:
             due_instance = VoucherDebitNoteDueDetails.objects.create(
@@ -189,7 +194,6 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             VoucherDebitNoteTransitDetails.objects.create(
                 debit_note_details=instance, tenant_id=tenant_id, **transit_data
             )
-
         # ── Build global Voucher reference ────────────────────────────
         dn_number = instance.debit_note_no or f"DN-{instance.id}"
         # Avoid collision on unique_together (tenant_id, type, voucher_number)
@@ -197,7 +201,6 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             dn_number = f"{dn_number}-{instance.id}"
 
         net_amount = Decimal(str(due_instance.net_amount_due if due_instance else 0))
-
         voucher = Voucher.objects.create(
             tenant_id=tenant_id,
             type="debit_note",
@@ -208,12 +211,11 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             source="debit_note_voucher",
             reference_id=instance.id,
             total_taxable_amount=(
-                supply_instance.total_taxable_value if supply_instance else 0
+                item_instance.total_taxable_value if item_instance else 0
             ),
-            total_cgst=(supply_instance.total_cgst if supply_instance else 0),
-            total_sgst=(supply_instance.total_sgst if supply_instance else 0),
-            total_igst=(supply_instance.total_igst if supply_instance else 0),
-            items_data=(supply_instance.items if supply_instance else None),
+            total_cgst=(item_instance.total_cgst if item_instance else 0),
+            total_sgst=(item_instance.total_sgst if item_instance else 0),
+            total_igst=(item_instance.total_igst if item_instance else 0),
         )
 
         # ── Determine Tax Type ────────────────────────────────────────
@@ -227,14 +229,14 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
 
         # ── Full posting pipeline ─────────────────────────────────────
         supply_dict = {}
-        if supply_instance:
+        if item_instance:
             supply_dict = {
-                "items": supply_instance.items or [],
-                "total_taxable_value": float(supply_instance.total_taxable_value or 0),
-                "total_igst":  float(supply_instance.total_igst or 0),
-                "total_cgst":  float(supply_instance.total_cgst or 0),
-                "total_sgst":  float(supply_instance.total_sgst or 0),
-                "total_cess":  float(supply_instance.total_cess or 0),
+                "items": item_data.get('items', []),
+                "total_taxable_value": float(item_instance.total_taxable_value or 0),
+                "total_igst":  float(item_instance.total_igst or 0),
+                "total_cgst":  float(item_instance.total_cgst or 0),
+                "total_sgst":  float(item_instance.total_sgst or 0),
+                "total_cess":  float(item_instance.total_cess or 0),
             }
 
         due_dict = {}
@@ -328,7 +330,7 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
     # ------------------------------------------------------------------
 
     def update(self, instance, validated_data):
-        supply_data     = validated_data.pop("supply_details", None)
+        item_data       = validated_data.pop("item_details", None)
         due_data_raw    = validated_data.pop("due_details", None)
         transit_data    = validated_data.pop("transit_details", None)
         payment_details = validated_data.pop("payment_details", []) or []
@@ -340,12 +342,13 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
 
         tenant_id = instance.tenant_id
 
-        supply_instance = None
-        if supply_data is not None:
-            supply_instance, _ = VoucherDebitNoteSupplyDetails.objects.update_or_create(
+        item_instance = None
+        if item_data is not None:
+            item_instance, _ = VoucherDebitNoteItemDetails.objects.update_or_create(
                 debit_note_details=instance,
-                defaults={"tenant_id": tenant_id, **supply_data},
+                defaults={"tenant_id": tenant_id, **{k: v for k, v in item_data.items() if k != 'items'}},
             )
+            self._sync_debit_note_items(item_instance, item_data.get('items'))
 
         due_instance = None
         if due_data_raw is not None:
@@ -367,12 +370,12 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
                 reference_id=instance.id,
                 tenant_id=tenant_id,
             )
-            if supply_instance:
-                voucher.total_taxable_amount = supply_instance.total_taxable_value
-                voucher.total_cgst           = supply_instance.total_cgst
-                voucher.total_sgst           = supply_instance.total_sgst
-                voucher.total_igst           = supply_instance.total_igst
-                voucher.items_data           = supply_instance.items
+            if item_instance:
+                voucher.total_taxable_amount = item_instance.total_taxable_value
+                voucher.total_cgst           = item_instance.total_cgst
+                voucher.total_sgst           = item_instance.total_sgst
+                voucher.total_igst           = item_instance.total_igst
+                voucher.items_data           = item_data.get('items') if item_data else []
             if due_instance:
                 voucher.total = due_instance.net_amount_due
             voucher.date   = instance.date
@@ -399,14 +402,14 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             )
 
             supply_dict = {}
-            if supply_instance:
+            if item_instance:
                 supply_dict = {
-                    "items": supply_instance.items or [],
-                    "total_taxable_value": float(supply_instance.total_taxable_value or 0),
-                    "total_igst":  float(supply_instance.total_igst or 0),
-                    "total_cgst":  float(supply_instance.total_cgst or 0),
-                    "total_sgst":  float(supply_instance.total_sgst or 0),
-                    "total_cess":  float(supply_instance.total_cess or 0),
+                    "items": item_data.get('items', []) if item_data else [],
+                    "total_taxable_value": float(item_instance.total_taxable_value or 0),
+                    "total_igst":  float(item_instance.total_igst or 0),
+                    "total_cgst":  float(item_instance.total_cgst or 0),
+                    "total_sgst":  float(item_instance.total_sgst or 0),
+                    "total_cess":  float(item_instance.total_cess or 0),
                 }
 
             due_dict = due_data_raw or {}
@@ -439,3 +442,29 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
         self._mirror_to_vendor_portal(instance)
 
         return instance
+
+    def _sync_debit_note_items(self, item_instance, items_json):
+        """Sync items JSON to VoucherDebitNoteItemLine table."""
+        if not items_json: return
+        from decimal import Decimal
+        rows = items_json if isinstance(items_json, list) else []
+        
+        VoucherDebitNoteItemLine.objects.filter(item_details=item_instance).delete()
+        for row in rows:
+            if not isinstance(row, dict): continue
+            VoucherDebitNoteItemLine.objects.create(
+                item_details=item_instance,
+                tenant_id=item_instance.tenant_id,
+                item_code=row.get('itemCode', ''),
+                item_name=row.get('itemName', ''),
+                hsn_sac=row.get('hsnSac', ''),
+                quantity=Decimal(str(row.get('qty', 0))),
+                uom=row.get('uom', ''),
+                rate=Decimal(str(row.get('itemRate', 0))),
+                taxable_value=Decimal(str(row.get('taxableValue', 0))),
+                igst_amount=Decimal(str(row.get('igst', 0))),
+                cgst_amount=Decimal(str(row.get('cgst', 0))),
+                sgst_amount=Decimal(str(row.get('sgst', 0))),
+                cess_amount=Decimal(str(row.get('cess', 0))),
+                invoice_value=Decimal(str(row.get('invoiceValue', 0)))
+            )
