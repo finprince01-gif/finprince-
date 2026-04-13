@@ -169,9 +169,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       console.warn('Failed to fetch Stock Items', err);
     }
 
-    // 5. Pending GRNs
+    // 5. Pending GRNs (Default load for Purchases)
     try {
-      const grns = await apiService.getPendingGRNs();
+      const grns = await apiService.getPendingGRNs({ grn_type: 'purchases' });
       setPendingGRNs(Array.isArray(grns) ? grns : ((grns as any).results || []));
     } catch (err) {
       console.warn('Failed to fetch Pending GRNs', err);
@@ -1206,13 +1206,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     fetchMultiplePODetails();
   }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty, exchangeRate, allItems, wasPartyAutoSet]);
 
-  // Fetch Pending GRNs based on selected vendor for Purchase Vouchers
+  // Fetch Pending GRNs based on selected vendor for Purchase Vouchers or customer for Credit Note
   useEffect(() => {
-    const fetchPendingGRNsForVendor = async () => {
-      if (voucherType !== 'Purchase') return;
+    const fetchPendingGRNsForEntity = async () => {
+      if (voucherType !== 'Purchase' && voucherType !== 'Credit Note') return;
 
-      const match = party?.match(/^(.*) \((.*)\)$/);
-      const entityName = match ? match[1] : party;
+      const isPurchase = voucherType === 'Purchase';
+      const entityToMatch = isPurchase ? party : cnCustomer;
+
+      const match = entityToMatch?.match(/^(^(.*) \((.*)\)$)|(^(.*)$)/);
+      const entityName = (match ? (match[2] || match[5]) : entityToMatch)?.trim();
 
       if (!entityName) {
         setPendingGRNs([]);
@@ -1220,7 +1223,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
 
       try {
-        const res = await apiService.getPendingGRNs(entityName);
+        const params = isPurchase 
+          ? { vendor_name: entityName, grn_type: 'purchases' as const }
+          : { customer_name: entityName, grn_type: 'sales_return' as const };
+
+        const res = await apiService.getPendingGRNs(params);
         if (res && Array.isArray(res)) {
           setPendingGRNs(res);
         } else {
@@ -1232,8 +1239,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     };
 
-    fetchPendingGRNsForVendor();
-  }, [party, voucherType]);
+    fetchPendingGRNsForEntity();
+  }, [party, cnCustomer, voucherType]);
 
   // Logic to auto-fill items from GRN when selected
   useEffect(() => {
@@ -10930,15 +10937,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {/* Create GRN Modal */}
           {isCreateGRNModalOpen && (
             <CreateGRNModal
-              mainVendorName={cnCustomer}
-              mainBranch={cnBranch}
-              mainGstin={cnGstin}
-              context="Credit Note"
+              mainVendorName={voucherType === 'Purchase' ? party : cnCustomer}
+              mainBranch={voucherType === 'Purchase' ? selectedBranch : cnBranch}
+              mainGstin={voucherType === 'Purchase' ? gstin : cnGstin}
+              context={voucherType === 'Purchase' ? 'Purchase' : 'Credit Note'}
               onClose={() => setIsCreateGRNModalOpen(false)}
               onSave={async (data) => {
                 try {
                   const response = await apiService.createInventoryOperationGRN(data);
-                  setGrnRefNo(response.grn_no);
+                  if (voucherType === 'Purchase') {
+                    setGrnRefNo(response.grn_no);
+                  } else {
+                    setCnGrnRefNo(response.grn_no);
+                  }
                   showSuccess('GRN Created Successfully!');
 
                   if (data.items && data.items.length > 0) {
@@ -10976,7 +10987,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   // Add to pending list and select it
                   if (response.grn_no) {
                     setPendingGRNs(prev => [...prev, response]);
-                    setGrnRefNo(response.grn_no);
+                    if (voucherType === 'Purchase') {
+                      setGrnRefNo(response.grn_no);
+                    } else {
+                      setCnGrnRefNo(response.grn_no);
+                    }
                   }
 
                   setIsCreateGRNModalOpen(false);
