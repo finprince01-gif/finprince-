@@ -83,17 +83,20 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
             except Exception as e:
                 logger.debug(f"AmountTransaction lookup failed: {e}")
             
-            # Try TransactionFile
-            from accounting.models import TransactionFile
-            transaction_file = TransactionFile.objects.filter(
-                tenant_id=obj.tenant_id,
-                ledger_name=obj.name
-            ).first()
-            
-            logger.debug(f"TransactionFile query result: {transaction_file}")
-            
-            if transaction_file and transaction_file.transactions:
-                return transaction_file.transactions.get('balance', 0)
+            # Try TransactionFile (gracefully handle if table doesn't exist)
+            try:
+                from accounting.models import TransactionFile
+                transaction_file = TransactionFile.objects.filter(
+                    tenant_id=obj.tenant_id,
+                    ledger_name=obj.name
+                ).first()
+                
+                logger.debug(f"TransactionFile query result: {transaction_file}")
+                
+                if transaction_file and transaction_file.transactions:
+                    return transaction_file.transactions.get('balance', 0)
+            except Exception as tf_err:
+                logger.debug(f"TransactionFile lookup failed (table may not exist): {tf_err}")
             
             # Fallback to journal entries (if table exists)
             try:

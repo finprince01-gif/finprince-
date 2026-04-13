@@ -142,7 +142,7 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VoucherJournal
-        fields = ['id', 'date', 'voucher_number', 'entries', 'totalDebit', 'totalCredit', 'narration', 'tenant_id', 'entry_lines']
+        fields = ['id', 'date', 'voucher_number', 'voucher_series', 'entries', 'totalDebit', 'totalCredit', 'narration', 'tenant_id', 'entry_lines']
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
