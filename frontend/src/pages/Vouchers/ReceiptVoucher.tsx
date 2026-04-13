@@ -228,15 +228,36 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             };
 
             if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);
-            if (prefilledData.sellerName) setReceiveFrom(findLedgerName(prefilledData.sellerName));
+            if (prefilledData.sellerName) {
+                const ledgerName = findLedgerName(prefilledData.sellerName);
+                if (ledgerName) {
+                     setReceiveFrom(ledgerName);
+                     handleCustomerSelect(ledgerName);
+                }
+            }
             if ((prefilledData as any).account) setReceiveIn(findLedgerName((prefilledData as any).account));
             if (prefilledData.totalAmount) {
+                setTotalReceipt(prefilledData.totalAmount);
+                // We'll also invoke handleTotalAmountChange equivalent manually if needed:
+                // But typically handleTotalAmountChange triggers pending transaction fetching and allocation.
+                // Since this is specifically for an advance, we might just set the advance amount directly.
                 setSingleAdvanceAmount(prefilledData.totalAmount);
                 setShowSingleAdvanceSection(true);
+                
+                // Set the Advance Reference Number
                 if (prefilledData.invoiceNumber) {
                     setSingleAdvanceRefNo(prefilledData.invoiceNumber);
                 } else if ((prefilledData as any).reference_number) {
                     setSingleAdvanceRefNo((prefilledData as any).reference_number);
+                }
+
+                // If user meant the TOP voucher number, set it here (overrides auto/manual briefly)
+                if ((prefilledData as any).receiptVoucherNumber) {
+                     setVoucherNumber((prefilledData as any).receiptVoucherNumber);
+                } else if (prefilledData.invoiceNumber) {
+                     // Since they circled the top voucher number, let's also prefill it with the invoice ref for now, 
+                     // or let it auto-gen. The auto-gen will overwrite it if a config is selected. 
+                     // Let's rely on Advance Receipt section's Reference No.
                 }
             }
             if ((prefilledData as any).narration) {
@@ -279,7 +300,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         if (selectedReceiptConfig && receiptVoucherConfigs.length > 0) {
             const config = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
             if (config) {
-                if (config.enable_auto_numbering) {
+                // Wait for any prefilled logic to finish so we don't immediately overwrite it if present
+                if (prefilledData && (prefilledData as any).receiptVoucherNumber) {
+                    setVoucherNumber((prefilledData as any).receiptVoucherNumber);
+                } else if (config.enable_auto_numbering) {
                     // Fetch the correctly formatted next number from the backend
                     httpClient.get<any>(`/api/masters/master-voucher-receipts/${config.id}/next-number/`)
                         .then((res) => {
@@ -292,10 +316,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     setVoucherNumber('Manual Input');
                 }
             }
-        } else {
+        } else if (!prefilledData || !(prefilledData as any).receiptVoucherNumber) {
             setVoucherNumber('');
         }
-    }, [selectedReceiptConfig, receiptVoucherConfigs]);
+    }, [selectedReceiptConfig, receiptVoucherConfigs, prefilledData]);
 
     // Single mode handlers
     const handleReceive = (index: number) => {

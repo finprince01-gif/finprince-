@@ -88,8 +88,9 @@ def post_transaction(voucher_type, voucher_id, tenant_id, entries):
                 party_customer_id=entry.get('party_customer_id') or entry.get('customer_id'),
                 party_vendor_id=entry.get('party_vendor_id') or entry.get('vendor_id'),
                 # Foreign Key Columns (via db_column in model)
-                customer_id=entry.get('customer_id'),
-                vendor_id=entry.get('vendor_id')
+                customer_id=entry.get('customer_id') or entry.get('party_customer_id'),
+                vendor_id=entry.get('vendor_id') or entry.get('party_vendor_id')
+
             ))
         
         JournalEntry.objects.bulk_create(journal_objects)

@@ -825,12 +825,249 @@ class SalesInvoice(BaseModel):
             })
 
 
-PaymentVoucher = Voucher
-ReceiptVoucher = Voucher
-PaymentVoucherItem = PendingTransaction
-ReceiptVoucherItem = PendingTransaction
-VoucherAllocation = AdvanceAllocation
-VoucherPaymentSingle = Voucher
-VoucherPaymentBulk = Voucher
-VoucherReceiptSingle = Voucher
-VoucherReceiptBulk = Voucher
+class VoucherAllocation(BaseModel):
+    """
+    Generic allocation system for Customer (Receipt vs Sales) 
+    and Vendor (Payment vs Purchase) portals.
+    """
+    SOURCE_TYPE_CHOICES = [
+        ('PAYMENT', 'Payment'),
+        ('RECEIPT', 'Receipt'),
+    ]
+    TARGET_TYPE_CHOICES = [
+        ('SALES', 'Sales Invoice'),
+        ('PURCHASE', 'Purchase Invoice'),
+    ]
+
+    ledger = models.ForeignKey(
+        'MasterLedger', 
+        on_delete=models.CASCADE, 
+        related_name='voucher_allocations',
+        db_column='ledger_id'
+    )
+    
+    # The source of the money (Receipt/Payment)
+    source_voucher_id = models.BigIntegerField()
+    source_type = models.CharField(max_length=20, choices=SOURCE_TYPE_CHOICES)
+    
+    # The target being paid (Sales/Purchase Invoice)
+    target_voucher_id = models.BigIntegerField(null=True, blank=True)
+    target_type = models.CharField(max_length=20, choices=TARGET_TYPE_CHOICES)
+    
+    # Normalized fields for precise 'Voucher Applied' tracking
+    # Target Info (The Invoice being paid)
+    target_voucher_no = models.CharField(max_length=100, null=True, blank=True)
+    target_voucher_date = models.DateField(null=True, blank=True)
+    
+    # Source Info (The Receipt/Payment/CN/JV being applied)
+    source_voucher_no   = models.CharField(max_length=100, null=True, blank=True)
+    source_voucher_date = models.DateField(null=True, blank=True)
+    
+    # Financials
+    pending_amount   = models.DecimalField(max_digits=15, decimal_places=2, default=0) # Before this payment
+    amount           = models.DecimalField(max_digits=15, decimal_places=2) # Amount applied
+    balance_after    = models.DecimalField(max_digits=15, decimal_places=2, default=0) # After this payment
+    
+    # Party IDs for explicit tracking
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+    
+    # Legacy/Meta
+    reference_type   = models.CharField(max_length=50, default='INVOICE') # INVOICE, ADVANCE, etc.
+
+    class Meta:
+        db_table = 'voucher_allocations'
+        verbose_name = "Voucher Allocation"
+        indexes = [
+            models.Index(fields=['tenant_id', 'ledger']),
+            models.Index(fields=['source_voucher_id', 'source_type']),
+            models.Index(fields=['target_voucher_id', 'target_type']),
+        ]
+
+    def __str__(self):
+        return f"Allocation: {self.amount} from {self.source_type}:{self.source_voucher_id} to {self.target_type}:{self.target_voucher_id}"
+
+class PaymentVoucher(BaseModel):
+    """
+    Unified payment voucher master record.
+    """
+    date           = models.DateField()
+    voucher_number = models.CharField(max_length=100)
+    pay_from       = models.ForeignKey(
+                        'MasterLedger',
+                        on_delete=models.RESTRICT,
+                        null=True, blank=True,
+                        related_name='payment_vouchers_from',
+                        db_column='pay_from_id')
+    voucher_type   = models.CharField(max_length=100, null=True, blank=True)
+    source         = models.CharField(max_length=100, default='manual')
+    narration      = models.TextField(null=True, blank=True)
+    total_amount   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    # Bank Reconciliation fields
+    bank_reconciled        = models.BooleanField(default=False)
+    bank_reconcile_date    = models.DateField(null=True, blank=True)
+    bank_statement_id      = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number  = models.CharField(max_length=100, null=True, blank=True)
+
+    # Party IDs for explicit tracking
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True)
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'payment_vouchers'
+        unique_together = ('tenant_id', 'voucher_number')
+        ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['tenant_id', 'date']),
+            models.Index(fields=['voucher_number']),
+        ]
+
+    def __str__(self):
+        return f"{self.voucher_number} ({self.date})"
+
+    @property
+    def is_bulk(self):
+        return self.items.count() > 1
+
+class PaymentVoucherItem(models.Model):
+    """
+    One line item per Pay-To ledger inside a PaymentVoucher.
+    """
+    voucher = models.ForeignKey(
+                  PaymentVoucher,
+                  on_delete=models.CASCADE,
+                  related_name='items')
+    pay_to_ledger = models.ForeignKey(
+                  'MasterLedger',
+                  on_delete=models.RESTRICT,
+                  related_name='payment_items_to',
+                  db_column='pay_to_ledger_id')
+    amount  = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    tenant_id = models.CharField(max_length=36, db_index=True, null=True, blank=True)
+    reference_type = models.CharField(max_length=20, default='INVOICE')
+    reference_id   = models.BigIntegerField(null=True, blank=True)
+    advance_ref_no = models.CharField(max_length=100, null=True, blank=True)
+
+    reference_number = models.CharField(max_length=100, null=True, blank=True)
+    pending_amount   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    balance_after    = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    invoice_date     = models.DateField(null=True, blank=True)
+
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True)
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+
+    transaction_details = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True,     null=True, blank=True)
+
+    class Meta:
+        db_table = 'payment_voucher_items'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_id', 'advance_ref_no'],
+                name='unique_payment_advance_ref',
+                condition=models.Q(advance_ref_no__isnull=False) & ~models.Q(advance_ref_no='')
+            )
+        ]
+        indexes = [
+            models.Index(fields=['voucher']),
+            models.Index(fields=['pay_to_ledger']),
+        ]
+
+class ReceiptVoucher(BaseModel):
+    """
+    Unified Receipt Voucher (Master Table).
+    """
+    date = models.DateField()
+    voucher_number = models.CharField(max_length=100)
+    voucher_type = models.CharField(max_length=100, null=True, blank=True)
+    
+    receive_in = models.ForeignKey(
+        'MasterLedger', 
+        on_delete=models.CASCADE, 
+        related_name='receipts_received_in',
+        db_column='receive_in_ledger_id'
+    )
+    
+    customer = models.ForeignKey(
+        'MasterLedger', 
+        on_delete=models.CASCADE, 
+        related_name='receipts_received_from',
+        db_column='customer_ledger_id',
+        null=True, 
+        blank=True
+    )
+    
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    notes = models.TextField(null=True, blank=True)
+    source = models.CharField(max_length=100, default='manual')
+
+    bank_reconciled = models.BooleanField(default=False)
+    bank_reconcile_date = models.DateField(null=True, blank=True)
+    bank_statement_id = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
+    
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True)
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'receipt_vouchers'
+        unique_together = ('tenant_id', 'voucher_number')
+        ordering = ['-date', '-created_at']
+
+class ReceiptVoucherItem(BaseModel):
+    """
+    Allocations or individual customer receipts (Child Table).
+    """
+    voucher = models.ForeignKey(
+        ReceiptVoucher, 
+        on_delete=models.CASCADE, 
+        related_name='items',
+        db_column='voucher_id'
+    )
+    
+    customer = models.ForeignKey(
+        'MasterLedger',
+        on_delete=models.CASCADE,
+        related_name='receipt_items',
+        db_column='customer_ledger_id'
+    )
+    
+    reference_id = models.CharField(max_length=100, null=True, blank=True)
+    reference_type = models.CharField(max_length=50, default='invoice')
+    pending_transaction = models.JSONField(null=True, blank=True)
+    
+    amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    pending_before = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    received_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    balance_after = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    invoice_date = models.DateField(null=True, blank=True)
+    
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True)
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+    
+    is_advance = models.BooleanField(default=False)
+    advance_ref_no = models.CharField(max_length=100, null=True, blank=True)
+
+    class Meta:
+        db_table = 'receipt_voucher_items'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_id', 'advance_ref_no'],
+                name='unique_receipt_advance_ref',
+                condition=models.Q(advance_ref_no__isnull=False) & ~models.Q(advance_ref_no='')
+            )
+        ]
+
+# Backward-compatibility aliases
+VoucherPaymentSingle = PaymentVoucher
+VoucherPaymentBulk   = PaymentVoucher
+VoucherReceiptSingle = ReceiptVoucher
+VoucherReceiptBulk = ReceiptVoucher

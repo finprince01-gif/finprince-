@@ -440,6 +440,7 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
 
         # Mirror to Vendor Portal
         self._mirror_to_vendor_portal(instance)
+
         return instance
 
     def _sync_debit_note_items(self, item_instance, items_json):

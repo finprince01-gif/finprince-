@@ -437,25 +437,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     }, [singleAdvanceAmount, pendingTransactions]);
 
     const handleTotalAmountChange = (val: number) => {
-        // Auto-allocate logic: First distribute to pending transactions in their current order
-        let remaining = val;
-        const updatedTransactions = pendingTransactions.map(txn => {
-            const payment = Math.min(remaining, txn.amount);
-            remaining -= payment;
-            return { ...txn, payment: Number(payment.toFixed(2)) };
-        });
+        // Only update the top-level amount field — do NOT auto-allocate to pending transactions
+        setTotalPayment(val);
 
-        setPendingTransactions(updatedTransactions);
-
-        // Any remaining amount goes to advance
-        if (remaining > 0.01) {
-            setSingleAdvanceAmount(Number(remaining.toFixed(2)));
-            if (!showSingleAdvanceSection) setShowSingleAdvanceSection(true);
-        } else {
-            setSingleAdvanceAmount(0);
-        }
-
-        // calculateTotalPayment will be triggered by states changing
     };
 
     // Uniqueness Check Logic

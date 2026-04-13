@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
+from decimal import Decimal
 from .models_voucher_credit_note import (
     VoucherCreditNoteInvoiceDetails,
     VoucherCreditNoteItemDetails,
@@ -86,9 +87,9 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
 
                 # ── Build global Voucher reference ────────────────────────────
                 from .models import Voucher
-                from decimal import Decimal
                 
                 cn_number = instance.credit_note_no or f"CN-{instance.id}"
+
                 
                 # Securely calculate totals for Voucher table
                 total_val = Decimal('0.00')
@@ -183,8 +184,14 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
 
             # Get amount from item details
             total_amt = Decimal('0')
-            if hasattr(instance, 'item_details'):
-                total_amt = instance.item_details.total_invoice_value
+            try:
+                # Refresh from DB to ensure OneToOne fields are attached
+                instance.refresh_from_db()
+                if hasattr(instance, 'item_details'):
+                    total_amt = instance.item_details.total_invoice_value
+            except:
+                pass
+
             
             cn_number = instance.credit_note_no or f"CN-{instance.id}"
 
@@ -206,7 +213,6 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
             print(f"!!! Portal Sync OK (Credit Note): {instance.customer_name} | {cn_number}")
         except Exception as e:
             print(f"!!! Portal Sync Failure (Credit Note): {str(e)}")
-
     def _sync_credit_note_items(self, item_instance, items_json):
         """Sync items JSON to VoucherCreditNoteItemLine table."""
         if not items_json: return
@@ -232,3 +238,4 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
                 cess_amount=Decimal(str(row.get('cess', 0))),
                 invoice_value=Decimal(str(row.get('invoiceValue', 0)))
             )
+

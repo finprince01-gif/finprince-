@@ -3624,6 +3624,16 @@ CREATE TABLE `norm_voucher_expense_items` (
   CONSTRAINT `norm_voucher_expense_expense_voucher_id_da18e1ad_fk_voucher_e` FOREIGN KEY (`expense_voucher_id`) REFERENCES `voucher_expenses` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--ALTER TABLE voucher_debit_note_due_details
+ALTER TABLE voucher_debit_note_due_details 
+ADD COLUMN reverse_gst_tcs VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_gst_tds VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_income_tax_tcs VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_income_tax_tds VARCHAR(10) DEFAULT 'No';
+
+--ALTER TABLE receipt_vouchers 
+ALTER TABLE receipt_vouchers 
+ADD COLUMN amount DECIMAL(15,2) DEFAULT 0.00 NOT NULL;
 
 CREATE TABLE `voucher_debit_note_item_lines` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -3669,3 +3679,4 @@ CREATE TABLE `voucher_purchase_advance_links` (
 
 
 SET FOREIGN_KEY_CHECKS = 1;
+
