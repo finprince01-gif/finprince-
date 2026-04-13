@@ -93,8 +93,8 @@ class InventoryOperationItemSyncMixin:
             if not isinstance(item, dict): continue
             
             # Flexible key mapping for different operation types
-            qty = item.get('qty', item.get('quantity', item.get('qty_issued', item.get('quantityIssued', item.get('quantityProduced', 0)))))
-            rate = item.get('rate', item.get('itemRate', 0))
+            qty = item.get('qty', item.get('quantity', item.get('qty_issued', item.get('quantity_issued', item.get('quantityIssued', item.get('quantityProduced', item.get('accepted_qty', item.get('acceptedQty', item.get('received_qty', item.get('receivedQty', 0))))))))))
+            rate = item.get('rate', item.get('itemRate', item.get('item_rate', 0)))
             
             item_model.objects.create(
                 parent=instance,
