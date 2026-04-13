@@ -246,6 +246,48 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'ACCOUNTING_VOUCHERS'
 
+    @action(detail=False, methods=['get'])
+    def report(self, request):
+        """Dedicated Ledger Report API following strict double-entry source."""
+        ledger_id = request.query_params.get('ledger_id')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        # Normalize input
+        if ledger_id in [None, "", "ALL", "0", "null"]:
+            ledger_id = None
+            
+        # Base queryset with branch isolation handled by mixin
+        queryset = self.get_queryset().select_related('ledger').order_by('transaction_date', 'id')
+        
+        if ledger_id:
+            queryset = queryset.filter(ledger_id=ledger_id)
+            
+        if start_date:
+            queryset = queryset.filter(transaction_date__gte=start_date)
+            
+        if end_date:
+            queryset = queryset.filter(transaction_date__lte=end_date)
+            
+        # Map fields for UI compatibility
+        data = []
+        for e in queryset:
+            # Determine particulars: If we are looking at a specific ledger, 
+            # particulars usually shows the 'opposite' ledger. 
+            # But in a simple list, showing the entry's own ledger name is a start.
+            data.append({
+                'id': e.id,
+                'transaction_date': e.transaction_date,
+                'particulars': e.ledger.name if e.ledger else e.ledger_name or 'N/A',
+                'voucher_type': e.voucher_type,
+                'voucher_number': e.voucher_number,
+                'debit': float(e.debit),
+                'credit': float(e.credit),
+                'voucher_id': e.voucher_id
+            })
+            
+        return Response(data)
+
 
 class PayFromLedgerView(APIView):
     """

@@ -17,7 +17,15 @@ def _clean_val(val):
     return cleaned
 
 
-def get_flat_hierarchy_rows():
+def get_business_types():
+    """Returns a unique list of business types from the hierarchy."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT DISTINCT `Type of Business` FROM master_hierarchy_raw WHERE `Type of Business` IS NOT NULL AND `Type of Business` != '' AND `Type of Business` != '-'")
+        rows = cursor.fetchall()
+    return sorted([row[0] for row in rows if row[0]])
+
+
+def get_flat_hierarchy_rows(business_type=None):
     """
     Returns flat rows from master_hierarchy_raw in the format the frontend
     LedgerCreationWizard and HierarchicalDropdown expect.
@@ -32,23 +40,30 @@ def get_flat_hierarchy_rows():
     NOTE: master_hierarchy_raw has no primary key column. We generate a
     sequential row_num as the id.
     """
-    logger.info("Fetching flat hierarchy rows from master_hierarchy_raw...")
+    logger.info(f"Fetching flat hierarchy rows (filter: {business_type})...")
+
+    query = """
+        SELECT
+            `Type of Business`,
+            `Financial Reporting`,
+            `Major Group`,
+            `Group`,
+            `Sub-group 1`,
+            `Sub-group 2`,
+            `Sub-group 3`,
+            `Ledgers`,
+            `Code`
+        FROM master_hierarchy_raw
+    """
+    params = []
+    if business_type:
+        query += " WHERE `Type of Business` = %s"
+        params.append(business_type)
+        
+    query += " ORDER BY `Major Group`, `Group`, `Sub-group 1`, `Sub-group 2`, `Sub-group 3`, `Ledgers`"
 
     with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT
-                `Type of Business`,
-                `Financial Reporting`,
-                `Major Group`,
-                `Group`,
-                `Sub-group 1`,
-                `Sub-group 2`,
-                `Sub-group 3`,
-                `Ledgers`,
-                `Code`
-            FROM master_hierarchy_raw
-            ORDER BY `Major Group`, `Group`, `Sub-group 1`, `Sub-group 2`, `Sub-group 3`, `Ledgers`
-        """)
+        cursor.execute(query, params)
         rows = cursor.fetchall()
 
     logger.info(f"Fetched {len(rows)} flat rows from master_hierarchy_raw.")

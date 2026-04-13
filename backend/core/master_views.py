@@ -214,7 +214,7 @@ class MasterBranchListCreateView(APIView):
         branches = Branch.objects.filter(master=request.user)
         data = [{
             'id': b.id,
-            'name': b.name,
+            'name': b.branch_name or b.name,  # Use branch_name for display
             'gstin': b.gstin,
             'created_at': b.created_at
         } for b in branches]
@@ -226,18 +226,24 @@ class MasterBranchListCreateView(APIView):
         
         data = request.data
         branch_name = data.get('name')
+        business_type = data.get('business_type')
         branch_gstin = data.get('gstin')
         email = data.get('email')
         phone = data.get('phone')
         owner_data = data.get('owner', {})
         
         if not all([branch_name, branch_gstin, owner_data.get('username'), owner_data.get('password'), owner_data.get('name')]):
-            return Response({'error': 'Missing required fields for branch provisioning (Branch Name, GSTIN, Admin Name, Username, Password).'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Missing required fields for branch provisioning (Type of Business, GSTIN, Admin Name, Username, Password).'}, status=status.HTTP_400_BAD_REQUEST)
 
         if branch_gstin:
             branch_gstin = branch_gstin.upper()
             if Branch.objects.filter(gstin=branch_gstin).exists():
                 return Response({'error': f'GSTIN {branch_gstin} already registered to an existing platform branch.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate unique name for tenant (name field is unique)
+        unique_tenant_name = branch_name
+        if Branch.objects.filter(name=branch_name).exists():
+            unique_tenant_name = f"{branch_name}-{branch_gstin}" if branch_gstin else f"{branch_name}-{uuid.uuid4().hex[:8]}"
 
         try:
             with transaction.atomic():
@@ -246,7 +252,9 @@ class MasterBranchListCreateView(APIView):
                 # 1. Create Branch
                 branch = Branch.objects.create(
                     id=tenant_id,
-                    name=branch_name,
+                    name=unique_tenant_name,
+                    branch_name=branch_name,
+                    business_type=business_type,
                     gstin=branch_gstin,
                     email=email,
                     phone=phone,
@@ -576,12 +584,25 @@ class MasterReportsView(APIView):
         ledgers = MasterLedger.objects.filter(tenant_id__in=target_ids)
         ledger_groups = MasterLedgerGroup.objects.filter(tenant_id__in=target_ids)
         
+        # Also fetch entries for Ledger Report drill-down
+        from accounting.models import JournalEntry
+        entries = JournalEntry.objects.filter(tenant_id__in=target_ids).select_related('ledger').order_by('transaction_date')
+        
         # Format payloads (Standard company structure)
         return Response({
             'vouchers': [{
                 'id': v.id, 'date': v.date, 'type': v.type, 'party': v.party, 'total': float(v.total or 0),
-                'invoiceNo': v.invoice_no, 'account': v.account, 'narration': v.narration
+                'invoiceNo': v.invoice_no, 'account': v.account, 'narration': v.narration,
+                'entries': [
+                    {'ledger': e.ledger.name if e.ledger else e.ledger_name, 'debit': float(e.debit), 'credit': float(e.credit)}
+                    for e in entries.filter(voucher_id=v.id, voucher_type=v.type.upper())
+                ]
             } for v in vouchers],
+            'entries': [{
+                'id': e.id, 'date': e.transaction_date, 'ledger': e.ledger.name if e.ledger else e.ledger_name,
+                'ledger_id': e.ledger_id,
+                'debit': float(e.debit), 'credit': float(e.credit), 'type': e.voucher_type, 'voucher_id': e.voucher_id
+            } for e in entries],
             'ledgers': [{
                 'id': l.id, 'name': l.name, 'group': l.group, 'category': l.category
             } for l in ledgers],

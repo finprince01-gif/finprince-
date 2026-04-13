@@ -45,6 +45,8 @@ const BranchesPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [businessTypes, setBusinessTypes] = useState<string[]>([]);
+    const [businessType, setBusinessType] = useState('');
 
     // Address states
     const [addressLine1, setAddressLine1] = useState('');
@@ -63,7 +65,17 @@ const BranchesPage: React.FC = () => {
     useEffect(() => {
         loadData();
         fetchGeoData();
+        fetchBusinessTypes();
     }, []);
+
+    const fetchBusinessTypes = async () => {
+        try {
+            const types = await masterApiService.getBusinessTypes();
+            setBusinessTypes(types || []);
+        } catch (err) {
+            console.error("Failed to fetch business types", err);
+        }
+    };
 
     const fetchGeoData = async () => {
         try {
@@ -95,6 +107,7 @@ const BranchesPage: React.FC = () => {
         try {
             await masterApiService.createBranch({
                 name: branchName,
+                business_type: businessType, // Send Business Type
                 gstin: branchGstin,
                 phone,
                 email,
@@ -147,7 +160,9 @@ const BranchesPage: React.FC = () => {
 
     const resetForm = () => {
         setCurrentStep(1);
-        setSelectedPlan('FREE'); setBranchName('');
+        setSelectedPlan('FREE'); 
+        setBranchName('');
+        setBusinessType('');
         setAdminName(''); setBranchGstin(''); setPhone(''); setEmail(''); setUsername(''); setPassword('');
         setAddressLine1(''); setAddressLine2(''); setAddressLine3('');
         setSelectedCountry('India'); setSelectedState(''); setSelectedDistrict('');
@@ -293,18 +308,27 @@ const BranchesPage: React.FC = () => {
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Branch Legal Name</label>
-                                        <input 
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Type of Business</label>
+                                        <select 
                                             id="branch-name" 
-                                            type="text" 
-                                            value={branchName} 
-                                            onChange={e => setBranchName(e.target.value)} 
+                                            value={businessType} 
+                                            onChange={e => {
+                                                setBusinessType(e.target.value);
+                                                // If we're replacing the name, maybe use business type as name
+                                                // but since name must be unique, we might need more.
+                                                // For now, let's just use it as the name too.
+                                                setBranchName(e.target.value);
+                                            }} 
                                             onKeyDown={e => handleEnter(e, 'branch-gstin')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="e.g. Acme Mumbai" 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
                                             autoFocus
                                             required 
-                                        />
+                                        >
+                                            <option value="">Select Business Type</option>
+                                            {businessTypes.map((type) => (
+                                                <option key={type} value={type}>{type}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Branch GSTIN</label>

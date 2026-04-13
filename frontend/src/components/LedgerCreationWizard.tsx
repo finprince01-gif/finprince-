@@ -57,7 +57,9 @@ interface LedgerCreationWizardProps {
         sub_group_3: string | null;
         ledger_type: string | null;
         parent_ledger_id?: number | null;
-        question_answers?: Record<number, any>;
+        question_answers?: Record<number | string, any>;
+        opening_balance?: number;
+        opening_balance_type?: string;
     }) => void;
 }
 
@@ -72,6 +74,12 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     const [subGroup3Input, setSubGroup3Input] = useState('');
     const [ledgerTypeInput, setLedgerTypeInput] = useState('');
     const [questionAnswers, setQuestionAnswers] = useState<Record<number, any>>({});
+
+    // Opening balance step state
+    const [showOpeningBalanceStep, setShowOpeningBalanceStep] = useState(false);
+    const [pendingLedgerData, setPendingLedgerData] = useState<Parameters<LedgerCreationWizardProps['onCreateLedger']>[0] | null>(null);
+    const [openingBalance, setOpeningBalance] = useState('');
+    const [openingBalanceType, setOpeningBalanceType] = useState<'debit' | 'credit'>('debit');
 
     // Helper: treat '-', '–', '—', empty as blank
     const isBlankStr = (v: string | null | undefined): boolean => {
@@ -556,10 +564,13 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         const finalSubGroup3 = selectedNode?.fullPath.sub_group_3 || subGroup3Input.trim();
         const finalLedgerType = selectedNode?.fullPath.ledger_type || ledgerTypeInput.trim();
 
-        // The Name is the most specific new value provided
+        // Determine the most specific new value and which level it belongs to
         let finalName = '';
+        let isLedgerLevel = false;  // true only when ledger name (ledger_type) is filled
+
         if (ledgerTypeInput.trim()) {
             finalName = ledgerTypeInput.trim();
+            isLedgerLevel = true;   // opening balance only makes sense at ledger level
         } else if (subGroup3Input.trim()) {
             finalName = subGroup3Input.trim();
         } else if (subGroup2Input.trim()) {
@@ -580,45 +591,75 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             sub_group_3: finalSubGroup3 || null,
             ledger_type: finalLedgerType || null,
             parent_ledger_id: selectedNode.fullPath.parent_ledger_id || null,
-            question_answers: questionAnswers // Pass collected answers
+            question_answers: questionAnswers
         };
 
-        // Call parent's onCreateLedger
-        onCreateLedger(newLedgerData);
+        // Only show opening balance step when creating at the ledger (name) level
+        if (isLedgerLevel) {
+            setPendingLedgerData(newLedgerData);
+            setOpeningBalance('');
+            setOpeningBalanceType('debit');
+            setShowOpeningBalanceStep(true);
+        } else {
+            // Sub group level — save directly without asking for opening balance
+            onCreateLedger(newLedgerData);
+            resetAfterSave();
+        }
+    };
 
-        // Reset form immediately
+    const refetchHierarchy = async () => {
+        try {
+            const [hierarchyRes, ledgersRes] = await Promise.all([
+                fetch('/api/masters/hierarchy/'),
+                fetch('/api/masters/ledgers/', { credentials: 'include' })
+            ]);
+            if (hierarchyRes.ok && ledgersRes.ok) {
+                const globalHierarchy: HierarchyRow[] = await hierarchyRes.json();
+                const ledgers: Ledger[] = await ledgersRes.json();
+                setTenantLedgers(ledgers);
+                const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
+                const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
+                setHierarchyData(mergedHierarchy);
+                setTreeData(buildTreeStructure(mergedHierarchy, ledgers));
+            }
+        } catch (error) {
+            console.error('Error refetching data:');
+        }
+    };
+
+    const handleConfirmOpeningBalance = () => {
+        if (!pendingLedgerData) return;
+
+        const balanceAmount = parseFloat(openingBalance) || 0;
+
+        const finalData = {
+            ...pendingLedgerData,
+            // Pass as direct top-level fields (not in additional_data)
+            opening_balance: balanceAmount > 0 ? balanceAmount : 0,
+            opening_balance_type: openingBalanceType === 'debit' ? 'Dr' : 'Cr',
+        };
+
+        onCreateLedger(finalData);
+        resetAfterSave();
+    };
+
+    const handleSkipOpeningBalance = () => {
+        if (!pendingLedgerData) return;
+        onCreateLedger(pendingLedgerData);
+        resetAfterSave();
+    };
+
+    const resetAfterSave = () => {
+        setShowOpeningBalanceStep(false);
+        setPendingLedgerData(null);
+        setOpeningBalance('');
+        setOpeningBalanceType('debit');
         setSubGroup2Input('');
         setSubGroup3Input('');
         setLedgerTypeInput('');
         setSelectedNode(null);
-        setQuestionAnswers({}); // Reset answers
-
-        // Refetch data after a short delay to get the newly created ledger with real ID
-        setTimeout(async () => {
-            try {
-                const [hierarchyRes, ledgersRes] = await Promise.all([
-                    fetch('/api/masters/hierarchy/'),
-                    fetch('/api/masters/ledgers/', {
-                        credentials: 'include'
-                    })
-                ]);
-
-                if (hierarchyRes.ok && ledgersRes.ok) {
-                    const globalHierarchy: HierarchyRow[] = await hierarchyRes.json();
-                    const ledgers: Ledger[] = await ledgersRes.json();
-
-                    setTenantLedgers(ledgers);
-                    const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
-                    const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
-                    setHierarchyData(mergedHierarchy);
-
-                    const tree = buildTreeStructure(mergedHierarchy, ledgers);
-                    setTreeData(tree);
-                }
-            } catch (error) {
-                console.error('Error refetching data:');
-            }
-        }, 500); // Wait 500ms for database to save
+        setQuestionAnswers({});
+        setTimeout(refetchHierarchy, 500);
     };
 
     if (loading) return <div className="text-gray-500 text-sm">Loading hierarchy...</div>;
@@ -757,16 +798,90 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                             />
                         )}
 
-                        {/* Create Ledger Button */}
-                        <div className="mt-6">
-                            <button
-                                type="button"
-                                onClick={handleSubmit}
-                                className="w-full bg-indigo-600 text-white px-6 py-3 rounded-[4px] font-medium hover:bg-indigo-700 transition-colors"
-                            >
-                                Create Ledger
-                            </button>
-                        </div>
+                        {/* Create Ledger Button OR Opening Balance Step */}
+                        {showOpeningBalanceStep ? (
+                            <div className="mt-6 bg-indigo-50 border border-indigo-200 rounded-lg p-4 space-y-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-lg">💰</span>
+                                    <h6 className="text-sm font-semibold text-indigo-800">
+                                        Opening Balance for <span className="italic">{pendingLedgerData?.customName}</span>
+                                    </h6>
+                                </div>
+                                <p className="text-xs text-indigo-600 leading-relaxed">
+                                    Enter the opening balance for this ledger. You can skip if not applicable.
+                                </p>
+
+                                {/* Amount Row */}
+                                <div className="flex gap-3 items-end">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Amount (₹)</label>
+                                        <input
+                                            type="number"
+                                            value={openingBalance}
+                                            onChange={(e) => setOpeningBalance(e.target.value)}
+                                            className="w-full p-2 border border-indigo-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                                            placeholder="0.00"
+                                            min="0"
+                                            step="0.01"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    {/* Dr / Cr Toggle */}
+                                    <div className="flex rounded overflow-hidden border border-indigo-300 text-sm font-medium shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpeningBalanceType('debit')}
+                                            className={`px-4 py-2 transition-colors ${
+                                                openingBalanceType === 'debit'
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-white text-indigo-700 hover:bg-indigo-50'
+                                            }`}
+                                        >
+                                            Dr
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpeningBalanceType('credit')}
+                                            className={`px-4 py-2 transition-colors border-l border-indigo-300 ${
+                                                openingBalanceType === 'credit'
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-white text-indigo-700 hover:bg-indigo-50'
+                                            }`}
+                                        >
+                                            Cr
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex gap-2 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={handleConfirmOpeningBalance}
+                                        className="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    >
+                                        Save Ledger
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSkipOpeningBalance}
+                                        className="px-4 py-2.5 rounded text-sm font-medium text-indigo-700 bg-white border border-indigo-300 hover:bg-indigo-50 transition-colors"
+                                    >
+                                        Skip
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-6">
+                                <button
+                                    type="button"
+                                    onClick={handleSubmit}
+                                    className="w-full bg-indigo-600 text-white px-6 py-3 rounded-[4px] font-medium hover:bg-indigo-700 transition-colors"
+                                >
+                                    Create Ledger
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

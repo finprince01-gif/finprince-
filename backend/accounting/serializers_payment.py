@@ -494,6 +494,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             self._mirror_to_vendor_portal(instance)
             self._mirror_to_customer_portal(instance)
             self._mirror_to_generic_voucher(instance)
+            self._post_journal_entries(instance)
 
         return instance
 
@@ -556,7 +557,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     'amount': total,
                     'total': total,
                     'narration': voucher.narration,
-                    'source': voucher.source or 'manual',
+                    'source': getattr(voucher, 'source', 'manual'),
                     'reference_id': voucher.id,
                     'ledger_id_val': voucher.ledger_id_val,
                     'party_customer_id': voucher.party_customer_id,
@@ -606,6 +607,8 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                         voucher_id=voucher.id,
                         tenant_id=voucher.tenant_id,
                         entries=entries,
+                        transaction_date=voucher.date,
+                        voucher_number=voucher.voucher_number
                     )
         except Exception as e:
             print(f"Error posting payment entries for voucher {voucher.id}: {e}")

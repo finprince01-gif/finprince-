@@ -175,110 +175,64 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         sync_sales_to_outward(invoice)
         print(f"Voucher {invoice.sales_invoice_no} saved successfully (ID: {invoice.id})")
 
-        # ACCOUNTING POSTING (OUTSIDE atomic transaction)
-        if payment_obj:
-            try:
-                # Part 2: Introduce Posting Control Logic
-                total_amount = float(payment_obj.payment_invoice_value or 0)
-                is_zero_invoice = total_amount == 0
-
-                if is_zero_invoice:
-                    print("Accounting skipped (zero invoice)")
-                    invoice.posting_status = "SKIPPED"
-                    invoice.save(update_fields=['posting_status'])
-                    return invoice
-
-                # Build Entries
-                customer = CustomerMasterCustomerBasicDetails.objects.get(
-                    id=customer_id, 
-                    tenant_id=tenant_id
-                )
-                
-                sales_ledger = get_standard_ledger(tenant_id, 'Sales Account', 'Sales Accounts', 'Income')
-                gst_output_ledger = get_standard_ledger(tenant_id, 'Output GST', 'Duties & Taxes', 'Liability')
-
-                entries = []
-
-                # Mandatory Entry: Customer (Debit)
-                entries.append({
-                    "ledger_id": customer.ledger_id,
-                    "debit": total_amount,
-                    "credit": 0,
-                    "customer_id": customer.id
-                })
-
-                # Mandatory Entry: Sales (Credit)
-                entries.append({
-                    "ledger_id": sales_ledger.id,
-                    "debit": 0,
-                    "credit": float(payment_obj.payment_taxable_value or 0)
-                })
-
-                # Optional Tax Entries
-                taxes = [
-                    (payment_obj.payment_igst, 'IGST'),
-                    (payment_obj.payment_cgst, 'CGST'),
-                    (payment_obj.payment_sgst, 'SGST'),
-                    (payment_obj.payment_cess, 'CESS'),
-                    (payment_obj.payment_state_cess, 'State Cess')
-                ]
-
-                for tax_val, _ in taxes:
-                    if tax_val and float(tax_val) > 0:
-                        entries.append({
-                            "ledger_id": gst_output_ledger.id,
-                            "debit": 0,
-                            "credit": float(tax_val)
-                        })
-
-                # Filter Zero Entries
-                entries = [e for e in entries if e["debit"] > 0 or e["credit"] > 0]
-
-                # Part 3: Validate Entries Before Posting
-                has_debit = any(e["debit"] > 0 for e in entries)
-                has_credit = any(e["credit"] > 0 for e in entries)
-
-                if len(entries) < 2 or not has_debit or not has_credit:
-                    print(f"Accounting skipped: Invalid entries count ({len(entries)}) or missing Dr/Cr")
-                    invoice.posting_status = "SKIPPED"
-                    invoice.posting_error = "Insufficient valid entries for posting (less than 2 or missing Dr/Cr)"
-                    invoice.save(update_fields=['posting_status', 'posting_error'])
-                    return invoice
-
-                total_debit = sum(e["debit"] for e in entries)
-                total_credit = sum(e["credit"] for e in entries)
-
-                if abs(total_debit - total_credit) > 0.01:
-                    print(f"WARNING: Debit/Credit mismatch! Diff: {total_debit - total_credit}")
-                    # We still try to post, or we could mark as FAILED. 
-                    # For strictness, let's let post_transaction handle the mismatch throw if it's too large.
-
-                print("FINAL ENTRIES:", entries)
-
-                # Part 4 & 5: Posting Status Tracking & Error Handling
-                post_transaction(
-                    voucher_type="SALES",
-                    voucher_id=voucher.id,
-                    tenant_id=tenant_id,
-                    entries=entries
-                )
-                
-                print("Accounting posted successfully")
-                invoice.posting_status = "POSTED"
-                invoice.save(update_fields=['posting_status'])
-                
-            except Exception as e:
-                print(f"ACCOUNTING POSTING FAILED: {str(e)}")
-                invoice.posting_status = "FAILED"
-                invoice.posting_error = str(e)
-                invoice.save(update_fields=['posting_status', 'posting_error'])
-                # DO NOT RE-RAISE. We want the voucher saved.
-        else:
-            print("Accounting skipped (no payment details)")
-            invoice.posting_status = "SKIPPED"
-            invoice.save(update_fields=['posting_status'])
+        # --- Double-Entry Posting for Sales (entries table) ---
+        self._post_journal_entries(invoice)
 
         return invoice
+
+    def _post_journal_entries(self, invoice):
+        """Unified double-entry posting for sales invoice."""
+        try:
+            tenant_id = invoice.tenant_id
+            payment_obj = invoice.payment_details
+            if not payment_obj: 
+                print("Accounting skipped (no payment details)")
+                return
+
+            total_amount = float(payment_obj.payment_invoice_value or 0)
+            if total_amount == 0:
+                print("Accounting skipped (zero invoice)")
+                return
+
+            customer = invoice.customer
+            sales_ledger = get_standard_ledger(tenant_id, 'Sales Account', 'Sales Accounts', 'Income')
+            gst_output_ledger = get_standard_ledger(tenant_id, 'Output GST', 'Duties & Taxes', 'Liability')
+
+            entries = []
+            # Customer (Debit)
+            entries.append({"ledger_id": customer.ledger_id, "debit": total_amount, "credit": 0})
+            
+            # Sales (Credit)
+            entries.append({"ledger_id": sales_ledger.id, "debit": 0, "credit": float(payment_obj.payment_taxable_value or 0)})
+
+            # Taxes
+            taxes = [
+                payment_obj.payment_igst, payment_obj.payment_cgst, payment_obj.payment_sgst, 
+                payment_obj.payment_cess, payment_obj.payment_state_cess
+            ]
+            for tax_val in taxes:
+                if tax_val and float(tax_val) > 0:
+                    entries.append({"ledger_id": gst_output_ledger.id, "debit": 0, "credit": float(tax_val)})
+
+            # Use generic voucher ID if present
+            v_id = getattr(invoice, 'voucher_id', None) or invoice.id
+            post_transaction(
+                voucher_type="SALES",
+                voucher_id=v_id,
+                tenant_id=tenant_id,
+                entries=entries,
+                transaction_date=invoice.date,
+                voucher_number=invoice.sales_invoice_no
+            )
+            print("Accounting posted successfully")
+            invoice.posting_status = "POSTED"
+            invoice.save(update_fields=['posting_status'])
+        except Exception as e:
+            print(f"ACCOUNTING POSTING FAILED: {str(e)}")
+            invoice.posting_status = "FAILED"
+            invoice.posting_error = str(e)
+            if invoice.id:
+                invoice.save(update_fields=['posting_status', 'posting_error'])
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
@@ -347,8 +301,10 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                     print(f"[SalesSerializer] Advance allocation update failed: {ex}")
 
         self._mirror_to_customer_portal(instance)
-        # Auto-sync to Inventory > Operations > Outward Slip
-        sync_sales_to_outward(instance)
+        
+        # Refresh double-entry posting
+        self._post_journal_entries(instance)
+
         return instance
 
     def _mirror_to_customer_portal(self, invoice):

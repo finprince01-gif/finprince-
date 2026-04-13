@@ -469,6 +469,8 @@ def post_debit_note_accounting(
             voucher_id=voucher_obj.id,
             tenant_id=tenant_id,
             entries=entries,
+            transaction_date=debit_note_instance.date,
+            voucher_number=voucher_obj.voucher_number
         )
         logger.info(
             "[DebitNoteService] Posted %d entries for Debit Note %s",

@@ -170,6 +170,10 @@ export interface Ledger {
 
   // Dynamic questions/answers for ledger creation wizard
   question_answers?: Record<number, any>;
+
+  // Opening balance (stored directly in DB columns)
+  opening_balance?: number;
+  opening_balance_type?: string;  // 'Dr' or 'Cr'
 }
 
 // ============================================================================
