@@ -170,7 +170,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         console.log("!!! Vendor Pending Transactions (Procurement):", transactions);
 
                         setPendingTransactions(transactions
-                            .filter((t: any) => t.transaction_type?.toLowerCase() === 'purchase')
+                            .filter((t: any) => {
+                                const type = t.transaction_type?.toLowerCase();
+                                const s = (t.due_status || '').toLowerCase();
+                                return type === 'purchase' && (s === 'due' || s === 'due today' || s === 'partially paid' || s === 'partially received');
+                            })
                             .map((t: any) => {
                                 const isMatch = prefilledData?.invoiceNumber === t.reference_number;
                                 const pAmt = isMatch ? (prefilledData?.totalAmount || 0) : 0;
@@ -202,7 +206,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         const termsMatch = String(rawTerms).match(/(\d+)/);
                         entityCreditPeriod = termsMatch ? parseInt(termsMatch[1], 10) : 0;
 
-                        setPendingTransactions(data.map(item => {
+                        const filteredData = data.map(item => {
                             const invDate = new Date(item.date || getCurrentDate());
                             const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
                             const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -238,19 +242,26 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 daysToDue: Math.max(0, entityCreditPeriod - diffDays),
                                 dueDate: dueDateStr
                             };
-                        }));
+                        }).filter(t => t.dueStatus !== 'Not Due');
+
+                        setPendingTransactions(filteredData);
                     } else {
                         // Fallback to standard pending invoices for other ledgers
                         data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
-                        const mapped = data.map(item => ({
-                            date: item.date,
-                            referenceNumber: item.reference_number,
-                            amount: item.amount,
-                            payment: 0,
-                            dueStatus: item.due_status,
-                            daysToDue: item.days_to_due,
-                            dueDate: item.due_date
-                        }));
+                        const mapped = data
+                            .map(item => ({
+                                date: item.date,
+                                referenceNumber: item.reference_number,
+                                amount: item.amount,
+                                payment: 0,
+                                dueStatus: item.due_status,
+                                daysToDue: item.days_to_due,
+                                dueDate: item.due_date
+                            }))
+                            .filter(t => {
+                                const s = (t.dueStatus || '').toLowerCase();
+                                return s === 'due' || s === 'due today' || s === 'partially paid' || s === 'partially received';
+                            });
                         setPendingTransactions(mapped);
                     }
 
@@ -575,8 +586,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     const mappedBulk: BulkTransaction[] = transactions
                         .filter((t: any) => {
                             const type = t.transaction_type?.toLowerCase();
-                            const status = t.due_status;
-                            return type === 'purchase' && (status === 'Due' || status === 'Due Today' || status === 'Partially Received');
+                            const s = (t.due_status || '').toLowerCase();
+                            return type === 'purchase' && (s === 'due' || s === 'due today' || s === 'partially paid' || s === 'partially received');
                         })
                         .map((t: any) => {
                             const pendingAmount = typeof t.payment_balance === 'number' ? t.payment_balance : Number(t.total_amount || 0);

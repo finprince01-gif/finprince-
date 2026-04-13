@@ -238,21 +238,21 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
 
         # Create child objects
         if supply_foreign_data is not None:
-            valid_fields = {'purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description', 'items'}
+            valid_fields = {'purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description'}
             filtered_data = {k: v for k, v in supply_foreign_data.items() if k in valid_fields}
             VoucherPurchaseSupplyForeignDetails.objects.create(
                 supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
             )
 
         if supply_inr_data is not None:
-            valid_fields = {'purchase_order_no', 'purchase_ledger', 'description', 'items'}
+            valid_fields = {'purchase_order_no', 'purchase_ledger', 'description'}
             filtered_data = {k: v for k, v in supply_inr_data.items() if k in valid_fields}
             VoucherPurchaseSupplyINRDetails.objects.create(
                 supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
             )
 
         if due_data is not None:
-            valid_fields = {'tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms', 'advance_references'}
+            valid_fields = {'tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms'}
             filtered_data = {k: v for k, v in due_data.items() if k in valid_fields}
             VoucherPurchaseDueDetails.objects.create(
                 supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
@@ -433,7 +433,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
 
         # Update or Create Nested Relations
         if supply_foreign_data is not None:
-            valid_fields = {'purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description', 'items'}
+            valid_fields = {'purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description'}
             filtered_data = {k: v for k, v in supply_foreign_data.items() if k in valid_fields}
             VoucherPurchaseSupplyForeignDetails.objects.update_or_create(
                 supplier_details=instance,
@@ -441,7 +441,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             )
 
         if supply_inr_data is not None:
-            valid_fields = {'purchase_order_no', 'purchase_ledger', 'description', 'items'}
+            valid_fields = {'purchase_order_no', 'purchase_ledger', 'description'}
             filtered_data = {k: v for k, v in supply_inr_data.items() if k in valid_fields}
             VoucherPurchaseSupplyINRDetails.objects.update_or_create(
                 supplier_details=instance,
@@ -449,7 +449,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             )
 
         if due_data is not None:
-            valid_fields = {'tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms', 'advance_references'}
+            valid_fields = {'tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms'}
             filtered_data = {k: v for k, v in due_data.items() if k in valid_fields}
             VoucherPurchaseDueDetails.objects.update_or_create(
                 supplier_details=instance,

@@ -1,11 +1,11 @@
 import uuid
+from .utils_serializers import SafeModelSerializerMixin
 from decimal import Decimal, InvalidOperation
 from rest_framework import serializers # type: ignore
-from .models_pending_transaction import PendingTransaction
-from .models_advance_allocation import AdvanceAllocation
 from .models import (
     MasterLedger, Voucher, JournalEntry,
-    ReceiptVoucher, ReceiptVoucherItem, VoucherAllocation
+    ReceiptVoucher, ReceiptVoucherItem, VoucherAllocation,
+    PendingTransaction, AdvanceAllocation
 )  # type: ignore
 from accounting.services.ledger_service import post_transaction, _resolve_ledger
 import datetime
@@ -26,7 +26,7 @@ def _safe_decimal(value):
     except (InvalidOperation, TypeError, ValueError):
         return Decimal("0")
 
-class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
+class ReceiptVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSerializer):
     customer = serializers.CharField(required=False, allow_null=True)
     # Read-only display fields
     customer_name = serializers.CharField(source='customer.name', read_only=True)
@@ -36,19 +36,20 @@ class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
     # Legacy field mappings
     received_amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, required=False)
     amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, required=False)
-    advance_ref_no = serializers.CharField(required=False, allow_null=True) # Used during create()
+    amount_applied = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
+    advance_ref_no = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     def to_internal_value(self, data):
         # Normalize reference_type to lowercase for choice validation (INVOICE -> invoice)
         if 'reference_type' in data and isinstance(data['reference_type'], str):
-            data['reference_type'] = data['reference_type'].lower()
+            data['reference_type'] = data['reference_type'].upper()
         return super().to_internal_value(data)
 
     class Meta:
         model = PendingTransaction
         fields = [
             'id', 'customer', 'customer_name', 'reference_id', 'reference_type', 
-            'pending_transaction', 'amount', 'pending_before', 'received_amount', 
+            'pending_transaction', 'amount', 'amount_applied', 'pending_before', 'received_amount', 
             'balance_after', 'is_advance', 'advance_ref_no', 'invoice_date',
             'allocations'
         ]
@@ -128,7 +129,7 @@ class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
             return None # Fallback
         return value
 
-class ReceiptVoucherSerializer(serializers.ModelSerializer):
+class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerializer):
     items = ReceiptVoucherItemSerializer(many=True, required=False)
     
     # Handle both ID and Name in POST
@@ -137,6 +138,8 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
     type = serializers.CharField(required=False, default='receipt', allow_null=True)
     voucher_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     narration = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
+    total_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
     total_receipt = serializers.SerializerMethodField()
 
     def get_total_receipt(self, obj):
@@ -164,150 +167,202 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
         return (l_id, c.id if c else None, v.id if v else None)
 
     def create(self, validated_data):
+        from django.db import transaction as db_transaction
         request = self.context.get('request')
         tenant_id = request.user.branch_id if request and hasattr(request.user, 'tenant_id') else None
         
+        # 1. Extract and Remove Non-DB Fields
         items_data = validated_data.pop('items', [])
+        receive_in_raw = validated_data.pop('receive_in', None)
+        customer_raw = validated_data.pop('customer', None)
+        total_p_provided = validated_data.pop('total_amount', None)
+        amount_provided = validated_data.pop('amount', None) 
+        v_num_provided = validated_data.pop('voucher_number', None)
+        v_date_provided = validated_data.pop('date', timezone.now().date())
+        v_narr_provided = validated_data.pop('narration', '')
         
-        # Detect Mode
-        mode = 'receipt_single'
-        if len(items_data) > 1:
-            mode = 'receipt_bulk'
+        with db_transaction.atomic():
+            # 2. Resolve Relationships
+            receive_in_ledger = _resolve_ledger(receive_in_raw, tenant_id) if receive_in_raw else None
+            customer_ledger = _resolve_ledger(customer_raw, tenant_id) if customer_raw else None
+            
+            # 3. Voucher Numbering
+            from masters.models import MasterVoucherReceipts
+            series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
 
-        # Auto numbering and validation
-        v_num_provided = validated_data.get('voucher_number')
-        from masters.models import MasterVoucherReceipts
-        series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            def _is_taken(v):
+                from accounting.models import ReceiptVoucher, AdvanceAllocation, PendingTransaction
+                return (
+                    ReceiptVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v).exists() or
+                    AdvanceAllocation.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists() or
+                    PendingTransaction.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists()
+                )
 
-        def _is_taken(v):
-            from accounting.models import ReceiptVoucher, AdvanceAllocation
-            from accounting.models_pending_transaction import PendingTransaction
-            return (
-                ReceiptVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v).exists() or
-                AdvanceAllocation.objects.filter(tenant_id=tenant_id, type__in=['receipt_single', 'receipt_bulk'], voucher_number=v).exists() or
-                PendingTransaction.objects.filter(tenant_id=tenant_id, type__in=['receipt_single', 'receipt_bulk'], voucher_number=v).exists()
-            )
-
-        if series:
-            expected_next = series.get_next_number()
-            if not v_num_provided or v_num_provided == expected_next:
-                v_num_to_use = expected_next
-                while _is_taken(v_num_to_use):
-                    series.increment_number()
-                    v_num_to_use = series.get_next_number()
-                
-                validated_data['voucher_number'] = v_num_to_use
-                series.increment_number()
-            else:
-                if _is_taken(v_num_provided):
+            v_num_to_use = v_num_provided
+            if series:
+                expected_next = series.get_next_number()
+                if not v_num_provided or v_num_provided == expected_next:
                     v_num_to_use = expected_next
                     while _is_taken(v_num_to_use):
                         series.increment_number()
                         v_num_to_use = series.get_next_number()
-                    
-                    validated_data['voucher_number'] = v_num_to_use
                     series.increment_number()
-        else:
-            if not v_num_provided:
-                validated_data['voucher_number'] = f"REC-{uuid.uuid4().hex[:6].upper()}"
             
-        # Populate master party IDs
-        receive_in = validated_data.get('receive_in')
-        if receive_in and not isinstance(receive_in, MasterLedger):
-            receive_in = _resolve_ledger(receive_in, tenant_id)
-        
-        l_id, c_id, v_id = self._get_party_ids(receive_in)
-        validated_data['ledger_id_val'] = l_id
-        validated_data['party_customer_id'] = c_id
-        validated_data['party_vendor_id'] = v_id
+            if not v_num_to_use:
+                v_num_to_use = f"REC-{uuid.uuid4().hex[:6].upper()}"
 
-        # Compute Total if not provided
-        if not validated_data.get('amount') and not validated_data.get('total_amount'):
-            total_p = sum(_safe_decimal(i.get('received_amount', i.get('amount', 0))) for i in items_data)
-            validated_data['amount'] = total_p
-            validated_data['total_amount'] = total_p
+            # 4. Calculate Total
+            final_total = total_p_provided or amount_provided
+            if not final_total:
+                final_total = sum(_safe_decimal(i.get('received_amount', i.get('amount', 0))) for i in items_data)
 
-        receipt = ReceiptVoucher.objects.create(**validated_data)
-        
-        v_num  = validated_data['voucher_number']
-        v_date = validated_data.get('date') or timezone.now().date()
-        v_narr = validated_data.get('narration', '')
-        
-        saved_items = []
-
-        for item_data in items_data:
-            party = item_data.get('customer')
-            if not party: continue
+            # 5. Resolve Party IDs for both sides
+            # Side A: receive_from (The External Party - Customer/Vendor/Ledger)
+            rf_l_id, rf_c_id, rf_v_id = self._get_party_ids(customer_ledger) if customer_ledger else (None, None, None)
             
-            # Extract date for normalization if it exists in JSON
-            txn_details = item_data.get('pending_transaction') or {}
-            item_date_raw = txn_details.get('date')
-            item_date = item_data.pop('invoice_date', None)
-            if not item_date and item_date_raw:
-                try:
-                    if isinstance(item_date_raw, str):
-                        import datetime
-                        item_date = datetime.datetime.strptime(item_date_raw, '%Y-%m-%d').date()
-                    else:
-                        item_date = item_date_raw
-                except:
-                    pass
+            # Side B: receive_in (The Internal Bank/Cash Ledger)
+            ri_l_id, ri_c_id, ri_v_id = self._get_party_ids(receive_in_ledger) if receive_in_ledger else (None, None, None)
 
-            # Resolved customer ledger
-            customer_ledger = item_data.get('customer')
-            i_l_id, i_c_id, i_v_id = self._get_party_ids(customer_ledger)
+            # 6. Create Header
+            receipt = ReceiptVoucher.objects.create(
+                tenant_id=tenant_id,
+                voucher_number=v_num_to_use,
+                transaction_type='RECEIPT',
+                date=v_date_provided,
+                total_amount=final_total,
+                amount=final_total, # Physical column
+                narration=v_narr_provided,
+                pay_to_ledger=receive_in_ledger,
+                pay_from_ledger=customer_ledger,
+                
+                # Shared/Legacy party ID
+                ledger_id_val=rf_l_id,
+                party_customer_id=rf_c_id,
+                party_vendor_id=rf_v_id,
 
-            # --- FIX: Aggressive ID capture from multiple potential sources ---
-            ref_id_val = item_data.get('reference_id')
-            if not ref_id_val:
-                ref_id_val = item_data.get('id')
-            if not ref_id_val and 'pending_transaction' in item_data:
-                ref_id_val = item_data['pending_transaction'].get('id')
-            
-            rvi = ReceiptVoucherItem.objects.create(
-                voucher=receipt, 
-                tenant_id=receipt.tenant_id,
-                invoice_date=item_date,
-                ledger_id_val=i_l_id,
-                party_customer_id=i_c_id,
-                party_vendor_id=i_v_id,
-                # Explicitly pass reference_id
-                reference_id=str(ref_id_val) if ref_id_val else None,
-                **{k: v for k, v in item_data.items() if k not in ['reference_id', 'id']}
+                # Side Specific (Receive context)
+                receive_from_ledger_id_val=rf_l_id,
+                receive_from_customer_id_val=rf_c_id,
+                receive_from_vendor_id_val=rf_v_id,
+                
+                receive_in_ledger_id_val=ri_l_id,
+                receive_in_customer_id_val=ri_c_id,
+                receive_in_vendor_id_val=ri_v_id
             )
 
-            # NEW: Save to separate VoucherAllocation table for full normalization
-            VoucherAllocation.objects.create(
-                tenant_id=receipt.tenant_id,
-                ledger=customer_ledger,
-                party_customer_id=i_c_id,
-                party_vendor_id=i_v_id,
-                source_voucher_id=receipt.id,
-                source_type='RECEIPT',
-                source_voucher_no=receipt.voucher_number,
-                source_voucher_date=receipt.date,
-                target_voucher_id=self._safe_int(ref_id_val),
-                target_type='SALES', 
-                target_voucher_no=rvi.reference_id,
-                target_voucher_date=rvi.invoice_date,
-                reference_type=rvi.reference_type,
-                pending_amount=rvi.pending_before,
-                amount=rvi.received_amount,
-                balance_after=rvi.balance_after
-            )
+            # 7. Create Items and Allocations
+            mode = 'receipt_bulk' if len(items_data) > 1 else 'receipt_single'
             
-            if ref_id_val:
-                update_sales_invoice_payment_status(receipt.tenant_id, ref_id_val)
-            
-            saved_items.append(rvi)
+            # If no items provided but total is positive, treat as a single advance item
+            if not items_data and final_total > 0:
+                AdvanceAllocation.objects.create(
+                    tenant_id=tenant_id,
+                    transaction=receipt,
+                    type=mode,
+                    reference_id='ADVANCE',
+                    reference_number=receipt.voucher_number,
+                    reference_type='ADVANCE',
+                    pay_from_ledger=customer_ledger,
+                    pay_to_ledger=receipt.pay_to_ledger,
+                    allocated_amount=final_total,
+                    amount=final_total, # Physical column
+                    original_amount=final_total,
+                    is_advance=True,
+                    advance_ref_no=receipt.voucher_number,
+                    
+                    # Core IDs
+                    ledger_id_val=rf_l_id,
+                    party_customer_id=rf_c_id,
+                    party_vendor_id=rf_v_id,
 
-        self._mirror_to_generic_voucher(receipt)
-        self._mirror_to_customer_portal(receipt)
-        self._mirror_to_vendor_portal(receipt)
-        self._post_journal_entries(receipt)
+                    # Side Specific
+                    receive_from_ledger_id_val=rf_l_id,
+                    receive_from_customer_id_val=rf_c_id,
+                    receive_from_vendor_id_val=rf_v_id,
+                    
+                    receive_in_ledger_id_val=ri_l_id,
+                    receive_in_customer_id_val=ri_c_id,
+                    receive_in_vendor_id_val=ri_v_id
+                )
 
-        return receipt
+            for item_data in items_data:
+                # Extract item-level non-DB fields
+                it_party_raw = item_data.pop('customer', None)
+                it_pending_raw = item_data.pop('pending_transaction', {})
+                it_amt = _safe_decimal(
+                    item_data.get('amount_applied') or
+                    item_data.get('received_amount') or 
+                    item_data.get('amount') or 
+                    item_data.get('receipt') or 
+                    item_data.get('payment') or 0
+                )
+                it_type = (item_data.get('reference_type', 'invoice')).upper()
+                it_ref_id = item_data.get('reference_id') or item_data.get('id')
 
+                # Metadata normalization
+                det_ref = (
+                    it_pending_raw.get('reference_no') or 
+                    it_pending_raw.get('ref_no') or 
+                    it_pending_raw.get('invoiceNo') or
+                    item_data.get('reference_no') or
+                    item_data.get('advance_ref_no')
+                )
+                det_party = it_pending_raw.get('party_name') or it_pending_raw.get('customer_name')
+                det_date = it_pending_raw.get('date') or it_pending_raw.get('invoice_date')
+
+                # Resolve Item Ledger
+                it_party_ledger = _resolve_ledger(it_party_raw, tenant_id) if it_party_raw else customer_ledger
+                p_l_id, p_c_id, p_v_id = self._get_party_ids(it_party_ledger) if it_party_ledger else (None, None, None)
+                
+                # Determine Target Detail Model
+                target_model = AdvanceAllocation if it_type == 'ADVANCE' else PendingTransaction
+                
+                target_model.objects.create(
+                    tenant_id=tenant_id,
+                    transaction=receipt,
+                    type=mode,
+                    reference_id=str(it_ref_id) if it_ref_id else None,
+                    reference_number=det_ref or str(it_ref_id) or v_num_to_use,
+                    reference_type=it_type,
+                    pay_from_ledger=it_party_ledger,
+                    pay_to_ledger=receipt.pay_to_ledger,
+                    allocated_amount=it_amt,
+                    amount=it_amt, # Physical column
+                    is_advance=(it_type == 'ADVANCE'),
+                    advance_ref_no=det_ref if it_type == 'ADVANCE' else None,
+                    
+                    # Concrete columns from frontend
+                    due_date=it_pending_raw.get('due_date'),
+                    due_status=it_pending_raw.get('due_status') or it_pending_raw.get('status'),
+                    original_amount=it_amt,
+                    
+                    invoice_date=det_date,
+                    pending_before=_safe_decimal(item_data.get('pending_before') or it_pending_raw.get('pending') or it_amt),
+                    balance_after=_safe_decimal(item_data.get('balance_after', 0)),
+                    
+                    # Party Sync
+                    ledger_id_val=p_l_id,
+                    party_customer_id=p_c_id,
+                    party_vendor_id=p_v_id,
+
+                    # Detailed Sync
+                    receive_from_ledger_id_val=p_l_id,
+                    receive_from_customer_id_val=p_c_id,
+                    receive_from_vendor_id_val=p_v_id,
+                    
+                    receive_in_ledger_id_val=ri_l_id,
+                    receive_in_customer_id_val=ri_c_id,
+                    receive_in_vendor_id_val=ri_v_id
+                )
+
+            # Mirroring and Posting
+            self._mirror_to_generic_voucher(receipt)
+            self._mirror_to_vendor_portal(receipt)
+            self._mirror_to_customer_portal(receipt)
+            self._post_journal_entries(receipt)
+
+            return receipt
+        
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         instance = super().update(instance, validated_data)

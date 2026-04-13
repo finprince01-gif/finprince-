@@ -349,7 +349,6 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         const advanceNeeded = val - currentAllocated;
         if (advanceNeeded > 0) {
             setSingleAdvanceAmount(Number(advanceNeeded.toFixed(2)));
-            if (!showSingleAdvanceSection) setShowSingleAdvanceSection(true);
         } else {
             setSingleAdvanceAmount(0);
         }

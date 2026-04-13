@@ -56,20 +56,19 @@ class DashboardAnalyticsView(APIView):
         expenses_qs = VoucherExpense.objects.filter(
             tenant_id=tenant_id,
             date__gte=six_months_ago
-        ).values('date', 'expense_rows')
+        ).prefetch_related('rel_items')
 
         expense_trend_map = defaultdict(float)
         expense_category_map = defaultdict(float)
 
         for voucher in expenses_qs:
-            month_str = voucher['date'].strftime('%b %y')
-            rows = voucher['expense_rows'] or []
-            if isinstance(rows, str): continue # Should be list/json
-            for row in rows:
-                 amount = float(row.get('totalAmount', 0) or 0)
+            month_str = voucher.date.strftime('%b %y')
+            # items are now in rel_items (ExpenseLineItem)
+            for row in voucher.rel_items.all():
+                 amount = float(row.total_amount or 0)
                  expense_trend_map[month_str] += amount
-                 # Breakdown by Expense Ledger Name (or infer category)
-                 category = row.get('expense', 'Uncategorized')
+                 # Breakdown by Expense Ledger Name
+                 category = row.expense_ledger_name or 'Uncategorized'
                  expense_category_map[category] += amount
 
         # Purchases (VoucherPurchase) - Treated as COGS/Expense
@@ -125,7 +124,7 @@ class DashboardAnalyticsView(APIView):
         payments_qs = PaymentVoucher.objects.filter(
             tenant_id=tenant_id, 
             date__gte=six_months_ago
-        ).prefetch_related('items')
+        )
         
         cash_out_map = defaultdict(float)
         for p in payments_qs:

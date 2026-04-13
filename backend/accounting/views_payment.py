@@ -4,15 +4,16 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from core.mixins import BranchQuerysetMixin, IsBranchMember
 from core.tenant import get_tenant_from_request
-from .models import Voucher, JournalEntry, PaymentVoucher, PaymentVoucherItem  # type: ignore
+from .models import (
+    Voucher, JournalEntry, PaymentVoucher, PaymentVoucherItem,
+    PendingTransaction, AdvanceAllocation, Transaction, TransactionAllocation
+)  # type: ignore
 from .serializers_payment import (
     PaymentVoucherSerializer, 
     VoucherPaymentSingleSerializer, 
     VoucherPaymentBulkSerializer,
     AdvancePaymentSerializer
 )
-from .models_advance_allocation import AdvanceAllocation
-from .models_pending_transaction import PendingTransaction
 from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink  # type: ignore
 from django.utils import timezone  # type: ignore
 from django.db import transaction as db_transaction  # type: ignore
@@ -63,17 +64,19 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
         if ref_no:
             # Check for standard advance ref no
-            exists = AdvanceAllocation.objects.filter(
+            exists = TransactionAllocation.objects.filter(
                 tenant_id=tenant_id,
-                advance_ref_no=ref_no
-            ).exclude(advance_ref_no='').exists()
+                reference_number=ref_no,
+                reference_type='ADVANCE'
+            ).exists()
             return Response({'is_unique': not exists})
             
         if v_num:
-            exists = (
-                PaymentVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists() or
-                AdvanceAllocation.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists()
-            )
+            # Check if voucher number is taken in the unified transaction table
+            exists = Transaction.objects.filter(
+                tenant_id=tenant_id, 
+                voucher_number=v_num
+            ).exists()
             return Response({'is_unique': not exists})
 
         return Response({'is_unique': True})
@@ -160,9 +163,9 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                 if purch and hasattr(purch, 'payment_details') and purch.payment_details:
                     pending_amt = purch.payment_details.payment_balance if purch.payment_details.payment_balance is not None else v_amt
             else:
-                 from .models_pending_transaction import PendingTransaction
+                 from .models import PendingTransaction
                  from django.db.models import Sum
-                 applied = PendingTransaction.objects.filter(tenant_id=tenant_id, reference_number=v.voucher_number).aggregate(t=Sum('amount_applied'))['t'] or 0
+                 applied = PendingTransaction.objects.filter(tenant_id=tenant_id, reference_number=v.voucher_number).aggregate(t=Sum('allocated_amount'))['t'] or 0
                  pending_amt = float(v_amt) - float(applied)
                  
             # If the invoice is fully paid, skip it
@@ -180,8 +183,10 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                 elif days_to_due == 0:
                     due_status = "Due Today"
             
-            # FILTER: only show "Due" or "Due Today" as requested by user
-            if due_status in ["Due", "Due Today"]:
+            is_partially_paid = float(pending_amt) < float(v_amt) - 0.01
+            
+            # FILTER: only show "Due", "Due Today", or "Partially Paid" as requested
+            if due_status in ["Due", "Due Today"] or is_partially_paid:
                 results.append({
                     'id': v.id,
                     'date': v.date.strftime('%Y-%m-%d') if v.date else '',
@@ -319,7 +324,7 @@ def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
     """
     # Advances are exclusively stored in AdvanceAllocation in the new system
     qs = AdvanceAllocation.objects.filter(
-        advance_amount__gt=0
+        amount__gt=0
     ).select_related('pay_to_ledger')
     
     if ledger_id:
@@ -371,8 +376,8 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
             is_payment = 'payment' in str(adv.type).lower()
             source_type = 'payment' if is_payment else 'receipt'
             
-            # Amount is now definitively stored in advance_amount
-            total_amt = Decimal(str(adv.advance_amount or 0))
+            # Amount is now definitively stored in amount
+            total_amt = Decimal(str(adv.amount or 0))
             
             allocated = get_allocated_amount(adv.id, source_type, tenant_id)
             remaining = total_amt - allocated

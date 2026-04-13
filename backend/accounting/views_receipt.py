@@ -5,11 +5,12 @@ from django.db import transaction as db_transaction # type: ignore
 from django.utils import timezone # type: ignore
 import datetime
 
-from .models import ReceiptVoucher, ReceiptVoucherItem, Voucher, JournalEntry # type: ignore
+from .models import (
+    ReceiptVoucher, ReceiptVoucherItem, Voucher, JournalEntry,
+    PendingTransaction, AdvanceAllocation, Transaction, TransactionAllocation
+) # type: ignore
 from .serializers_receipt import ReceiptVoucherSerializer # type: ignore
 from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink # type: ignore
-from .models_advance_allocation import AdvanceAllocation
-from .models_pending_transaction import PendingTransaction
 
 class ReceiptVoucherViewSet(viewsets.ModelViewSet):
     """
@@ -123,11 +124,18 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
         ref_no = request.query_params.get('ref_no')
         tenant_id = self.request.user.branch_id if hasattr(self.request.user, 'tenant_id') else None
         
-        # Unique check for Voucher Number and Advance Reference
-        exists_voucher = Voucher.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists()
-        exists_advance = AdvanceAllocation.objects.filter(advance_ref_no=ref_no, tenant_id=tenant_id).exists()
+        if not tenant_id:
+             tenant_id = request.headers.get('X-Branch-Id')
+
+        # Check for Advance Ref or Voucher Number in the unified transaction table
+        exists_voucher = Transaction.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists()
+        exists_advance = TransactionAllocation.objects.filter(
+            reference_number=ref_no, 
+            reference_type='ADVANCE',
+            tenant_id=tenant_id
+        ).exists()
         
-        is_unique = not (exists_voucher or exists_advance)
+        is_unique = not (exists_voucher or exists_advance or Voucher.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists())
         return Response({"is_unique": is_unique, "ref_no": ref_no})
 
 # --- DEPRECATED VIEWSETS (Aliases to prevent runtime errors in urls.py) ---

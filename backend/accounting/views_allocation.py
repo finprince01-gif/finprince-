@@ -4,8 +4,10 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Q
 from django.db import transaction
-from .models import MasterLedger, JournalEntry, Voucher, PendingTransaction
-from .models_advance_allocation import AdvanceAllocation
+from .models import (
+    MasterLedger, JournalEntry, Voucher, PendingTransaction,
+    AdvanceAllocation, VoucherAllocation
+)
 import datetime
 
 class VoucherAllocationViewSet(viewsets.ModelViewSet):
@@ -128,7 +130,7 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
                 tenant_id=tenant_id,
                 voucher_number=v_id_for_query,
             )
-            total_allocated = allocs.aggregate(Sum('amount_applied'))['amount_applied__sum'] or 0
+            total_allocated = allocs.aggregate(total=Sum('allocated_amount'))['total'] or 0
             history = [{
                 'target_id': a.reference_number,
                 'target_number': a.reference_number,
@@ -141,7 +143,7 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
                 tenant_id=tenant_id,
                 reference_number=v.voucher_number # Target invoice number
             )
-            total_allocated = allocs.aggregate(Sum('amount_applied'))['amount_applied__sum'] or 0
+            total_allocated = allocs.aggregate(total=Sum('allocated_amount'))['total'] or 0
             history = [{
                 'source_id': a.source_voucher_id,
                 'source_number': Voucher.objects.filter(id=a.source_id).values_list('voucher_number', flat=True).first(),
@@ -182,7 +184,7 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
             target_total = float(target_v.total or target_v.amount or 0)
             target_allocated = PendingTransaction.objects.filter(
                 reference_number=target_v.voucher_number, tenant_id=tenant_id
-            ).aggregate(Sum('amount_applied'))['amount_applied__sum'] or 0
+            ).aggregate(total=Sum('allocated_amount'))['total'] or 0
             
             if amount > (target_total - float(target_allocated)) + 0.01:
                  return Response({"error": "Amount exceeds invoice balance"}, status=400)

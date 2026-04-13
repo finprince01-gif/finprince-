@@ -422,14 +422,48 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             id: string; code: string; name: string; ledger_id?: string;
             days0to45: number; days45to90: number; months6: number; year1: number;
             advances: number;
+            openOrders: number;
         }> = {};
 
+        // INITIALIZE: Ensure all vendors with active POs in this category show up
+        purchaseOrders.forEach((po: any) => {
+            let poCat = po.category;
+            if (!poCat && po.vendorName) {
+                const vendor = vendorList.find(v => v.vendor_name === po.vendorName);
+                if (vendor) poCat = (vendor as any).vendor_category_name || (vendor as any).vendor_category || '';
+            }
+
+            if ((poCat || '').toLowerCase().includes(categoryName.toLowerCase()) &&
+                ['Draft', 'Pending Approval', 'Approved', 'Mailed'].includes(po.status)) {
+                
+                const vendor = vendorList.find(v => v.vendor_name === po.vendorName);
+                if (vendor) {
+                    const vendorId = vendor.id.toString();
+                    if (!vendorGroups[vendorId]) {
+                        vendorGroups[vendorId] = {
+                            id: vendorId,
+                            code: vendor.vendor_code || `VEN-${vendorId}`,
+                            name: vendor.vendor_name,
+                            ledger_id: (vendor as any).ledger_id || (vendor as any).ledger,
+                            days0to45: 0,
+                            days45to90: 0,
+                            months6: 0,
+                            year1: 0,
+                            advances: 0,
+                            openOrders: 0,
+                        };
+                    }
+                    vendorGroups[vendorId].openOrders += 1;
+                }
+            }
+        });
+
         purchaseVouchers.forEach((pv: any) => {
-            const vendorId = pv.vendor_id;
+            const vendorId = (pv.vendor_id || pv.vendor_basic_detail_id || pv.vendor_basic_detail)?.toString();
             if (!vendorId) return;
 
             // Match vendor from vendorList
-            const vendor = vendorList.find((v: any) => v.id === vendorId);
+            const vendor = vendorList.find((v: any) => v.id.toString() === vendorId);
             if (!vendor) return;
 
             // Filter by current procurement category
@@ -445,7 +479,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
             if (!vendorGroups[vendorId]) {
                 vendorGroups[vendorId] = {
-                    id: vendorId.toString(),
+                    id: vendorId,
                     code: vendorCode,
                     name: vendorName,
                     ledger_id: (vendor as any).ledger_id || (vendor as any).ledger,
@@ -454,6 +488,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     months6: 0,
                     year1: 0,
                     advances: 0,
+                    openOrders: 0
                 };
             }
 
@@ -489,13 +524,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             const vendor = vendorList.find((v: any) => v.ledger_id === ledgerId || v.ledger === ledgerId);
             if (!vendor) return;
 
-            const vendorId = vendor.id;
+            const vendorId = vendor.id.toString();
             const vendorCode = vendor.vendor_code || `VEN-${vendorId}`;
             const vendorName = vendor.vendor_name || adv.pay_to_name || 'Unknown Vendor';
 
             if (!vendorGroups[vendorId]) {
                 vendorGroups[vendorId] = {
-                    id: vendorId.toString(),
+                    id: vendorId,
                     code: vendorCode,
                     name: vendorName,
                     days0to45: 0,
@@ -503,6 +538,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     months6: 0,
                     year1: 0,
                     advances: 0,
+                    openOrders: 0
                 };
             }
 
@@ -1062,9 +1098,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const fetchPurchaseOrders = async () => {
         try {
             const response: any = await httpClient.get('/api/vendors/purchase-orders/');
-            const payload = response?.data?.data || response?.data || response || [];
-            if (Array.isArray(payload)) {
-                const mapped = payload.map((po: any) => ({
+            let payload = response?.data?.data || response?.data;
+            // If response itself is an array (direct response from httpClient)
+            const list = Array.isArray(payload) ? payload : (Array.isArray(response) ? response : (payload || []));
+
+            if (Array.isArray(list)) {
+                const mapped = list.map((po: any) => ({
                     id: po.id,
                     poNumber: po.po_number,
                     poDate: po.po_date || (po.created_at ? po.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
@@ -1078,11 +1117,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     category: po.category_name || po.category || po.po_category || '',
                     amount: po.total_value ? po.total_value.toString() : '0.00'
                 }));
-                // Combine with hardcoded if needed, or just replace
-                // For now, let's keep hardcoded as fallback if empty
-                if (mapped.length > 0) {
-                    setPurchaseOrders(mapped);
-                }
+                
+                // Always set state even if empty to clear dummy data
+                setPurchaseOrders(mapped);
             }
         } catch (error) {
             console.error('Error fetching POs:', error);
@@ -2728,7 +2765,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
         const fetchLedgers = async () => {
             try {
-                const res: any = await httpClient.get('/api/accounting/ledgers/?group=Sundry Creditors');
+                const res: any = await httpClient.get('/api/masters/ledgers/?group=Sundry Creditors');
                 setAllLedgers(Array.isArray(res) ? res : (res.results || []));
             } catch (err) {
                 console.error('Error fetching ledgers:', err);
@@ -5527,6 +5564,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 max-w-[150px]">Vendor Code</th>
                                                                         <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 min-w-[200px]">Vendor Name</th>
                                                                         <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 min-w-[180px]">Sub Category</th>
+                                                                        <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[80px]">Open Orders</th>
                                                                         <th colSpan={5} className="px-6 py-3 text-center text-[11px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-100 bg-[#F8F9FA]/80 shadow-sm">Amount - Due For</th>
                                                                         <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-widest border-l border-gray-100 w-[100px]">Actions</th>
                                                                     </tr>
@@ -5553,9 +5591,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         </tr>
                                                                     ) : getFilteredVendorAging(agingData).length === 0 ? (
                                                                         <tr>
-                                                                            <td colSpan={9} className="px-6 py-10 text-center text-sm text-gray-500">
+                                                                            <td colSpan={10} className="px-6 py-10 text-center text-sm text-gray-500">
                                                                                 {agingData.length === 0
-                                                                                    ? "No outstanding purchase invoices for this category."
+                                                                                    ? `No active procurement data (orders or outstanding invoices) for ${activeProcurementSubTab}.`
                                                                                     : "No vendors found matching your search term."}
                                                                             </td>
                                                                         </tr>
@@ -5567,9 +5605,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 border-r border-gray-50">
                                                                                     <span className="text-gray-600">{activeProcurementSubTab}</span>
                                                                                 </td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center font-bold text-gray-600 border-r border-gray-50">
+                                                                                    <span className={vendor.openOrders > 0 ? "bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full" : "text-gray-300"}>
+                                                                                        {vendor.openOrders}
+                                                                                    </span>
+                                                                                </td>
 
                                                                                 {/* Amount columns */}
-                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-slate-400 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">-</td>
+                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-slate-400 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">₹0.00</td>
                                                                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.days0to45)}</td>
                                                                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.days45to90)}</td>
                                                                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.months6)}</td>

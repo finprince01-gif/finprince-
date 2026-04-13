@@ -1,15 +1,17 @@
 import uuid
+from .utils_serializers import SafeModelSerializerMixin
 print("DEBUG: Loading serializers_payment.py")
 from rest_framework import serializers  # type: ignore[import]
-from .models_pending_transaction import PendingTransaction
-from .models_advance_allocation import AdvanceAllocation
 from .models import (
     MasterLedger, Voucher, JournalEntry,
-    PaymentVoucher, PaymentVoucherItem, VoucherAllocation
+    PaymentVoucher, PaymentVoucherItem, VoucherAllocation,
+    PendingTransaction, AdvanceAllocation
 )  # type: ignore[import]
 
 from accounting.services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal, InvalidOperation
+from django.utils import timezone
+import datetime
 
 
 def _safe_decimal(value):
@@ -31,11 +33,11 @@ class PaymentAllocationDetailSerializer(serializers.ModelSerializer):
 # Item serializer
 # ---------------------------------------------------------------------------
 
-class PaymentVoucherItemSerializer(serializers.ModelSerializer):
+class PaymentVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSerializer):
     # Incoming fields for resolving ledger
     type = serializers.CharField(write_only=True, required=False)
     id_ref = serializers.IntegerField(write_only=True, required=False)
-    advance_ref_no = serializers.CharField(write_only=True, required=False, allow_null=True)
+    advance_ref_no = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     
     # Read-only display fields
     pay_to_ledger_name = serializers.CharField(source='pay_to_ledger.name', read_only=True)
@@ -46,17 +48,18 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
 
     # Legacy field mappings
     amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, required=False)
+    amount_applied = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
 
     def to_internal_value(self, data):
         # Normalize reference_type to lowercase for choice validation (INVOICE -> invoice)
         if 'reference_type' in data and isinstance(data['reference_type'], str):
-            data['reference_type'] = data['reference_type'].lower()
+            data['reference_type'] = data['reference_type'].upper()
         return super().to_internal_value(data)
 
     class Meta:
         model = PendingTransaction
         fields = [
-            'id', 'amount', 'reference_type', 'reference_id', 
+            'id', 'amount', 'amount_applied', 'reference_type', 'reference_id', 
             'reference_number', 'pending_amount', 'balance_after', 'invoice_date',
             'transaction_details', 'pay_to_ledger', 'pay_to_ledger_name',
             'type', 'id_ref', 'vendor_name', 'customer_name',
@@ -113,7 +116,7 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
 
 
 
-class PaymentVoucherSerializer(serializers.ModelSerializer):
+class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerializer):
     pay_from_name = serializers.CharField(source='pay_from.name', read_only=True)
     pay_from = serializers.CharField(required=False, allow_null=True)
     type = serializers.CharField(required=False, default='payment', allow_null=True)
@@ -127,6 +130,8 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
     # Optional Top-Level Advance (for backward compatibility / bulk)
     advance_ref_no = serializers.CharField(required=False, allow_null=True, allow_blank=True, write_only=True)
     advance_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, write_only=True)
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
+    total_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
     items = PaymentVoucherItemSerializer(many=True, required=False)
 
     def _safe_int(self, val):
@@ -277,241 +282,198 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
             raise
 
     def _do_create(self, validated_data):
+        from django.db import transaction as db_transaction
         request = self.context.get('request')
         tenant_id = getattr(request.user, 'tenant_id', None) if request else None
         
+        # 1. Extract and Remove Non-DB Fields
         items_data = validated_data.pop('items', [])
         top_adv_ref = validated_data.pop('advance_ref_no', None)
         top_adv_amt = _safe_decimal(validated_data.pop('advance_amount', 0))
+        pay_from_raw = validated_data.pop('pay_from', None)
+        v_num_provided = validated_data.pop('voucher_number', None)
+        v_date_provided = validated_data.pop('date', timezone.now().date())
+        v_total_provided = validated_data.pop('total_amount', None)
+        v_amt_provided = validated_data.pop('amount', None)
+        v_narr_provided = validated_data.pop('narration', '')
+        
+        with db_transaction.atomic():
+            # 2. Resolve Relationships
+            pay_from_ledger = _resolve_ledger(pay_from_raw, tenant_id) if pay_from_raw else None
+            
+            # 3. Voucher Numbering
+            from masters.models import MasterVoucherPayments
+            series = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True).first()
 
-        # Detect Mode (Single vs Bulk)
-        mode = 'payment_single'
-        if isinstance(self, VoucherPaymentBulkSerializer):
-            mode = 'payment_bulk'
+            def _is_taken(v):
+                from accounting.models import PaymentVoucher, AdvanceAllocation, PendingTransaction
+                return (
+                    PaymentVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v).exists() or
+                    AdvanceAllocation.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists() or
+                    PendingTransaction.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists()
+                )
 
-        # Auto numbering and validation
-        v_num_provided = validated_data.get('voucher_number')
-        from masters.models import MasterVoucherPayments
-        series = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True).first()
-
-        def _is_taken(v):
-            from accounting.models import PaymentVoucher, AdvanceAllocation
-            return (
-                PaymentVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v).exists() or
-                AdvanceAllocation.objects.filter(tenant_id=tenant_id, voucher_number=v).exists()
-            )
-
-        if series:
-            expected_next = series.get_next_number()
-            # If no number provided, OR user provided the expected auto-generated number
-            if not v_num_provided or v_num_provided == expected_next:
-                v_num_to_use = expected_next
-                # Fast forward if somehow already taken
-                while _is_taken(v_num_to_use):
-                    series.increment_number()
-                    v_num_to_use = series.get_next_number()
-                
-                validated_data['voucher_number'] = v_num_to_use
-                series.increment_number()
-            else:
-                # Custom number provided.
-                if _is_taken(v_num_provided):
-                    # Robust fallback: The frontend likely sent a stale auto-generated number 
-                    # that got taken in another tab. We force an auto-increment instead of failing.
+            v_num_to_use = v_num_provided
+            if series:
+                expected_next = series.get_next_number()
+                if not v_num_provided or v_num_provided == expected_next:
                     v_num_to_use = expected_next
                     while _is_taken(v_num_to_use):
                         series.increment_number()
                         v_num_to_use = series.get_next_number()
-                    
-                    validated_data['voucher_number'] = v_num_to_use
                     series.increment_number()
-        else:
-            if not v_num_provided:
-                validated_data['voucher_number'] = f"PAY-{uuid.uuid4().hex[:6].upper()}"
-
-        v_num  = validated_data['voucher_number']
-        v_date = validated_data.get('date') or datetime.date.today()
-        v_narr = validated_data.get('narration', '')
-        v_from = validated_data.get('pay_from')
-        if v_from and not isinstance(v_from, MasterLedger):
-            v_from = _resolve_ledger(v_from, tenant_id)
-        
-        # Resolve Pay From Name
-        v_from_name = v_from.name if v_from else ''
-
-        # Populate master party IDs
-        pay_from = validated_data.get('pay_from')
-        l_id, c_id, v_id = self._get_party_ids(pay_from)
-        validated_data['ledger_id_val'] = l_id
-        validated_data['party_customer_id'] = c_id
-        validated_data['party_vendor_id'] = v_id
-
-        # Compute Total if not provided
-        if not validated_data.get('total_amount'):
-            total_p = sum(_safe_decimal(i.get('amount_applied', i.get('amount', 0))) for i in items_data) + top_adv_amt
-            validated_data['total_amount'] = total_p
-
-        voucher = PaymentVoucher.objects.create(**validated_data)
-
-
-        # Storage for constructed response
-        saved_items = []
-
-        # 1. Process Main Items
-        for item_data in items_data:
-            pay_to = item_data.get('pay_to_ledger')
-            if not pay_to: continue
             
-            l_id, c_id, v_id = self._get_party_ids(pay_to)
-            txn_details = item_data.get('transaction_details', {})
-            
-            ref_type = item_data.get('reference_type', 'invoice').lower()
-            amt      = _safe_decimal(item_data.get('amount_applied', 0))
-            
-            pay_to_ledger = item_data.get('pay_to_ledger')
-            if not pay_to_ledger: continue
-            
-            p_l_id, p_c_id, p_v_id = self._get_party_ids(pay_to_ledger)
-            txn_details = item_data.get('transaction_details', {})
-            
-            ref_type = item_data.get('reference_type', 'invoice').lower()
-            amt      = _safe_decimal(item_data.get('amount', item_data.get('amount_applied', 0)))
-            
-            if pay_to_ledger and amt > 0:
-                # If it's an advance, we store advance_ref_no in transaction_details
-                adv_ref = item_data.pop('advance_ref_no', None)
-                if adv_ref:
-                    if not txn_details: txn_details = {}
-                    txn_details['reference_no'] = adv_ref
+            if not v_num_to_use:
+                v_num_to_use = f"PAY-{uuid.uuid4().hex[:6].upper()}"
 
-                # Extract date for normalization
-                item_date_raw = txn_details.get('date') or item_data.get('invoice_date')
-                item_date = None
-                if item_date_raw:
-                    try:
-                        import datetime
-                        if isinstance(item_date_raw, str):
-                            item_date = datetime.datetime.strptime(item_date_raw, '%Y-%m-%d').date()
-                        else:
-                            item_date = item_date_raw
-                    except:
-                        pass
+            # 4. Calculate Total
+            final_total = v_total_provided or v_amt_provided
+            if not final_total:
+                final_total = sum(_safe_decimal(i.get('amount_applied', i.get('amount', 0))) for i in items_data) + top_adv_amt
 
-                pvi = PaymentVoucherItem.objects.create(
-                    voucher=voucher, 
+            # 5. Resolve Party IDs for both sides
+            # Side A: pay_from (Internal Bank/Cash Ledger)
+            pf_l_id, pf_c_id, pf_v_id = self._get_party_ids(pay_from_ledger) if pay_from_ledger else (None, None, None)
+            
+            # Side B: pay_to (The External Party - usually first item's ledger for header)
+            first_it = items_data[0] if items_data else {}
+            first_pay_to = _resolve_ledger(first_it.get('pay_to_ledger'), tenant_id) if first_it.get('pay_to_ledger') else None
+            pt_l_id, pt_c_id, pt_v_id = self._get_party_ids(first_pay_to) if first_pay_to else (None, None, None)
+
+            # 6. Create Header
+            voucher = PaymentVoucher.objects.create(
+                tenant_id=tenant_id,
+                voucher_number=v_num_to_use,
+                transaction_type='PAYMENT',
+                date=v_date_provided,
+                total_amount=final_total,
+                amount=final_total, # Physical column
+                narration=v_narr_provided,
+                pay_from_ledger=pay_from_ledger,
+                
+                # Shared/Legacy party ID (pointing to EXTERNAL party for payments if possible, or bank)
+                ledger_id_val=pt_l_id or pf_l_id,
+                party_customer_id=pt_c_id or pf_c_id,
+                party_vendor_id=pt_v_id or pf_v_id,
+
+                # Side Specific (Payment context)
+                pay_from_ledger_id_val=pf_l_id,
+                pay_from_customer_id_val=pf_c_id,
+                pay_from_vendor_id_val=pf_v_id,
+                
+                pay_to_ledger_id_val=pt_l_id,
+                pay_to_customer_id_val=pt_c_id,
+                pay_to_vendor_id_val=pt_v_id
+            )
+
+            # 7. Create allocations explicitly
+            mode = 'payment_bulk' if len(items_data) > 1 else 'payment_single'
+            
+            # If no items/advance provided but total is positive, treat as automatic advance
+            actual_adv_amt = top_adv_amt if top_adv_amt > 0 else (final_total if not items_data else 0)
+            
+            if actual_adv_amt > 0:
+                AdvanceAllocation.objects.create(
                     tenant_id=tenant_id,
-                    pay_to_ledger=pay_to_ledger, 
-                    amount=amt,
-                    reference_type=item_data.get('reference_type', 'INVOICE'),
-                    reference_id=item_data.get('reference_id'),
-                    reference_number=item_data.get('reference_number') or txn_details.get('reference_number') or txn_details.get('invoiceNo') or txn_details.get('referenceNumber'),
-                    pending_amount=item_data.get('pending_amount') or txn_details.get('amount') or 0,
-                    balance_after=item_data.get('balance_after') or txn_details.get('pending') or 0,
-                    invoice_date=item_date,
-                    advance_ref_no=adv_ref,
-                    transaction_details=txn_details,
-                    ledger_id_val=p_l_id,
-                    party_customer_id=p_c_id,
-                    party_vendor_id=p_v_id
-                )
-
-                # NEW: Save to separate VoucherAllocation table for full normalization
-                VoucherAllocation.objects.create(
-                    tenant_id=tenant_id,
-                    ledger=pay_to_ledger,
-                    party_customer_id=p_c_id,
-                    party_vendor_id=p_v_id,
-                    source_voucher_id=voucher.id,
-                    source_type='PAYMENT',
-                    source_voucher_no=voucher.voucher_number,
-                    source_voucher_date=voucher.date,
-                    target_voucher_id=self._safe_int(item_data.get('reference_id')),
-                    target_type='PURCHASE', 
-                    target_voucher_no=pvi.reference_number,
-                    target_voucher_date=pvi.invoice_date,
-                    reference_type=pvi.reference_type,
-                    pending_amount=pvi.pending_amount,
-                    amount=pvi.amount,
-                    balance_after=pvi.balance_after
-                )
-                saved_items.append(pvi)
-
-
-        # 2. Process Top-Level Advance (if any)
-        if top_adv_amt > 0:
-            # We need a party for this. Pick from first item or use a default if missing.
-            party = items_data[0].get('pay_to_ledger') if items_data else None
-            if party:
-                l_id, c_id, v_id = self._get_party_ids(party)
-                adv = AdvanceAllocation.objects.create(
-                    tenant_id=tenant_id,
+                    transaction=voucher,
                     type=mode,
-                    voucher_number=v_num,
-                    voucher_date=v_date,
-                    narration=v_narr,
-                    pay_from_ledger=v_from,
-                    pay_to_ledger=party,
-                    vendor_id=v_id,
-                    customer_id=c_id,
-                    advance_ref_no=top_adv_ref or v_num,
-                    advance_amount=top_adv_amt,
-                    total_amount=total_p,
+                    reference_id='ADVANCE',
+                    reference_type='ADVANCE',
+                    reference_number=top_adv_ref or voucher.voucher_number,
+                    pay_from_ledger=pay_from_ledger,
+                    allocated_amount=actual_adv_amt,
+                    amount=actual_adv_amt, # Physical column
+                    original_amount=actual_adv_amt,
+                    is_advance=True,
+                    advance_ref_no=top_adv_ref or voucher.voucher_number,
+                    details_party_name=pay_from_ledger.name if pay_from_ledger else None,
+                    
+                    # Side Specific
+                    pay_from_ledger_id_val=pf_l_id,
+                    pay_from_customer_id_val=pf_c_id,
+                    pay_from_vendor_id_val=pf_v_id,
+
+                    # Party sync
+                    ledger_id_val=pt_l_id or pf_l_id,
+                    party_customer_id=pt_c_id or pf_c_id,
+                    party_vendor_id=pt_v_id or pf_v_id
                 )
-                saved_items.append(adv)
 
-        # Mock Object for internal processing (Portals, Global Voucher)
-        mock_voucher = type('MockVoucher', (), {
-            'id': uuid.uuid4().int & ((1<<63)-1), # Safe for MySQL Signed BIGINT
-            'tenant_id': tenant_id,
-            'date': v_date,
-            'voucher_number': v_num,
-            'pay_from': v_from,
-            'pay_from_id': v_from.id if getattr(v_from, 'id', None) else v_from,
-            'narration': v_narr,
-            'total_amount': total_p,
-            'source': 'manual',
-            'ledger_id_val': saved_items[0].pay_to_ledger_id if saved_items else None,
-            'party_customer_id': saved_items[0].customer_id if saved_items else None,
-            'party_vendor_id': saved_items[0].vendor_id if saved_items else None,
-            'items': type('MockItems', (), {
-                'all': lambda self: self.items_list,
-                '__iter__': lambda self: iter(self.items_list),
-                'select_related': lambda self, *args: self,
-                'prefetch_related': lambda self, *args: self,
-                'items_list': [
-                    type('MockItem', (), {
-                        'id': item.id,
-                        'pay_to_ledger_id': item.pay_to_ledger_id,
-                        'pay_to_ledger': item.pay_to_ledger,
-                        'amount': getattr(item, 'amount_applied', getattr(item, 'advance_amount', 0)),
-                        'reference_type': 'ADVANCE' if isinstance(item, AdvanceAllocation) else 'INVOICE',
-                        'advance_ref_no': getattr(item, 'advance_ref_no', None),
-                        'ledger_id_val': item.pay_to_ledger_id,
-                        'party_customer_id': item.customer_id,
-                        'party_vendor_id': item.vendor_id,
-                        'transaction_details': {}
-                    }) for item in saved_items
-                ]
-            })()
-        })
+            for item_data in items_data:
+                it_pay_to_raw = item_data.pop('pay_to_ledger', None)
+                it_pending_raw = item_data.pop('transaction_details', {})
+                it_amt = _safe_decimal(
+                    item_data.get('amount_applied') or
+                    item_data.get('amount') or 
+                    item_data.get('received_amount') or 
+                    item_data.get('payment') or 
+                    item_data.get('receipt') or 0
+                )
+                it_type = (item_data.get('reference_type', 'invoice')).upper()
+                it_ref_id = item_data.get('reference_id') or item_data.get('id')
+                it_adv_ref = item_data.get('advance_ref_no')
 
-        # Logic Sync
-        self._post_to_global_voucher(mock_voucher)
-        self._mirror_to_vendor_portal(mock_voucher)
-        self._mirror_to_customer_portal(mock_voucher)
+                it_pay_to_ledger = _resolve_ledger(it_pay_to_raw, tenant_id) if it_pay_to_raw else None
+                p_l_id, p_c_id, p_v_id = self._get_party_ids(it_pay_to_ledger) if it_pay_to_ledger else (None, None, None)
 
-        # Prepare Response Data (Attach data as dict if needed, or just return mock)
-        # Note: By returning mock_voucher, we satisfy the view's need for .id
-        return mock_voucher
+                det_ref = (
+                    it_pending_raw.get('reference_no') or 
+                    it_pending_raw.get('ref_no') or 
+                    it_pending_raw.get('invoiceNo') or
+                    item_data.get('reference_no') or
+                    item_data.get('advance_ref_no') or
+                    it_adv_ref
+                )
+                det_party = it_pending_raw.get('party_name') or it_pending_raw.get('vendor_name')
+                det_date = it_pending_raw.get('date') or it_pending_raw.get('invoice_date')
 
-        self._post_to_global_voucher(voucher)
-        self._mirror_to_vendor_portal(voucher)
-        self._mirror_to_customer_portal(voucher)
-        return voucher
+                target_model = AdvanceAllocation if it_type == 'ADVANCE' else PendingTransaction
+                
+                target_model.objects.create(
+                    tenant_id=tenant_id,
+                    transaction=voucher,
+                    type=mode,
+                    reference_id=str(it_ref_id) if it_ref_id else None,
+                    reference_number=it_adv_ref or det_ref or str(it_ref_id) or v_num_to_use,
+                    reference_type=it_type,
+                    pay_to_ledger=it_pay_to_ledger,
+                    pay_from_ledger=voucher.pay_from_ledger,
+                    allocated_amount=it_amt,
+                    amount=it_amt,
+                    is_advance=(it_type == 'ADVANCE'),
+                    advance_ref_no=it_adv_ref,
+                    
+                    # Concrete columns from frontend
+                    due_date=it_pending_raw.get('due_date'),
+                    due_status=it_pending_raw.get('due_status') or it_pending_raw.get('status'),
+                    original_amount=it_amt,
 
-    # ------------------------------------------------------------------
-    # UPDATE (partial supported)
-    # ------------------------------------------------------------------
+                    invoice_date=det_date,
+                    pending_before=_safe_decimal(item_data.get('pending_amount') or it_pending_raw.get('pending') or it_amt),
+                    balance_after=_safe_decimal(item_data.get('balance_after', 0)),
+                    
+                    # Legacy sync
+                    ledger_id_val=p_l_id,
+                    party_vendor_id=p_v_id,
+                    party_customer_id=p_c_id,
+
+                    # Side Specific (Payment context)
+                    pay_from_ledger_id_val=pf_l_id,
+                    pay_from_customer_id_val=pf_c_id,
+                    pay_from_vendor_id_val=pf_v_id,
+                    
+                    pay_to_ledger_id_val=p_l_id,
+                    pay_to_customer_id_val=p_c_id,
+                    pay_to_vendor_id_val=p_v_id
+                )
+
+            self._mirror_to_generic_voucher(voucher)
+            self._mirror_to_vendor_portal(voucher)
+            self._mirror_to_customer_portal(voucher)
+            self._post_journal_entries(voucher)
+
+            return voucher
+        
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         instance = super().update(instance, validated_data)
@@ -531,7 +493,7 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
             
             self._mirror_to_vendor_portal(instance)
             self._mirror_to_customer_portal(instance)
-            self._post_to_global_voucher(instance)
+            self._mirror_to_generic_voucher(instance)
 
         return instance
 
@@ -567,70 +529,56 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _post_to_global_voucher(self, voucher: PaymentVoucher):
+    def _mirror_to_generic_voucher(self, voucher: PaymentVoucher):
         """
-        Create / upsert a row in the global Voucher tracking table and post
-        double-entry journal entries for every line item.
+        Create / upsert a row in the global Voucher tracking table.
         """
-        items = list(voucher.items.select_related('pay_to_ledger').all())
-        total = voucher.total_amount
-
-        # Upsert global Voucher record
-        gv = Voucher.objects.filter(
-            tenant_id=voucher.tenant_id,
-            type='payment',
-            voucher_number=voucher.voucher_number,
-        ).first()
-
-        if not gv:
-            try:
-                first_pay_to = items[0].pay_to_ledger.name if items else None
-                gv = Voucher.objects.create(
-                    tenant_id=voucher.tenant_id,
-                    type='payment',
-                    date=voucher.date,
-                    voucher_number=voucher.voucher_number,
-                    party=first_pay_to,
-                    account=voucher.pay_from.name if voucher.pay_from else None,
-                    amount=total,
-                    total=total,
-                    narration=voucher.narration,
-                    source=voucher.source or 'manual',
-                    reference_id=voucher.id,
-                    ledger_id_val=voucher.ledger_id_val,
-                    party_customer_id=voucher.party_customer_id,
-                    party_vendor_id=voucher.party_vendor_id,
-                )
-            except Exception as e:
-                print(f"!!! Global Voucher creation failed for PaymentVoucher {voucher.id}: {e}")
-                return
-
-        # Store global voucher id on the payment record for reconciliation links
-        setattr(voucher, '_accounting_voucher_id', gv.id)
-
-        # Double-entry posting
         try:
-            entries = []
-            total_debit: Decimal = Decimal("0")
+            items = list(voucher.items.all())
+            total = voucher.total_amount
 
-            from customerportal.database import CustomerMasterCustomerBasicDetails
-            from vendors.models import VendorMasterBasicDetail
+            # Extract names for the 'party' field
+            party_names = []
+            for item in items:
+                name = item.pay_to_ledger.name if item.pay_to_ledger else "Unknown"
+                if name not in party_names:
+                    party_names.append(name)
+
+            # Mirror to generic table
+            gv = Voucher.objects.update_or_create(
+                tenant_id=voucher.tenant_id,
+                type='payment',
+                voucher_number=voucher.voucher_number,
+                defaults={
+                    'date': voucher.date,
+                    'party': ", ".join(party_names) if party_names else "Multiple",
+                    'account': voucher.pay_from_ledger.name if voucher.pay_from_ledger else None,
+                    'amount': total,
+                    'total': total,
+                    'narration': voucher.narration,
+                    'source': voucher.source or 'manual',
+                    'reference_id': voucher.id,
+                    'ledger_id_val': voucher.ledger_id_val,
+                    'party_customer_id': voucher.party_customer_id,
+                    'party_vendor_id': voucher.party_vendor_id,
+                }
+            )
+        except Exception as e:
+            print(f"!!! Global Voucher mirror failed for Payment {voucher.id}: {e}")
+
+    def _post_journal_entries(self, voucher: PaymentVoucher):
+        """
+        Post double-entry journal records.
+        """
+        try:
+            items = list(voucher.items.all())
+            entries = []
+            total_debit = Decimal("0")
 
             for item in items:
                 amt = _safe_decimal(item.amount)
-                if amt > 0 and item.pay_to_ledger_id:
-                    total_debit += amt  # type: ignore
-                    # Resolve vendor or customer ID for this ledger
-                    v_id = None
-                    c_id = None
-                    vendor = VendorMasterBasicDetail.objects.filter(tenant_id=voucher.tenant_id, ledger_id=item.pay_to_ledger_id).first()
-                    if vendor:
-                        v_id = vendor.id
-                    else:
-                        customer = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=voucher.tenant_id, ledger_id=item.pay_to_ledger_id).first()
-                        if customer:
-                            c_id = customer.id
-
+                if amt > 0:
+                    total_debit += amt
                     entries.append({
                         "ledger_id": item.pay_to_ledger_id, 
                         "debit": float(amt), 
@@ -638,30 +586,37 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                         "ledger_id_val": item.ledger_id_val,
                         "party_customer_id": item.party_customer_id,
                         "party_vendor_id": item.party_vendor_id,
-                        "vendor_id": v_id,
-                        "customer_id": c_id
-
+                        "vendor_id": item.party_vendor_id,
+                        "customer_id": item.party_customer_id
                     })
 
-            if total_debit > 0 and voucher.pay_from_id:  # type: ignore
+            if total_debit > 0 and voucher.pay_from_ledger:
                 entries.append({
-                    "ledger_id": voucher.pay_from_id,
+                    "ledger_id": voucher.pay_from_ledger_id,
                     "debit": 0,
                     "credit": float(total_debit),
                     "ledger_id_val": voucher.ledger_id_val,
                     "party_customer_id": voucher.party_customer_id,
                     "party_vendor_id": voucher.party_vendor_id
                 })
+                
                 if len(entries) >= 2:
-                    voucher_type_label = "PAYMENT_BULK" if len(items) > 1 else "PAYMENT"
                     post_transaction(
-                        voucher_type=voucher_type_label,
-                        voucher_id=gv.id,
+                        voucher_type="PAYMENT",
+                        voucher_id=voucher.id,
                         tenant_id=voucher.tenant_id,
                         entries=entries,
                     )
         except Exception as e:
             print(f"Error posting payment entries for voucher {voucher.id}: {e}")
+
+    def _mirror_to_vendor_portal(self, voucher):
+        """Implement if needed for Payment tracking in portal"""
+        pass
+
+    def _mirror_to_customer_portal(self, voucher):
+        """Implement if needed for Payment tracking in portal"""
+        pass
 
 
 # ---------------------------------------------------------------------------

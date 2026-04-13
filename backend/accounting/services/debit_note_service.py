@@ -28,7 +28,7 @@ from typing import Any
 from django.db import transaction as db_transaction
 
 logger = logging.getLogger(__name__)
-from accounting.models_pending_transaction import PendingTransaction, AllocationLink
+from accounting.models import PendingTransaction, AllocationLink
 
 
 # ---------------------------------------------------------------------------
@@ -777,7 +777,7 @@ def mirror_to_vendor_portal(
     """
     try:
         from vendors.models import VendorMasterBasicDetail, VendorTransaction
-        from accounting.models_pending_transaction import PendingTransaction
+        from accounting.models import PendingTransaction
 
         tenant_id = debit_note_instance.tenant_id
         dn_number = voucher_obj.voucher_number

@@ -30,14 +30,7 @@ class VoucherPurchaseViewSet(viewsets.ModelViewSet):
                 due_details__to_pay__gt=0
             )
 
-            # Exclude purchases that already have a payment voucher linked to them
-            payment_purchase_ids = Voucher.objects.filter(
-                type='payment', 
-                tenant_id=tenant_id,
-                reference_id__isnull=False
-            ).values_list('reference_id', flat=True)
-            
-            queryset = queryset.exclude(id__in=payment_purchase_ids)
+            pass # Handled by to_pay filter above
         
         # Optional: Filter by vendor name/branch if provided
         vendor_name = self.request.query_params.get('vendor_name')

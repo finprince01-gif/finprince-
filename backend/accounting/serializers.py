@@ -308,9 +308,9 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
         if request and hasattr(request, 'user') and request.user.is_authenticated:
             validated_data['tenant_id'] = request.user.branch_id
         
-        # Store items_data for sales/purchase
-        if voucher_type in ['sales', 'purchase']:
-            validated_data['items_data'] = items_data
+        # items_data was removed from the Voucher model in a previous normalization step.
+        # It is now handled via a dynamic property in the Voucher model for read-only access.
+        # For creation, items should be handled by specialized serializers or additional logic here.
         
         # Auto-generate voucher_number if not provided
         if 'voucher_number' not in validated_data or not validated_data['voucher_number']:
