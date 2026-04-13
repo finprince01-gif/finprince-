@@ -37,7 +37,7 @@ from .serializers import (
     CustomerMastersSalesOrderSerializer
 )
 import logging
-from accounting.models_voucher_payment import PaymentVoucherItem
+from accounting.models import PaymentVoucherItem
 from accounting.serializers import PaymentVoucherItemSerializer
 
 logger = logging.getLogger(__name__)

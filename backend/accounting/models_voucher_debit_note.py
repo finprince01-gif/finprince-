@@ -60,18 +60,17 @@ class VoucherDebitNoteSupplierDetails(BaseModel):
         return f"{self.debit_note_no} - {self.vendor_name}"
 
 
-class VoucherDebitNoteSupplyDetails(BaseModel):
+class VoucherDebitNoteItemDetails(BaseModel):
     """
-    Stores Supply Details for Debit Note Voucher (Tab 2)
+    Stores Item Details for Debit Note Voucher (Tab 2)
     """
     debit_note_details = models.OneToOneField(
         VoucherDebitNoteSupplierDetails, 
         on_delete=models.CASCADE, 
-        related_name='supply_details'
+        related_name='item_details'
     )
     
-    
-    # Totals (Maintained for legacy, but items moved to VoucherDebitNoteItem)
+    # Totals
     total_taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_igst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_cgst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
@@ -80,15 +79,14 @@ class VoucherDebitNoteSupplyDetails(BaseModel):
     total_invoice_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
     class Meta:
-        db_table = 'norm_debit_note_supply_headers'
+        db_table = 'voucher_debit_note_item_details'
 
 
-class VoucherDebitNoteItem(BaseModel):
+class VoucherDebitNoteItemLine(BaseModel):
     """
-    Normalized individual line items for a Debit Note.
-    Replaces the 'items' JSON array in VoucherDebitNoteSupplyDetails.
+    Individual line items for a Debit Note.
     """
-    supply_details = models.ForeignKey(VoucherDebitNoteSupplyDetails, on_delete=models.CASCADE, related_name='item_lines')
+    item_details = models.ForeignKey(VoucherDebitNoteItemDetails, on_delete=models.CASCADE, related_name='item_lines')
     
     item_code = models.CharField(max_length=100, null=True, blank=True)
     item_name = models.CharField(max_length=255, null=True, blank=True)
@@ -107,7 +105,10 @@ class VoucherDebitNoteItem(BaseModel):
     reason_for_return = models.TextField(null=True, blank=True)
 
     class Meta:
-        db_table = 'norm_debit_note_line_items'
+        db_table = 'voucher_debit_note_item_lines'
+
+
+
 
 
 class VoucherDebitNoteDueDetails(BaseModel):

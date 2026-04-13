@@ -2,10 +2,14 @@ import uuid
 import logging
 from rest_framework import serializers
 from .models import (
-    MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
-    Voucher, JournalEntry, AmountTransaction
+    MasterLedgerGroup,
+    MasterLedger,
+    MasterHierarchyRaw,
+    Voucher,
+    JournalEntry,
+    AmountTransaction,
+    PaymentVoucherItem
 )
-from .models_voucher_payment import PaymentVoucherItem
 from .services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal
 
@@ -415,6 +419,9 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
     
     # Matching IDs for frontend (Mapped to ledger_id as per Step 2/7)
     reference_no = serializers.CharField(source='voucher.voucher_number', read_only=True)
+
+    # Backward-compat amount field
+    amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, read_only=True)
 
     class Meta:
         model = PaymentVoucherItem

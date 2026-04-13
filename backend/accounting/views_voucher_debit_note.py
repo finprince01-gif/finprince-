@@ -40,7 +40,7 @@ class VoucherDebitNoteViewSet(viewsets.ModelViewSet):
 
         qs = VoucherDebitNoteSupplierDetails.objects.filter(
             tenant_id=tenant_id
-        ).select_related("supply_details", "due_details", "transit_details")
+        ).select_related("item_details", "due_details", "transit_details")
 
         vendor_name = self.request.query_params.get("vendor_name")
         if vendor_name:

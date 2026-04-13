@@ -670,6 +670,65 @@ class InventoryOperationEWayBill(BaseModel):
             models.Index(fields=['operation_type', 'operation_id']),
         ]
 
+class InventoryOperationDeliveryChallan(BaseModel):
+    """
+    Normalized Delivery Challan / Dispatch Details for inventory operations.
+    """
+    OPERATION_TYPES = [
+        ('jobwork', 'Job Work'),
+        ('interunit', 'Inter Unit'),
+        ('location_change', 'Location Change'),
+        ('production', 'Production'),
+        ('scrap', 'Scrap'),
+        ('outward', 'Outward'),
+        ('grn', 'New GRN'),
+    ]
+    operation_type = models.CharField(max_length=20, choices=OPERATION_TYPES)
+    operation_id = models.BigIntegerField()
+    
+    # Core Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True) # Road, Air, Sea, Rail, Courier
+    dispatch_date = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    
+    delivery_type = models.CharField(max_length=100, null=True, blank=True) # Self, Third Party, Courier
+    transporter_id = models.CharField(max_length=15, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
+    
+    # Beyond Port / Shipping Details (Air/Sea)
+    shipping_bill_no = models.CharField(max_length=100, null=True, blank=True)
+    shipping_bill_date = models.DateField(null=True, blank=True)
+    ship_port_code = models.CharField(max_length=100, null=True, blank=True)
+    vessel_flight_no = models.CharField(max_length=100, null=True, blank=True)
+    port_of_loading = models.CharField(max_length=255, null=True, blank=True)
+    port_of_discharge = models.CharField(max_length=255, null=True, blank=True)
+    final_destination = models.CharField(max_length=255, null=True, blank=True)
+    origin_city = models.CharField(max_length=255, null=True, blank=True)
+    origin_country = models.CharField(max_length=255, null=True, blank=True)
+    dest_country = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Rail Specific
+    railway_receipt_no = models.CharField(max_length=100, null=True, blank=True)
+    railway_receipt_date = models.DateField(null=True, blank=True)
+    fnr_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_no = models.CharField(max_length=100, null=True, blank=True)
+    station_of_loading = models.CharField(max_length=255, null=True, blank=True)
+    station_of_discharge = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Document Reference
+    dispatch_document = models.FileField(upload_to='inventory_dispatch/', null=True, blank=True)
+    
+    status = models.CharField(max_length=50, default='Active')
+
+    class Meta:
+        db_table = 'inventory_operation_delivery_challans'
+        indexes = [
+            models.Index(fields=['operation_type', 'operation_id']),
+        ]
+
 class HsnGstMaster(models.Model):
     hsn_code = models.CharField(max_length=20, null=True, blank=True)
     description = models.TextField(null=True, blank=True)

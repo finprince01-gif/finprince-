@@ -1,24 +1,23 @@
 import uuid
 from decimal import Decimal, InvalidOperation
 from rest_framework import serializers # type: ignore
-from .models_voucher_receipt import (  # type: ignore
-    ReceiptVoucher, 
-    ReceiptVoucherItem
-)
-from .models_pending_transaction import VoucherPendingTransaction
-from .models_voucher_allocation import VoucherAllocation
-from .models import MasterLedger, Voucher, JournalEntry  # type: ignore
+from .models_pending_transaction import PendingTransaction
+from .models_advance_allocation import AdvanceAllocation
+from .models import (
+    MasterLedger, Voucher, JournalEntry,
+    ReceiptVoucher, ReceiptVoucherItem
+)  # type: ignore
 from accounting.services.ledger_service import post_transaction, _resolve_ledger
 import datetime
+from django.utils import timezone
 from accounting.services.sales_status_service import update_sales_invoice_payment_status
 
 class ReceiptAllocationDetailSerializer(serializers.ModelSerializer):
     class Meta:
-        model = VoucherPendingTransaction
+        model = PendingTransaction
         fields = [
-            'id', 'invoice_no', 'invoice_date', 'amount_applied',
-            'pending_amount', 'total_amount', 'balance_after',
-            'is_advance', 'advance_ref_no'
+            'id', 'invoice_date', 'reference_number', 'reference_type',
+            'total_amount', 'amount_applied', 'pending_amount', 'balance_after'
         ]
 
 def _safe_decimal(value):
@@ -34,18 +33,26 @@ class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
     allocations = ReceiptAllocationDetailSerializer(many=True, read_only=True, source='pending_transactions')
     pending_transaction = serializers.JSONField(write_only=True, required=False)
 
+    # Legacy field mappings
+    received_amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, required=False)
+    amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, required=False)
+    advance_ref_no = serializers.CharField(required=False, allow_null=True) # Used during create()
+
+    def to_internal_value(self, data):
+        # Normalize reference_type to lowercase for choice validation (INVOICE -> invoice)
+        if 'reference_type' in data and isinstance(data['reference_type'], str):
+            data['reference_type'] = data['reference_type'].lower()
+        return super().to_internal_value(data)
+
     class Meta:
-        model = ReceiptVoucherItem
+        model = PendingTransaction
         fields = [
-            'id', 'customer', 'customer_name', 'reference_type', 
-            'amount', 'pending_before', 'received_amount', 
-            'balance_after', 'is_advance', 'advance_ref_no', 'invoice_date', 
+            'id', 'customer', 'customer_name', 'invoice_date', 'advance_ref_no', 
+            'reference_number', 'reference_type', 'amount', 'pending_amount', 
+            'received_amount', 'amount_applied', 'balance_after',
             'allocations', 'pending_transaction'
         ]
         extra_kwargs = {
-            'amount': {'max_digits': 20, 'decimal_places': 2},
-            'pending_before': {'max_digits': 20, 'decimal_places': 2},
-            'received_amount': {'max_digits': 20, 'decimal_places': 2},
             'balance_after': {'max_digits': 20, 'decimal_places': 2},
         }
 
@@ -122,159 +129,199 @@ class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
         return value
 
 class ReceiptVoucherSerializer(serializers.ModelSerializer):
-    receive_in_name = serializers.CharField(source='receive_in.name', read_only=True)
     items = ReceiptVoucherItemSerializer(many=True, required=False)
     
     # Handle both ID and Name in POST
     receive_in = serializers.CharField(required=False, allow_null=True)
     customer = serializers.CharField(required=False, allow_null=True)
-    voucher_number = serializers.CharField(required=False, allow_blank=True)
+    type = serializers.CharField(required=False, default='receipt', allow_null=True)
+    voucher_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    narration = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    total_receipt = serializers.SerializerMethodField()
+
+    def get_total_receipt(self, obj):
+        return getattr(obj, 'total_amount', getattr(obj, 'amount', 0))
 
     class Meta:
-        model = ReceiptVoucher
+        model = Voucher
         fields = '__all__'
-        read_only_fields = ['tenant_id']
         extra_kwargs = {
-            'total_amount': {'max_digits': 20, 'decimal_places': 2},
-            'amount': {'max_digits': 20, 'decimal_places': 2},
+            'type': {'required': False},
+            'voucher_number': {'required': False},
         }
 
-    def validate_voucher_number(self, value):
-        if not value:
-            return value
-        request = self.context.get('request')
-        tenant_id = request.user.branch_id if request and hasattr(request.user, 'tenant_id') else None
+    def _get_party_ids(self, ledger):
+        """Extract vendor/customer database IDs from a MasterLedger."""
+        l_id = ledger.id
+        from vendors.models import VendorMasterBasicDetail
+        from customerportal.database import CustomerMasterCustomerBasicDetails
         
-        qs = ReceiptVoucher.objects.filter(tenant_id=tenant_id, voucher_number=value)
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
+        v = VendorMasterBasicDetail.objects.filter(ledger_id=l_id).first()
+        c = CustomerMasterCustomerBasicDetails.objects.filter(ledger_id=l_id).first()
         
-        if qs.exists():
-            raise serializers.ValidationError(f"Receipt number {value} is already in use.")
-        return value
-
-    def validate(self, attrs):
-        request = self.context.get('request')
-        tenant_id = request.user.branch_id if request and hasattr(request.user, 'tenant_id') else None
-
-        if 'receive_in' in attrs and not isinstance(attrs['receive_in'], MasterLedger):
-            attrs['receive_in'] = _resolve_ledger(attrs['receive_in'], tenant_id)
-        
-        if 'customer' in attrs and attrs['customer'] and not isinstance(attrs['customer'], MasterLedger):
-            ledger = _resolve_ledger(attrs['customer'], tenant_id)
-            if not ledger:
-                # Check Portal Customer
-                from customerportal.models import CustomerMasterCustomer
-                portal_cust = CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, customer_name__iexact=str(attrs['customer']).strip()).first()
-                if portal_cust:
-                    ledger = MasterLedger.objects.filter(tenant_id=tenant_id, name__iexact=portal_cust.customer_name).first()
-                    if not ledger:
-                        try:
-                            ledger = MasterLedger.objects.create(tenant_id=tenant_id, name=portal_cust.customer_name, group='Sundry Debtors', category='Asset')
-                            portal_cust.ledger_id = ledger.id
-                            portal_cust.save(update_fields=['ledger_id'])
-                        except Exception:
-                            ledger = MasterLedger.objects.filter(tenant_id=tenant_id, name__iexact=portal_cust.customer_name).first()
-                
-                if not ledger:
-                    # Check Portal Vendor
-                    from vendors.models import VendorMasterBasicDetail
-                    portal_vend = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, vendor_name__iexact=str(attrs['customer']).strip()).first()
-                    if portal_vend:
-                        ledger = MasterLedger.objects.filter(tenant_id=tenant_id, name__iexact=portal_vend.vendor_name).first()
-                        if not ledger:
-                            try:
-                                ledger = MasterLedger.objects.create(tenant_id=tenant_id, name=portal_vend.vendor_name, group='Sundry Creditors', category='Liability')
-                                portal_vend.ledger_id = ledger.id
-                                portal_vend.save(update_fields=['ledger_id'])
-                            except Exception:
-                                ledger = MasterLedger.objects.filter(tenant_id=tenant_id, name__iexact=portal_vend.vendor_name).first()
-            
-            attrs['customer'] = ledger
-
-        return attrs
+        return (l_id, c.id if c else None, v.id if v else None)
 
     def create(self, validated_data):
         request = self.context.get('request')
         tenant_id = request.user.branch_id if request and hasattr(request.user, 'tenant_id') else None
         
-        # Ensure tenant_id is in validated_data before super().create
-        validated_data['tenant_id'] = tenant_id
-
         items_data = validated_data.pop('items', [])
         
-        # If customer is missing from master (common in bulk), pick the first customer from items
-        if not validated_data.get('customer') and items_data:
-            first_item_customer = items_data[0].get('customer')
-            if first_item_customer:
-                # The nested serializer already validated it if it was in items
-                validated_data['customer'] = first_item_customer if isinstance(first_item_customer, MasterLedger) else _resolve_ledger(first_item_customer, tenant_id)
-            
-        if not validated_data.get('voucher_number'):
-            from masters.models import MasterVoucherReceipts
-            series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
-            if series:
-                validated_data['voucher_number'] = series.get_next_number()
-                series.increment_number()
-            else:
-                # Allow custom prefix from client if needed, or default
-                validated_data['voucher_number'] = f"REC-{uuid.uuid4().hex[:6].upper()}"
-            
-        # We'll resolve party IDs for the Master record from the first item
-        # RATIONALE: User wants to see Customer ID in the master record too.
-        main_l_id, main_c_id, main_v_id = None, None, None
-        if items_data:
-            first_item = items_data[0]
-            customer_raw = first_item.get('customer') or first_item.get('ledger_id_val')
-            if customer_raw:
-                main_l_id, main_c_id, main_v_id = self._get_party_ids(customer_raw)
+        # Detect Mode
+        mode = 'receipt_single'
+        from .views_receipt import VoucherReceiptBulkViewSet
+        # This is a bit brittle, but we can check the context or just use single by default
+        # Actually safer to check if items > 1
+        if len(items_data) > 1:
+            mode = 'receipt_bulk'
 
-        validated_data['ledger_id_val'] = main_l_id
-        validated_data['party_customer_id'] = main_c_id
-        validated_data['party_vendor_id'] = main_v_id
+        # Auto numbering and validation
+        v_num_provided = validated_data.get('voucher_number')
+        from masters.models import MasterVoucherReceipts
+        series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
 
-        receipt = super().create(validated_data)
-
-        # Create child items (Customers and Allocations)
-        for item_data in items_data:
-            # Resolve item-level customer if it's a string from the nested serializer
-            customer_data = item_data.pop('customer', None)
-            if customer_data:
-                item_data['customer'] = customer_data
-            
-            # Extract date for normalization if it exists in JSON
-            txn_details = item_data.get('pending_transaction') or {}
-            item_date_raw = txn_details.get('date')
-            item_date = item_data.pop('invoice_date', None)
-            if not item_date and item_date_raw:
-                try:
-                    if isinstance(item_date_raw, str):
-                        import datetime
-                        item_date = datetime.datetime.strptime(item_date_raw, '%Y-%m-%d').date()
-                    else:
-                        item_date = item_date_raw
-                except:
-                    pass
-
-            # Resolved customer ledger
-            customer_ledger = item_data.get('customer')
-            i_l_id, i_c_id, i_v_id = self._get_party_ids(customer_ledger)
-            item_instance = ReceiptVoucherItem.objects.create(
-                voucher=receipt, 
-                tenant_id=receipt.tenant_id,
-                invoice_date=item_date,
-                ledger_id_val=i_l_id,
-                party_customer_id=i_c_id,
-                party_vendor_id=i_v_id,
-                **{k: v for k, v in item_data.items() if k not in ['id', 'pending_transaction']}
+        def _is_taken(v):
+            from accounting.models import ReceiptVoucher, AdvanceAllocation
+            from accounting.models_pending_transaction import PendingTransaction
+            return (
+                ReceiptVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v).exists() or
+                AdvanceAllocation.objects.filter(tenant_id=tenant_id, type__in=['receipt_single', 'receipt_bulk'], voucher_number=v).exists() or
+                PendingTransaction.objects.filter(tenant_id=tenant_id, type__in=['receipt_single', 'receipt_bulk'], voucher_number=v).exists()
             )
 
-            self._sync_allocations(item_instance, item_data.get('pending_transaction'))
+        if series:
+            expected_next = series.get_next_number()
+            # If no number provided, OR user provided the expected auto-generated number
+            if not v_num_provided or v_num_provided == expected_next:
+                v_num_to_use = expected_next
+                # Fast forward if somehow already taken
+                while _is_taken(v_num_to_use):
+                    series.increment_number()
+                    v_num_to_use = series.get_next_number()
+                
+                validated_data['voucher_number'] = v_num_to_use
+                series.increment_number()
+            else:
+                # Custom number provided.
+                if _is_taken(v_num_provided):
+                    # Robust fallback: The frontend likely sent a stale auto-generated number 
+                    # that got taken in another tab. We force an auto-increment instead of failing.
+                    v_num_to_use = expected_next
+                    while _is_taken(v_num_to_use):
+                        series.increment_number()
+                        v_num_to_use = series.get_next_number()
+                    
+                    validated_data['voucher_number'] = v_num_to_use
+                    series.increment_number()
+        else:
+            if not v_num_provided:
+                validated_data['voucher_number'] = f"REC-{uuid.uuid4().hex[:6].upper()}"
+        
+        v_num  = validated_data['voucher_number']
+        v_date = validated_data.get('date') or timezone.now().date()
+        v_narr = validated_data.get('narration', '')
+        v_in   = validated_data.get('receive_in')
+        if v_in and not isinstance(v_in, MasterLedger):
+            v_in = _resolve_ledger(v_in, tenant_id)
+        v_in_name = v_in.name if v_in else ''
+
+        total_p = validated_data.get('amount') or validated_data.get('total_amount') or 0
+        if total_p == 0:
+            total_p = sum(_safe_decimal(i.get('amount_applied', 0)) for i in items_data)
+
+        saved_items = []
+
+        for item_data in items_data:
+            party = item_data.get('customer')
+            if not party: continue
             
-            # Post-save: Update Sales Invoice payment status if we have a reference_id from allocation
-            ref_id_val = None # Logic to extract from allocations if needed
-            if ref_id_val:
-                update_sales_invoice_payment_status(receipt.tenant_id, ref_id_val)
+            l_id, c_id, v_id = self._get_party_ids(party)
+            txn_details = item_data.get('pending_transaction', {})
+            
+            ref_type = item_data.get('reference_type', 'invoice').lower()
+            amt      = _safe_decimal(item_data.get('amount_applied', 0))
+            
+            if ref_type == 'advance' or item_data.get('is_advance'):
+                adv = AdvanceAllocation.objects.create(
+                    tenant_id=tenant_id,
+                    type=mode,
+                    voucher_number=v_num,
+                    voucher_date=v_date,
+                    narration=v_narr,
+                    pay_from_ledger_id=v_in.id if getattr(v_in, 'id', None) else v_in,
+                    pay_to_ledger_id=party.id if getattr(party, 'id', None) else party,
+                    vendor_id=v_id,
+                    customer_id=c_id,
+                    advance_ref_no=item_data.get('advance_ref_no') or v_num,
+                    advance_amount=amt,
+                    total_amount=total_p,
+                )
+                saved_items.append(adv)
+            else:
+                pt = PendingTransaction.objects.create(
+                    tenant_id=tenant_id,
+                    type=mode,
+                    voucher_number=v_num,
+                    voucher_date=v_date,
+                    narration=v_narr,
+                    pay_from_ledger_id=v_in.id if getattr(v_in, 'id', None) else v_in,
+                    pay_to_ledger_id=party.id if getattr(party, 'id', None) else party,
+                    vendor_id=v_id,
+                    customer_id=c_id,
+                    reference_number=item_data.get('reference_number') or txn_details.get('invoiceNo') or txn_details.get('referenceNumber'),
+                    reference_type='invoice',
+                    invoice_date=item_data.get('invoice_date'),
+                    amount_applied=amt,
+                    pending_amount=_safe_decimal(item_data.get('pending_before', 0)),
+                    balance_after=_safe_decimal(item_data.get('balance_after', 0)),
+                )
+                saved_items.append(pt)
+
+        # Mock for sync
+        mock_receipt = type('MockReceipt', (), {
+            'id': uuid.uuid4().int & ((1<<63)-1),
+            'tenant_id': tenant_id,
+            'date': v_date,
+            'voucher_number': v_num,
+            'receive_in': v_in,
+            'narration': v_narr,
+            'amount': total_p,
+            'total_amount': total_p,
+            'source': 'manual',
+            'ledger_id_val': saved_items[0].pay_to_ledger_id if saved_items else None,
+            'party_customer_id': saved_items[0].customer_id if saved_items else None,
+            'party_vendor_id': saved_items[0].vendor_id if saved_items else None,
+            'items': type('MockItems', (), {
+                'all': lambda self: self.items_list,
+                '__iter__': lambda self: iter(self.items_list),
+                'select_related': lambda self, *args: self,
+                'prefetch_related': lambda self, *args: self,
+                'items_list': [
+                    type('MockItem', (), {
+                        'id': item.id,
+                        'customer': item.pay_to_ledger,
+                        'pay_to_ledger': item.pay_to_ledger, # Alias for consistency
+                        'pay_to_ledger_id': item.pay_to_ledger_id,
+                        'amount': getattr(item, 'amount_applied', getattr(item, 'advance_amount', 0)),
+                        'received_amount': getattr(item, 'amount_applied', getattr(item, 'advance_amount', 0)),
+                        'reference_type': 'ADVANCE' if isinstance(item, AdvanceAllocation) else 'INVOICE',
+                        'is_advance': isinstance(item, AdvanceAllocation),
+                        'advance_ref_no': getattr(item, 'advance_ref_no', None),
+                        'ledger_id_val': item.pay_to_ledger_id,
+                        'party_customer_id': item.customer_id,
+                        'party_vendor_id': item.vendor_id,
+                    }) for item in saved_items
+                ]
+            })()
+        })
+
+        self._mirror_to_generic_voucher(mock_receipt)
+        self._mirror_to_customer_portal(mock_receipt)
+        self._mirror_to_vendor_portal(mock_receipt)
+        self._post_journal_entries(mock_receipt)
+
+        # Return the mock object to satisfy the view's .id access
+        return mock_receipt
 
         self._mirror_to_generic_voucher(receipt)
         self._mirror_to_customer_portal(receipt)

@@ -50,8 +50,8 @@ def flexible_parse_date(date_str):
 
 from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink  # type: ignore[import]
 from .models import AmountTransaction, MasterLedger, Voucher, JournalEntry  # type: ignore[import]
-from .models_voucher_payment import VoucherPaymentSingle  # type: ignore[import]
-from .models_voucher_receipt import VoucherReceiptSingle  # type: ignore[import]
+from .models import VoucherPaymentSingle  # type: ignore[import]
+from .models import VoucherReceiptSingle  # type: ignore[import]
 from .serializers_bank_reconciliation import (  # type: ignore[import]
     BankStatementTransactionSerializer,
     BankReconciliationLinkSerializer,

@@ -17,7 +17,8 @@ from .models import (
     InventoryOperationConsumptionItem,
     InventoryOperationScrapItem,
     InventoryOperationOutwardItem,
-    InventoryOperationNewGRNItem
+    InventoryOperationNewGRNItem,
+    InventoryOperationDeliveryChallan
 )
 import json
 from decimal import Decimal
@@ -76,6 +77,7 @@ class InventoryMasterIssueSlipSerializer(serializers.ModelSerializer):
 class InventoryOperationItemSyncMixin:
     items = serializers.JSONField(write_only=True, required=False)
     eway_bill_details = serializers.JSONField(write_only=True, required=False)
+    delivery_challan = serializers.JSONField(write_only=True, required=False)
 
     def _sync_items(self, instance, item_model, items_data):
         """Bridge between virtual JSON items in payload and normalized child tables."""
@@ -135,6 +137,59 @@ class InventoryOperationItemSyncMixin:
                 validity=row.get('validity', ''),
                 status=row.get('status', 'Active')
             )
+
+    def _sync_delivery_challan(self, instance, operation_type, dc_data):
+        """Sync virtual Delivery Challan JSON to normalized table."""
+        from .models import InventoryOperationDeliveryChallan
+        if not dc_data: return
+        
+        if isinstance(dc_data, str):
+            try: dc_data = json.loads(dc_data)
+            except: return
+        
+        if not isinstance(dc_data, dict): return
+
+        InventoryOperationDeliveryChallan.objects.update_or_create(
+            operation_type=operation_type,
+            operation_id=instance.id,
+            tenant_id=instance.tenant_id,
+            defaults={
+                'dispatch_from': dc_data.get('dispatch_from', dc_data.get('dispatch_address')),
+                'mode_of_transport': dc_data.get('mode_of_transport'),
+                'dispatch_date': dc_data.get('dispatch_date') if dc_data.get('dispatch_date') else None,
+                'dispatch_time': dc_data.get('dispatch_time') if dc_data.get('dispatch_time') else None,
+                'delivery_type': dc_data.get('delivery_type'),
+                'transporter_id': dc_data.get('transporter_id'),
+                'transporter_name': dc_data.get('transporter_name'),
+                'vehicle_no': dc_data.get('vehicle_no', dc_data.get('vehicle_number')),
+                'lr_gr_consignment': dc_data.get('lr_gr_consignment'),
+                
+                # Air/Sea
+                'shipping_bill_no': dc_data.get('shipping_bill_no', dc_data.get('beyondPortShippingBillNo')),
+                'shipping_bill_date': dc_data.get('shipping_bill_date') if dc_data.get('shipping_bill_date') else None,
+                'ship_port_code': dc_data.get('ship_port_code', dc_data.get('beyondPortShipPortCode')),
+                'vessel_flight_no': dc_data.get('vessel_flight_no', dc_data.get('beyondPortVesselFlightNo')),
+                'port_of_loading': dc_data.get('port_of_loading', dc_data.get('beyondPortPortOfLoading')),
+                'port_of_discharge': dc_data.get('port_of_discharge', dc_data.get('beyondPortPortOfDischarge')),
+                'final_destination': dc_data.get('final_destination', dc_data.get('beyondPortFinalDestination')),
+                'origin_city': dc_data.get('origin_city', dc_data.get('beyondPortOrigin')),
+                'origin_country': dc_data.get('origin_country', dc_data.get('beyondPortOriginCountry')),
+                'dest_country': dc_data.get('dest_country', dc_data.get('beyondPortDestCountry')),
+                
+                # Rail
+                'railway_receipt_no': dc_data.get('railway_receipt_no', dc_data.get('railBeyondPortRailwayReceiptNo')),
+                'railway_receipt_date': dc_data.get('railway_receipt_date') if dc_data.get('railway_receipt_date') else None,
+                'fnr_no': dc_data.get('fnr_no', dc_data.get('railBeyondPortFnrNo')),
+                'rail_no': dc_data.get('rail_no', dc_data.get('railBeyondPortRailNo')),
+                'station_of_loading': dc_data.get('station_of_loading', dc_data.get('railBeyondPortStationOfLoading')),
+                'station_of_discharge': dc_data.get('station_of_discharge', dc_data.get('railBeyondPortStationOfDischarge')),
+            }
+        )
+
+class InventoryOperationDeliveryChallanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InventoryOperationDeliveryChallan
+        fields = '__all__'
 
 # -------------------------------------------------------------------------
 # OPERATION ITEM SERIALIZERS
@@ -222,6 +277,7 @@ class InventoryOperationJobWorkSerializer(InventoryOperationItemSyncMixin, seria
         instance = super().create(validated_data)
         self._sync_items(instance, InventoryOperationJobWorkItem, items_data)
         self._sync_eway_bills(instance, 'jobwork', eway_data)
+        self._sync_delivery_challan(instance, 'jobwork', dc_data)
         return instance
 
     def update(self, instance, validated_data):
@@ -259,6 +315,8 @@ class InventoryOperationJobWorkSerializer(InventoryOperationItemSyncMixin, seria
             self._sync_items(instance, InventoryOperationJobWorkItem, items_data)
         if eway_data is not None:
             self._sync_eway_bills(instance, 'jobwork', eway_data)
+        if dc_data is not None:
+            self._sync_delivery_challan(instance, 'jobwork', dc_data)
         return instance
 
 # --- Inter Unit ---
@@ -299,6 +357,7 @@ class InventoryOperationInterUnitSerializer(InventoryOperationItemSyncMixin, ser
         instance = super().create(validated_data)
         self._sync_items(instance, InventoryOperationInterUnitItem, items_data)
         self._sync_eway_bills(instance, 'interunit', eway_data)
+        self._sync_delivery_challan(instance, 'interunit', dc_data)
         return instance
 
     def update(self, instance, validated_data):
@@ -336,6 +395,8 @@ class InventoryOperationInterUnitSerializer(InventoryOperationItemSyncMixin, ser
             self._sync_items(instance, InventoryOperationInterUnitItem, items_data)
         if eway_data is not None:
              self._sync_eway_bills(instance, 'interunit', eway_data)
+        if dc_data is not None:
+             self._sync_delivery_challan(instance, 'interunit', dc_data)
         return instance
 
 # --- Location Change ---
@@ -376,6 +437,7 @@ class InventoryOperationLocationChangeSerializer(InventoryOperationItemSyncMixin
         instance = super().create(validated_data)
         self._sync_items(instance, InventoryOperationLocationChangeItem, items_data)
         self._sync_eway_bills(instance, 'location_change', eway_data)
+        self._sync_delivery_challan(instance, 'location_change', dc_data)
         return instance
 
     def update(self, instance, validated_data):
@@ -413,6 +475,8 @@ class InventoryOperationLocationChangeSerializer(InventoryOperationItemSyncMixin
             self._sync_items(instance, InventoryOperationLocationChangeItem, items_data)
         if eway_data is not None:
             self._sync_eway_bills(instance, 'location_change', eway_data)
+        if dc_data is not None:
+            self._sync_delivery_challan(instance, 'location_change', dc_data)
         return instance
 
 # --- Production ---
@@ -422,30 +486,28 @@ class InventoryOperationProductionSerializer(InventoryOperationItemSyncMixin, se
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
-    # Delivery challan fields that do NOT exist as direct columns on the Production model
-    # They must be stripped out before calling super().create()/update()
-    DELIVERY_CHALLAN_ONLY_FIELDS = [
-        'dispatch_from', 'mode_of_transport', 'dispatch_date', 'dispatch_time',
-        'delivery_type', 'transporter_id', 'transporter_name', 'vehicle_no',
-        'lr_gr_consignment', 'eway_bill'
-    ]
-
-    def _strip_dc_fields(self, validated_data):
-        """Remove delivery-challan-only fields from top-level validated_data.
-        They are already stored inside the delivery_challan JSON column."""
-        for field in self.DELIVERY_CHALLAN_ONLY_FIELDS:
-            validated_data.pop(field, None)
-        return validated_data
-
     def create(self, validated_data):
-        """Strip delivery-challan-only fields that have NO column on the Production model.
-        These fields are already stored inside the delivery_challan JSON field."""
-        validated_data = self._strip_dc_fields(validated_data)
-        return super().create(validated_data)
+        items_data = validated_data.pop('items', [])
+        eway_data = validated_data.pop('eway_bill_details', [])
+        dc_data = validated_data.pop('delivery_challan', None)
+        instance = super().create(validated_data)
+        self._sync_items(instance, InventoryOperationProductionItem, items_data)
+        self._sync_eway_bills(instance, 'production', eway_data)
+        self._sync_delivery_challan(instance, 'production', dc_data)
+        return instance
 
     def update(self, instance, validated_data):
-        validated_data = self._strip_dc_fields(validated_data)
-        return super().update(instance, validated_data)
+        items_data = validated_data.pop('items', None)
+        eway_data = validated_data.pop('eway_bill_details', None)
+        dc_data = validated_data.pop('delivery_challan', None)
+        instance = super().update(instance, validated_data)
+        if items_data is not None:
+            self._sync_items(instance, InventoryOperationProductionItem, items_data)
+        if eway_data is not None:
+            self._sync_eway_bills(instance, 'production', eway_data)
+        if dc_data is not None:
+            self._sync_delivery_challan(instance, 'production', dc_data)
+        return instance
 
     def validate(self, data):
         items = data.get('items', [])
@@ -477,13 +539,20 @@ class InventoryOperationConsumptionSerializer(InventoryOperationItemSyncMixin, s
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
+        dc_data = validated_data.pop('delivery_challan', None)
         instance = super().create(validated_data)
         self._sync_items(instance, InventoryOperationConsumptionItem, items_data)
+        self._sync_delivery_challan(instance, 'consumption', dc_data)
         return instance
 
     def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        dc_data = validated_data.pop('delivery_challan', None)
         instance = super().update(instance, validated_data)
-        self._sync_items(instance, InventoryOperationConsumptionItem)
+        if items_data is not None:
+            self._sync_items(instance, InventoryOperationConsumptionItem, items_data)
+        if dc_data is not None:
+            self._sync_delivery_challan(instance, 'consumption', dc_data)
         return instance
 
 # --- Scrap ---
@@ -494,7 +563,10 @@ class InventoryOperationScrapSerializer(InventoryOperationItemSyncMixin, seriali
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
+        items_data = validated_data.pop('items', [])
+        eway_data = validated_data.pop('eway_bill_details', [])
+        dc_data = validated_data.pop('delivery_challan', None)
+
         if dc_data:
             validated_data['dispatch_from'] = dc_data.get('dispatch_from')
             if not validated_data.get('dispatch_from'):
@@ -513,7 +585,9 @@ class InventoryOperationScrapSerializer(InventoryOperationItemSyncMixin, seriali
             validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
 
         instance = super().create(validated_data)
-        self._sync_items(instance, InventoryOperationScrapItem)
+        self._sync_items(instance, InventoryOperationScrapItem, items_data)
+        self._sync_eway_bills(instance, 'scrap', eway_data)
+        self._sync_delivery_challan(instance, 'scrap', dc_data)
         return instance
 
     def update(self, instance, validated_data):
@@ -542,6 +616,8 @@ class InventoryOperationScrapSerializer(InventoryOperationItemSyncMixin, seriali
             self._sync_items(instance, InventoryOperationScrapItem, items_data)
         if eway_data is not None:
              self._sync_eway_bills(instance, 'scrap', eway_data)
+        if dc_data is not None:
+             self._sync_delivery_challan(instance, 'scrap', dc_data)
         return instance
 
 # --- Outward ---
@@ -549,19 +625,24 @@ class InventoryOperationOutwardSerializer(InventoryOperationItemSyncMixin, seria
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
         eway_data = validated_data.pop('eway_bill_details', [])
+        dc_data = validated_data.pop('delivery_challan', None)
         instance = super().create(validated_data)
         self._sync_items(instance, InventoryOperationOutwardItem, items_data)
         self._sync_eway_bills(instance, 'outward', eway_data)
+        self._sync_delivery_challan(instance, 'outward', dc_data)
         return instance
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         eway_data = validated_data.pop('eway_bill_details', None)
+        dc_data = validated_data.pop('delivery_challan', None)
         instance = super().update(instance, validated_data)
         if items_data is not None:
              self._sync_items(instance, InventoryOperationOutwardItem, items_data)
         if eway_data is not None:
              self._sync_eway_bills(instance, 'outward', eway_data)
+        if dc_data is not None:
+             self._sync_delivery_challan(instance, 'outward', dc_data)
         return instance
 
     class Meta:
@@ -574,19 +655,24 @@ class InventoryOperationNewGRNSerializer(InventoryOperationItemSyncMixin, serial
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
         eway_data = validated_data.pop('eway_bill_details', [])
+        dc_data = validated_data.pop('delivery_challan', None)
         instance = super().create(validated_data)
         self._sync_items(instance, InventoryOperationNewGRNItem, items_data)
         self._sync_eway_bills(instance, 'grn', eway_data)
+        self._sync_delivery_challan(instance, 'grn', dc_data)
         return instance
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         eway_data = validated_data.pop('eway_bill_details', None)
+        dc_data = validated_data.pop('delivery_challan', None)
         instance = super().update(instance, validated_data)
         if items_data is not None:
              self._sync_items(instance, InventoryOperationNewGRNItem, items_data)
         if eway_data is not None:
              self._sync_eway_bills(instance, 'grn', eway_data)
+        if dc_data is not None:
+             self._sync_delivery_challan(instance, 'grn', dc_data)
         return instance
 
     class Meta:

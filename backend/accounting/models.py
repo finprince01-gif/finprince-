@@ -4,8 +4,8 @@ from core.models import BaseModel # pyre-fixme
 
 # Import TransactionFile model
 from .models_transaction import TransactionFile # pyre-fixme
-from .models_voucher_payment import PaymentVoucher, PaymentVoucherItem, VoucherPaymentSingle, VoucherPaymentBulk # pyre-fixme
-from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk # pyre-fixme
+from .models_advance_allocation import AdvanceAllocation, AdvanceAllocationMap
+from .models_pending_transaction import PendingTransaction, AllocationLink, VoucherPendingTransaction
 from .models_voucher_expense import VoucherExpense # pyre-fixme
 from .models_voucher_contra import VoucherContra # pyre-fixme
 from .models_voucher_journal import VoucherJournal # pyre-fixme
@@ -31,9 +31,6 @@ from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesDispatchDetails,
     VoucherSalesEwayBill
 )
-from .models_voucher_allocation import VoucherAllocation
-from .models_advance_allocation import AdvanceAllocationMap  # noqa: F401  advance consumption tracking
-from .models_pending_transaction import PendingTransaction, AllocationLink, VoucherPendingTransaction  # noqa: F401  bill allocation lifecycle
 
 
 # ============================================================================
@@ -301,6 +298,17 @@ class Voucher(BaseModel):
     ledger_id_val     = models.BigIntegerField(null=True, blank=True)
     party_customer_id = models.BigIntegerField(null=True, blank=True)
     party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+
+    # Bank Reconciliation fields (for compatibility)
+    bank_reconciled        = models.BooleanField(default=False)
+    bank_reconcile_date    = models.DateField(null=True, blank=True)
+    bank_statement_id      = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number  = models.CharField(max_length=100, null=True, blank=True)
+
+    @property
+    def pay_from(self): return self.account
+    @property
+    def receive_in(self): return self.account
 
     class Meta:
 
@@ -815,3 +823,14 @@ class SalesInvoice(BaseModel):
             raise ValidationError({
                 'invoice_date': 'Future dates not allowed'
             })
+
+
+PaymentVoucher = Voucher
+ReceiptVoucher = Voucher
+PaymentVoucherItem = PendingTransaction
+ReceiptVoucherItem = PendingTransaction
+VoucherAllocation = AdvanceAllocation
+VoucherPaymentSingle = Voucher
+VoucherPaymentBulk = Voucher
+VoucherReceiptSingle = Voucher
+VoucherReceiptBulk = Voucher

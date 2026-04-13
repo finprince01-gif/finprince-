@@ -30,7 +30,7 @@ from .models import (
     VendorMasterProductService
 )
 from .vendor_database import VendorDatabase
-from accounting.models_voucher_payment import PaymentVoucherItem
+from accounting.models import PaymentVoucherItem
 from accounting.serializers import PaymentVoucherItemSerializer
 
 

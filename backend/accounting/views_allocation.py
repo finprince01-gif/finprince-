@@ -4,12 +4,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Q
 from django.db import transaction
-from .models import MasterLedger, JournalEntry, Voucher, VoucherAllocation
+from .models import MasterLedger, JournalEntry, Voucher, PendingTransaction
+from .models_advance_allocation import AdvanceAllocation
 import datetime
 
 class VoucherAllocationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    queryset = VoucherAllocation.objects.all()
+    queryset = PendingTransaction.objects.filter(reference_type='invoice')
 
     def get_queryset(self):
         tenant_id = getattr(self.request.user, 'tenant_id', None)
@@ -121,28 +122,26 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
         if v_amount == 0:
              v_amount = float(v.total_debit if v.total_debit > 0 else v.total_credit)
 
-        # Fetch Allocations
+        # Fetch Allocations from PendingTransaction
         if v_type in ['PAYMENT', 'RECEIPT']:
-            allocs = VoucherAllocation.objects.filter(
+            allocs = PendingTransaction.objects.filter(
                 tenant_id=tenant_id,
-                source_voucher_id=v_id_for_query,
-                source_type=v_type
+                voucher_number=v_id_for_query,
             )
-            total_allocated = allocs.aggregate(Sum('amount'))['amount__sum'] or 0
+            total_allocated = allocs.aggregate(Sum('amount_applied'))['amount_applied__sum'] or 0
             history = [{
-                'target_id': a.target_voucher_id,
-                'target_number': Voucher.objects.filter(id=a.target_voucher_id).values_list('voucher_number', flat=True).first(),
-                'type': a.target_type,
-                'amount': float(a.amount),
+                'target_id': a.reference_number,
+                'target_number': a.reference_number,
+                'type': a.reference_type,
+                'amount': float(a.amount_applied),
                 'date': a.created_at
             } for a in allocs]
         else: # SALES, PURCHASE
-            allocs = VoucherAllocation.objects.filter(
+            allocs = PendingTransaction.objects.filter(
                 tenant_id=tenant_id,
-                target_voucher_id=v_id_for_query,
-                target_type=v_type
+                reference_number=v.voucher_number # Target invoice number
             )
-            total_allocated = allocs.aggregate(Sum('amount'))['amount__sum'] or 0
+            total_allocated = allocs.aggregate(Sum('amount_applied'))['amount_applied__sum'] or 0
             history = [{
                 'source_id': a.source_voucher_id,
                 'source_number': Voucher.objects.filter(id=a.source_id).values_list('voucher_number', flat=True).first(),
@@ -181,31 +180,22 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
             # Validate Invoice Balance
             target_v = Voucher.objects.get(id=target_id, tenant_id=tenant_id)
             target_total = float(target_v.total or target_v.amount or 0)
-            target_allocated = VoucherAllocation.objects.filter(
-                target_voucher_id=target_id, target_type=target_type, tenant_id=tenant_id
-            ).aggregate(Sum('amount'))['amount__sum'] or 0
+            target_allocated = PendingTransaction.objects.filter(
+                reference_number=target_v.voucher_number, tenant_id=tenant_id
+            ).aggregate(Sum('amount_applied'))['amount_applied__sum'] or 0
             
             if amount > (target_total - float(target_allocated)) + 0.01:
                  return Response({"error": "Amount exceeds invoice balance"}, status=400)
 
-            # Validate Advance/Source Balance
-            source_v = Voucher.objects.get(id=source_id, tenant_id=tenant_id)
-            source_total = float(source_v.total or source_v.amount or 0)
-            source_allocated = VoucherAllocation.objects.filter(
-                source_voucher_id=source_id, source_type=source_type, tenant_id=tenant_id
-            ).aggregate(Sum('amount'))['amount__sum'] or 0
-
-            if amount > (source_total - float(source_allocated)) + 0.01:
-                 return Response({"error": "Amount exceeds available source balance"}, status=400)
-
-            alloc = VoucherAllocation.objects.create(
+            alloc = PendingTransaction.objects.create(
                 tenant_id=tenant_id,
-                ledger_id=ledger_id,
-                source_voucher_id=source_id,
-                source_type=source_type,
-                target_voucher_id=target_id,
-                target_type=target_type,
-                amount=amount
+                pay_to_ledger_id=ledger_id,
+                voucher_number=source_id,
+                type=source_type,
+                reference_number=target_v.voucher_number,
+                reference_type='invoice',
+                amount_applied=amount,
+                status='paid'
             )
             return Response({"status": "success", "id": alloc.id})
 

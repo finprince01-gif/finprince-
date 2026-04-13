@@ -4,14 +4,27 @@ from .models_voucher_credit_note import (
     VoucherCreditNoteInvoiceDetails,
     VoucherCreditNoteItemDetails,
     VoucherCreditNoteDueDetails,
-    VoucherCreditNoteTransitDetails
+    VoucherCreditNoteTransitDetails,
+    VoucherCreditNoteItemLine,
 )
 
+class VoucherCreditNoteItemLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VoucherCreditNoteItemLine
+        fields = [
+            'id', 'item_code', 'item_name', 'hsn_sac', 'quantity', 'uom', 'rate',
+            'taxable_value', 'igst_amount', 'cgst_amount', 'sgst_amount', 'cess_amount',
+            'invoice_value'
+        ]
+
 class VoucherCreditNoteItemDetailsSerializer(serializers.ModelSerializer):
+    items = serializers.JSONField(required=False, default=list, write_only=True)
+    line_items = VoucherCreditNoteItemLineSerializer(many=True, read_only=True, source='item_lines')
+    
     class Meta:
         model = VoucherCreditNoteItemDetails
         fields = [
-            'items', 'total_taxable_value', 'total_igst', 
+            'items', 'line_items', 'total_taxable_value', 'total_igst', 
             'total_cgst', 'total_sgst', 'total_cess', 'total_invoice_value'
         ]
         read_only_fields = ['tenant_id']
@@ -57,8 +70,9 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
 
                 # Create Items
                 item_instance = VoucherCreditNoteItemDetails.objects.create(
-                    credit_note_details=instance, tenant_id=tenant_id, **item_data
+                    credit_note_details=instance, tenant_id=tenant_id, **{k: v for k, v in item_data.items() if k != 'items'}
                 )
+                self._sync_credit_note_items(item_instance, item_data.get('items', []))
                 
                 # Create Due
                 VoucherCreditNoteDueDetails.objects.create(
@@ -95,8 +109,7 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
                     total_taxable_amount=Decimal(str(item_instance.total_taxable_value or 0)),
                     total_cgst=Decimal(str(item_instance.total_cgst or 0)),
                     total_sgst=Decimal(str(item_instance.total_sgst or 0)),
-                    total_igst=Decimal(str(item_instance.total_igst or 0)),
-                    items_data=item_instance.items,
+                    total_igst=Decimal(str(item_instance.total_igst or 0))
                 )
 
                 # Mirror to Customer Portal
@@ -120,11 +133,12 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
                 instance.save()
 
                 # Update Related
-                if item_data:
-                    VoucherCreditNoteItemDetails.objects.update_or_create(
+                if item_data is not None:
+                    item_instance, _ = VoucherCreditNoteItemDetails.objects.update_or_create(
                         credit_note_details=instance, 
-                        defaults={**item_data, 'tenant_id': instance.tenant_id}
+                        defaults={**{k: v for k, v in item_data.items() if k != 'items'}, 'tenant_id': instance.tenant_id}
                     )
+                    self._sync_credit_note_items(item_instance, item_data.get('items', []))
                 if due_data:
                     VoucherCreditNoteDueDetails.objects.update_or_create(
                         credit_note_details=instance, 
@@ -192,3 +206,29 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
             print(f"!!! Portal Sync OK (Credit Note): {instance.customer_name} | {cn_number}")
         except Exception as e:
             print(f"!!! Portal Sync Failure (Credit Note): {str(e)}")
+
+    def _sync_credit_note_items(self, item_instance, items_json):
+        """Sync items JSON to VoucherCreditNoteItemLine table."""
+        if not items_json: return
+        from decimal import Decimal
+        rows = items_json if isinstance(items_json, list) else []
+        
+        VoucherCreditNoteItemLine.objects.filter(item_details=item_instance).delete()
+        for row in rows:
+            if not isinstance(row, dict): continue
+            VoucherCreditNoteItemLine.objects.create(
+                item_details=item_instance,
+                tenant_id=item_instance.tenant_id,
+                item_code=row.get('itemCode', ''),
+                item_name=row.get('itemName', ''),
+                hsn_sac=row.get('hsnSac', ''),
+                quantity=Decimal(str(row.get('qty', 0))),
+                uom=row.get('uom', ''),
+                rate=Decimal(str(row.get('itemRate', 0))),
+                taxable_value=Decimal(str(row.get('taxableValue', 0))),
+                igst_amount=Decimal(str(row.get('igst', 0))),
+                cgst_amount=Decimal(str(row.get('cgst', 0))),
+                sgst_amount=Decimal(str(row.get('sgst', 0))),
+                cess_amount=Decimal(str(row.get('cess', 0))),
+                invoice_value=Decimal(str(row.get('invoiceValue', 0)))
+            )

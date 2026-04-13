@@ -62,10 +62,6 @@ class VoucherCreditNoteItemDetails(BaseModel):
         related_name='item_details'
     )
     
-    # Items
-    # Structure: [{id, itemCode, itemName, hsnSac, qty, uom, rate, taxableValue, igst, cgst, sgst, cess, invoiceValue, salesLedger, ...}]
-    items = models.JSONField(default=list)
-    
     # Totals
     total_taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_igst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
@@ -76,6 +72,32 @@ class VoucherCreditNoteItemDetails(BaseModel):
 
     class Meta:
         db_table = 'voucher_credit_note_item_details'
+
+
+class VoucherCreditNoteItemLine(BaseModel):
+    """
+    Individual line items for a Credit Note.
+    """
+    item_details = models.ForeignKey(VoucherCreditNoteItemDetails, on_delete=models.CASCADE, related_name='item_lines')
+    
+    item_code = models.CharField(max_length=100, null=True, blank=True)
+    item_name = models.CharField(max_length=255, null=True, blank=True)
+    hsn_sac = models.CharField(max_length=50, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=18, decimal_places=4, default=0)
+    uom = models.CharField(max_length=50, null=True, blank=True)
+    rate = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    taxable_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    
+    igst_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    cess_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    
+    invoice_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    reason_for_return = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'voucher_credit_note_item_lines'
 
 
 class VoucherCreditNoteDueDetails(BaseModel):

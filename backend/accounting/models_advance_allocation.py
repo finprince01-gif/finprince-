@@ -1,73 +1,115 @@
+"""
+models_advance_allocation.py
+==============================
+AdvanceAllocation — unified advance table for Payment and Receipt vouchers.
+
+Replaces:
+  - AdvanceAllocationMap (old advance_allocations)
+  - VoucherAllocation     (voucher_allocations)
+  - parts of PaymentVoucher / ReceiptVoucher headers
+
+One row = one advance payment (single or bulk, payment or receipt).
+Use the `type` field to identify the voucher kind and mode.
+
+type choices:
+  'payment_single'  — Single payment advance
+  'payment_bulk'    — Bulk payment advance
+  'receipt_single'  — Single receipt advance
+  'receipt_bulk'    — Bulk receipt advance
+"""
+
 from django.db import models
 from core.models import BaseModel
 
 
-class AdvanceAllocationMap(BaseModel):
+TYPE_CHOICES = [
+    ('payment_single', 'Payment – Single'),
+    ('payment_bulk',   'Payment – Bulk'),
+    ('receipt_single', 'Receipt – Single'),
+    ('receipt_bulk',   'Receipt – Bulk'),
+]
+
+
+class AdvanceAllocation(BaseModel):
     """
-    Tracks the consumption of advance payments against specific invoices.
+    Unified advance allocation for Payment and Receipt vouchers.
 
-    advance_source_id  → PK of PaymentVoucherItem (payment) or ReceiptVoucherItem (receipt).
-                         This is the CANONICAL key — advance_ref_no is secondary.
-    advance_source_type→ 'payment' | 'receipt'
-    advance_ref_no     → Human-readable reference number (display only, not a unique key).
-    voucher_id         → ID from the global `vouchers` table of the invoice that consumed
-                         this advance.
-    voucher_type       → 'sales' | 'purchase'
-    ledger_id          → MasterLedger ID of the party (customer/vendor) for fast filtering.
-    amount             → How much of the advance was consumed by this voucher.
+    Fields
+    ------
+    type                Identifies the voucher kind and mode.
+    voucher_number      Parent voucher number.
+    voucher_date        Date of the parent voucher.
+    voucher_type        Config name (e.g. 'Payment-01', 'Receipt-A').
+    narration           Free-text note.
 
-    Remaining balance is ALWAYS computed dynamically:
-        remaining = total_advance_amount - SUM(amount) WHERE advance_source_id = X
+    pay_from_ledger_*   Cash/Bank account (Payment=pay from; Receipt=receive in).
+    pay_to_ledger_*     Party ledger (Payment=pay to; Receipt=receive from).
+
+    vendor_id/name      Set when party is a vendor.
+    customer_id/name    Set when party is a customer.
+
+    advance_ref_no      User-supplied advance reference number.
+    advance_amount      The advance amount in this row.
+    total_amount        Full voucher total (sum of all items including advance).
+
+    bank_*              Bank reconciliation fields.
+    source              'manual' | 'bulk' | 'ai_extracted'
     """
 
-    ADVANCE_SOURCE_CHOICES = [
-        ('payment', 'Payment Voucher Item'),
-        ('receipt', 'Receipt Voucher Item'),
-    ]
-
-    VOUCHER_TYPE_CHOICES = [
-        ('sales', 'Sales Invoice'),
-        ('purchase', 'Purchase Invoice'),
-    ]
-
-    # ── Source (the advance itself) ──────────────────────────────────
-    advance_source_id = models.BigIntegerField(
-        help_text="PK of PaymentVoucherItem or ReceiptVoucherItem"
-    )
-    advance_source_type = models.CharField(
+    # ── Type ─────────────────────────────────────────────────────────────────
+    type = models.CharField(
         max_length=20,
-        choices=ADVANCE_SOURCE_CHOICES,
-        default='payment',
-        help_text="'payment' or 'receipt'"
+        choices=TYPE_CHOICES,
+        db_index=True,
+        help_text="payment_single | payment_bulk | receipt_single | receipt_bulk"
     )
+
+    # ── Parent Voucher ────────────────────────────────────────────────────────
+    voucher_number = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    voucher_date   = models.DateField(null=True, blank=True)
+    voucher_type   = models.CharField(max_length=100, null=True, blank=True)
+    narration      = models.TextField(null=True, blank=True)
+
+    # ── Pay From / Receive In  (Cash/Bank Ledger) ─────────────────────────────
+    pay_from_ledger = models.ForeignKey(
+        'MasterLedger',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='advance_pay_from',
+        db_column='pay_from_ledger_id',
+    )
+    # ── Pay To / Receive From  (Party Ledger) ────────────────────────────────
+    pay_to_ledger = models.ForeignKey(
+        'MasterLedger',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='advance_pay_to',
+        db_column='pay_to_ledger_id',
+    )
+
+    # ── Party Identity ────────────────────────────────────────────────────────
+    vendor_id   = models.BigIntegerField(null=True, blank=True, db_index=True)
+    customer_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+
+    # ── Advance Details ───────────────────────────────────────────────────────
     advance_ref_no = models.CharField(
-        max_length=150,
-        null=True,
-        blank=True,
-        help_text="Human-readable reference number (display only)"
+        max_length=150, null=True, blank=True,
+        help_text="User-entered advance reference number"
     )
+    advance_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_amount   = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                         help_text="Full voucher total")
 
-    # ── Target (the invoice consuming this advance) ──────────────────
-    voucher_id = models.BigIntegerField(
-        help_text="ID from the global vouchers table"
-    )
-    voucher_type = models.CharField(
-        max_length=20,
-        choices=VOUCHER_TYPE_CHOICES,
-        help_text="'sales' or 'purchase'"
-    )
-    ledger_id = models.BigIntegerField(
-        null=True,
-        blank=True,
-        help_text="MasterLedger ID of the party (for filtering)"
-    )
+    # ── Bank Reconciliation ───────────────────────────────────────────────────
+    bank_reconciled       = models.BooleanField(default=False)
+    bank_reconcile_date   = models.DateField(null=True, blank=True)
+    bank_statement_id     = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
-    # ── Amount consumed ──────────────────────────────────────────────
-    amount = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=0,
-        help_text="Amount of the advance consumed by this voucher"
+    # ── Source ────────────────────────────────────────────────────────────────
+    source = models.CharField(
+        max_length=100, default='manual',
+        help_text="'manual' | 'bulk' | 'ai_extracted'"
     )
 
     class Meta:
@@ -75,31 +117,37 @@ class AdvanceAllocationMap(BaseModel):
         verbose_name = 'Advance Allocation'
         verbose_name_plural = 'Advance Allocations'
         indexes = [
-            # Primary lookup: remaining balance per advance source
-            models.Index(
-                fields=['tenant_id', 'advance_source_id', 'advance_source_type'],
-                name='adv_alloc_source_idx'
-            ),
-            # Lookup by ref_no (display, not unique key)
-            models.Index(
-                fields=['tenant_id', 'advance_ref_no'],
-                name='adv_alloc_refno_idx'
-            ),
-            # Idempotent delete on voucher resave
-            models.Index(
-                fields=['tenant_id', 'voucher_id', 'voucher_type'],
-                name='adv_alloc_voucher_idx'
-            ),
-            # Party-level filtering (portal views)
-            models.Index(
-                fields=['tenant_id', 'ledger_id'],
-                name='adv_alloc_ledger_idx'
-            ),
+            models.Index(fields=['tenant_id', 'type'],           name='adv_alloc_type_idx'),
+            models.Index(fields=['tenant_id', 'voucher_number'], name='adv_alloc_vno_idx'),
+            models.Index(fields=['tenant_id', 'advance_ref_no'], name='adv_alloc_refno_idx'),
+            models.Index(fields=['tenant_id', 'vendor_id'],      name='adv_alloc_vendor_idx'),
+            models.Index(fields=['tenant_id', 'customer_id'],    name='adv_alloc_customer_idx'),
+            models.Index(fields=['pay_from_ledger'],             name='adv_alloc_pay_from_idx'),
+            models.Index(fields=['pay_to_ledger'],               name='adv_alloc_pay_to_idx'),
         ]
+
+    @property
+    def amount(self): return self.advance_amount
+    @property
+    def ledger(self): return self.pay_to_ledger
+    @property
+    def pay_to(self): return self.pay_to_ledger
+    @property
+    def customer(self): return self.pay_to_ledger
+    @property
+    def voucher(self):
+        class MockVoucher:
+            def __init__(self, adv):
+                self.date = adv.voucher_date
+                self.voucher_number = adv.voucher_number
+        return MockVoucher(self)
 
     def __str__(self):
         return (
-            f"Alloc #{self.id}: ₹{self.amount} from "
-            f"{self.advance_source_type}:{self.advance_source_id} "
-            f"→ {self.voucher_type}:{self.voucher_id}"
+            f"[{self.type}] {self.voucher_number} | "
+            f"Advance ₹{self.advance_amount} ({self.advance_ref_no or 'no-ref'})"
         )
+
+
+# ── Backward-compat alias ─────────────────────────────────────────────────────
+AdvanceAllocationMap = AdvanceAllocation   # DEPRECATED — use AdvanceAllocation
