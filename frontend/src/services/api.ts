@@ -960,7 +960,7 @@ class ApiService {
      * @returns Array of sales invoices with payment details
      */
     async getRichCustomerSalesInvoices(customerName: string) {
-        return httpClient.get<any[]>(`/api/voucher-sales-new/?customer_name=${encodeURIComponent(customerName)}`);
+        return httpClient.get<any[]>(`/api/voucher-sales-new/?customer_name=${encodeURIComponent(customerName)}&show_all=true`);
     }
 
     /**

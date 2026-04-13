@@ -16,9 +16,10 @@ import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import SalesOrderList from './SalesOrderList';
 import SalesOrderViewModal from './SalesOrderViewModal';
-import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt } from 'lucide-react';
+import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt, Check } from 'lucide-react';
 import CustomerViewModal from './CustomerViewModal';
 import SalesGSTViewModal from './SalesGSTViewModal';
+import { formatDate } from '../../utils/formatting';
 
 type MainTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'Sales Quotation & Order' | 'Customer' | 'Long-term Contracts';
@@ -27,9 +28,9 @@ type TransactionSubTab = 'Sales Quotation' | 'Sales Order' | 'Sales' | 'Receipt'
 type SalesQuotationSubTab = 'General Customer Quote' | 'Specific Customer Quote';
 type SalesOrderSubTab = 'Pending & Cancelled' | 'Executed';
 type SalesCategory = 'Export' | 'Within Country (B2B)' | 'Within Country (B2C)';
-type TransactionType = 'Sales' | 'Receipt' | 'Purchase' | 'Payment' | 'Debit Note' | 'Credit Note';
-type PurchaseStatus = 'Paid' | 'Unpaid' | 'Partially Paid' | 'Approved';
-type SalesStatus = 'Not Due' | 'Due' | 'Partially Received' | 'Received' | 'Utilized' | 'Not Utilized';
+type TransactionType = 'Sales' | 'Receipt' | 'Purchase' | 'Payment' | 'Debit Note' | 'Credit Note' | 'Journal' | 'Contra';
+type PurchaseStatus = 'Paid' | 'Unpaid' | 'Partially Paid' | 'Approved' | 'Advance' | 'Partially Advanced' | 'Partially Utilized';
+type SalesStatus = 'Not Due' | 'Due' | 'Due Today' | 'Partially Received' | 'Received' | 'Utilized' | 'Not Utilized' | 'Partially Due' | 'Advance' | 'Partially Advanced' | 'Partially Utilized';
 
 interface AgingData {
     customerId: string;
@@ -55,7 +56,9 @@ interface LedgerEntry {
     credit: number;
     runningBalance: number;
     posting_status?: string;
-    originalInv?: any; // Added to store full invoice details for detailed view
+    originalInv?: any;
+    voucherNo?: string; // Own voucher number (e.g., REC0001)
+    amount?: number;
 }
 
 interface Category {
@@ -87,7 +90,12 @@ const getAvailableStates = (countryCode: string) => {
     return [...libStates, ...formattedExtra];
 };
 
-const CustomerPortalPage: React.FC = () => {
+interface CustomerPortalProps {
+    onNavigate?: (page: string) => void;
+    setPrefilledVoucherData?: (data: any) => void;
+}
+
+const CustomerPortalPage: React.FC<CustomerPortalProps> = ({ onNavigate, setPrefilledVoucherData }) => {
     const { hasTabAccess, isSuperuser } = usePermissions();
 
     const allTabs: MainTab[] = ['Master', 'Transaction'];
@@ -202,7 +210,7 @@ const CustomerPortalPage: React.FC = () => {
                         {/* Masters Content */}
                         <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 min-h-[500px]">
                             {activeMasterSubTab === 'Category' && <CategoryContent />}
-                            {activeMasterSubTab === 'Customer' && <CustomerContent />}
+                            {activeMasterSubTab === 'Customer' && <CustomerContent onNavigate={onNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />}
                             {activeMasterSubTab === 'Sales Quotation & Order' && <SalesOrderContent />}
                             {activeMasterSubTab === 'Long-term Contracts' && <LongTermContractsContent />}
                         </div>
@@ -273,7 +281,7 @@ const CustomerPortalPage: React.FC = () => {
                                 )
                             )}
                             {activeTransactionSubTab === 'Sales' && (
-                                <SalesContent />
+                                <SalesContent onNavigate={onNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />
                             )}
                             {activeTransactionSubTab === 'Receipt' && (
                                 <ReceiptContent />
@@ -345,7 +353,11 @@ const CategoryContent: React.FC = () => {
     );
 };
 
-const CustomerContent: React.FC = () => {
+interface CustomerContentProps {
+    onNavigate?: (page: string) => void;
+    setPrefilledVoucherData?: (data: any) => void;
+}
+const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefilledVoucherData }) => {
     // State for view mode
     const [view, setView] = useState<'list' | 'create'>('list');
     const [viewCustomer, setViewCustomer] = useState<any | null>(null); // State for viewing customer details
@@ -5799,16 +5811,18 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 interface CustomerLedgerViewProps {
     customer: { id: string; name: string; is_also_vendor?: boolean; ledger_id?: string; credit_period?: string; };
     onBack: () => void;
+    onNavigate?: (page: string) => void;
+    setPrefilledVoucherData?: (data: any) => void;
 }
 
-function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
+function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherData }: CustomerLedgerViewProps) {
     const [dateFilter, setDateFilter] = useState<{ start: string; end: string }>({ start: '', end: '' });
     const [postFromFilter, setPostFromFilter] = useState<TransactionType | ''>('');
     const [ledgerFilter, setLedgerFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<PurchaseStatus | SalesStatus | ''>('');
     const [debitFilter, setDebitFilter] = useState('');
     const [creditFilter, setCreditFilter] = useState('');
-    const [viewMode, setViewMode] = useState<'invoice-wise' | 'month-wise'>('invoice-wise');
+    const [viewMode, setViewMode] = useState<'invoice-wise' | 'month-wise' | 'allocation'>('invoice-wise');
     const [showNetOffModal, setShowNetOffModal] = useState(false);
     const [monthFilter, setMonthFilter] = useState<string[]>([]);
     const [selectedMonthView, setSelectedMonthView] = useState<string | null>(null);
@@ -5820,104 +5834,148 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     const [isGSTModalOpen, setIsGSTModalOpen] = useState(false);
     const [isJournalView, setIsJournalView] = useState(false);
     const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+    const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+    const [selectedAdvanceRow, setSelectedAdvanceRow] = useState<any>(null);
+
 
     const toggleFilter = (filterName: string) => setActiveFilter(prev => prev === filterName ? null : filterName);
+    const handleAdvanceClick = (row: any) => {
+        setSelectedAdvanceRow(row);
+        setIsAdvanceModalOpen(true);
+    };
+
+    const fetchLedgerData = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const [salesData, transactionsData] = await Promise.all([
+                httpClient.get<any[]>(`/api/voucher-sales-new/?show_all=true`),
+                httpClient.get<any[]>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
+            ]);
+
+            const customerInvoices = salesData.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
+
+            const invoiceEntries: LedgerEntry[] = customerInvoices.map((inv: any) => {
+                const creditPeriod = parseInt(customer.credit_period || '0', 10);
+                const invDate = new Date(inv.date);
+                const today = new Date();
+                const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const diffTime = d2.getTime() - d1.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                const isDue = diffDays > creditPeriod;
+
+                return {
+                    id: inv.id.toString(),
+                    date: inv.date,
+                    postFrom: 'Sales' as TransactionType,
+                    referenceNo: inv.sales_invoice_no,
+                    ledger: 'Sales',
+                    status: (inv.status && inv.status.toLowerCase() === 'received') ? 'Received'
+                        : (inv.status && inv.status.toLowerCase() === 'partially received') ? 'Partially Received'
+                            : (inv.posting_status === 'POSTED'
+                                ? (diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due'))
+                                : 'Not Utilized') as SalesStatus,
+                    debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
+                    credit: 0,
+                    runningBalance: 0,
+                    posting_status: inv.posting_status,
+                    originalInv: inv,
+                    voucherNo: inv.sales_invoice_no,
+                    amount: parseFloat(inv.payment_details?.payment_invoice_value || 0)
+                };
+            });
+
+            const transactionEntries: LedgerEntry[] = (transactionsData || []).map((t: any) => {
+                const rawType = t.transaction_type?.toLowerCase() || '';
+                let transType = 'Sales';
+                if (rawType.includes('receipt')) transType = 'Receipt';
+                else if (rawType.includes('payment')) transType = 'Payment';
+                else if (rawType.includes('credit')) transType = 'Credit Note';
+                else if (rawType.includes('debit')) transType = 'Debit Note';
+                else if (rawType.includes('journal')) transType = 'Journal';
+
+                // For customers, a 'Payment' (refund) is a Debit, and a 'Receipt' is a Credit.
+                // A 'Credit Note' acts like a receipt (Credit), 'Debit Note' acts like sales (Debit).
+                let d = parseFloat(t.debit || 0);
+                let c = parseFloat(t.credit || 0);
+
+                // Fallbacks in case debit/credit wasn't properly categorized by backend
+                if ((transType === 'Payment' || transType === 'Debit Note') && c > 0 && d === 0) {
+                    d = c;
+                    c = 0;
+                } else if ((transType === 'Receipt' || transType === 'Credit Note') && d > 0 && c === 0) {
+                    c = d;
+                    d = 0;
+                }
+
+                const creditPeriod = parseInt(customer.credit_period || '0', 10);
+                const invDate = new Date(t.date);
+                const today = new Date();
+                const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const diffTime = d2.getTime() - d1.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                const isDue = diffDays > creditPeriod;
+
+                let finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending')
+                    ? t.payment_status
+                    : (transType === 'Receipt' ? 'Not Utilized' : (transType === 'Sales' ? (isDue ? 'Due' : 'Not Due') : 'Not Due'));
+
+                return {
+                    id: `T-${t.id}`,
+                    date: t.date,
+                    postFrom: transType as TransactionType,
+                    referenceNo: t.reference_number || t.transaction_number || t.voucher_number || 'N/A',
+                    ledger: transType,
+                    status: finalStatus as SalesStatus,
+                    debit: d,
+                    credit: c,
+                    runningBalance: 0,
+                    posting_status: 'POSTED',
+                    originalInv: t,
+                    voucherNo: (t.transaction_number && t.transaction_number.includes('-') && (transType === 'Receipt' || transType === 'Payment'))
+                        ? t.transaction_number.substring(0, t.transaction_number.lastIndexOf('-'))
+                        : (t.transaction_number || t.voucher_number || t.id?.toString()),
+                    amount: parseFloat(t.total_amount || t.amount || 0)
+                };
+            });
+
+            setLedgerEntries([...invoiceEntries, ...transactionEntries]);
+        } catch (err: any) {
+            console.error('Failed to fetch ledger data:', err);
+            setError(err?.message || 'Unable to connect to the server.');
+            handleApiError(err, 'Fetch Ledger Data');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchLedgerData = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const [salesData, transactionsData] = await Promise.all([
-                    httpClient.get<any[]>(`/api/voucher-sales-new/?show_all=true`),
-                    httpClient.get<any[]>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
-                ]);
-
-                const customerInvoices = salesData.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
-
-                const invoiceEntries: LedgerEntry[] = customerInvoices.map((inv: any) => {
-                    const creditPeriod = parseInt(customer.credit_period || '0', 10);
-                    const invDate = new Date(inv.date);
-                    const today = new Date();
-                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-                    const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                    const diffTime = d2.getTime() - d1.getTime();
-                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                    const isDue = diffDays > creditPeriod;
-
-                    return {
-                        id: inv.id.toString(),
-                        date: inv.date,
-                        postFrom: 'Sales' as TransactionType,
-                        referenceNo: inv.sales_invoice_no,
-                        ledger: 'Sales',
-                        status: (inv.status && inv.status.toLowerCase() === 'received') ? 'Received'
-                            : (inv.status && inv.status.toLowerCase() === 'partially received') ? 'Partially Received'
-                                : (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
-                        debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
-                        credit: 0,
-                        runningBalance: 0,
-                        posting_status: inv.posting_status,
-                        originalInv: inv
-                    };
-                });
-
-                const transactionEntries: LedgerEntry[] = (transactionsData || []).map((t: any) => {
-                    const rawType = t.transaction_type?.toLowerCase();
-                    const transType = rawType === 'receipt' ? 'Receipt' : (rawType === 'payment' ? 'Payment' : 'Sales');
-
-                    // For customers, a 'Payment' (refund) is a Debit, and a 'Receipt' is a Credit.
-                    // We ensure the display logic reflects this by swapping if necessary based on transType.
-                    let d = parseFloat(t.debit || 0);
-                    let c = parseFloat(t.credit || 0);
-
-                    if (transType === 'Payment' && c > 0 && d === 0) {
-                        d = c;
-                        c = 0;
-                    } else if (transType === 'Receipt' && d > 0 && c === 0) {
-                        c = d;
-                        d = 0;
-                    }
-
-                    const creditPeriod = parseInt(customer.credit_period || '0', 10);
-                    const invDate = new Date(t.date);
-                    const today = new Date();
-                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-                    const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                    const diffTime = d2.getTime() - d1.getTime();
-                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                    const isDue = diffDays > creditPeriod;
-
-                    let finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending')
-                        ? t.payment_status
-                        : (transType === 'Receipt' ? 'Not Utilized' : (transType === 'Sales' ? (isDue ? 'Due' : 'Not Due') : 'Not Due'));
-
-                    return {
-                        id: `T-${t.id}`,
-                        date: t.date,
-                        postFrom: transType as TransactionType,
-                        referenceNo: t.reference_number || t.transaction_number || t.voucher_number || 'N/A',
-                        ledger: transType,
-                        status: finalStatus as SalesStatus,
-                        debit: d,
-                        credit: c,
-                        runningBalance: 0,
-                        posting_status: 'POSTED',
-                        originalInv: t
-                    };
-                });
-
-                setLedgerEntries([...invoiceEntries, ...transactionEntries]);
-            } catch (err: any) {
-                console.error('Failed to fetch ledger data:', err);
-                setError(err?.message || 'Unable to connect to the server.');
-                handleApiError(err, 'Fetch Ledger Data');
-            } finally {
-                setIsLoading(false);
-            }
-        };
         fetchLedgerData();
     }, [customer.id]);
+
+    const handleProceedAllocation = async (selectedAdvance: any, invoiceRef: string) => {
+        try {
+            // Determine the backend ID (T- is for CustomerTransaction)
+            const rawId = selectedAdvance.id;
+            const isTransaction = String(rawId).startsWith('T-');
+            const transId = isTransaction ? rawId.replace('T-', '') : rawId;
+
+            // Update the transaction's reference_number to match the invoice reference
+            await httpClient.patch(`/api/customerportal/transactions/${transId}/`, {
+                reference_number: invoiceRef,
+                payment_status: 'utilized'
+            });
+
+            showSuccess(`Successfully allocated ${selectedAdvance.voucherNo} to ${invoiceRef}`);
+            // Refresh the entire ledger data to reflect changes
+            fetchLedgerData();
+        } catch (error: any) {
+            console.error("Allocation failed:", error);
+            showError(error.response?.data?.error || "Failed to proceed with allocation.");
+        }
+    };
 
     const processedEntries = useMemo(() => {
         let balance = 0;
@@ -6028,12 +6086,418 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     const totalCredit = filteredData.reduce((sum, entry) => sum + entry.credit, 0);
 
     const getStatusBadgeColor = (status: string) => {
-        const colors: Record<string, string> = { 'Paid': 'bg-green-100 text-green-800', 'Unpaid': 'bg-red-100 text-red-800', 'Partially Paid': 'bg-yellow-100 text-yellow-800', 'Approved': 'bg-blue-100 text-indigo-800', 'Not Due': 'bg-gray-100 text-gray-800', 'Due': 'bg-indigo-100 text-indigo-800', 'Partially Received': 'bg-yellow-100 text-yellow-800', 'Received': 'bg-green-100 text-green-800', 'Utilized': 'bg-green-100 text-green-800', 'Not Utilized': 'bg-gray-100 text-gray-800' };
+        const colors: Record<string, string> = {
+            'Paid': 'bg-green-100 text-green-800',
+            'Unpaid': 'bg-red-100 text-red-800',
+            'Partially Paid': 'bg-yellow-100 text-yellow-800',
+            'Approved': 'bg-blue-100 text-indigo-800',
+            'Not Due': 'bg-gray-100 text-gray-800',
+            'Due': 'bg-red-100 text-red-800',
+            'Due Today': 'bg-red-100 text-red-800',
+            'Partially Due': 'bg-red-100 text-red-800',
+            'Partially Received': 'bg-yellow-100 text-yellow-800',
+            'Received': 'bg-green-100 text-green-800',
+            'Utilized': 'bg-green-100 text-green-800',
+            'Not Utilized': 'bg-gray-100 text-gray-800',
+            'Advance': 'bg-indigo-100 text-indigo-800',
+            'Partially Advanced': 'bg-indigo-50 text-indigo-700',
+            'Partially Utilized': 'bg-yellow-100 text-yellow-800'
+        };
         return colors[status] || 'bg-gray-100 text-gray-800';
     };
 
-    const postFromOptions: TransactionType[] = ['Sales', 'Receipt', 'Purchase', 'Payment', 'Debit Note', 'Credit Note'];
-    const statusOptions = ['Not Due', 'Due', 'Partially Received', 'Received', 'Utilized', 'Not Utilized'];
+    const postFromOptions: TransactionType[] = ['Sales', 'Receipt', 'Purchase', 'Payment', 'Debit Note', 'Credit Note', 'Journal'];
+    const statusOptions = ['Not Due', 'Due', 'Due Today', 'Partially Received', 'Received', 'Utilized', 'Not Utilized', 'Advance', 'Partially Advanced', 'Partially Utilized'];
+
+    interface AdvanceAllocationModalProps {
+        isOpen: boolean;
+        onClose: () => void;
+        row: any;
+        customer: any;
+        ledgerEntries: LedgerEntry[];
+        setPrefilledVoucherData?: (data: any) => void;
+        onNavigate?: (tab: string) => void;
+        onProceed?: (selectedAdvance: any, invoiceRef: string) => void;
+    }
+
+    const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen, onClose, row, customer, ledgerEntries, setPrefilledVoucherData, onNavigate, onProceed }) => {
+        if (!isOpen || !row) return null;
+
+        const [selectedAdvance, setSelectedAdvance] = useState<any>(null);
+
+        // Find exclusively pure unutilized or generic advance receipts for this customer (omitting those already allocated or with custom advance references)
+        const advances = (ledgerEntries || []).filter(e =>
+            e.postFrom === 'Receipt' &&
+            (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced') &&
+            (!e.originalInv?.reference_number || e.originalInv.reference_number.toUpperCase() === 'ADVANCE' || e.originalInv.reference_number.trim() === '')
+        );
+
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div className="bg-white w-[800px] max-w-[90vw] rounded-lg shadow-2xl overflow-hidden border border-gray-200 animate-in fade-in zoom-in duration-200">
+                    <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <Receipt className="w-5 h-5 text-indigo-100" />
+                            <h3 className="text-white font-bold text-lg">Advance Allocation Details</h3>
+                        </div>
+                        <button onClick={onClose} className="text-white hover:text-gray-200 transition-colors">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <div className="p-6">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Invoice Ref</label>
+                                <div className="text-sm font-bold text-gray-900">{row.refNo}</div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Customer</label>
+                                <div className="text-sm font-bold text-gray-900 truncate">{customer.name}</div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Inv Amount</label>
+                                <div className="text-sm font-bold text-gray-900">₹{row.netAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Pending</label>
+                                <div className="text-sm font-bold text-red-600">₹{row.pendingBalance?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                            </div>
+                        </div>
+
+                        {advances.length > 0 ? (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Available Receipt Vouchers</h4>
+                                    <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{advances.length} Found</span>
+                                </div>
+                                <div className="max-h-[500px] overflow-y-auto border border-gray-200 rounded">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                                            <tr className="text-left text-xs text-gray-600 uppercase tracking-wider">
+                                                <th className="px-4 py-3 font-semibold">Select</th>
+                                                <th className="px-4 py-3 font-semibold">Voucher Number</th>
+                                                <th className="px-4 py-3 font-semibold">Date</th>
+                                                <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 bg-white">
+                                            {advances.map((adv, idx) => (
+                                                <tr
+                                                    key={idx}
+                                                    onClick={() => setSelectedAdvance(adv)}
+                                                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedAdvance?.id === adv.id
+                                                            ? 'bg-indigo-50/50'
+                                                            : ''
+                                                        }`}
+                                                >
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="radio"
+                                                            name="advance-selection"
+                                                            checked={selectedAdvance?.id === adv.id}
+                                                            onChange={() => setSelectedAdvance(adv)}
+                                                            className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 font-medium text-gray-900">{adv.voucherNo}</td>
+                                                    <td className="px-4 py-3 text-gray-500">
+                                                        {adv.date.split('-').reverse().join('-')}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-gray-900 font-bold">
+                                                        ₹{adv.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                <p className="text-sm text-gray-500 font-medium">No linked advance receipts found</p>
+                                <p className="text-[10px] text-gray-400 mt-1">Receipts matching reference "{row.refNo}" will appear here.</p>
+                            </div>
+                        )}
+
+                        <div className="mt-8 flex gap-3">
+                            <button
+                                onClick={onClose}
+                                className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors uppercase tracking-widest text-[10px]"
+                            >
+                                Close Window
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (setPrefilledVoucherData && onNavigate) {
+                                        setPrefilledVoucherData({
+                                            voucherType: 'Receipt',
+                                            sellerName: customer.name,
+                                            invoiceDate: new Date().toISOString().split('T')[0]
+                                        });
+                                        onNavigate('Vouchers');
+                                        onClose();
+                                    }
+                                }}
+                                className="flex-1 py-3 bg-indigo-50 text-indigo-700 font-bold rounded hover:bg-indigo-100 transition-colors uppercase tracking-widest text-[10px]"
+                            >
+                                Create New Advance
+                            </button>
+                            {advances.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        if (!selectedAdvance) {
+                                            showInfo("Please select an advance to proceed.");
+                                            return;
+                                        }
+                                        if (onProceed) {
+                                            onProceed(selectedAdvance, row.refNo);
+                                        }
+                                        onClose();
+                                    }}
+                                    className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAdvance
+                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                                        }`}
+                                >
+                                    Proceed Allocation
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const AllocationLedgerView: React.FC = () => {
+
+        /**
+         * Group ledgerEntries by their reference relationships.
+         * Logic:
+         * 1. Sources: Only 'Sales', 'Debit Note' entries.
+         * 2. Items: 'Receipt', 'Credit Note', 'Journal'.
+         * 3. Match: item.referenceNo === source.referenceNo
+         */
+        const allocationRows = useMemo(() => {
+            if (!ledgerEntries || ledgerEntries.length === 0) return [];
+
+            // Group entries by referenceNo strictly to find linked vouchers
+            const groups: Record<string, any[]> = {};
+            ledgerEntries.forEach(entry => {
+                const ref = entry.referenceNo?.trim() || '-';
+                if (ref === '-') {
+                    const uniqueId = `standalone-${entry.id}`;
+                    groups[uniqueId] = [entry];
+                    return;
+                }
+                const groupKey = ref.toLowerCase();
+                if (!groups[groupKey]) groups[groupKey] = [];
+                groups[groupKey].push(entry);
+            });
+
+            const rows: any[] = [];
+
+            // Process groups and sort by source date
+            const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
+                const dateA = groups[aRef][0]?.date || '0000-00-00';
+                const dateB = groups[bRef][0]?.date || '0000-00-00';
+                return new Date(dateB).getTime() - new Date(dateA).getTime();
+            });
+
+            sortedGroupRefs.forEach(ref => {
+                const entries = groups[ref];
+
+                // If it's a standalone group
+                if (ref.startsWith('standalone-')) {
+                    const entry = entries[0];
+                    if (!['Sales', 'Debit Note'].includes(entry.postFrom)) return;
+
+                    const amt = (entry.debit || 0) - (entry.credit || 0);
+                    rows.push({
+                        date: entry.date,
+                        postedFrom: entry.postFrom,
+                        refNo: entry.referenceNo !== '-' ? entry.referenceNo : (entry.voucherNo || '-'),
+                        netAmount: amt,
+                        appliedDate: '-',
+                        appliedRefNo: '-',
+                        appliedAmount: '-',
+                        pendingBalance: amt,
+                        status: amt === 0 ? 'Received' : entry.status,
+                        rowSpan: 1,
+                        isFirstInSource: true
+                    });
+                    return;
+                }
+
+                // For linked groups
+                const sources = entries.filter(e => ['Sales', 'Debit Note'].includes(e.postFrom))
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                if (sources.length === 0) return;
+
+                const applications = entries.filter(e => ['Receipt', 'Credit Note', 'Journal'].includes(e.postFrom))
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                // Combine all sources in the group for one span
+                const totalSourceAmt = sources.reduce((sum, s) => sum + ((s.debit || 0) - (s.credit || 0)), 0);
+                const firstSource = sources[0];
+
+                if (applications.length === 0) {
+                    rows.push({
+                        date: firstSource.date,
+                        postedFrom: firstSource.postFrom,
+                        refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : (firstSource.voucherNo || '-'),
+                        netAmount: totalSourceAmt,
+                        appliedDate: '-',
+                        appliedRefNo: '-',
+                        appliedAmount: '-',
+                        pendingBalance: totalSourceAmt,
+                        status: totalSourceAmt === 0 ? 'Received' : firstSource.status,
+                        rowSpan: 1,
+                        isFirstInSource: true
+                    });
+                } else {
+                    let lastPending = totalSourceAmt;
+                    const totalAppAmt = applications.reduce((sum, a) => sum + ((a.credit || 0) - (a.debit || 0)), 0);
+                    const totalSourceAmtRounded = Math.round(totalSourceAmt * 100);
+                    const totalAppAmtRounded = Math.round(totalAppAmt * 100);
+                    const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
+                        ? 'Received'
+                        : (totalAppAmtRounded > 0 ? 'Partially Received' : firstSource.status);
+
+                    applications.forEach((app, appIdx) => {
+                        const appAmt = (app.credit || 0) - (app.debit || 0);
+                        const currentPending = Math.max(0, lastPending - appAmt);
+                        rows.push({
+                            date: firstSource.date,
+                            postedFrom: firstSource.postFrom,
+                            refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : (firstSource.voucherNo || '-'),
+                            netAmount: totalSourceAmt,
+                            appliedDate: app.date,
+                            appliedRefNo: app.voucherNo || '-',
+                            appliedAmount: appAmt,
+                            pendingBalance: currentPending,
+                            status: calculatedStatus,
+                            rowSpan: applications.length,
+                            isFirstInSource: appIdx === 0
+                        });
+                        lastPending = currentPending;
+                    });
+                }
+            });
+
+            return rows;
+        }, [ledgerEntries]);
+
+        return (
+            <div className="bg-white border border-slate-200 rounded-[4px] overflow-hidden shadow-none">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200">
+                        <thead className="bg-[#F8F9FA] border-b border-slate-200">
+                            <tr className="border-b border-slate-200">
+                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Date</th>
+                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Posted From</th>
+                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Reference No.</th>
+                                <th rowSpan={2} className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Amount</th>
+                                <th colSpan={4} className="px-6 py-2 border-r border-slate-200 bg-indigo-50/30">
+                                    <div className="flex justify-center items-center h-full text-[11px] font-black text-indigo-600 uppercase tracking-widest">
+                                        Voucher Applied
+                                    </div>
+                                </th>
+                                <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Status</th>
+                                <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest">Actions</th>
+                            </tr>
+                            <tr>
+                                <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Date</th>
+                                <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Ref No.</th>
+                                <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Amount</th>
+                                <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Pending</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                            {allocationRows.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                    {row.isFirstInSource && (
+                                        <>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
+                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${row.postedFrom === 'Sales'
+                                                        ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                                        : 'bg-amber-50 text-amber-600 border-amber-100'
+                                                    }`}>
+                                                    {row.postedFrom}
+                                                </span>
+                                            </td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top">{row.refNo}</td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">
+                                                ₹{row.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                        </>
+                                    )}
+                                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">{row.appliedDate !== '-' ? formatDate(row.appliedDate) : '-'}</td>
+                                    <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">{row.appliedRefNo}</td>
+                                    <td className="px-6 py-4 text-sm text-right font-bold text-emerald-600 border-r border-slate-100">
+                                        {row.appliedAmount !== '-' ? `₹${row.appliedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-right font-bold text-slate-900 border-r border-slate-100">
+                                        ₹{row.pendingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </td>
+                                    {row.isFirstInSource && (
+                                        <>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
+                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold border uppercase tracking-tighter shadow-sm ${row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                        row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'partially due' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                            row.status?.toLowerCase() === 'due' || row.status?.toLowerCase() === 'due today' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                                'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                    }`}>
+                                                    {row.status}
+                                                </span>
+                                            </td>
+                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center align-top">
+                                                {(row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'due') && (
+                                                    <button
+                                                        onClick={() => handleAdvanceClick(row)}
+                                                        className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-indigo-700 transition-colors uppercase tracking-widest flex items-center gap-1 mx-auto"
+                                                    >
+                                                        Reference
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </>
+                                    )}
+                                </tr>
+                            ))}
+                            {allocationRows.length === 0 && (
+                                <tr>
+                                    <td colSpan={10} className="px-6 py-16 text-center text-gray-400 text-sm font-medium italic">No sales documents found to allocate.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                        <tfoot className="bg-[#F8F9FA] border-t border-slate-200">
+                            <tr>
+                                <td colSpan={3} className="px-6 py-5 text-[11px] font-black text-gray-400 text-center tracking-widest uppercase">AGGREGATE SALES LEDGER STATUS</td>
+                                <td className="px-6 py-5 text-right text-[14px] font-black text-slate-800">
+                                    ₹{ledgerEntries.filter(e => ['Sales', 'Debit Note'].includes(e.postFrom))
+                                        .reduce((sum, e) => sum + ((e.debit || 0) - (e.credit || 0)), 0)
+                                        .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td colSpan={3} className="bg-indigo-50/10 border-x border-gray-100/50"></td>
+                                <td className="px-6 py-5 text-right text-[14px] font-black text-rose-600 drop-shadow-sm">
+                                    ₹{allocationRows.reduce((sum, r, idx, arr) => {
+                                        const isLastInGroup = (idx === arr.length - 1) || (arr[idx + 1].isFirstInSource);
+                                        return isLastInGroup ? sum + r.pendingBalance : sum;
+                                    }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        );
+    };
 
     const MonthLedgerView: React.FC = () => {
         const filteredMonthData = monthLedgerData.filter(entry =>
@@ -6044,7 +6508,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
         const totalCredit = filteredMonthData.reduce((sum, item) => sum + item.credit, 0);
 
         return (
-            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden shadow-none border border-slate-200-none border border-slate-200">
+            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden shadow-none border border-slate-200">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-[#F8F9FA]">
@@ -6179,6 +6643,15 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                     )}
                                 </button>
                                 <button
+                                    onClick={() => setViewMode(viewMode === 'allocation' ? 'invoice-wise' : 'allocation')}
+                                    className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-all shadow-sm ${viewMode === 'allocation'
+                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                        }`}
+                                >
+                                    ALLOCATION VIEW
+                                </button>
+                                <button
                                     onClick={() => setShowNetOffModal(true)}
                                     className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm uppercase px-5"
                                 >
@@ -6221,6 +6694,8 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
 
                     {viewMode === 'month-wise' ? (
                         <MonthLedgerView />
+                    ) : viewMode === 'allocation' ? (
+                        <AllocationLedgerView />
                     ) : (
                         isLoading ? (
                             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -6628,7 +7103,20 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         )
                     )}
 
+                    {/* Advance Allocation Modal */}
+                    <AdvanceAllocationModal
+                        isOpen={isAdvanceModalOpen}
+                        onClose={() => setIsAdvanceModalOpen(false)}
+                        row={selectedAdvanceRow}
+                        customer={customer}
+                        ledgerEntries={ledgerEntries}
+                        setPrefilledVoucherData={setPrefilledVoucherData}
+                        onNavigate={onNavigate}
+                        onProceed={handleProceedAllocation}
+                    />
+
                     {/* GST Details Modal */}
+
                     <SalesGSTViewModal
                         isOpen={isGSTModalOpen}
                         onClose={() => setIsGSTModalOpen(false)}
@@ -6675,7 +7163,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, desc, activeOrder
     </div>
 );
 
-function SalesContent() {
+function SalesContent({ onNavigate, setPrefilledVoucherData }: { onNavigate?: (page: string) => void; setPrefilledVoucherData?: (data: any) => void; }) {
     const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
     const [activeCategory, setActiveCategory] = useState<SalesCategory>('Export');
     const [showLedgerView, setShowLedgerView] = useState(false);
@@ -6895,7 +7383,7 @@ function SalesContent() {
     }
 
     if (showLedgerView && selectedCustomer) {
-        return <CustomerLedgerView customer={selectedCustomer} onBack={handleBackToAging} />;
+        return <CustomerLedgerView customer={selectedCustomer} onBack={handleBackToAging} onNavigate={onNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
     }
 
     return (

@@ -8,8 +8,10 @@ import SearchableSelect from '../../components/SearchableSelect';
 import { ExtractedInvoiceData } from '../../types';
 
 interface PendingTransaction {
+    id?: number;
     date: string;
     referenceNumber: string;
+    invoiceNo?: string;
     amount: number;
     payment: number;
     dueStatus?: string;
@@ -30,6 +32,7 @@ interface BulkTransaction {
     id: string;
     date: string;
     invoiceNo: string;
+    referenceNumber?: string;
     amount: number;
     payNow: number;
     selected: boolean;
@@ -165,28 +168,29 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         const transactions = Array.isArray(res) ? res : (res.results || []);
 
                         console.log("!!! Vendor Pending Transactions (Procurement):", transactions);
-                        
+
                         setPendingTransactions(transactions
-                            .filter((t: any) => {
-                                const type = t.transaction_type?.toLowerCase();
-                                const status = t.due_status;
-                                return type === 'purchase' && (status === 'Due' || status === 'Due Today' || status === 'Partially Received');
-                            })
+                            .filter((t: any) => t.transaction_type?.toLowerCase() === 'purchase')
                             .map((t: any) => {
                                 const isMatch = prefilledData?.invoiceNumber === t.reference_number;
                                 const pAmt = isMatch ? (prefilledData?.totalAmount || 0) : 0;
-                                
+
                                 // Show remaining balance if available, else original total
                                 const pendingAmount = typeof t.payment_balance === 'number' ? t.payment_balance : Number(t.total_amount || 0);
+
+                                const statusRaw = (t.due_status || '').toString().trim().toLowerCase();
+                                const status = statusRaw === 'partially paid' || statusRaw === 'partially received'
+                                    ? (statusRaw === 'partially paid' ? 'Partially Paid' : 'Partially Received')
+                                    : t.due_status;
 
                                 return {
                                     date: t.transaction_date,
                                     referenceNumber: t.reference_number || `PUR-${t.id}`,
                                     amount: pendingAmount,
                                     payment: pAmt,
-                                    dueStatus: t.due_status,
+                                    dueStatus: status,
                                     dueDate: t.due_date,
-                                    daysToDue: t.credit_period_days 
+                                    daysToDue: t.credit_period_days
                                 };
                             })
                         );
@@ -205,11 +209,17 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             const diffTime = d2.getTime() - d1.getTime();
                             const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-                            let status = 'Not Due';
-                            if (diffDays > entityCreditPeriod) {
-                                status = 'Due';
-                            } else if (diffDays === entityCreditPeriod) {
-                                status = 'Due Today';
+                            const statusRaw = (item.status || '').toString().trim().toLowerCase();
+                            let status = statusRaw === 'partially received' || statusRaw === 'partially paid'
+                                ? (statusRaw === 'partially received' ? 'Partially Received' : 'Partially Paid')
+                                : 'Not Due';
+
+                            if (status === 'Not Due') {
+                                if (diffDays > entityCreditPeriod) {
+                                    status = 'Due';
+                                } else if (diffDays === entityCreditPeriod) {
+                                    status = 'Due Today';
+                                }
                             }
 
                             const dueDate = new Date(d1);
@@ -222,13 +232,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             return {
                                 date: item.date,
                                 referenceNumber: item.sales_invoice_no || item.invoice_number || `SAL-${item.id}`,
-                                amount: Number(item.payment_details?.payment_payable || item.total || 0),
+                                amount: Number(item.payment_details?.payment_balance ?? item.payment_details?.payment_payable ?? item.total ?? 0),
                                 payment: 0,
                                 dueStatus: status,
                                 daysToDue: Math.max(0, entityCreditPeriod - diffDays),
                                 dueDate: dueDateStr
                             };
-                        }).filter(item => item.dueStatus === 'Due' || item.dueStatus === 'Due Today'));
+                        }));
                     } else {
                         // Fallback to standard pending invoices for other ledgers
                         data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
@@ -241,7 +251,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             daysToDue: item.days_to_due,
                             dueDate: item.due_date
                         }));
-                        setPendingTransactions(mapped.filter(item => item.dueStatus === 'Due' || item.dueStatus === 'Due Today'));
+                        setPendingTransactions(mapped);
                     }
 
                     // 2. Fetch available advances
@@ -427,25 +437,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     }, [singleAdvanceAmount, pendingTransactions]);
 
     const handleTotalAmountChange = (val: number) => {
-        // Auto-allocate logic: First distribute to pending transactions in their current order
-        let remaining = val;
-        const updatedTransactions = pendingTransactions.map(txn => {
-            const payment = Math.min(remaining, txn.amount);
-            remaining -= payment;
-            return { ...txn, payment: Number(payment.toFixed(2)) };
-        });
-
-        setPendingTransactions(updatedTransactions);
-
-        // Any remaining amount goes to advance
-        if (remaining > 0.01) {
-            setSingleAdvanceAmount(Number(remaining.toFixed(2)));
-            if (!showSingleAdvanceSection) setShowSingleAdvanceSection(true);
-        } else {
-            setSingleAdvanceAmount(0);
-        }
-        
-        // calculateTotalPayment will be triggered by states changing
+        // Only update the top-level amount field — do NOT auto-allocate to pending transactions
+        setTotalPayment(val);
     };
 
     // Uniqueness Check Logic
@@ -577,7 +570,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     const transactions = Array.isArray(res) ? res : (res.results || []);
 
                     console.log("!!! Vendor Bulk Transactions (Procurement):", transactions);
-                    
+
                     const mappedBulk: BulkTransaction[] = transactions
                         .filter((t: any) => {
                             const type = t.transaction_type?.toLowerCase();
@@ -753,6 +746,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             pay_to_ledger: selectedOpt.ledger_id,
                             amount: t.payment,
                             reference_type: 'INVOICE',
+                            reference_id: t.id,
+                            reference_number: t.referenceNumber || t.invoiceNo,
+                            pending_amount: t.amount,
+                            balance_after: Math.max(0, t.amount - t.payment),
+                            invoice_date: t.date,
                             transaction_details: {
                                 ...t,
                                 pending: Math.max(0, t.amount - t.payment)
@@ -767,7 +765,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         pay_to_ledger: selectedOpt.ledger_id,
                         amount: singleAdvanceAmount,
                         reference_type: 'ADVANCE',
-                        advance_ref_no: singleAdvanceRefNo
+                        advance_ref_no: singleAdvanceRefNo,
+                        reference_number: singleAdvanceRefNo
                     });
                 }
 
@@ -801,6 +800,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 pay_to_ledger: opt.ledger_id,
                                 amount: t.payNow,
                                 reference_type: 'INVOICE',
+                                reference_id: t.id,
+                                reference_number: t.invoiceNo || t.referenceNumber,
+                                pending_amount: t.amount,
+                                balance_after: Math.max(0, t.amount - t.payNow),
+                                invoice_date: t.date,
                                 transaction_details: {
                                     ...t,
                                     pending: Math.max(0, t.amount - t.payNow)
@@ -1115,9 +1119,12 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
-                                                        ? 'bg-red-100 text-red-600 border border-red-200'
-                                                        : 'bg-green-100 text-green-600 border border-green-200'
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                                        txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
+                                                            ? 'bg-red-100 text-red-600 border border-red-200'
+                                                            : (txn.dueStatus === 'Partially Received' || txn.dueStatus === 'Partially Paid')
+                                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                                : 'bg-green-100 text-green-600 border border-green-200'
                                                         }`}>
                                                         {txn.dueStatus}
                                                     </span>
@@ -1401,9 +1408,12 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                                     )}
                                                                 </td>
                                                                 <td className="py-3 px-2 text-center text-sm text-gray-700">
-                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${transaction.status === 'Due' || transaction.status === 'Due Today'
-                                                                        ? 'bg-red-100 text-red-600 border border-red-200'
-                                                                        : (transaction.status === 'Not Due' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200')
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                                                        transaction.status === 'Due' || transaction.status === 'Due Today'
+                                                                            ? 'bg-red-100 text-red-600 border border-red-200'
+                                                                            : (transaction.status === 'Partially Received' || transaction.status === 'Partially Paid')
+                                                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                                                : (transaction.status === 'Not Due' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200')
                                                                         }`}>
                                                                         {transaction.status || 'Pending'}
                                                                     </span>

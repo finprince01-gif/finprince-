@@ -37,7 +37,11 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
                 payment_details__payment_payable__gt=0
             ).select_related('payment_details')
         
-        # Optional: Filter by customer name/branch if provided
+        # Optional: Filter by customer ID/name/branch if provided
+        customer_id = self.request.query_params.get('customer_id')
+        if customer_id:
+            queryset = queryset.filter(customer_id=customer_id)
+            
         customer_name = self.request.query_params.get('customer_name')
         if customer_name:
             queryset = queryset.filter(customer_name=customer_name)

@@ -1,6 +1,7 @@
 import uuid
 from rest_framework import serializers  # type: ignore[import]
 from .models_voucher_payment import PaymentVoucher, PaymentVoucherItem  # type: ignore[import]
+from .models_voucher_allocation import VoucherAllocation
 from .models import MasterLedger, Voucher, JournalEntry  # type: ignore[import]
 from accounting.services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal, InvalidOperation
@@ -32,6 +33,7 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
         model = PaymentVoucherItem
         fields = [
             'id', 'amount', 'reference_type', 'reference_id', 
+            'reference_number', 'pending_amount', 'balance_after', 'invoice_date',
             'transaction_details', 'pay_to_ledger', 'pay_to_ledger_name',
             'type', 'id_ref', 'vendor_name', 'customer_name',
             'advance_ref_no'
@@ -97,6 +99,26 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
     advance_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, write_only=True)
     total_payment = serializers.SerializerMethodField()
     items = PaymentVoucherItemSerializer(many=True, required=False)
+
+    def _safe_int(self, val):
+        if val is None: return None
+        try:
+            return int(float(str(val)))
+        except:
+            return None
+
+    def _get_party_ids(self, ledger):
+        if not ledger: return None, None, None
+        try:
+            vendor = getattr(ledger, 'vendors_basic', None)
+            vid = vendor.first().id if vendor and vendor.exists() else None
+            
+            customer = getattr(ledger, 'customers_basic', None)
+            cid = customer.first().id if customer and customer.exists() else None
+            
+            return ledger.id, cid, vid
+        except:
+            return getattr(ledger, 'id', None), None, None
 
     def _mirror_to_vendor_portal(self, voucher):
         """Mirror PaymentVoucher items to Vendor Portal ledger"""
@@ -264,6 +286,13 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
         
         validated_data['total_amount'] = total
 
+        # Populate master party IDs
+        pay_from = validated_data.get('pay_from')
+        l_id, c_id, v_id = self._get_party_ids(pay_from)
+        validated_data['ledger_id_val'] = l_id
+        validated_data['party_customer_id'] = c_id
+        validated_data['party_vendor_id'] = v_id
+
         voucher = PaymentVoucher.objects.create(**validated_data)
 
         # Create child items (Strictly one row per logic)
@@ -287,15 +316,57 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                     if not txn_details: txn_details = {}
                     txn_details['reference_no'] = adv_ref
 
-                PaymentVoucherItem.objects.create(
+                # Extract date for normalization
+                item_date_raw = txn_details.get('date')
+                item_date = None
+                if item_date_raw:
+                    try:
+                        import datetime
+                        if isinstance(item_date_raw, str):
+                            item_date = datetime.datetime.strptime(item_date_raw, '%Y-%m-%d').date()
+                        else:
+                            item_date = item_date_raw
+                    except:
+                        pass
+
+                p_l_id, p_c_id, p_v_id = self._get_party_ids(pay_to_ledger)
+
+                pvi = PaymentVoucherItem.objects.create(
                     voucher=voucher, 
                     tenant_id=tenant_id,
                     pay_to_ledger=pay_to_ledger, 
                     amount=item_data.get('amount'),
                     reference_type=item_data.get('reference_type', 'INVOICE'),
                     reference_id=item_data.get('reference_id'),
+                    reference_number=item_data.get('reference_number') or txn_details.get('reference_number') or txn_details.get('invoiceNo') or txn_details.get('referenceNumber'),
+                    pending_amount=item_data.get('pending_amount') or txn_details.get('amount') or 0,
+                    balance_after=item_data.get('balance_after') or txn_details.get('pending') or 0,
+                    invoice_date=item_date,
                     advance_ref_no=adv_ref,
-                    transaction_details=txn_details
+                    transaction_details=txn_details,
+                    ledger_id_val=p_l_id,
+                    party_customer_id=p_c_id,
+                    party_vendor_id=p_v_id
+                )
+
+                # NEW: Save to separate VoucherAllocation table for full normalization
+                VoucherAllocation.objects.create(
+                    tenant_id=tenant_id,
+                    ledger=pay_to_ledger,
+                    party_customer_id=p_c_id,
+                    party_vendor_id=p_v_id,
+                    source_voucher_id=voucher.id,
+                    source_type='PAYMENT',
+                    source_voucher_no=voucher.voucher_number,
+                    source_voucher_date=voucher.date,
+                    target_voucher_id=self._safe_int(item_data.get('reference_id')),
+                    target_type='PURCHASE', 
+                    target_voucher_no=pvi.reference_number,
+                    target_voucher_date=pvi.invoice_date,
+                    reference_type=pvi.reference_type,
+                    pending_amount=pvi.pending_amount,
+                    amount=pvi.amount,
+                    balance_after=pvi.balance_after
                 )
 
         self._post_to_global_voucher(voucher)
@@ -321,6 +392,10 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                 PaymentVoucherItem.objects.create(voucher=instance, pay_to_ledger=pay_to_ledger, **item_data)
             instance.total_amount = total
             instance.save(update_fields=['total_amount', 'updated_at'])
+            
+            self._mirror_to_vendor_portal(instance)
+            self._mirror_to_customer_portal(instance)
+            self._post_to_global_voucher(instance)
 
         return instance
 
@@ -357,6 +432,9 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                     narration=voucher.narration,
                     source=voucher.source or 'manual',
                     reference_id=voucher.id,
+                    ledger_id_val=voucher.ledger_id_val,
+                    party_customer_id=voucher.party_customer_id,
+                    party_vendor_id=voucher.party_vendor_id,
                 )
             except Exception as e:
                 print(f"!!! Global Voucher creation failed for PaymentVoucher {voucher.id}: {e}")
@@ -374,13 +452,23 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
                 amt = _safe_decimal(item.amount)
                 if amt > 0 and item.pay_to_ledger_id:
                     total_debit += amt  # type: ignore
-                    entries.append({"ledger_id": item.pay_to_ledger_id, "debit": float(amt), "credit": 0})
+                    entries.append({
+                        "ledger_id": item.pay_to_ledger_id, 
+                        "debit": float(amt), 
+                        "credit": 0,
+                        "ledger_id_val": item.ledger_id_val,
+                        "party_customer_id": item.party_customer_id,
+                        "party_vendor_id": item.party_vendor_id
+                    })
 
             if total_debit > 0 and voucher.pay_from_id:  # type: ignore
                 entries.append({
                     "ledger_id": voucher.pay_from_id,
                     "debit": 0,
                     "credit": float(total_debit),
+                    "ledger_id_val": voucher.ledger_id_val,
+                    "party_customer_id": voucher.party_customer_id,
+                    "party_vendor_id": voucher.party_vendor_id
                 })
                 if len(entries) >= 2:
                     voucher_type_label = "PAYMENT_BULK" if len(items) > 1 else "PAYMENT"
@@ -611,4 +699,5 @@ class AdvancePaymentSerializer(serializers.ModelSerializer):
             if hasattr(cat_obj, 'category'): return cat_obj.category # type: ignore
             return str(cat_obj) if cat_obj else None
         return None
+
 

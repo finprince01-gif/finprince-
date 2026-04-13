@@ -31,6 +31,7 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
         return queryset
 
     def create(self, request, *args, **kwargs):
+        print(f"!!! DIAG DIAG RAW PAYLOAD: {request.data}")
         bank_transaction_id = request.data.get('bank_transaction_id')
         
         serializer = self.get_serializer(data=request.data)

@@ -4095,3 +4095,11 @@ CREATE TABLE `vouchers` (
 
 -- Dump completed on 2026-04-01 11:28:58
 >>>>>>> origin/main
+
+
+--ALTER TABLE voucher_debit_note_due_details
+ALTER TABLE voucher_debit_note_due_details 
+ADD COLUMN reverse_gst_tcs VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_gst_tds VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_income_tax_tcs VARCHAR(10) DEFAULT 'No', 
+ADD COLUMN reverse_income_tax_tds VARCHAR(10) DEFAULT 'No';

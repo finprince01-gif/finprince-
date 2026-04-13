@@ -1,6 +1,6 @@
 // Vendor Portal - Master Configuration
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter, ChevronLeft, X } from 'lucide-react';
+import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter, ChevronLeft, X, Receipt, Check } from 'lucide-react';
 import { Country, State, City } from 'country-state-city';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
@@ -133,6 +133,154 @@ interface VendorPortalProps {
     setPrefilledVoucherData?: (data: any) => void;
 }
 
+interface AdvanceAllocationModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    row: any;
+    vendor: any;
+    ledgerEntries: any[];
+    onProceed?: (selectedAdvance: any, invoiceRef: string) => void;
+}
+
+const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen, onClose, row, vendor, ledgerEntries, onProceed }) => {
+    if (!isOpen || !row) return null;
+
+    const [selectedAdvance, setSelectedAdvance] = useState<any>(null);
+
+    // Find exclusively pure unutilized advance payments for this vendor
+    const advances = (ledgerEntries || []).filter(e =>
+        e.transferFrom === 'Payment' &&
+        (e.status === 'Not Utilized' || e.status === 'Partially Utilized') &&
+        // USER REQUEST: Only include "Amount field" entries (where reference_number matches voucher base)
+        // and EXCLUDE explicit "ADVANCE" entries or Pending Transaction (invoice) entries.
+        e.rawVoucher?.reference_number?.toUpperCase() !== 'ADVANCE' &&
+        (
+            !e.rawVoucher?.reference_number || 
+            e.rawVoucher.reference_number.trim() === '' || 
+            (e.voucherNo && e.rawVoucher.reference_number && e.voucherNo.startsWith(e.rawVoucher.reference_number + '-'))
+        )
+    ).map(e => ({
+        id: e.id,
+        voucherNo: e.voucherNo,
+        date: e.date,
+        amount: e.debit !== '-' ? parseFloat(e.debit.replace(/,/g, '')) : 0,
+        status: e.status
+    }));
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white w-[800px] max-w-[90vw] rounded-lg shadow-2xl overflow-hidden border border-gray-200 animate-in fade-in zoom-in duration-200">
+                <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <Receipt className="w-5 h-5 text-indigo-100" />
+                        <h3 className="text-white font-bold text-lg">Advance Allocation Details</h3>
+                    </div>
+                    <button onClick={onClose} className="text-white hover:text-gray-200 transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="p-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-gray-50 p-3 rounded border border-gray-100 text-left">
+                            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Invoice Ref</label>
+                            <div className="text-sm font-bold text-gray-900">{row.refNo}</div>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded border border-gray-100 text-left">
+                            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Vendor</label>
+                            <div className="text-sm font-bold text-gray-900 truncate">{vendor.name}</div>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded border border-gray-100 text-left">
+                            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Inv Amount</label>
+                            <div className="text-sm font-bold text-gray-900">₹{row.netAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded border border-gray-100 text-left">
+                            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Pending</label>
+                            <div className="text-sm font-bold text-red-600">₹{row.pendingBalance?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        </div>
+                    </div>
+
+                    {advances.length > 0 ? (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Available Payment Vouchers</h4>
+                                <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{advances.length} Found</span>
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto border border-gray-200 rounded">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                                        <tr className="text-left text-xs text-gray-600 uppercase tracking-wider">
+                                            <th className="px-4 py-3 font-semibold">Select</th>
+                                            <th className="px-4 py-3 font-semibold">Voucher Number</th>
+                                            <th className="px-4 py-3 font-semibold">Date</th>
+                                            <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 bg-white">
+                                        {advances.map((adv, idx) => (
+                                            <tr 
+                                                key={idx} 
+                                                onClick={() => setSelectedAdvance(adv)}
+                                                className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedAdvance?.id === adv.id ? 'bg-indigo-50/50' : ''}`}
+                                            >
+                                                <td className="px-4 py-3">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="advance-selection" 
+                                                        checked={selectedAdvance?.id === adv.id}
+                                                        onChange={() => setSelectedAdvance(adv)}
+                                                        className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3 font-medium text-gray-900">{adv.voucherNo}</td>
+                                                <td className="px-4 py-3 text-gray-600">{adv.date.split('-').reverse().join('-')}</td>
+                                                <td className="px-4 py-3 text-right font-bold text-gray-900">₹{adv.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="flex justify-end pt-4 border-t border-gray-100 gap-3">
+                                <button 
+                                    onClick={onClose}
+                                    className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    disabled={!selectedAdvance}
+                                    onClick={() => onProceed && onProceed(selectedAdvance, row.refNo)}
+                                    className={`flex items-center gap-2 px-8 py-2 rounded-[4px] text-sm font-bold uppercase tracking-widest transition-all ${
+                                        selectedAdvance 
+                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200' 
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    }`}
+                                >
+                                    <Check className="w-4 h-4" />
+                                    Proceed Allocation
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-100 rounded-lg">
+                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                                <Receipt className="w-8 h-8 text-gray-300" />
+                            </div>
+                            <h4 className="text-gray-900 font-bold mb-1">No Advance Payments Found</h4>
+                            <p className="text-gray-500 text-sm mb-6 text-center max-w-[300px]">There are no unutilized payment vouchers available for this vendor.</p>
+                            <button 
+                                onClick={onClose}
+                                className="px-8 py-2 bg-gray-100 text-gray-600 rounded-[4px] text-sm font-bold hover:bg-gray-200 transition-colors"
+                            >
+                                Close Modal
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, setPrefilledVoucherData }) => {
     const { hasTabAccess, isSuperuser } = usePermissions();
     // GST Details Interfaces (Defined inside to avoid placement issues, or better moved out if stable)
@@ -214,6 +362,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const [activeFilter, setActiveFilter] = useState<string | null>(null);
     const [procurementSearchTerm, setProcurementSearchTerm] = useState('');
     const [paymentSearchTerm, setPaymentSearchTerm] = useState('');
+    const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+    const [selectedAdvanceRow, setSelectedAdvanceRow] = useState<any>(null);
 
     const toggleFilter = (filterName: string) => setActiveFilter(prev => prev === filterName ? null : filterName);
 
@@ -433,8 +583,23 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         if (refType === 'ADVANCE' || t.is_advance) {
                             return paidAmount > 0 ? 'Utilized' : 'Not Utilized';
                         }
-                        // ── PAYMENT / RECEIPT ──────────────────────────────────────
+                        // ── ADVANCE / GENERIC UNALLOCATED entries ─────────────────
                         if (txType === 'payment' || txType === 'receipt') {
+                            const isGenericPayment = t.transaction_number && t.reference_number && t.transaction_number.startsWith(t.reference_number + '-');
+                            
+                            const isAdvanceEntry = (t.reference_type || '').toUpperCase() === 'ADVANCE' || 
+                                                 t.is_advance || 
+                                                 !t.reference_number || 
+                                                 t.reference_number.toUpperCase() === 'ADVANCE' || 
+                                                 t.reference_number.trim() === '' ||
+                                                 isGenericPayment;
+                            
+                            if (isAdvanceEntry) {
+                                const usedAmt = parseFloat(t.paid_amount || t.used_amount || 0);
+                                if (usedAmt >= amount && amount > 0) return 'Utilized';
+                                if (usedAmt > 0) return 'Partially Utilized';
+                                return 'Not Utilized';
+                            }
                             return paidAmount >= amount ? 'Received' : paidAmount > 0 ? 'Partially Received' : 'Not Due';
                         }
                         // ── Fallback ───────────────────────────────────────────────
@@ -506,6 +671,31 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
         setPrefilledVoucherData(prefill);
         onNavigate('Vouchers');
+    };
+
+    const handleProceedAllocation = async (selectedAdvance: any, invoiceRef: string) => {
+        try {
+            // Determine the backend ID (t- is for VendorTransaction)
+            const rawId = selectedAdvance.id;
+            const isTransaction = String(rawId).startsWith('t-');
+            const transId = isTransaction ? rawId.replace('t-', '') : rawId;
+
+            // Update the transaction's reference_number to match the invoice reference
+            await httpClient.patch(`/api/vendors/transactions/${transId}/`, {
+                reference_number: invoiceRef,
+                status: 'utilized'
+            });
+
+            showSuccess(`Successfully allocated ${selectedAdvance.voucherNo} to ${invoiceRef}`);
+            // Refresh the ledger data to reflect changes
+            if (selectedProcurementVendor) {
+                fetchVendorLedger(selectedProcurementVendor.id, selectedProcurementVendor.name);
+            }
+            setIsAdvanceModalOpen(false);
+        } catch (error: any) {
+            console.error("Allocation failed:", error);
+            showError(error.response?.data?.error || "Failed to proceed with allocation.");
+        }
     };
 
 
@@ -678,6 +868,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     });
                 } else {
                     let lastPending = totalSourceAmt;
+                    const totalAppAmt = applications.reduce((sum, a) => sum + parseFloat((a.debit !== '-' ? a.debit : a.credit !== '-' ? a.credit : '0').toString().replace(/,/g, '')), 0);
+                    const totalSourceAmtRounded = Math.round(totalSourceAmt * 100);
+                    const totalAppAmtRounded = Math.round(totalAppAmt * 100);
+                    const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
+                        ? 'Received'
+                        : (totalAppAmtRounded > 0 ? 'Partially Received' : firstSource.status);
+
                     applications.forEach((app, appIdx) => {
                         const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
                         const currentPending = Math.max(0, lastPending - appAmt);
@@ -690,7 +887,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                             appliedRefNo: app.voucherNo,
                             appliedAmount: appAmt,
                             pendingBalance: currentPending,
-                            status: firstSource.status,
+                            status: calculatedStatus,
                             rowSpan: applications.length,
                             isFirstInSource: appIdx === 0
                         });
@@ -3871,19 +4068,19 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                             placeholder="Numeric only"
                                                                                         />
                                                                                     </div>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
-                                                                    {record.registrationType === 'Unregistered' ?
-                                                                        'Add a branch manually to continue.' :
-                                                                        'No places of business found. Fetch via GSTIN or add manually.'
-                                                                    }
-                                                                </div>
-                                                            )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
+                                                                {record.registrationType === 'Unregistered' ?
+                                                                    'Add a branch manually to continue.' :
+                                                                    'No places of business found. Fetch via GSTIN or add manually.'
+                                                                }
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
@@ -6261,13 +6458,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                     <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Date</th>
                                                                     <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Posted From</th>
                                                                     <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Reference No.</th>
-                                                                    <th rowSpan={2} className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Net Amount</th>
+                                                                    <th rowSpan={2} className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Amount</th>
                                                                     <th colSpan={4} className="px-6 py-2 border-r border-slate-200 bg-indigo-50/30">
                                                                         <div className="flex justify-center items-center h-full text-[11px] font-black text-indigo-600 uppercase tracking-widest">
                                                                             Voucher Applied
                                                                         </div>
                                                                     </th>
-                                                                    <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                                                                    <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Status</th>
+                                                                    <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest">Action</th>
                                                                 </tr>
                                                                 <tr>
                                                                     <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Date</th>
@@ -6282,7 +6480,17 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         {row.isFirstInSource && (
                                                                             <>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
-                                                                                <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">{row.postedFrom}</td>
+                                                                                <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
+                                                                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                                                                        row.postedFrom === 'Purchase' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                                                                                        row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                        row.postedFrom === 'Debit Note' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                                                                                        row.postedFrom === 'Credit Note' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                                                                                        'bg-slate-50 text-slate-600 border border-slate-100'
+                                                                                    }`}>
+                                                                                        {row.postedFrom}
+                                                                                    </span>
+                                                                                </td>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top">{row.refNo}</td>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">
                                                                                     {row.netAmount !== '-' ? `₹${row.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
@@ -6298,20 +6506,37 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                             {row.pendingBalance !== '-' ? `₹${row.pendingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                                         </td>
                                                                         {row.isFirstInSource && (
-                                                                            <td rowSpan={row.rowSpan} className="px-6 py-4 align-top">
-                                                                                <span className={`inline-flex px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${row.status === 'Received' || row.status === 'Utilized' ? 'bg-emerald-50 text-emerald-600' :
-                                                                                        row.status === 'Due' ? 'bg-red-50 text-red-600' :
-                                                                                            'bg-indigo-50 text-indigo-600'
-                                                                                    }`}>
+                                                                            <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
+                                                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                                                                    row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                    row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                                                    row.status?.toLowerCase() === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                                                    'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                                                }`}>
                                                                                     {row.status}
                                                                                 </span>
+                                                                            </td>
+                                                                        )}
+                                                                        {row.isFirstInSource && (
+                                                                            <td rowSpan={row.rowSpan} className="px-6 py-4 whitespace-nowrap text-center align-top">
+                                                                                {(row.status === 'Due' || row.status === 'Partially Received') && (
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            setSelectedAdvanceRow(row);
+                                                                                            setIsAdvanceModalOpen(true);
+                                                                                        }}
+                                                                                        className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-[4px] hover:bg-indigo-700 transition-colors uppercase tracking-widest"
+                                                                                    >
+                                                                                        Reference
+                                                                                    </button>
+                                                                                )}
                                                                             </td>
                                                                         )}
                                                                     </tr>
                                                                 ))}
                                                                 {allocationRows.length === 0 && (
                                                                     <tr>
-                                                                        <td colSpan={9} className="px-6 py-20 text-center text-slate-400">
+                                                                        <td colSpan={10} className="px-6 py-20 text-center text-slate-400">
                                                                             <p className="text-sm font-medium">No allocation data found for this vendor.</p>
                                                                         </td>
                                                                     </tr>
@@ -7775,6 +8000,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     onClose={() => setShowNetoffModal(false)}
                     vendorName={selectedProcurementVendor?.name || ''}
                     runningBalance={totalCredit - totalDebit}
+                />
+            )}
+
+            {/* Advance Allocation Modal */}
+            {selectedProcurementVendor && (
+                <AdvanceAllocationModal
+                    isOpen={isAdvanceModalOpen}
+                    onClose={() => setIsAdvanceModalOpen(false)}
+                    row={selectedAdvanceRow}
+                    vendor={selectedProcurementVendor}
+                    ledgerEntries={vendorLedgerData}
+                    onProceed={handleProceedAllocation}
                 />
             )}
         </div >

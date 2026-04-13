@@ -1137,7 +1137,7 @@ const App: React.FC = () => {
       case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />; // Available for all plans
       case 'Users & Roles': return <UsersAndRolesPage onNavigate={handleNavigate} />;
       case 'Vendor Portal': return <VendorPortalPage onLogout={handleLogout} onNavigate={handleNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
-      case 'Customer Portal': return <CustomerPortalPage />;
+      case 'Customer Portal': return <CustomerPortalPage onNavigate={handleNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
       case 'Payroll': return <PayrollPage />;
       case 'Service': return <ServicePage />;
       case 'GST': return <GSTPage />;

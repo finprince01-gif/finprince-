@@ -292,6 +292,11 @@ class Voucher(BaseModel):
     reference_id = models.BigIntegerField(null=True, blank=True, help_text="ID of the source document (Invoice/Order)")
     dummy_force = models.IntegerField(null=True, blank=True)
 
+    # Party IDs for explicit tracking
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True)
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
+
     class Meta:
 
         db_table = 'vouchers'
@@ -336,6 +341,11 @@ class JournalEntry(BaseModel):
         on_delete=models.SET_NULL,
         db_column='vendor_id'
     )
+    
+    # Party IDs for explicit tracking
+    ledger_id_val     = models.BigIntegerField(null=True, blank=True)
+    party_customer_id = models.BigIntegerField(null=True, blank=True)
+    party_vendor_id   = models.BigIntegerField(null=True, blank=True)
     
     class Meta:
 
