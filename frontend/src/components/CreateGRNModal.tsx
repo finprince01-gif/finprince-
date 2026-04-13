@@ -40,6 +40,11 @@ interface CreateGRNModalProps {
 const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initialSupplierInvoiceNo = '', initialExtractedData, mainVendorName, mainBranch, mainGstin, context = 'Purchase' }) => {
     // Form State
     const [grnType, setGrnType] = useState<'purchases' | 'sales_return'>(context === 'Credit Note' ? 'sales_return' : 'purchases');
+
+    // Sync grnType if context changes
+    useEffect(() => {
+        setGrnType(context === 'Credit Note' ? 'sales_return' : 'purchases');
+    }, [context]);
     const [grnNo, setGrnNo] = useState('');
     const [grnSeriesId, setGrnSeriesId] = useState('');
     const [grnSeriesName, setGrnSeriesName] = useState('');
@@ -71,9 +76,16 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
 
     const filteredGrnSeriesList = useMemo(() => {
         return grnSeriesList.filter((series: any) => {
-            const seriesType = (series.grn_type || '').toLowerCase().replace(' ', '_');
-            const currentType = (grnType || '').toLowerCase();
-            if (currentType === 'purchases') return seriesType === 'purchase';
+            const seriesType = (series.grn_type || '').toLowerCase().trim();
+            const currentType = (grnType || '').toLowerCase().trim();
+            
+            // Map common variations
+            if (currentType === 'purchases') {
+                return seriesType === 'purchase' || seriesType === 'purchases';
+            }
+            if (currentType === 'sales_return') {
+                return seriesType === 'sales_return' || seriesType === 'sales return';
+            }
             return seriesType === currentType;
         });
     }, [grnSeriesList, grnType]);
@@ -653,6 +665,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
             grn_type: grnType,
             grn_no: grnNo,
             grn_series_name: grnSeriesName,
+            grn_series_id: grnSeriesId,
             date: date || null,
             time: time || null,
             location_id: location ? parseInt(location) : null,

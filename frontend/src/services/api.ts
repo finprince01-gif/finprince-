@@ -326,11 +326,11 @@ class ApiService {
     /**
      * Get Pending GRNs for reference in Vouchers
      */
-    async getPendingGRNs(vendorName?: string) {
-        let url = '/api/inventory/operations/pending-grns/';
-        if (vendorName) {
-            url += `?vendor_name=${encodeURIComponent(vendorName)}`;
-        }
+    async getPendingGRNs(params: { vendor_name?: string, customer_name?: string, grn_type?: 'purchases' | 'sales_return' } = {}) {
+        let url = '/api/inventory/operations/pending-grns/?';
+        if (params.vendor_name) url += `vendor_name=${encodeURIComponent(params.vendor_name)}&`;
+        if (params.customer_name) url += `customer_name=${encodeURIComponent(params.customer_name)}&`;
+        if (params.grn_type) url += `grn_type=${params.grn_type}&`;
         return httpClient.get<any[]>(url);
     }
 

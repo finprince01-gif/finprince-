@@ -503,15 +503,25 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             const matchesCustomer = slipCustomer === currentCustomer;
 
+            // Type filter: Only show 'sales' outward slips in Sales Voucher
+            const slipType = (item.outward_type || item.outwardType || '').toLowerCase();
+            const isSalesType = !slipType || slipType === 'sales';
+
             // Optional: Filter by branch if it's available and selected
             if (customerBranch) {
                 const slipBranch = (item.branch || item.branch_name || '').toString().trim().toLowerCase();
                 const currentBranch = (customerBranch || '').toString().trim().toLowerCase();
-                return matchesCustomer && (slipBranch === currentBranch || !slipBranch);
+                return matchesCustomer && isSalesType && (slipBranch === currentBranch || !slipBranch);
             }
 
-            return matchesCustomer;
+            return matchesCustomer && isSalesType;
         });
+
+        if (filtered.length === 0 && outwardSlipsData.length > 0 && customerName) {
+            console.log(`[SalesVoucher] No matching slips for customer "${customerName}". Available slips authors:`, 
+                outwardSlipsData.map(s => s.customer_name || s.customerName)
+            );
+        }
 
         const options = filtered.map(item => (item.outward_slip_no || item.slip_no || '').toString().trim()).filter(Boolean);
         return [...new Set(options)].sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
@@ -526,6 +536,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 // FILTER: Only show PENDING slips, or the currently selected one (for edit mode)
                 const filteredData = data.filter(item =>
                     item.status === 'PENDING' ||
+                    item.status === 'Posted' ||
                     !item.status ||
                     item.outward_slip_no === outwardSlipNo
                 );

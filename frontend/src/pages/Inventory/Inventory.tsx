@@ -998,7 +998,7 @@ const InventoryPage: React.FC = () => {
   }, [issueSlipTab, jobWorkSubTab, jobWorkSentType]);
 
   useEffect(() => {
-    if (['inter-unit', 'location-change', 'consumption', 'scrap', 'production'].includes(issueSlipTab)) {
+    if (['inter-unit', 'location-change', 'consumption', 'scrap', 'production', 'outward', 'job-work'].includes(issueSlipTab)) {
       if (locations.length === 0) fetchLocations();
       if (items.length === 0) fetchItems();
       if (issueSlipTab === 'consumption' && ledgers.length === 0) fetchLedgers();
@@ -1603,6 +1603,7 @@ const InventoryPage: React.FC = () => {
           gstin: outwardGstin,
           total_boxes: outwardTotalBoxes ? Number(outwardTotalBoxes) : null,
           posting_note: postingNote,
+          status: 'Posted',
           items: issueSlipItems.map(item => ({
             item_code: item.itemCode,
             item_name: item.itemName,
@@ -1841,6 +1842,7 @@ const InventoryPage: React.FC = () => {
         const interUnitPayload = {
           issue_slip_no: issueSlipNumber,
           issue_slip_series: selectedIssueSlipSeriesName || '',
+          issue_slip_series_id: issueSlipSeriesList.find((s: any) => s.name === selectedIssueSlipSeriesName)?.id,
           date: issueSlipDate || null,
           time: issueSlipTime || null,
           status: 'Posted',
@@ -1918,6 +1920,7 @@ const InventoryPage: React.FC = () => {
           goods_from_location: goodsFromLocation,
           goods_to_location: issueSlipTab === 'consumption' ? null : goodsToLocation, // NIL for consumption
           issue_slip_series: selectedIssueSlipSeriesName,
+          issue_slip_series_id: issueSlipSeriesList.find((s: any) => s.name === selectedIssueSlipSeriesName)?.id,
           posting_note: postingNote,
           items: issueSlipItems.map(item => ({
             item_code: item.itemCode,
@@ -1973,6 +1976,7 @@ const InventoryPage: React.FC = () => {
               scrap_type: 'production',
               issue_slip_no: scrapProdSlipNo,
               issue_slip_series: scrapProdSlipSeries,
+              issue_slip_series_id: issueSlipSeriesList.find((s: any) => s.name === scrapProdSlipSeries)?.id,
               date: scrapProdDate,
               time: scrapProdTime,
               goods_from_location: goodsFromLocation,
@@ -1990,6 +1994,7 @@ const InventoryPage: React.FC = () => {
               scrap_type: 'other',
               issue_slip_no: scrapOtherSlipNo,
               issue_slip_series: scrapOtherSlipSeries,
+              issue_slip_series_id: issueSlipSeriesList.find((s: any) => s.name === scrapOtherSlipSeries)?.id,
               date: scrapOtherDate,
               time: scrapOtherTime,
               goods_from_location: scrapOtherIssuedFrom,
@@ -2015,6 +2020,7 @@ const InventoryPage: React.FC = () => {
               scrap_type: 'disposed',
               issue_slip_no: scrapDispSlipNo,
               issue_slip_series: scrapDispSlipSeries,
+              issue_slip_series_id: issueSlipSeriesList.find((s: any) => s.name === scrapDispSlipSeries)?.id,
               date: scrapDispDate,
               time: scrapDispTime,
               goods_from_location: scrapDispIssuedFrom,
@@ -2040,8 +2046,19 @@ const InventoryPage: React.FC = () => {
       showSuccess('Operation saved successfully!');
       setShowIssueSlipForm(false);
       fetchStockMovementSummary();
-      fetchStockMovementSummary();
-      // Optional: Reset form fields here if needed
+      
+      // Reset Issue Slip Form
+      setIssueSlipNumber('');
+      setSelectedIssueSlipSeriesName('');
+      setGoodsFromLocation('');
+      setGoodsToLocation('');
+      setOutwardVendorName('');
+      setOutwardCustomerName('');
+      setOutwardBranch('');
+      setOutwardAddress('');
+      setOutwardGstin('');
+      setIssueSlipItems([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: '', remarks: '' }]);
+      setPostingNote('');
     } catch (error: any) {
       console.error('Error saving operation:', error);
       const detail = error.response?.data?.detail || error.response?.data?.error || (error.response?.data ? JSON.stringify(error.response.data) : '');
@@ -2679,6 +2696,7 @@ const InventoryPage: React.FC = () => {
         grn_type: grnType,
         grn_no: grnNumber,
         grn_series_name: grnSelectedSeriesName,
+        grn_series_id: grnSelectedSeriesId,
         date: grnDate || null,
         time: grnTime || null,
         location_id: grnLocation || null, // Assuming this is ID
@@ -2714,8 +2732,24 @@ const InventoryPage: React.FC = () => {
       showSuccess('GRN saved successfully!');
       setShowGRNForm(false);
       fetchStockMovementSummary();
+      
+      // Reset GRN form state to ensure auto-increment on next open
+      setGrnNumber('');
+      setGrnSelectedSeriesId(null);
+      setGrnSelectedSeriesName('');
+      setGrnVendorName('');
+      setGrnCustomerName('');
+      setGrnGstin('');
+      setGrnAddress('');
+      setGrnBranch('');
+      setGrnLocation('');
+      setGrnSelectedPOs([]);
+      setGrnItems([{ itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: '' }]);
+      setGrnReason('');
+      setGrnPostingNote('');
       setGrnDocument(null);
       setGrnDocumentPreview(null);
+      setGrnSecondaryRefNo('');
     } catch (error) {
       console.error('Error saving GRN:');
       showError('Failed to save GRN. Please check your inputs.');
@@ -4372,7 +4406,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select Series</option>
-                            {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase() === 'outward').map((s: any) => (
+                            {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase().trim() === 'outward' || (s.issueSlipType || '').toLowerCase().trim() === 'outwards').map((s: any) => (
                               <option key={s.id} value={s.name}>{s.name}</option>
                             ))}
                           </select>
