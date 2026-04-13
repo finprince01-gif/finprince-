@@ -10,7 +10,9 @@ import logging
 import re
 from datetime import datetime, date, timedelta
 from decimal import Decimal
-
+import uuid
+from django.utils import timezone
+from django.db.models import Sum
 from .models import VendorTransaction, VendorMasterTerms
 from .vendortransaction_serializers import VendorTransactionSerializer
 
@@ -41,6 +43,32 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
         """Filter queryset by tenant"""
         tenant_id = self.get_tenant_id()
         return VendorTransaction.objects.filter(tenant_id=tenant_id).order_by('transaction_date', 'id')
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        details = request.data.get('transaction_details')
+        tenant_id = self.get_tenant_id()
+        
+        if details and isinstance(details, list):
+            for d in details:
+                ref_no = d.get('reference_no')
+                amt = Decimal(str(d.get('payment') or 0))
+                if ref_no and amt > 0:
+                    # Create an allocation transaction
+                    VendorTransaction.objects.create(
+                        tenant_id=tenant_id,
+                        vendor_id=instance.vendor_id,
+                        transaction_type='payment',
+                        transaction_number=f"ALC-{uuid.uuid4().hex[:6].upper()}",
+                        transaction_date=timezone.now().date(),
+                        amount=amt,
+                        total_amount=amt,
+                        status='Paid',
+                        reference_number=instance.reference_number or instance.transaction_number,
+                        notes=f"Allocated from {ref_no}"
+                    )
+            return Response({'success': True})
+        return super().partial_update(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'])
     def by_vendor(self, request):
@@ -171,6 +199,21 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                 item['due_status'] = None
                 item['due_date'] = None
                 item['credit_period_days'] = 0
+                
+            # Check utilization for advances (runs for all types, but specifically identifies payments/receipts)
+            is_generic = (item.get('transaction_number') and item.get('reference_number') and 
+                        item.get('transaction_number').startswith(item.get('reference_number') + '-'))
+            is_adv = (item.get('reference_number') == 'ADVANCE' or is_generic)
+            
+            if (tx_type == 'payment' or tx_type == 'receipt') and is_adv:
+                v_num = item.get('transaction_number')
+                used = VendorTransaction.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_id=vendor_id,
+                    notes__icontains=f"Allocated from {v_num}"
+                ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+                item['used_amount'] = float(used)
+                item['paid_amount'] = float(used) # Alias for frontend consistency
 
         return Response(data)
         

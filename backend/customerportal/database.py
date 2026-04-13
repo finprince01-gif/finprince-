@@ -483,6 +483,7 @@ class CustomerTransaction(models.Model):
     TRANSACTION_TYPES = [
         ('invoice', 'Invoice'),
         ('payment', 'Payment'),
+        ('receipt', 'Receipt'),
         ('credit_note', 'Credit Note'),
         ('debit_note', 'Debit Note'),
     ]

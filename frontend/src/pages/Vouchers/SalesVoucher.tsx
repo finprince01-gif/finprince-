@@ -1610,7 +1610,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 );
 
                 if (!hsn && masterItem) {
-                    hsn = masterItem.hsn_code || masterItem.hsnCode || masterItem.hsn_sac || masterItem.hsn_sac || masterItem.sac_code || masterItem.sacCode || '';
+                    hsn = masterItem.hsn_code || masterItem.hsnCode || masterItem.hsn_sac || masterItem.hsnSac || masterItem.sacCode || masterItem.sac_code || '';
                 }
 
                 // Determine GST rate
@@ -2124,7 +2124,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
                     if (matchedItem) {
                         let inrRate = 0;
-                        const hsn = matchedItem.hsn_code || matchedItem.hsnCode || matchedItem.hsn_sac || matchedItem.hsnSac || matchedItem.sac_code || matchedItem.sac_code || '';
+                        const hsn = matchedItem.hsn_code || matchedItem.hsnCode || matchedItem.hsn_sac || matchedItem.hsnSac || matchedItem.sacCode || matchedItem.sac_code || '';
 
                         if (isService) {
                             updatedRow.itemCode = matchedItem.serviceCode || matchedItem.service_code || updatedRow.itemCode;
@@ -2353,7 +2353,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     if (matchedItem) {
                         const convRate = parseFloat(exchangeRate) || 1;
                         let inrRate = 0;
-                        const hsn = matchedItem.hsn_code || matchedItem.hsnCode || matchedItem.hsn_sac || matchedItem.hsnSac || matchedItem.sac_code || matchedItem.sac_code || '';
+                        const hsn = matchedItem.hsn_code || matchedItem.hsnCode || matchedItem.hsn_sac || matchedItem.hsnSac || matchedItem.sacCode || matchedItem.sac_code || '';
 
                         if (isService) {
                             updatedRow.itemCode = matchedItem.serviceCode || matchedItem.service_code || updatedRow.itemCode;

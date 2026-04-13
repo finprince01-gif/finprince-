@@ -166,7 +166,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         """Mirror PaymentVoucher items to Vendor Portal ledger"""
         from vendors.models import VendorMasterBasicDetail, VendorTransaction
         try:
-            for item in voucher.items.all():
+            for item in voucher.get_items():
                 # Find vendor master by ledger_id
                 vendor = VendorMasterBasicDetail.objects.filter(
                     tenant_id=voucher.tenant_id, 
@@ -237,7 +237,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         """Mirror PaymentVoucher items to Customer Portal ledger (if applicable)"""
         from customerportal.database import CustomerMasterCustomerBasicDetails, CustomerTransaction
         try:
-            for item in voucher.items.all():
+            for item in voucher.get_items():
                 # Find customer master by ledger_id
                 customer = CustomerMasterCustomerBasicDetails.objects.filter(
                     tenant_id=voucher.tenant_id, 
@@ -480,7 +480,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
 
         if items_data is not None:
             # Replace child items wholesale
-            instance.items.all().delete()
+            instance.delete_items()
             total = Decimal("0")
             for item_data in items_data:
                 pay_to_ledger = item_data.pop('pay_to_ledger')
@@ -534,7 +534,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         Create / upsert a row in the global Voucher tracking table.
         """
         try:
-            items = list(voucher.items.all())
+            items = list(voucher.get_items())
             total = voucher.total_amount
 
             # Extract names for the 'party' field
@@ -571,7 +571,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         Post double-entry journal records.
         """
         try:
-            items = list(voucher.items.all())
+            items = list(voucher.get_items())
             entries = []
             total_debit = Decimal("0")
 

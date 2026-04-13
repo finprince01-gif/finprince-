@@ -150,16 +150,15 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
     // Find exclusively pure unutilized advance payments for this vendor
     const advances = (ledgerEntries || []).filter(e =>
         e.transferFrom === 'Payment' &&
-        (e.status === 'Not Utilized' || e.status === 'Partially Utilized') &&
-        // USER REQUEST: Only include "Amount field" entries (where reference_number matches voucher base)
-        // and EXCLUDE explicit "ADVANCE" entries or Pending Transaction (invoice) entries.
-        e.rawVoucher?.reference_number?.toUpperCase() !== 'ADVANCE' &&
+        (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Utilized') &&
         (
             !e.rawVoucher?.reference_number || 
-            e.rawVoucher.reference_number.trim() === '' || 
+            e.rawVoucher.reference_number.toUpperCase() === 'ADVANCE' ||
+            e.rawVoucher.reference_number.trim() === '' ||
             (e.voucherNo && e.rawVoucher.reference_number && e.voucherNo.startsWith(e.rawVoucher.reference_number + '-'))
         )
-    ).map(e => ({
+    ).filter(e => e.status !== 'Utilized') // Only show those that still have balance
+    .map(e => ({
         id: e.id,
         voucherNo: e.voucherNo,
         date: e.date,

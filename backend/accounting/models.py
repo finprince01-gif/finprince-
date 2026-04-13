@@ -942,6 +942,19 @@ class Transaction(BaseModel):
     def __str__(self):
         return f"{self.transaction_type}: {self.voucher_number} ({self.date})"
 
+    def get_items(self):
+        """Unified access to all allocation sub-items for mirroring/POST-logic"""
+        # Circular import protection
+        return list(self.advanceallocation_items.all()) + \
+               list(self.pendingtransaction_items.all()) + \
+               list(self.transactionallocation_items.all())
+
+    def delete_items(self):
+        """Delete all allocation sub-items"""
+        self.advanceallocation_items.all().delete()
+        self.pendingtransaction_items.all().delete()
+        self.transactionallocation_items.all().delete()
+
 class AllocationBase(BaseModel):
     """
     Sub-details for Transaction (Header) relating to bill-wise apps.
@@ -1022,6 +1035,11 @@ class AllocationBase(BaseModel):
     def amount_applied(self): return self.allocated_amount
     @amount_applied.setter
     def amount_applied(self, value): self.allocated_amount = value
+
+    @property
+    def received_amount(self): return self.allocated_amount
+    @received_amount.setter
+    def received_amount(self, value): self.allocated_amount = value
 
     @property
     def pending_amount(self): return self.pending_before
