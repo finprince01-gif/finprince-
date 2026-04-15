@@ -5,8 +5,9 @@ from rest_framework import serializers  # type: ignore[import]
 from .models import (
     MasterLedger, Voucher, JournalEntry,
     PaymentVoucher, PaymentVoucherItem, VoucherAllocation,
-    PendingTransaction, AdvanceAllocation
+    PendingTransaction, AdvanceAllocation, VoucherPendingTransaction
 )  # type: ignore[import]
+
 
 from accounting.services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal, InvalidOperation
@@ -174,18 +175,20 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 ).first()
                 if vendor:
                     # Try to find a reference invoice number to link the payment in the ledger
-                    ref_no = None
-                    if item.transaction_details and isinstance(item.transaction_details, dict):
-                        ref_no = (
-                            item.transaction_details.get('invoice_no')
-                            or item.transaction_details.get('reference_no')
-                            or item.transaction_details.get('referenceNumber') # Case from Single Mode
-                            or item.transaction_details.get('invoiceNo')       # Case from Bulk Mode
-                        )
-
+                    ref_no = item.reference_number or item.advance_ref_no
+                    
                     # If it's an advance, mark it accordingly
+                    # Note: item.reference_type is a field on AllocationBase
                     p_status = 'Advance' if item.reference_type == 'ADVANCE' else 'Paid'
                     
+                    # Logic for reference number to match portal filters
+                    # We prioritize 'ADVANCE' string for unallocated payments so they show up in the procurement reference list
+                    ref_to_use = ref_no
+                    if not ref_to_use or ref_to_use.strip() == '':
+                        # Always prefer the actual voucher number for traceability in the portal
+                        ref_to_use = voucher.voucher_number
+
+
                     VendorTransaction.objects.update_or_create(
                         tenant_id=voucher.tenant_id,
                         vendor_id=vendor.id,
@@ -197,8 +200,10 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                             'amount': item.amount,
                             'total_amount': item.amount,
                             'status': p_status,
-                            'reference_number': ref_no or item.advance_ref_no or voucher.voucher_number,
-                            'notes': f"Payment for {ref_no}" if ref_no else voucher.narration,
+                            'reference_number': ref_to_use,
+                            'reference_type': item.reference_type,
+                            'is_advance': (p_status == 'Advance'),
+                            'notes': f"Payment for {ref_no}" if ref_no and ref_no != 'ADVANCE' else voucher.narration,
                             'ledger_name': vendor.vendor_name
                         }
                     )
@@ -613,13 +618,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         except Exception as e:
             print(f"Error posting payment entries for voucher {voucher.id}: {e}")
 
-    def _mirror_to_vendor_portal(self, voucher):
-        """Implement if needed for Payment tracking in portal"""
-        pass
-
-    def _mirror_to_customer_portal(self, voucher):
-        """Implement if needed for Payment tracking in portal"""
-        pass
+    # Mirroring implementations move to the top of the class for better visibility
 
 
 # ---------------------------------------------------------------------------

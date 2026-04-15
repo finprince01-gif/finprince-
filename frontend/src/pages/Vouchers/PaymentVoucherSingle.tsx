@@ -787,7 +787,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     items.push({
                         pay_to_ledger: selectedOpt.ledger_id,
                         amount: totalPayment,
-                        reference_type: 'INVOICE'
+                        reference_type: 'ADVANCE',
+                        advance_ref_no: 'ADVANCE'
                     });
                 }
             } else {
@@ -842,7 +843,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         items.push({
                             pay_to_ledger: opt.ledger_id,
                             amount: remainder,
-                            reference_type: 'INVOICE',
+                            reference_type: 'ADVANCE',
+                            advance_ref_no: 'ADVANCE', 
                             narration: 'Balance payment'
                         });
                     }
@@ -1131,8 +1133,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                        txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
                                                             ? 'bg-red-100 text-red-600 border border-red-200'
                                                             : (txn.dueStatus === 'Partially Received' || txn.dueStatus === 'Partially Paid')
                                                                 ? 'bg-orange-100 text-orange-600 border border-orange-200'
@@ -1420,8 +1421,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                                     )}
                                                                 </td>
                                                                 <td className="py-3 px-2 text-center text-sm text-gray-700">
-                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                                        transaction.status === 'Due' || transaction.status === 'Due Today'
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${transaction.status === 'Due' || transaction.status === 'Due Today'
                                                                             ? 'bg-red-100 text-red-600 border border-red-200'
                                                                             : (transaction.status === 'Partially Received' || transaction.status === 'Partially Paid')
                                                                                 ? 'bg-orange-100 text-orange-600 border border-orange-200'

@@ -25,6 +25,8 @@ class VendorTransactionSerializer(serializers.ModelSerializer):
             'status',
             'payment_mode',
             'reference_number',
+            'reference_type',
+            'is_advance',
             'notes',
             'ledger_name',
             'created_at',
