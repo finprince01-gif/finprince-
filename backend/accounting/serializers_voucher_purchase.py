@@ -488,7 +488,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
 
             # 'Unpaid' → the by_vendor API treats non-paid as eligible for
             # credit-period Due / Not Due calculation.
-            tx_status = 'Paid' if float(total_amt or 0) == 0 else 'Unpaid'
+            tx_status = 'Received' if float(total_amt or 0) == 0 else 'Unpaid'
 
             VendorTransaction.objects.update_or_create(
                 tenant_id=tenant_id,

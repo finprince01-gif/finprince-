@@ -41,13 +41,7 @@ class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
     def get_tenant_id(self):
         """Extract tenant_id from authenticated user"""
         user = self.request.user
-        if hasattr(user, 'tenant_id'):
-            return user.branch_id
-        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
-            return user.tenant.tenant_id
-        else:
-            # Fallback for development/testing
-            return getattr(user, 'id', 'default_tenant')
+        return getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None) or getattr(user, 'id', 'default_tenant')
     
     def get_queryset(self):
         """Filter queryset by tenant only. is_active filtering is handled in list()"""

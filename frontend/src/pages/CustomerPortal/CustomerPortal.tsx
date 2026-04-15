@@ -60,7 +60,7 @@ interface LedgerEntry {
     originalInv?: any;
     voucherNo?: string; // Own voucher number (e.g., REC0001)
     amount?: number;
-
+    is_advance?: boolean;
 }
 
 interface Category {
@@ -6045,7 +6045,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             const mergedTransactions: LedgerEntry[] = [];
             const seen = new Set<string>();
 
-            [...transactionEntries, ...fallbackTransactionEntries].forEach((entry) => {
+            [...invoiceEntries, ...transactionEntries, ...fallbackTransactionEntries].forEach((entry) => {
                 const key = dedupeKey(entry);
                 if (!seen.has(key)) {
                     seen.add(key);
@@ -6053,7 +6053,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 }
             });
 
-            setLedgerEntries([...invoiceEntries, ...mergedTransactions]);
+            setLedgerEntries(mergedTransactions);
         } catch (err: any) {
             console.error('Failed to fetch ledger data:', err);
             setError(err?.message || 'Unable to connect to the server.');
@@ -6078,7 +6078,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             // Update the transaction's reference_number to match the invoice reference
             await httpClient.patch(`/api/customerportal/transactions/${transId}/`, {
                 reference_number: invoiceRef,
-                payment_status: 'utilized'
+                payment_status: 'Utilized'
             });
 
             showSuccess(`Successfully allocated ${selectedAdvance.voucherNo} to ${invoiceRef}`);
@@ -6288,9 +6288,12 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
         // Find exclusively pure unutilized or generic advance receipts for this customer (omitting those already allocated or with custom advance references)
         const advances = (ledgerEntries || []).filter(e =>
             e.postFrom === 'Receipt' &&
-            (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced') &&
-            (!e.originalInv?.reference_number || e.originalInv.reference_number.toUpperCase() === 'ADVANCE' || e.originalInv.reference_number.trim() === '')
-
+            // Must be an advance/unutilized type
+            (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced' || e.is_advance) &&
+            // AND must NOT have an invoice reference yet
+            (!e.originalInv?.reference_number || 
+             ['ADVANCE', '', '-', 'N/A'].includes(e.originalInv.reference_number.toUpperCase().trim())
+            )
         );
 
         return (

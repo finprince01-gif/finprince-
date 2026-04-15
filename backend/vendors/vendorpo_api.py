@@ -32,10 +32,10 @@ class VendorPOViewSet(viewsets.ModelViewSet):
     def get_tenant_id(self, request):
         """Extract tenant_id from the authenticated user"""
         user = request.user
+        tid = getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None)
         
-        # Check if user has tenant_id attribute
-        if hasattr(user, 'tenant_id'):
-            return str(user.branch_id)
+        if tid:
+            return str(tid)
         
         # If not, raise an error
         raise PermissionDenied("User has no associated tenant")
@@ -214,10 +214,12 @@ def get_pending_pos(request):
     """
     try:
         user = request.user
-        if not hasattr(user, 'tenant_id'):
+        tenant_id = getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None)
+        
+        if not tenant_id:
             return Response({'error': 'User has no tenant'}, status=status.HTTP_403_FORBIDDEN)
             
-        tenant_id = str(user.branch_id)
+        tenant_id = str(tenant_id)
         vendor_id = request.query_params.get('vendor_id')
         vendor_name = request.query_params.get('vendor_name')
         

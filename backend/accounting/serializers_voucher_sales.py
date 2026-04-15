@@ -178,6 +178,13 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         # --- Double-Entry Posting for Sales (entries table) ---
         self._post_journal_entries(invoice)
 
+        # Recalculate status centrally
+        try:
+            from .services.sales_status_service import update_sales_invoice_payment_status
+            update_sales_invoice_payment_status(tenant_id, str(invoice.id))
+        except Exception as e:
+            print(f"!!! Status Sync Error in Create: {str(e)}")
+
         return invoice
 
     def _post_journal_entries(self, invoice):
@@ -305,6 +312,13 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         # Refresh double-entry posting
         self._post_journal_entries(instance)
 
+        # Recalculate status centrally
+        try:
+            from .services.sales_status_service import update_sales_invoice_payment_status
+            update_sales_invoice_payment_status(instance.tenant_id, str(instance.id))
+        except Exception as e:
+            print(f"!!! Status Sync Error in Update: {str(e)}")
+
         return instance
 
     def _mirror_to_customer_portal(self, invoice):
@@ -333,10 +347,26 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             payment_details = invoice.payment_details if hasattr(invoice, 'payment_details') else None
             total_invoice_val = payment_details.payment_invoice_value if payment_details else 0
             
-            # 2. Mirror Advance Adjustments only
-            # The Invoice itself is already fetched from the main Sales table by the portal UI,
-            # so we only mirror the advance adjustments to the customer_transaction table.
-            
+            # 2. Mirror the Invoice header itself
+            # We mirror the invoice as an 'invoice' type transaction. 
+            # This ensures it shows up in unified transaction lists/ledgers in the portal.
+            CustomerTransaction.objects.update_or_create(
+                tenant_id=invoice.tenant_id,
+                transaction_number=invoice.sales_invoice_no,
+                transaction_type='invoice',
+                customer_id=portal_customer.id,
+                defaults={
+                    'transaction_date': invoice.date,
+                    'total_amount': total_invoice_val,
+                    'amount': total_invoice_val,
+                    'payment_status': invoice.status,
+                    'reference_number': invoice.sales_invoice_no,
+                    'notes': invoice.voucher_name or "Sales Invoice"
+                }
+            )
+
+            # 3. Mirror Advance Adjustments
+            # We also mirror the advance adjustments to the customer_transaction table.            
             if payment_details and payment_details.payment_advance and float(payment_details.payment_advance) > 0:
                 # Idempotency: Remove existing mirrored advance adjustments for this invoice
                 # These are identified by the '-ADJ{id}I' suffix in transaction_number

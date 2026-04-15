@@ -361,6 +361,18 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             self._mirror_to_customer_portal(receipt)
             self._post_journal_entries(receipt)
 
+            # --- Update Payment Status in Sales Module ---
+            try:
+                # Track unique invoice IDs to avoid redundant updates
+                updated_invoices = set()
+                for item in items_data:
+                    it_ref_id = item.get('reference_id') or item.get('id')
+                    if it_ref_id and str(it_ref_id) not in updated_invoices:
+                        update_sales_invoice_payment_status(tenant_id, str(it_ref_id))
+                        updated_invoices.add(str(it_ref_id))
+            except Exception as e:
+                print(f"!!! Status Sync Error: {str(e)}")
+
             return receipt
         
     def update(self, instance, validated_data):
@@ -389,6 +401,17 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         self._mirror_to_customer_portal(instance)
         self._mirror_to_vendor_portal(instance)
         self._post_journal_entries(instance)
+
+        # Update Payment Status in Sales Module
+        try:
+            items_qs = instance.get_items()
+            updated_invoices = set()
+            for item in items_qs:
+                if item.reference_id and str(item.reference_id) not in updated_invoices:
+                    update_sales_invoice_payment_status(instance.tenant_id, str(item.reference_id))
+                    updated_invoices.add(str(item.reference_id))
+        except Exception as e:
+            print(f"!!! Status Sync Update Error: {str(e)}")
         
         return instance
 
@@ -522,8 +545,8 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                         
                         is_adv = (getattr(item, 'is_advance', False) or (getattr(item, 'reference_type', '').upper() == 'ADVANCE') or not getattr(item, 'reference_id', None))
                         
-                        # Use actual voucher number for traceability, even for advances
-                        ref_no_to_use = receipt.voucher_number
+                        # Use Resolved Ref No for linking, fallback to voucher number
+                        ref_no_to_use = ref_no or receipt.voucher_number
 
 
                         CustomerTransaction.objects.update_or_create(

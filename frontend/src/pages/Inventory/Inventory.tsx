@@ -675,15 +675,26 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  const fetchJobWorkOutwardOptions = async () => {
+  const fetchJobWorkOutwardOptions = async (vendorName?: string) => {
     try {
-      // Mock or use endpoint if available. Assume getJobWorkOutwardSlips exists in apiService (added previously).
-      const response = await apiService.getJobWorkOutwardSlips();
+      const response = await apiService.getJobWorkOutwardSlips(vendorName);
       if (Array.isArray(response)) {
         setJobWorkOutwardOptions(response);
       }
     } catch (error) {
       console.error('Error fetching job work outward slips:', error);
+    }
+  };
+
+  const fetchOutwardSalesOrders = async (customerName?: string) => {
+    try {
+      const filters: any = { status: 'pending' };
+      if (customerName) filters.customer_name = customerName;
+      
+      const response = await apiService.getSalesOrders(filters);
+      setOutwardSalesOrderOptions(Array.isArray(response) ? response : []);
+    } catch (error) {
+      console.error("Error fetching outward sales orders", error);
     }
   };
 
@@ -990,12 +1001,12 @@ const InventoryPage: React.FC = () => {
 
   useEffect(() => {
     if (issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'receipt') {
-      fetchJobWorkOutwardOptions();
+      fetchJobWorkOutwardOptions(outwardVendorName);
       // Also ensure vendors/locations are loaded if needed
       if (vendors.length === 0) fetchVendors();
       if (locations.length === 0) fetchLocations();
     }
-  }, [issueSlipTab, jobWorkSubTab, jobWorkSentType]);
+  }, [issueSlipTab, jobWorkSubTab, jobWorkSentType, outwardVendorName]);
 
   useEffect(() => {
     if (['inter-unit', 'location-change', 'consumption', 'scrap', 'production', 'outward', 'job-work'].includes(issueSlipTab)) {
@@ -2108,6 +2119,9 @@ const InventoryPage: React.FC = () => {
                       (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) ? (poResponse as any).data : [];
         
         setJobWorkOrderNoOptions(rawPOs);
+
+        // Fetch Job Work Outward Slips for this vendor
+        fetchJobWorkOutwardOptions(trimmedName);
       } catch (error) {
         console.error("Error fetching vendor details:", error);
       }
@@ -2228,6 +2242,9 @@ const InventoryPage: React.FC = () => {
         }
       }
     }
+    
+    // Fetch pending sales orders for this specific customer (or all if cleared)
+    fetchOutwardSalesOrders(customerName);
   };
 
   const handleOutwardSupplierInvoiceChange = (invNumber: string) => {
@@ -2668,8 +2685,7 @@ const InventoryPage: React.FC = () => {
       const fetchOutwardData = async () => {
         try {
           if (outwardType === 'sales') {
-            const response = await apiService.getSalesOrders({ status: 'pending' });
-            setOutwardSalesOrderOptions(Array.isArray(response) ? response : []);
+            fetchOutwardSalesOrders(outwardCustomerName);
           } else if (outwardType === 'purchase_return') {
             const response = await apiService.getVouchers('Purchase');
             setOutwardSupplierInvoiceOptions(Array.isArray(response) ? response : []);
@@ -2680,7 +2696,7 @@ const InventoryPage: React.FC = () => {
       };
       fetchOutwardData();
     }
-  }, [showIssueSlipForm, issueSlipTab, outwardType]);
+  }, [showIssueSlipForm, issueSlipTab, outwardType, outwardCustomerName]);
 
   useEffect(() => {
     if (showIssueSlipForm && issueSlipTab === 'scrap') {
@@ -2852,20 +2868,20 @@ const InventoryPage: React.FC = () => {
     const canCreateGRN = isSuperuser || hasTabAccess('Inventory', 'GRN Creation');
 
     const filteredStockData = operationsStockData.filter(item => {
-      const matchCategory = item.category.toLowerCase().includes(stockFilters.category.toLowerCase());
-      const matchSubCategory = item.subCategory.toLowerCase().includes(stockFilters.subCategory.toLowerCase());
-      const matchItemCode = item.itemCode.toLowerCase().includes(stockFilters.itemCode.toLowerCase());
-      const matchItemName = item.itemName.toLowerCase().includes(stockFilters.itemName.toLowerCase());
-      const matchUom = item.uom.toLowerCase().includes(stockFilters.uom.toLowerCase());
+      const matchCategory = (item.category || '').toLowerCase().includes(stockFilters.category.toLowerCase());
+      const matchSubCategory = (item.subCategory || '').toLowerCase().includes(stockFilters.subCategory.toLowerCase());
+      const matchItemCode = (item.itemCode || '').toLowerCase().includes(stockFilters.itemCode.toLowerCase());
+      const matchItemName = (item.itemName || '').toLowerCase().includes(stockFilters.itemName.toLowerCase());
+      const matchUom = (item.uom || '').toLowerCase().includes(stockFilters.uom.toLowerCase());
       return matchCategory && matchSubCategory && matchItemCode && matchItemName && matchUom;
     });
 
     const filteredDetailsData = stockDetailsData.filter(item => {
-      const matchDate = item.date.toLowerCase().includes(detailsFilters.date.toLowerCase());
-      const matchParticulars = item.particulars.toLowerCase().includes(detailsFilters.particulars.toLowerCase());
-      const matchRefNo = item.refNo.toLowerCase().includes(detailsFilters.refNo.toLowerCase());
-      const matchLocation = item.location.toLowerCase().includes(detailsFilters.location.toLowerCase());
-      const matchUom = item.uom.toLowerCase().includes(detailsFilters.uom.toLowerCase());
+      const matchDate = (item.date || '').toLowerCase().includes(detailsFilters.date.toLowerCase());
+      const matchParticulars = (item.particulars || '').toLowerCase().includes(detailsFilters.particulars.toLowerCase());
+      const matchRefNo = (item.refNo || '').toLowerCase().includes(detailsFilters.refNo.toLowerCase());
+      const matchLocation = (item.location || '').toLowerCase().includes(detailsFilters.location.toLowerCase());
+      const matchUom = (item.uom || '').toLowerCase().includes(detailsFilters.uom.toLowerCase());
       return matchDate && matchParticulars && matchRefNo && matchLocation && matchUom;
     });
 
@@ -4063,7 +4079,7 @@ const InventoryPage: React.FC = () => {
                           >
                             <option value="">Select Outward No</option>
                             {jobWorkOutwardOptions.map((opt: any) => (
-                              <option key={opt.id} value={opt.issue_slip_no}>{opt.issue_slip_no}</option>
+                              <option key={opt.id} value={opt.job_work_outward_no}>{opt.job_work_outward_no}</option>
                             ))}
                           </select>
                         </div>

@@ -339,8 +339,12 @@ class ApiService {
     /**
      * Get Job Work Outward Slips (for reference in Receipt)
      */
-    async getJobWorkOutwardSlips() {
-        return httpClient.get<any[]>('/api/inventory/operations/job-work/?operation_type=outward');
+    async getJobWorkOutwardSlips(vendorName?: string) {
+        let url = '/api/inventory/operations/job-work/?operation_type=outward';
+        if (vendorName) {
+            url += `&vendor_name=${encodeURIComponent(vendorName)}`;
+        }
+        return httpClient.get<any[]>(url);
     }
 
     /**

@@ -152,14 +152,14 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
     // Find exclusively pure unutilized advance payments or debit notes for this vendor
     const advances = (ledgerEntries || []).filter(e =>
         (e.transferFrom === 'Payment' || e.transferFrom === 'Debit Note') &&
-        (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced' || e.is_advance) &&
+        // Must be an advance type record
+        (e.is_advance || (e.status && ['Advance', 'Not Utilized', 'Partially Utilized'].includes(e.status))) &&
+        // AND it must NOT be allocated to a specific invoice yet
         (
             !e.rawVoucher?.reference_number || 
             e.rawVoucher.reference_number.toUpperCase() === 'ADVANCE' ||
             e.rawVoucher.reference_number.trim() === '' ||
-            (e.rawVoucher.reference_type || '').toUpperCase() === 'ADVANCE' ||
-            e.is_advance ||
-            (e.voucherNo && e.rawVoucher.reference_number && e.voucherNo.startsWith(e.rawVoucher.reference_number + '-'))
+            e.rawVoucher.reference_number === '-'
         )
     ).filter(e => e.status !== 'Utilized' && e.status !== 'Paid') // Only show those that still have balance
     .map(e => ({
@@ -732,7 +732,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             // Update the transaction's reference_number to match the invoice reference
             await httpClient.patch(`/api/vendors/transactions/${transId}/`, {
                 reference_number: invoiceRef,
-                status: 'utilized'
+                status: 'Utilized'
             });
 
             showSuccess(`Successfully allocated ${selectedAdvance.voucherNo} to ${invoiceRef}`);

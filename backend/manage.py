@@ -7,6 +7,14 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def main():
     """Run administrative tasks."""
+    # Force UTF-8 for console output to handle emojis on Windows
+    if sys.stdout.encoding.lower() != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+            sys.stderr.reconfigure(encoding='utf-8')
+        except AttributeError:
+            pass # Fallback for older python
+            
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')      
     try:
         from django.core.management import execute_from_command_line

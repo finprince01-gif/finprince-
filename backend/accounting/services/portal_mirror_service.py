@@ -1,0 +1,326 @@
+import logging
+from decimal import Decimal
+from django.db import transaction, models
+from vendors.models import VendorTransaction, VendorMasterBasicDetail
+from customerportal.database import CustomerTransaction, CustomerMasterCustomer
+from accounting.models import AdvanceAllocation, PendingTransaction, TransactionAllocation
+
+logger = logging.getLogger(__name__)
+
+def mirror_purchase_to_portal(purchase_header):
+    """
+    Mirror a purchase voucher to the Vendor Portal.
+    purchase_header: VoucherPurchaseSupplierDetails instance
+    """
+    try:
+        from .sales_status_service import update_sales_invoice_payment_status
+        
+        tenant_id = purchase_header.tenant_id
+        vendor = VendorMasterBasicDetail.objects.filter(
+            tenant_id=tenant_id, 
+            id=purchase_header.vendor_basic_detail_id
+        ).first()
+
+        if not vendor:
+            # Fallback to vendor_name lookup if ID not linked
+            vendor = VendorMasterBasicDetail.objects.filter(
+                tenant_id=tenant_id,
+                vendor_name__iexact=str(purchase_header.vendor_name).strip()
+            ).first()
+
+        if not vendor:
+            return
+
+        payment_details = purchase_header.payment_details if hasattr(purchase_header, 'payment_details') else None
+        total_amt = Decimal(str(payment_details.payment_invoice_value if payment_details else 0))
+        
+        # Determine status. 'Unpaid' is base for purchases.
+        # Mirroring as 'Received' if total is 0 (unlikely) or for consistency with portal labels
+        tx_status = 'Received' if total_amt == 0 else 'Unpaid'
+
+        v_num = purchase_header.purchase_voucher_no or purchase_header.supplier_invoice_no
+
+        VendorTransaction.objects.update_or_create(
+            tenant_id=tenant_id,
+            vendor_id=vendor.id,
+            transaction_number=v_num,
+            transaction_type='purchase',
+            defaults={
+                'transaction_date': purchase_header.date,
+                'amount': total_amt,
+                'total_amount': total_amt,
+                'status': tx_status,
+                'reference_number': v_num,
+                'reference_type': 'invoice',
+                'is_advance': False,
+                'notes': getattr(purchase_header, 'voucher_name', None) or "Purchase Invoice",
+                'ledger_name': vendor.vendor_name or "Vendor"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Portal Mirror Sync Error (Purchase): {e}")
+
+def mirror_sales_to_portal(sales_header):
+    """
+    Mirror a sales invoice to the Customer Portal.
+    sales_header: VoucherSalesInvoiceDetails instance
+    """
+    try:
+        tenant_id = sales_header.tenant_id
+        customer = CustomerMasterCustomer.objects.filter(
+            tenant_id=tenant_id, 
+            id=sales_header.customer_id
+        ).first()
+
+        if not customer and sales_header.customer_name:
+             customer = CustomerMasterCustomer.objects.filter(
+                tenant_id=tenant_id, 
+                customer_name__iexact=str(sales_header.customer_name).strip()
+            ).first()
+
+        if not customer:
+            return
+
+        payment_details = sales_header.payment_details if hasattr(sales_header, 'payment_details') else None
+        total_amt = Decimal(str(payment_details.payment_invoice_value if payment_details else 0))
+
+        CustomerTransaction.objects.update_or_create(
+            tenant_id=tenant_id,
+            transaction_number=sales_header.sales_invoice_no,
+            transaction_type='invoice',
+            customer_id=customer.id,
+            defaults={
+                'transaction_date': sales_header.date,
+                'total_amount': total_amt,
+                'amount': total_amt,
+                'payment_status': sales_header.status or 'Unpaid',
+                'reference_number': sales_header.sales_invoice_no,
+                'reference_type': 'invoice',
+                'is_advance': False,
+                'notes': sales_header.voucher_name or "Sales Invoice",
+                'ledger_name': 'Sales'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Portal Mirror Sync Error (Sales): {e}")
+
+def mirror_transaction_to_portal(txn):
+    """
+    Mirror a transaction record (Payment or Receipt) to the Portal.
+    txn: Transaction model instance
+    """
+    try:
+        # Determine if Payment or Receipt
+        t_type = (txn.transaction_type or '').upper()
+        if t_type not in ['PAYMENT', 'RECEIPT']:
+            return
+
+        tenant_id = txn.tenant_id
+        
+        # Get items (allocations)
+        items = txn.get_items()
+        
+        for it in items:
+            # Resolve Party
+            p_l_id = it.pay_to_ledger_id or it.customer_id
+            if t_type == 'PAYMENT':
+                vendor = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=p_l_id).first()
+                if vendor:
+                    _mirror_payment_item(txn, it, vendor)
+            elif t_type == 'RECEIPT':
+                customer = CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, ledger_id=p_l_id).first()
+                if not customer and hasattr(it, 'customer_name'):
+                     customer = CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, customer_name=it.customer_name).first()
+                
+                if customer:
+                    _mirror_receipt_item(txn, it, customer)
+                    
+    except Exception as e:
+        logger.error(f"Portal Mirror Sync Error (Transaction {txn.id}): {e}")
+
+def _mirror_payment_item(voucher, item, vendor):
+    # Status
+    is_adv = (getattr(item, 'reference_type', '').upper() == 'ADVANCE' or item.is_advance)
+    status = 'Advance' if is_adv else 'Received'
+    
+    # Reference
+    ref = item.reference_number or item.advance_ref_no or voucher.voucher_number
+    
+    VendorTransaction.objects.update_or_create(
+        tenant_id=voucher.tenant_id,
+        vendor_id=vendor.id,
+        transaction_number=f"{voucher.voucher_number}-{item.id}",
+        transaction_type='payment',
+        defaults={
+            'transaction_date': voucher.date,
+            'amount': item.allocated_amount or item.amount,
+            'total_amount': item.allocated_amount or item.amount,
+            'status': status,
+            'reference_number': ref,
+            'reference_type': getattr(item, 'reference_type', 'invoice'),
+            'is_advance': is_adv,
+            'notes': f"Payment for {ref}" if ref and ref != 'ADVANCE' else (voucher.narration or "Payment"),
+            'ledger_name': vendor.vendor_name or "Vendor"
+        }
+    )
+    
+    # If it's a legitimate payment for an invoice, update the invoice's status in portal too
+    if status == 'Received' and ref and ref != 'ADVANCE':
+        _update_portal_purchase_status(voucher.tenant_id, vendor.id, ref)
+
+def _mirror_receipt_item(voucher, item, customer):
+    is_adv = (getattr(item, 'reference_type', '').upper() == 'ADVANCE' or item.is_advance)
+    status = 'Advance' if is_adv else 'Partially Utilized'
+    
+    ref = item.reference_number or item.advance_ref_no or voucher.voucher_number
+    
+    CustomerTransaction.objects.update_or_create(
+        tenant_id=voucher.tenant_id,
+        customer_id=customer.id,
+        transaction_number=f"{voucher.voucher_number}-{item.id}",
+        transaction_type='receipt',
+        defaults={
+            'transaction_date': voucher.date,
+            'amount': item.allocated_amount or item.amount or item.received_amount,
+            'total_amount': item.allocated_amount or item.amount or item.received_amount,
+            'payment_status': status,
+            'reference_number': ref,
+            'reference_type': getattr(item, 'reference_type', 'invoice'),
+            'is_advance': is_adv,
+            'notes': voucher.narration or f"Receipt for {ref}",
+            'ledger_name': 'Receipt'
+        }
+    )
+
+def _update_portal_purchase_status(tenant_id, vendor_id, ref_no):
+    """Refreshes a mirrored purchase's status based on total payments found in portal"""
+    try:
+        purchase = VendorTransaction.objects.filter(
+            tenant_id=tenant_id, 
+            vendor_id=vendor_id, 
+            transaction_type='purchase', 
+            reference_number=ref_no
+        ).first()
+        
+        if purchase:
+            total_amt = Decimal(str(purchase.total_amount or 0))
+            if total_amt <= 0: return
+
+            # Sum all payments
+            paid = VendorTransaction.objects.filter(
+                tenant_id=tenant_id,
+                vendor_id=vendor_id,
+                transaction_type='payment',
+                reference_number=ref_no
+            ).aggregate(s=models.Sum('total_amount'))['s'] or 0
+
+            if Decimal(str(paid)) >= total_amt:
+                purchase.status = 'Received'
+            elif Decimal(str(paid)) > 0:
+                purchase.status = 'Partially Received'
+            else:
+                purchase.status = 'Unpaid'
+            purchase.save(update_fields=['status'])
+    except Exception as e:
+        logger.error(f"Failed to update portal purchase status: {e}")
+
+def sync_portal_allocation_to_main_ledger(portal_instance):
+    """
+    Sync an allocation (reference_number update) from the Portal back to the main Ledger.
+    portal_instance: VendorTransaction or CustomerTransaction instance
+    """
+    try:
+        from accounting.models import AdvanceAllocation, PendingTransaction
+        
+        tx_num = portal_instance.transaction_number
+        if '-' not in tx_num:
+            return
+
+        # Split into VoucherNo and Item ID
+        parts = tx_num.split('-')
+        item_id = parts[-1]
+        voucher_no = '-'.join(parts[:-1])
+
+        if not item_id.isdigit():
+            return
+
+        ref_no = portal_instance.reference_number
+        # If reference is generic, skip
+        if not ref_no or ref_no.upper() in ['ADVANCE', 'N/A', '-']:
+            return
+
+        # NEW: Find the actual Invoice ID to link by reference_id
+        from ..models_voucher_sales import VoucherSalesInvoiceDetails
+        invoice_obj = VoucherSalesInvoiceDetails.objects.filter(
+            tenant_id=portal_instance.tenant_id, 
+            sales_invoice_no=ref_no
+        ).first()
+        ref_id = str(invoice_obj.id) if invoice_obj else ref_no
+
+        # Try to find corresponding record in main system
+        # We check both AdvanceAllocation and PendingTransaction
+        updated = False
+        
+        # 1. Check AdvanceAllocation
+        adv = AdvanceAllocation.objects.filter(id=item_id, transaction__voucher_number=voucher_no).first()
+        if adv:
+            adv.reference_number = ref_no
+            adv.reference_id = ref_id
+            adv.reference_type = 'INVOICE'
+            adv.save(update_fields=['reference_number', 'reference_id', 'reference_type'])
+            updated = True
+            
+        # 2. Check PendingTransaction
+        pt = PendingTransaction.objects.filter(id=item_id, transaction__voucher_number=voucher_no).first()
+        if pt:
+            pt.reference_number = ref_no
+            pt.reference_id = ref_id
+            pt.reference_type = 'INVOICE'
+            pt.save(update_fields=['reference_number', 'reference_id', 'reference_type'])
+            updated = True
+        
+        if updated:
+            if invoice_obj:
+                from .sales_status_service import update_sales_invoice_payment_status
+                update_sales_invoice_payment_status(portal_instance.tenant_id, invoice_obj.id)
+            logger.info(f"Successfully synced portal allocation {tx_num} -> {ref_no} to main ledger.")
+        else:
+            logger.warning(f"Could not find backend record for portal allocation {tx_num}")
+
+    except Exception as e:
+        logger.error(f"Failed to sync portal allocation to main ledger: {e}")
+
+def delete_purchase_from_portal(purchase_header):
+    try:
+        VendorTransaction.objects.filter(
+            tenant_id=purchase_header.tenant_id,
+            transaction_number=purchase_header.purchase_voucher_no or purchase_header.supplier_invoice_no,
+            transaction_type='purchase'
+        ).delete()
+    except Exception as e:
+        logger.error(f"Failed to delete purchase mirror: {e}")
+
+def delete_sales_from_portal(sales_header):
+    try:
+        CustomerTransaction.objects.filter(
+            tenant_id=sales_header.tenant_id,
+            transaction_number=sales_header.sales_invoice_no,
+            transaction_type='invoice'
+        ).delete()
+    except Exception as e:
+        logger.error(f"Failed to delete sales mirror: {e}")
+
+def delete_transaction_from_portal(txn):
+    try:
+        # Match by prefix of transaction_number since portal uses {voucher}-{id}
+        VendorTransaction.objects.filter(
+            tenant_id=txn.tenant_id,
+            transaction_number__startswith=f"{txn.voucher_number}-"
+        ).delete()
+        CustomerTransaction.objects.filter(
+            tenant_id=txn.tenant_id,
+            transaction_number__startswith=f"{txn.voucher_number}-"
+        ).delete()
+    except Exception as e:
+        logger.error(f"Failed to delete transaction mirror: {e}")
+

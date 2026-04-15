@@ -303,7 +303,17 @@ class InventoryOperationJobWorkViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        return InventoryOperationJobWork.objects.filter(tenant_id=tenant_id)
+        queryset = InventoryOperationJobWork.objects.filter(tenant_id=tenant_id)
+        
+        operation_type = self.request.query_params.get('operation_type')
+        if operation_type:
+            queryset = queryset.filter(operation_type=operation_type)
+            
+        vendor_name = self.request.query_params.get('vendor_name')
+        if vendor_name:
+            queryset = queryset.filter(vendor_name=vendor_name)
+            
+        return queryset.order_by('-id')
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
@@ -1011,8 +1021,14 @@ class StockMovementSummaryViewSet(viewsets.ReadOnlyModelViewSet):
         item_code = request.query_params.get('itemCode')
         
         movements = StockMovement.objects.filter(tenant_id=tenant_id)
+        uom = ""
         if item_code:
             movements = movements.filter(item_code=item_code)
+            # Try to get UOM from StockItem or Master Item
+            from .models import InventoryStockItem
+            stock_item = InventoryStockItem.objects.filter(tenant_id=tenant_id, item_code=item_code).first()
+            if stock_item:
+                uom = stock_item.unit
             
         movements = movements.order_by('date', 'time')
         
@@ -1032,7 +1048,7 @@ class StockMovementSummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 'particulars': m.voucher_type,
                 'refNo': m.voucher_no,
                 'location': m.location,
-                'uom': '', # Can fetch from item if needed
+                'uom': uom,
                 'openingQty': opening,
                 'openingValue': 0, # Placeholder
                 'inwardQty': float(m.inward_qty),

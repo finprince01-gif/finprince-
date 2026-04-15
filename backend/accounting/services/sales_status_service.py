@@ -2,7 +2,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum
 from ..models_voucher_sales import VoucherSalesInvoiceDetails, VoucherSalesPaymentDetails
-from ..models_voucher_receipt import ReceiptVoucherItem
+from ..models import PendingTransaction
 
 def update_sales_invoice_payment_status(tenant_id, invoice_id):
     """
@@ -31,15 +31,25 @@ def update_sales_invoice_payment_status(tenant_id, invoice_id):
             # --- ANCHOR: Use invoice value minus advance as the fixed starting point ---
             payable_anchor = Decimal(str(payment_details.payment_invoice_value or 0)) - Decimal(str(payment_details.payment_advance or 0))
 
-            # Sum all received amounts across all ReceiptVoucherItems referencing this invoice
-            # Resolve reference_id from ReceiptVoucherItem. 
-            # We look for matches against the ID (as string) or the Sales Invoice Number.
+            from ..models import TransactionAllocation, AdvanceAllocation
             search_ids = [str(invoice.id), str(invoice.sales_invoice_no)]
             
-            receipt_total = ReceiptVoucherItem.objects.filter(
+            p_total = PendingTransaction.objects.filter(
                 tenant_id=tenant_id,
                 reference_id__in=search_ids
-            ).aggregate(total=Sum('received_amount'))['total'] or Decimal('0.00')
+            ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0.00')
+
+            a_total = AdvanceAllocation.objects.filter(
+                tenant_id=tenant_id,
+                reference_id__in=search_ids
+            ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0.00')
+
+            t_total = TransactionAllocation.objects.filter(
+                tenant_id=tenant_id,
+                reference_id__in=search_ids
+            ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0.00')
+
+            receipt_total = p_total + t_total + a_total
 
             payment_details.payment_received = receipt_total
             payment_details.payment_balance = payable_anchor - receipt_total

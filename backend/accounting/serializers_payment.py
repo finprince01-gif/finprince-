@@ -179,7 +179,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     
                     # If it's an advance, mark it accordingly
                     # Note: item.reference_type is a field on AllocationBase
-                    p_status = 'Advance' if item.reference_type == 'ADVANCE' else 'Paid'
+                    p_status = 'Advance' if item.reference_type == 'ADVANCE' else 'Received'
                     
                     # Logic for reference number to match portal filters
                     # We prioritize 'ADVANCE' string for unallocated payments so they show up in the procurement reference list
@@ -203,22 +203,22 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                             'reference_number': ref_to_use,
                             'reference_type': item.reference_type,
                             'is_advance': (p_status == 'Advance'),
-                            'notes': f"Payment for {ref_no}" if ref_no and ref_no != 'ADVANCE' else voucher.narration,
-                            'ledger_name': vendor.vendor_name
+                            'notes': f"Payment for {ref_to_use}" if ref_to_use and ref_to_use != 'ADVANCE' else (voucher.narration or "Payment"),
+                            'ledger_name': vendor.vendor_name or "Vendor"
                         }
                     )
 
-                    # ── Also mark linked Purchase transaction(s) as Paid ──────
+                    # ── Also mark linked Purchase transaction(s) as Received ──────
                     # This ensures the Due/Not Due status in the procurement
-                    # ledger flips to "Paid" once a payment is recorded.
-                    if p_status == 'Paid':
+                    # ledger flips to "Received" once a payment is recorded.
+                    if p_status == 'Received':
                         if ref_no:
                             p_txn = VendorTransaction.objects.filter(
                                 tenant_id=voucher.tenant_id,
                                 vendor_id=vendor.id,
                                 transaction_type='purchase',
                                 reference_number=ref_no
-                            ).exclude(status='Paid').first()
+                            ).exclude(status='Received').first()
 
                             if p_txn:
                                 # Current payment for this invoice
@@ -226,9 +226,9 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                                 invoice_total = Decimal(str(p_txn.total_amount or 0))
                                 
                                 if current_payment >= invoice_total:
-                                    p_txn.status = 'Paid'
+                                    p_txn.status = 'Received'
                                 else:
-                                    p_txn.status = 'Partially Paid'
+                                    p_txn.status = 'Partially Received'
                                 
                                 p_txn.save()
                                 print(f"!!! Vendor Purchase {ref_no} marked {p_txn.status} for {vendor.vendor_name}")
@@ -422,10 +422,12 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 p_l_id, p_c_id, p_v_id = self._get_party_ids(it_pay_to_ledger) if it_pay_to_ledger else (None, None, None)
 
                 det_ref = (
+                    it_pending_raw.get('reference_number') or
                     it_pending_raw.get('reference_no') or 
                     it_pending_raw.get('ref_no') or 
                     it_pending_raw.get('invoiceNo') or
-                    item_data.get('reference_no') or
+                    item_data.get('reference_number') or
+                    item_data.get('reference_no') or 
                     item_data.get('advance_ref_no') or
                     it_adv_ref
                 )

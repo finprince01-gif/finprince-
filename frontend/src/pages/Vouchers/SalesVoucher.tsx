@@ -835,7 +835,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             ref.id === id ? { 
                 ...ref, 
                 appliedNow: checked,
-                amount: checked ? ref.amount : ref.originalAmount 
+                // Auto-fill amount with full remaining amount when checked
+                amount: checked ? (ref.amount && parseFloat(ref.amount) > 0 ? ref.amount : (ref.remainingAmount || ref.originalAmount)) : "" 
             } : ref
         ));
     };

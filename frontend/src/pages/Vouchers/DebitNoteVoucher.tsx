@@ -163,10 +163,17 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         allPurchaseInvoices
             .filter(inv => selectedSupplierInvoices.includes(inv.invoice_no))
             .forEach(inv => {
-                const invItems = inv.supply_inr_details?.items || inv.supply_foreign_details?.items || inv.items_data || [];
+                const invItems = inv.supply_inr_details?.line_items || inv.supply_inr_details?.items || 
+                                 inv.supply_foreign_details?.line_items || inv.supply_foreign_details?.items || 
+                                 inv.items_data || inv.items || [];
                 invItems.forEach((item: any) => {
                     items.push({
                         ...item,
+                        itemCode: item.itemCode || item.item_code || item.code || '',
+                        itemName: item.itemName || item.item_name || item.name || '',
+                        hsnSac: item.hsnSac || item.hsn_sac || '',
+                        qty: item.qty || item.quantity || '0',
+                        itemRate: item.itemRate || item.rate || '0',
                         invoice_no: inv.invoice_no,
                         purchase_ledger: inv.supply_inr_details?.purchase_ledger || inv.supply_foreign_details?.purchase_ledger || ''
                     });
@@ -760,7 +767,9 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             let items: any[] = [];
             
             // 1. Try known nested locations
-            if (inv.supply_inr_details?.items) items = inv.supply_inr_details.items;
+            if (inv.supply_inr_details?.line_items) items = inv.supply_inr_details.line_items;
+            else if (inv.supply_inr_details?.items) items = inv.supply_inr_details.items;
+            else if (inv.supply_foreign_details?.line_items) items = inv.supply_foreign_details.line_items;
             else if (inv.supply_foreign_details?.items) items = inv.supply_foreign_details.items;
             else if (inv.items_data) items = inv.items_data;
             else if (inv.items) items = inv.items;
@@ -796,19 +805,19 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                     newItems.push({
                         id: Date.now() + Math.random(),
                         supplierInvoiceNo: inv.invoice_no,
-                        itemCode: item.itemCode || item.code || '',
-                        itemName: item.itemName || item.name || '',
+                        itemCode: item.itemCode || item.item_code || item.code || '',
+                        itemName: item.itemName || item.item_name || item.name || '',
                         hsnSac: item.hsnSac || item.hsn_sac || '',
-                        qty: item.qty || '0',
-                        uom: item.uom || '',
+                        qty: item.qty || item.quantity || '0',
+                        uom: item.uom || 'PCS',
                         itemRate: item.itemRate || item.rate || '0',
-                        taxableValue: item.taxableValue || '0',
-                        igst: item.igst || '0',
-                        cgst: item.cgst || '0',
-                        sgst: item.sgst || '0',
-                        cess: item.cess || '0',
-                        invoiceValue: item.invoiceValue || '0',
-                        purchaseLedger: item.purchaseLedger || '',
+                        taxableValue: item.taxableValue || item.taxable_value || '0',
+                        igst: item.igst || item.igst_amount || '0',
+                        cgst: item.cgst || item.cgst_amount || '0',
+                        sgst: item.sgst || item.sgst_amount || '0',
+                        cess: item.cess || item.cess_amount || '0',
+                        invoiceValue: item.invoiceValue || item.invoice_value || '0',
+                        purchaseLedger: item.purchaseLedger || item.purchase_ledger || '',
                         description: item.description || '',
                         gstRate: item.gstRate || item.gst_rate || '0',
                         selected: true,

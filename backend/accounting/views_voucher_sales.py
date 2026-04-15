@@ -167,23 +167,47 @@ class VoucherSalesViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 )
 
 
-                # 5. Mark Invoice as Paid / Update Balance
-                if hasattr(invoice, 'payment_details'):
-                    payment_details = invoice.payment_details
-                    amount_decimal = Decimal(str(amount))
-                    
-                    # Update received and balance
-                    payment_details.payment_received = (payment_details.payment_received or 0) + amount_decimal
-                    payment_details.payment_payable = max(0, (payment_details.payment_payable or 0) - amount_decimal)
-                    payment_details.payment_balance = payment_details.payment_payable
-                    payment_details.save()
-                    
-                    # Update status
-                    if payment_details.payment_payable <= 0:
-                        invoice.status = 'received'
-                    else:
-                        invoice.status = 'partially received'
-                    invoice.save()
+                # 5. Create Allocation record so the system tracks this payment centrally
+                from .models import PendingTransaction
+                PendingTransaction.objects.create(
+                    tenant_id=tenant_id,
+                    transaction=voucher,
+                    reference_id=str(invoice.id),
+                    reference_number=invoice.sales_invoice_no,
+                    reference_type='INVOICE',
+                    pay_from_ledger=receive_from_ledger,
+                    pay_to_ledger=receive_in_ledger,
+                    allocated_amount=amount,
+                    amount=amount
+                )
+
+                # 6. Mirror to Customer Portal so the receipt shows up in transaction history
+                try:
+                    from customerportal.models import CustomerTransaction, CustomerMasterCustomer
+                    portal_customer = CustomerMasterCustomer.objects.filter(ledger_id=receive_from_ledger.id, tenant_id=tenant_id).first()
+                    if portal_customer:
+                        CustomerTransaction.objects.update_or_create(
+                            tenant_id=tenant_id,
+                            transaction_number=voucher_no,
+                            transaction_type='receipt',
+                            customer_id=portal_customer.id,
+                            defaults={
+                                'transaction_date': receipt_date,
+                                'total_amount': amount,
+                                'amount': amount,
+                                'reference_number': invoice.sales_invoice_no,
+                                'notes': narration
+                            }
+                        )
+                except Exception as e:
+                    print(f"!!! Mirroring Error in post-receipt: {str(e)}")
+
+                # 7. Recalculate Invoice Status using the central service
+                try:
+                    from .services.sales_status_service import update_sales_invoice_payment_status
+                    update_sales_invoice_payment_status(tenant_id, str(invoice.id))
+                except Exception as e:
+                    print(f"!!! Status Sync Error in post-receipt: {str(e)}")
                 
                 return Response({"message": "Receipt posted successfully", "voucher_no": voucher_no}, status=status.HTTP_201_CREATED)
 

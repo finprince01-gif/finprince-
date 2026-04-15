@@ -32,17 +32,20 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
     def get_tenant_id(self):
         """Extract tenant_id from the authenticated user"""
         user = self.request.user
-        if hasattr(user, 'tenant_id'):
-            return user.branch_id
-        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
-            return user.tenant.tenant_id
-        else:
-            return getattr(user, 'id', 'default_tenant')
+        return getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None) or getattr(user, 'id', 'default_tenant')
 
     def get_queryset(self):
         """Filter queryset by tenant"""
         tenant_id = self.get_tenant_id()
         return VendorTransaction.objects.filter(tenant_id=tenant_id).order_by('transaction_date', 'id')
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        try:
+            from accounting.services.portal_mirror_service import sync_portal_allocation_to_main_ledger
+            sync_portal_allocation_to_main_ledger(instance)
+        except Exception as e:
+            logger.error(f"Failed to reverse-sync vendor portal allocation: {e}")
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -63,7 +66,7 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                         transaction_date=timezone.now().date(),
                         amount=amt,
                         total_amount=amt,
-                        status='Paid',
+                        status='Received',
                         reference_number=instance.reference_number or instance.transaction_number,
                         notes=f"Allocated from {ref_no}"
                     )
@@ -163,7 +166,7 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                 item['payment_balance'] = float(total_amt - paid_sum)
 
                 if tx_status == 'paid' or tx_status == 'received' or (total_amt > 0 and paid_sum >= total_amt):
-                    item['due_status'] = 'Paid'
+                    item['due_status'] = 'Received'
                     item['due_date'] = None
                     item['credit_period_days'] = credit_period_days
                 elif tx_status == 'partially paid' or tx_status == 'partially received' or (paid_sum > 0 and paid_sum < total_amt):

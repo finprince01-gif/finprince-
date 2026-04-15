@@ -330,6 +330,14 @@ class CustomerTransactionViewSet(viewsets.ModelViewSet):
         if tenant_id:
             return CustomerTransaction.objects.filter(tenant_id=tenant_id)
         return CustomerTransaction.objects.none()
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        try:
+            from accounting.services.portal_mirror_service import sync_portal_allocation_to_main_ledger
+            sync_portal_allocation_to_main_ledger(instance)
+        except Exception as e:
+            logger.error(f"Failed to reverse-sync portal allocation: {e}")
     
     @action(detail=False, methods=['get'])
     def by_customer(self, request):
@@ -407,7 +415,7 @@ class CustomerTransactionViewSet(viewsets.ModelViewSet):
                 item['payment_balance'] = float(total_amt - paid_sum)
 
                 if total_amt > 0 and paid_sum >= total_amt:
-                    item['due_status'] = 'Paid'
+                    item['due_status'] = 'Received'
                     item['due_date'] = None
                 elif paid_sum > 0 and paid_sum < total_amt:
                     item['due_status'] = 'Partially Received'
@@ -723,6 +731,10 @@ class CustomerTransactionSalesOrderViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status__in=['pending', 'approved'])
         elif status_param:
             queryset = queryset.filter(status=status_param)
+
+        customer_name = self.request.query_params.get('customer_name')
+        if customer_name:
+            queryset = queryset.filter(customer_name=customer_name)
             
         return queryset.order_by('-created_at')
     
