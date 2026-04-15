@@ -108,7 +108,9 @@ class MasterLedger(BaseModel):
         ('Unregistered', 'Unregistered'),
         ('Composition', 'Composition'),
     ]
-    name = models.CharField(max_length=255)
+    # Canonical ledger endpoint name stored in DB column `ledger_type`.
+    # Kept as `name` at ORM/API level for backward compatibility.
+    name = models.CharField(max_length=255, null=True, blank=True, db_column='ledger_type')
     group = models.CharField(max_length=255, null=True, blank=True, help_text="Ledger group name")
     
     # NEW: Proper group linking
@@ -120,7 +122,6 @@ class MasterLedger(BaseModel):
     sub_group_1 = models.CharField(max_length=255, null=True, blank=True)
     sub_group_2 = models.CharField(max_length=255, null=True, blank=True)
     sub_group_3 = models.CharField(max_length=255, null=True, blank=True)
-    ledger_type = models.CharField(max_length=255, null=True, blank=True)
     
     gstin = models.CharField(max_length=15, null=True, blank=True)
     registration_type = models.CharField(max_length=20, choices=REG_TYPE_CHOICES, null=True, blank=True)
@@ -144,7 +145,7 @@ class MasterLedger(BaseModel):
         max_length=50,
         null=True,
         blank=True,
-        unique=True,
+        unique=False,
         db_column='ledger_code',
         help_text="Auto-generated code based on hierarchy position"
     )
@@ -179,10 +180,22 @@ class MasterLedger(BaseModel):
     class Meta:
 
         db_table = 'master_ledgers'
-        unique_together = ('name', 'tenant_id')
+        unique_together = (
+            ('name', 'tenant_id'),
+            ('tenant_id', 'code'),
+        )
 
     def __str__(self):
-        return f"{self.name} ({self.group})"
+        return f"{self.name or '-'} ({self.group})"
+
+    @property
+    def ledger_type(self):
+        """Compatibility alias: logical ledger_type maps to canonical `name`."""
+        return self.name
+
+    @ledger_type.setter
+    def ledger_type(self, value):
+        self.name = value
 
 # class MasterVoucherConfig(BaseModel):
 #     name = models.CharField(max_length=255, default='__NUMBERING__')

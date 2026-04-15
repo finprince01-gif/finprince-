@@ -1,3 +1,17 @@
+﻿
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+DROP TABLE IF EXISTS `accounting_cache_table`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `accounting_cache_table` (
   `cache_key` varchar(255) NOT NULL,
   `value` longtext NOT NULL,
@@ -5,91 +19,10 @@ CREATE TABLE `accounting_cache_table` (
   PRIMARY KEY (`cache_key`),
   KEY `accounting_cache_table_expires` (`expires`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `master_ledgers` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `category` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'From hierarchy: major_group_1',
-  `group` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `sub_group_1` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'From hierarchy: sub_group_1_1',
-  `sub_group_2` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'From hierarchy: sub_group_2_1',
-  `sub_group_3` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'From hierarchy: sub_group_3_1',
-  `ledger_type` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'From hierarchy: ledger_1',
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `gstin` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `registration_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `state` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `extended_data` json DEFAULT NULL,
-  `parent_ledger_id` int DEFAULT NULL,
-  `ledger_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `group_id` int DEFAULT NULL,
-  `financial_reporting` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `major_group` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `type_of_business` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `ledger` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `additional_data` json DEFAULT NULL,
-  `opening_balance` decimal(20,2) NOT NULL,
-  `opening_balance_type` varchar(2) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `master_ledgers_ledger_code_tenant_id_ef0135d0_uniq` (`ledger_code`,`tenant_id`),
-  UNIQUE KEY `master_ledgers_tenant_id_ledger_code_c1b0ccf4_uniq` (`tenant_id`,`ledger_code`),
-  KEY `master_ledgers_tenant_id_idx` (`tenant_id`),
-  KEY `master_ledgers_category_idx` (`category`),
-  KEY `master_ledgers_group_idx` (`group`)
-) ENGINE=InnoDB AUTO_INCREMENT=158 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `transactions` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `voucher_number` varchar(100) NOT NULL,
-  `transaction_type` varchar(10) NOT NULL,
-  `date` date NOT NULL,
-  `total_amount` decimal(15,2) NOT NULL,
-  `narration` longtext,
-  `bank_reconciled` tinyint(1) NOT NULL,
-  `bank_reconcile_date` date DEFAULT NULL,
-  `bank_statement_id` bigint DEFAULT NULL,
-  `bank_reference_number` varchar(100) DEFAULT NULL,
-  `ledger_id_val` bigint DEFAULT NULL,
-  `party_customer_id` bigint DEFAULT NULL,
-  `party_vendor_id` bigint DEFAULT NULL,
-  `pay_from_ledger_id` bigint DEFAULT NULL,
-  `pay_to_ledger_id` bigint DEFAULT NULL,
-  `credit` decimal(15,2) NOT NULL,
-  `debit` decimal(15,2) NOT NULL,
-  `pay_from_customer_id_val` bigint DEFAULT NULL,
-  `pay_from_ledger_id_val` bigint DEFAULT NULL,
-  `pay_from_vendor_id_val` bigint DEFAULT NULL,
-  `pay_to_customer_id_val` bigint DEFAULT NULL,
-  `pay_to_ledger_id_val` bigint DEFAULT NULL,
-  `pay_to_vendor_id_val` bigint DEFAULT NULL,
-  `receive_from_customer_id_val` bigint DEFAULT NULL,
-  `receive_from_ledger_id_val` bigint DEFAULT NULL,
-  `receive_from_vendor_id_val` bigint DEFAULT NULL,
-  `receive_in_customer_id_val` bigint DEFAULT NULL,
-  `receive_in_ledger_id_val` bigint DEFAULT NULL,
-  `receive_in_vendor_id_val` bigint DEFAULT NULL,
-  `amount` decimal(15,2) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `transactions_tenant_id_voucher_number_25ef1219_uniq` (`tenant_id`,`voucher_number`),
-  KEY `transaction_tenant__69d40e_idx` (`tenant_id`,`date`),
-  KEY `transaction_transac_ddda52_idx` (`transaction_type`),
-  KEY `transactions_pay_from_ledger_id_30e5f13c_fk_master_ledgers_id` (`pay_from_ledger_id`),
-  KEY `transactions_pay_to_ledger_id_6bf87a0b_fk_master_ledgers_id` (`pay_to_ledger_id`),
-  KEY `transactions_tenant_id_36e35a29` (`tenant_id`),
-  KEY `transactions_voucher_number_e20585d0` (`voucher_number`),
-  KEY `transactions_transaction_type_7487b5c6` (`transaction_type`),
-  KEY `transactions_date_ec2ce9b4` (`date`),
-  CONSTRAINT `transactions_pay_from_ledger_id_30e5f13c_fk_master_ledgers_id` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`),
-  CONSTRAINT `transactions_pay_to_ledger_id_6bf87a0b_fk_master_ledgers_id` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=45 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `advance_allocation`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `advance_allocation` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -138,8 +71,10 @@ CREATE TABLE `advance_allocation` (
   CONSTRAINT `advance_allocation_pay_to_ledger_id_336922ab_fk_master_le` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `advance_allocation_transaction_id_7b578e38_fk_transactions_id` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_usage`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ai_usage` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -151,8 +86,10 @@ CREATE TABLE `ai_usage` (
   UNIQUE KEY `ai_usage_tenant_id_year_month_db489a8c_uniq` (`tenant_id`,`year`,`month`),
   KEY `ai_usage_tenant_id_d4ca031b` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `amount_transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `amount_transactions` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) DEFAULT NULL,
@@ -176,36 +113,20 @@ CREATE TABLE `amount_transactions` (
   KEY `idx_ledger_tenant_date_id` (`transaction_date`,`id`),
   KEY `amount_transactions_tenant_id_e2218fc5` (`tenant_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `auth_group`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `auth_group` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `django_content_type` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `app_label` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `model` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `django_content_type_app_label_model_76bd3d3b_uniq` (`app_label`,`model`)
-) ENGINE=InnoDB AUTO_INCREMENT=191 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `auth_permission` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `content_type_id` int NOT NULL,
-  `codename` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `auth_permission_content_type_id_codename_01ab375a_uniq` (`content_type_id`,`codename`),
-  CONSTRAINT `auth_permission_content_type_id_2f476e4b_fk_django_co` FOREIGN KEY (`content_type_id`) REFERENCES `django_content_type` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=761 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `auth_group_permissions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `auth_group_permissions` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `group_id` int NOT NULL,
@@ -216,8 +137,48 @@ CREATE TABLE `auth_group_permissions` (
   CONSTRAINT `auth_group_permissio_permission_id_84c5c92e_fk_auth_perm` FOREIGN KEY (`permission_id`) REFERENCES `auth_permission` (`id`),
   CONSTRAINT `auth_group_permissions_group_id_b120cbf9_fk_auth_group_id` FOREIGN KEY (`group_id`) REFERENCES `auth_group` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `auth_permission`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `auth_permission` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content_type_id` int NOT NULL,
+  `codename` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `auth_permission_content_type_id_codename_01ab375a_uniq` (`content_type_id`,`codename`),
+  CONSTRAINT `auth_permission_content_type_id_2f476e4b_fk_django_co` FOREIGN KEY (`content_type_id`) REFERENCES `django_content_type` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=761 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `bank_reconciliation_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bank_reconciliation_links` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `bank_transaction_id` bigint NOT NULL COMMENT 'FK to bank_statement_transactions',
+  `voucher_id` bigint NOT NULL COMMENT 'FK to vouchers.id',
+  `reconciliation_date` date DEFAULT NULL COMMENT 'Date when reconciled',
+  `reconciliation_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Reconciled' COMMENT 'Reconciled | Pending | Disputed',
+  `reconciliation_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'manual' COMMENT 'automatic | manual',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `voucher_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `confidence_score` int DEFAULT '0',
+  `match_method` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cheque_number` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `reconciled_at` datetime(6) DEFAULT NULL,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_bank_transaction_voucher` (`bank_transaction_id`,`voucher_id`),
+  KEY `idx_bank_rec_voucher` (`voucher_id`),
+  KEY `bank_reconciliation_links_tenant_id_e9e852c1` (`tenant_id`),
+  CONSTRAINT `fk_bank_rec_transaction` FOREIGN KEY (`bank_transaction_id`) REFERENCES `bank_statement_transactions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `bank_statement_transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `bank_statement_transactions` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `bank_ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers (Bank/Cash ledger)',
@@ -249,31 +210,10 @@ CREATE TABLE `bank_statement_transactions` (
   KEY `idx_bank_st_tenant_date` (`transaction_date`),
   KEY `bank_statement_transactions_tenant_id_2f20b447` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `bank_reconciliation_links` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `bank_transaction_id` bigint NOT NULL COMMENT 'FK to bank_statement_transactions',
-  `voucher_id` bigint NOT NULL COMMENT 'FK to vouchers.id',
-  `reconciliation_date` date DEFAULT NULL COMMENT 'Date when reconciled',
-  `reconciliation_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Reconciled' COMMENT 'Reconciled | Pending | Disputed',
-  `reconciliation_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'manual' COMMENT 'automatic | manual',
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `voucher_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `confidence_score` int DEFAULT '0',
-  `match_method` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `cheque_number` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `reconciled_at` datetime(6) DEFAULT NULL,
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_bank_transaction_voucher` (`bank_transaction_id`,`voucher_id`),
-  KEY `idx_bank_rec_voucher` (`voucher_id`),
-  KEY `bank_reconciliation_links_tenant_id_e9e852c1` (`tenant_id`),
-  CONSTRAINT `fk_bank_rec_transaction` FOREIGN KEY (`bank_transaction_id`) REFERENCES `bank_statement_transactions` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `bulk_invoice_jobs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `bulk_invoice_jobs` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(100) NOT NULL,
@@ -290,8 +230,10 @@ CREATE TABLE `bulk_invoice_jobs` (
   `updated_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -323,8 +265,10 @@ CREATE TABLE `customer_master` (
   KEY `customer_master_tenant_code_idx` (`tenant_id`,`customer_code`),
   KEY `customer_master_tenant_deleted_idx` (`tenant_id`,`is_deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_category`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_category` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -339,8 +283,33 @@ CREATE TABLE `customer_master_category` (
   KEY `customer_category_is_active_idx` (`tenant_id`,`is_active`),
   KEY `customer_category_category_idx` (`category`(100))
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_customer_banking`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `customer_master_customer_banking` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `customer_basic_detail_id` bigint NOT NULL,
+  `account_number` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bank_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ifsc_code` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `branch_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `swift_code` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `associated_branches` json DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `created_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `updated_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `customer_bank_tenant_acc_idx` (`tenant_id`,`account_number`),
+  KEY `customer_bank_basic_detail_idx` (`customer_basic_detail_id`),
+  CONSTRAINT `customer_bank_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_customer_basicdetails`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_basicdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -369,29 +338,10 @@ CREATE TABLE `customer_master_customer_basicdetails` (
   CONSTRAINT `customer_basic_category_fk` FOREIGN KEY (`customer_category_id`) REFERENCES `customer_master_category` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_customer_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `customer_master_customer_banking` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `customer_basic_detail_id` bigint NOT NULL,
-  `account_number` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bank_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `ifsc_code` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `branch_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `swift_code` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `associated_branches` json DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `created_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `updated_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `customer_bank_tenant_acc_idx` (`tenant_id`,`account_number`),
-  KEY `customer_bank_basic_detail_idx` (`customer_basic_detail_id`),
-  CONSTRAINT `customer_bank_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_customer_gstdetails`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_gstdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -419,8 +369,10 @@ CREATE TABLE `customer_master_customer_gstdetails` (
   KEY `customer_gst_basic_detail_idx` (`customer_basic_detail_id`),
   CONSTRAINT `customer_gst_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_customer_productservice`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_productservice` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -441,8 +393,10 @@ CREATE TABLE `customer_master_customer_productservice` (
   KEY `customer_prod_basic_detail_idx` (`customer_basic_detail_id`),
   CONSTRAINT `customer_prod_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_customer_tds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_tds` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -464,8 +418,10 @@ CREATE TABLE `customer_master_customer_tds` (
   KEY `customer_tds_tenant_idx` (`tenant_id`),
   CONSTRAINT `customer_tds_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_customer_termscondition`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_customer_termscondition` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -486,8 +442,10 @@ CREATE TABLE `customer_master_customer_termscondition` (
   KEY `customer_terms_tenant_idx` (`tenant_id`),
   CONSTRAINT `customer_terms_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_longtermcontracts_basicdetails`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -517,8 +475,10 @@ CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
   KEY `cust_ltc_basic_validity_idx` (`contract_validity_from`,`contract_validity_to`),
   KEY `cust_ltc_basic_is_deleted_idx` (`tenant_id`,`is_deleted`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_longtermcontracts_productservices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_longtermcontracts_productservices` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -541,8 +501,10 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
   KEY `cust_ltc_prod_contract_idx` (`contract_basic_detail_id`),
   CONSTRAINT `cust_ltc_prod_contract_fk` FOREIGN KEY (`contract_basic_detail_id`) REFERENCES `customer_master_longtermcontracts_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_master_longtermcontracts_termscondition`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_master_longtermcontracts_termscondition` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -562,8 +524,10 @@ CREATE TABLE `customer_master_longtermcontracts_termscondition` (
   KEY `cust_ltc_terms_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_ltc_terms_contract_fk` FOREIGN KEY (`contract_basic_detail_id`) REFERENCES `customer_master_longtermcontracts_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_masters_salesorder`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_masters_salesorder` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -585,8 +549,10 @@ CREATE TABLE `customer_masters_salesorder` (
   KEY `customer_so_is_active_idx` (`is_active`),
   KEY `customer_so_is_deleted_idx` (`is_deleted`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_masters_salesquotation`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_masters_salesquotation` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -608,8 +574,10 @@ CREATE TABLE `customer_masters_salesquotation` (
   KEY `customer_sq_is_active_idx` (`is_active`),
   KEY `customer_sq_is_deleted_idx` (`is_deleted`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -631,8 +599,10 @@ CREATE TABLE `customer_transaction` (
   KEY `customer_transaction_date_idx` (`transaction_date`),
   KEY `idx_customer_tx_tenant_date_id` (`tenant_id`,`transaction_date`,`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesorder_basicdetails`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_basicdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -658,8 +628,10 @@ CREATE TABLE `customer_transaction_salesorder_basicdetails` (
   KEY `cust_trans_so_basic_customer_idx` (`customer_name`),
   KEY `cust_trans_so_basic_date_idx` (`date`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesorder_deliveryterms`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_deliveryterms` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -674,8 +646,10 @@ CREATE TABLE `customer_transaction_salesorder_deliveryterms` (
   KEY `cust_trans_so_delivery_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_delivery_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesorder_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -697,8 +671,10 @@ CREATE TABLE `customer_transaction_salesorder_items` (
   KEY `cust_trans_so_items_basic_detail_idx` (`so_basic_detail_id`),
   CONSTRAINT `cust_trans_so_items_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesorder_payment_salesperson`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_payment_salesperson` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -714,8 +690,10 @@ CREATE TABLE `customer_transaction_salesorder_payment_salesperson` (
   KEY `cust_trans_so_pay_sp_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_pay_sp_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesorder_quotation_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesorder_quotation_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -729,8 +707,10 @@ CREATE TABLE `customer_transaction_salesorder_quotation_details` (
   KEY `cust_trans_so_quote_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_quote_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesquotation_general`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesquotation_general` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -747,8 +727,10 @@ CREATE TABLE `customer_transaction_salesquotation_general` (
   KEY `customer_trans_salesquotation_gen_tenant_idx` (`tenant_id`,`quote_number`),
   KEY `customer_trans_salesquotation_gen_eff_from_idx` (`effective_from`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesquotation_general_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesquotation_general_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `item_code` varchar(50) NOT NULL,
@@ -760,8 +742,10 @@ CREATE TABLE `customer_transaction_salesquotation_general_items` (
   `quotation_id` int NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesquotation_specific`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesquotation_specific` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -784,8 +768,10 @@ CREATE TABLE `customer_transaction_salesquotation_specific` (
   KEY `customer_trans_salesquotation_spec_tenant_idx` (`tenant_id`,`quote_number`),
   KEY `customer_trans_salesquotation_spec_val_from_idx` (`validity_from`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_transaction_salesquotation_specific_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_transaction_salesquotation_specific_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `item_code` varchar(50) NOT NULL,
@@ -803,36 +789,10 @@ CREATE TABLE `customer_transaction_salesquotation_specific_items` (
   `quotation_id` int NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `users` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `password` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `last_login` datetime(6) DEFAULT NULL,
-  `is_superuser` tinyint(1) NOT NULL DEFAULT '0',
-  `username` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `email` varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `is_staff` tinyint(1) NOT NULL DEFAULT '0',
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `phone` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `phone_verified` tinyint(1) NOT NULL DEFAULT '0',
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `company_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `selected_plan` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `logo_path` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `subscription_start_date` date DEFAULT NULL,
-  `state` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `access_expiry` datetime(6) DEFAULT NULL,
-  `role` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `full_name` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `email` (`email`),
-  KEY `users_tenant_id_idx` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=87 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `django_admin_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `django_admin_log` (
   `id` int NOT NULL AUTO_INCREMENT,
   `action_time` datetime(6) NOT NULL,
@@ -849,8 +809,21 @@ CREATE TABLE `django_admin_log` (
   CONSTRAINT `django_admin_log_user_id_c564eba6_fk_users_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `django_admin_log_chk_1` CHECK ((`action_flag` >= 0))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `django_content_type`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `django_content_type` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `app_label` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `django_content_type_app_label_model_76bd3d3b_uniq` (`app_label`,`model`)
+) ENGINE=InnoDB AUTO_INCREMENT=191 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `django_migrations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `django_migrations` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `app` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -858,8 +831,10 @@ CREATE TABLE `django_migrations` (
   `applied` datetime(6) NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=164 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `django_session`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `django_session` (
   `session_key` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
   `session_data` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -867,38 +842,10 @@ CREATE TABLE `django_session` (
   PRIMARY KEY (`session_key`),
   KEY `django_session_expire_date_a5c62663` (`expire_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `vendor_master_vendorcreation_basicdetail` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `vendor_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Vendor code (auto-generated or manual)',
-  `vendor_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Vendor name',
-  `pan_no` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'PAN number',
-  `contact_person` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Contact person name',
-  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Email address',
-  `contact_no` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Contact number',
-  `vendor_category` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Vendor category',
-  `billing_currency` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Billing currency',
-  `is_also_customer` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Is this vendor also a customer?',
-  `tcs_applicable` tinyint(1) DEFAULT '0' COMMENT 'Is TCS applicable for this vendor?',
-  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this vendor is active',
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `created_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Created by user',
-  `updated_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Updated by user',
-  `ledger_id` bigint DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `vendor_basicdetail_tenant_code_unique` (`tenant_id`,`vendor_code`),
-  KEY `vendor_basicdetail_tenant_id_idx` (`tenant_id`),
-  KEY `vendor_basicdetail_tenant_name_idx` (`tenant_id`,`vendor_name`),
-  KEY `vendor_basicdetail_email_idx` (`email`),
-  KEY `vendor_basicdetail_pan_idx` (`pan_no`),
-  KEY `fk_vendor_ledger` (`ledger_id`),
-  CONSTRAINT `fk_vendor_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `entries`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `entries` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -922,8 +869,10 @@ CREATE TABLE `entries` (
   KEY `entries_vendor_id_1464aba9_fk_vendor_ma` (`vendor_id`),
   CONSTRAINT `entries_vendor_id_1464aba9_fk_vendor_ma` FOREIGN KEY (`vendor_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=75 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `extracted_invoices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `extracted_invoices` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
@@ -978,8 +927,10 @@ CREATE TABLE `extracted_invoices` (
   KEY `idx_extracted_created` (`created_at`),
   KEY `extracted_invoices_tenant_id_10bdf0b7` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `extraction_performance`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `extraction_performance` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `file_count` int NOT NULL DEFAULT '1',
@@ -987,8 +938,10 @@ CREATE TABLE `extraction_performance` (
   `timestamp` datetime(6) NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `hsn_gst_master`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `hsn_gst_master` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `hsn_code` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -1001,72 +954,10 @@ CREATE TABLE `hsn_gst_master` (
   PRIMARY KEY (`id`),
   KEY `idx_hsn_code` (`hsn_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=12605 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `master_users` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `email` varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `username` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `is_active` tinyint(1) DEFAULT '1',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `last_login` datetime(6) DEFAULT NULL,
-  `name` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `pan_number` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `address_line1` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `address_line2` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `address_line3` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `city` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `country` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `district` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `phone` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `pincode` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `state` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `gstin` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `cin` varchar(21) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `email` (`email`),
-  UNIQUE KEY `username` (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `tenants` (
-  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `master_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `branch_name` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `gstin` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `pan_number` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL,
-  `address_line1` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `address_line2` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bank_account_no` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bank_ifsc` varchar(11) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bank_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `cin` varchar(21) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `city` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `logo_path` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `phone` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `pincode` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `state` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `tan` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `website` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `country` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `address_line3` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `district` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `type_of_business` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `business_type` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `gstin` (`gstin`),
-  UNIQUE KEY `tenants_gstin_uniq` (`gstin`),
-  KEY `fk_tenant_master` (`master_id`),
-  KEY `tenants_pan_number_d205ad7c` (`pan_number`),
-  CONSTRAINT `fk_tenant_master` FOREIGN KEY (`master_id`) REFERENCES `master_users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_master_category`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_category` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -1083,8 +974,10 @@ CREATE TABLE `inventory_master_category` (
   KEY `inventory_master_category_category_idx` (`category`(100)),
   CONSTRAINT `inventory_master_category_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_master_grn`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_grn` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1102,8 +995,10 @@ CREATE TABLE `inventory_master_grn` (
   PRIMARY KEY (`id`),
   KEY `idx_img_tenant` (`tenant_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_master_inventoryitems`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_inventoryitems` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -1137,8 +1032,10 @@ CREATE TABLE `inventory_master_inventoryitems` (
   CONSTRAINT `inv_items_category_fk` FOREIGN KEY (`category_id`) REFERENCES `inventory_master_category` (`id`) ON DELETE SET NULL,
   CONSTRAINT `inv_items_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_master_issueslip`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_issueslip` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1156,8 +1053,10 @@ CREATE TABLE `inventory_master_issueslip` (
   PRIMARY KEY (`id`),
   KEY `idx_imi_tenant` (`tenant_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_master_location`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_master_location` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -1180,8 +1079,10 @@ CREATE TABLE `inventory_master_location` (
   KEY `inventory_master_location_name_idx` (`tenant_id`,`name`),
   CONSTRAINT `inventory_master_location_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_consumption`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_consumption` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1201,8 +1102,10 @@ CREATE TABLE `inventory_operation_consumption` (
   KEY `idx_ioc_tenant` (`tenant_id`),
   KEY `idx_ioc_issue_slip` (`issue_slip_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_consumption_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_consumption_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1228,8 +1131,10 @@ CREATE TABLE `inventory_operation_consumption_items` (
   KEY `inventory_operation_consumption_items_tenant_id_ee9ac0e8` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_7e9468b9_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_consumption` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_delivery_challans`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_delivery_challans` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1268,8 +1173,10 @@ CREATE TABLE `inventory_operation_delivery_challans` (
   KEY `inventory_operation_delivery_challans_tenant_id_583c0b45` (`tenant_id`),
   KEY `inventory_o_operati_458d2c_idx` (`operation_type`,`operation_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_ewaybills`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_ewaybills` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1285,8 +1192,10 @@ CREATE TABLE `inventory_operation_ewaybills` (
   `status` varchar(50) NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_interunit`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_interunit` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1316,8 +1225,10 @@ CREATE TABLE `inventory_operation_interunit` (
   KEY `idx_ioi_tenant` (`tenant_id`),
   KEY `idx_ioi_issue_slip` (`issue_slip_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_interunit_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_interunit_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1343,8 +1254,10 @@ CREATE TABLE `inventory_operation_interunit_items` (
   KEY `inventory_operation_interunit_items_tenant_id_09f7441c` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_96479fac_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_interunit` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_jobwork`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_jobwork` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1387,8 +1300,10 @@ CREATE TABLE `inventory_operation_jobwork` (
   KEY `idx_jobwork_receipt_no` (`job_work_receipt_no`),
   KEY `idx_jobwork_vendor` (`vendor_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_jobwork_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_jobwork_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1414,8 +1329,10 @@ CREATE TABLE `inventory_operation_jobwork_items` (
   KEY `inventory_operation_jobwork_items_tenant_id_c4cd20ad` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_35893357_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_jobwork` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_locationchange`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_locationchange` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1442,8 +1359,10 @@ CREATE TABLE `inventory_operation_locationchange` (
   KEY `idx_iolc_tenant` (`tenant_id`),
   KEY `idx_iolc_issue_slip` (`issue_slip_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_locationchange_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_locationchange_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1469,8 +1388,10 @@ CREATE TABLE `inventory_operation_locationchange_items` (
   KEY `inventory_operation_locationchange_items_tenant_id_ce165cde` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_0dc03106_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_locationchange` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_new_grn`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_new_grn` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1495,8 +1416,10 @@ CREATE TABLE `inventory_operation_new_grn` (
   `secondary_ref_no` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_new_grn_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_new_grn_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1522,50 +1445,10 @@ CREATE TABLE `inventory_operation_new_grn_items` (
   KEY `inventory_operation_new_grn_items_tenant_id_ed6058b1` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_b3d55e78_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_new_grn` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `voucher_sales_invoicedetails` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `date` date NOT NULL,
-  `sales_invoice_no` varchar(100) NOT NULL,
-  `voucher_name` varchar(255) DEFAULT NULL,
-  `outward_slip_no` varchar(100) DEFAULT NULL,
-  `customer_name` varchar(255) NOT NULL,
-  `customer_id` bigint DEFAULT NULL,
-  `customer_branch` varchar(100) DEFAULT NULL,
-  `voucher_id` bigint DEFAULT NULL,
-  `outward_slip_id` bigint DEFAULT NULL,
-  `bill_to` longtext,
-  `ship_to` longtext,
-  `gstin` varchar(15) DEFAULT NULL,
-  `contact` varchar(100) DEFAULT NULL,
-  `tax_type` varchar(50) DEFAULT NULL,
-  `state_type` varchar(20) NOT NULL,
-  `export_type` varchar(50) DEFAULT NULL,
-  `exchange_rate` varchar(50) DEFAULT NULL,
-  `supporting_document` varchar(100) DEFAULT NULL,
-  `sales_order_no` varchar(255) DEFAULT NULL,
-  `place_of_supply` varchar(2) DEFAULT NULL,
-  `reverse_charge` varchar(1) NOT NULL,
-  `invoice_type` varchar(50) NOT NULL,
-  `gst_export_type` varchar(10) DEFAULT NULL,
-  `port_code` varchar(6) DEFAULT NULL,
-  `shipping_bill_number` varchar(50) DEFAULT NULL,
-  `shipping_bill_date` date DEFAULT NULL,
-  `ecommerce_gstin` varchar(15) DEFAULT NULL,
-  `irn` varchar(255) DEFAULT NULL,
-  `ack_no` varchar(100) DEFAULT NULL,
-  `status` varchar(20) NOT NULL,
-  `current_step` int NOT NULL,
-  `posting_status` varchar(20) NOT NULL,
-  `posting_error` longtext,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_outward`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_outward` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1603,8 +1486,10 @@ CREATE TABLE `inventory_operation_outward` (
   CONSTRAINT `fk_outward_linked_voucher` FOREIGN KEY (`linked_sales_voucher_id`) REFERENCES `voucher_sales_invoicedetails` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_outward_sales` FOREIGN KEY (`linked_sales_voucher_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_outward_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_outward_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1630,8 +1515,10 @@ CREATE TABLE `inventory_operation_outward_items` (
   KEY `inventory_operation_outward_items_tenant_id_ceac5768` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_a538ecf4_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_outward` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_production`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_production` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1667,8 +1554,10 @@ CREATE TABLE `inventory_operation_production` (
   KEY `idx_iop_tenant` (`tenant_id`),
   KEY `idx_iop_issue_slip` (`issue_slip_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_production_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_production_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1694,8 +1583,10 @@ CREATE TABLE `inventory_operation_production_items` (
   KEY `inventory_operation_production_items_tenant_id_c89881c0` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_0de4392b_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_production` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_scrap`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_scrap` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1725,8 +1616,10 @@ CREATE TABLE `inventory_operation_scrap` (
   KEY `idx_ios_tenant` (`tenant_id`),
   KEY `idx_ios_issue_slip` (`issue_slip_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_operation_scrap_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_operation_scrap_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1752,8 +1645,10 @@ CREATE TABLE `inventory_operation_scrap_items` (
   KEY `inventory_operation_scrap_items_tenant_id_c2cf17a8` (`tenant_id`),
   CONSTRAINT `inventory_operation__parent_id_aba48315_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_operation_scrap` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_stock_groups`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_stock_groups` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1768,8 +1663,10 @@ CREATE TABLE `inventory_stock_groups` (
   KEY `inventory_stock_groups_tenant_id_5a287e36` (`tenant_id`),
   CONSTRAINT `inventory_stock_grou_parent_id_dbb53edc_fk_inventory` FOREIGN KEY (`parent_id`) REFERENCES `inventory_stock_groups` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_stock_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_stock_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1788,8 +1685,10 @@ CREATE TABLE `inventory_stock_items` (
   KEY `inventory_stock_items_tenant_id_15fba8d0` (`tenant_id`),
   KEY `inventory_stock_items_item_code_afced5e7` (`item_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_stock_movements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_stock_movements` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -1812,8 +1711,10 @@ CREATE TABLE `inventory_stock_movements` (
   KEY `inventory_s_tenant__a1ed12_idx` (`tenant_id`,`item_code`,`date`),
   KEY `inventory_s_tenant__13dd88_idx` (`tenant_id`,`location`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `inventory_unit`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `inventory_unit` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1825,8 +1726,10 @@ CREATE TABLE `inventory_unit` (
   PRIMARY KEY (`id`),
   KEY `inventory_unit_tenant_id_idx` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `invoice_ocr_temp`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `invoice_ocr_temp` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `file_hash` varchar(64) NOT NULL,
@@ -1860,8 +1763,10 @@ CREATE TABLE `invoice_ocr_temp` (
   UNIQUE KEY `invoice_ocr_temp_tenant_id_file_hash_e3413772_uniq` (`tenant_id`,`file_hash`),
   KEY `invoice_ocr_temp_group_id_be2506c4` (`group_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `invoice_processing_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `invoice_processing_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `file_path` varchar(500) NOT NULL,
@@ -1883,8 +1788,10 @@ CREATE TABLE `invoice_processing_items` (
   KEY `invoice_processing_items_tenant_id_f6757b48` (`tenant_id`),
   CONSTRAINT `invoice_processing_items_job_id_ef36791a_fk_bulk_invoice_jobs_id` FOREIGN KEY (`job_id`) REFERENCES `bulk_invoice_jobs` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=89 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_chart_of_accounts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_chart_of_accounts` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `type_of_business` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -1903,8 +1810,25 @@ CREATE TABLE `master_chart_of_accounts` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `ledger_code` (`ledger_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_hierarchy_mapped`;
+/*!50001 DROP VIEW IF EXISTS `master_hierarchy_mapped`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `master_hierarchy_mapped` AS SELECT 
+ 1 AS `major_group`,
+ 1 AS `group_name`,
+ 1 AS `sub_group_1`,
+ 1 AS `sub_group_2`,
+ 1 AS `sub_group_3`,
+ 1 AS `ledger_name`,
+ 1 AS `ledger_code`,
+ 1 AS `type_of_business`,
+ 1 AS `financial_reporting`*/;
+SET character_set_client = @saved_cs_client;
+DROP TABLE IF EXISTS `master_hierarchy_raw`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_hierarchy_raw` (
   `Type of Business` text,
   `Financial Reporting` text,
@@ -1924,8 +1848,10 @@ CREATE TABLE `master_hierarchy_raw` (
   `P` text,
   `Code` text
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_ledger_groups`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_ledger_groups` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1939,8 +1865,75 @@ CREATE TABLE `master_ledger_groups` (
   UNIQUE KEY `master_ledger_groups_name_tenant_id_7f67aa3f_uniq` (`name`,`tenant_id`),
   KEY `master_ledger_groups_tenant_id_b55cdb7c` (`tenant_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=240 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_ledgers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `master_ledgers` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `category` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'From hierarchy: major_group_1',
+  `group` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sub_group_1` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'From hierarchy: sub_group_1_1',
+  `sub_group_2` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'From hierarchy: sub_group_2_1',
+  `sub_group_3` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'From hierarchy: sub_group_3_1',
+  `ledger_type` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'From hierarchy: ledger_1',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `gstin` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `registration_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `state` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `extended_data` json DEFAULT NULL,
+  `parent_ledger_id` int DEFAULT NULL,
+  `ledger_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `group_id` int DEFAULT NULL,
+  `financial_reporting` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `major_group` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `type_of_business` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ledger` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `additional_data` json DEFAULT NULL,
+  `opening_balance` decimal(20,2) NOT NULL,
+  `opening_balance_type` varchar(2) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `master_ledgers_ledger_code_tenant_id_ef0135d0_uniq` (`ledger_code`,`tenant_id`),
+  UNIQUE KEY `master_ledgers_tenant_id_ledger_code_c1b0ccf4_uniq` (`tenant_id`,`ledger_code`),
+  KEY `master_ledgers_tenant_id_idx` (`tenant_id`),
+  KEY `master_ledgers_category_idx` (`category`),
+  KEY `master_ledgers_group_idx` (`group`)
+) ENGINE=InnoDB AUTO_INCREMENT=158 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `master_users` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `username` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `last_login` datetime(6) DEFAULT NULL,
+  `name` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `pan_number` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address_line1` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address_line2` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address_line3` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `city` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `country` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `district` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `phone` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `pincode` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `state` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `gstin` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cin` varchar(21) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_contra`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_contra` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1961,8 +1954,10 @@ CREATE TABLE `master_voucher_contra` (
   KEY `idx_tenant_contra` (`tenant_id`),
   KEY `idx_voucher_name_contra` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_creditnote`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_creditnote` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1983,8 +1978,10 @@ CREATE TABLE `master_voucher_creditnote` (
   KEY `idx_tenant_creditnote` (`tenant_id`),
   KEY `idx_voucher_name_creditnote` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_debitnote`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_debitnote` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2005,8 +2002,10 @@ CREATE TABLE `master_voucher_debitnote` (
   KEY `idx_tenant_debitnote` (`tenant_id`),
   KEY `idx_voucher_name_debitnote` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_expenses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_expenses` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2027,8 +2026,10 @@ CREATE TABLE `master_voucher_expenses` (
   KEY `idx_tenant_expenses` (`tenant_id`),
   KEY `idx_voucher_name_expenses` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_journal`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_journal` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2049,8 +2050,10 @@ CREATE TABLE `master_voucher_journal` (
   KEY `idx_tenant_journal` (`tenant_id`),
   KEY `idx_voucher_name_journal` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_payments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_payments` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2071,8 +2074,10 @@ CREATE TABLE `master_voucher_payments` (
   KEY `idx_tenant_payments` (`tenant_id`),
   KEY `idx_voucher_name_payments` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_purchases`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_purchases` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2093,8 +2098,10 @@ CREATE TABLE `master_voucher_purchases` (
   KEY `idx_tenant_purchases` (`tenant_id`),
   KEY `idx_voucher_name_purchases` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_receipts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_receipts` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2115,8 +2122,10 @@ CREATE TABLE `master_voucher_receipts` (
   KEY `idx_tenant_receipts` (`tenant_id`),
   KEY `idx_voucher_name_receipts` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `master_voucher_sales`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `master_voucher_sales` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2137,30 +2146,10 @@ CREATE TABLE `master_voucher_sales` (
   KEY `idx_tenant_sales` (`tenant_id`),
   KEY `idx_voucher_name_sales` (`voucher_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `voucher_journal` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `date` date NOT NULL,
-  `voucher_number` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `total_debit` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `total_credit` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `narration` longtext COLLATE utf8mb4_unicode_ci,
-  `voucher_id` bigint DEFAULT NULL,
-  `bank_statement_id` bigint DEFAULT NULL,
-  `bank_reconciled` tinyint(1) NOT NULL,
-  `bank_reference_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bank_reconcile_date` date DEFAULT NULL,
-  `voucher_series` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_voucher_journal_tenant` (`tenant_id`),
-  KEY `idx_voucher_journal_voucher` (`voucher_number`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `norm_journal_voucher_entries`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `norm_journal_voucher_entries` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -2178,32 +2167,10 @@ CREATE TABLE `norm_journal_voucher_entries` (
   KEY `norm_journal_voucher_entries_tenant_id_73ab0cae` (`tenant_id`),
   CONSTRAINT `norm_journal_voucher_voucher_id_91678885_fk_voucher_j` FOREIGN KEY (`voucher_id`) REFERENCES `voucher_journal` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `voucher_expenses` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `date` date NOT NULL,
-  `voucher_number` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `uploaded_files` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `voucher_id` bigint DEFAULT NULL,
-  `posting_note` longtext COLLATE utf8mb4_unicode_ci,
-  `voucher_series` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `total_amount` decimal(15,2) NOT NULL,
-  `total_cess` decimal(15,2) NOT NULL,
-  `total_cgst` decimal(15,2) NOT NULL,
-  `total_igst` decimal(15,2) NOT NULL,
-  `total_sgst` decimal(15,2) NOT NULL,
-  `total_taxable_value` decimal(15,2) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `voucher_expenses_tenant_id_idx` (`tenant_id`),
-  KEY `voucher_expenses_date_idx` (`date`),
-  CONSTRAINT `voucher_expenses_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `norm_voucher_expense_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `norm_voucher_expense_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -2230,8 +2197,10 @@ CREATE TABLE `norm_voucher_expense_items` (
   KEY `norm_voucher_expense_items_tenant_id_81c00818` (`tenant_id`),
   CONSTRAINT `norm_voucher_expense_expense_voucher_id_da18e1ad_fk_voucher_e` FOREIGN KEY (`expense_voucher_id`) REFERENCES `voucher_expenses` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `password_reset_otps`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `password_reset_otps` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `user_id` bigint NOT NULL,
@@ -2244,8 +2213,33 @@ CREATE TABLE `password_reset_otps` (
   KEY `password_reset_otps_user_id_fk` (`user_id`),
   CONSTRAINT `password_reset_otps_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_attendance`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `payroll_attendance` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `employee_id` bigint NOT NULL,
+  `attendance_date` date NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `check_in_time` time(6) DEFAULT NULL,
+  `check_out_time` time(6) DEFAULT NULL,
+  `working_hours` decimal(5,2) NOT NULL,
+  `overtime_hours` decimal(5,2) NOT NULL,
+  `remarks` longtext COLLATE utf8mb4_unicode_ci,
+  `created_at` datetime(6) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `payroll_attendance_employee_id_attendance_date_a0505de9_uniq` (`employee_id`,`attendance_date`),
+  KEY `payroll_attendance_tenant_id_841750ad` (`tenant_id`),
+  KEY `payroll_att_tenant__165cd2_idx` (`tenant_id`,`attendance_date`),
+  CONSTRAINT `payroll_attendance_employee_id_27765acc_fk_payroll_employee_id` FOREIGN KEY (`employee_id`) REFERENCES `payroll_employee` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_employee`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2280,29 +2274,29 @@ CREATE TABLE `payroll_employee` (
   KEY `payroll_emp_tenant__ce9278_idx` (`tenant_id`,`status`),
   KEY `payroll_emp_employe_b2acf6_idx` (`employee_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `payroll_attendance` (
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_employee_bank_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `payroll_employee_bank_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `employee_id` bigint NOT NULL,
-  `attendance_date` date NOT NULL,
-  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `check_in_time` time(6) DEFAULT NULL,
-  `check_out_time` time(6) DEFAULT NULL,
-  `working_hours` decimal(5,2) NOT NULL,
-  `overtime_hours` decimal(5,2) NOT NULL,
-  `remarks` longtext COLLATE utf8mb4_unicode_ci,
+  `account_number` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ifsc_code` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bank_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `branch_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime(6) NOT NULL,
   `updated_at` datetime(6) NOT NULL,
+  `employee_basic_id` bigint NOT NULL,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `payroll_attendance_employee_id_attendance_date_a0505de9_uniq` (`employee_id`,`attendance_date`),
-  KEY `payroll_attendance_tenant_id_841750ad` (`tenant_id`),
-  KEY `payroll_att_tenant__165cd2_idx` (`tenant_id`,`attendance_date`),
-  CONSTRAINT `payroll_attendance_employee_id_27765acc_fk_payroll_employee_id` FOREIGN KEY (`employee_id`) REFERENCES `payroll_employee` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+  UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
+  KEY `idx_tenant` (`tenant_id`),
+  CONSTRAINT `payroll_employee_ban_employee_basic_id_0c5268e7_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_employee_basic_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_basic_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2323,25 +2317,10 @@ CREATE TABLE `payroll_employee_basic_details` (
   KEY `payroll_emp_tenant__3c85ef_idx` (`tenant_id`,`status`),
   KEY `payroll_emp_employe_d77d0c_idx` (`employee_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `payroll_employee_bank_details` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `account_number` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `ifsc_code` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bank_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `branch_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL,
-  `updated_at` datetime(6) NOT NULL,
-  `employee_basic_id` bigint NOT NULL,
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
-  KEY `idx_tenant` (`tenant_id`),
-  CONSTRAINT `payroll_employee_ban_employee_basic_id_0c5268e7_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_employee_employment`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_employment` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `department` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2357,8 +2336,10 @@ CREATE TABLE `payroll_employee_employment` (
   KEY `idx_tenant` (`tenant_id`),
   CONSTRAINT `payroll_employee_emp_employee_basic_id_362bd41e_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_employee_salary`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_salary` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `basic_salary` decimal(12,2) NOT NULL,
@@ -2372,8 +2353,10 @@ CREATE TABLE `payroll_employee_salary` (
   KEY `idx_tenant` (`tenant_id`),
   CONSTRAINT `payroll_employee_sal_employee_basic_id_cdfba561_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_employee_statutory`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_employee_statutory` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `pan_number` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2389,8 +2372,10 @@ CREATE TABLE `payroll_employee_statutory` (
   KEY `idx_tenant` (`tenant_id`),
   CONSTRAINT `payroll_employee_sta_employee_basic_id_893b5c6c_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_leave_application`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_leave_application` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2412,8 +2397,10 @@ CREATE TABLE `payroll_leave_application` (
   KEY `payroll_lea_employe_cbbda2_idx` (`employee_id`,`start_date`),
   CONSTRAINT `payroll_leave_applic_employee_id_c9e5973d_fk_payroll_e` FOREIGN KEY (`employee_id`) REFERENCES `payroll_employee` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_pay_run`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_pay_run` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2437,8 +2424,10 @@ CREATE TABLE `payroll_pay_run` (
   KEY `payroll_pay_tenant__859fa0_idx` (`tenant_id`,`status`),
   KEY `payroll_pay_start_d_0e9a8e_idx` (`start_date`,`end_date`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_pay_run_detail`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_pay_run_detail` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `pay_run_id` bigint NOT NULL,
@@ -2468,8 +2457,10 @@ CREATE TABLE `payroll_pay_run_detail` (
   CONSTRAINT `payroll_pay_run_deta_employee_id_4ff1cb24_fk_payroll_e` FOREIGN KEY (`employee_id`) REFERENCES `payroll_employee` (`id`),
   CONSTRAINT `payroll_pay_run_detail_pay_run_id_8104f2c0_fk_payroll_pay_run_id` FOREIGN KEY (`pay_run_id`) REFERENCES `payroll_pay_run` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_salary_component`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_salary_component` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2486,8 +2477,10 @@ CREATE TABLE `payroll_salary_component` (
   UNIQUE KEY `payroll_salary_component_tenant_id_component_code_08e42af3_uniq` (`tenant_id`,`component_code`),
   KEY `payroll_salary_component_tenant_id_626cee31` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_salary_template`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_salary_template` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2500,8 +2493,10 @@ CREATE TABLE `payroll_salary_template` (
   UNIQUE KEY `payroll_salary_template_tenant_id_template_name_f5ff8dfa_uniq` (`tenant_id`,`template_name`),
   KEY `payroll_salary_template_tenant_id_27fcb732` (`tenant_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_salary_template_component`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_salary_template_component` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `template_id` bigint NOT NULL,
@@ -2513,8 +2508,10 @@ CREATE TABLE `payroll_salary_template_component` (
   CONSTRAINT `payroll_salary_templ_component_id_aad04e07_fk_payroll_s` FOREIGN KEY (`component_id`) REFERENCES `payroll_salary_component` (`id`),
   CONSTRAINT `payroll_salary_templ_template_id_ad0b9c80_fk_payroll_s` FOREIGN KEY (`template_id`) REFERENCES `payroll_salary_template` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payroll_statutory_configuration`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payroll_statutory_configuration` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2531,8 +2528,10 @@ CREATE TABLE `payroll_statutory_configuration` (
   UNIQUE KEY `payroll_statutory_config_tenant_id_statutory_type_548d8bf4_uniq` (`tenant_id`,`statutory_type`),
   KEY `payroll_statutory_configuration_tenant_id_aad30130` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pending_transaction`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `pending_transaction` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -2581,8 +2580,10 @@ CREATE TABLE `pending_transaction` (
   CONSTRAINT `pending_transaction_pay_to_ledger_id_a8c827a0_fk_master_le` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `pending_transaction_transaction_id_181f5b92_fk_transactions_id` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `rbac_roles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `rbac_roles` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -2597,8 +2598,10 @@ CREATE TABLE `rbac_roles` (
   KEY `rbac_roles_tenant_id_idx` (`tenant_id`),
   CONSTRAINT `rbac_roles_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `rbac_user_roles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `rbac_user_roles` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -2622,8 +2625,10 @@ CREATE TABLE `rbac_user_roles` (
   CONSTRAINT `rbac_user_roles_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
   CONSTRAINT `rbac_user_roles_user_id_01d9ab9e_fk_users_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `sales_invoices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sales_invoices` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2654,8 +2659,10 @@ CREATE TABLE `sales_invoices` (
   CONSTRAINT `sales_invoices_customer_id_a0072102_fk_master_ledgers_id` FOREIGN KEY (`customer_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `sales_invoices_voucher_type_id_ae2f21d9_fk_master_vo` FOREIGN KEY (`voucher_type_id`) REFERENCES `master_voucher_receipts` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_group`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_group` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2668,8 +2675,10 @@ CREATE TABLE `service_group` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant` (`tenant_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_list`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_list` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2690,8 +2699,10 @@ CREATE TABLE `service_list` (
   KEY `idx_service_code` (`service_code`),
   KEY `idx_service_group` (`service_group`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenant_ledgers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `tenant_ledgers` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2706,8 +2717,49 @@ CREATE TABLE `tenant_ledgers` (
   KEY `tenant_ledgers_tenant_id_00603c5e` (`tenant_id`),
   CONSTRAINT `tenant_ledgers_master_ledger_id_4dc5dee4_fk_master_ch` FOREIGN KEY (`master_ledger_id`) REFERENCES `master_chart_of_accounts` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenants`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tenants` (
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `master_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `branch_name` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `gstin` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `pan_number` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL,
+  `address_line1` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address_line2` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bank_account_no` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bank_ifsc` varchar(11) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bank_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cin` varchar(21) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `city` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `logo_path` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `phone` varchar(15) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `pincode` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `state` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tan` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `website` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `country` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address_line3` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `district` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `type_of_business` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `business_type` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `gstin` (`gstin`),
+  UNIQUE KEY `tenants_gstin_uniq` (`gstin`),
+  KEY `fk_tenant_master` (`master_id`),
+  KEY `tenants_pan_number_d205ad7c` (`pan_number`),
+  CONSTRAINT `fk_tenant_master` FOREIGN KEY (`master_id`) REFERENCES `master_users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `transaction_allocations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `transaction_allocations` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -2758,8 +2810,10 @@ CREATE TABLE `transaction_allocations` (
   CONSTRAINT `transaction_allocati_pay_to_ledger_id_8181c51a_fk_master_le` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`),
   CONSTRAINT `transaction_allocati_transaction_id_de86e2b6_fk_transacti` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `transaction_file`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `transaction_file` (
   `id` bigint NOT NULL,
   `tenant_id` bigint NOT NULL,
@@ -2817,27 +2871,91 @@ CREATE TABLE `transaction_file` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `ledger_code` (`ledger_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `vendor_master_category` (
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `transactions` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `category` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this category is active',
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `group` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
-  `subgroup` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
-  `is_system` tinyint(1) DEFAULT '0',
-  `sub_subgroup` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `voucher_number` varchar(100) NOT NULL,
+  `transaction_type` varchar(10) NOT NULL,
+  `date` date NOT NULL,
+  `total_amount` decimal(15,2) NOT NULL,
+  `narration` longtext,
+  `bank_reconciled` tinyint(1) NOT NULL,
+  `bank_reconcile_date` date DEFAULT NULL,
+  `bank_statement_id` bigint DEFAULT NULL,
+  `bank_reference_number` varchar(100) DEFAULT NULL,
+  `ledger_id_val` bigint DEFAULT NULL,
+  `party_customer_id` bigint DEFAULT NULL,
+  `party_vendor_id` bigint DEFAULT NULL,
+  `pay_from_ledger_id` bigint DEFAULT NULL,
+  `pay_to_ledger_id` bigint DEFAULT NULL,
+  `credit` decimal(15,2) NOT NULL,
+  `debit` decimal(15,2) NOT NULL,
+  `pay_from_customer_id_val` bigint DEFAULT NULL,
+  `pay_from_ledger_id_val` bigint DEFAULT NULL,
+  `pay_from_vendor_id_val` bigint DEFAULT NULL,
+  `pay_to_customer_id_val` bigint DEFAULT NULL,
+  `pay_to_ledger_id_val` bigint DEFAULT NULL,
+  `pay_to_vendor_id_val` bigint DEFAULT NULL,
+  `receive_from_customer_id_val` bigint DEFAULT NULL,
+  `receive_from_ledger_id_val` bigint DEFAULT NULL,
+  `receive_from_vendor_id_val` bigint DEFAULT NULL,
+  `receive_in_customer_id_val` bigint DEFAULT NULL,
+  `receive_in_ledger_id_val` bigint DEFAULT NULL,
+  `receive_in_vendor_id_val` bigint DEFAULT NULL,
+  `amount` decimal(15,2) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `vendor_category_tenant_unique` (`tenant_id`,`category`(100),`group`(100),`subgroup`(100)),
-  KEY `vendor_category_tenant_id_idx` (`tenant_id`),
-  KEY `vendor_category_is_active_idx` (`tenant_id`,`is_active`),
-  KEY `vendor_category_category_idx` (`category`(100))
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+  UNIQUE KEY `transactions_tenant_id_voucher_number_25ef1219_uniq` (`tenant_id`,`voucher_number`),
+  KEY `transaction_tenant__69d40e_idx` (`tenant_id`,`date`),
+  KEY `transaction_transac_ddda52_idx` (`transaction_type`),
+  KEY `transactions_pay_from_ledger_id_30e5f13c_fk_master_ledgers_id` (`pay_from_ledger_id`),
+  KEY `transactions_pay_to_ledger_id_6bf87a0b_fk_master_ledgers_id` (`pay_to_ledger_id`),
+  KEY `transactions_tenant_id_36e35a29` (`tenant_id`),
+  KEY `transactions_voucher_number_e20585d0` (`voucher_number`),
+  KEY `transactions_transaction_type_7487b5c6` (`transaction_type`),
+  KEY `transactions_date_ec2ce9b4` (`date`),
+  CONSTRAINT `transactions_pay_from_ledger_id_30e5f13c_fk_master_ledgers_id` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`),
+  CONSTRAINT `transactions_pay_to_ledger_id_6bf87a0b_fk_master_ledgers_id` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=45 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `users` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `password` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `last_login` datetime(6) DEFAULT NULL,
+  `is_superuser` tinyint(1) NOT NULL DEFAULT '0',
+  `username` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_staff` tinyint(1) NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `phone` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `phone_verified` tinyint(1) NOT NULL DEFAULT '0',
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `company_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `selected_plan` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `logo_path` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `subscription_start_date` date DEFAULT NULL,
+  `state` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `access_expiry` datetime(6) DEFAULT NULL,
+  `role` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `full_name` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`),
+  KEY `users_tenant_id_idx` (`tenant_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=87 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL,
@@ -2891,8 +3009,31 @@ CREATE TABLE `vendor_master` (
   KEY `vendor_mast_tenant__6ec23e_idx` (`tenant_id`,`is_active`),
   CONSTRAINT `vendor_master_category_id_f3722f92_fk_vendor_master_category_id` FOREIGN KEY (`category_id`) REFERENCES `vendor_master_category` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master_category`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `vendor_master_category` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `category` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this category is active',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `group` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `subgroup` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `is_system` tinyint(1) DEFAULT '0',
+  `sub_subgroup` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vendor_category_tenant_unique` (`tenant_id`,`category`(100),`group`(100),`subgroup`(100)),
+  KEY `vendor_category_tenant_id_idx` (`tenant_id`),
+  KEY `vendor_category_is_active_idx` (`tenant_id`,`is_active`),
+  KEY `vendor_category_category_idx` (`category`(100))
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master_posettings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_posettings` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2912,8 +3053,10 @@ CREATE TABLE `vendor_master_posettings` (
   KEY `vendor_posettings_category_fk` (`category_id`),
   CONSTRAINT `vendor_posettings_category_fk` FOREIGN KEY (`category_id`) REFERENCES `vendor_master_category` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_banking`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_banking` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2936,8 +3079,42 @@ CREATE TABLE `vendor_master_vendorcreation_banking` (
   KEY `vendor_banking_bank_account_no_idx` (`bank_account_no`),
   CONSTRAINT `vendor_banking_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_basicdetail`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `vendor_master_vendorcreation_basicdetail` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vendor_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Vendor code (auto-generated or manual)',
+  `vendor_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Vendor name',
+  `pan_no` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'PAN number',
+  `contact_person` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Contact person name',
+  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Email address',
+  `contact_no` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Contact number',
+  `vendor_category` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Vendor category',
+  `billing_currency` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Billing currency',
+  `is_also_customer` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Is this vendor also a customer?',
+  `tcs_applicable` tinyint(1) DEFAULT '0' COMMENT 'Is TCS applicable for this vendor?',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this vendor is active',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `created_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Created by user',
+  `updated_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Updated by user',
+  `ledger_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vendor_basicdetail_tenant_code_unique` (`tenant_id`,`vendor_code`),
+  KEY `vendor_basicdetail_tenant_id_idx` (`tenant_id`),
+  KEY `vendor_basicdetail_tenant_name_idx` (`tenant_id`,`vendor_name`),
+  KEY `vendor_basicdetail_email_idx` (`email`),
+  KEY `vendor_basicdetail_pan_idx` (`pan_no`),
+  KEY `fk_vendor_ledger` (`ledger_id`),
+  CONSTRAINT `fk_vendor_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_gstdetails`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_gstdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2974,8 +3151,10 @@ CREATE TABLE `vendor_master_vendorcreation_gstdetails` (
   KEY `vendor_gstdetails_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_gstdetails_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_productservices_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_productservices_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `hsn_sac_code` varchar(20) DEFAULT NULL,
@@ -2996,8 +3175,10 @@ CREATE TABLE `vendor_master_vendorcreation_productservices_items` (
   KEY `idx_vendor_items_tenant_id` (`tenant_id`),
   CONSTRAINT `fk_vendor_basic_detail` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_tds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_tds` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3030,8 +3211,10 @@ CREATE TABLE `vendor_master_vendorcreation_tds` (
   KEY `vendor_tds_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_tds_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_master_vendorcreation_terms`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_master_vendorcreation_terms` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3054,8 +3237,10 @@ CREATE TABLE `vendor_master_vendorcreation_terms` (
   KEY `vendor_terms_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
   CONSTRAINT `vendor_terms_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_transaction`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_transaction` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3078,8 +3263,10 @@ CREATE TABLE `vendor_transaction` (
   KEY `vendor_transaction_transaction_date_idx` (`transaction_date`),
   KEY `idx_vendor_tx_tenant_date_id` (`tenant_id`,`transaction_date`,`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_transaction_po`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_transaction_po` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3119,8 +3306,10 @@ CREATE TABLE `vendor_transaction_po` (
   CONSTRAINT `vendor_po_series_fk` FOREIGN KEY (`po_series_id`) REFERENCES `vendor_master_posettings` (`id`) ON DELETE SET NULL,
   CONSTRAINT `vendor_po_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vendor_transaction_po_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vendor_transaction_po_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3143,8 +3332,10 @@ CREATE TABLE `vendor_transaction_po_items` (
   KEY `idx_vendor_po_items_tenant` (`tenant_id`),
   KEY `idx_vendor_po_items_po` (`po_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_contra`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_contra` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3178,8 +3369,39 @@ CREATE TABLE `voucher_contra` (
   KEY `idx_voucher_contra_voucher` (`voucher_number`),
   KEY `idx_voucher_contra_voucher_id` (`voucher_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_credit_note_due_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_credit_note_due_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `credit_note_details_id` bigint NOT NULL,
+  `credit_period` int DEFAULT '0',
+  `due_date` date DEFAULT NULL,
+  `tds_it` decimal(15,2) DEFAULT '0.00',
+  `posting_note` text,
+  `terms_conditions` text,
+  `reverse_gst_tcs` varchar(10) DEFAULT 'No',
+  `reverse_gst_tds` varchar(10) DEFAULT 'No',
+  `gst_tds_tcs_amount` decimal(15,2) DEFAULT '0.00',
+  `reverse_income_tax_tcs` varchar(10) DEFAULT 'No',
+  `reverse_income_tax_tds` varchar(10) DEFAULT 'No',
+  `income_tax_tds_tcs_amount` decimal(15,2) DEFAULT '0.00',
+  `advance_amount` decimal(15,2) DEFAULT '0.00',
+  `payable_amount` decimal(15,2) DEFAULT '0.00',
+  `applied_invoices` json NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `credit_note_details_id` (`credit_note_details_id`),
+  KEY `tenant_id` (`tenant_id`),
+  CONSTRAINT `fk_cn_invoice_due` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_credit_note_invoice_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_credit_note_invoice_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3211,35 +3433,10 @@ CREATE TABLE `voucher_credit_note_invoice_details` (
   KEY `date` (`date`),
   KEY `customer_id` (`customer_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `voucher_credit_note_due_details` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  `credit_note_details_id` bigint NOT NULL,
-  `credit_period` int DEFAULT '0',
-  `due_date` date DEFAULT NULL,
-  `tds_it` decimal(15,2) DEFAULT '0.00',
-  `posting_note` text,
-  `terms_conditions` text,
-  `reverse_gst_tcs` varchar(10) DEFAULT 'No',
-  `reverse_gst_tds` varchar(10) DEFAULT 'No',
-  `gst_tds_tcs_amount` decimal(15,2) DEFAULT '0.00',
-  `reverse_income_tax_tcs` varchar(10) DEFAULT 'No',
-  `reverse_income_tax_tds` varchar(10) DEFAULT 'No',
-  `income_tax_tds_tcs_amount` decimal(15,2) DEFAULT '0.00',
-  `advance_amount` decimal(15,2) DEFAULT '0.00',
-  `payable_amount` decimal(15,2) DEFAULT '0.00',
-  `applied_invoices` json NOT NULL,
-  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `credit_note_details_id` (`credit_note_details_id`),
-  KEY `tenant_id` (`tenant_id`),
-  CONSTRAINT `fk_cn_invoice_due` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_credit_note_item_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_credit_note_item_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3257,8 +3454,10 @@ CREATE TABLE `voucher_credit_note_item_details` (
   KEY `tenant_id` (`tenant_id`),
   CONSTRAINT `fk_cn_invoice_items` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_credit_note_item_lines`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_credit_note_item_lines` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3283,8 +3482,10 @@ CREATE TABLE `voucher_credit_note_item_lines` (
   KEY `voucher_credit_note_item_lines_tenant_id_0aa7facf` (`tenant_id`),
   CONSTRAINT `voucher_credit_note__item_details_id_1a4bf244_fk_voucher_c` FOREIGN KEY (`item_details_id`) REFERENCES `voucher_credit_note_item_details` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_credit_note_transit_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_credit_note_transit_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3306,8 +3507,84 @@ CREATE TABLE `voucher_credit_note_transit_details` (
   KEY `tenant_id` (`tenant_id`),
   CONSTRAINT `fk_cn_invoice_transit` FOREIGN KEY (`credit_note_details_id`) REFERENCES `voucher_credit_note_invoice_details` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_debit_note_due_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_debit_note_due_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `debit_note_details_id` bigint NOT NULL,
+  `reverse_tcs` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `reverse_tds` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `tds_it` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `purchase_invoice_amount_applied` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `gross_amount_due` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `net_amount_due` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `terms_and_conditions` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `reverse_gst_tcs` varchar(10) DEFAULT 'No',
+  `reverse_gst_tds` varchar(10) DEFAULT 'No',
+  `reverse_income_tax_tcs` varchar(10) DEFAULT 'No',
+  `reverse_income_tax_tds` varchar(10) DEFAULT 'No',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_debit_note_due_details` (`debit_note_details_id`),
+  CONSTRAINT `fk_debit_note_due_details` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_debit_note_item_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_debit_note_item_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `total_taxable_value` decimal(15,2) NOT NULL,
+  `total_igst` decimal(15,2) NOT NULL,
+  `total_cgst` decimal(15,2) NOT NULL,
+  `total_sgst` decimal(15,2) NOT NULL,
+  `total_cess` decimal(15,2) NOT NULL,
+  `total_invoice_value` decimal(15,2) NOT NULL,
+  `debit_note_details_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `debit_note_details_id` (`debit_note_details_id`),
+  KEY `voucher_debit_note_item_details_tenant_id_e801802e` (`tenant_id`),
+  CONSTRAINT `voucher_debit_note_i_debit_note_details_i_149a98ff_fk_voucher_d` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_debit_note_item_lines`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_debit_note_item_lines` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `item_code` varchar(100) DEFAULT NULL,
+  `item_name` varchar(255) DEFAULT NULL,
+  `hsn_sac` varchar(50) DEFAULT NULL,
+  `quantity` decimal(18,4) NOT NULL,
+  `uom` varchar(50) DEFAULT NULL,
+  `rate` decimal(18,2) NOT NULL,
+  `taxable_value` decimal(18,2) NOT NULL,
+  `igst_amount` decimal(18,2) NOT NULL,
+  `cgst_amount` decimal(18,2) NOT NULL,
+  `sgst_amount` decimal(18,2) NOT NULL,
+  `cess_amount` decimal(18,2) NOT NULL,
+  `invoice_value` decimal(18,2) NOT NULL,
+  `reason_for_return` longtext,
+  `item_details_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `voucher_debit_note_i_item_details_id_9dc5ccef_fk_voucher_d` (`item_details_id`),
+  KEY `voucher_debit_note_item_lines_tenant_id_53c83bf0` (`tenant_id`),
+  CONSTRAINT `voucher_debit_note_i_item_details_id_9dc5ccef_fk_voucher_d` FOREIGN KEY (`item_details_id`) REFERENCES `voucher_debit_note_item_details` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_debit_note_supplier_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_debit_note_supplier_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3339,76 +3616,10 @@ CREATE TABLE `voucher_debit_note_supplier_details` (
   KEY `fk_voucher_debit_note_vendor` (`vendor_basic_detail_id`),
   CONSTRAINT `fk_voucher_debit_note_vendor` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `voucher_debit_note_due_details` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  `debit_note_details_id` bigint NOT NULL,
-  `reverse_tcs` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `reverse_tds` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `tds_it` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `purchase_invoice_amount_applied` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `gross_amount_due` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `net_amount_due` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `terms_and_conditions` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `reverse_gst_tcs` varchar(10) DEFAULT 'No',
-  `reverse_gst_tds` varchar(10) DEFAULT 'No',
-  `reverse_income_tax_tcs` varchar(10) DEFAULT 'No',
-  `reverse_income_tax_tds` varchar(10) DEFAULT 'No',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_debit_note_due_details` (`debit_note_details_id`),
-  CONSTRAINT `fk_debit_note_due_details` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `voucher_debit_note_item_details` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `total_taxable_value` decimal(15,2) NOT NULL,
-  `total_igst` decimal(15,2) NOT NULL,
-  `total_cgst` decimal(15,2) NOT NULL,
-  `total_sgst` decimal(15,2) NOT NULL,
-  `total_cess` decimal(15,2) NOT NULL,
-  `total_invoice_value` decimal(15,2) NOT NULL,
-  `debit_note_details_id` bigint NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `debit_note_details_id` (`debit_note_details_id`),
-  KEY `voucher_debit_note_item_details_tenant_id_e801802e` (`tenant_id`),
-  CONSTRAINT `voucher_debit_note_i_debit_note_details_i_149a98ff_fk_voucher_d` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `voucher_debit_note_item_lines` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `item_code` varchar(100) DEFAULT NULL,
-  `item_name` varchar(255) DEFAULT NULL,
-  `hsn_sac` varchar(50) DEFAULT NULL,
-  `quantity` decimal(18,4) NOT NULL,
-  `uom` varchar(50) DEFAULT NULL,
-  `rate` decimal(18,2) NOT NULL,
-  `taxable_value` decimal(18,2) NOT NULL,
-  `igst_amount` decimal(18,2) NOT NULL,
-  `cgst_amount` decimal(18,2) NOT NULL,
-  `sgst_amount` decimal(18,2) NOT NULL,
-  `cess_amount` decimal(18,2) NOT NULL,
-  `invoice_value` decimal(18,2) NOT NULL,
-  `reason_for_return` longtext,
-  `item_details_id` bigint NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `voucher_debit_note_i_item_details_id_9dc5ccef_fk_voucher_d` (`item_details_id`),
-  KEY `voucher_debit_note_item_lines_tenant_id_53c83bf0` (`tenant_id`),
-  CONSTRAINT `voucher_debit_note_i_item_details_id_9dc5ccef_fk_voucher_d` FOREIGN KEY (`item_details_id`) REFERENCES `voucher_debit_note_item_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_debit_note_transit_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_debit_note_transit_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3429,8 +3640,130 @@ CREATE TABLE `voucher_debit_note_transit_details` (
   UNIQUE KEY `uk_debit_note_transit_details` (`debit_note_details_id`),
   CONSTRAINT `fk_debit_note_transit_details` FOREIGN KEY (`debit_note_details_id`) REFERENCES `voucher_debit_note_supplier_details` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_expenses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_expenses` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `date` date NOT NULL,
+  `voucher_number` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `uploaded_files` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `voucher_id` bigint DEFAULT NULL,
+  `posting_note` longtext COLLATE utf8mb4_unicode_ci,
+  `voucher_series` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `total_amount` decimal(15,2) NOT NULL,
+  `total_cess` decimal(15,2) NOT NULL,
+  `total_cgst` decimal(15,2) NOT NULL,
+  `total_igst` decimal(15,2) NOT NULL,
+  `total_sgst` decimal(15,2) NOT NULL,
+  `total_taxable_value` decimal(15,2) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `voucher_expenses_tenant_id_idx` (`tenant_id`),
+  KEY `voucher_expenses_date_idx` (`date`),
+  CONSTRAINT `voucher_expenses_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_journal`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_journal` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `date` date NOT NULL,
+  `voucher_number` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `total_debit` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `total_credit` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `narration` longtext COLLATE utf8mb4_unicode_ci,
+  `voucher_id` bigint DEFAULT NULL,
+  `bank_statement_id` bigint DEFAULT NULL,
+  `bank_reconciled` tinyint(1) NOT NULL,
+  `bank_reference_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bank_reconcile_date` date DEFAULT NULL,
+  `voucher_series` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_voucher_journal_tenant` (`tenant_id`),
+  KEY `idx_voucher_journal_voucher` (`voucher_number`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_purchase_advance_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_purchase_advance_links` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `date` date NOT NULL,
+  `ref_no` varchar(100) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `applied_now` decimal(15,2) NOT NULL,
+  `due_details_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `voucher_purchase_adv_due_details_id_67db4207_fk_voucher_p` (`due_details_id`),
+  KEY `voucher_purchase_advance_links_tenant_id_4bc220f3` (`tenant_id`),
+  CONSTRAINT `voucher_purchase_adv_due_details_id_67db4207_fk_voucher_p` FOREIGN KEY (`due_details_id`) REFERENCES `voucher_purchase_due_details` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=56 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_purchase_due_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_purchase_due_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `tds_gst` decimal(15,2) DEFAULT '0.00',
+  `tds_it` decimal(15,2) DEFAULT '0.00',
+  `advance_paid` decimal(15,2) DEFAULT '0.00',
+  `to_pay` decimal(15,2) DEFAULT '0.00',
+  `posting_note` longtext COLLATE utf8mb4_unicode_ci,
+  `terms` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `supplier_details_id` bigint NOT NULL,
+  `advance_references` json DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_vpdd_tenant` (`tenant_id`),
+  KEY `idx_vpdd_supplier` (`supplier_details_id`),
+  CONSTRAINT `fk_vpdd_supplier` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_purchase_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_purchase_items` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `item_code` varchar(100) NOT NULL,
+  `item_name` varchar(255) NOT NULL,
+  `hsn_sac` varchar(20) DEFAULT NULL,
+  `quantity` decimal(15,4) NOT NULL,
+  `uom` varchar(50) DEFAULT NULL,
+  `rate` decimal(15,2) NOT NULL,
+  `taxable_value` decimal(15,2) NOT NULL,
+  `igst_amount` decimal(15,2) NOT NULL,
+  `cgst_amount` decimal(15,2) NOT NULL,
+  `sgst_amount` decimal(15,2) NOT NULL,
+  `cess_amount` decimal(15,2) NOT NULL,
+  `invoice_value` decimal(15,2) NOT NULL,
+  `currency` varchar(10) NOT NULL,
+  `exchange_rate` decimal(10,4) NOT NULL,
+  `supplier_details_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `voucher_purchase_items_tenant_id_61d700bd` (`tenant_id`),
+  KEY `voucher_purchase_ite_supplier_details_id_cb77d995_fk_voucher_p` (`supplier_details_id`),
+  CONSTRAINT `voucher_purchase_ite_supplier_details_id_cb77d995_fk_voucher_p` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_purchase_supplier_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_supplier_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3459,72 +3792,10 @@ CREATE TABLE `voucher_purchase_supplier_details` (
   KEY `idx_purchase_supplier_grn_ref` (`tenant_id`,`grn_reference`),
   CONSTRAINT `fk_vpsd_vendor` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `voucher_purchase_due_details` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `tds_gst` decimal(15,2) DEFAULT '0.00',
-  `tds_it` decimal(15,2) DEFAULT '0.00',
-  `advance_paid` decimal(15,2) DEFAULT '0.00',
-  `to_pay` decimal(15,2) DEFAULT '0.00',
-  `posting_note` longtext COLLATE utf8mb4_unicode_ci,
-  `terms` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `supplier_details_id` bigint NOT NULL,
-  `advance_references` json DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_vpdd_tenant` (`tenant_id`),
-  KEY `idx_vpdd_supplier` (`supplier_details_id`),
-  CONSTRAINT `fk_vpdd_supplier` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-CREATE TABLE `voucher_purchase_advance_links` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `date` date NOT NULL,
-  `ref_no` varchar(100) NOT NULL,
-  `amount` decimal(15,2) NOT NULL,
-  `applied_now` decimal(15,2) NOT NULL,
-  `due_details_id` bigint NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `voucher_purchase_adv_due_details_id_67db4207_fk_voucher_p` (`due_details_id`),
-  KEY `voucher_purchase_advance_links_tenant_id_4bc220f3` (`tenant_id`),
-  CONSTRAINT `voucher_purchase_adv_due_details_id_67db4207_fk_voucher_p` FOREIGN KEY (`due_details_id`) REFERENCES `voucher_purchase_due_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=56 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-CREATE TABLE `voucher_purchase_items` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `item_code` varchar(100) NOT NULL,
-  `item_name` varchar(255) NOT NULL,
-  `hsn_sac` varchar(20) DEFAULT NULL,
-  `quantity` decimal(15,4) NOT NULL,
-  `uom` varchar(50) DEFAULT NULL,
-  `rate` decimal(15,2) NOT NULL,
-  `taxable_value` decimal(15,2) NOT NULL,
-  `igst_amount` decimal(15,2) NOT NULL,
-  `cgst_amount` decimal(15,2) NOT NULL,
-  `sgst_amount` decimal(15,2) NOT NULL,
-  `cess_amount` decimal(15,2) NOT NULL,
-  `invoice_value` decimal(15,2) NOT NULL,
-  `currency` varchar(10) NOT NULL,
-  `exchange_rate` decimal(10,4) NOT NULL,
-  `supplier_details_id` bigint NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `voucher_purchase_items_tenant_id_61d700bd` (`tenant_id`),
-  KEY `voucher_purchase_ite_supplier_details_id_cb77d995_fk_voucher_p` (`supplier_details_id`),
-  CONSTRAINT `voucher_purchase_ite_supplier_details_id_cb77d995_fk_voucher_p` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_purchase_supply_foreign_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_supply_foreign_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3540,8 +3811,10 @@ CREATE TABLE `voucher_purchase_supply_foreign_details` (
   KEY `idx_vpsfd_supplier` (`supplier_details_id`),
   CONSTRAINT `fk_vpsfd_supplier` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_purchase_supply_inr_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_supply_inr_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3556,8 +3829,10 @@ CREATE TABLE `voucher_purchase_supply_inr_details` (
   KEY `idx_vpsid_supplier` (`supplier_details_id`),
   CONSTRAINT `fk_vpsid_supplier` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_purchase_transit_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_purchase_transit_details` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -3615,8 +3890,10 @@ CREATE TABLE `voucher_purchase_transit_details` (
   KEY `idx_vptd_supplier` (`supplier_details_id`),
   CONSTRAINT `fk_vptd_supplier` FOREIGN KEY (`supplier_details_id`) REFERENCES `voucher_purchase_supplier_details` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_sales_dispatchdetails`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_dispatchdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3667,8 +3944,10 @@ CREATE TABLE `voucher_sales_dispatchdetails` (
   KEY `voucher_sales_dispatchdetails_tenant_id_8c1c414b` (`tenant_id`),
   CONSTRAINT `voucher_sales_dispat_invoice_id_594c7043_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_sales_ewaybill`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_ewaybill` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3694,8 +3973,54 @@ CREATE TABLE `voucher_sales_ewaybill` (
   KEY `voucher_sales_ewaybill_tenant_id_35fe8846` (`tenant_id`),
   CONSTRAINT `voucher_sales_ewaybi_invoice_id_68862ccb_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_sales_invoicedetails`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `voucher_sales_invoicedetails` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `date` date NOT NULL,
+  `sales_invoice_no` varchar(100) NOT NULL,
+  `voucher_name` varchar(255) DEFAULT NULL,
+  `outward_slip_no` varchar(100) DEFAULT NULL,
+  `customer_name` varchar(255) NOT NULL,
+  `customer_id` bigint DEFAULT NULL,
+  `customer_branch` varchar(100) DEFAULT NULL,
+  `voucher_id` bigint DEFAULT NULL,
+  `outward_slip_id` bigint DEFAULT NULL,
+  `bill_to` longtext,
+  `ship_to` longtext,
+  `gstin` varchar(15) DEFAULT NULL,
+  `contact` varchar(100) DEFAULT NULL,
+  `tax_type` varchar(50) DEFAULT NULL,
+  `state_type` varchar(20) NOT NULL,
+  `export_type` varchar(50) DEFAULT NULL,
+  `exchange_rate` varchar(50) DEFAULT NULL,
+  `supporting_document` varchar(100) DEFAULT NULL,
+  `sales_order_no` varchar(255) DEFAULT NULL,
+  `place_of_supply` varchar(2) DEFAULT NULL,
+  `reverse_charge` varchar(1) NOT NULL,
+  `invoice_type` varchar(50) NOT NULL,
+  `gst_export_type` varchar(10) DEFAULT NULL,
+  `port_code` varchar(6) DEFAULT NULL,
+  `shipping_bill_number` varchar(50) DEFAULT NULL,
+  `shipping_bill_date` date DEFAULT NULL,
+  `ecommerce_gstin` varchar(15) DEFAULT NULL,
+  `irn` varchar(255) DEFAULT NULL,
+  `ack_no` varchar(100) DEFAULT NULL,
+  `status` varchar(20) NOT NULL,
+  `current_step` int NOT NULL,
+  `posting_status` varchar(20) NOT NULL,
+  `posting_error` longtext,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_sales_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_items` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3722,8 +4047,10 @@ CREATE TABLE `voucher_sales_items` (
   KEY `voucher_sales_items_tenant_id_d4aa028b` (`tenant_id`),
   CONSTRAINT `voucher_sales_items_invoice_id_8393120a_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_sales_items_foreign`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_items_foreign` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3743,8 +4070,10 @@ CREATE TABLE `voucher_sales_items_foreign` (
   KEY `voucher_sales_items_foreign_tenant_id_5f6e6179` (`tenant_id`),
   CONSTRAINT `voucher_sales_items__invoice_id_7f0ef8d3_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `voucher_sales_paymentdetails`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `voucher_sales_paymentdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3772,8 +4101,10 @@ CREATE TABLE `voucher_sales_paymentdetails` (
   KEY `voucher_sales_paymentdetails_tenant_id_70b6f0ec` (`tenant_id`),
   CONSTRAINT `voucher_sales_paymen_invoice_id_dd7b57c8_fk_voucher_s` FOREIGN KEY (`invoice_id`) REFERENCES `voucher_sales_invoicedetails` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `vouchers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `vouchers` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
@@ -3809,3 +4140,27 @@ CREATE TABLE `vouchers` (
   `bank_statement_id` bigint DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=74 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!50001 DROP VIEW IF EXISTS `master_hierarchy_mapped`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `master_hierarchy_mapped` AS select nullif(trim(`master_hierarchy_raw`.`Major Group`),'') AS `major_group`,nullif(trim(`master_hierarchy_raw`.`Group`),'') AS `group_name`,nullif(trim(`master_hierarchy_raw`.`Sub-group 1`),'') AS `sub_group_1`,nullif(trim(`master_hierarchy_raw`.`Sub-group 2`),'') AS `sub_group_2`,nullif(trim(`master_hierarchy_raw`.`Sub-group 3`),'') AS `sub_group_3`,nullif(trim(`master_hierarchy_raw`.`Ledgers`),'') AS `ledger_name`,nullif(trim(`master_hierarchy_raw`.`Code`),'') AS `ledger_code`,nullif(trim(`master_hierarchy_raw`.`Type of Business`),'') AS `type_of_business`,nullif(trim(`master_hierarchy_raw`.`Financial Reporting`),'') AS `financial_reporting` from `master_hierarchy_raw` where ((trim(`master_hierarchy_raw`.`Major Group`) is not null) and (trim(`master_hierarchy_raw`.`Major Group`) <> '') and (trim(`master_hierarchy_raw`.`Ledgers`) is not null) and (trim(`master_hierarchy_raw`.`Ledgers`) <> '')) */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+

@@ -388,6 +388,11 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         }
     };
 
+    const fetchFullCustomerById = async (customerId: number) => {
+        const response = await httpClient.get<any>(`/api/customerportal/customer-master/${customerId}/`);
+        return response;
+    };
+
     const fetchStockItems = async () => {
         try {
             // Fetch both Inventory Items and Services
@@ -1202,6 +1207,31 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         // 9. Switch View
         setView('create');
         setActiveTab('Basic Details');
+    };
+
+    const handleViewCustomer = async (customer: any) => {
+        try {
+            const fullCustomer = await fetchFullCustomerById(customer.id);
+            let resolvedCategoryName = '';
+            if (fullCustomer?.customer_category_name) {
+                resolvedCategoryName = fullCustomer.customer_category_name;
+            } else if (categories.length > 0 && fullCustomer?.customer_category) {
+                const cat = categories.find((c: Category) => c.id === fullCustomer.customer_category);
+                if (cat) resolvedCategoryName = cat.full_path || cat.category;
+            }
+            setViewCustomer({ ...fullCustomer, customer_category_name: resolvedCategoryName });
+        } catch (error) {
+            handleApiError(error, 'Fetch Customer Details');
+        }
+    };
+
+    const handleEditCustomerById = async (customer: any) => {
+        try {
+            const fullCustomer = await fetchFullCustomerById(customer.id);
+            handleEditCustomer(fullCustomer);
+        } catch (error) {
+            handleApiError(error, 'Fetch Customer For Edit');
+        }
     };
 
     const filteredCustomers = (customers || []).filter(customer => {
@@ -3195,24 +3225,14 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                         <button
                                             className="text-indigo-600 hover:text-indigo-900 transition-colors"
                                             title="View"
-                                            onClick={() => {
-                                                // Enrich customer object with resolved category name
-                                                let resolvedCategoryName = '';
-                                                if (customer.customer_category_name) {
-                                                    resolvedCategoryName = customer.customer_category_name;
-                                                } else if (categories.length > 0 && customer.customer_category) {
-                                                    const cat = categories.find((c: Category) => c.id === customer.customer_category);
-                                                    if (cat) resolvedCategoryName = cat.full_path || cat.category;
-                                                }
-                                                setViewCustomer({ ...customer, customer_category_name: resolvedCategoryName });
-                                            }}
+                                            onClick={() => handleViewCustomer(customer)}
                                         >
                                             <Eye className="w-5 h-5" />
                                         </button>
                                         <button
                                             className="text-blue-600 hover:text-blue-900 transition-colors"
                                             title="Edit"
-                                            onClick={() => handleEditCustomer(customer)}
+                                            onClick={() => handleEditCustomerById(customer)}
                                         >
                                             <Pencil className="w-5 h-5" />
                                         </button>
@@ -5855,7 +5875,31 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 httpClient.get<any[]>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
             ]);
 
-            const customerInvoices = salesData.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
+            let ledgerEntriesByLedger: any[] = [];
+            if (customer.ledger_id) {
+                try {
+                    const ledgerData = await httpClient.get<any[]>(`/api/allocations/ledger/${customer.ledger_id}/entries/`);
+                    if (Array.isArray(ledgerData)) {
+                        ledgerEntriesByLedger = ledgerData;
+                    }
+                } catch (ledgerErr) {
+                    console.warn('Ledger fallback fetch failed:', ledgerErr);
+                }
+            }
+
+            const normalize = (v: any) => String(v ?? '').trim().toLowerCase();
+            const selectedCustomerId = customer.id?.toString();
+            const selectedCustomerName = normalize(customer.name);
+
+            const customerInvoices = (salesData || []).filter(inv => {
+                const byId =
+                    selectedCustomerId &&
+                    inv?.customer_id !== null &&
+                    inv?.customer_id !== undefined &&
+                    inv.customer_id.toString() === selectedCustomerId;
+                const byName = selectedCustomerName && normalize(inv?.customer_name) === selectedCustomerName;
+                return Boolean(byId || byName);
+            });
 
             const invoiceEntries: LedgerEntry[] = customerInvoices.map((inv: any) => {
                 const creditPeriod = parseInt(customer.credit_period || '0', 10);
@@ -5962,7 +6006,56 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 };
             });
 
-            setLedgerEntries([...invoiceEntries, ...transactionEntries]);
+            const fallbackTransactionEntries: LedgerEntry[] = (ledgerEntriesByLedger || [])
+                .filter((row: any) => row && row.voucher_type && String(row.voucher_type).toLowerCase() !== 'opening balance')
+                .map((row: any) => {
+                    const rawType = String(row.voucher_type || '').toLowerCase();
+                    let transType = 'Sales';
+                    if (rawType.includes('receipt')) transType = 'Receipt';
+                    else if (rawType.includes('payment')) transType = 'Payment';
+                    else if (rawType.includes('credit')) transType = 'Credit Note';
+                    else if (rawType.includes('debit')) transType = 'Debit Note';
+                    else if (rawType.includes('journal')) transType = 'Journal';
+                    else if (rawType.includes('contra')) transType = 'Contra';
+
+                    return {
+                        id: `L-${row.id}`,
+                        date: row.date,
+                        postFrom: transType as TransactionType,
+                        referenceNo: row.voucher_number || row.narration || 'N/A',
+                        ledger: transType,
+                        status: 'Not Due' as SalesStatus,
+                        debit: parseFloat(row.debit || 0),
+                        credit: parseFloat(row.credit || 0),
+                        runningBalance: 0,
+                        posting_status: 'POSTED',
+                        originalInv: row,
+                        voucherNo: row.voucher_number || row.id?.toString(),
+                        amount: parseFloat(row.debit || 0) + parseFloat(row.credit || 0)
+                    };
+                })
+                .filter((entry: LedgerEntry) => entry.postFrom !== 'Sales');
+
+            const dedupeKey = (entry: LedgerEntry) => [
+                entry.postFrom,
+                (entry.voucherNo || '').toString().toLowerCase(),
+                entry.date || '',
+                Number(entry.debit || 0).toFixed(2),
+                Number(entry.credit || 0).toFixed(2)
+            ].join('|');
+
+            const mergedTransactions: LedgerEntry[] = [];
+            const seen = new Set<string>();
+
+            [...transactionEntries, ...fallbackTransactionEntries].forEach((entry) => {
+                const key = dedupeKey(entry);
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    mergedTransactions.push(entry);
+                }
+            });
+
+            setLedgerEntries([...invoiceEntries, ...mergedTransactions]);
         } catch (err: any) {
             console.error('Failed to fetch ledger data:', err);
             setError(err?.message || 'Unable to connect to the server.');
@@ -5975,7 +6068,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     useEffect(() => {
 
         fetchLedgerData();
-    }, [customer.id]);
+    }, [customer.id, customer.ledger_id, customer.name, customer.credit_period]);
 
     const handleProceedAllocation = async (selectedAdvance: any, invoiceRef: string) => {
         try {

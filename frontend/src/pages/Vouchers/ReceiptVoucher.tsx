@@ -87,20 +87,58 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     const [allLedgers, setAllLedgers] = useState<Ledger[]>([]);
     const [portalCustomers, setPortalCustomers] = useState<any[]>([]);
     const [portalVendors, setPortalVendors] = useState<any[]>([]);
+    const [hierarchy, setHierarchy] = useState<any[]>([]);
+
+    const normalizeName = (s: any) => (s ?? '').toString().trim().toLowerCase();
+
+    const buildHierarchySets = (rows: any[]) => {
+        const nonLeaf = new Set<string>();
+        const leaf = new Set<string>();
+
+        for (const r of rows || []) {
+            const mg = normalizeName(r.major_group_1);
+            const g = normalizeName(r.group_1);
+            const sg1 = normalizeName(r.sub_group_1_1);
+            const sg2 = normalizeName(r.sub_group_2_1);
+            const sg3 = normalizeName(r.sub_group_3_1);
+            const led = normalizeName(r.ledger_1);
+
+            if (mg) nonLeaf.add(mg);
+            if (g) nonLeaf.add(g);
+            if (sg1) nonLeaf.add(sg1);
+            if (sg2) nonLeaf.add(sg2);
+            if (sg3) nonLeaf.add(sg3);
+
+            // Deepest value is treated as a selectable endpoint for dropdown purposes.
+            const endpoint = led || sg3 || sg2 || sg1 || g || mg;
+            if (endpoint) leaf.add(endpoint);
+        }
+
+        return { nonLeaf, leaf };
+    };
+
+    // For ReceiveFrom dropdown we do NOT want hierarchy headings (group/sub-groups)
+    // even if the hierarchy marks them as endpoints. Only real ledgers/vendors/customers.
+    const isHierarchyHeadingName = (name: string, sets: { nonLeaf: Set<string>, leaf: Set<string> }) => {
+        const n = normalizeName(name);
+        return !!n && sets.nonLeaf.has(n);
+    };
 
     // Fetch data on mount
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [ledgersData, customersData, vendorsData] = await Promise.all([
+                const [ledgersData, customersData, vendorsData, hierarchyData] = await Promise.all([
                     apiService.getLedgers(),
                     apiService.getRichCustomers(),
-                    apiService.getRichVendors()
+                    apiService.getRichVendors(),
+                    apiService.getHierarchy(),
                 ]);
 
                 setAllLedgers(ledgersData || []);
                 setPortalCustomers(customersData || []);
                 setPortalVendors(vendorsData || []);
+                setHierarchy(Array.isArray(hierarchyData) ? hierarchyData : []);
             } catch (error) {
                 console.error('Error fetching data:', error);
                 showError('Failed to fetch required data');
@@ -134,6 +172,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     // Filter Receive From (Credit) options: All ledgers (allowing transfers) + Portal entities
     const receiveFromOptions = useMemo(() => {
+        const sets = buildHierarchySets(hierarchy);
+
         // Construct synthetic ledger objects for portal entities to make them selectable
         const custOptions = portalCustomers.map(c => ({
             id: `portal-cust-${c.id}`,
@@ -152,11 +192,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }));
 
         // Map existing ledgers and assign types
-        const ledgerOptions = allLedgers.map(l => ({
-            ...l,
-            type: l.group === 'Sundry Debtors' ? 'Customer' :
-                l.group === 'Sundry Creditors' ? 'Vendor' : 'Ledger'
-        }));
+        const ledgerOptions = allLedgers
+            // Exclude hierarchy headings accidentally saved as "ledgers"
+            .filter(l => !isHierarchyHeadingName(l.name, sets))
+            .map(l => ({
+                ...l,
+                type: l.group === 'Sundry Debtors' ? 'Customer' :
+                    l.group === 'Sundry Creditors' ? 'Vendor' : 'Ledger'
+            }));
 
         // Combine all, avoiding duplicates if name matches exactly with an existing ledger
         const combined = [...ledgerOptions];
@@ -170,7 +213,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         });
 
         return combined;
-    }, [allLedgers, portalCustomers, portalVendors]);
+    }, [allLedgers, portalCustomers, portalVendors, hierarchy]);
 
     // Receipt Voucher Configuration state
     const [receiptVoucherConfigs, setReceiptVoucherConfigs] = useState<any[]>([]);

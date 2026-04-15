@@ -52,6 +52,8 @@ export interface Ledger {
 
   // Auto-generated code based on hierarchy
   ledger_code?: string;
+  // Backend also returns this field name
+  code?: string;
 
   gstin?: string;
   registrationType?: 'Registered' | 'Unregistered' | 'Composition';

@@ -388,11 +388,28 @@ class PayToLedgerView(APIView):
                     "category": c['customer_category__category'] or "General"
                 }
 
+        def _norm(v):
+            return (v or '').strip().lower()
+
         # 3. Fetch all other Ledgers
-        ledgers = MasterLedger.objects.filter(tenant_id=tenant_id).values('id', 'name', 'category')
+        # Exclude structural "subgroup nodes" that were accidentally saved as ledgers
+        # (e.g., name == sub_group_2). These should never appear in Pay To / Receive From dropdowns.
+        ledgers = MasterLedger.objects.filter(tenant_id=tenant_id).values(
+            'id', 'name', 'category', 'group', 'sub_group_1', 'sub_group_2', 'sub_group_3'
+        )
         for l in ledgers:
             lid = l['id']
             if lid not in results_map:
+                n = _norm(l.get('name'))
+                if not n:
+                    continue
+                if n and (
+                    n == _norm(l.get('sub_group_1')) or
+                    n == _norm(l.get('sub_group_2')) or
+                    n == _norm(l.get('sub_group_3')) or
+                    n == _norm(l.get('group'))
+                ):
+                    continue
                 results_map[lid] = {
                     "id": lid,
                     "name": l['name'],

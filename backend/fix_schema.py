@@ -66,15 +66,6 @@ def fix_master_hierarchy_raw():
     for new_col, old_col in mapping.items():
         run_sql(f"UPDATE master_hierarchy_raw SET `{new_col}` = `{old_col}`")
 
-def fix_vendor_master_product_service():
-    print("\n--- Fixing vendors_vendormasterproductservice ---")
-    
-    run_sql("ALTER TABLE vendors_vendormasterproductservice ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1")
-    run_sql("ALTER TABLE vendors_vendormasterproductservice ADD COLUMN created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6)")
-    run_sql("ALTER TABLE vendors_vendormasterproductservice ADD COLUMN updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)")
-    run_sql("ALTER TABLE vendors_vendormasterproductservice ADD COLUMN created_by VARCHAR(100) DEFAULT NULL")
-    run_sql("ALTER TABLE vendors_vendormasterproductservice ADD COLUMN updated_by VARCHAR(100) DEFAULT NULL")
-
 def fix_vendor_transaction():
     print("\n--- Fixing vendor_transaction ---")
     
@@ -122,7 +113,6 @@ def fix_allocation_tables():
 
 if __name__ == "__main__":
     fix_master_hierarchy_raw()
-    fix_vendor_master_product_service()
     fix_vendor_transaction()
     fix_allocation_tables()
     print("\nSchema Fix Complete.")

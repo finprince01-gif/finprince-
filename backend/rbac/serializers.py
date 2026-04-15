@@ -75,10 +75,10 @@ class UserRoleSerializer(serializers.ModelSerializer):
         model = UserRole
         fields = [
             'id', 'user', 'role', 'role_name', 'role_description',
-            'user_username', 'username', 'phone', 
+            'user_username', 'username', 'email', 'phone',
             'assigned_at', 'assigned_by', 'tenant_id'
         ]
-        read_only_fields = ['id', 'assigned_at', 'assigned_by', 'tenant_id', 'username', 'phone']
+        read_only_fields = ['id', 'assigned_at', 'assigned_by', 'tenant_id', 'username', 'email', 'phone']
     
     def create(self, validated_data):
         """Create user role assignment with tenant_id and assigned_by"""
@@ -97,7 +97,7 @@ class UserWithRolesSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'company_name', 'phone',
+            'id', 'username', 'email', 'company_name', 'phone',
             'is_active', 'access_expiry', 'tenant_id', 'roles', 'permissions',
             'created_at', 'updated_at'
         ]
@@ -154,9 +154,10 @@ class UserWithRolesSerializer(serializers.ModelSerializer):
 class CreateUserWithRoleSerializer(serializers.Serializer):
     """Serializer for creating a new user with role assignment"""
     username = serializers.CharField(max_length=100)
+    email = serializers.EmailField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, min_length=6)
     phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
-    is_active = serializers.BooleanField(default=False)
+    is_active = serializers.BooleanField(default=True)
     access_expiry = serializers.DateTimeField(required=False, allow_null=True)
     role_ids = serializers.ListField(
         child=serializers.IntegerField(),
@@ -187,6 +188,12 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
                     f"Role with ID {role_id} does not exist or does not belong to your tenant"
                 )
         return value
+
+    def validate_email(self, value):
+        """Email is optional in Users & Roles onboarding."""
+        if value and value.strip():
+            return value.strip()
+        return None
     
     def create(self, validated_data):
         """Create user and assign roles"""
@@ -208,9 +215,21 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
             raise serializers.ValidationError({"detail": "Cannot determine organization (Branch ID) from your session. Please re-login."})
 
         try:
+            # Email in User model is globally unique. To avoid blocking seat creation
+            # when same email is reused, fall back to NULL (not empty string).
+            requested_email = (validated_data.get('email') or '').strip()
+            email_for_user = requested_email or None
+            if requested_email and User.objects.filter(email=requested_email).exists():
+                logger.warning(
+                    "RBAC user create: email '%s' already exists. Creating user without email.",
+                    requested_email
+                )
+                email_for_user = None
+
             # Create user with tenant_id from request
             user = User.objects.create_user(
                 username=validated_data['username'],
+                email=email_for_user,
                 password=validated_data['password'],
                 phone=validated_data.get('phone', ''),
                 tenant_id=tenant_id,
@@ -229,6 +248,7 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
                         user=user,
                         role=role,
                         username=user.username,
+                        email=requested_email or user.email,
                         phone=user.phone,
                         tenant_id=tenant_id,
                         assigned_by=request.user

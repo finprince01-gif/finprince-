@@ -1198,21 +1198,48 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     const groupedGst: Record<string, GSTRecord> = {};
                     gstList.forEach((g: any) => {
                         const gstin = (g.gstin || '').trim();
-                        if (!groupedGst[gstin]) {
-                            groupedGst[gstin] = {
+                        const rawType = String(g.gst_registration_type || g.registration_type || 'regular').toLowerCase();
+                        const normalizedType: GSTRecord['registrationType'] = ({
+                            regular: 'Regular',
+                            composition: 'Composition',
+                            special_economic_zone: 'SEZ',
+                            sez: 'SEZ',
+                            unregistered: 'Unregistered',
+                        } as Record<string, GSTRecord['registrationType']>)[rawType] || 'Regular';
+
+                        const gstKey = gstin || `no-gstin-${normalizedType}`;
+                        if (!groupedGst[gstKey]) {
+                            groupedGst[gstKey] = {
                                 id: gstin || g.id?.toString() || `gst-${Math.random().toString(36).substr(2, 9)}`,
                                 gstin: gstin,
-                                registrationType: g.registration_type || 'Regular',
+                                registrationType: normalizedType,
                                 tradeName: g.trade_name || '',
                                 legalName: g.legal_name || '',
                                 placesOfBusiness: [],
                                 isExpanded: false
                             };
                         }
-                        if (g.reference_name) {
-                            groupedGst[gstin].placesOfBusiness.push({
+
+                        const hasBranchData = Boolean(
+                            g.reference_name ||
+                            g.branch_address ||
+                            g.branch_address_line1 ||
+                            g.branch_address_line2 ||
+                            g.branch_address_line3 ||
+                            g.branch_city ||
+                            g.branch_state ||
+                            g.branch_country ||
+                            g.branch_pincode ||
+                            g.branch_contact_person ||
+                            g.branch_contact_no ||
+                            g.branch_email
+                        );
+
+                        if (hasBranchData || normalizedType === 'Unregistered') {
+                            const fallbackReference = `Branch ${groupedGst[gstKey].placesOfBusiness.length + 1}`;
+                            groupedGst[gstKey].placesOfBusiness.push({
                                 id: (g.id || '').toString(),
-                                referenceName: g.reference_name || '',
+                                referenceName: g.reference_name || fallbackReference,
                                 addressLine1: g.branch_address_line1 || '',
                                 addressLine2: g.branch_address_line2 || '',
                                 addressLine3: g.branch_address_line3 || '',
@@ -1299,7 +1326,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             // 5. Products/Services Details
             try {
                 const prodRes: any = await httpClient.get(`/api/vendors/product-services/?vendor_basic_detail=${vendor.id}`);
-                const prodData = prodRes.items || [];
+                const prodData = Array.isArray(prodRes) ? prodRes : (prodRes?.items || prodRes?.results || prodRes?.data || []);
                 if (prodData.length > 0) {
                     const mappedItems = prodData.map((item: any, idx: number) => ({
                         id: idx + 1,
@@ -2417,13 +2444,19 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 const existingGstList = Array.isArray(existingGst) ? existingGst : (existingGst.results || []);
 
                 for (const gst of gstRecords) {
-                    if (!gst.gstin) continue;
+                    const registrationType = gst.registrationType || 'Regular';
+                    const isUnregistered = registrationType === 'Unregistered';
+                    const normalizedGstin = (gst.gstin || '').trim().toUpperCase();
+
+                    if (!isUnregistered && !normalizedGstin) continue;
 
                     const branches = gst.placesOfBusiness && gst.placesOfBusiness.length > 0
                         ? gst.placesOfBusiness
                         : [{ id: '', referenceName: '', addressLine1: '', addressLine2: '', addressLine3: '', address: '', contactPerson: '', email: '', contactNumber: '', pincode: '', city: '', state: '', country: '' } as PlaceOfBusiness];
 
-                    for (const branch of branches) {
+                    for (let branchIndex = 0; branchIndex < branches.length; branchIndex++) {
+                        const branch = branches[branchIndex];
+                        const resolvedReferenceName = (branch.referenceName || '').trim() || `Branch ${branchIndex + 1}`;
                         const mapRegistrationType = (type: string) => {
                             const mapping: Record<string, string> = {
                                 'Regular': 'regular',
@@ -2440,11 +2473,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
                         const gstPayload = {
                             vendor_basic_detail: newId,
-                            gstin: gst.gstin,
-                            gst_registration_type: mapRegistrationType(gst.registrationType),
-                            legal_name: gst.legalName || 'N/A',
-                            trade_name: gst.tradeName || gst.legalName || 'N/A',
-                            reference_name: branch.referenceName || '',
+                            gstin: isUnregistered ? '' : normalizedGstin,
+                            gst_registration_type: mapRegistrationType(registrationType),
+                            legal_name: gst.legalName || vendorName || 'N/A',
+                            trade_name: gst.tradeName || gst.legalName || vendorName || 'N/A',
+                            reference_name: resolvedReferenceName,
                             branch_address: [branch.addressLine1, branch.addressLine2, branch.addressLine3].filter(Boolean).join(', ') || branch.address || '',
                             branch_address_line1: branch.addressLine1 || '',
                             branch_address_line2: branch.addressLine2 || '',
@@ -2458,21 +2491,20 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                             branch_country: branch.country || ''
                         };
 
+                        const branchId = (branch.id || '').toString();
                         const existingRecord = existingGstList.find((g: any) => {
-                            // Match by ID if available (from database)
-                            if (branch.id && !branch.id.startsWith('gst-')) {
-                                return g.id.toString() === branch.id.toString();
+                            if (branchId && g.id?.toString() === branchId) {
+                                return true;
                             }
-                            // Fallback to GSTIN + Name match for new entries or when ID is missing
-                            return g.gstin === gst.gstin && g.reference_name === (branch.referenceName || '');
+                            return (g.gstin || '') === gstPayload.gstin && (g.reference_name || '') === resolvedReferenceName;
                         });
 
                         if (existingRecord) {
                             await httpClient.patch(`/api/vendors/gst-details/${existingRecord.id}/`, gstPayload);
-                            console.log(`GST updated: ${gst.gstin}`);
+                            console.log(`GST updated: ${gstPayload.gstin || 'UNREGISTERED'}`);
                         } else {
                             await httpClient.post('/api/vendors/gst-details/', gstPayload);
-                            console.log(`GST created: ${gst.gstin}`);
+                            console.log(`GST created: ${gstPayload.gstin || 'UNREGISTERED'}`);
                         }
                     }
                 }

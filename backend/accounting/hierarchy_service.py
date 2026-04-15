@@ -37,12 +37,32 @@ def get_flat_hierarchy_rows(business_type=None):
     This intentionally matches the HierarchyRow interface in the frontend
     TypeScript components.
 
-    NOTE: master_hierarchy_raw has no primary key column. We generate a
-    sequential row_num as the id.
+    NOTE:
+    - In most environments we add an `id` AUTO_INCREMENT column to
+      master_hierarchy_raw via `backend/fix_schema.py`.
+    - We prefer ordering by that `id` so the frontend tree matches the
+      exact row order users see in the table.
+    - If the column is missing, we fall back to the previous deterministic
+      alphabetical ordering and generate sequential ids.
     """
     logger.info(f"Fetching flat hierarchy rows (filter: {business_type})...")
 
-    query = """
+    query_with_id = """
+        SELECT
+            id,
+            `Type of Business`,
+            `Financial Reporting`,
+            `Major Group`,
+            `Group`,
+            `Sub-group 1`,
+            `Sub-group 2`,
+            `Sub-group 3`,
+            `Ledgers`,
+            `Code`
+        FROM master_hierarchy_raw
+    """
+
+    query_without_id = """
         SELECT
             `Type of Business`,
             `Financial Reporting`,
@@ -57,31 +77,58 @@ def get_flat_hierarchy_rows(business_type=None):
     """
     params = []
     if business_type:
-        query += " WHERE `Type of Business` = %s"
+        query_with_id += " WHERE `Type of Business` = %s"
+        query_without_id += " WHERE `Type of Business` = %s"
         params.append(business_type)
-        
-    query += " ORDER BY `Major Group`, `Group`, `Sub-group 1`, `Sub-group 2`, `Sub-group 3`, `Ledgers`"
 
+    # Prefer "table order" via id when available.
+    # Fallback: previous alphabetical ordering.
     with connection.cursor() as cursor:
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
+        try:
+            cursor.execute(query_with_id + " ORDER BY id", params)
+            rows = cursor.fetchall()
+            has_id = True
+        except Exception:
+            cursor.execute(
+                query_without_id
+                + " ORDER BY `Major Group`, `Group`, `Sub-group 1`, `Sub-group 2`, `Sub-group 3`, `Ledgers`",
+                params,
+            )
+            rows = cursor.fetchall()
+            has_id = False
 
     logger.info(f"Fetched {len(rows)} flat rows from master_hierarchy_raw.")
 
     result = []
     for idx, row in enumerate(rows, start=1):
-        result.append({
-            "id": idx,                          # Generated sequential ID (no PK in DB)
-            "type_of_business_1": _clean_val(row[0]),
-            "financial_reporting_1": _clean_val(row[1]),
-            "major_group_1": _clean_val(row[2]),
-            "group_1": _clean_val(row[3]),
-            "sub_group_1_1": _clean_val(row[4]),
-            "sub_group_2_1": _clean_val(row[5]),
-            "sub_group_3_1": _clean_val(row[6]),
-            "ledger_1": _clean_val(row[7]),
-            "code": _clean_val(row[8]),
-        })
+        if has_id:
+            # row indices: 0=id, 1..9=fields
+            result.append({
+                "id": int(row[0]),
+                "type_of_business_1": _clean_val(row[1]),
+                "financial_reporting_1": _clean_val(row[2]),
+                "major_group_1": _clean_val(row[3]),
+                "group_1": _clean_val(row[4]),
+                "sub_group_1_1": _clean_val(row[5]),
+                "sub_group_2_1": _clean_val(row[6]),
+                "sub_group_3_1": _clean_val(row[7]),
+                "ledger_1": _clean_val(row[8]),
+                "code": _clean_val(row[9]),
+            })
+        else:
+            # Generated sequential ID fallback
+            result.append({
+                "id": idx,
+                "type_of_business_1": _clean_val(row[0]),
+                "financial_reporting_1": _clean_val(row[1]),
+                "major_group_1": _clean_val(row[2]),
+                "group_1": _clean_val(row[3]),
+                "sub_group_1_1": _clean_val(row[4]),
+                "sub_group_2_1": _clean_val(row[5]),
+                "sub_group_3_1": _clean_val(row[6]),
+                "ledger_1": _clean_val(row[7]),
+                "code": _clean_val(row[8]),
+            })
 
     return result
 

@@ -88,22 +88,61 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     const [payFromOptions, setPayFromOptions] = useState<Ledger[]>([]);
     const [vendors, setVendors] = useState<any[]>([]);
     const [customers, setCustomers] = useState<any[]>([]);
+    const [hierarchy, setHierarchy] = useState<any[]>([]);
 
-    // Fetch ledgers and Pay From options on mount
+    const normalizeName = (s: any) => (s ?? '').toString().trim().toLowerCase();
+
+    const buildHierarchySets = (rows: any[]) => {
+        const nonLeaf = new Set<string>();
+        const leaf = new Set<string>();
+
+        for (const r of rows || []) {
+            const mg = normalizeName(r.major_group_1);
+            const g = normalizeName(r.group_1);
+            const sg1 = normalizeName(r.sub_group_1_1);
+            const sg2 = normalizeName(r.sub_group_2_1);
+            const sg3 = normalizeName(r.sub_group_3_1);
+            const led = normalizeName(r.ledger_1);
+
+            if (mg) nonLeaf.add(mg);
+            if (g) nonLeaf.add(g);
+            if (sg1) nonLeaf.add(sg1);
+            if (sg2) nonLeaf.add(sg2);
+            if (sg3) nonLeaf.add(sg3);
+
+            // Treat the deepest non-null value in the row as a selectable endpoint.
+            const endpoint = led || sg3 || sg2 || sg1 || g || mg;
+            if (endpoint) leaf.add(endpoint);
+        }
+
+        return { nonLeaf, leaf };
+    };
+
+    // For PayTo/ReceiveFrom dropdowns we do NOT want hierarchy headings (group/sub-groups)
+    // even if the hierarchy marks them as endpoints. Only real ledgers/vendors/customers.
+    const isHierarchyHeadingName = (name: string, sets: { nonLeaf: Set<string>, leaf: Set<string> }) => {
+        const n = normalizeName(name);
+        return !!n && sets.nonLeaf.has(n);
+    };
+
+    // Fetch ledgers and master data on mount
     useEffect(() => {
         const fetchAllData = async () => {
             try {
-                const [ledgersData, payFromData, vendorsData, customersData, configsData] = await Promise.all([
+                const [ledgersData, payFromData, vendorsData, customersData, configsData, payToData, hierarchyData] = await Promise.all([
                     apiService.getLedgers(),
                     apiService.getPayFromLedgers(),
                     apiService.getRichVendors(),
                     apiService.getRichCustomers(),
-                    httpClient.get<any[]>('/api/masters/master-voucher-payments/')
+                    httpClient.get<any[]>('/api/masters/master-voucher-payments/'),
+                    apiService.getPayToLedgers(),
+                    apiService.getHierarchy(),
                 ]);
                 setAllLedgers(ledgersData || []);
                 setPayFromOptions(payFromData || []);
                 setVendors(vendorsData || []);
                 setCustomers(customersData || []);
+                setHierarchy(Array.isArray(hierarchyData) ? hierarchyData : []);
 
                 const configs = (configsData || []).map(config => ({
                     ...config,
@@ -113,6 +152,16 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 if (configs && configs.length === 1) {
                     setSelectedPaymentConfig(configs[0].voucher_name);
                 }
+
+                // Filter Pay To so we don't show hierarchy headings (group/sub-group names).
+                // Always keep Vendor/Customer; filter only the "ledger" type when it is a heading-only node.
+                const sets = buildHierarchySets(Array.isArray(hierarchyData) ? hierarchyData : []);
+                const filteredPayTo = (payToData || []).filter((opt: any) => {
+                    if (!opt) return false;
+                    if ((opt.type || '').toString().toLowerCase() !== 'ledger') return true;
+                    return !isHierarchyHeadingName(opt.name, sets);
+                });
+                setPayToOptions(filteredPayTo);
             } catch (error) {
                 console.error('Error fetching data:', error);
                 showError('Failed to fetch master data');
@@ -121,20 +170,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         fetchAllData();
     }, []);
 
-    // Filter Pay To options: All ledgers EXCEPT those in Pay From + Vendors + Customers
+    // Pay To options are fetched + filtered in fetchAllData()
     const [payToOptions, setPayToOptions] = useState<any[]>([]);
-
-    useEffect(() => {
-        const fetchPayTo = async () => {
-            try {
-                const data = await apiService.getPayToLedgers();
-                setPayToOptions(data);
-            } catch (error) {
-                console.error('Failed to fetch Pay To options:', error);
-            }
-        };
-        fetchPayTo();
-    }, []);
 
     // Single mode state
     const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);

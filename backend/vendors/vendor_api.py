@@ -26,10 +26,10 @@ from .models import (
     VendorMasterGSTDetails,
     VendorMasterTDS,
     VendorMasterBanking,
-    VendorMasterTerms,
-    VendorMasterProductService
+    VendorMasterTerms
 )
 from .vendor_database import VendorDatabase
+from .vendorproduct_database import VendorProductServiceDatabase
 from accounting.models import TransactionAllocation as PaymentVoucherItem
 from accounting.serializers_payment import PaymentVoucherItemSerializer
 
@@ -656,9 +656,9 @@ class PurchaseVendorCreateView(APIView):
                                 "supplier_item_name": s_name
                             })
                 
-                VendorMasterProductService.objects.create(
+                VendorProductServiceDatabase.upsert_product_services(
                     tenant_id=effective_tenant_id,
-                    vendor_basic_detail=vendor,
+                    vendor_basic_detail_id=vendor.id,
                     items=valid_items,
                     created_by=username
                 )

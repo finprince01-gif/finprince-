@@ -7,6 +7,15 @@ class CustomUserManager(BaseUserManager):
     def create_user(self, username, password=None, **extra_fields):
         if not username:
             raise ValueError('The Username field must be set')
+
+        # Normalize blank email to NULL so unique(email) does not conflict on ''.
+        email = extra_fields.get('email')
+        if isinstance(email, str):
+            email = email.strip()
+        if not email:
+            extra_fields['email'] = None
+        else:
+            extra_fields['email'] = email
         
         # Ensure tenant creation logic
         tenant_id = extra_fields.get('tenant_id')

@@ -2857,12 +2857,62 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const mergedMap = new Map<string, Ledger>();
     ledgers.forEach(l => mergedMap.set(String(l.id ?? l.name), l));
     freshLedgers.forEach(l => mergedMap.set(String(l.id ?? l.name), l));
-    const effectiveLedgers = Array.from(mergedMap.values());
+    const effectiveLedgers = Array.from(mergedMap.values()).map((l) => ({
+      ...l,
+      // Canonical display name should be actual ledger endpoint when available.
+      name: (l.ledger_type || l.name || '').toString().trim()
+    }));
 
     // Helper to identify cash/bank accounts robustly
     const isCashBank = (l: Ledger) => {
       const g = (l.group || '').toLowerCase();
       return g.includes('cash') || g.includes('bank') || g.includes('od') || g.includes('cc');
+    };
+
+    // Exclude hierarchy heading names accidentally saved as "ledgers" (group/sub-group nodes).
+    // Keep true endpoints from the hierarchy (deepest value per row), and any custom ledger names.
+    const normalizeName = (s: any) => (s ?? '').toString().trim().toLowerCase();
+    const nonLeaf = new Set<string>();
+    const leaf = new Set<string>();
+    hierarchy.forEach((r: any) => {
+      const mg = normalizeName(r.major_group_1);
+      const g = normalizeName(r.group_1);
+      const sg1 = normalizeName(r.sub_group_1_1);
+      const sg2 = normalizeName(r.sub_group_2_1);
+      const sg3 = normalizeName(r.sub_group_3_1);
+      const led = normalizeName(r.ledger_1);
+      if (mg) nonLeaf.add(mg);
+      if (g) nonLeaf.add(g);
+      if (sg1) nonLeaf.add(sg1);
+      if (sg2) nonLeaf.add(sg2);
+      if (sg3) nonLeaf.add(sg3);
+      const endpoint = led || sg3 || sg2 || sg1 || g || mg;
+      if (endpoint) leaf.add(endpoint);
+    });
+    const isHierarchyHeadingName = (name: string) => {
+      const n = normalizeName(name);
+      return !!n && nonLeaf.has(n);
+    };
+
+    const isRealLedgerLeaf = (l: Ledger) => {
+      const n = normalizeName(l.name);
+      if (!n) return false;
+      // Exclude any structural nodes (group/sub-groups/categories) accidentally saved in ledgers.
+      if (isHierarchyHeadingName(l.name)) return false;
+      if (
+        n === normalizeName(l.group as any) ||
+        n === normalizeName(l.sub_group_1 as any) ||
+        n === normalizeName(l.sub_group_2 as any) ||
+        n === normalizeName(l.sub_group_3 as any)
+      ) return false;
+      return true;
+    };
+
+    // Only show true vendor ledgers in "Vendor Name" dropdown (Purchase).
+    // This prevents unrelated ledgers like "Output GST" from appearing.
+    const isVendorLedger = (l: Ledger) => {
+      const g = (l.group || '').toLowerCase().trim();
+      return g.includes('sundry creditors') || g.includes('trade payables');
     };
 
     const accountLedgers = cashBankLedgers.length > 0
@@ -2871,16 +2921,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     const allLedgers = [...effectiveLedgers];
 
-    const partyLedgers = effectiveLedgers.filter(l => !isCashBank(l));
+    const partyLedgers = effectiveLedgers.filter(l => !isCashBank(l) && isRealLedgerLeaf(l));
 
     const partyOptions = [...new Set([
-      ...effectiveLedgers.filter(l => !isCashBank(l)).map(l => l.name),
+      ...effectiveLedgers.filter(l => !isCashBank(l) && isRealLedgerLeaf(l)).map(l => l.name),
       ...richVendors.map(v => v.vendor_name),
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);
 
     const purchasePartyOptions = [...new Set([
-      ...effectiveLedgers.filter(l => !isCashBank(l)).map(l => l.name),
+      ...effectiveLedgers.filter(l => isVendorLedger(l) && isRealLedgerLeaf(l)).map(l => l.name),
       ...richVendors.map(v => v.vendor_name)
     ])].filter(Boolean);
 
@@ -2888,22 +2938,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);
 
-    // Build the complete ledger options list:
-    // 1. User-created + fresh fetched ledgers
-    const userLedgerNames = effectiveLedgers.map(l => l.name);
-    // 2. Default/pre-built hierarchy ledgers (same logic as SalesVoucher)
-    const hierarchyLedgers = new Set<string>();
-    hierarchy.forEach(row => {
-      if (row.ledger_1) hierarchyLedgers.add(row.ledger_1);
-      if (row.sub_group_3_1) hierarchyLedgers.add(row.sub_group_3_1);
-      if (row.sub_group_2_1) hierarchyLedgers.add(row.sub_group_2_1);
-      if (row.sub_group_1_1) hierarchyLedgers.add(row.sub_group_1_1);
-      if (row.group_1) hierarchyLedgers.add(row.group_1);
-      if (row.major_group_1) hierarchyLedgers.add(row.major_group_1);
-    });
-    const allLedgerOptions = Array.from(
-      new Set([...userLedgerNames, ...Array.from(hierarchyLedgers)])
-    ).filter(Boolean);
+    // Ledger lists used in voucher account dropdowns must only contain true ledgers.
+    const allLedgerOptions = Array.from(new Set(
+      effectiveLedgers.filter(isRealLedgerLeaf).map(l => l.name)
+    )).filter(Boolean);
 
     return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
@@ -3050,6 +3088,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }
   }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers, setGrnRefNo, setSelectedPurchasePOs, setPurchaseItems, setPurchaseAdvanceRefs, fetchVendorAdvances]);
+
+  // Keep purchase addresses and GSTIN in sync when user changes branch after selecting a vendor.
+  useEffect(() => {
+    if (voucherType !== 'Purchase' || !vendorId) return;
+    if (!selectedBranch) return;
+
+    const selectedGstRecord = vendorGstDetails.find(
+      (g: any) => g.vendor_basic_detail === vendorId && g.reference_name === selectedBranch
+    );
+    if (!selectedGstRecord) return;
+
+    if (selectedGstRecord.gstin) setGstin(selectedGstRecord.gstin);
+    if (selectedGstRecord.branch_address) {
+      setAddressFields(selectedGstRecord.branch_address);
+    }
+  }, [voucherType, vendorId, selectedBranch, vendorGstDetails, setAddressFields, setGstin]);
 
   const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string, branch: string = '') => {
     try {
@@ -9982,8 +10036,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     try {
       const response = await httpClient.post('/api/vouchers/expenses/', payload);
-
-      showSuccess('Expense voucher saved successfully!');
+      const savedNo = (response as any)?.voucher_number || voucherNumber;
+      showSuccess(`Expense voucher ${savedNo} saved successfully.`);
 
       // Reset form
       setExpenseRows([{
@@ -10784,7 +10838,33 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               )
             )}
 
-            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Debit Note'].includes(voucherType) && (
+            {voucherType === 'Credit Note' && (
+              creditNoteActiveTab !== 'transit' ? (
+                <button
+                  onClick={() => {
+                    const creditTabs = cnInForeignCurrency === 'Yes'
+                      ? ['invoice', 'items_foreign', 'items_inr', 'due', 'transit']
+                      : ['invoice', 'items', 'due', 'transit'];
+
+                    const idx = creditTabs.indexOf(creditNoteActiveTab);
+                    if (idx >= 0 && idx < creditTabs.length - 1) {
+                      setCreditNoteActiveTab(creditTabs[idx + 1] as any);
+                    }
+                  }}
+                  className="erp-button-primary"
+                >
+                  Next
+                </button>
+              ) : (
+                <div className="flex space-x-3">
+                  <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                  <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                  <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                </div>
+              )
+            )}
+
+            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Credit Note', 'Debit Note'].includes(voucherType) && (
               <div className="flex space-x-3">
                 <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                 <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>

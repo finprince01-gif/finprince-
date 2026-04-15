@@ -807,7 +807,9 @@ const MastersPage: React.FC<MastersPageProps> = ({
             onCreateLedger={(data) => {
               // Create the ledger object with all hierarchy data
               const newLedger: Ledger = {
-                name: data.customName,
+                // Only true ledger-level entries should carry a ledger endpoint `name`.
+                // For subgroup creations we keep it blank so it doesn't appear as a ledger leaf.
+                name: data.ledger_type ? data.customName : '',
                 group: data.group || '',
                 category: data.category || undefined,
                 sub_group_1: data.sub_group_1 || undefined,
@@ -821,12 +823,8 @@ const MastersPage: React.FC<MastersPageProps> = ({
                 ...(data.opening_balance_type !== undefined ? { opening_balance_type: data.opening_balance_type } : {}),
               };
 
-              // Directly add the ledger
-              if (!ledgers.find(l => l.name.toLowerCase() === newLedger.name.toLowerCase())) {
-                onAddLedger(newLedger);
-              } else {
-                showError('A ledger with this name already exists!');
-              }
+              // Let backend enforce exact uniqueness rules by hierarchy + tenant.
+              onAddLedger(newLedger);
             }}
 
           />

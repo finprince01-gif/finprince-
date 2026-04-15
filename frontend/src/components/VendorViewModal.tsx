@@ -56,7 +56,7 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
             let itemList = [];
             try {
                 const prodRes: any = await httpClient.get(`/api/vendors/product-services/?vendor_basic_detail=${vendorId}`);
-                itemList = prodRes.items || [];
+                itemList = Array.isArray(prodRes) ? prodRes : (prodRes?.items || prodRes?.results || prodRes?.data || []);
             } catch (e) { }
 
             setVendorData({
