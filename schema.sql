@@ -2976,7 +2976,17 @@ CREATE TABLE `vendors_vendormasterproductservice` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_vendorcreation_basicdetail',
-  `items` json NOT NULL COMMENT 'JSON array of product/service items;
+  `items` json NOT NULL COMMENT 'JSON array of product/service items; empty array [] when none added',
+  `created_at` datetime(6) NOT NULL,
+  `created_by` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  `updated_by` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vendor_prodserv_vendor_unique` (`vendor_basic_detail_id`),
+  KEY `vendor_prodserv_tenant_id_idx` (`tenant_id`),
+  CONSTRAINT `vendor_prodserv_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE TABLE `vendor_master_vendorcreation_productservices_items` (
@@ -2989,11 +2999,19 @@ CREATE TABLE `vendor_master_vendorcreation_productservices_items` (
   `supplier_item_name` varchar(255) DEFAULT NULL,
   `tenant_id` varchar(36) NOT NULL,
   `created_at` datetime(6) NOT NULL,
+  `vendor_basic_detail_id` bigint DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `created_by` varchar(100) DEFAULT NULL,
+  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `vendor_master_vendor_product_service_id_ab90bd5f_fk_vendors_v` (`product_service_id`),
   KEY `vendor_master_vendorcreatio_tenant_id_941aa1cb` (`tenant_id`),
+  KEY `idx_vendor_items_vendor_id` (`vendor_basic_detail_id`),
+  KEY `idx_vendor_items_tenant_id` (`tenant_id`),
+  CONSTRAINT `fk_vendor_basic_detail` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE,
   CONSTRAINT `vendor_master_vendor_product_service_id_ab90bd5f_fk_vendors_v` FOREIGN KEY (`product_service_id`) REFERENCES `vendors_vendormasterproductservice` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 CREATE TABLE `vendor_master_vendorcreation_tds` (
