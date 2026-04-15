@@ -407,26 +407,33 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                 const existingGstList: any[] = Array.isArray(existingGst) ? existingGst : (existingGst.results || []);
 
                 for (const gst of gstRecords) {
-                    if (!gst.gstin) continue;
+                    const registrationType = gst.registrationType || 'Regular';
+                    const isUnregistered = registrationType === 'Unregistered';
+                    const normalizedGstin = (gst.gstin || '').trim().toUpperCase();
+
+                    if (!isUnregistered && !normalizedGstin) continue;
+
                     const branches = gst.placesOfBusiness.length > 0
                         ? gst.placesOfBusiness
                         : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '' }];
 
-                    for (const branch of branches) {
+                    for (let branchIndex = 0; branchIndex < branches.length; branchIndex++) {
+                        const branch = branches[branchIndex];
+                        const resolvedReferenceName = (branch.referenceName || '').trim() || `Branch ${branchIndex + 1}`;
                         const gstPayload = {
                             vendor_basic_detail: newId,
-                            gstin: gst.gstin,
-                            gst_registration_type: mapRegType(gst.registrationType),
-                            legal_name: gst.legalName || 'N/A',
-                            trade_name: gst.tradeName || gst.legalName || 'N/A',
-                            reference_name: branch.referenceName || '',
+                            gstin: isUnregistered ? '' : normalizedGstin,
+                            gst_registration_type: mapRegType(registrationType),
+                            legal_name: gst.legalName || vendorName || 'N/A',
+                            trade_name: gst.tradeName || gst.legalName || vendorName || 'N/A',
+                            reference_name: resolvedReferenceName,
                             branch_address: branch.address || '',
                             branch_contact_person: (branch as any).contactPerson || '',
                             branch_email: branch.email || '',
                             branch_contact_no: (branch as any).contactNumber || '',
                         };
                         const existing = existingGstList.find(g =>
-                            g.gstin === gst.gstin && g.reference_name === (branch.referenceName || ''),
+                            (g.gstin || '') === gstPayload.gstin && (g.reference_name || '') === resolvedReferenceName,
                         );
                         if (existing) {
                             await httpClient.patch(`/api/vendors/gst-details/${existing.id}/`, gstPayload);

@@ -608,8 +608,10 @@ const App: React.FC = () => {
     try {
       const response = await apiService.saveLedger(ledger);
       if (response && response.id) {
-        setLedgers(prev => [...prev, response].sort((a, b) => a.name.localeCompare(b.name)));
-        showSuccess(`Ledger "${response.name}" saved successfully.`);
+        // Preserve backend table order (no client-side alphabetical sorting).
+        setLedgers(prev => [...prev, response]);
+        const savedName = response.ledger_type || response.name || 'Ledger entry';
+        showSuccess(`Ledger "${savedName}" saved successfully.`);
       } else {
         console.error(`Failed to save ledger ${ledger.name}: No ID in response`, response);
         showError(`Failed to save ledger "${ledger.name}". Please try again.`);
@@ -631,14 +633,17 @@ const App: React.FC = () => {
 
       if (ledgerId) {
         const response = await apiService.updateLedger(ledgerId, ledger);
-        if (response.success) {
-
-          setLedgers(prev => prev.map(l => l.id === ledgerId ? { ...l, ...ledger } : l).sort((a, b) => a.name.localeCompare(b.name)));
+        if (response && (response as any).id) {
+          // Preserve backend order; replace in place.
+          setLedgers(prev => prev.map(l => l.id === ledgerId ? response : l));
+        } else {
+          // Fallback: optimistic local merge if backend response shape changes.
+          setLedgers(prev => prev.map(l => l.id === ledgerId ? { ...l, ...ledger } : l));
         }
       } else {
         // Fallback: update by name if no ID available
 
-        setLedgers(prev => prev.map(l => l.name === idOrName ? { ...l, ...ledger } : l).sort((a, b) => a.name.localeCompare(b.name)));
+        setLedgers(prev => prev.map(l => l.name === idOrName ? { ...l, ...ledger } : l));
       }
     } catch (err) {
       console.error(`Error updating ledger ${idOrName}:`);

@@ -33,6 +33,7 @@ class MasterLedgerGroupSerializer(BranchModelSerializerMixin, serializers.ModelS
 class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerializer):
     question_answers = serializers.JSONField(source='additional_data', required=False, allow_null=True)
     balance = serializers.SerializerMethodField()
+    ledger_type = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = MasterLedger
@@ -52,12 +53,12 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
         ]
         read_only_fields = ['id', 'code', 'balance', 'tenant_id', 'created_at', 'updated_at']
         extra_kwargs = {
+            'name': {'required': False, 'allow_null': True, 'allow_blank': True},
             'category': {'required': False, 'allow_blank': True, 'default': ''},
             'group': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_1': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_2': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_3': {'required': False, 'allow_null': True, 'allow_blank': True},
-            'ledger_type': {'required': False, 'allow_null': True, 'allow_blank': True},
             'gstin': {'required': False, 'allow_null': True, 'allow_blank': True},
             'registration_type': {'required': False, 'allow_null': True, 'allow_blank': True},
             'state': {'required': False, 'allow_null': True, 'allow_blank': True},
@@ -136,8 +137,23 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
             logger.error(f"Error in get_balance: {e}")
             return 0.0
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Keep frontend-safe string values even for subgroup-only rows.
+        if ret.get('name') is None:
+            ret['name'] = ''
+        if ret.get('ledger_type') in (None, ''):
+            ret['ledger_type'] = ret.get('name') or ''
+        return ret
+
 
     def create(self, validated_data):
+        ledger_type = validated_data.pop('ledger_type', None)
+        if ledger_type is not None:
+            validated_data['name'] = (ledger_type or '').strip() or None
+        elif not (validated_data.get('name') or '').strip():
+            validated_data['name'] = None
+
         # Guard: category is NOT NULL in DB — never allow null to reach Django ORM
         if not validated_data.get('category'):
             validated_data['category'] = ''
@@ -152,6 +168,12 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
         return instance
 
     def update(self, instance, validated_data):
+        ledger_type = validated_data.pop('ledger_type', None)
+        if ledger_type is not None:
+            validated_data['name'] = (ledger_type or '').strip() or None
+        elif 'name' in validated_data and not (validated_data.get('name') or '').strip():
+            validated_data['name'] = None
+
         # Update Master Ledger fields
         if 'category' in validated_data and validated_data['category'] is None:
             validated_data['category'] = ''
@@ -480,4 +502,3 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         return ret
-

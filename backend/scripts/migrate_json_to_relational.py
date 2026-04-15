@@ -27,7 +27,6 @@ from accounting.models_voucher_receipt import ReceiptVoucherItem, ReceiptAllocat
 from accounting.models_voucher_journal import VoucherJournal, JournalVoucherEntry
 from accounting.models_voucher_expense import VoucherExpense, ExpenseLineItem
 from accounting.models_voucher_debit_note import VoucherDebitNoteSupplyDetails, VoucherDebitNoteItem
-from vendors.models import VendorMasterProductService, VendorProductServiceItem
 from customerportal.database import (
     CustomerTransactionSalesQuotationGeneral, CustomerTransactionSalesQuotationGeneralItem,
     CustomerTransactionSalesQuotationSpecific, CustomerTransactionSalesQuotationSpecificItem
@@ -280,25 +279,6 @@ def migrate_debit_note_items():
                 }
             )
 
-def migrate_vendor_products():
-    logger.info("Migrating Vendor Products/Services...")
-    vendor_products = VendorMasterProductService.objects.exclude(items__in=[None, [], '[]'])
-    for vp in vendor_products:
-        items = vp.items
-        if isinstance(items, str): items = json.loads(items)
-        for item in items:
-            VendorProductServiceItem.objects.get_or_create(
-                product_service=vp,
-                item_code=item.get('item_code', ''),
-                item_name=item.get('item_name', ''),
-                defaults={
-                    'tenant_id': vp.tenant_id,
-                    'hsn_sac_code': item.get('hsn_sac_code', ''),
-                    'supplier_item_code': item.get('supplier_item_code', ''),
-                    'supplier_item_name': item.get('supplier_item_name', '')
-                }
-            )
-
 def migrate_customer_quotations():
     logger.info("Migrating Customer Quotations...")
     # General
@@ -350,7 +330,6 @@ if __name__ == "__main__":
         migrate_journal_entries()
         migrate_expense_items()
         migrate_debit_note_items()
-        migrate_vendor_products()
         migrate_customer_quotations()
         logger.info("MIGRATION COMPLETED SUCCESSFULLY!")
     except Exception as e:

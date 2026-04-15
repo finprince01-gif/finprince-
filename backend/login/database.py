@@ -46,14 +46,21 @@ def get_user_by_email(email):
         return None
 
 def get_user_by_email_and_username(email, username):
-    """Get user by email and username."""
+    """Get user by branch email+username OR user email+username."""
     from django.contrib.auth import get_user_model
     from core.models import Branch
     User = get_user_model()
     try:
-        branch = Branch.objects.get(email=email)
-        return User.objects.get(username=username, tenant_id=branch.id)
-    except (Branch.DoesNotExist, User.DoesNotExist):
+        # Primary path: branch email identifies tenant, username identifies user inside tenant
+        branch = Branch.objects.filter(email=email).first()
+        if branch:
+            user = User.objects.filter(username=username, tenant_id=branch.id).first()
+            if user:
+                return user
+
+        # Fallback path: allow direct login by created user's email + username
+        return User.objects.filter(email=email, username=username).first()
+    except User.DoesNotExist:
         return None
     except Exception as e:
         logger.error(f"Error fetching user by email and username: {e}")

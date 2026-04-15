@@ -9,7 +9,6 @@ from rest_framework.permissions import IsAuthenticated
 import logging
 
 from .vendorproduct_serializers import (
-    VendorProductServiceSerializer,
     VendorProductServiceCreateSerializer,
     VendorProductServiceUpdateSerializer,
 )

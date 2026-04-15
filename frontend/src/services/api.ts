@@ -150,11 +150,13 @@ class ApiService {
     }
 
     async updateLedger(id: number, data: Partial<Ledger>) {
-        return httpClient.put<{ success: boolean }>(`/api/masters/ledgers/${id}/`, data);
+        // Backend returns the updated ledger object, not a {success:true} wrapper.
+        return httpClient.put<Ledger>(`/api/masters/ledgers/${id}/`, data);
     }
 
     async deleteLedger(id: number) {
-        return httpClient.delete<{ success: boolean }>(`/api/masters/ledgers/${id}/`);
+        // Backend returns 204 No Content.
+        return httpClient.delete<any>(`/api/masters/ledgers/${id}/`);
     }
 
     // ============================================================================

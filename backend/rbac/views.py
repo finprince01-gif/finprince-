@@ -257,6 +257,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                 user=user,
                 role=role,
                 username=user.username,
+                email=user.email,
                 phone=user.phone,
                 tenant_id=tenant_id,
                 assigned_by=request.user

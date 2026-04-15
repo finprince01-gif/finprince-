@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Icon from './Icon';
 import LedgerQuestions from './LedgerQuestions';
-import { showWarning } from '../utils/toast';
+import { showError, showSuccess, showWarning } from '../utils/toast';
+import { httpClient } from '../services';
 
 interface HierarchyRow {
     id: number;
@@ -50,6 +51,7 @@ interface TreeNode {
 interface LedgerCreationWizardProps {
     onCreateLedger: (data: {
         customName: string;
+        entryLevel?: 'sub_group_2' | 'sub_group_3' | 'ledger';
         group: string | null;
         category: string | null;
         sub_group_1: string | null;
@@ -74,6 +76,10 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     const [subGroup3Input, setSubGroup3Input] = useState('');
     const [ledgerTypeInput, setLedgerTypeInput] = useState('');
     const [questionAnswers, setQuestionAnswers] = useState<Record<number, any>>({});
+
+    // Edit existing (tenant) ledgers directly in the preview panel
+    const [isEditingExistingLedger, setIsEditingExistingLedger] = useState(false);
+    const [editLedgerName, setEditLedgerName] = useState('');
 
     // Opening balance step state
     const [showOpeningBalanceStep, setShowOpeningBalanceStep] = useState(false);
@@ -110,12 +116,15 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
         const finalCategory = normalizeCategory(ledger.category);
 
+        const ledgerLeafName = (ledger.ledger_type && ledger.ledger_type.trim()) || ledger.name;
+
         // If this ledger has a parent, find the parent and use its hierarchy + name as ledger_type
         if (ledger.parent_ledger_id) {
             const parent = allLedgers.find(l => l.id === ledger.parent_ledger_id);
             if (parent) {
                 const pSg2 = isBlankStr(parent.sub_group_2) ? null : parent.sub_group_2;
                 const pSg3 = isBlankStr(parent.sub_group_3) ? null : parent.sub_group_3;
+                const parentLeafName = (parent.ledger_type && parent.ledger_type.trim()) || parent.name;
                 return {
                     id: ledger.id,
                     type_of_business_1: null,
@@ -125,8 +134,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     sub_group_1_1: isBlankStr(parent.sub_group_1) ? null : parent.sub_group_1,
                     sub_group_2_1: pSg2,
                     sub_group_3_1: pSg3,
-                    ledger_1: parent.name,  // Parent name becomes the "type"
-                    custom_ledger: ledger.name,  // Child name goes here!
+                    ledger_1: parentLeafName || null,  // Parent name becomes the "type"
+                    custom_ledger: ledgerLeafName || null,  // Child name goes here!
                     code: null,
                     isCustom: true
                 };
@@ -136,14 +145,13 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         // Regular custom ledger (no parent)
         // Determine if ledger name duplicates the deepest hierarchy level
         // If so, we treat the ledger as residing AT that level, not below it.
-        let ledgerLevelVal: string | null = ledger.name;
+        let ledgerLevelVal: string | null = ledgerLeafName || null;
 
-        if (!ledger.ledger_type) {
-            // If the name is already used in ANY of the subgroup levels, 
-            // don't repeat it at the ledger level. 
-            if (normSg3 === ledger.name || normSg2 === ledger.name || normSg1 === ledger.name) {
-                ledgerLevelVal = null;
-            }
+        // If the name is already used in ANY of the subgroup levels,
+        // don't repeat it again at the ledger level. This prevents the UI from
+        // showing the same string twice (e.g. subgroup "X" and ledger "X").
+        if (ledgerLevelVal && (normSg3 === ledgerLevelVal || normSg2 === ledgerLevelVal || normSg1 === ledgerLevelVal)) {
+            ledgerLevelVal = null;
         }
 
         return {
@@ -297,6 +305,9 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         // Second pass: Add nested custom ledgers — smart placement
         ledgers.forEach(ledger => {
             if (!ledger.parent_ledger_id) return;
+            // If this ledger already got placed in pass-1 (via custom_ledger row),
+            // do not add it again here. This prevents duplicate/incorrect nesting.
+            if (ledgerIdToPath.has(ledger.id)) return;
 
             const nSg3 = isBlankValue(ledger.sub_group_3) ? null : ledger.sub_group_3;
             const nLt  = isBlankValue(ledger.ledger_type)  ? null : ledger.ledger_type;
@@ -367,10 +378,22 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
             // --- Default case: add as a child of the parent ledger node ---
             const parentNode = tree.get(parentPath)!;
+            const childDisplayName =
+                (ledger.name || '').trim() ||
+                (nLt || '').trim() ||
+                (nSg3 || '').trim() ||
+                (nSg2 || '').trim();
+            if (!childDisplayName) return;
+
+            const inferredLevel =
+                ((ledger.name || '').trim() || (nLt || '').trim())
+                    ? 6
+                    : (nSg3 ? 4 : (nSg2 ? 3 : 6));
+
             const childNode: TreeNode = {
-                name: ledger.name,
+                name: childDisplayName,
                 children: [],
-                level: 6,
+                level: inferredLevel,
                 isCustom: true,
                 ledgerId: ledger.id,
                 fullPath: {
@@ -388,7 +411,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 parentNode.children.push(childNode);
             }
 
-            const childPath = `${parentPath}>${ledger.name}`;
+            const childPath = `${parentPath}>${childDisplayName}`;
             tree.set(childPath, childNode);
             ledgerIdToPath.set(ledger.id, childPath);
         });
@@ -416,33 +439,9 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             }
         });
 
-        // Custom sort order for accounting major groups
-        const sortOrder: { [key: string]: number } = {
-            "owners' funds": 1,
-            "owner's funds": 1,
-            "npo funds": 2,
-            "npo": 2,
-            "liability": 3,
-            "liabilities": 3,
-            "asset": 4,
-            "assets": 4,
-            "income": 5,
-            "expenditure": 6,
-            "expenses": 6,
-            "expense": 6
-        };
-
-        return roots.sort((a, b) => {
-            const orderA = sortOrder[a.name.toLowerCase()] || 999;
-            const orderB = sortOrder[b.name.toLowerCase()] || 999;
-
-            if (orderA !== orderB) {
-                return orderA - orderB;
-            }
-
-            // Fallback to alphabetical if same order or not in map
-            return a.name.localeCompare(b.name);
-        });
+        // Preserve the hierarchy table's ordering (as provided by the backend).
+        // Sorting here would fight the expected "table order" users rely on.
+        return roots;
     };
 
     const toggleNode = (nodePath: string) => {
@@ -464,7 +463,9 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             sub_group_2: node.level >= 3 ? node.fullPath.sub_group_2 : null,
             sub_group_3: node.level >= 4 ? node.fullPath.sub_group_3 : null,
             ledger_type: node.level >= 5 ? node.fullPath.ledger_type : null,
-            parent_ledger_id: node.isCustom && node.ledgerId ? node.ledgerId : null,  // If custom ledger, use its ID as parent
+            // Only set parent_ledger_id when user explicitly creates a nested *ledger* under a custom ledger.
+            // Setting it here causes subgroup inputs to be saved as child-ledgers (confusing UI like "subgroup inside ledger").
+            parent_ledger_id: null,
         };
 
         setSelectedNode({
@@ -476,6 +477,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         setSubGroup3Input('');
         setLedgerTypeInput('');
         setQuestionAnswers({});
+        setIsEditingExistingLedger(false);
+        setEditLedgerName('');
     };
 
     const renderTree = (nodes: TreeNode[], parentPath = '', level = 0): React.ReactElement[] => {
@@ -490,8 +493,9 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             let textStyle = '';
             let iconStyle = 'text-gray-400';
 
-            if (!hasChildren) {
-                // Last entry (endpoint) is always red and clearly readable
+            if (!hasChildren && node.level >= 5) {
+                // True ledger endpoints (ledger level only) are red + italic.
+                // Sub-group nodes with no children are structural and should not look like ledgers.
                 const sizeClass = level === 0 ? 'text-sm' : level === 1 ? 'text-[13.5px]' : 'text-[13px]';
                 textStyle = `${sizeClass} text-red-600 font-medium italic`;
                 iconStyle = 'text-red-500';
@@ -539,7 +543,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                             </span>
                         ) : (
                             <span className={`mr-1 text-xs ${iconStyle}`}>
-                                {node.isCustom ? '★' : '•'}
+                                {(node.isCustom && node.level >= 5) ? '★' : '•'}
                             </span>
                         )}
                         <span className={`text-sm select-none ${textStyle}`}>
@@ -564,17 +568,26 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         const finalSubGroup3 = selectedNode?.fullPath.sub_group_3 || subGroup3Input.trim();
         const finalLedgerType = selectedNode?.fullPath.ledger_type || ledgerTypeInput.trim();
 
-        // Determine the most specific new value and which level it belongs to
+        const canEditSubGroup2 = !selectedNode?.fullPath.sub_group_2;
+        const canEditSubGroup3 = !selectedNode?.fullPath.sub_group_3;
+        const canEditLedgerType = !selectedNode?.fullPath.ledger_type;
+
+        // Determine the most specific NEW value and which level it belongs to.
+        // Only user-editable fields count as "new".
         let finalName = '';
+        let entryLevel: 'sub_group_2' | 'sub_group_3' | 'ledger' | null = null;
         let isLedgerLevel = false;  // true only when ledger name (ledger_type) is filled
 
-        if (ledgerTypeInput.trim()) {
+        if (canEditLedgerType && ledgerTypeInput.trim()) {
             finalName = ledgerTypeInput.trim();
             isLedgerLevel = true;   // opening balance only makes sense at ledger level
-        } else if (subGroup3Input.trim()) {
+            entryLevel = 'ledger';
+        } else if (canEditSubGroup3 && subGroup3Input.trim()) {
             finalName = subGroup3Input.trim();
-        } else if (subGroup2Input.trim()) {
+            entryLevel = 'sub_group_3';
+        } else if (canEditSubGroup2 && subGroup2Input.trim()) {
             finalName = subGroup2Input.trim();
+            entryLevel = 'sub_group_2';
         }
 
         if (!finalName || !selectedNode) {
@@ -582,15 +595,22 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             return;
         }
 
+        const resolvedParentLedgerId =
+            // When creating from a selected custom ledger, nest new subgroup/ledger under it.
+            (selectedNode.isCustom && selectedNode.ledgerId)
+                ? selectedNode.ledgerId
+                : null;
+
         const newLedgerData = {
             customName: finalName,
+            entryLevel: entryLevel || undefined,
             group: selectedNode.fullPath.group,
             category: selectedNode.fullPath.category,
             sub_group_1: selectedNode.fullPath.sub_group_1,
             sub_group_2: finalSubGroup2 || null,
             sub_group_3: finalSubGroup3 || null,
-            ledger_type: finalLedgerType || null,
-            parent_ledger_id: selectedNode.fullPath.parent_ledger_id || null,
+            ledger_type: isLedgerLevel ? (finalLedgerType || finalName) : null,
+            parent_ledger_id: resolvedParentLedgerId,
             question_answers: questionAnswers
         };
 
@@ -607,7 +627,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         }
     };
 
-    const refetchHierarchy = async () => {
+    const refetchHierarchy = async (): Promise<TreeNode[] | null> => {
         try {
             const [hierarchyRes, ledgersRes] = await Promise.all([
                 fetch('/api/masters/hierarchy/'),
@@ -620,11 +640,14 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
                 const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
                 setHierarchyData(mergedHierarchy);
-                setTreeData(buildTreeStructure(mergedHierarchy, ledgers));
+                const tree = buildTreeStructure(mergedHierarchy, ledgers);
+                setTreeData(tree);
+                return tree;
             }
         } catch (error) {
             console.error('Error refetching data:');
         }
+        return null;
     };
 
     const handleConfirmOpeningBalance = () => {
@@ -659,6 +682,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         setLedgerTypeInput('');
         setSelectedNode(null);
         setQuestionAnswers({});
+        setIsEditingExistingLedger(false);
+        setEditLedgerName('');
         setTimeout(refetchHierarchy, 500);
     };
 
@@ -668,6 +693,64 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     const isSubGroup2Fixed = !!selectedNode?.fullPath.sub_group_2;
     const isSubGroup3Fixed = !!selectedNode?.fullPath.sub_group_3;
     const isLedgerTypeFixed = !!selectedNode?.fullPath.ledger_type;
+
+    const canEditSelectedLedger = !!selectedNode?.isCustom && !!selectedNode?.ledgerId && selectedNode.level >= 5;
+
+    const findNodeByLedgerId = (nodes: TreeNode[], ledgerId: number): TreeNode | null => {
+        for (const n of nodes) {
+            if (n.isCustom && n.ledgerId === ledgerId) return n;
+            if (n.children?.length) {
+                const found = findNodeByLedgerId(n.children, ledgerId);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+
+    const beginEditSelectedLedger = () => {
+        if (!canEditSelectedLedger || !selectedNode) return;
+        setIsEditingExistingLedger(true);
+        setShowOpeningBalanceStep(false);
+        setPendingLedgerData(null);
+        setEditLedgerName(selectedNode.name || selectedNode.fullPath.ledger_type || '');
+    };
+
+    const cancelEditSelectedLedger = () => {
+        setIsEditingExistingLedger(false);
+        setEditLedgerName('');
+    };
+
+    const saveEditedLedger = async () => {
+        if (!selectedNode?.ledgerId) return;
+
+        const nextName = editLedgerName.trim();
+        if (!nextName) {
+            showWarning('Ledger name cannot be empty.');
+            return;
+        }
+
+        try {
+            const ledgerId = selectedNode.ledgerId;
+            await httpClient.patch(`/api/masters/ledgers/${ledgerId}/`, { name: nextName });
+            showSuccess('Ledger updated successfully.');
+
+            setIsEditingExistingLedger(false);
+            setEditLedgerName('');
+
+            const tree = await refetchHierarchy();
+            if (tree) {
+                const found = findNodeByLedgerId(tree, ledgerId);
+                if (found) {
+                    selectNodeForPreview(found);
+                } else {
+                    setSelectedNode(null);
+                }
+            }
+        } catch (e) {
+            console.error('Error updating ledger:', e);
+            showError('Failed to update ledger.');
+        }
+    };
 
     return (
         <div className="bg-white rounded-[4px] border border-gray-200 space-y-4">
@@ -778,10 +861,19 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                 </label>
                                 <input
                                     type="text"
-                                    value={isLedgerTypeFixed ? selectedNode?.fullPath.ledger_type! : ledgerTypeInput}
-                                    onChange={(e) => !isLedgerTypeFixed && setLedgerTypeInput(e.target.value)}
-                                    disabled={!selectedNode || isLedgerTypeFixed}
-                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || isLedgerTypeFixed
+                                    value={isEditingExistingLedger
+                                        ? editLedgerName
+                                        : (isLedgerTypeFixed ? selectedNode?.fullPath.ledger_type! : ledgerTypeInput)
+                                    }
+                                    onChange={(e) => {
+                                        if (isEditingExistingLedger) {
+                                            setEditLedgerName(e.target.value);
+                                            return;
+                                        }
+                                        if (!isLedgerTypeFixed) setLedgerTypeInput(e.target.value);
+                                    }}
+                                    disabled={!selectedNode || (!isEditingExistingLedger && isLedgerTypeFixed)}
+                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || (!isEditingExistingLedger && isLedgerTypeFixed)
                                         ? 'bg-gray-100 text-gray-600 border-gray-200'
                                         : 'bg-white border-gray-300'
                                         }`}
@@ -798,8 +890,40 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                             />
                         )}
 
+                        {/* Edit Existing (Tenant) Ledger In Preview */}
+                        {canEditSelectedLedger && !showOpeningBalanceStep && (
+                            <div className="flex items-center justify-end gap-2 mb-2">
+                                {!isEditingExistingLedger ? (
+                                    <button
+                                        type="button"
+                                        onClick={beginEditSelectedLedger}
+                                        className="px-4 py-2 rounded-[4px] text-sm font-medium text-indigo-700 bg-white border border-indigo-300 hover:bg-indigo-50 transition-colors"
+                                    >
+                                        Edit Ledger
+                                    </button>
+                                ) : (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={cancelEditSelectedLedger}
+                                            className="px-4 py-2 rounded-[4px] text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={saveEditedLedger}
+                                            className="px-4 py-2 rounded-[4px] text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+                                        >
+                                            Save Changes
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
                         {/* Create Ledger Button OR Opening Balance Step */}
-                        {showOpeningBalanceStep ? (
+                        {isEditingExistingLedger ? null : showOpeningBalanceStep ? (
                             <div className="mt-6 bg-indigo-50 border border-indigo-200 rounded-lg p-4 space-y-4">
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="text-lg">💰</span>
@@ -889,4 +1013,5 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         </div>
     );
 };
+
 

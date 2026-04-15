@@ -15,7 +15,7 @@ class VendorGSTDetailsDatabase:
         """Create a new vendor GST detail entry"""
         with transaction.atomic():
             # Auto-extract state code and PAN from GSTIN
-            gstin = gst_data.get('gstin', '').upper()
+            gstin = (gst_data.get('gstin') or '').upper()
             if len(gstin) == 15:
                 gst_data['gst_state_code'] = gstin[:2]
                 gst_data['pan_linked_with_gstin'] = gstin[2:12]
@@ -102,9 +102,10 @@ class VendorGSTDetailsDatabase:
     @staticmethod
     def check_duplicate_gstin(tenant_id, gstin, reference_name=None, exclude_id=None):
         """Check if a GSTIN already exists for a tenant, optionally with a specific reference name"""
+        normalized_gstin = (gstin or '').upper()
         queryset = VendorMasterGSTDetails.objects.filter(
             tenant_id=tenant_id,
-            gstin=gstin.upper()
+            gstin=normalized_gstin
         )
         if reference_name:
             queryset = queryset.filter(reference_name=reference_name)

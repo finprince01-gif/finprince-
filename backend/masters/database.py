@@ -76,7 +76,8 @@ def delete_ledger_group(ledger_group_id, tenant_id):
 
 def get_all_ledgers(tenant_id):
     """Get all ledgers for a tenant."""
-    return MasterLedger.objects.filter(tenant_id=tenant_id)
+    # Preserve deterministic "table order" (insertion/PK order).
+    return MasterLedger.objects.filter(tenant_id=tenant_id).order_by('id')
 
 
 def get_ledger_by_id(ledger_id, tenant_id):
@@ -170,7 +171,8 @@ def delete_voucher_config(config_id, tenant_id):
 
 def get_all_hierarchy_data():
     """Get all hierarchy data (global, no tenant filtering)."""
-    return MasterHierarchyRaw.objects.all()
+    # Preserve deterministic "table order" from the raw hierarchy table.
+    return MasterHierarchyRaw.objects.all().order_by('id')
 
 
 def get_hierarchy_by_id(hierarchy_id):
@@ -262,4 +264,3 @@ def delete_amount_transaction(transaction_id, tenant_id):
     """Delete an amount transaction."""
     transaction = get_amount_transaction_by_id(transaction_id, tenant_id)
     transaction.delete()
-
