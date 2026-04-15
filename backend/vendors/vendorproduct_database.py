@@ -42,7 +42,7 @@ class VendorProductServiceDatabase:
 
         # MySQL ON DUPLICATE KEY UPDATE – works with the UNIQUE KEY on vendor_basic_detail_id
         query = """
-            INSERT INTO vendor_master_vendorcreation_productservices
+            INSERT INTO vendors_vendormasterproductservice
                 (tenant_id, vendor_basic_detail_id, items, is_active, created_at, updated_at, created_by, updated_by)
             VALUES
                 (%s, %s, %s, 1, NOW(6), NOW(6), %s, %s)
@@ -80,7 +80,7 @@ class VendorProductServiceDatabase:
         query = """
             SELECT id, tenant_id, vendor_basic_detail_id, items, is_active,
                    created_at, updated_at, created_by, updated_by
-            FROM vendor_master_vendorcreation_productservices
+            FROM vendors_vendormasterproductservice
             WHERE vendor_basic_detail_id = %s
         """
         try:
@@ -122,7 +122,7 @@ class VendorProductServiceDatabase:
         query = """
             SELECT id, tenant_id, vendor_basic_detail_id, items, is_active,
                    created_at, updated_at, created_by, updated_by
-            FROM vendor_master_vendorcreation_productservices
+            FROM vendors_vendormasterproductservice
             WHERE tenant_id = %s AND is_active = 1
             ORDER BY updated_at DESC
         """
@@ -158,13 +158,13 @@ class VendorProductServiceDatabase:
         """Soft- or hard-delete the record for a vendor."""
         if soft:
             query = """
-                UPDATE vendor_master_vendorcreation_productservices
+                UPDATE vendors_vendormasterproductservice
                 SET is_active = 0, updated_at = NOW(6)
                 WHERE vendor_basic_detail_id = %s
             """
         else:
             query = """
-                DELETE FROM vendor_master_vendorcreation_productservices
+                DELETE FROM vendors_vendormasterproductservice
                 WHERE vendor_basic_detail_id = %s
             """
         try:
