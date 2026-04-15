@@ -522,12 +522,9 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                         
                         is_adv = (getattr(item, 'is_advance', False) or (getattr(item, 'reference_type', '').upper() == 'ADVANCE') or not getattr(item, 'reference_id', None))
                         
-                        # Use 'item.reference_number' if it's 'ADVANCE', otherwise fallback to voucher number
-                        ref_no_to_use = getattr(item, 'reference_number', None)
-                        if not ref_no_to_use or (ref_no_to_use.upper() != 'ADVANCE' and not is_adv):
-                            ref_no_to_use = receipt.voucher_number
-                        elif is_adv:
-                            ref_no_to_use = 'ADVANCE'
+                        # Use actual voucher number for traceability, even for advances
+                        ref_no_to_use = receipt.voucher_number
+
 
                         CustomerTransaction.objects.update_or_create(
                             tenant_id=receipt.tenant_id,

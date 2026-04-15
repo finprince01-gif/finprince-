@@ -848,6 +848,8 @@ class VendorTransaction(models.Model):
     
     # Reference and Notes
     reference_number = models.CharField(max_length=100, null=True, blank=True)
+    reference_type = models.CharField(max_length=50, null=True, blank=True)
+    is_advance = models.BooleanField(default=False)
     notes = models.TextField(null=True, blank=True)
     
     # Additional Fields from Voucher for display

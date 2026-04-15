@@ -5878,10 +5878,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                         // The processedEntries refBalances logic will upgrade status to 'Received'/'Partially Received'
                         // based on actual receipt transactions with matching referenceNo.
                         // Here we only set the due-date status.
-                        if (inv.posting_status === 'POSTED') {
-                            return diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due');
-                        }
-                        return 'Not Utilized';
+                        // Any voucher showing in the ledger should show its aging status if it's a Sales invoice
+                        return diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due');
                     })() as SalesStatus,
                     debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
                     credit: 0,
@@ -6049,9 +6047,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                             const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
                             const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
                             const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-                            if (entry.posting_status === 'POSTED') {
-                                updatedStatus = diffDays > cp ? 'Due' : (diffDays === cp ? 'Due Today' : 'Not Due');
-                            }
+                            // Always show aging status for unpaid sales invoices in the ledger
+                            updatedStatus = diffDays > cp ? 'Due' : (diffDays === cp ? 'Due Today' : 'Not Due');
                         }
                     }
                 }

@@ -140,24 +140,28 @@ interface AdvanceAllocationModalProps {
     vendor: any;
     ledgerEntries: any[];
     onProceed?: (selectedAdvance: any, invoiceRef: string) => void;
+    onNavigate?: (page: string) => void;
+    setPrefilledVoucherData?: (data: any) => void;
 }
 
-const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen, onClose, row, vendor, ledgerEntries, onProceed }) => {
+const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen, onClose, row, vendor, ledgerEntries, onProceed, onNavigate, setPrefilledVoucherData }) => {
     if (!isOpen || !row) return null;
 
     const [selectedAdvance, setSelectedAdvance] = useState<any>(null);
 
-    // Find exclusively pure unutilized advance payments for this vendor
+    // Find exclusively pure unutilized advance payments or debit notes for this vendor
     const advances = (ledgerEntries || []).filter(e =>
-        e.transferFrom === 'Payment' &&
-        (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Utilized') &&
+        (e.transferFrom === 'Payment' || e.transferFrom === 'Debit Note') &&
+        (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced' || e.is_advance) &&
         (
             !e.rawVoucher?.reference_number || 
             e.rawVoucher.reference_number.toUpperCase() === 'ADVANCE' ||
             e.rawVoucher.reference_number.trim() === '' ||
+            (e.rawVoucher.reference_type || '').toUpperCase() === 'ADVANCE' ||
+            e.is_advance ||
             (e.voucherNo && e.rawVoucher.reference_number && e.voucherNo.startsWith(e.rawVoucher.reference_number + '-'))
         )
-    ).filter(e => e.status !== 'Utilized') // Only show those that still have balance
+    ).filter(e => e.status !== 'Utilized' && e.status !== 'Paid') // Only show those that still have balance
     .map(e => ({
         id: e.id,
         voucherNo: e.voucherNo,
@@ -238,42 +242,50 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
                                     </tbody>
                                 </table>
                             </div>
-                            <div className="flex justify-end pt-4 border-t border-gray-100 gap-3">
-                                <button 
-                                    onClick={onClose}
-                                    className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button 
-                                    disabled={!selectedAdvance}
-                                    onClick={() => onProceed && onProceed(selectedAdvance, row.refNo)}
-                                    className={`flex items-center gap-2 px-8 py-2 rounded-[4px] text-sm font-bold uppercase tracking-widest transition-all ${
-                                        selectedAdvance 
-                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200' 
-                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                    }`}
-                                >
-                                    <Check className="w-4 h-4" />
-                                    Proceed Allocation
-                                </button>
-                            </div>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-100 rounded-lg">
-                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                                <Receipt className="w-8 h-8 text-gray-300" />
-                            </div>
-                            <h4 className="text-gray-900 font-bold mb-1">No Advance Payments Found</h4>
-                            <p className="text-gray-500 text-sm mb-6 text-center max-w-[300px]">There are no unutilized payment vouchers available for this vendor.</p>
-                            <button 
-                                onClick={onClose}
-                                className="px-8 py-2 bg-gray-100 text-gray-600 rounded-[4px] text-sm font-bold hover:bg-gray-200 transition-colors"
-                            >
-                                Close Modal
-                            </button>
+                        <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                            <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                            <p className="text-sm text-gray-500 font-medium">No unutilized payment vouchers available for this vendor.</p>
+                            <p className="text-[10px] text-gray-400 mt-1">Vouchers with "Advance" or "Not Utilized" status will appear here.</p>
                         </div>
                     )}
+                    
+                    <div className="mt-8 flex gap-3">
+                        <button 
+                            onClick={onClose}
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors uppercase tracking-widest text-[10px]"
+                        >
+                            Close Window
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if (setPrefilledVoucherData && onNavigate) {
+                                    setPrefilledVoucherData({
+                                        voucherType: 'Payment',
+                                        payTo: vendor.name,
+                                        date: new Date().toISOString().split('T')[0]
+                                    });
+                                    onNavigate('Vouchers');
+                                    onClose();
+                                }
+                            }}
+                            className="flex-1 py-3 bg-indigo-50 text-indigo-700 font-bold rounded hover:bg-indigo-100 transition-colors uppercase tracking-widest text-[10px]"
+                        >
+                            Create New Advance
+                        </button>
+                        {advances.length > 0 && (
+                            <button 
+                                onClick={() => onProceed && onProceed(selectedAdvance, row.refNo)}
+                                disabled={!selectedAdvance}
+                                className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAdvance 
+                                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200' 
+                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                            >
+                                Proceed Allocation
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -624,6 +636,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                             
                             const isAdvanceEntry = (t.reference_type || '').toUpperCase() === 'ADVANCE' || 
                                                  t.is_advance || 
+                                                 (t.status || '').toLowerCase() === 'advance' ||
                                                  !t.reference_number || 
                                                  t.reference_number.toUpperCase() === 'ADVANCE' || 
                                                  t.reference_number.trim() === '' ||
@@ -640,11 +653,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         // ── Fallback ───────────────────────────────────────────────
                         const s = (t.status || '').toLowerCase();
                         if (s === 'paid' || s === 'received') return 'Received';
-                        if (s === 'advance') return 'Utilized';
+                        if (s === 'advance') return 'Not Utilized';
                         return 'Not Due';
                     })(),
                     debit: isDebit ? amt : 0,
                     credit: !isDebit ? amt : 0,
+                    is_advance: !!(t.is_advance || (t.reference_type || '').toUpperCase() === 'ADVANCE' || (t.status || '').toLowerCase() === 'advance'),
                     rawVoucher: t
                 };
             });
@@ -6565,6 +6579,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                     <button
                                                                                         onClick={() => {
                                                                                             setSelectedAdvanceRow(row);
+                                                                                            // Ensure ledger is fetched for this vendor if not already loaded or to refresh
+                                                                                            if (row.vendor_id || selectedProcurementVendor?.id) {
+                                                                                                const vId = row.vendor_id || selectedProcurementVendor?.id;
+                                                                                                const vName = row.vendorName || selectedProcurementVendor?.name || '';
+                                                                                                fetchVendorLedger(vId, vName);
+                                                                                            }
                                                                                             setIsAdvanceModalOpen(true);
                                                                                         }}
                                                                                         className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-[4px] hover:bg-indigo-700 transition-colors uppercase tracking-widest"
