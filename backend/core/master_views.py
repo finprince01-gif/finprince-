@@ -232,13 +232,24 @@ class MasterBranchListCreateView(APIView):
         phone = data.get('phone')
         owner_data = data.get('owner', {})
         
-        if not all([branch_name, branch_gstin, owner_data.get('username'), owner_data.get('password'), owner_data.get('name')]):
-            return Response({'error': 'Missing required fields for branch provisioning (Type of Business, GSTIN, Admin Name, Username, Password).'}, status=status.HTTP_400_BAD_REQUEST)
+        if not all([branch_name, business_type, branch_gstin, owner_data.get('username'), owner_data.get('password'), owner_data.get('name')]):
+            return Response({'error': 'Missing required fields for branch provisioning (Business Name, Type of Business, GSTIN, Admin Name, Username, Password).'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Conflict Checks
         if branch_gstin:
             branch_gstin = branch_gstin.upper()
             if Branch.objects.filter(gstin=branch_gstin).exists():
-                return Response({'error': f'GSTIN {branch_gstin} already registered to an existing platform branch.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': f'GSTIN {branch_gstin} is already registered to an existing branch.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        admin_email = owner_data.get('email', email)
+        if admin_email and User.objects.filter(email=admin_email).exists():
+            return Response({'error': f'Administrator email {admin_email} is already registered to an existing account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        admin_username = owner_data.get('username')
+        if admin_username and User.objects.filter(username=admin_username).exists():
+            # While usernames aren't strictly unique at the top level in some models,
+            # this specific platform logic requires unique admin handles per branch.
+            return Response({'error': f'Username {admin_username} is already taken.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Generate unique name for tenant (name field is unique)
         unique_tenant_name = branch_name
@@ -307,7 +318,7 @@ class MasterBranchDetailView(APIView):
             branch = Branch.objects.get(id=tenant_id, master=request.user)
             owner = User.objects.filter(tenant_id=branch.id, role='COMPANY_ADMIN', is_superuser=True).first()
             if not owner:
-                owner = User.objects.filter(tenant_id=tenant.id).first()
+                owner = User.objects.filter(tenant_id=branch.id).first()
                 
             plan = owner.selected_plan if owner else 'FREE'
             plan = plan.upper() if plan else 'FREE'

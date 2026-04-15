@@ -5874,10 +5874,10 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     referenceNo: inv.sales_invoice_no,
                     ledger: 'Sales',
                     status: (() => {
-                        const total_val = parseFloat(inv.payment_details?.payment_invoice_value || 0);
-                        const balance_val = parseFloat(inv.payment_details?.payment_balance ?? total_val);
-                        if (inv.status?.toLowerCase() === 'received' || (balance_val <= 0 && total_val > 0)) return 'Received';
-                        if (inv.status?.toLowerCase() === 'partially received' || (balance_val < total_val && balance_val > 0)) return 'Partially Received';
+                        // NOTE: payment_balance defaults to 0 in DB, so we CANNOT use it to detect 'Received'.
+                        // The processedEntries refBalances logic will upgrade status to 'Received'/'Partially Received'
+                        // based on actual receipt transactions with matching referenceNo.
+                        // Here we only set the due-date status.
                         if (inv.posting_status === 'POSTED') {
                             return diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due');
                         }
@@ -5902,32 +5902,46 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 else if (rawType.includes('debit')) transType = 'Debit Note';
                 else if (rawType.includes('journal')) transType = 'Journal';
 
-                // For customers, a 'Payment' (refund) is a Debit, and a 'Receipt' is a Credit.
-                // A 'Credit Note' acts like a receipt (Credit), 'Debit Note' acts like sales (Debit).
                 let d = parseFloat(t.debit || 0);
                 let c = parseFloat(t.credit || 0);
 
-                // Fallbacks in case debit/credit wasn't properly categorized by backend
                 if ((transType === 'Payment' || transType === 'Debit Note') && c > 0 && d === 0) {
-                    d = c;
-                    c = 0;
+                    d = c; c = 0;
                 } else if ((transType === 'Receipt' || transType === 'Credit Note') && d > 0 && c === 0) {
-                    c = d;
-                    d = 0;
+                    c = d; d = 0;
                 }
 
-                const creditPeriod = parseInt(customer.credit_period || '0', 10);
-                const invDate = new Date(t.date);
-                const today = new Date();
-                const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-                const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                const diffTime = d2.getTime() - d1.getTime();
-                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                const isDue = diffDays > creditPeriod;
+                let finalStatus: string;
+                if (transType === 'Sales' || rawType === 'invoice') {
+                    const paidAmt = parseFloat(t.paid_amount || 0);
+                    const totalAmt = parseFloat(t.total_amount || t.amount || 0);
+                    const isFullyPaid = paidAmt >= totalAmt && totalAmt > 0;
+                    const isPartiallyPaid = paidAmt > 0 && paidAmt < totalAmt;
 
-                let finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending')
-                    ? t.payment_status
-                    : (transType === 'Receipt' ? 'Not Utilized' : (transType === 'Sales' ? (isDue ? 'Due' : 'Not Due') : 'Not Due'));
+                    if (isFullyPaid || t.due_status === 'Paid') {
+                        finalStatus = 'Received';
+                    } else if (isPartiallyPaid || t.due_status === 'Partially Received') {
+                        finalStatus = 'Partially Received';
+                    } else if (t.due_status === 'Due') {
+                        finalStatus = 'Due';
+                    } else if (t.due_status === 'Not Due') {
+                        finalStatus = 'Not Due';
+                    } else {
+                        const cp = parseInt(customer.credit_period || '0', 10);
+                        const invDate = new Date(t.date);
+                        const today = new Date();
+                        const diffDays = Math.floor((today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
+                        finalStatus = diffDays > cp ? 'Due' : 'Not Due';
+                    }
+                } else if (transType === 'Receipt' || transType === 'Credit Note') {
+                    const paidAmt = parseFloat(t.paid_amount || 0);
+                    const totalAmt = parseFloat(t.total_amount || t.amount || 0);
+                    if (paidAmt >= totalAmt && totalAmt > 0) finalStatus = 'Utilized';
+                    else if (paidAmt > 0) finalStatus = 'Partially Utilized';
+                    else finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending') ? t.payment_status : 'Not Utilized';
+                } else {
+                    finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending') ? t.payment_status : 'Not Due';
+                }
 
                 return {
                     id: `T-${t.id}`,
@@ -6026,6 +6040,19 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                         updatedStatus = 'Received';
                     } else if (paidRounded > 0) {
                         updatedStatus = 'Partially Received';
+                    } else {
+                        // Nothing paid yet — re-apply due-date logic using customer credit period
+                        if (entry.postFrom === 'Sales' || (entry.postFrom as string).toLowerCase() === 'invoice') {
+                            const cp = parseInt(customer.credit_period || '0', 10);
+                            const invDate = new Date(entry.date);
+                            const todayD = new Date();
+                            const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                            const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+                            const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+                            if (entry.posting_status === 'POSTED') {
+                                updatedStatus = diffDays > cp ? 'Due' : (diffDays === cp ? 'Due Today' : 'Not Due');
+                            }
+                        }
                     }
                 }
             }

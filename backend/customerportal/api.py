@@ -333,17 +333,114 @@ class CustomerTransactionViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def by_customer(self, request):
-        """Get all transactions for a specific customer"""
+        """
+        Get all transactions for a specific customer, enriched with due_status
+        calculated from the customer's credit period (mirrors vendor portal by_vendor).
+        """
+        import re
+        from datetime import date, timedelta, datetime
+        from decimal import Decimal
+
         customer_id = request.query_params.get('customer_id')
         if not customer_id:
             return Response(
                 {'error': 'customer_id parameter required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        tenant_id = getattr(request.user, 'tenant_id', None)
         transactions = self.get_queryset().filter(customer_id=customer_id)
+
+        # ── Fetch customer credit period ───────────────────────────────────
+        credit_period_days = 0
+        try:
+            from .models import CustomerMasterCustomerTermsCondition
+            terms = CustomerMasterCustomerTermsCondition.objects.filter(
+                customer_basic_detail_id=customer_id
+            ).first()
+            if terms and terms.credit_period:
+                raw = str(terms.credit_period).strip()
+                if raw.isdigit():
+                    credit_period_days = int(raw)
+                else:
+                    m = re.search(r'(\d+)', raw)
+                    if m:
+                        credit_period_days = int(m.group(1))
+        except Exception as e:
+            logger.warning(f"Could not fetch credit period for customer {customer_id}: {e}")
+
+        def calculate_due_status(transaction_date, credit_days):
+            if not transaction_date:
+                return "Not Due", None
+            due_dt = transaction_date + timedelta(days=credit_days)
+            status_str = "Due" if date.today() > due_dt else "Not Due"
+            return status_str, due_dt.strftime('%Y-%m-%d')
+
+        # ── Serialize and enrich ───────────────────────────────────────────
         serializer = self.get_serializer(transactions, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+
+        for item in data:
+            tx_type = (item.get('transaction_type') or '').lower()
+
+            if tx_type in ('sales', 'invoice'):
+                tx_date_raw = item.get('transaction_date') or item.get('date')
+                total_amt = Decimal(str(item.get('total_amount') or item.get('amount') or 0))
+
+                # Sum all receipts/credit-notes linked to this sales transaction
+                ref_no = item.get('reference_number') or item.get('transaction_number')
+                paid_sum = Decimal('0')
+                if ref_no:
+                    linking_txs = CustomerTransaction.objects.filter(
+                        tenant_id=tenant_id,
+                        customer_id=customer_id,
+                        reference_number=ref_no
+                    ).exclude(id=item.get('id'))
+                    for ltx in linking_txs:
+                        ltype = (ltx.transaction_type or '').lower()
+                        if ltype in ('receipt', 'credit_note'):
+                            paid_sum += Decimal(str(ltx.total_amount or 0))
+                        elif ltype in ('debit_note',):
+                            paid_sum -= Decimal(str(ltx.total_amount or 0))
+
+                item['paid_amount'] = float(paid_sum)
+                item['payment_balance'] = float(total_amt - paid_sum)
+
+                if total_amt > 0 and paid_sum >= total_amt:
+                    item['due_status'] = 'Paid'
+                    item['due_date'] = None
+                elif paid_sum > 0 and paid_sum < total_amt:
+                    item['due_status'] = 'Partially Received'
+                    if tx_date_raw:
+                        try:
+                            parsed_date = datetime.strptime(str(tx_date_raw), '%Y-%m-%d').date()
+                            _, due_date_str = calculate_due_status(parsed_date, credit_period_days)
+                            item['due_date'] = due_date_str
+                        except Exception:
+                            item['due_date'] = None
+                    else:
+                        item['due_date'] = None
+                elif tx_date_raw:
+                    try:
+                        parsed_date = datetime.strptime(str(tx_date_raw), '%Y-%m-%d').date()
+                        due_status, due_date_str = calculate_due_status(parsed_date, credit_period_days)
+                        item['due_status'] = due_status
+                        item['due_date'] = due_date_str
+                    except Exception:
+                        item['due_status'] = 'Not Due'
+                        item['due_date'] = None
+                else:
+                    item['due_status'] = 'Not Due'
+                    item['due_date'] = None
+
+                item['credit_period_days'] = credit_period_days
+
+            else:
+                item['due_status'] = None
+                item['due_date'] = None
+                item['credit_period_days'] = 0
+
+        return Response(data)
 
 
 # class CustomerSalesQuotationViewSet(viewsets.ModelViewSet):
