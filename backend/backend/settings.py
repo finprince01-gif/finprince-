@@ -16,7 +16,7 @@ if not SECRET_KEY:
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
 # Production: Specify exact domains (no wildcards)
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,testserver,16.171.255.74,13.63.35.153,13.235.91.238').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,testserver,16.171.255.74,13.63.35.153,13.235.91.238,13.203.204.171').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -172,6 +172,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://16.171.255.74",
     "http://13.235.91.238",
     "https://13.235.91.238",
+    "http://13.203.204.171",
+    "https://13.203.204.171",
     # Development (only if DEBUG=True)
     "http://localhost:5173",
     "http://localhost:5174",
@@ -183,6 +185,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://16.171.255.74",
     "http://13.63.35.153",
     "http://13.235.91.238",
+    "http://13.203.204.171",
 ]
 
 # Filter out localhost in production
@@ -198,6 +201,8 @@ CSRF_TRUSTED_ORIGINS = [
     'https://16.171.255.74',
     'http://13.235.91.238',
     'https://13.235.91.238',
+    'http://13.203.204.171',
+    'https://13.203.204.171',
     # Development (only if DEBUG=True)
     'http://localhost:5173',
     'http://localhost:5174',
@@ -208,6 +213,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://16.171.255.74',
     'http://13.63.35.153',
     'http://13.235.91.238',
+    'http://13.203.204.171',
 ]
 
 # Filter out localhost in production
