@@ -1,4 +1,4 @@
-﻿aiohappyeyeballs==2.6.1
+aiohappyeyeballs==2.6.1
 aiohttp==3.13.1
 aiohttp-retry==2.9.1
 aiokafka==0.13.0
@@ -31,7 +31,6 @@ click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
 colorama==0.4.6
-comtypes==1.4.15
 coverage==7.13.0
 croniter==6.0.0
 cryptography==46.0.3
@@ -155,7 +154,6 @@ pymilvus==2.6.9
 PyMuPDF==1.27.1
 PyMySQL==1.1.2
 pyparsing==3.2.5
-pypiwin32==223
 pytesseract==0.3.13
 pytest==7.4.3
 pytest-cov==4.1.0
@@ -167,7 +165,6 @@ python-jose==3.5.0
 python-multipart==0.0.20
 pyttsx3==2.99
 pytz==2025.2
-pywin32==311
 PyYAML==6.0.3
 redis==7.1.0
 referencing==0.36.2
