@@ -200,7 +200,9 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             _base = f"{_base}-{supplier_instance.id}"
         purchase_voucher_number = _base
 
-        purchase_total = due_data.get('to_pay', 0) if due_data is not None else 0
+        purchase_total_net = Decimal(str(due_data.get('to_pay', 0) if due_data is not None else 0))
+        purchase_advance_paid = Decimal(str(due_data.get('advance_paid', 0) if due_data is not None else 0))
+        purchase_total_gross = purchase_total_net + purchase_advance_paid
 
         # Calculate tax totals from supply_inr_data if available
         total_taxable = 0.0
@@ -222,7 +224,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             voucher_number=purchase_voucher_number,
             invoice_no=supplier_instance.supplier_invoice_no,
             party=supplier_instance.vendor_name,
-            total=purchase_total,
+            total=purchase_total_gross,
             source='purchase_voucher',
             reference_id=supplier_instance.id,
             is_inter_state=supplier_instance.input_type == 'Interstate',
@@ -253,7 +255,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             )
 
         if due_data is not None:
-            valid_fields = {'tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms'}
+            valid_fields = {'tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms', 'advance_references'}
             filtered_data = {k: v for k, v in due_data.items() if k in valid_fields}
             VoucherPurchaseDueDetails.objects.create(
                 supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
@@ -277,8 +279,8 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         # Sync legacy JSON to new relational tables
         self._sync_relational_data(supplier_instance, supply_inr_data, supply_inr_data, due_data)
 
-        # --- Double-Entry Posting for Purchase (entries table) ---
-        self._post_journal_entries(supplier_instance, voucher.id, purchase_total, supply_inr_data, supply_foreign_data, due_data)
+        # Advance Allocations
+        self._post_journal_entries(supplier_instance, voucher.id, purchase_total_gross, supply_inr_data, supply_foreign_data, due_data)
 
         self._mirror_to_vendor_portal(supplier_instance)
 
@@ -328,12 +330,14 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             try:
                 voucher = Voucher.objects.get(id=voucher_id)
 
-                purchase_total = due_data.get('to_pay') if due_data is not None else voucher.total
+                net_val = Decimal(str(due_data.get('to_pay', 0)))
+                adv_val = Decimal(str(due_data.get('advance_paid', 0)))
+                purchase_total_gross = net_val + adv_val
 
                 total_igst = 0.0
                 
                 voucher.date = instance.date
-                voucher.total = purchase_total
+                voucher.total = purchase_total_gross
                 voucher.save()
             except Voucher.DoesNotExist:
                 pass
@@ -370,7 +374,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         self._mirror_to_vendor_portal(instance)
 
         # Refresh double-entry posting
-        self._post_journal_entries(instance, voucher_id, purchase_total, supply_inr_data, supply_foreign_data, due_data)
+        self._post_journal_entries(instance, voucher_id, purchase_total_gross, supply_inr_data, supply_foreign_data, due_data)
 
         return instance
 
@@ -461,6 +465,10 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 or f"PUR-{purchase.id}"
             )
 
+            # Canonical mapping reference (Critical for Vendor Portal Allocation View)
+            # Ensure group_ref is never empty or just whitespace
+            group_ref = (purchase.supplier_invoice_no or '').strip() or tx_number
+
             # Prefer vendor_basic_detail FK; fall back to name match
             vendor = None
             if purchase.vendor_basic_detail_id:
@@ -479,16 +487,16 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 return
 
             # Pull the to_pay amount from the related DueDetails row
-            # (the instance may or may not have the cached reverse-related attr)
             try:
                 due_details = purchase.due_details
-                total_amt = due_details.to_pay if due_details else 0
+                net_amt = Decimal(str(due_details.to_pay or 0))
+                adv_amt = Decimal(str(due_details.advance_paid or 0))
+                total_gross = net_amt + adv_amt
             except Exception:
-                total_amt = 0
+                total_gross = 0
 
-            # 'Unpaid' → the by_vendor API treats non-paid as eligible for
-            # credit-period Due / Not Due calculation.
-            tx_status = 'Received' if float(total_amt or 0) == 0 else 'Unpaid'
+            # Purchase should reflect full invoice value; status will be calculated by child payments
+            tx_status = 'Received' if float(total_gross or 0) == 0 else 'Unpaid'
 
             VendorTransaction.objects.update_or_create(
                 tenant_id=tenant_id,
@@ -497,10 +505,10 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 transaction_type='purchase',
                 defaults={
                     'transaction_date': purchase.date,
-                    'amount': total_amt,
-                    'total_amount': total_amt,
+                    'amount': total_gross,
+                    'total_amount': total_gross,
                     'status': tx_status,
-                    'reference_number': purchase.supplier_invoice_no,
+                    'reference_number': group_ref,
                     'notes': f"Purchase from {purchase.vendor_name}",
                     'ledger_name': 'Purchase A/c',
                 }
@@ -513,12 +521,11 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 existing_allocs = VendorTransaction.objects.filter(
                     tenant_id=tenant_id,
                     vendor_id=vendor.id,
-                    transaction_number__startswith=f"{tx_number}-ALLOC-"
+                    transaction_number__startswith=f"ALC-{tx_number}-"
                 )
                 for ea in existing_allocs:
-                    # Try to find the source ref from the notes or transaction_number
-                    # In our new pattern, transaction_number is f"{tx_number}-ALLOC-{ref_no}"
-                    parts = ea.transaction_number.split("-ALLOC-")
+                    # In our pattern, transaction_number is f"ALC-{tx_number}-{ref_no}"
+                    parts = ea.transaction_number.split(f"ALC-{tx_number}-")
                     if len(parts) > 1:
                         source_ref = parts[1]
                         # Restore balance to the source 'Advance' record
@@ -557,14 +564,14 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                     VendorTransaction.objects.create(
                         tenant_id=tenant_id,
                         vendor_id=vendor.id,
-                        transaction_number=f"{tx_number}-ALLOC-{ref_no}",
+                        transaction_number=f"ALC-{tx_number}-{ref_no}",
                         transaction_type='payment',
                         transaction_date=purchase.date,
                         amount=applied_amt,
                         total_amount=applied_amt,
                         status='Paid',
-                        reference_number=purchase.supplier_invoice_no, # This links it to the Purchase row
-                        notes=f"Allocated from {ref_no}",
+                        reference_number=group_ref, # This links it to the Purchase row
+                        notes=f"Allocated to {group_ref} from {ref_no}",
                         ledger_name=vendor.vendor_name
                     )
 
@@ -614,7 +621,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             except Exception as inner_e:
                 print(f"!!! Error syncing allocations to Vendor Portal: {inner_e}")
 
-            print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name} | tx={tx_number} | amt={total_amt}")
+            print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name} | tx={tx_number} | amt={total_gross}")
         except Exception as e:
             print(f"!!! Vendor Portal Sync Failure (Purchase): {str(e)}")
 

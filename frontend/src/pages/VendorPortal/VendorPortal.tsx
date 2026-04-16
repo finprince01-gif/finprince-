@@ -6586,7 +6586,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                             </>
                                                                         )}
                                                                         <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">{row.appliedDate !== '-' ? formatDate(row.appliedDate) : '-'}</td>
-                                                                        <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">{row.appliedRefNo}</td>
+                                                                        <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">{row.appliedRefNo && String(row.appliedRefNo).startsWith('ALC-') ? String(row.appliedRefNo).split('-').slice(2).join('-') : row.appliedRefNo}</td>
                                                                         <td className="px-6 py-4 text-sm text-right font-bold text-emerald-600 border-r border-slate-100">
                                                                             {row.appliedAmount !== '-' ? `₹${row.appliedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                                         </td>
