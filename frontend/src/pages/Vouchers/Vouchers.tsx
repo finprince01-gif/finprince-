@@ -680,7 +680,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnTransitUptoPortStationLoading, setCnTransitUptoPortStationLoading] = useState('');
   const [cnTransitUptoPortStationDischarge, setCnTransitUptoPortStationDischarge] = useState('');
   const [cnItems, setCnItems] = useState([
-    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null, salesInvoiceNo: null as string | null, financialAmount: 0 }
+    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 0, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null, salesInvoiceNo: null as string | null, financialAmount: 0 }
   ]);
 
   // Automatic calculation for Reverse IT (TCS/TDS)
@@ -819,7 +819,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [selectedPurchaseItems, setSelectedPurchaseItems] = useState<string[]>([]);
   const [showPurchaseMismatches, setShowPurchaseMismatches] = useState(false);
   const [purchaseItems, setPurchaseItems] = useState([
-    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }
+    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 0, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }
   ]);
 
   const calculatePurchaseTotals = () => {
@@ -3674,6 +3674,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       (item as any)[field] = value;
     }
 
+    // Default qty to 1 if HSN/SAC starts with 99 (Services)
+    if (field === 'hsnSac' && value?.toString().startsWith('99')) {
+      item.qty = 1;
+    }
+
     // ── ITEM RATE VALIDATION ──────────────────────────────────────────────
     if (field === 'rate') {
       const enteredRate = typeof value === 'string' ? parseFloat(value) || 0 : (value as number);
@@ -3726,13 +3731,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }
 
-    // Auto-populate based on Item Code or Name
-    if (field === 'itemCode' || field === 'itemName') {
+    // Auto-populate based on Item Code, Name or HSN/SAC
+    if (field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
+      // Reset qty whenever item selection changes
+      item.qty = 0;
+      
       let selectedItem: any;
       if (field === 'itemCode') {
         selectedItem = allItems.find((i: any) => (i.item_code || i.code) === value);
       } else if (field === 'itemName') {
         selectedItem = allItems.find((i: any) => (i.name || i.item_name) === value);
+      } else if (field === 'hsnSac') {
+        selectedItem = allItems.find((i: any) => (i.hsn_sac || i.hsn || i.hsn_code || i.hsn_sac_code) === value?.toString());
       }
 
       if (selectedItem) {
@@ -3740,6 +3750,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         item.itemName = selectedItem.name || selectedItem.item_name || item.itemName;
         item.uom = selectedItem.unit || selectedItem.uom || item.uom;
         item.hsnSac = selectedItem.hsn_sac || selectedItem.hsn || selectedItem.hsn_code || selectedItem.hsn_sac_code || item.hsnSac;
+
+        // Default qty to 1 if HSN/SAC starts with 99 (Services)
+        if (item.hsnSac?.toString().startsWith('99')) {
+          item.qty = 1;
+        }
 
         // ── RATE FETCHING LOGIC ──────────────────────────────────────────────
         let fetchedRate: number | null = null;
@@ -3921,7 +3936,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       itemCode: '',
       itemName: '',
       hsnSac: '',
-      qty: 1,
+      qty: 0,
       uom: '',
       rate: 0,
       taxableValue: 0,
@@ -6689,13 +6704,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       (item as any)[field] = value;
     }
 
-    // Auto-populate based on Item Code or Name
-    if (field === 'itemCode' || field === 'itemName') {
+    // Default qty to 1 if HSN/SAC starts with 99 (Services)
+    if (field === 'hsnSac' && value?.toString().startsWith('99')) {
+      item.qty = 1;
+    }
+
+    // Auto-populate based on Item Code, Name or HSN/SAC
+    if (field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
+      // Reset qty whenever item selection changes
+      item.qty = 0;
+      
       let selectedItem: any;
       if (field === 'itemCode') {
         selectedItem = allItems.find((i: any) => (i.item_code || i.code) === value);
       } else if (field === 'itemName') {
         selectedItem = allItems.find((i: any) => (i.name || i.item_name) === value);
+      } else if (field === 'hsnSac') {
+        selectedItem = allItems.find((i: any) => (i.hsn_sac || i.hsn || i.hsn_code || i.hsn_sac_code) === value?.toString());
       }
 
       if (selectedItem) {
@@ -6703,6 +6728,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         item.itemName = selectedItem.name || selectedItem.item_name || item.itemName;
         item.uom = selectedItem.unit || selectedItem.uom || item.uom;
         item.hsnSac = selectedItem.hsn_sac || selectedItem.hsn || selectedItem.hsn_code || selectedItem.hsn_sac_code || item.hsnSac;
+
+        // Default qty to 1 if HSN/SAC starts with 99 (Services)
+        if (item.hsnSac?.toString().startsWith('99')) {
+          item.qty = 1;
+        }
       }
     }
 
@@ -6773,7 +6803,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   };
 
   const addCreditNoteItem = () => {
-    setCnItems([...cnItems, { id: Date.now().toString(), itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }]);
+    setCnItems([...cnItems, { id: Date.now().toString(), itemCode: '', itemName: '', hsnSac: '', qty: 0, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }]);
   };
 
   const removeCreditNoteItem = (id: string) => {
