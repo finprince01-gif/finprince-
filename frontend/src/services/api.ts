@@ -228,6 +228,13 @@ class ApiService {
         return httpClient.get<any[]>(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
     }
 
+    /**
+     * Get Vendor Categories
+     */
+    async getVendorCategories(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/vendors/categories/', undefined, options);
+    }
+
     // ============================================================================
     // INVENTORY - ITEMS
     // ============================================================================

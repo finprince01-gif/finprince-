@@ -3,8 +3,11 @@ from rest_framework.response import Response  # type: ignore
 from rest_framework.permissions import IsAuthenticated  # type: ignore
 from django.db.models import Q  # type: ignore
 from django.db import transaction  # type: ignore
+from django.conf import settings
 import logging
 import json
+import hashlib
+import os
 
 from .service import process_invoice_upload
 from .normalize import normalize
@@ -38,7 +41,22 @@ class CleanOCRStagingView(views.APIView):
         results = []
         for uploaded_file in files:
             try:
+                # Read bytes
                 file_bytes = uploaded_file.read()
+                file_hash = hashlib.sha256(file_bytes).hexdigest()
+                
+                # Persistence for Rescan feature
+                # Save bytes to media/ocr_temp/
+                temp_dir = os.path.join(settings.MEDIA_ROOT, 'ocr_temp')
+                if not os.path.exists(temp_dir):
+                    os.makedirs(temp_dir)
+                
+                temp_file_path = os.path.join(temp_dir, file_hash)
+                if not os.path.exists(temp_file_path):
+                    with open(temp_file_path, 'wb') as f:
+                        f.write(file_bytes)
+                
+                # Process upload
                 result = process_invoice_upload(
                     file_bytes=file_bytes,
                     voucher_type=voucher_type,
@@ -149,6 +167,7 @@ class CleanOCRStagingView(views.APIView):
                 "validation_status": ui_status,
                 "vendor_status": "EXISTS" if (ui_status in ["FOUND", "READY", "RESOLVED", "VOUCHER_CREATED", "DUPLICATE"] or v_id) else "NEW",
                 "processed": r.processed,
+                "has_source": os.path.exists(os.path.join(settings.MEDIA_ROOT, 'ocr_temp', r.file_hash)) if r.file_hash else False,
                 "extracted_data": {
                     "sections": sections,
                     **norm
@@ -304,4 +323,101 @@ class OCRStagingFinalizeView(views.APIView):
 
         summary['success'] = True
         return Response(summary)
+
+class OCRStagingRescanView(views.APIView):
+    """
+    Re-trigger OCR extraction for an existing staging record.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        tenant_id = request.user.branch_id
+        file_hash = request.data.get('file_hash')
+        
+        if not file_hash:
+            return Response({'error': 'file_hash required'}, status=400)
+            
+        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=tenant_id).first()
+        if not record:
+            return Response({'error': 'Record not found'}, status=404)
+            
+        # Try to find the cached file bytes
+        temp_file_path = os.path.join(settings.MEDIA_ROOT, 'ocr_temp', file_hash)
+        
+        if not os.path.exists(temp_file_path):
+            return Response({
+                'error': 'Source file not found for rescan. Please re-upload the file.'
+            }, status=404)
+            
+        try:
+            with open(temp_file_path, 'rb') as f:
+                file_bytes = f.read()
+                
+            from .pipeline import run_ocr_pipeline
+            record.status = 'EXTRACTING'
+            record.validation_status = 'PENDING'
+            record.save()
+            
+            execution_res = run_ocr_pipeline(file_bytes, record)
+            
+            return Response({
+                "success": True,
+                "status": "EXTRACTED",
+                "validation_status": execution_res.get('validation', {}).get('status', 'ERROR'),
+                "data": execution_res.get('data', {})
+            })
+        except Exception as e:
+            logger.error(f"RESCAN FAILED: {str(e)}")
+            return Response({'error': f"Rescan failed: {str(e)}"}, status=500)
+
+class OCRStagingRescanUploadView(views.APIView):
+    """
+    Allows uploading a missing source file for an existing record to re-trigger OCR.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        tenant_id = request.user.branch_id
+        old_hash = request.data.get('file_hash')
+        uploaded_file = request.FILES.get('file')
+
+        if not old_hash or not uploaded_file:
+            return Response({'error': 'Original file_hash and new file required'}, status=400)
+
+        record = InvoiceTempOCR.objects.filter(file_hash=old_hash, tenant_id=tenant_id).first()
+        if not record:
+            return Response({'error': 'Staging record not found'}, status=404)
+
+        try:
+            file_bytes = uploaded_file.read()
+            new_hash = hashlib.sha256(file_bytes).hexdigest()
+
+            # Save to ocr_temp
+            temp_dir = os.path.join(settings.MEDIA_ROOT, 'ocr_temp')
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir)
+
+            temp_file_path = os.path.join(temp_dir, new_hash)
+            with open(temp_file_path, 'wb') as f:
+                f.write(file_bytes)
+
+            # Update identity and status
+            record.file_hash = new_hash
+            record.status = 'EXTRACTING'
+            record.validation_status = 'PENDING'
+            record.save()
+
+            from .pipeline import run_ocr_pipeline
+            execution_res = run_ocr_pipeline(file_bytes, record)
+
+            return Response({
+                "success": True,
+                "file_hash": new_hash,
+                "status": "EXTRACTED",
+                "validation_status": execution_res.get('validation', {}).get('status', 'ERROR'),
+                "data": execution_res.get('data', {})
+            })
+        except Exception as e:
+            logger.error(f"RESCAN UPLOAD FAILED: {str(e)}")
+            return Response({'error': f"Upload & Rescan failed: {str(e)}"}, status=500)
 

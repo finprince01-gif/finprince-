@@ -16,7 +16,7 @@ if not SECRET_KEY:
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
 # Production: Specify exact domains (no wildcards)
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,testserver,16.171.255.74,13.63.35.153,13.235.91.238,13.203.204.171').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,.finpixe.com,testserver,16.171.255.74,13.63.35.153,13.235.91.238,13.203.204.171,13.203.204.1').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',

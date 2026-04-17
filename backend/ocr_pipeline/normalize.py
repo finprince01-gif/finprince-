@@ -132,48 +132,73 @@ def derive_city_from_address(address: str) -> str:
 
     return ""
 
+# ── Key Aliases for Robust Mapping (OCR Stability Layer) ─────
+KEY_ALIASES = {
+    # Canonical : [Possible AI variations]
+    "gstin": ["gstin", "vendor_gstin", "supplier_gstin", "gst_no", "tax_id"],
+    "vendor_name": ["vendor_name", "supplier_name", "seller_name", "party_name", "vendor"],
+    "vendor_address": ["vendor_address", "supplier_address", "address", "bill_from", "seller_address"],
+    "vendor_state": ["vendor_state", "state", "place_of_supply", "vendor_place_of_supply"],
+    "invoice_no": ["invoice_no", "invoice_number", "inv_no", "bill_no", "supplier_invoice_no", "reference_no"],
+    "invoice_date": ["invoice_date", "date", "bill_date", "inv_date", "voucher_date"],
+    "total_amount": ["total_amount", "total_invoice_value", "grand_total", "total", "invoice_value"],
+    "taxable_value": ["taxable_value", "subtotal", "taxable_amount", "assessable_value", "net_amount"]
+}
+
+def resolve_key(data: Dict[str, Any], canonical_key: str) -> Any:
+    """
+    Looks up a value in data based on a list of aliases.
+    Returns the first non-empty value found.
+    """
+    aliases = KEY_ALIASES.get(canonical_key, [canonical_key])
+    for alt in aliases:
+        val = data.get(alt)
+        if val is not None and val != "":
+            return val
+    return None
+
 def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Step 2: Correct Hierarchical Normalization.
+    Step 2: Correct Hierarchical Normalization (Lossless Adapter).
     Directly produces the nested structure expected by the UI.
 
-    Branch derivation rules:
-      1. vendor_city (from AI extraction) → use directly
-      2. Fallback: parse city from vendor_address
-      3. Always editable in the UI after this point
+    Hardened for:
+    - Key variation between GPT/Gemini models
+    - Missing vs Empty value handling
+    - Branch derivation from noisy addresses
     """
+    # ── RAW BACKUP (Lossless) ──────────────────────────────────
+    # Keep the original data inside the result for traceability
+    raw_source = data.copy()
+
     # ── Line Items ──────────────────────────────────────────────
-    raw_items = data.get("line_items", []) or data.get("items", [])
+    raw_items = resolve_key(data, "line_items") or data.get("items", []) or []
+    if not isinstance(raw_items, list): raw_items = []
+    
     normalized_items = []
     for i, item in enumerate(raw_items):
         # --- Failsafe: Derive Missing Values ---
-        qty = normalize_amount(item.get("quantity"))
-        rate = normalize_amount(item.get("rate"))
-        item_taxable = normalize_amount(item.get("taxable_value") or item.get("taxable_amount"))
+        # Allow aliases even inside line items for future robustness
+        qty = normalize_amount(item.get("quantity") or item.get("qty"))
+        rate = normalize_amount(item.get("rate") or item.get("item_rate"))
+        item_taxable = normalize_amount(item.get("taxable_value") or item.get("taxable_amount") or item.get("amount"))
         
         # If taxable value is missing but we have Qty & Rate, derive it
         if item_taxable == 0 and qty > 0 and rate > 0:
             item_taxable = qty * rate
             
         # If tax rates are 0 in item but present in header (summary), distribute them
-        igst_r = normalize_amount(item.get("igst_rate"))
-        if igst_r == 0: igst_r = normalize_amount(data.get("igst_rate") or data.get("igst_percent"))
-        
-        cgst_r = normalize_amount(item.get("cgst_rate"))
-        if cgst_r == 0: cgst_r = normalize_amount(data.get("cgst_rate") or data.get("cgst_percent"))
-        
-        sgst_r = normalize_amount(item.get("sgst_rate"))
-        if sgst_r == 0: sgst_r = normalize_amount(data.get("sgst_rate") or data.get("sgst_percent"))
-
-        cess_r = normalize_amount(item.get("cess_rate"))
-        if cess_r == 0: cess_r = normalize_amount(data.get("cess_rate") or data.get("cess_percent"))
+        igst_r = normalize_amount(item.get("igst_rate") or item.get("igst_percent"))
+        cgst_r = normalize_amount(item.get("cgst_rate") or item.get("cgst_percent"))
+        sgst_r = normalize_amount(item.get("sgst_rate") or item.get("sgst_percent"))
+        cess_r = normalize_amount(item.get("cess_rate") or item.get("cess_percent"))
 
         normalized_items.append({
-            "si_no": str(item.get("si_no") or (i+1)),
-            "description": str(item.get("description") or "").strip(),
+            "si_no": str(item.get("si_no") or item.get("s_no") or (i+1)),
+            "description": str(item.get("description") or item.get("item_name") or "").strip(),
             "hsn_sac": str(item.get("hsn_code") or item.get("hsn_sac") or "").strip(),
             "quantity": qty,
-            "uom": str(item.get("uom") or "").strip(),
+            "uom": str(item.get("uom") or item.get("unit") or "").strip(),
             "rate": rate,
             "discount_percent": normalize_amount(item.get("discount_percent") or item.get("disc")),
             "taxable_value": item_taxable,
@@ -185,17 +210,16 @@ def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
             "sgst_amount": normalize_amount(item.get("sgst_amount") or item.get("sgst")),
             "cess_rate": cess_r,
             "cess_amount": normalize_amount(item.get("cess_amount") or item.get("cess")),
-            "amount": normalize_amount(item.get("amount") or item.get("total"))
+            "amount": normalize_amount(item.get("amount") or item.get("total") or item.get("line_total"))
         })
 
-    # Header-level tax rates for fallback distribution (Step 4: distribute summary GST)
-    header_igst_r = normalize_amount(data.get("igst_rate") or data.get("igst_percent") or data.get("igst"))
-    header_cgst_r = normalize_amount(data.get("cgst_rate") or data.get("cgst_percent") or data.get("cgst"))
-    header_sgst_r = normalize_amount(data.get("sgst_rate") or data.get("sgst_percent") or data.get("sgst"))
-    header_cess_r = normalize_amount(data.get("cess_rate") or data.get("cess_percent") or data.get("cess"))
+    # Header-level tax rates for fallback distribution
+    header_igst_r = normalize_amount(resolve_key(data, "igst_rate") or data.get("igst"))
+    header_cgst_r = normalize_amount(resolve_key(data, "cgst_rate") or data.get("cgst"))
+    header_sgst_r = normalize_amount(resolve_key(data, "sgst_rate") or data.get("sgst"))
+    header_cess_r = normalize_amount(resolve_key(data, "cess_rate") or data.get("cess"))
 
     # Only distribute if summary rate looks like a percentage (e.g. 9, 18, 5)
-    # If the summary value is very large, it's probably an amount, not a rate.
     def is_likely_rate(val): return 0 < val <= 28
 
     for item in normalized_items:
@@ -208,91 +232,81 @@ def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
         if item["taxable_value"] == 0 and item["quantity"] > 0 and item["rate"] > 0:
             item["taxable_value"] = item["quantity"] * item["rate"]
 
-    vendor_address = str(data.get("vendor_address", "")).strip()
+    vendor_address = str(resolve_key(data, "vendor_address") or "").strip()
 
-    # ── Branch Derivation (auto, NOT from direct OCR) ──────────
-    vendor_city = str(data.get("vendor_city", "")).strip()
+    # ── Branch Derivation ──────────────────────────────────────
+    vendor_city = str(data.get("vendor_city") or "").strip()
     manual_branch = str(data.get("branch") or data.get("Branch") or "").strip()
     
     if manual_branch:
         branch = manual_branch
-        logger.info(f"BRANCH kept from manual entry: '{branch}'")
     elif vendor_city:
         branch = vendor_city
-        logger.info(f"BRANCH set from vendor_city: '{branch}'")
     else:
         branch = derive_city_from_address(vendor_address)
-        if branch:
-            logger.info(f"BRANCH derived from address: '{branch}'")
-        else:
-            branch = ""
-            logger.info("BRANCH: could not derive city from address — leaving empty for manual entry")
+
+    # ── Robust Field Resolution (Aliases Applied) ─────────────
+    name = str(resolve_key(data, "vendor_name") or "").strip()
+    gstin = str(resolve_key(data, "gstin") or "").replace(" ", "").upper()
+    inv_no = str(resolve_key(data, "invoice_no") or "").strip()
+    inv_date = normalize_date(resolve_key(data, "invoice_date"))
+    total_amt = normalize_amount(resolve_key(data, "total_amount"))
+    tax_amt = normalize_amount(resolve_key(data, "taxable_value"))
+    state = str(resolve_key(data, "vendor_state") or "").strip()
 
     # ── Hierarchical structure for UI sections ──────────────────
-    # Helper to get field with aliases
-    def get_field(keys, default=""):
-        for k in keys:
-            val = data.get(k)
-            if val is not None and val != "":
-                return val
-        return default
-
-    # Aliases for robust mapping
-    inv_no = get_field(["invoice_number", "invoice_no", "inv_no", "bill_no", "supplier_invoice_no"])
-    inv_date = get_field(["invoice_date", "date", "bill_date", "supplier_invoice_date"])
-    total_amt = get_field(["total_amount", "total_invoice_value", "grand_total", "total"])
-    tax_amt = get_field(["taxable_value", "subtotal", "taxable_amount"])
-
     result = {
         "sections": {
             "supplier_details": {
-                "vendor_name": str(data.get("vendor_name", "")).strip(),
+                "vendor_name": name,
                 "vendor_address": vendor_address,
                 "bill_from": vendor_address,
                 "ship_from": vendor_address,
                 "vendor_city": vendor_city,
-                "vendor_state": str(data.get("vendor_state") or data.get("state") or "").strip(),
+                "vendor_state": state,
                 "vendor_country": str(data.get("vendor_country") or "India").strip(),
-                "registration_type": str(data.get("registration_type") or ("Regular" if data.get("gstin") else "")).strip(),
+                "registration_type": str(data.get("registration_type") or ("Regular" if gstin else "")).strip(),
                 "gst_taxability_type": str(data.get("gst_taxability_type") or "Taxable").strip(),
                 "gst_nature_of_transaction": str(data.get("gst_nature_of_transaction") or "").strip(),
                 "gst_classification": str(data.get("gst_classification") or "").strip(),
-                "gstin": str(data.get("gstin", "")).replace(" ", "").upper(),
-                "supplier_invoice_no": str(inv_no).strip(),
-                "invoice_date": normalize_date(inv_date),
-                "place_of_supply": str(data.get("place_of_supply") or data.get("vendor_state") or "").strip(),
-                # Branch = derived city (editable in UI, never hallucinated)
+                "gstin": gstin,
+                "supplier_invoice_no": inv_no,
+                "invoice_date": inv_date,
+                "place_of_supply": str(data.get("place_of_supply") or state or "").strip(),
                 "branch": branch or None
             },
             "supply_details": {
-                "total_invoice_value": normalize_amount(total_amt),
-                "total_taxable_value": normalize_amount(tax_amt),
+                "total_invoice_value": total_amt,
+                "total_taxable_value": tax_amt,
                 "total_cgst": normalize_amount(data.get("cgst") or data.get("total_cgst")),
                 "total_sgst": normalize_amount(data.get("sgst") or data.get("total_sgst")),
                 "total_igst": normalize_amount(data.get("igst") or data.get("total_igst")),
-                "ack_no": str(data.get("ack_number", "")).strip(),
+                "ack_no": str(data.get("ack_number") or "").strip(),
                 "ack_date": normalize_date(data.get("ack_date"))
             },
             "due_details": {
                 "due_date": normalize_date(data.get("due_date")),
-                "payment_terms": str(data.get("payment_terms", "")).strip()
+                "payment_terms": str(data.get("payment_terms") or "").strip()
             },
             "transit_details": {
-                "transporter_name": str(data.get("transporter_name", "")).strip(),
-                "vehicle_no": str(data.get("vehicle_number", "")).strip(),
-                "lr_gr_consignment": str(data.get("lr_number", "")).strip()
+                "transporter_name": str(data.get("transporter_name") or "").strip(),
+                "vehicle_no": str(data.get("vehicle_number") or "").strip(),
+                "lr_gr_consignment": str(data.get("lr_number") or "").strip()
             },
             "items": normalized_items
         },
-        # Top-level aliases for table display
-        "vendor_name": str(data.get("vendor_name", "")).strip(),
+        # Top-level aliases for table display (Consistency with UI)
+        "vendor_name": name,
         "vendor_address": vendor_address,
-        "gstin": str(data.get("gstin", "")).replace(" ", "").upper(),
-        "supplier_invoice_no": str(inv_no).strip(),
-        "invoice_date": normalize_date(inv_date),
-        "total_invoice_value": normalize_amount(total_amt),
-        "currency": str(data.get("currency", "INR")).upper()
+        "gstin": gstin,
+        "supplier_invoice_no": inv_no,
+        "invoice_date": inv_date,
+        "total_invoice_value": total_amt,
+        "currency": str(data.get("currency") or "INR").upper(),
+        # Lossless backup
+        "_raw_source": raw_source
     }
     
-    logger.info(f"NORMALIZED DATA: sections.supplier_details.branch = '{branch}'")
+    logger.info(f"NORMALIZATION COMPLETE: Validated GSTIN={gstin[:4]}... INV={inv_no}")
     return result
+

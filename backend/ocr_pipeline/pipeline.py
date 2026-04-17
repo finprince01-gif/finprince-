@@ -1,6 +1,8 @@
 import logging
 from django.db import transaction
 from django.utils import timezone
+from google import genai
+from core.ai_proxy import api_key_manager
 from .extraction import extract_invoice
 from .normalize import normalize
 from .repository import InvoiceTempOCR
@@ -24,8 +26,20 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
     logger.info(f"NEW OCR PIPELINE ACTIVE - Start processing record {record.id}...")
     
     try:
+        # Get API key
+        api_key = api_key_manager.get_healthy_key()
+        if not api_key:
+            raise RuntimeError("No healthy Gemini API keys available")
+
+        # Initialize Gemini Client
+        from google.genai import types
+        client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=None)
+        )
+
         # Phase 1: High-Precision Extraction (Gemini)
-        extracted = extract_invoice(file_bytes)
+        extracted = extract_invoice(client, file_bytes, voucher_type=record.voucher_type or 'Purchase')
         
         # Phase 2: Hierarchical Normalization
         normalized = normalize(extracted)
@@ -88,36 +102,33 @@ def validate_and_process(record: InvoiceTempOCR):
         # and the status confirms it, skip the full GSTIN+branch lookup to avoid false NEED_VENDOR
         branch_name = supplier.get("branch") or record.branch or ""
 
-        if record.vendor_id and record.validation_status in ['FOUND', 'READY', 'RESOLVED', 'MATCHED_VENDOR']:
+        if record.vendor_id and record.validation_status in ['FOUND', 'READY', 'RESOLVED', 'MATCHED_VENDOR', 'EXISTING_VENDOR']:
             try:
                 vendor = VendorMasterBasicDetail.objects.get(id=record.vendor_id, tenant_id=tenant_id)
                 print(f"FAST PATH: Using stored vendor_id={record.vendor_id} for {vendor.vendor_name}")
             except VendorMasterBasicDetail.DoesNotExist:
                 vendor = None
         else:
-            # 🔹 VENDOR VALIDATION (GSTIN + BRANCH)
-            # Attempt to find vendor via GSTIN and Branch (reference_name in model)
-            gst_record = VendorMasterGSTDetails.objects.filter(
-                tenant_id=tenant_id,
-                gstin__iexact=gstin,
-                reference_name__iexact=branch_name,  # MUST match branch as requested
-                vendor_basic_detail__isnull=False
-            ).select_related('vendor_basic_detail').first()
-
-            vendor = gst_record.vendor_basic_detail if gst_record else None
+            # 🔹 STRICT VENDOR VALIDATION (GSTIN + BRANCH)
+            from vendors.vendor_validation_logic import validate_vendor
+            val_res = validate_vendor(tenant_id, vendor_name, gstin, branch=branch_name)
             
-            # Fallback: Search by name if GSTIN+branch match failed
-            if not vendor and vendor_name:
-                vendor = VendorMasterBasicDetail.objects.filter(
-                    tenant_id=tenant_id, 
-                    vendor_name__iexact=vendor_name,
-                ).first()
+            if val_res['status'] == 'EXISTING_VENDOR':
+                vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
+                if vendor:
+                    record.vendor_id = vendor.id
+                    record.validation_status = 'FOUND' # Maintain compatibility with existing UI
+                    record.save()
+                print(f"STRICT MATCH FOUND: {vendor.vendor_name if vendor else 'Unknown'}")
+            else:
+                vendor = None
 
         if not vendor:
             record.validation_status = "NEED_VENDOR"
             record.save()
-            print("FINAL STATUS: NEED_VENDOR (Branch mismatch or missing)")
+            print("FINAL STATUS: NEED_VENDOR (Strict matching failed)")
             return {"status": "NEED_VENDOR"}
+
 
         # Sync vendor name from master if it differs
         vendor_name = vendor.vendor_name
@@ -178,12 +189,31 @@ def validate_and_process(record: InvoiceTempOCR):
                     "invoiceValue": item.get('amount', 0)
                 })
 
+            # Create INR supply details (without items field which doesn't exist on this model)
             VoucherPurchaseSupplyINRDetails.objects.create(
                 tenant_id=tenant_id,
                 supplier_details=voucher_main,
-                items=mapped_items,
                 description=f"Auto-validated via OCR Pipeline: {record.file_path}"
             )
+
+            # Create line items in the correct table
+            from accounting.models_voucher_purchase import VoucherPurchaseItem
+            for item in items:
+                VoucherPurchaseItem.objects.create(
+                    tenant_id=tenant_id,
+                    supplier_details=voucher_main,
+                    item_name=item.get('description') or "—",
+                    hsn_sac=item.get('hsn_sac') or "",
+                    quantity=item.get('quantity', 0),
+                    uom=item.get('uom') or "",
+                    rate=item.get('rate', 0),
+                    taxable_value=item.get('taxable_value', 0),
+                    cgst_amount=item.get('cgst_amount', 0),
+                    sgst_amount=item.get('sgst_amount', 0),
+                    igst_amount=item.get('igst_amount', 0),
+                    invoice_value=item.get('amount', 0),
+                    item_code="" # To be matched later if needed
+                )
 
             VoucherPurchaseDueDetails.objects.create(
                 tenant_id=tenant_id,

@@ -11,16 +11,6 @@
     "pythonPlatform": "Windows",
     "typeCheckingMode": "basic",
     "useLibraryCodeForTypes": true,
-    "extraPaths": [
-        "backend"
-    ],
-    "executionEnvironments": [
-        {
-            "root": "backend",
-            "extraPaths": [
-                ".",
-                "C:/Python314/Lib/site-packages"
-            ]
-        }
-    ]
+    "venvPath": "backend",
+    "venv": "venv"
 }

@@ -8,9 +8,6 @@ reportMissingImports = "warning"
 reportMissingTypeStubs = false
 useLibraryCodeForTypes = true
 
-[tool.pyright.env]
-pythonPath = "."
-
 [project]
 name = "backend"
 version = "0.1.0"

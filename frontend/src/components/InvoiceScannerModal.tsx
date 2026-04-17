@@ -383,6 +383,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             const branch = firstRow['Branch'] || '';
             const state = firstRow['State'] || firstRow['Billing State'] || firstRow['Bill From - State'] || '';
             const billFrom = firstRow['Bill From'] || firstRow['Buyer/Supplier - Address'] || firstRow['Bill From - Address Line 1'] || '';
+            const vendorCategory = firstRow['Vendor Category'] || firstRow['vendor_category'] || '';
 
             setVendorValidation('VALIDATING');
             try {
@@ -405,11 +406,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     setVendorValidation('FOUND');
                 } else if (res?.status === 'NOT_FOUND') {
                     setVendorValidation('NOT_FOUND');
-                    setExtractedVendorData({ vendor_name: vendorName, gstin, state, address: billFrom, branch, supplier_items: items.length > 0 ? items : undefined });
+                    setExtractedVendorData({ vendor_name: vendorName, gstin, state, address: billFrom, branch, vendor_category: vendorCategory, supplier_items: items.length > 0 ? items : undefined });
                 } else if (res?.status === 'GSTIN_CONFLICT') {
                     setVendorValidation('GSTIN_CONFLICT');
                     setVendorValidationMessage(res.message);
-                    setExtractedVendorData({ vendor_name: vendorName, gstin, state, address: billFrom, branch, supplier_items: items.length > 0 ? items : undefined });
+                    setExtractedVendorData({ vendor_name: vendorName, gstin, state, address: billFrom, branch, vendor_category: vendorCategory, supplier_items: items.length > 0 ? items : undefined });
                 } else {
                     setVendorValidation('IDLE');
                 }
@@ -800,6 +801,17 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 showSuccess(response.message || 'Vendor created successfully');
                 setIsCreateVendorModalOpen(false);
                 setVendorValidation('FOUND');
+
+                // Update invoice header with corrected vendor info
+                setInvoiceResults(prev => prev.map((res, i) => {
+                    if (i !== 0) return res;
+                    const newRes = { ...res };
+                    newRes.invoice = { ...newRes.invoice };
+                    newRes.invoice['Vendor Name'] = data.vendor_name;
+                    newRes.invoice['GSTIN'] = data.gstin;
+                    newRes.invoice['Vendor Category'] = data.vendor_category || '';
+                    return newRes;
+                }));
 
                 // Once the vendor is created, automatically continue the AI Extraction process.
                 setTimeout(() => {

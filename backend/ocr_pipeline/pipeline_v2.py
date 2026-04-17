@@ -140,12 +140,31 @@ def finalize_staging_record(record_id: int) -> dict:
                     "invoiceValue": item.get('amount', 0)
                 })
 
+            # Create INR supply details (without items field which doesn't exist on this model)
             VoucherPurchaseSupplyINRDetails.objects.create(
                 tenant_id=tenant_id,
                 supplier_details=voucher_main,
-                items=mapped_items,
                 description=f"Auto-generated via OCR Pipeline 2: {record.file_path}"
             )
+
+            # Create line items in the correct table
+            from accounting.models_voucher_purchase import VoucherPurchaseItem
+            for item in items:
+                VoucherPurchaseItem.objects.create(
+                    tenant_id=tenant_id,
+                    supplier_details=voucher_main,
+                    item_name=item.get('description') or "—",
+                    hsn_sac=item.get('hsn_sac') or "",
+                    quantity=item.get('quantity', 0),
+                    uom=item.get('uom') or "",
+                    rate=item.get('rate', 0),
+                    taxable_value=item.get('taxable_value', 0),
+                    cgst_amount=item.get('cgst_amount', 0),
+                    sgst_amount=item.get('sgst_amount', 0),
+                    igst_amount=item.get('igst_amount', 0),
+                    invoice_value=item.get('amount', 0),
+                    item_code="" # To be matched later if needed
+                )
 
             VoucherPurchaseDueDetails.objects.create(
                 tenant_id=tenant_id,
