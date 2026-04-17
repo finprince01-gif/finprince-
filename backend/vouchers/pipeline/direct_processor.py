@@ -94,3 +94,5 @@ def process_bulk_job(job_id: int, voucher_type: str = 'Purchase'):
         if 'job' in locals():
             job.status = 'failed'
             job.save()
+    finally:
+        connection.close()

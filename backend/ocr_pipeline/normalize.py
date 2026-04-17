@@ -148,6 +148,12 @@ def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
     for i, item in enumerate(raw_items):
         # --- Failsafe: Derive Missing Values ---
         qty = normalize_amount(item.get("quantity"))
+        hsn_sac = str(item.get("hsn_code") or item.get("hsn_sac") or "").strip()
+        
+        # Default quantity to 1 for Services (HSN/SAC starting with 99)
+        if hsn_sac.startswith("99") and qty == 0:
+            qty = 1.0
+
         rate = normalize_amount(item.get("rate"))
         item_taxable = normalize_amount(item.get("taxable_value") or item.get("taxable_amount"))
         

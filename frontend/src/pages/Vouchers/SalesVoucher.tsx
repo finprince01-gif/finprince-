@@ -2118,22 +2118,34 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 }
                 let updatedRow = { ...row, [field]: cleanValue };
 
-                // Auto-fill item details when itemCode or itemName changes
-                if (field === 'itemCode' || field === 'itemName') {
-                    let matchedItem = inventoryItems.find(item =>
-                        field === 'itemCode' ? item.item_code === value : (item.name === value || item.item_name === value)
-                    );
+                // Default qty to 1 if HSN/SAC starts with 99 (Services)
+                if (field === 'hsnSac' && cleanValue.startsWith('99')) {
+                    updatedRow.qty = '1';
+                }
 
+                // Auto-fill item details when itemCode, itemName, or hsnSac changes
+                if (field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
+                    // Reset qty whenever item selection changes
+                    updatedRow.qty = '';
+                    
+                    let matchedItem = (inventoryItems as any[]).find(item => {
+                        if (field === 'itemCode') return item.item_code === value;
+                        if (field === 'itemName') return (item.name === value || item.item_name === value);
+                        if (field === 'hsnSac') return (item.hsn_code === value || item.hsnCode === value || item.hsn_sac === value || item.hsnSac === value);
+                        return false;
+                    });
+    
                     let isService = false;
                     if (!matchedItem) {
-                        matchedItem = serviceItems.find(item =>
-                            field === 'itemCode'
-                                ? (item.serviceCode === value || item.service_code === value)
-                                : (item.serviceName === value || item.service_name === value)
-                        );
+                        matchedItem = (serviceItems as any[]).find(item => {
+                            if (field === 'itemCode') return (item.serviceCode === value || item.service_code === value);
+                            if (field === 'itemName') return (item.serviceName === value || item.service_name === value);
+                            if (field === 'hsnSac') return (item.hsn_sac === value || item.hsnSac === value || item.sacCode === value || item.sac_code === value);
+                            return false;
+                        });
                         if (matchedItem) isService = true;
                     }
-
+    
                     if (matchedItem) {
                         let inrRate = 0;
                         const hsn = matchedItem.hsn_code || matchedItem.hsnCode || matchedItem.hsn_sac || matchedItem.hsnSac || matchedItem.sacCode || matchedItem.sac_code || '';
@@ -2159,6 +2171,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         }
                         updatedRow.gstRate = (matchedItem.gst_rate || matchedItem.gstRate || '0').toString();
                         updatedRow.cessRate = (matchedItem.cess_rate || matchedItem.cessRate || '0').toString();
+
+                        // Default qty to 1 if HSN/SAC starts with 99 (Services)
+                        if (updatedRow.hsnSac.toString().startsWith('99')) {
+                            updatedRow.qty = '1';
+                        }
 
                         // Recalculate values
                         const qty = parseFloat(updatedRow.qty) || 0;
@@ -3711,8 +3728,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                             <input
                                                                 type="text"
                                                                 value={row.hsnSac}
-                                                                readOnly
-                                                                className="w-full px-2 py-1 bg-gray-50 bg-opacity-50 border-0 rounded text-sm text-center text-gray-700 cursor-not-allowed"
+                                                                onChange={(e) => handleItemRowChange(row.id, 'hsnSac', e.target.value)}
+                                                                className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                                                                 placeholder="HSN/SAC"
                                                             />
                                                         </td>

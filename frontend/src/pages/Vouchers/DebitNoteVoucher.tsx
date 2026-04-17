@@ -586,10 +586,12 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             let updatedRow = { ...oldRow, ...updates };
 
             // Logic for item selection (auto-fill)
-            if (updates.itemCode || updates.itemName) {
+            if (updates.itemCode || updates.itemName || updates.hsnSac) {
+                updatedRow.qty = '0'; // Reset qty
                 const selectedItem = availableItems.find(it =>
                     (updates.itemCode && it.itemCode === updates.itemCode) ||
-                    (updates.itemName && it.itemName === updates.itemName)
+                    (updates.itemName && it.itemName === updates.itemName) ||
+                    (updates.hsnSac && (it.hsnSac === updates.hsnSac || it.hsn_sac === updates.hsnSac))
                 );
                 if (selectedItem) {
                     updatedRow = {
@@ -605,6 +607,11 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                         purchaseLedger: selectedItem.purchase_ledger || '',
                         maxQty: parseFloat(selectedItem.qty || '0')
                     };
+
+                    // Default qty to 1 if HSN/SAC starts with 99 (Services)
+                    if (updatedRow.hsnSac?.toString().startsWith('99')) {
+                        updatedRow.qty = '1';
+                    }
                 }
             }
 
@@ -1806,7 +1813,14 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         <SearchableDropdown disabled={isFinancial === 'Yes'} options={availableItems.map(it => it.itemName).filter(Boolean)} value={row.itemName} onChange={(val) => updateItemRow(index, { itemName: val })} placeholder="Item name" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input disabled={isFinancial === 'Yes'} type="text" value={row.hsnSac} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="HSN" />
+                                                        <input 
+                                                            disabled={isFinancial === 'Yes'} 
+                                                            type="text" 
+                                                            value={row.hsnSac} 
+                                                            onChange={(e) => updateItemRow(index, { hsnSac: e.target.value })}
+                                                            className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} 
+                                                            placeholder="HSN" 
+                                                        />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
                                                         <input disabled={isFinancial === 'Yes'} type="number" value={row.qty} onChange={(e) => updateItemRow(index, { qty: e.target.value })} className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} placeholder="0" />
