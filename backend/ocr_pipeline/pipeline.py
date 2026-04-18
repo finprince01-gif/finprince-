@@ -68,10 +68,70 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
             "validation": {"status": "ERROR", "error": str(e)}
         }
 
-def validate_and_process(record: InvoiceTempOCR):
+def finalize_merged_records(records, auto_save: bool = True):
+    """
+    Groups and merges multi-page invoices into a single voucher.
+    """
+    if not records:
+        return {"status": "ERROR", "error": "No records to merge"}
+    
+    if len(records) == 1:
+        return validate_and_process(records[0], auto_save=auto_save)
+    
+    print(f"MERGING {len(records)} records for multi-page processing...")
+    
+    # ── Phase 1: Aggregation (Strict Rules per user request) ──
+    primary = records[0] # FIRST record
+    last_record = records[-1] # LAST record
+    
+    all_items = []
+    for r in records:
+        data = r.extracted_data or {}
+        sections = data.get("sections", {})
+        all_items.extend(sections.get("items", []))
+            
+    # ── Phase 2: Create a virtual merged state ──
+    merged_data = primary.extracted_data.copy()
+    if "sections" not in merged_data: merged_data["sections"] = {}
+    
+    # 1. Header: already from primary (records[0])
+    
+    # 2. Line Items: Aggregate
+    merged_data["sections"]["items"] = all_items
+    
+    # 3. Totals / Taxes / Charges: From LAST record
+    last_sections = (last_record.extracted_data or {}).get("sections", {})
+    merged_data["sections"]["supply_details"] = last_sections.get("supply_details", {})
+    merged_data["sections"]["due_details"] = last_sections.get("due_details", {})
+    merged_data["sections"]["transit_details"] = last_sections.get("transit_details", {})
+    
+    # Update top-level field for consistency
+    if last_record.extracted_data:
+        merged_data["total_invoice_value"] = last_record.extracted_data.get("total_invoice_value")
+        
+    primary.extracted_data = merged_data
+    # We save temporarily to allow validate_and_process to work with DB data
+    primary.save()
+    
+    # ── Phase 3: Process the merged record ──
+    res = validate_and_process(primary, auto_save=auto_save)
+    
+    # ── Phase 4: Sync status to other pages ──
+    if res.get("status") == "VOUCHER_CREATED":
+        v_id = res.get("voucher_id")
+        for r in records[1:]:
+            r.processed = True
+            r.validation_status = "VOUCHER_CREATED"
+            r.status = "VOUCHER_CREATED"
+            r.voucher_id = v_id
+            r.save()
+            
+    return res
+
+def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False):
     """
     CORE VALIDATION FUNCTION: 
-    Checks for Vendor, Duplicates, and Auto-Creates Voucher if possible.
+    Checks for Vendor, Duplicates, and optionally creates Voucher.
     """
     print("VALIDATION START:", record.id)
     
@@ -123,32 +183,57 @@ def validate_and_process(record: InvoiceTempOCR):
             else:
                 vendor = None
 
-        if not vendor:
-            record.validation_status = "NEED_VENDOR"
-            record.save()
-            print("FINAL STATUS: NEED_VENDOR (Strict matching failed)")
-            return {"status": "NEED_VENDOR"}
-
-
-        # Sync vendor name from master if it differs
-        vendor_name = vendor.vendor_name
-
-        # 🔹 PURCHASE DUPLICATE VALIDATION (Invoice No + GSTIN + Branch)
+        # 🔹 PURCHASE DUPLICATE VALIDATION (Invoice No + GSTIN + Branch + Vendor Name)
+        # We do this BEFORE the vendor check so we can show 'Already Exist' even for unresolved vendors
         is_duplicate = VoucherPurchaseSupplierDetails.objects.filter(
             supplier_invoice_no__iexact=invoice_no,
             gstin__iexact=gstin,
-            branch__iexact=branch_name, # Strict branch matching for duplicates
+            branch__iexact=branch_name,
+            vendor_name__iexact=vendor_name,
             tenant_id=tenant_id
         ).exists()
-        print("DUPLICATE:", is_duplicate)
+        print("DUPLICATE CHECK:", is_duplicate)
 
         if is_duplicate:
             record.validation_status = "DUPLICATE"
             record.save()
             print("FINAL STATUS: DUPLICATE")
+            # We still want to check if the vendor exists to show correct 'Vendor Status' in UI
+            # But the primary pipeline status for the row becomes DUPLICATE
+            from vendors.vendor_validation_logic import validate_vendor
+            val_res = validate_vendor(tenant_id, vendor_name, gstin, branch=branch_name)
+            if val_res['status'] == 'EXISTING_VENDOR':
+                 record.vendor_id = val_res['vendor_id']
+                 record.save()
             return {"status": "DUPLICATE"}
 
-        # 🔹 CREATE PURCHASE VOUCHER (AUTO-SAVE)
+        if not vendor:
+            # Re-check if it's there (duplicate check might have used OCR name, this uses master)
+            from vendors.vendor_validation_logic import validate_vendor
+            val_res = validate_vendor(tenant_id, vendor_name, gstin, branch=branch_name)
+            
+            if val_res['status'] == 'EXISTING_VENDOR':
+                vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
+                if vendor:
+                    record.vendor_id = vendor.id
+                    record.validation_status = 'FOUND'
+                    record.save()
+            else:
+                record.validation_status = "NEED_VENDOR"
+                record.save()
+                return {"status": "NEED_VENDOR"}
+
+        # Sync vendor name from master if found
+        if vendor:
+             vendor_name = vendor.vendor_name
+
+        # 🔹 CREATE PURCHASE VOUCHER (ONLY IF auto_save IS TRUE)
+        if not auto_save:
+            record.validation_status = "READY"
+            record.save()
+            print("FINAL STATUS: READY (Waiting for manual finalization)")
+            return {"status": "READY"}
+
         # Using the Pipeline 2 logic refined earlier
         with transaction.atomic():
             branch_record = Branch.objects.filter(id=tenant_id).first()
@@ -175,18 +260,28 @@ def validate_and_process(record: InvoiceTempOCR):
             # Map items
             mapped_items = []
             for item in items:
+                # Helper to safely convert to decimal
+                def to_dec(val):
+                    try:
+                        if not val or str(val).strip() == "": return 0
+                        # Clean currency symbols and commas
+                        clean_val = str(val).replace('₹', '').replace(',', '').strip()
+                        return float(clean_val)
+                    except:
+                        return 0
+
                 mapped_items.append({
                     "itemCode": "",
                     "itemName": item.get('description') or "—",
                     "hsnSac": item.get('hsn_sac') or "",
-                    "qty": item.get('quantity', 0),
+                    "qty": to_dec(item.get('quantity')),
                     "uom": item.get('uom') or "",
-                    "rate": item.get('rate', 0),
-                    "taxableValue": item.get('taxable_value', 0),
-                    "cgst": item.get('cgst', 0),
-                    "sgst": item.get('sgst', 0),
-                    "igst": item.get('igst', 0),
-                    "invoiceValue": item.get('amount', 0)
+                    "rate": to_dec(item.get('rate')),
+                    "taxableValue": to_dec(item.get('taxable_value') or item.get('amount')),
+                    "cgst": to_dec(item.get('cgst_amount') or item.get('cgst')),
+                    "sgst": to_dec(item.get('sgst_amount') or item.get('sgst')),
+                    "igst": to_dec(item.get('igst_amount') or item.get('igst')),
+                    "invoiceValue": to_dec(item.get('amount') or item.get('line_total'))
                 })
 
             # Create INR supply details (without items field which doesn't exist on this model)
@@ -198,27 +293,29 @@ def validate_and_process(record: InvoiceTempOCR):
 
             # Create line items in the correct table
             from accounting.models_voucher_purchase import VoucherPurchaseItem
-            for item in items:
+            for m_item in mapped_items:
                 VoucherPurchaseItem.objects.create(
                     tenant_id=tenant_id,
                     supplier_details=voucher_main,
-                    item_name=item.get('description') or "—",
-                    hsn_sac=item.get('hsn_sac') or "",
-                    quantity=item.get('quantity', 0),
-                    uom=item.get('uom') or "",
-                    rate=item.get('rate', 0),
-                    taxable_value=item.get('taxable_value', 0),
-                    cgst_amount=item.get('cgst_amount', 0),
-                    sgst_amount=item.get('sgst_amount', 0),
-                    igst_amount=item.get('igst_amount', 0),
-                    invoice_value=item.get('amount', 0),
+                    item_name=m_item['itemName'],
+                    hsn_sac=m_item['hsnSac'],
+                    quantity=m_item['qty'],
+                    uom=m_item['uom'],
+                    rate=m_item['rate'],
+                    taxable_value=m_item['taxableValue'],
+                    cgst_amount=m_item['cgst'],
+                    sgst_amount=m_item['sgst'],
+                    igst_amount=m_item['igst'],
+                    invoice_value=m_item['invoiceValue'],
                     item_code="" # To be matched later if needed
                 )
 
+            # Re-fetch total values from supply details if needed
+            total_inv_val = to_dec(supply.get('total_invoice_value'))
             VoucherPurchaseDueDetails.objects.create(
                 tenant_id=tenant_id,
                 supplier_details=voucher_main,
-                to_pay=supply.get('total_invoice_value', 0),
+                to_pay=total_inv_val,
                 terms=due.get('payment_terms', '')
             )
 
@@ -235,14 +332,14 @@ def validate_and_process(record: InvoiceTempOCR):
                 voucher_number=v_num,
                 invoice_no=invoice_no,
                 party=vendor_name,
-                total=supply.get('total_invoice_value', 0),
+                total=total_inv_val,
                 source='ocr_pipeline',
                 reference_id=voucher_main.id,
-                total_taxable_amount=supply.get('total_taxable_value', 0),
-                total_cgst=supply.get('total_cgst', 0),
-                total_sgst=supply.get('total_sgst', 0),
-                total_igst=supply.get('total_igst', 0),
-                items_data=mapped_items
+                total_taxable_amount=to_dec(supply.get('total_taxable_value')),
+                total_cgst=to_dec(supply.get('total_cgst')),
+                total_sgst=to_dec(supply.get('total_sgst')),
+                total_igst=to_dec(supply.get('total_igst'))
+                # items_data removed as it has no setter
             )
 
             # 🔹 FINAL STATUS UPDATE

@@ -30,9 +30,15 @@ def process_invoice_upload(
     
     # 2. Duplicate Detection / Lifecycle Management
     existing = repo.find_by_hash_and_tenant(file_hash, tenant_id)
-    if existing and existing.extracted_data and existing.upload_session_id == upload_session_id:
-        # Scenario A: Exact same file in same session — skip
-        logger.info(f"Duplicate detect within session: Reusing {existing.id}")
+    if existing and existing.extracted_data:
+        # Scenario: File already exists in staging (from any session) — skip re-processing
+        logger.info(f"Duplicate detect: Reusing existing record {existing.id} for new session {upload_session_id}")
+        
+        # We MUST update session_id so the frontend view (which filters by current session) reveals it
+        if existing.upload_session_id != upload_session_id:
+            existing.upload_session_id = upload_session_id
+            existing.save()
+
         return {
             "id": existing.id,
             "file_hash": existing.file_hash,

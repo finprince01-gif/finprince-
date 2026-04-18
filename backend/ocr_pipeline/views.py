@@ -13,6 +13,7 @@ from .service import process_invoice_upload
 from .normalize import normalize
 from .repository import InvoiceTempOCR
 from .pipeline import validate_and_process as finalize_record
+from .grouping import run_grouping_logic
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,12 @@ class CleanOCRStagingView(views.APIView):
                 logger.error(f"POST API Processing failure: {str(e)}")
                 results.append({"file_name": uploaded_file.name, "status": "FAILED", "error": str(e)})
 
+        # STEP 5: Run Grouping Preprocessor (Multi-page Merge)
+        try:
+            run_grouping_logic(tenant_id, upload_session_id)
+        except Exception as ge:
+            logger.error(f"Grouping preprocessor failed: {str(ge)}")
+
         return Response({
             "success": True,
             "status": "SUCCESS",
@@ -109,6 +116,11 @@ class CleanOCRStagingView(views.APIView):
         else:
             print(f"DEBUG: No session ID, file_paths or resume flag provided. Returning empty list.")
             records = InvoiceTempOCR.objects.none()
+
+        # ── Step 3.5: Apply Grouping filter (Hide secondary pages) ──
+        # If records exist, only show primary aggregated records
+        if records.exists():
+            records = records.filter(Q(is_primary=True) | Q(group_id__isnull=True))
 
         # ── Step 4: Optional Filter ──
         v_filter = request.query_params.get('filter')
@@ -231,6 +243,12 @@ class CleanOCRStagingView(views.APIView):
             # Run the authoritative pipeline validation
             from .pipeline import validate_and_process
             v_res = validate_and_process(record)
+
+            # Re-run grouping after manual edit
+            try:
+                run_grouping_logic(record.tenant_id, record.upload_session_id)
+            except Exception as ge:
+                logger.error(f"Post-patch grouping failed: {str(ge)}")
             
             # Re-read the saved record to get accurate status
             record.refresh_from_db()
@@ -273,11 +291,14 @@ class OCRStagingFinalizeView(views.APIView):
         tenant_id = request.user.branch_id
         upload_session_id = request.data.get('upload_session_id')
         
-        # ── Step 1: Find processable records (READY ONLY - Exclude Duplicates) ──
+        # ── Step 1: Find processable records (READY/Matched Only - Exclude Duplicates) ──
+        # We include ANY record that has a vendor_id, even if status is NEED_VENDOR (syncing issue)
         query = InvoiceTempOCR.objects.filter(
             tenant_id=tenant_id,
-            validation_status__in=['READY', 'FOUND', 'RESOLVED', 'MATCHED_VENDOR', 'SUCCESS', 'NEEDS_ATTENTION', 'LOW_CONFIDENCE'],
             processed=False
+        ).filter(
+            Q(validation_status__in=['READY', 'FOUND', 'RESOLVED', 'MATCHED_VENDOR', 'SUCCESS', 'NEEDS_ATTENTION', 'LOW_CONFIDENCE', 'NEED_VENDOR']) |
+            Q(vendor_id__isnull=False)
         ).exclude(validation_status__in=['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'])
         if upload_session_id:
             query = query.filter(upload_session_id=upload_session_id)
@@ -307,19 +328,43 @@ class OCRStagingFinalizeView(views.APIView):
         if not records_to_process and not all_session_records:
             return Response({'error': 'No processable invoices found in staging.'}, status=400)
 
-        for r in records_to_process:
-            if r.processed:
+        # ── Step 3: Progressive Processing (Grouped for Multi-Page) ──
+        # We process ONLY primary records, but fetch all group members to pass to the merging pipeline
+        groups = {}
+        processed_group_ids = set()
+
+        # Collect all primary records and standalone records
+        primaries = records_to_process.filter(Q(is_primary=True) | Q(group_id__isnull=True))
+
+        for primary in primaries:
+            if primary.group_id:
+                # Fetch all members of this group in order
+                group_members = list(InvoiceTempOCR.objects.filter(
+                    group_id=primary.group_id, 
+                    tenant_id=tenant_id
+                ).order_by('created_at', 'id'))
+                key = primary.group_id
+            else:
+                group_members = [primary]
+                key = f"UNGROUPED_{primary.id}"
+            
+            groups[key] = group_members
+
+        from .pipeline import finalize_merged_records
+        for key, group_records in groups.items():
+            # Check if any record in group is already processed (safety)
+            if any(r.processed for r in group_records):
                 continue
                 
-            res = finalize_record(r)
+            res = finalize_merged_records(group_records, auto_save=True)
+            
             if res.get('status') == 'VOUCHER_CREATED':
                 summary['created'] += 1
             elif res.get('status') in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
                 summary['skipped'] += 1
-                summary['errors'].append({'file': r.file_path, 'message': res.get('message') or "Duplicate in database"})
             else:
                 summary['failed'] += 1
-                summary['errors'].append({'file': r.file_path, 'error': res.get('error')})
+                summary['errors'].append({'key': key, 'error': res.get('error')})
 
         summary['success'] = True
         return Response(summary)

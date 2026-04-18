@@ -140,36 +140,97 @@ KEY_ALIASES = {
     "vendor_address": ["vendor_address", "supplier_address", "address", "bill_from", "seller_address"],
     "vendor_state": ["vendor_state", "state", "place_of_supply", "vendor_place_of_supply"],
     "invoice_no": ["invoice_no", "invoice_number", "inv_no", "bill_no", "supplier_invoice_no", "reference_no"],
-    "invoice_date": ["invoice_date", "date", "bill_date", "inv_date", "voucher_date"],
-    "total_amount": ["total_amount", "total_invoice_value", "grand_total", "total", "invoice_value"],
-    "taxable_value": ["taxable_value", "subtotal", "taxable_amount", "assessable_value", "net_amount"]
+    "invoice_date": ["invoice_date", "date", "bill_date", "inv_date", "voucher_date", "tax_invoice_date"],
+    "total_amount": ["total_amount", "total_invoice_value", "grand_total", "total", "invoice_value", "final_amount"],
+    "taxable_value": ["taxable_value", "subtotal", "taxable_amount", "assessable_value", "net_amount", "taxable_value_total"],
+    "total_cgst": ["total_cgst", "cgst", "cgst_amount", "central_tax", "cgst_value", "total_central_tax"],
+    "total_sgst": ["total_sgst", "sgst", "sgst_amount", "state_tax", "utgst", "sgst_value", "total_state_tax"],
+    "total_igst": ["total_igst", "igst", "igst_amount", "integrated_tax", "tax_amount", "igst_value", "total_tax", "igst_tax"]
 }
 
 def resolve_key(data: Dict[str, Any], canonical_key: str) -> Any:
     """
     Looks up a value in data based on a list of aliases.
-    Returns the first non-empty value found.
+    Recursive search inside 'sections' if present.
     """
     aliases = KEY_ALIASES.get(canonical_key, [canonical_key])
+    
+    # 1. Check top level
     for alt in aliases:
-        val = data.get(alt)
-        if val is not None and val != "":
-            return val
+        if alt in data and data[alt] not in (None, ""):
+            return data[alt]
+            
+    # 2. Check inside 'sections' (for re-normalization of already structured data)
+    sections = data.get("sections", {})
+    if sections:
+        for section in sections.values():
+            if isinstance(section, dict):
+                for alt in aliases:
+                    if alt in section and section[alt] not in (None, ""):
+                        return section[alt]
+    
+    # 3. Last ditch: some models produce supply_details, supplier_details directly
+    for k in ["supply_details", "supplier_details", "supplyDetails", "supplierDetails"]:
+        sub = data.get(k, {})
+        if isinstance(sub, dict):
+            for alt in aliases:
+                if alt in sub and sub[alt] not in (None, ""):
+                    return sub[alt]
+
     return None
 
-def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
+def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
     """
     Step 2: Correct Hierarchical Normalization (Lossless Adapter).
     Directly produces the nested structure expected by the UI.
-
-    Hardened for:
-    - Key variation between GPT/Gemini models
-    - Missing vs Empty value handling
-    - Branch derivation from noisy addresses
     """
     # ── RAW BACKUP (Lossless) ──────────────────────────────────
-    # Keep the original data inside the result for traceability
+    # Always work on the rawest data available (original OCR output)
+    data = data_in.get("_raw_source") or data_in.copy()
     raw_source = data.copy()
+
+    # Define likely rate check here for reuse
+    def is_likely_rate(val): return 0 < val <= 28
+
+    # ── HEURISTIC HEADER DETECTION ──
+    # Aggressively find header amounts to drive reconciliation
+    hdr_taxable = normalize_amount(resolve_key(data, "taxable_value"))
+    
+    # Try multiple common keys for taxes if resolve_key missed some
+    hdr_cgst_amt = normalize_amount(resolve_key(data, "cgst_amount") or data.get("total_cgst") or data.get("cgst"))
+    hdr_sgst_amt = normalize_amount(resolve_key(data, "sgst_amount") or data.get("total_sgst") or data.get("sgst"))
+    hdr_igst_amt = normalize_amount(resolve_key(data, "igst_amount") or data.get("total_igst") or data.get("igst"))
+    hdr_cess_amt = normalize_amount(resolve_key(data, "cess_amount") or data.get("total_cess") or data.get("cess"))
+    
+    # Fallback for structured data where resolve_key might have skipped subsections
+    if not hdr_cgst_amt and "sections" in data:
+        sec = data["sections"].get("supply_details", {})
+        hdr_cgst_amt = normalize_amount(sec.get("total_cgst") or sec.get("cgst"))
+        hdr_sgst_amt = normalize_amount(sec.get("total_sgst") or sec.get("sgst"))
+        hdr_igst_amt = normalize_amount(sec.get("total_igst") or sec.get("igst"))
+        hdr_cess_amt = normalize_amount(sec.get("total_cess") or sec.get("cess"))
+        hdr_taxable = hdr_taxable or normalize_amount(sec.get("total_taxable_value") or sec.get("taxable_value"))
+
+    # Header-level tax rates for fallback distribution
+    header_igst_r = normalize_amount(resolve_key(data, "igst_rate") or data.get("igst_percent"))
+    header_cgst_r = normalize_amount(resolve_key(data, "cgst_rate") or data.get("cgst_percent"))
+    header_sgst_r = normalize_amount(resolve_key(data, "sgst_rate") or data.get("sgst_percent"))
+    header_cess_r = normalize_amount(resolve_key(data, "cess_rate") or data.get("cess_percent"))
+
+    # Rate Resolution Helper
+    def is_likely_rate(val): return 0 < val <= 28
+
+    # ── Derive Rates from Amounts if Missing ──
+    if hdr_taxable > 0:
+        if header_igst_r == 0 and hdr_igst_amt > 0:
+            derived = round((hdr_igst_amt / hdr_taxable) * 100, 2)
+            if is_likely_rate(derived): header_igst_r = derived
+        if header_cgst_r == 0 and hdr_cgst_amt > 0:
+            derived = round((hdr_cgst_amt / hdr_taxable) * 100, 2)
+            if is_likely_rate(derived): header_cgst_r = derived
+        if header_sgst_r == 0 and hdr_sgst_amt > 0:
+            derived = round((hdr_sgst_amt / hdr_taxable) * 100, 2)
+            if is_likely_rate(derived): header_sgst_r = derived
 
     # ── Line Items ──────────────────────────────────────────────
     raw_items = resolve_key(data, "line_items") or data.get("items", []) or []
@@ -177,25 +238,21 @@ def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
     
     normalized_items = []
     for i, item in enumerate(raw_items):
-        # --- Failsafe: Derive Missing Values ---
-        # Allow aliases even inside line items for future robustness
         qty = normalize_amount(item.get("quantity") or item.get("qty"))
         rate = normalize_amount(item.get("rate") or item.get("item_rate"))
-        item_taxable = normalize_amount(item.get("taxable_value") or item.get("taxable_amount") or item.get("amount"))
+        item_taxable = normalize_amount(item.get("taxable_value") or item.get("taxable_amount") or item.get("amount") or item.get("net_amount"))
         
-        # If taxable value is missing but we have Qty & Rate, derive it
         if item_taxable == 0 and qty > 0 and rate > 0:
             item_taxable = qty * rate
             
-        # If tax rates are 0 in item but present in header (summary), distribute them
-        igst_r = normalize_amount(item.get("igst_rate") or item.get("igst_percent"))
-        cgst_r = normalize_amount(item.get("cgst_rate") or item.get("cgst_percent"))
-        sgst_r = normalize_amount(item.get("sgst_rate") or item.get("sgst_percent"))
+        igst_r = normalize_amount(item.get("igst_rate") or item.get("igst_percent") or item.get("igst_tax_rate"))
+        cgst_r = normalize_amount(item.get("cgst_rate") or item.get("cgst_percent") or item.get("cgst_tax_rate"))
+        sgst_r = normalize_amount(item.get("sgst_rate") or item.get("sgst_percent") or item.get("sgst_tax_rate"))
         cess_r = normalize_amount(item.get("cess_rate") or item.get("cess_percent"))
 
         normalized_items.append({
             "si_no": str(item.get("si_no") or item.get("s_no") or (i+1)),
-            "description": str(item.get("description") or item.get("item_name") or "").strip(),
+            "description": str(item.get("description") or item.get("item_name") or item.get("itemName") or "").strip(),
             "hsn_sac": str(item.get("hsn_code") or item.get("hsn_sac") or "").strip(),
             "quantity": qty,
             "uom": str(item.get("uom") or item.get("unit") or "").strip(),
@@ -203,34 +260,49 @@ def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
             "discount_percent": normalize_amount(item.get("discount_percent") or item.get("disc")),
             "taxable_value": item_taxable,
             "igst_rate": igst_r,
-            "igst_amount": normalize_amount(item.get("igst_amount") or item.get("igst")),
+            "igst_amount": normalize_amount(item.get("igst_amount") or item.get("igst") or item.get("igst_tax_amount")),
             "cgst_rate": cgst_r,
-            "cgst_amount": normalize_amount(item.get("cgst_amount") or item.get("cgst")),
+            "cgst_amount": normalize_amount(item.get("cgst_amount") or item.get("cgst") or item.get("cgst_tax_amount")),
             "sgst_rate": sgst_r,
-            "sgst_amount": normalize_amount(item.get("sgst_amount") or item.get("sgst")),
+            "sgst_amount": normalize_amount(item.get("sgst_amount") or item.get("sgst") or item.get("sgst_tax_amount")),
             "cess_rate": cess_r,
             "cess_amount": normalize_amount(item.get("cess_amount") or item.get("cess")),
-            "amount": normalize_amount(item.get("amount") or item.get("total") or item.get("line_total"))
+            "amount": normalize_amount(item.get("amount") or item.get("total") or item.get("line_total") or item.get("invoice_value"))
         })
 
-    # Header-level tax rates for fallback distribution
-    header_igst_r = normalize_amount(resolve_key(data, "igst_rate") or data.get("igst"))
-    header_cgst_r = normalize_amount(resolve_key(data, "cgst_rate") or data.get("cgst"))
-    header_sgst_r = normalize_amount(resolve_key(data, "sgst_rate") or data.get("sgst"))
-    header_cess_r = normalize_amount(resolve_key(data, "cess_rate") or data.get("cess"))
-
-    # Only distribute if summary rate looks like a percentage (e.g. 9, 18, 5)
-    def is_likely_rate(val): return 0 < val <= 28
-
+    # ── TAX TYPE RECONCILIATION ──
+    # Force line item tax types to match the header totals (Interstate vs Intrastate)
     for item in normalized_items:
-        if item["igst_rate"] == 0 and is_likely_rate(header_igst_r): item["igst_rate"] = header_igst_r
-        if item["cgst_rate"] == 0 and is_likely_rate(header_cgst_r): item["cgst_rate"] = header_cgst_r
-        if item["sgst_rate"] == 0 and is_likely_rate(header_sgst_r): item["sgst_rate"] = header_sgst_r
-        if item["cess_rate"] == 0 and is_likely_rate(header_cess_r): item["cess_rate"] = header_cess_r
+        # Case A: Header is Intrastate (CGST/SGST)
+        if (hdr_cgst_amt > 0 or hdr_sgst_amt > 0) and hdr_igst_amt == 0:
+            if item["igst_rate"] > 0 and item["cgst_rate"] == 0:
+                # Merge IGST into CGST/SGST split
+                rate = item["igst_rate"]
+                item["cgst_rate"], item["sgst_rate"] = rate / 2, rate / 2
+                item["igst_rate"], item["igst_amount"] = 0, 0
+            
+            # Distribution of header rates (already handled above but reinforced here)
+            if item["cgst_rate"] == 0 and is_likely_rate(header_cgst_r): item["cgst_rate"] = header_cgst_r
+            if item["sgst_rate"] == 0 and is_likely_rate(header_sgst_r): item["sgst_rate"] = header_sgst_r
+
+        # Case B: Header is Interstate (IGST)
+        elif hdr_igst_amt > 0 and (hdr_cgst_amt == 0 and hdr_sgst_amt == 0):
+            if (item["cgst_rate"] > 0 or item["sgst_rate"] > 0) and item["igst_rate"] == 0:
+                # Merge CGST/SGST into IGST
+                item["igst_rate"] = item["cgst_rate"] + item["sgst_rate"]
+                item["cgst_rate"], item["cgst_amount"] = 0, 0
+                item["sgst_rate"], item["sgst_amount"] = 0, 0
+            
+            if item["igst_rate"] == 0 and is_likely_rate(header_igst_r): item["igst_rate"] = header_igst_r
+
+        # ── Final Amount Recalculation ──
+        # Re-calculate amounts based on the reconciled rates
+        if item["igst_rate"] > 0: item["igst_amount"] = round((item["taxable_value"] * item["igst_rate"]) / 100, 2)
+        if item["cgst_rate"] > 0: item["cgst_amount"] = round((item["taxable_value"] * item["cgst_rate"]) / 100, 2)
+        if item["sgst_rate"] > 0: item["sgst_amount"] = round((item["taxable_value"] * item["sgst_rate"]) / 100, 2)
         
-        # taxable_value failsafe (Qty * Rate) if still 0
-        if item["taxable_value"] == 0 and item["quantity"] > 0 and item["rate"] > 0:
-            item["taxable_value"] = item["quantity"] * item["rate"]
+        # Final row total
+        item["amount"] = round(item["taxable_value"] + item["igst_amount"] + item["cgst_amount"] + item["sgst_amount"] + item["cess_amount"], 2)
 
     vendor_address = str(resolve_key(data, "vendor_address") or "").strip()
 
@@ -278,9 +350,9 @@ def normalize(data: Dict[str, Any]) -> Dict[str, Any]:
             "supply_details": {
                 "total_invoice_value": total_amt,
                 "total_taxable_value": tax_amt,
-                "total_cgst": normalize_amount(data.get("cgst") or data.get("total_cgst")),
-                "total_sgst": normalize_amount(data.get("sgst") or data.get("total_sgst")),
-                "total_igst": normalize_amount(data.get("igst") or data.get("total_igst")),
+                "total_cgst": normalize_amount(resolve_key(data, "total_cgst")),
+                "total_sgst": normalize_amount(resolve_key(data, "total_sgst")),
+                "total_igst": normalize_amount(resolve_key(data, "total_igst")),
                 "ack_no": str(data.get("ack_number") or "").strip(),
                 "ack_date": normalize_date(data.get("ack_date"))
             },
