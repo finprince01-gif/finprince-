@@ -191,13 +191,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
                             </div>
                         </form>
 
-                        <footer className="w-full pt-1 mt-1 text-center">
+                        <footer className="w-full pt-1 mt-1 text-center space-y-2">
                             <button
                                 onClick={handleBackToPortal}
                                 className="w-full py-3 rounded-xl bg-slate-50 border border-slate-100 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] hover:bg-slate-100 hover:text-[#4B3CFF] transition-all flex items-center justify-center gap-2"
                             >
                                 <Icon name="arrow-left" size={14} />
                                 Back to Portal Selection
+                            </button>
+
+                            <button
+                                onClick={() => window.location.href = (import.meta as any).env?.VITE_LANDING_URL || 'http://localhost:3000'}
+                                className="w-full py-2.5 text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] hover:text-[#4B3CFF] transition-all flex items-center justify-center gap-2"
+                            >
+                                <Icon name="link" size={12} />
+                                Return to Main Website
                             </button>
                         </footer>
                     </div>
