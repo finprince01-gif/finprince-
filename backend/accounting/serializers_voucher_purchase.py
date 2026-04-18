@@ -13,7 +13,8 @@ from .models_voucher_purchase import (  # type: ignore[import]
 from .models import Voucher, MasterLedger  # type: ignore[import]
 from .services.ledger_service import post_transaction, _resolve_ledger  # type: ignore[import]
 from accounting.services.inventory_sync import sync_purchase_to_grn
-from decimal import Decimal  # noqa: F401
+from decimal import Decimal, ROUND_HALF_UP  # noqa: F401
+from accounting.services.advance_service import write_allocations
 
 
 class VoucherPurchaseItemSerializer(serializers.ModelSerializer):
@@ -279,9 +280,29 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         # Sync legacy JSON to new relational tables
         self._sync_relational_data(supplier_instance, supply_inr_data, supply_inr_data, due_data)
 
-        # Advance Allocations
+        # 5. Advance Allocations (Main Accounting)
+        try:
+            due_details = supplier_instance.due_details
+            if due_details and due_details.advance_references:
+                adv_refs = due_details.advance_references
+                if isinstance(adv_refs, str):
+                    adv_refs = json.loads(adv_refs)
+                
+                if adv_refs:
+                    write_allocations(
+                        tenant_id=tenant_id,
+                        voucher_id=voucher.id,
+                        voucher_type='purchase',
+                        advance_refs=adv_refs,
+                        ledger_id=supplier_instance.vendor_basic_detail.ledger_id if supplier_instance.vendor_basic_detail else None
+                    )
+        except Exception as alloc_e:
+            print(f"!!! Advance Allocation Save Failed: {alloc_e}")
+
+        # 6. Double-Entry Posting
         self._post_journal_entries(supplier_instance, voucher.id, purchase_total_gross, supply_inr_data, supply_foreign_data, due_data)
 
+        # 7. Mirror to Vendor Portal
         self._mirror_to_vendor_portal(supplier_instance)
 
         # Auto-sync to Inventory > Operations > GRN
@@ -371,6 +392,24 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         # Sync legacy JSON to new relational tables
         self._sync_relational_data(instance, supply_inr_data, supply_foreign_data, due_data)
         
+        # Advance Allocations (Main Accounting)
+        try:
+            if due_data and 'advance_references' in due_data:
+                adv_refs = due_data['advance_references']
+                if isinstance(adv_refs, str):
+                    adv_refs = json.loads(adv_refs)
+                
+                if adv_refs:
+                    write_allocations(
+                        tenant_id=tenant_id,
+                        voucher_id=voucher_id,
+                        voucher_type='purchase',
+                        advance_refs=adv_refs,
+                        ledger_id=instance.vendor_basic_detail.ledger_id if instance.vendor_basic_detail else None
+                    )
+        except Exception as alloc_e:
+            print(f"!!! Advance Allocation Update Failed: {alloc_e}")
+
         self._mirror_to_vendor_portal(instance)
 
         # Refresh double-entry posting
@@ -405,7 +444,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                     cgst_amount=Decimal(str(item.get('cgst', 0))),
                     sgst_amount=Decimal(str(item.get('sgst', 0))),
                     cess_amount=Decimal(str(item.get('cess', 0))),
-                    invoice_value=Decimal(str(item.get('invoiceValue', 0))),
+                    invoice_value=Decimal(str(item.get('invoiceValue', 0))).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP),
                     currency='INR',
                     exchange_rate=1.0
                 )

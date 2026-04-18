@@ -423,7 +423,8 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
             # Resolve total amount (handles different field names in subclasses)
             total_amt = Decimal(str(getattr(adv, 'amount', 0) or getattr(adv, 'received_amount', 0) or 0))
             
-            allocated = get_allocated_amount(adv.id, source_type, tenant_id)
+            ref_no = getattr(adv, 'advance_ref_no', None) or getattr(adv, 'reference_number', None)
+            allocated = get_allocated_amount(adv.id, source_type, tenant_id, ref_no=ref_no)
             remaining = total_amt - allocated
             
             # Attach to object for serializer

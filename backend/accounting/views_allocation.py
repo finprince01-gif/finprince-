@@ -124,33 +124,51 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
         if v_amount == 0:
              v_amount = float(v.total_debit if v.total_debit > 0 else v.total_credit)
 
-        # Fetch Allocations from PendingTransaction
+        # Fetch Allocations from multiple tables
+        from accounting.models import VoucherAdvanceAdjustment
         if v_type in ['PAYMENT', 'RECEIPT']:
-            allocs = PendingTransaction.objects.filter(
-                tenant_id=tenant_id,
-                voucher_number=v_id_for_query,
-            )
-            total_allocated = allocs.aggregate(total=Sum('allocated_amount'))['total'] or 0
+            # For Payment/Receipt, these are sources of advances
+            # History is where these advances were used
+            allocs = PendingTransaction.objects.filter(tenant_id=tenant_id, transaction_id=v_id_for_query)
+            adjs = VoucherAdvanceAdjustment.objects.filter(tenant_id=tenant_id, advance_voucher=v)
+            
+            total_allocated = (allocs.aggregate(Sum('allocated_amount'))['allocated_amount__sum'] or 0) + \
+                              (adjs.aggregate(Sum('amount'))['amount__sum'] or 0)
+            
             history = [{
                 'target_id': a.reference_number,
                 'target_number': a.reference_number,
                 'type': a.reference_type,
-                'amount': float(a.amount_applied),
+                'amount': float(a.allocated_amount),
                 'date': a.created_at
-            } for a in allocs]
-        else: # SALES, PURCHASE
-            allocs = PendingTransaction.objects.filter(
-                tenant_id=tenant_id,
-                reference_number=v.voucher_number # Target invoice number
-            )
-            total_allocated = allocs.aggregate(total=Sum('allocated_amount'))['total'] or 0
+            } for a in allocs] + [{
+                'target_id': adj.target_voucher.id,
+                'target_number': adj.target_voucher.voucher_number,
+                'type': 'ADJUSTMENT',
+                'amount': float(adj.amount),
+                'date': adj.adjustment_date
+            } for adj in adjs]
+        else: # SALES, PURCHASE (Targets)
+            # Find where these invoices were paid from
+            allocs = PendingTransaction.objects.filter(tenant_id=tenant_id, reference_number=v.voucher_number)
+            adjs = VoucherAdvanceAdjustment.objects.filter(tenant_id=tenant_id, target_voucher=v)
+            
+            total_allocated = (allocs.aggregate(Sum('allocated_amount'))['allocated_amount__sum'] or 0) + \
+                              (adjs.aggregate(Sum('amount'))['amount__sum'] or 0)
+            
             history = [{
-                'source_id': a.source_voucher_id,
-                'source_number': Voucher.objects.filter(id=a.source_id).values_list('voucher_number', flat=True).first(),
-                'type': a.source_type,
-                'amount': float(a.amount),
+                'source_id': a.transaction_id,
+                'source_number': a.transaction.voucher_number if a.transaction else None,
+                'type': a.type,
+                'amount': float(a.allocated_amount),
                 'date': a.created_at
-            } for a in allocs]
+            } for a in allocs] + [{
+                'source_id': adj.advance_voucher.id,
+                'source_number': adj.advance_voucher.voucher_number,
+                'type': 'ADVANCE_ADJ',
+                'amount': float(adj.amount),
+                'date': adj.adjustment_date
+            } for adj in adjs]
 
         return Response({
             'voucher_id': v_id_for_query,
@@ -192,7 +210,7 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
             alloc = PendingTransaction.objects.create(
                 tenant_id=tenant_id,
                 pay_to_ledger_id=ledger_id,
-                voucher_number=source_id,
+                transaction_id=source_id,
                 type=source_type,
                 reference_number=target_v.voucher_number,
                 reference_type='invoice',
@@ -226,9 +244,11 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
         open_invoices = []
         for t in targets:
             total = float(t.total or t.amount or 0)
-            allocated = VoucherAllocation.objects.filter(
-                target_voucher_id=t.id, target_type=target_type, tenant_id=tenant_id
-            ).aggregate(Sum('amount'))['amount__sum'] or 0
+            allocated = PendingTransaction.objects.filter(
+                reference_number=t.voucher_number, 
+                reference_type__iexact='invoice', 
+                tenant_id=tenant_id
+            ).aggregate(total=Sum('allocated_amount'))['total'] or 0
             balance = total - float(allocated)
             if balance > 0.01:
                 open_invoices.append({
@@ -240,12 +260,12 @@ class VoucherAllocationViewSet(viewsets.ModelViewSet):
                 })
 
         available_advances = []
+        from accounting.services.advance_service import get_allocated_amount
         for s in sources:
-            # Check if this voucher is marked as advance or if we just treat all unallocated as available
             total = float(s.total or s.amount or 0)
-            allocated = VoucherAllocation.objects.filter(
-                source_voucher_id=s.id, source_type=source_type, tenant_id=tenant_id
-            ).aggregate(Sum('amount'))['amount__sum'] or 0
+            # Use centralized service to sum VoucherAdvanceAdjustment, PendingTransaction, etc.
+            allocated = get_allocated_amount(s.id, s.type, tenant_id, ref_no=s.voucher_number)
+            
             balance = total - float(allocated)
             if balance > 0.01:
                 available_advances.append({

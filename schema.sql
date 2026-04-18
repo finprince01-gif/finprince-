@@ -3825,3 +3825,30 @@ CREATE TABLE `vouchers` (
 ) ENGINE=InnoDB AUTO_INCREMENT=101 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
+
+CREATE TABLE `voucher_advance_adjustments` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `tenant_id` varchar(50) DEFAULT NULL,
+  `ref_no` varchar(150) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `adjustment_date` date NOT NULL,
+  `customer_id` bigint DEFAULT NULL,
+  `notes` longtext,
+  `advance_voucher_id` bigint NOT NULL,
+  `target_voucher_id` bigint NOT NULL,
+  `vendor_id` bigint DEFAULT NULL,
+  `type` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `voucher_advance_adjustme_tenant_id_advance_vouche_0234b8a6_uniq` (`tenant_id`,`advance_voucher_id`,`target_voucher_id`,`ref_no`),
+  KEY `voucher_advance_adju_advance_voucher_id_e3736e82_fk_vouchers_` (`advance_voucher_id`),
+  KEY `voucher_advance_adju_target_voucher_id_f8d7e887_fk_vouchers_` (`target_voucher_id`),
+  KEY `voucher_advance_adjustments_tenant_id_34ee5de8` (`tenant_id`),
+  KEY `voucher_advance_adjustments_ref_no_cb90cc2f` (`ref_no`),
+  KEY `voucher_advance_adjustments_ledger_id_b5145481` (`customer_id`),
+  KEY `voucher_advance_adjustments_vendor_id_e74fd08e` (`vendor_id`),
+  KEY `voucher_advance_adjustments_type_abf40520` (`type`),
+  CONSTRAINT `voucher_advance_adju_advance_voucher_id_e3736e82_fk_vouchers_` FOREIGN KEY (`advance_voucher_id`) REFERENCES `vouchers` (`id`),
+  CONSTRAINT `voucher_advance_adju_target_voucher_id_f8d7e887_fk_vouchers_` FOREIGN KEY (`target_voucher_id`) REFERENCES `vouchers` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

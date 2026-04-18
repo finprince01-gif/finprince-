@@ -31,7 +31,7 @@ def update_sales_invoice_payment_status(tenant_id, invoice_id):
             # --- ANCHOR: Use invoice value minus advance as the fixed starting point ---
             payable_anchor = Decimal(str(payment_details.payment_invoice_value or 0)) - Decimal(str(payment_details.payment_advance or 0))
 
-            from ..models import TransactionAllocation, AdvanceAllocation
+            from ..models import TransactionAllocation, AdvanceAllocation, VoucherAdvanceAdjustment
             search_ids = [str(invoice.id), str(invoice.sales_invoice_no)]
             
             p_total = PendingTransaction.objects.filter(
@@ -48,8 +48,14 @@ def update_sales_invoice_payment_status(tenant_id, invoice_id):
                 tenant_id=tenant_id,
                 reference_id__in=search_ids
             ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0.00')
+            
+            # Sum from newest table
+            v_total = VoucherAdvanceAdjustment.objects.filter(
+                tenant_id=tenant_id,
+                target_voucher_id__in=[invoice.id, getattr(invoice, 'voucher_id', None)]
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-            receipt_total = p_total + t_total + a_total
+            receipt_total = p_total + t_total + a_total + v_total
 
             payment_details.payment_received = receipt_total
             payment_details.payment_balance = payable_anchor - receipt_total

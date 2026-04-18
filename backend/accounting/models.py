@@ -394,6 +394,33 @@ class Voucher(BaseModel):
             models.Index(fields=['tenant_id', 'date']),
         ]
 
+class VoucherAdvanceAdjustment(BaseModel):
+    """
+    Dedicated table for tracking adjustments between an Advance and a Voucher (Invoice/Bill).
+    """
+    tenant_id = models.CharField(max_length=50, db_index=True)
+    # The source of the money (the Advance Voucher)
+    advance_voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='adjustments_out')
+    # The target consuming the money (the Invoice/Bill Voucher)
+    target_voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='adjustments_in')
+    
+    ref_no = models.CharField(max_length=150, db_index=True)
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    adjustment_date = models.DateField()
+    
+    # Metadata for reporting
+    customer_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    vendor_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    type = models.CharField(max_length=20, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'voucher_advance_adjustments'
+        unique_together = ('tenant_id', 'advance_voucher', 'target_voucher', 'ref_no')
+
+    def __str__(self):
+        return f"{self.ref_no}: {self.amount} ({self.advance_voucher.voucher_number} -> {self.target_voucher.voucher_number})"
+
 class JournalEntry(BaseModel):
     voucher_type = models.CharField(max_length=50)
     voucher_id = models.BigIntegerField()

@@ -301,6 +301,8 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         v_total_provided = validated_data.pop('total_amount', None)
         v_amt_provided = validated_data.pop('amount', None)
         v_narr_provided = validated_data.pop('narration', '')
+
+        from decimal import ROUND_HALF_UP
         
         with db_transaction.atomic():
             # 2. Resolve Relationships
@@ -335,6 +337,10 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             final_total = v_total_provided or v_amt_provided
             if not final_total:
                 final_total = sum(_safe_decimal(i.get('amount_applied', i.get('amount', 0))) for i in items_data) + top_adv_amt
+            
+            # ROUNDING to 2 decimal places
+            final_total = Decimal(str(final_total)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
+            top_adv_amt = Decimal(str(top_adv_amt)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
 
             # 5. Resolve Party IDs for both sides
             # Side A: pay_from (Internal Bank/Cash Ledger)

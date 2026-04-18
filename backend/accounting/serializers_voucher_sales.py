@@ -35,6 +35,14 @@ class VoucherSalesPaymentDetailsSerializer(serializers.ModelSerializer):
         exclude = ('invoice', 'tenant_id')
         read_only_fields = ('id', 'created_at', 'updated_at', 'payment_received', 'payment_balance')
 
+    def validate(self, data):
+        """Round all decimal fields to 2 decimal places to prevent validation errors."""
+        from decimal import Decimal, ROUND_HALF_UP
+        for field, value in data.items():
+            if isinstance(value, Decimal):
+                data[field] = value.quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
+        return data
+
 class VoucherSalesDispatchDetailsSerializer(serializers.ModelSerializer):
     dispatch_document = serializers.FileField(required=False, allow_null=True)
 
@@ -133,13 +141,18 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             for eway_data in eway_bill_details_data:
                 VoucherSalesEwayBill.objects.create(invoice=invoice, tenant_id=tenant_id, **eway_data)
 
+            # Round total to 2 decimal places
+            final_total = decimal.Decimal(str(payment_obj.payment_invoice_value if payment_obj else 0)).quantize(
+                decimal.Decimal('0.00'), rounding=decimal.ROUND_HALF_UP
+            )
+
             voucher = Voucher.objects.create(
                 tenant_id=tenant_id,
                 type="sales",
                 voucher_number=invoice.sales_invoice_no or f"SAL-{invoice.id}",
                 date=invoice.date,
                 party=invoice.customer_name,
-                total=payment_obj.payment_invoice_value if payment_obj else 0,
+                total=final_total,
                 invoice_no=invoice.sales_invoice_no,
                 source="sales_invoice",
                 reference_id=invoice.id
@@ -169,7 +182,6 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 except Exception as ex:
                     print(f"[SalesSerializer] Advance allocation failed: {ex}")
 
-
         self._mirror_to_customer_portal(invoice)
         # Auto-sync to Inventory > Operations > Outward Slip
         sync_sales_to_outward(invoice)
@@ -188,26 +200,37 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         return invoice
 
     def _post_journal_entries(self, invoice):
-        """Unified double-entry posting for sales invoice."""
+        """Internal helper to post double-entry bookkeeping for the invoice"""
         try:
-            tenant_id = invoice.tenant_id
-            payment_obj = invoice.payment_details
-            if not payment_obj: 
-                print("Accounting skipped (no payment details)")
+            from accounting.services.ledger_service import post_transaction
+            from accounting.utils_ledger import get_standard_ledger
+            
+            tenant_id = self.context.get('request').user.tenant_id
+            payment_obj = getattr(invoice, 'payment_details', None)
+            if not payment_obj:
+                print("[SalesSerializer] Skipped posting: No payment details found on instance")
                 return
 
             total_amount = float(payment_obj.payment_invoice_value or 0)
             if total_amount == 0:
-                print("Accounting skipped (zero invoice)")
+                print("[SalesSerializer] Skipped posting: Zero amount")
                 return
 
-            customer = invoice.customer
+            from customerportal.database import CustomerMasterCustomer
+            customer = CustomerMasterCustomer.objects.filter(id=invoice.customer_id).first()
+            if not customer:
+                 print(f"[SalesSerializer] Posting Error: Customer {invoice.customer_id} not found.")
+                 return
+
             sales_ledger = get_standard_ledger(tenant_id, 'Sales Account', 'Sales Accounts', 'Income')
             gst_output_ledger = get_standard_ledger(tenant_id, 'Output GST', 'Duties & Taxes', 'Liability')
 
             entries = []
-            # Customer (Debit)
-            entries.append({"ledger_id": customer.ledger_id, "debit": total_amount, "credit": 0})
+            if customer.ledger_id:
+                entries.append({"ledger_id": customer.ledger_id, "debit": total_amount, "credit": 0})
+            else:
+                print(f"[SalesSerializer] Posting Error: Customer {customer.name} has no ledger mapping.")
+                return
             
             # Sales (Credit)
             entries.append({"ledger_id": sales_ledger.id, "debit": 0, "credit": float(payment_obj.payment_taxable_value or 0)})
@@ -221,25 +244,31 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 if tax_val and float(tax_val) > 0:
                     entries.append({"ledger_id": gst_output_ledger.id, "debit": 0, "credit": float(tax_val)})
 
-            # Use generic voucher ID if present
+            # Resolve Voucher ID
             v_id = getattr(invoice, 'voucher_id', None) or invoice.id
+            
+            # Post
             post_transaction(
                 voucher_type="SALES",
                 voucher_id=v_id,
                 tenant_id=tenant_id,
-                entries=entries,
                 transaction_date=invoice.date,
-                voucher_number=invoice.sales_invoice_no
+                voucher_number=invoice.sales_invoice_no,
+                entries=entries
             )
-            print("Accounting posted successfully")
-            invoice.posting_status = "POSTED"
-            invoice.save(update_fields=['posting_status'])
+            
+            invoice.posting_status = 'POSTED'
+            invoice.posting_error = None
+            invoice.save()
+            print(f"[SalesSerializer] Double-entry posted for {invoice.sales_invoice_no}")
+
         except Exception as e:
-            print(f"ACCOUNTING POSTING FAILED: {str(e)}")
-            invoice.posting_status = "FAILED"
+            print(f"[SalesSerializer] CRITICAL POSTING ERROR: {e}")
+            invoice.posting_status = 'FAILED'
             invoice.posting_error = str(e)
-            if invoice.id:
-                invoice.save(update_fields=['posting_status', 'posting_error'])
+            try:
+                invoice.save()
+            except: pass
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
