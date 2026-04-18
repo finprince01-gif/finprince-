@@ -80,6 +80,7 @@ class MasterRequestResetOTPView(APIView):
             cache.set(f"master_reset_otp_{email}", otp, timeout=900)
             
             def send_otp_email():
+                from django.db import connection
                 try:
                     send_mail(
                         'Your Password Reset OTP - FinPixe Platform Admin',
@@ -90,6 +91,8 @@ class MasterRequestResetOTPView(APIView):
                     )
                 except Exception as e:
                     print(f"Failed to send OTP email: {e}")
+                finally:
+                    connection.close()
                     
             threading.Thread(target=send_otp_email, daemon=True).start()
                 

@@ -395,11 +395,11 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             if (newItemsList.length > 0) {
                 setItems(newItemsList as IssueSlipItem[]);
             } else {
-                setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', itemRate: '' }]);
+                setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', remarks: '', itemRate: '' }]);
             }
         } else {
             // Keep current customer/branch but clear items
-            setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', itemRate: '' }]);
+            setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', remarks: '', itemRate: '' }]);
         }
     };
 
@@ -439,13 +439,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             if (field === 'quantity') {
                 const enteredQty = parseFloat(value) || 0;
                 
-                // 1. Stock Validation
-                // For now, if stockBalance is unknown, we assume it's infinite in this mock/partial implementation
-                // In a real system, we'd fetch it earlier.
-                if (item.stockBalance !== undefined && enteredQty > item.stockBalance) {
-                    showWarning(`Insufficient stock at selected location. Available: ${item.stockBalance}`);
-                    // Optional: auto-adjust to max or just show warning. Requirement says "Show error".
-                }
+
 
                 // 2. SO Quantity Validation
                 if (item.pendingQuantity) {

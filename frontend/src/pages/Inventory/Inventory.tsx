@@ -690,7 +690,7 @@ const InventoryPage: React.FC = () => {
     try {
       const filters: any = { status: 'pending' };
       if (customerName) filters.customer_name = customerName;
-      
+
       const response = await apiService.getSalesOrders(filters);
       setOutwardSalesOrderOptions(Array.isArray(response) ? response : []);
     } catch (error) {
@@ -2057,7 +2057,7 @@ const InventoryPage: React.FC = () => {
       showSuccess('Operation saved successfully!');
       setShowIssueSlipForm(false);
       fetchStockMovementSummary();
-      
+
       // Reset Issue Slip Form
       setIssueSlipNumber('');
       setSelectedIssueSlipSeriesName('');
@@ -2094,15 +2094,15 @@ const InventoryPage: React.FC = () => {
       try {
         // Fetch branches/GST details
         const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
-        const rawBranches = Array.isArray(branchResponse) ? branchResponse : 
-                           (branchResponse && (branchResponse as any).data && Array.isArray((branchResponse as any).data)) ? (branchResponse as any).data : [];
-        
+        const rawBranches = Array.isArray(branchResponse) ? branchResponse :
+          (branchResponse && (branchResponse as any).data && Array.isArray((branchResponse as any).data)) ? (branchResponse as any).data : [];
+
         const mappedBranches = rawBranches.map((b: any) => ({
           ...b,
           reference_name: b.reference_name || b.branch_name || b.name || b.gstin || `Branch ${b.id}` || 'Main',
           branch_address: b.branch_address || b.address || ''
         }));
-        
+
         setOutwardBranchOptions(mappedBranches);
 
         // Auto-select first branch if available
@@ -2115,9 +2115,9 @@ const InventoryPage: React.FC = () => {
 
         // Fetch PENDING POs for this vendor
         const poResponse = await apiService.getPendingPOs(vendor.id);
-        const rawPOs = Array.isArray(poResponse) ? poResponse : 
-                      (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) ? (poResponse as any).data : [];
-        
+        const rawPOs = Array.isArray(poResponse) ? poResponse :
+          (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) ? (poResponse as any).data : [];
+
         setJobWorkOrderNoOptions(rawPOs);
 
         // Fetch Job Work Outward Slips for this vendor
@@ -2242,7 +2242,7 @@ const InventoryPage: React.FC = () => {
         }
       }
     }
-    
+
     // Fetch pending sales orders for this specific customer (or all if cleared)
     fetchOutwardSalesOrders(customerName);
   };
@@ -2353,7 +2353,7 @@ const InventoryPage: React.FC = () => {
   };
 
   const handleIssueSlipSeriesChange = async (
-    seriesName: string, 
+    seriesName: string,
     seriesNameSetter: React.Dispatch<React.SetStateAction<string>>,
     slipNoSetter: React.Dispatch<React.SetStateAction<string>>
   ) => {
@@ -2366,7 +2366,7 @@ const InventoryPage: React.FC = () => {
     if (series) {
       const defaultVal = series.preview || '';
       slipNoSetter(defaultVal);
-      
+
       try {
         const response = await httpClient.get<{ outward_slip_no: string }>(
           `/api/inventory/master-voucher-issue-slip/${series.id}/next-number/`
@@ -2748,7 +2748,7 @@ const InventoryPage: React.FC = () => {
       showSuccess('GRN saved successfully!');
       setShowGRNForm(false);
       fetchStockMovementSummary();
-      
+
       // Reset GRN form state to ensure auto-increment on next open
       setGrnNumber('');
       setGrnSelectedSeriesId(null);
@@ -2813,15 +2813,7 @@ const InventoryPage: React.FC = () => {
       const qty = parseFloat(updatedItems[index].quantity) || 0;
       const rate = parseFloat(updatedItems[index].rate) || 0;
 
-      // Stock Balance Validation
-      const balanceStock = parseFloat(updatedItems[index].remainingQty) || 0;
-      if (field === 'quantity' && qty > balanceStock && balanceStock > 0) {
-        showError("Insufficient stock at selected location.");
-        updatedItems[index].quantity = balanceStock;
-        updatedItems[index].value = balanceStock * rate;
-      } else {
-        updatedItems[index].value = qty * rate;
-      }
+      updatedItems[index].value = qty * rate;
 
       // Sales Order Quantity Prompt
       if (field === 'quantity' && issueSlipTab === 'outward' && outwardType === 'sales' && updatedItems[index].soNo) {
@@ -3567,8 +3559,8 @@ const InventoryPage: React.FC = () => {
                             >
                               <option value="">Select Vendor</option>
                               {vendors.map(vendor => (
-                                  <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
-                                ))}
+                                <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
+                              ))}
                             </select>
                           </div>
                           <div>
@@ -4098,8 +4090,8 @@ const InventoryPage: React.FC = () => {
                             >
                               <option value="">Select Vendor</option>
                               {vendors.map(vendor => (
-                                  <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
-                                ))}
+                                <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
+                              ))}
                             </select>
                           </div>
                           <div>
@@ -5082,7 +5074,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.map(loc => (
+                            {locations.filter(loc => loc.location_type === 'company_premises').map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -5095,7 +5087,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.map(loc => (
+                            {locations.filter(loc => loc.location_type === 'company_premises').map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -5454,9 +5446,9 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select location</option>
-                             {locations.map(loc => (
-                               <option key={loc.id} value={loc.id}>{loc.name}</option>
-                             ))}
+                            {locations.map(loc => (
+                              <option key={loc.id} value={loc.id}>{loc.name}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -5820,9 +5812,9 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select location</option>
-                             {locations.map(loc => (
-                               <option key={loc.id} value={loc.id}>{loc.name}</option>
-                             ))}
+                            {locations.map(loc => (
+                              <option key={loc.id} value={loc.id}>{loc.name}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -5860,13 +5852,71 @@ const InventoryPage: React.FC = () => {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-200">
-                                {/* Mock data representing fetch from converted output */}
                                 {fgMaterialsIssuedItems.map((item, index) => (
                                   <tr key={index}>
-                                    <td className="px-3 py-2 border-r"><input type="text" value={item.itemCode} readOnly className="w-full bg-gray-50 border-none rounded text-sm" /></td>
-                                    <td className="px-3 py-2 border-r"><input type="text" value={item.itemName} readOnly className="w-full bg-gray-50 border-none rounded text-sm" /></td>
-                                    <td className="px-3 py-2 border-r"><input type="text" value={item.uom} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
-                                    <td className="px-3 py-2 border-r"><input type="number" value={item.quantityAvailable} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
+                                    {/* Item Code Dropdown */}
+                                    <td className="px-3 py-2 border-r">
+                                      <select
+                                        value={item.itemCode}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const newItems = [...fgMaterialsIssuedItems];
+                                          newItems[index].itemCode = val;
+                                          const selectedItem = items.find(i => i.item_code === val);
+                                          if (selectedItem) {
+                                            newItems[index].itemName = selectedItem.item_name || selectedItem.name || '';
+                                            newItems[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn_sac || '';
+                                            newItems[index].uom = selectedItem.uom || selectedItem.unit || '';
+                                            newItems[index].rate = selectedItem.rate || '';
+                                          }
+                                          setFgMaterialsIssuedItems(newItems);
+                                        }}
+                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                                      >
+                                        <option value="">Code</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    {/* Item Name Dropdown */}
+                                    <td className="px-3 py-2 border-r">
+                                      <select
+                                        value={item.itemName}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const newItems = [...fgMaterialsIssuedItems];
+                                          newItems[index].itemName = val;
+                                          const selectedItem = items.find(i => (i.item_name || i.name) === val);
+                                          if (selectedItem) {
+                                            newItems[index].itemCode = selectedItem.item_code || '';
+                                            newItems[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn_sac || '';
+                                            newItems[index].uom = selectedItem.uom || selectedItem.unit || '';
+                                            newItems[index].rate = selectedItem.rate || '';
+                                          }
+                                          setFgMaterialsIssuedItems(newItems);
+                                        }}
+                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                                      >
+                                        <option value="">Item</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    {/* HSN Code - auto-populated read-only */}
+                                    <td className="px-3 py-2 border-r">
+                                      <input type="text" value={item.hsnCode || ''} readOnly className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm text-center" />
+                                    </td>
+                                    {/* UOM - auto-populated read-only */}
+                                    <td className="px-3 py-2 border-r">
+                                      <input type="text" value={item.uom || ''} readOnly className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm text-center" />
+                                    </td>
+                                    {/* Quantity Available - read-only */}
+                                    <td className="px-3 py-2 border-r">
+                                      <input type="number" value={item.quantityAvailable || ''} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" placeholder="—" />
+                                    </td>
+                                    {/* Quantity Issued - editable */}
                                     <td className="px-3 py-2 border-r">
                                       <input
                                         type="number"
@@ -5878,7 +5928,6 @@ const InventoryPage: React.FC = () => {
                                           const qty = Number(val || 0);
                                           const rate = Number(newItems[index].rate || 0);
                                           const amount = parseFloat((qty * rate).toFixed(2));
-
                                           newItems[index] = {
                                             ...newItems[index],
                                             quantityIssued: val,
@@ -5889,20 +5938,42 @@ const InventoryPage: React.FC = () => {
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
                                       />
                                     </td>
-                                    <td className="px-3 py-2 border-r"><input type="number" value={item.rate} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
+                                    {/* Rate - auto from item master */}
+                                    <td className="px-3 py-2 border-r">
+                                      <input type="number" value={item.rate || ''} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" />
+                                    </td>
+                                    {/* Amount - calculated */}
                                     <td className="px-3 py-2">
                                       <input
                                         type="number"
-                                        value={item.amount}
+                                        value={item.amount || ''}
                                         readOnly
                                         disabled
                                         placeholder="0.00"
                                         className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm text-center cursor-not-allowed"
                                       />
                                     </td>
+                                    {/* Remove */}
+                                    <td className="px-2 py-2 text-center">
+                                      <button
+                                        onClick={() => setFgMaterialsIssuedItems(fgMaterialsIssuedItems.filter((_, i) => i !== index))}
+                                        className="text-red-500 hover:text-red-700 text-xs font-bold"
+                                      >✕</button>
+                                    </td>
                                   </tr>
                                 ))}
+                                <tr>
+                                  <td colSpan={9} className="px-3 py-2 text-center">
+                                    <button
+                                      onClick={() => setFgMaterialsIssuedItems([...fgMaterialsIssuedItems, { itemCode: '', itemName: '', hsnCode: '', uom: '', quantityAvailable: '', quantityIssued: '', rate: '', amount: '' }])}
+                                      className="text-indigo-600 text-xs font-bold hover:underline"
+                                    >
+                                      + Add Item
+                                    </button>
+                                  </td>
+                                </tr>
                               </tbody>
+
                             </table>
                           ) : (
                             <table className="min-w-full">
@@ -6228,9 +6299,9 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select location</option>
-                             {locations.map(loc => (
-                               <option key={loc.id} value={loc.id}>{loc.name}</option>
-                             ))}
+                            {locations.map(loc => (
+                              <option key={loc.id} value={loc.id}>{loc.name}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -6441,9 +6512,9 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select location</option>
-                             {locations.map(loc => (
-                               <option key={loc.id} value={loc.id}>{loc.name}</option>
-                             ))}
+                            {locations.map(loc => (
+                              <option key={loc.id} value={loc.id}>{loc.name}</option>
+                            ))}
                           </select>
                         </div>
                         <div>
@@ -6455,9 +6526,9 @@ const InventoryPage: React.FC = () => {
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select location</option>
-                               {locations.map(loc => (
-                                 <option key={loc.id} value={loc.id}>{loc.name}</option>
-                               ))}
+                              {locations.map(loc => (
+                                <option key={loc.id} value={loc.id}>{loc.name}</option>
+                              ))}
                             </select>
                           ) : (
                             <input
@@ -6847,14 +6918,9 @@ const InventoryPage: React.FC = () => {
                                             const v = e.target.value;
                                             const val = parseFloat(v) || 0;
                                             const ni = [...scrapProdItems];
-                                            const totalOfItem = ni.reduce((acc, curr, i) => acc + ((curr.itemCode === item.itemCode) ? (i === idx ? val : (parseFloat(curr.quantityGenerated) || 0)) : 0), 0);
-                                            const balance = item.stockBalance ?? 999999;
-                                            if (totalOfItem > balance) {
-                                              showError(`Insufficient stock at dispatch location. Available: ${balance}`);
-                                            }
                                             ni[idx].quantityGenerated = v;
                                             setScrapProdItems(ni);
-                                          }} placeholder="Qty" className={`w-full px-2 py-1.5 border rounded text-[11px] focus:ring-1 focus:ring-indigo-500 ${parseFloat(item.quantityGenerated) > (item.stockBalance || 999999) ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} />
+                                          }} placeholder="Qty" className="w-full px-2 py-1.5 border rounded text-[11px] focus:ring-1 focus:ring-indigo-500 border-gray-300" />
                                         </td>
                                         <td className="px-3 py-2 text-center">
                                           <button onClick={() => setScrapProdItems(scrapProdItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
@@ -7021,19 +7087,10 @@ const InventoryPage: React.FC = () => {
                                         <td className="px-3 py-2">
                                           <input type="number" value={item.quantity} onChange={(e) => {
                                             const v = e.target.value;
-                                            const val = parseFloat(v) || 0;
                                             const ni = [...scrapOtherItemsScrapped];
-
-                                            // Stock Validation
-                                            const totalOfItem = ni.reduce((acc, curr, i) => acc + ((curr.itemCode === item.itemCode) ? (i === idx ? val : (parseFloat(curr.quantity) || 0)) : 0), 0);
-                                            const balance = item.stockBalance ?? 999999;
-                                            if (totalOfItem > balance) {
-                                              showError(`Insufficient stock at dispatch location. Available: ${balance}`);
-                                            }
-
                                             ni[idx].quantity = v;
                                             setScrapOtherItemsScrapped(ni);
-                                          }} placeholder="Qty" className={`w-full px-2 py-1.5 border rounded text-[11px] focus:ring-1 focus:ring-indigo-500 ${parseFloat(item.quantity) > (item.stockBalance || 999999) ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} />
+                                          }} placeholder="Qty" className="w-full px-2 py-1.5 border rounded text-[11px] focus:ring-1 focus:ring-indigo-500 border-gray-300" />
                                         </td>
                                         <td className="px-3 py-2 text-center">
                                           <button onClick={() => setScrapOtherItemsScrapped(scrapOtherItemsScrapped.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>

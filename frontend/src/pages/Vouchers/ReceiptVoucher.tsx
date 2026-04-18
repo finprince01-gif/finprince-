@@ -152,20 +152,18 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         return allLedgers.filter(l => {
             const group = (l.group || '').toLowerCase();
             const category = (l.category || '').toLowerCase();
+            const words = group.split(/[\s-]+/); // split by space or hyphen
+
+            // Explicitly exclude Purchase/Expense groups to prevent false positives
+            if (group.includes('purchase') || group.includes('direct') || group.includes('indirect')) {
+                return false;
+            }
+
             return (
-                (category.includes('asset') && group.includes('cash')) ||
-                (category.includes('asset') && group.includes('bank')) ||
-                (category.includes('asset') && group.includes('od')) ||
-                (category.includes('asset') && group.includes('cc')) ||
-                (category.includes('liability') && group.includes('borrowing')) ||
-                (category.includes('liability') && group.includes('loan')) ||
-                // Fallbacks
-                group.includes('cash') ||
-                group.includes('bank') ||
-                group.includes('od') ||
-                group.includes('cc') ||
-                group.includes('borrowing') ||
-                group.includes('loan')
+                (category.includes('asset') && words.some(w => ['cash', 'bank', 'od', 'cc'].includes(w))) ||
+                (category.includes('liability') && words.some(w => ['borrowing', 'loan', 'od', 'cc'].includes(w))) ||
+                // Fallbacks for less structured data
+                words.some(w => ['cash', 'bank', 'od', 'cc', 'borrowing', 'loan'].includes(w))
             );
         });
     }, [allLedgers]);
@@ -274,8 +272,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             if (prefilledData.sellerName) {
                 const ledgerName = findLedgerName(prefilledData.sellerName);
                 if (ledgerName) {
-                     setReceiveFrom(ledgerName);
-                     handleCustomerSelect(ledgerName);
+                    setReceiveFrom(ledgerName);
+                    handleCustomerSelect(ledgerName);
                 }
             }
             if ((prefilledData as any).account) setReceiveIn(findLedgerName((prefilledData as any).account));
@@ -286,7 +284,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 // Since this is specifically for an advance, we might just set the advance amount directly.
                 setSingleAdvanceAmount(prefilledData.totalAmount);
                 setShowSingleAdvanceSection(true);
-                
+
                 // Set the Advance Reference Number
                 if (prefilledData.invoiceNumber) {
                     setSingleAdvanceRefNo(prefilledData.invoiceNumber);
@@ -296,11 +294,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                 // If user meant the TOP voucher number, set it here (overrides auto/manual briefly)
                 if ((prefilledData as any).receiptVoucherNumber) {
-                     setVoucherNumber((prefilledData as any).receiptVoucherNumber);
+                    setVoucherNumber((prefilledData as any).receiptVoucherNumber);
                 } else if (prefilledData.invoiceNumber) {
-                     // Since they circled the top voucher number, let's also prefill it with the invoice ref for now, 
-                     // or let it auto-gen. The auto-gen will overwrite it if a config is selected. 
-                     // Let's rely on Advance Receipt section's Reference No.
+                    // Since they circled the top voucher number, let's also prefill it with the invoice ref for now, 
+                    // or let it auto-gen. The auto-gen will overwrite it if a config is selected. 
+                    // Let's rely on Advance Receipt section's Reference No.
                 }
             }
             if ((prefilledData as any).narration) {
@@ -388,14 +386,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         // When a total amount is entered manually, we don't auto-allocate to invoices.
         // Instead, we update the total and assign any difference relative to current allocations to Advance.
         const currentAllocated = pendingTransactions.reduce((sum, txn) => sum + (txn.receipt || 0), 0);
-        
+
         const advanceNeeded = val - currentAllocated;
         if (advanceNeeded > 0) {
             setSingleAdvanceAmount(Number(advanceNeeded.toFixed(2)));
         } else {
             setSingleAdvanceAmount(0);
         }
-        
+
         setTotalReceipt(val);
     };
 
@@ -518,7 +516,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
                     const rawStatus = (item.status || '').toString().trim().toLowerCase();
-                    
+
                     // Priority 1: Follow project specific status
                     let status = (rawStatus === 'partially received') ? 'Partially Received' : 'Not Due';
 
@@ -559,11 +557,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 });
 
                 // Filter: Only Due, Partially Received, Due Today. EXCLUDE fully Received (amount > 0 already filters them)
-                const validTransactions = mappedTransactions.filter(t => 
+                const validTransactions = mappedTransactions.filter(t =>
                     t.amount > 0 && t.status !== 'Received' &&
                     (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today')
                 );
-                
+
                 setBulkTransactions(validTransactions);
                 const mappedPending: PendingTransaction[] = validTransactions.map(t => ({
                     id: t.id,
@@ -744,7 +742,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 pending_before: Number(Number(t.amount).toFixed(2)),
                                 received_amount: Number(Number(t.receipt).toFixed(2)),
                                 balance_after: Number(Math.max(0, t.amount - t.receipt).toFixed(2)),
-                                invoice_date: t.date 
+                                invoice_date: t.date
                             })),
                         // Advance item if applicable
                         ...(singleAdvanceAmount > 0 ? [{
@@ -1143,12 +1141,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                        txn.status === 'Due' || txn.status === 'Due Today'
-                                                            ? 'bg-red-100 text-red-600 border border-red-200'
-                                                            : txn.status === 'Partially Received'
-                                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
-                                                                : 'bg-green-100 text-green-600 border border-green-200'
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.status === 'Due' || txn.status === 'Due Today'
+                                                        ? 'bg-red-100 text-red-600 border border-red-200'
+                                                        : txn.status === 'Partially Received'
+                                                            ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                            : 'bg-green-100 text-green-600 border border-green-200'
                                                         }`}>
                                                         {txn.status}
                                                     </span>
