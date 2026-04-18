@@ -174,7 +174,7 @@ class CleanOCRStagingView(views.APIView):
                 "vendor_gstin": r.gstin or supplier.get("gstin") or norm.get("gstin") or "—",
                 "gstin": r.gstin or supplier.get("gstin") or norm.get("gstin") or "—",
                 "vendor_id": v_id,
-                "status": "SUCCESS" if v_status_record in ["EXTRACTED", "VOUCHER_CREATED"] else "PROCESSING",
+                "status": "SUCCESS" if v_status_record in ["EXTRACTED", "FAILED", "VOUCHER_CREATED"] else "PROCESSING",
                 "validationStatus": ui_status,
                 "validation_status": ui_status,
                 "vendor_status": "EXISTS" if (ui_status in ["FOUND", "READY", "RESOLVED", "VOUCHER_CREATED", "DUPLICATE"] or v_id) else "NEW",

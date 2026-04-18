@@ -14,6 +14,8 @@ from accounting.models_voucher_purchase import (
 )
 from accounting.models import Voucher, MasterLedger
 from core.models import Branch
+import time
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -25,48 +27,62 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
     print("PIPELINE EXECUTED")
     logger.info(f"NEW OCR PIPELINE ACTIVE - Start processing record {record.id}...")
     
-    try:
-        # Get API key
-        api_key = api_key_manager.get_healthy_key()
-        if not api_key:
-            raise RuntimeError("No healthy Gemini API keys available")
+    max_retries = 3
+    last_err = None
+    
+    for attempt in range(max_retries):
+        try:
+            # Get API key
+            api_key = api_key_manager.get_healthy_key()
+            if not api_key:
+                raise RuntimeError("No healthy Gemini API keys available")
 
-        # Initialize Gemini Client
-        from google.genai import types
-        client = genai.Client(
-            api_key=api_key,
-            http_options=types.HttpOptions(timeout=None)
-        )
+            # Initialize Gemini Client
+            client = genai.Client(
+                api_key=api_key,
+                http_options=types.HttpOptions(timeout=None)
+            )
 
-        # Phase 1: High-Precision Extraction (Gemini)
-        extracted = extract_invoice(client, file_bytes, voucher_type=record.voucher_type or 'Purchase')
-        
-        # Phase 2: Hierarchical Normalization
-        normalized = normalize(extracted)
-        
-        # STEP 1: Save extracted data immediately
-        record.extracted_data = normalized
-        record.status = 'EXTRACTED'
-        record.save()
-        
-        # STEP 2: IMMEDIATELY call validation and processing
-        logger.info(f"PIPELINE: Extraction complete for record {record.id}. Starting immediate validation...")
-        res = validate_and_process(record)
-        
-        return {
-            "data": normalized,
-            "validation": res
-        }
-    except Exception as e:
-        logger.error(f"PIPELINE CRITICAL FAILURE for record {record.id}: {str(e)}")
-        record.status = 'FAILED'
-        record.validation_status = 'ERROR'
-        record.validation_message = f"Extraction Error: {str(e)}"
-        record.save()
-        return {
-            "data": {},
-            "validation": {"status": "ERROR", "error": str(e)}
-        }
+            # Phase 1: High-Precision Extraction (Gemini)
+            extracted = extract_invoice(client, file_bytes, voucher_type=record.voucher_type or 'Purchase')
+            
+            # Phase 2: Hierarchical Normalization
+            normalized = normalize(extracted)
+            
+            # STEP 1: Save extracted data immediately
+            record.extracted_data = normalized
+            record.status = 'EXTRACTED'
+            record.save()
+            
+            # STEP 2: IMMEDIATELY call validation and processing
+            logger.info(f"PIPELINE: Extraction complete for record {record.id}. Starting immediate validation...")
+            res = validate_and_process(record)
+            
+            return {
+                "data": normalized,
+                "validation": res
+            }
+        except Exception as e:
+            last_err = e
+            err_msg = str(e).upper()
+            if ("429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg) and attempt < max_retries - 1:
+                logger.warning(f"Rate limited (429) for record {record.id} on attempt {attempt+1}. Retrying with fresh key...")
+                api_key_manager.mark_key_unhealthy(api_key)
+                
+                # Exponential backoff: 5s, 10s
+                sleep_time = (attempt + 1) * 5
+                time.sleep(sleep_time)
+                continue
+            
+            logger.error(f"PIPELINE CRITICAL FAILURE for record {record.id}: {str(e)}")
+            record.status = 'FAILED'
+            record.validation_status = 'ERROR'
+            record.validation_message = f"Extraction Error: {str(e)}"
+            record.save()
+            return {
+                "data": {},
+                "validation": {"status": "ERROR", "error": str(e)}
+            }
 
 def finalize_merged_records(records, auto_save: bool = True):
     """
