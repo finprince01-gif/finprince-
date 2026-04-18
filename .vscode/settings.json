@@ -1,5 +1,5 @@
 {
-    "python.defaultInterpreterPath": "C:/Python314/python.exe",
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
     "python.languageServer": "Pylance",
     "css.lint.unknownAtRules": "ignore",
     "scss.lint.unknownAtRules": "ignore",
@@ -7,9 +7,6 @@
     "pyre2.enablePyre2": false,
     "python.analysis.extraPaths": [
         "backend",
-        "D:/finpixe/Ai_Accounting_v1-22/AI-accounting-0.03/backend",
-        "C:/Python314/Lib/site-packages",
-        "C:/Users/Dharun/AppData/Roaming/Python/Python314/site-packages",
         "."
     ],
     "python.analysis.typeCheckingMode": "off",

@@ -3,13 +3,17 @@ from rest_framework.response import Response  # type: ignore
 from rest_framework.permissions import IsAuthenticated  # type: ignore
 from django.db.models import Q  # type: ignore
 from django.db import transaction  # type: ignore
+from django.conf import settings
 import logging
 import json
+import hashlib
+import os
 
 from .service import process_invoice_upload
 from .normalize import normalize
 from .repository import InvoiceTempOCR
 from .pipeline import validate_and_process as finalize_record
+from .grouping import run_grouping_logic
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +42,22 @@ class CleanOCRStagingView(views.APIView):
         results = []
         for uploaded_file in files:
             try:
+                # Read bytes
                 file_bytes = uploaded_file.read()
+                file_hash = hashlib.sha256(file_bytes).hexdigest()
+                
+                # Persistence for Rescan feature
+                # Save bytes to media/ocr_temp/
+                temp_dir = os.path.join(settings.MEDIA_ROOT, 'ocr_temp')
+                if not os.path.exists(temp_dir):
+                    os.makedirs(temp_dir)
+                
+                temp_file_path = os.path.join(temp_dir, file_hash)
+                if not os.path.exists(temp_file_path):
+                    with open(temp_file_path, 'wb') as f:
+                        f.write(file_bytes)
+                
+                # Process upload
                 result = process_invoice_upload(
                     file_bytes=file_bytes,
                     voucher_type=voucher_type,
@@ -50,6 +69,12 @@ class CleanOCRStagingView(views.APIView):
             except Exception as e:
                 logger.error(f"POST API Processing failure: {str(e)}")
                 results.append({"file_name": uploaded_file.name, "status": "FAILED", "error": str(e)})
+
+        # STEP 5: Run Grouping Preprocessor (Multi-page Merge)
+        try:
+            run_grouping_logic(tenant_id, upload_session_id)
+        except Exception as ge:
+            logger.error(f"Grouping preprocessor failed: {str(ge)}")
 
         return Response({
             "success": True,
@@ -91,6 +116,11 @@ class CleanOCRStagingView(views.APIView):
         else:
             print(f"DEBUG: No session ID, file_paths or resume flag provided. Returning empty list.")
             records = InvoiceTempOCR.objects.none()
+
+        # ── Step 3.5: Apply Grouping filter (Hide secondary pages) ──
+        # If records exist, only show primary aggregated records
+        if records.exists():
+            records = records.filter(Q(is_primary=True) | Q(group_id__isnull=True))
 
         # ── Step 4: Optional Filter ──
         v_filter = request.query_params.get('filter')
@@ -149,6 +179,7 @@ class CleanOCRStagingView(views.APIView):
                 "validation_status": ui_status,
                 "vendor_status": "EXISTS" if (ui_status in ["FOUND", "READY", "RESOLVED", "VOUCHER_CREATED", "DUPLICATE"] or v_id) else "NEW",
                 "processed": r.processed,
+                "has_source": os.path.exists(os.path.join(settings.MEDIA_ROOT, 'ocr_temp', r.file_hash)) if r.file_hash else False,
                 "extracted_data": {
                     "sections": sections,
                     **norm
@@ -212,6 +243,12 @@ class CleanOCRStagingView(views.APIView):
             # Run the authoritative pipeline validation
             from .pipeline import validate_and_process
             v_res = validate_and_process(record)
+
+            # Re-run grouping after manual edit
+            try:
+                run_grouping_logic(record.tenant_id, record.upload_session_id)
+            except Exception as ge:
+                logger.error(f"Post-patch grouping failed: {str(ge)}")
             
             # Re-read the saved record to get accurate status
             record.refresh_from_db()
@@ -254,11 +291,14 @@ class OCRStagingFinalizeView(views.APIView):
         tenant_id = request.user.branch_id
         upload_session_id = request.data.get('upload_session_id')
         
-        # ── Step 1: Find processable records (READY ONLY - Exclude Duplicates) ──
+        # ── Step 1: Find processable records (READY/Matched Only - Exclude Duplicates) ──
+        # We include ANY record that has a vendor_id, even if status is NEED_VENDOR (syncing issue)
         query = InvoiceTempOCR.objects.filter(
             tenant_id=tenant_id,
-            validation_status__in=['READY', 'FOUND', 'RESOLVED', 'MATCHED_VENDOR', 'SUCCESS', 'NEEDS_ATTENTION', 'LOW_CONFIDENCE'],
             processed=False
+        ).filter(
+            Q(validation_status__in=['READY', 'FOUND', 'RESOLVED', 'MATCHED_VENDOR', 'SUCCESS', 'NEEDS_ATTENTION', 'LOW_CONFIDENCE', 'NEED_VENDOR']) |
+            Q(vendor_id__isnull=False)
         ).exclude(validation_status__in=['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'])
         if upload_session_id:
             query = query.filter(upload_session_id=upload_session_id)
@@ -288,20 +328,141 @@ class OCRStagingFinalizeView(views.APIView):
         if not records_to_process and not all_session_records:
             return Response({'error': 'No processable invoices found in staging.'}, status=400)
 
-        for r in records_to_process:
-            if r.processed:
+        # ── Step 3: Progressive Processing (Grouped for Multi-Page) ──
+        # We process ONLY primary records, but fetch all group members to pass to the merging pipeline
+        groups = {}
+        processed_group_ids = set()
+
+        # Collect all primary records and standalone records
+        primaries = records_to_process.filter(Q(is_primary=True) | Q(group_id__isnull=True))
+
+        for primary in primaries:
+            if primary.group_id:
+                # Fetch all members of this group in order
+                group_members = list(InvoiceTempOCR.objects.filter(
+                    group_id=primary.group_id, 
+                    tenant_id=tenant_id
+                ).order_by('created_at', 'id'))
+                key = primary.group_id
+            else:
+                group_members = [primary]
+                key = f"UNGROUPED_{primary.id}"
+            
+            groups[key] = group_members
+
+        from .pipeline import finalize_merged_records
+        for key, group_records in groups.items():
+            # Check if any record in group is already processed (safety)
+            if any(r.processed for r in group_records):
                 continue
                 
-            res = finalize_record(r)
+            res = finalize_merged_records(group_records, auto_save=True)
+            
             if res.get('status') == 'VOUCHER_CREATED':
                 summary['created'] += 1
             elif res.get('status') in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
                 summary['skipped'] += 1
-                summary['errors'].append({'file': r.file_path, 'message': res.get('message') or "Duplicate in database"})
             else:
                 summary['failed'] += 1
-                summary['errors'].append({'file': r.file_path, 'error': res.get('error')})
+                summary['errors'].append({'key': key, 'error': res.get('error')})
 
         summary['success'] = True
         return Response(summary)
+
+class OCRStagingRescanView(views.APIView):
+    """
+    Re-trigger OCR extraction for an existing staging record.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        tenant_id = request.user.branch_id
+        file_hash = request.data.get('file_hash')
+        
+        if not file_hash:
+            return Response({'error': 'file_hash required'}, status=400)
+            
+        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=tenant_id).first()
+        if not record:
+            return Response({'error': 'Record not found'}, status=404)
+            
+        # Try to find the cached file bytes
+        temp_file_path = os.path.join(settings.MEDIA_ROOT, 'ocr_temp', file_hash)
+        
+        if not os.path.exists(temp_file_path):
+            return Response({
+                'error': 'Source file not found for rescan. Please re-upload the file.'
+            }, status=404)
+            
+        try:
+            with open(temp_file_path, 'rb') as f:
+                file_bytes = f.read()
+                
+            from .pipeline import run_ocr_pipeline
+            record.status = 'EXTRACTING'
+            record.validation_status = 'PENDING'
+            record.save()
+            
+            execution_res = run_ocr_pipeline(file_bytes, record)
+            
+            return Response({
+                "success": True,
+                "status": "EXTRACTED",
+                "validation_status": execution_res.get('validation', {}).get('status', 'ERROR'),
+                "data": execution_res.get('data', {})
+            })
+        except Exception as e:
+            logger.error(f"RESCAN FAILED: {str(e)}")
+            return Response({'error': f"Rescan failed: {str(e)}"}, status=500)
+
+class OCRStagingRescanUploadView(views.APIView):
+    """
+    Allows uploading a missing source file for an existing record to re-trigger OCR.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        tenant_id = request.user.branch_id
+        old_hash = request.data.get('file_hash')
+        uploaded_file = request.FILES.get('file')
+
+        if not old_hash or not uploaded_file:
+            return Response({'error': 'Original file_hash and new file required'}, status=400)
+
+        record = InvoiceTempOCR.objects.filter(file_hash=old_hash, tenant_id=tenant_id).first()
+        if not record:
+            return Response({'error': 'Staging record not found'}, status=404)
+
+        try:
+            file_bytes = uploaded_file.read()
+            new_hash = hashlib.sha256(file_bytes).hexdigest()
+
+            # Save to ocr_temp
+            temp_dir = os.path.join(settings.MEDIA_ROOT, 'ocr_temp')
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir)
+
+            temp_file_path = os.path.join(temp_dir, new_hash)
+            with open(temp_file_path, 'wb') as f:
+                f.write(file_bytes)
+
+            # Update identity and status
+            record.file_hash = new_hash
+            record.status = 'EXTRACTING'
+            record.validation_status = 'PENDING'
+            record.save()
+
+            from .pipeline import run_ocr_pipeline
+            execution_res = run_ocr_pipeline(file_bytes, record)
+
+            return Response({
+                "success": True,
+                "file_hash": new_hash,
+                "status": "EXTRACTED",
+                "validation_status": execution_res.get('validation', {}).get('status', 'ERROR'),
+                "data": execution_res.get('data', {})
+            })
+        except Exception as e:
+            logger.error(f"RESCAN UPLOAD FAILED: {str(e)}")
+            return Response({'error': f"Upload & Rescan failed: {str(e)}"}, status=500)
 

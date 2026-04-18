@@ -1,8 +1,32 @@
 import json
 import logging
+import re
 from google.genai import types
 
 logger = logging.getLogger(__name__)
+
+def extract_json_from_text(text):
+    """
+    Robust JSON extraction:
+    1. Look for ```json ... ``` blocks (case-insensitive).
+    2. Fallback to finding the first { and last } markers.
+    """
+    if not text:
+        return ""
+        
+    # 1. Markdown regex: matches ```json ... ``` or just ``` ... ```
+    # Using re.DOTALL to match across newlines
+    markdown_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL | re.IGNORECASE)
+    if markdown_match:
+        return markdown_match.group(1).strip()
+    
+    # 2. Block fallback: Find first '{' and last '}'
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        return text[start_idx : end_idx + 1].strip()
+    
+    return text.strip()
 
 def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.0.0"):
     """
@@ -92,16 +116,22 @@ Extract invoice data from this {voucher_type} document into the EXACT JSON forma
         )
         
         # Parse result
-        text = response.text.strip()
-        logger.info(f"RAW AI RESPONSE: {text}")
+        raw_text = response.text.strip()
+        logger.info(f"RAW AI RESPONSE (Length: {len(raw_text)} chars)")
         
-        if "```json" in text:
-            text = text.split("```json")[-1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[-1].split("```")[0].strip()
-            
-        result = json.loads(text)
-        return result
+        cleaned_json_text = extract_json_from_text(raw_text)
+        
+        try:
+            result = json.loads(cleaned_json_text)
+            logger.info("Successfully parsed Gemini JSON response.")
+            return result
+        except json.JSONDecodeError as jde:
+            logger.error(f"JSON Decode Error: {str(jde)}")
+            logger.error(f"Partial text that failed: {cleaned_json_text[:200]}...")
+            # Fallback for visibility
+            return {"_error": "JSON_DECODE_FAILED", "_raw": raw_text}
+
     except Exception as e:
         logger.error(f"Extraction failed: {str(e)}")
         raise RuntimeError(f"Extraction failed: {str(e)}")
+

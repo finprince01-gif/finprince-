@@ -526,6 +526,7 @@ class PurchaseVendorCreateView(APIView):
         branch = request.data.get('branch', '').strip()
         address = request.data.get('address', '').strip()
         state = request.data.get('state', '').strip()
+        vendor_category = request.data.get('vendor_category', '').strip()
         supplier_items = request.data.get('supplier_items', [])
         
         # Step 1: Pre-creation Validation (Branch-based rules)
@@ -537,7 +538,7 @@ class PurchaseVendorCreateView(APIView):
             branch=branch
         )
 
-        if val_result['status'] == 'FOUND':
+        if val_result['status'] in ['FOUND', 'EXISTING_VENDOR']:
             # Rule 1: Exact Duplicate (Name + GSTIN + Branch match)
             # We treat this as "CREATED" to maintain idempotency in the creation flow
             return Response({
@@ -572,7 +573,7 @@ class PurchaseVendorCreateView(APIView):
             "pan_no": gstin[2:12] if gstin and len(gstin) >= 15 else None,
             "email": f"pending_{tenant_prefix}@example.com",
             "contact_no": "+910000000000",
-            "vendor_category": "Supplier",
+            "vendor_category": vendor_category if vendor_category else "Supplier",
         }
         
         try:
@@ -693,7 +694,7 @@ class PurchaseVendorValidateView(APIView):
             state=state
         )
         
-        if result['status'] == 'FOUND':
+        if result['status'] in ['FOUND', 'EXISTING_VENDOR']:
             print(f"Found vendor by {result['matched_by']} match: {result['vendor_name']}")
         elif result['status'] == 'GSTIN_CONFLICT':
             print(f"GSTIN {gstin} found but name mismatch: {result['message']}")

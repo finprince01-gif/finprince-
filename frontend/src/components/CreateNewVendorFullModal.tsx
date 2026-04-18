@@ -143,15 +143,47 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     const [ifscCache, setIfscCache] = useState<Record<string, { bank: string, branch: string }>>({});
     const [deliveryTerms, setDeliveryTerms] = useState('');
 
-    const [uploadedFiles, setUploadedFiles] = useState<{
-        msmeFile: File | null;
-        fssaiFile: File | null;
-        iecFile: File | null;
-    }>({
-        msmeFile: null,
-        fssaiFile: null,
-        iecFile: null,
-    });
+    const [categories, setCategories] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                // Use a standard set of defaults matching backend/vendorcategory_api.py
+                const DEFAULT_CATEGORIES = [
+                    "Raw Material", "Work in Progress", "Services", "Jobwork", "Stores and Spares",
+                    "Packing Material", "Stock in Trade", "Fixed Assets", "Capital Goods", "Consumables"
+                ];
+
+                const res: any = await httpClient.get('/api/vendors/categories/');
+                const arr = Array.isArray(res) ? res : (res.results || []);
+
+                const dbPaths = arr.map((item: any) => {
+                    const parts = [item.category];
+                    if (item.group) parts.push(item.group);
+                    if (item.subgroup) parts.push(item.subgroup);
+                    return parts.join(' > ');
+                }).filter(Boolean);
+
+                const allPaths = [...DEFAULT_CATEGORIES, ...dbPaths];
+                const uniquePaths: string[] = [];
+                const seen = new Set<string>();
+
+                allPaths.forEach(path => {
+                    const lower = path.toLowerCase();
+                    if (!seen.has(lower)) {
+                        seen.add(lower);
+                        uniquePaths.push(path);
+                    }
+                });
+
+                setCategories(uniquePaths.sort((a, b) => a.localeCompare(b)));
+            } catch (error) {
+                console.error('Error fetching vendor categories:', error);
+            }
+        };
+
+        fetchCategories();
+    }, []);
 
     const handleFileUpload = (type: keyof typeof uploadedFiles, file: File | null) => {
         if (file) {
@@ -206,6 +238,16 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
             setCreateCustomerOption(null);
         }
     }, [isAlsoCustomer, vendorName, panNo]);
+
+    const [uploadedFiles, setUploadedFiles] = useState<{
+        msmeFile: File | null;
+        fssaiFile: File | null;
+        iecFile: File | null;
+    }>({
+        msmeFile: null,
+        fssaiFile: null,
+        iecFile: null,
+    });
 
     /* ─── GST helpers ──────────────────────── */
     const addGstRecord = () => setGstRecords(prev => [...prev, {
@@ -582,7 +624,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                     <label className={labelCls}>Vendor Category <span className="text-red-500">*</span></label>
                     <select className={inputCls} value={vendorCategory} onChange={e => setVendorCategory(e.target.value)}>
                         <option value="">Select Category</option>
-                        {VENDOR_SYSTEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
                 <div>

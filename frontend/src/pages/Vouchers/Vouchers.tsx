@@ -45,6 +45,17 @@ interface VouchersPageProps {
 }
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
+const UPLOAD_OPTIONS_CONFIG: Record<string, string[]> = {
+  purchase: ["purchase_scan", "others"],
+  sales: ["sales_excel_upload", "others"],
+  payment: ["banking", "others"],
+  receipt: ["banking", "others"],
+  contra: ["others"],
+  journal: ["others"],
+  expenses: ["others"],
+  "credit note": ["others"],
+  "debit note": ["others"],
+};
 
 
 
@@ -272,7 +283,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const files = e.target.files;
     if (!files || files.length === 0) return;
     if (files.length > 1) {
-      showError('FINPIXE SINGLE SCAN allows only one invoice. Use FINPIXE BULK SCAN for multiple invoices.');
+      showError('PURCHASE SINGLE SCAN allows only one invoice. Use PURCHASE BULK SCAN for multiple invoices.');
       if (singleScanInputRef.current) singleScanInputRef.current.value = '';
       return;
     }
@@ -10591,107 +10602,128 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   {isScannerMenuOpen && (
                     <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
                       <div className="py-1" role="menu">
+                        {(() => {
+                          const currentVoucherType = voucherType.toLowerCase();
+                          const allowedOptions = UPLOAD_OPTIONS_CONFIG[currentVoucherType] || ["others"];
 
-                        <button
-                          onClick={() => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); }}
-                          className={`flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`}
-                          role="menuitem"
-                        >
-                          <Icon name="scanner" className={`w-4 h-4 mr-3 ${isLimitReached ? 'text-red-500' : 'text-emerald-500'}`} />
-                          Finpixe AI Scan {isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>}
-                        </button>
-                        <button
-                          onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
-                          className="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          role="menuitem"
-                        >
-                          <div className="flex items-center">
-                            <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />
-                            Others
-                          </div>
-                          <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
-                        </button>
+                          const UPLOAD_OPTION_META: Record<string, any> = {
+                            purchase_scan: {
+                              id: 'purchase_scan',
+                              label: "Purchase Scan",
+                              icon: <Icon name="scanner" className={`w-4 h-4 mr-3 ${isLimitReached ? 'text-red-500' : 'text-emerald-500'}`} />,
+                              onClick: () => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); },
+                              className: `flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`,
+                              extraLabel: isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>
+                            },
+                            sales_excel_upload: {
+                              id: 'sales_excel_upload',
+                              label: "Sales Excel Upload",
+                              icon: <Icon name="file-spreadsheet" className="w-4 h-4 mr-3 text-blue-500" />,
+                              onClick: () => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); },
+                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            },
+                            banking: {
+                              id: 'banking',
+                              label: "Banking",
+                              icon: <Icon name="bank" className="w-4 h-4 mr-3 text-blue-500" />,
+                              onClick: () => { onNavigate('Banking' as any); setIsScannerMenuOpen(false); },
+                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
+                            },
+                            others: {
+                              id: 'others',
+                              label: "Others",
+                              icon: <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />,
+                              onClick: () => setIsOthersSubmenuOpen(prev => !prev),
+                              className: "flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100",
+                              hasSubmenu: true
+                            }
+                          };
 
-                        <button
-                          onClick={() => { onNavigate('Banking' as any); setIsScannerMenuOpen(false); }}
-                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
-                          role="menuitem"
-                        >
-                          <Icon name="bank" className="w-4 h-4 mr-3 text-blue-500" />
-                          Banking
-                        </button>
+                          return allowedOptions.map((key) => {
+                            const option = UPLOAD_OPTION_META[key];
+                            if (!option) return null;
 
-                        {isOthersSubmenuOpen && (
-                          <div className="bg-gray-50 py-1 shadow-inner">
-                            <button
-                              onClick={() => setIsTallySubmenuOpen(prev => !prev)}
-                              className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                              role="menuitem"
-                            >
-                              <div className="flex items-center">
-                                <Icon name="document" className="w-3 h-3 mr-3" />
-                                Tally
-                              </div>
-                              <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
-                            </button>
-
-                            {isTallySubmenuOpen && (
-                              <div className="bg-gray-100/50 py-0.5 shadow-inner">
+                            return (
+                              <React.Fragment key={key}>
                                 <button
-                                  onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                                  className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                                  onClick={option.onClick}
+                                  className={option.className}
                                   role="menuitem"
                                 >
-                                  <Icon name="plus" className="w-3 h-3 mr-2" />
-                                  Voucher
+                                  <div className="flex items-center">
+                                    {option.icon}
+                                    {option.label}
+                                    {option.extraLabel}
+                                  </div>
+                                  {option.hasSubmenu && (
+                                    <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
+                                  )}
                                 </button>
-                                <button
-                                  onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                                  className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
-                                  role="menuitem"
-                                >
-                                  <Icon name="masters" className="w-3 h-3 mr-2" />
-                                  Master
-                                </button>
-                              </div>
-                            )}
-                            <button
-                              onClick={() => { zohoScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
-                              className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                              role="menuitem"
-                            >
-                              <Icon name="document" className="w-3 h-3 mr-3" />
-                              Zoho
-                            </button>
-                            <button
-                              onClick={() => { sapScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
-                              className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                              role="menuitem"
-                            >
-                              <Icon name="document" className="w-3 h-3 mr-3" />
-                              SAP
-                            </button>
-                          </div>
-                        )}
 
-                        <div className="border-t border-gray-100 my-1"></div>
-                        <button
-                          onClick={() => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); }}
-                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          role="menuitem"
-                        >
-                          <Icon name="file-spreadsheet" className="w-4 h-4 mr-3 text-blue-500" />
-                          Sales Excel Upload
-                        </button>
+                                {key === 'others' && isOthersSubmenuOpen && (
+                                  <div className="bg-gray-50 py-1 shadow-inner">
+                                    <button
+                                      onClick={() => setIsTallySubmenuOpen(prev => !prev)}
+                                      className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                                      role="menuitem"
+                                    >
+                                      <div className="flex items-center">
+                                        <Icon name="document" className="w-3 h-3 mr-3" />
+                                        Tally
+                                      </div>
+                                      <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
+                                    </button>
 
-
+                                    {isTallySubmenuOpen && (
+                                      <div className="bg-gray-100/50 py-0.5 shadow-inner">
+                                        <button
+                                          onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                          className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                                          role="menuitem"
+                                        >
+                                          <Icon name="plus" className="w-3 h-3 mr-2" />
+                                          Voucher
+                                        </button>
+                                        <button
+                                          onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                          className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                                          role="menuitem"
+                                        >
+                                          <Icon name="masters" className="w-3 h-3 mr-2" />
+                                          Master
+                                        </button>
+                                      </div>
+                                    )}
+                                    <button
+                                      onClick={() => { zohoScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                                      className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                                      role="menuitem"
+                                    >
+                                      <Icon name="document" className="w-3 h-3 mr-3" />
+                                      Zoho
+                                    </button>
+                                    <button
+                                      onClick={() => { sapScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                                      className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                                      role="menuitem"
+                                    >
+                                      <Icon name="document" className="w-3 h-3 mr-3" />
+                                      SAP
+                                    </button>
+                                  </div>
+                                )}
+                              </React.Fragment>
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
 
-
-                {/* Single scan input */}
+            {/* Single scan input */}
                 <input
                   type="file"
                   ref={singleScanInputRef}
@@ -10773,10 +10805,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   accept="image/*,.pdf"
                   className="hidden"
                 />
-              </div>
-            </div>
 
-            <style dangerouslySetInnerHTML={{
+                <style dangerouslySetInnerHTML={{
               __html: `
                 .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
                 .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
