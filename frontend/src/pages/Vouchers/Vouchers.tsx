@@ -3587,6 +3587,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     if (voucher) {
       onAddVouchers([voucher]);
+      showSuccess(`${voucherType} Voucher Saved Successfully!`);
       resetForm();
       refetch(); // Refresh usage statistics
 

@@ -69,7 +69,6 @@ const AuthPortal: React.FC = () => {
                     </button>
                 </div>
 
-                {/* Registration Entry - Consistency with cards */}
                 <button
                     onClick={() => handleNavigate('/register')}
                     className="group relative w-full p-[1.5px] rounded-[16px] bg-gradient-to-r from-[#4B3CFF] via-[#7A6CFF] to-[#A5A8FF] hover:translate-y-[-3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.08),0_0_10px_rgba(75,60,255,0.2)] active:scale-[0.98] focus:outline-none transition-all duration-300 shadow-[0_10px_25px_rgba(0,0,0,0.08)]"
@@ -85,6 +84,15 @@ const AuthPortal: React.FC = () => {
                             <Icon name="arrow-right" className="w-4 h-4 text-[#4B3CFF] group-hover:translate-x-1 transition-transform" />
                         </div>
                     </div>
+                </button>
+                
+                {/* Landing Page Link */}
+                <button
+                    onClick={() => window.location.href = (import.meta as any).env?.VITE_LANDING_URL || 'http://localhost:3000'}
+                    className="mt-8 text-[10px] font-black text-[#5a5f9e] uppercase tracking-[0.3em] hover:text-[#4B3CFF] transition-all flex items-center gap-2 group"
+                >
+                    <Icon name="arrow-left" size={14} className="group-hover:-translate-x-1 transition-transform" />
+                    Back to Home
                 </button>
             </div>
         </PremiumBackground>
