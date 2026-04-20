@@ -25,7 +25,7 @@ type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR' | 'EXISTS' | 'NEW
 type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE' | 'DUPLICATE_IN_BATCH' | 'SUCCESS' | 'FAILED' | 'NEED_VENDOR' | 'INCOMPLETE' | 'EXTRACTING' | 'SCANNING';
 
 interface ScanResult {
-    id: number;
+    id: string;
     file_hash: string;
     file_path: string;
     vendor_status: VendorStatus;
@@ -46,6 +46,13 @@ interface ScanResult {
     _isMerged?: boolean;
     _mergedCount?: number;
     _allHashes?: string[];
+    error_message?: string;
+    total_taxable_value?: string;
+    total_cgst?: string;
+    total_sgst?: string;
+    total_igst?: string;
+    group_id?: string;
+    processed: boolean;
 }
 
 interface FinalizeErrorItem {
@@ -680,6 +687,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const [scanCurrentFile, setScanCurrentFile] = useState('');
     const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
     const [filterStatus, setFilterStatus] = useState<'ready' | 'pending' | 'scanning'>('pending');
+    const [groupPages, setGroupPages] = useState(true);
     const [showOnlyPending, setShowOnlyPending] = useState(true);
     const [finalizing, setFinalizing] = useState(false);
     const [resizing, setResizing] = useState<number | null>(null);
@@ -700,19 +708,49 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         if (!scanResults || !scanResults.length) return [];
         
         const groups: Record<string, ScanResult[]> = {};
-        const normalize = (s: any) => String(s || '').replace(/[^a-zA-Z0-9]/g, '').trim().toUpperCase();
+        const normalize = (s: any) => String(s || '').replace(/[^A-Z0-9]/g, '').trim().toUpperCase();
+        
+        // Month-Aware Date Fingerprint (handles 'Sep', 'Sept', '09', etc.)
+        const dateFingerprint = (d: any) => {
+            let s = String(d || '').toLowerCase().trim();
+            if (!s || s === '—') return "";
+            const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+            months.forEach((m, i) => {
+                // Handle both 'sept' and 'sep' for September
+                const monthNum = String(i + 1).padStart(2, '0');
+                if (m === 'sep') {
+                    s = s.replace(/september|sept|sep/, monthNum);
+                } else {
+                    s = s.replace(new RegExp(m + '[a-z]*'), monthNum);
+                }
+            });
+            const digits = s.replace(/[^0-9]/g, '');
+            // Sort digits to make it order/separator independent (2024-09-07 == 07-09-2024)
+            return digits.split('').sort().join('');
+        };
 
         scanResults.forEach(r => {
-            const invNo = normalize(getCellValue(r, 'invoice_no') || getCellValue(r, 'invoice_number') || r.invoice_number);
-            const gstin = normalize(getCellValue(r, 'vendor_gstin') || r.vendor_gstin);
-            const vendor = normalize(getCellValue(r, 'vendor_name') || r.vendor_name);
+            const group_id = r.group_id;
+            const invNo = normalize(r.invoice_number || getCellValue(r, 'invoice_no') || getCellValue(r, 'invoice_number'));
+            const gstin = normalize(r.vendor_gstin || getCellValue(r, 'vendor_gstin'));
+            const date = dateFingerprint(r.invoice_date || getCellValue(r, 'invoice_date'));
 
             let key = "";
-            if (invNo && (gstin || vendor)) {
-                // If we have InvNo and either GSTIN or Vendor Name, we can group.
-                key = `${invNo}_${gstin || vendor}`;
-            } else {
-                key = `UNGROUPED_${r.file_hash}_${Math.random()}`;
+            // Primary Key: High-Confidence Match (GSTIN + InvNo + Standardized Date)
+            if (gstin && invNo && date) {
+                key = `U3_${gstin}_${invNo}_${date}`;
+            }
+            else if (invNo && gstin) {
+                key = `U2_${gstin}_${invNo}`;
+            }
+            else if (group_id) {
+                key = `GID_${group_id}`;
+            } 
+            else if (invNo && (gstin || normalize(r.vendor_name))) {
+                key = `M2V_${invNo}_${gstin || normalize(r.vendor_name)}`;
+            } 
+            else {
+                key = `UNGROUPED_${r.file_hash || r.id}`;
             }
 
             if (!groups[key]) groups[key] = [];
@@ -720,32 +758,42 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         });
 
         const final = Object.values(groups).map(group => {
-            if (group.length === 1) return group[0];
+            if (group.length === 1) return { ...group[0], _isMerged: false, _mergedCount: 1, _allHashes: [group[0].file_hash] };
             
             // SORT: Put rows with more data/vendor_id at the top
             const sorted = [...group].sort((a, b) => {
                 if (a.vendor_id && !b.vendor_id) return -1;
                 if (!a.vendor_id && b.vendor_id) return 1;
-                const aAmt = parseFloat(String(getCellValue(a, 'total_amount')).replace(/[₹,]/g, '') || '0');
-                const bAmt = parseFloat(String(getCellValue(b, 'total_amount')).replace(/[₹,]/g, '') || '0');
+                const aAmt = parseFloat(String(getCellValue(a, 'total_amount') || a.total_amount).replace(/[₹,]/g, '') || '0');
+                const bAmt = parseFloat(String(getCellValue(b, 'total_amount') || b.total_amount).replace(/[₹,]/g, '') || '0');
                 return bAmt - aAmt;
             });
             
             const primary = { ...sorted[0] };
-            
-            // Concatenate all items from all pages
+            const finalMergedCount = group.length;
+
+            // Exhaustive Collection of items from across ALL pages
             const allItems = group.reduce((acc, r) => {
-                const items = r.extracted_data?.sections?.items || [];
-                return [...acc, ...items];
+                const data = r.extracted_data || {};
+                const pageItems = data.items || data.line_items || data.sections?.items || [];
+                return [...acc, ...(Array.isArray(pageItems) ? pageItems : [])];
             }, [] as any[]);
+
+            // Pick the best header values from across the group
+            const bestInvNo = group.find(r => r.invoice_number)?.invoice_number || primary.invoice_number;
+            const bestDate = group.find(r => r.invoice_date)?.invoice_date || primary.invoice_date;
 
             return {
                 ...primary,
+                invoice_number: bestInvNo,
+                invoice_date: bestDate,
                 _isMerged: true,
-                _mergedCount: group.length,
+                _mergedCount: finalMergedCount,
                 _allHashes: group.map(x => x.file_hash),
                 extracted_data: {
                     ...(primary.extracted_data || {}),
+                    items: allItems,
+                    line_items: allItems,
                     sections: {
                         ...(primary.extracted_data?.sections || {}),
                         items: allItems
@@ -1081,18 +1129,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 const totalSgst = clean(inv['total_sgst'], inv['SGST/UTGST'], inv['Summary Totals']?.['Total SGST/UTGST']) || '0.00';
                 const totalIgst = clean(inv['total_igst'], inv['IGST'], inv['Summary Totals']?.['Total IGST']) || '0.00';
 
-                // Hardening: Only treat as NEEDS_ATTENTION if it is explicitly set by backend.
-                // Do not eagerly override PENDING here while the pipeline is still active.
-                const hasAnyData = invoiceNumber !== '—' || vendorName !== '—' || totalAmount !== '—';
-                const isCompletelyEmpty = !hasAnyData && Object.keys(inv).length === 0;
-
-                if (vStatus === 'PENDING' && isCompletelyEmpty) {
-                    // Let it stay as PENDING (will show 'Validating...' or spinner in UI)
-                    // unless we are at the very end of retries (handled by stopPolling logic).
-                }
-
-                return {
-                    id: r.id,
+                const result: ScanResult = {
+                    id: String(r.id || r.file_hash),
                     file_hash: r.file_hash,
                     file_path: r.file_path,
                     invoice_number: invoiceNumber,
@@ -1100,24 +1138,26 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     vendor_name: vendorName,
                     vendor_gstin: vendorGstin,
                     total_amount: totalAmount,
-                    // Pass unified totals down
                     total_taxable_value: totalTaxable,
                     total_cgst: totalCgst,
                     total_sgst: totalSgst,
                     total_igst: totalIgst,
                     validationStatus: vStatus,
-                    vendor_id: r.vendor_id || null,
-                    // Use backend vendor_status as source of truth (set by strict GSTIN validation)
-                    vendor_status: (r.vendor_status === 'MATCHED' || r.vendor_status === 'CREATE_VENDOR' || r.vendor_status === 'EXISTS' || r.vendor_status === 'NEW') 
-                        ? r.vendor_status 
-                        : (r.vendor_id ? 'MATCHED' : 'CREATE_VENDOR') as VendorStatus,
-                    // Only show human-readable matched_by labels; suppress 'AI_PIPELINE' and 'NONE'
-                    matchedBy: (r.matched_by === 'VALIDATION' || r.matched_by === 'Newly Created') ? r.matched_by : '',
-                    conflictMessage: r.conflict_message || '',
+                    vendor_status: (['READY', 'FOUND', 'MATCHED'].includes(vStatus) ? 'FOUND' : 'NEW') as VendorStatus,
+                    vendor_id: r.vendor_id,
+                    branch: r.branch || clean(inv['branch'], inv['Branch']),
                     extracted_data: rawExtracted,
-                    status: r.status || backendStatus,
+                    status: r.status || vStatus,
                     created_at: r.created_at || new Date().toISOString(),
-                } as ScanResult;
+                    error_message: r.validation_message || '',
+                    matchedBy: r.matched_by || '',
+                    conflictMessage: r.conflict_message || '',
+                    _isMerged: !!rawExtracted?._is_merged,
+                    _mergedCount: rawExtracted?._merged_count || 1,
+                    group_id: r.group_id,
+                    processed: !!r.processed,
+                };
+                return result;
             });
 
             setScanResults(seeded);
@@ -1272,8 +1312,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 }
             });
 
-            // Backend uses 5 parallel threads for the chunks
-            const batchCount = Math.ceil(estimatedTasks / 5);
+            // Backend uses 10 parallel threads for the chunks in CleanOCRStagingView
+            const batchCount = Math.ceil(estimatedTasks / 10);
             setEstimatedExtractionTime(avgTime * batchCount);
         } catch (error) {
             let estimatedTasks = 0;
@@ -1281,7 +1321,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
                 estimatedTasks += isPdf ? Math.max(1, Math.ceil(f.size / 100000)) : 1;
             });
-            const batchCount = Math.ceil(estimatedTasks / 5);
+            const batchCount = Math.ceil(estimatedTasks / 10);
             setEstimatedExtractionTime(3.85 * batchCount);
         }
 
@@ -1291,10 +1331,22 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             formData.append('voucher_type', voucherType);
             formData.append('upload_session_id', uploadSessionId);
 
-            setScanProgress(90);
-            setScanCurrentFile(`Processing AI results…`);
+            setScanProgress(40);
+            setScanCurrentFile(`Uploading ${selectedFiles.length} files...`);
+
+            // Start a small interval to move progress from 40 to 90 while waiting for backend
+            const progressInterval = setInterval(() => {
+                setScanProgress(prev => {
+                    if (prev < 90) return prev + 1;
+                    return prev;
+                });
+            }, 1000);
 
             const res: any = await httpClient.postFormData('/api/ocr-staging/', formData);
+            clearInterval(progressInterval);
+
+            setScanProgress(95);
+            setScanCurrentFile(`Finalizing items...`);
 
             setScanProgress(100);
 
@@ -1376,7 +1428,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                 extracted_data: updatedExtracted,
                                 validationStatus: 'processing' as ValidationStatus,
                                 vendor_id: patchRes.vendor_id || res.vendor_id,
-                                vendor_name: patchRes.vendor_name || vendorData.vendor_name,
+                                vendor_name: patchRes.vendor_name || patchRes.vendor_name || vendorData.vendor_name,
                                 vendor_gstin: vendorData.gstin,
                                 vendor_status: 'EXISTS' as VendorStatus,
                             }
@@ -1456,7 +1508,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     }
 
     const toggleSelectAll = () => {
-        const currentlyShowing = scanResults.filter(row => !['READY', 'FOUND', 'RESOLVED'].includes(row.validationStatus));
+        const currentlyShowing = scanResults.filter(row => row.vendor_status !== 'EXISTS');
         if (selectedHashes.size === currentlyShowing.length && currentlyShowing.length > 0) {
             setSelectedHashes(new Set());
         } else {
@@ -1645,18 +1697,18 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // ── Render ────────────────────────────────────────────────────────────────
 
-    const missingCount = scanResults.filter(r => r.validationStatus === 'VENDOR_MISSING' || r.validationStatus === 'NOT_FOUND').length;
-    const conflictCount = scanResults.filter(r => r.validationStatus === 'GSTIN_CONFLICT').length;
-    const resolvedCount = scanResults.filter(r => r.validationStatus === 'RESOLVED').length;
-    const readyCount = scanResults.filter(r => ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus)).length;
-    const duplicatesCount = scanResults.filter(r => ['DUPLICATE', 'DUPLICATE_IN_BATCH'].includes(r.validationStatus)).length;
-    const errorCount = scanResults.filter(r => r.validationStatus === 'VALIDATION_FAILED' || r.validationStatus === 'EXTRACTION_FAILED' || r.validationStatus === 'ERROR').length;
-    const pendingCount = scanResults.filter(r => ['PENDING', 'PROCESSING', 'processing', 'scanning'].includes(r.validationStatus)).length;
-    const vouchersCreatedCount = scanResults.filter(r => r.validationStatus === 'VOUCHER_CREATED').length;
+    const missingCount = mergedResults.filter(r => r.validationStatus === 'VENDOR_MISSING' || r.validationStatus === 'NOT_FOUND').length;
+    const conflictCount = mergedResults.filter(r => r.validationStatus === 'GSTIN_CONFLICT').length;
+    const resolvedCount = mergedResults.filter(r => r.validationStatus === 'RESOLVED').length;
+    const readyCount = mergedResults.filter(r => ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus)).length;
+    const duplicatesCount = mergedResults.filter(r => ['DUPLICATE', 'DUPLICATE_IN_BATCH'].includes(r.validationStatus)).length;
+    const errorCount = mergedResults.filter(r => r.validationStatus === 'VALIDATION_FAILED' || r.validationStatus === 'EXTRACTION_FAILED' || r.validationStatus === 'ERROR').length;
+    const pendingCount = mergedResults.filter(r => ['PENDING', 'PROCESSING', 'processing', 'scanning'].includes(r.validationStatus)).length;
+    const vouchersCreatedCount = mergedResults.filter(r => r.validationStatus === 'VOUCHER_CREATED').length;
 
-    // Attention Needed includes everything that isn't successfully matched OR already successfully filed.
-    // We now INCLUDE duplicates here so they are accounted for in the total batch count (e.g. 5 files scanned = 1 Matched + 4 Attention/Duplicates)
-    const attentionNeededCount = scanResults.filter(r => !['READY', 'FOUND', 'RESOLVED', 'VOUCHER_CREATED', 'SUCCESS'].includes(r.validationStatus)).length;
+    // Attention Needed includes everything that isn't already successfully filed as a voucher.
+    // Synchronized with mergedResults to match the 35 uploaded files.
+    const attentionNeededCount = mergedResults.filter(r => r.validationStatus !== 'VOUCHER_CREATED').length;
 
     // Default filter on first load of review step
     useEffect(() => {
@@ -1802,6 +1854,11 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                     {step === 'scanning' && 'AI extracting invoice data…'}
                                     {step === 'review' && (
                                         <span className="flex items-center gap-2">
+                                            <span className="text-white/80 font-medium">
+                                                {mergedResults.length} voucher{mergedResults.length !== 1 ? 's' : ''} 
+                                                <span className="mx-1 opacity-40">|</span>
+                                                {mergedResults.reduce((acc, r) => acc + (r._mergedCount || 1), 0)} file{mergedResults.reduce((acc, r) => acc + (r._mergedCount || 1), 0) !== 1 ? 's' : ''}
+                                            </span>
                                             <span
                                                 onClick={() => setFilterStatus('ready')}
                                                 className={`cursor-pointer px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${filterStatus === 'ready' ? 'bg-emerald-400 text-white border-white/40 shadow-sm' : 'bg-emerald-400/30 text-emerald-50 border-emerald-400/20 hover:bg-emerald-400/50'}`}
@@ -2039,6 +2096,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                         <div className="text-xl mb-1">⚠️</div>
                                         <div className="text-2xl">{attentionNeededCount}</div>
                                         <div className="text-[10px] uppercase opacity-70 tracking-wider">Need Attention</div>
+                                        <div className="mt-1 text-[9px] text-amber-600/60 font-medium">
+                                            (from {mergedResults.filter(r => !r.processed && (r.validationStatus === 'NEED_VENDOR' || r.vendor_status === 'CREATE_VENDOR' || r.validationStatus === 'NOT_FOUND' || r.validationStatus === 'VENDOR_MISSING' || !r.vendor_id)).reduce((acc, r) => acc + (r._mergedCount || 1), 0)} physical files)
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2083,14 +2143,29 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                     </div>
                                 )}
 
-                                <div className="flex items-center justify-between px-2 mb-2">
-                                    <div className="text-xs font-bold text-gray-500 uppercase tracking-tight">
-                                        {selectedHashes.size > 0 ? `${selectedHashes.size} items selected` : 'Select items to bulk delete'}
+                                <div className="flex items-center justify-between px-2 mb-2 bg-gray-50/50 p-2 rounded-xl border border-gray-100">
+                                    <div className="flex items-center gap-6">
+                                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                            {selectedHashes.size > 0 ? `${selectedHashes.size} items selected` : 'Batch Actions'}
+                                        </div>
+                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                            <div className="relative inline-flex items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={groupPages}
+                                                    onChange={e => setGroupPages(e.target.checked)}
+                                                    className="sr-only"
+                                                />
+                                                <div className={`w-8 h-4 rounded-full transition-colors ${groupPages ? 'bg-indigo-600' : 'bg-gray-300'}`} />
+                                                <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${groupPages ? 'translate-x-4' : 'translate-x-0'}`} />
+                                            </div>
+                                            <span className="text-[10px] font-black text-indigo-900/60 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">Group multi-page invoices</span>
+                                        </label>
                                     </div>
                                     {selectedHashes.size > 0 && (
                                         <button
                                             onClick={handleBulkDelete}
-                                            className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors flex items-center gap-1.5"
+                                            className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
                                         >
                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             Delete Selected
@@ -2122,7 +2197,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-{mergedResults
+                                        {(groupPages ? mergedResults : scanResults)
                                             .filter(r => {
                                                 // If we are on the 'Ready' tab, only show Ready/Found/Success
                                                 if (filterStatus === 'ready') return ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus);
@@ -2134,8 +2209,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                         // Strict: ONLY show rows that need vendor registration
                                                         return ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(r.validationStatus);
                                                     }
-                                                    // Otherwise (Fresh Upload or Full Review), show everything EXCEPT already saved vouchers
-                                                    // This ensures "Show the uploaded" is satisfied — user sees all 5 files they just scanned.
+                                                    // Otherwise (Fresh Upload or Full Review), show everything EXCEPT already saved vouchers.
+                                                    // This ensures every uploaded file (including duplicates or ready items) is visible for review.
                                                     return r.validationStatus !== 'VOUCHER_CREATED';
                                                 }
                                                 return true;
@@ -2174,7 +2249,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                             <input
                                                                 type="checkbox"
                                                                 className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                                checked={selectedHashes.has(row.file_hash)}
+                                                        checked={selectedHashes.has(row.file_hash)}
                                                                 onChange={() => toggleSelectRow(row.file_hash)}
                                                                 onClick={e => e.stopPropagation()}
                                                             />
@@ -2182,12 +2257,21 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                         <td className="px-3 py-3 text-center text-xs font-bold text-gray-500">
                                                             {idx + 1}
                                                         </td>
-                                                        <td className="px-3 py-3">
-                                                            <div className="flex flex-col">
-                                                                <span className="truncate max-w-[120px] font-medium text-gray-700" title={row.file_path}>{row.file_path.split('/').pop()}</span>
-                                                                <button onClick={() => setDetailsRow(row)} className="text-[10px] text-indigo-500 hover:text-indigo-700 underline font-bold text-left mt-0.5">View Details</button>
-                                                            </div>
-                                                        </td>
+                                                         <td className="px-3 py-3">
+                                                             <div className="flex flex-col">
+                                                                 <div className="flex items-center gap-1.5 min-w-0">
+                                                                     <span className="truncate max-w-[120px] font-medium text-gray-700" title={row.file_path}>
+                                                                         {row.file_path.split('/').pop()}
+                                                                     </span>
+                                                                     {row._isMerged && (
+                                                                         <span className="flex-shrink-0 bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter border border-indigo-200">
+                                                                             {row._mergedCount} FILES
+                                                                         </span>
+                                                                     )}
+                                                                 </div>
+                                                                 <button onClick={() => setDetailsRow(row)} className="text-[10px] text-indigo-500 hover:text-indigo-700 underline font-bold text-left mt-0.5">View Details</button>
+                                                             </div>
+                                                         </td>
                                                         <td className="px-3 py-3 font-bold text-gray-800 text-[11px]">{getCellValue(row, 'invoice_number')}</td>
                                                         <td className="px-3 py-3 text-[11px] text-gray-600 font-medium whitespace-nowrap">{getCellValue(row, 'invoice_date')}</td>
                                                         <td className="px-4 py-3">
@@ -2204,7 +2288,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                   <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
                                                                       <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
                                                                   </span>
-                                                             ) : hasEffectiveMatch ? (
+                                                              ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                   <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">FAILED</span>
+                                                              ) : hasEffectiveMatch ? (
                                                                   <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded">ALREADY EXIST</span>
                                                              ) : (
                                                                   <span className="bg-orange-100 text-orange-800 border border-orange-300 px-2 py-1 rounded">Create Vendor</span>

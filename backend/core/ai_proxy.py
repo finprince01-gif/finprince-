@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import base64
 import time
 import hashlib
@@ -177,12 +178,20 @@ rate_limiter = RateLimiter()
 
 def generate_cache_key(request_data: dict) -> str:
     """Generate cache key from request data"""
+    
+    # Crucial: Include image data hash if present to prevent collisions between different invoices
+    image_hash = None
+    if 'image_data' in request_data:
+        image_hash = hashlib.md5(str(request_data['image_data']).encode()).hexdigest()
+
     cacheable_data = json.dumps({
         'type': request_data.get('type'),
         'message': request_data.get('message', ''),
         'contextData': request_data.get('contextData', ''),
         'useGrounding': request_data.get('useGrounding', False),
-        'file_hash': request_data.get('file_hash')  # For invoice files
+        'file_hash': request_data.get('file_hash'),
+        'image_hash': image_hash,
+        'prompt': request_data.get('prompt', '') # Also include prompt to avoid mixing different workflows
     }, sort_keys=True)
     return hashlib.md5(cacheable_data.encode()).hexdigest()
 
@@ -434,7 +443,32 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
                     continue
                 
                 logger.info(f"AI Response Status: SUCCESS | Model: {model_name} | Time: {time.monotonic() - t_start:.2f}s")
-                return response.text.strip()
+                
+                # Robust Extraction: Remove markdown blocks if present
+                clean_text = response.text.strip()
+                if "```json" in clean_text:
+                    clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean_text:
+                    clean_text = clean_text.split("```")[1].split("```")[0].strip()
+                
+                # BASIC JSON REPAIR (Safety Layer)
+                try:
+                    # Check if it's already valid JSON
+                    json.loads(clean_text)
+                except json.JSONDecodeError:
+                    # Attempt simple repairs
+                    # 1. Replace single quotes with double quotes (common AI error)
+                    repaired = re.sub(r"\'", '"', clean_text)
+                    # 2. Remove trailing commas before closing braces/brackets
+                    repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+                    try:
+                        json.loads(repaired)
+                        clean_text = repaired
+                        logger.info("Successfully repaired AI JSON output.")
+                    except:
+                        pass # If repair failed, return original and let the caller handle error
+                
+                return clean_text
 
             except exceptions.NotFound as e:
                 # 404 -> Model not found or not supported

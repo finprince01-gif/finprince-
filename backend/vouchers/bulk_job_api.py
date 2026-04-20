@@ -179,24 +179,37 @@ class BulkUploadAPIView(APIView):
         logger.info(f"[UPLOAD] Created Job {job.id} | tenant={tenant_id} | files={len(files)}")
 
         paths = []
-        for uploaded_file in files:
-            file_bytes = uploaded_file.read()
-            file_hash  = storage.hash_bytes(file_bytes)
-            key        = storage.make_key(job.id, uploaded_file.name)
-            paths.append(key)
+        import concurrent.futures
+        from django.db import connection
 
-            storage.upload_bytes(file_bytes, key)
+        def upload_worker(uploaded_file):
+            try:
+                uploaded_file.seek(0)
+                file_bytes = uploaded_file.read()
+                file_hash  = storage.hash_bytes(file_bytes)
+                key        = storage.make_key(job.id, uploaded_file.name)
+                
+                storage.upload_bytes(file_bytes, key)
 
-            master = InvoiceProcessingItem.objects.create(
-                job=job,
-                file_path=key,
-                file_hash=file_hash,
-                status='pending',
-                page_count=1,
-            )
+                # Need separate connection for thread
+                master = InvoiceProcessingItem.objects.create(
+                    job=job,
+                    file_path=key,
+                    file_hash=file_hash,
+                    status='pending',
+                    page_count=1,
+                )
+                logger.info(f"Registered item {master.id} for Job {job.id}")
+                return key
+            except Exception as e:
+                logger.error(f"Upload worker failed for {uploaded_file.name}: {e}")
+                return None
+            finally:
+                connection.close()
 
-            # Directly processed via staging API or manual trigger
-            logger.info(f"Registered item {master.id} for Job {job.id}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            results = list(executor.map(upload_worker, files))
+            paths = [r for r in results if r]
 
         # ── PUSH TO PROCESSOR ─────────────────────────────────────
         # Note: No Kafka. Direct in-process worker thread.

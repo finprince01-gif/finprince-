@@ -84,7 +84,15 @@ def run_grouping_logic(tenant_id: str, upload_session_id: str = None):
         # Normalization (Step 2)
         gstin = normalize_gstin(gstin_raw)
         inv_no = normalize_invoice_no(inv_no_raw)
+        
+        # IMPROVEMENT: If branch looks like a full address, try to distill it to city 
+        # to ensure pages with slightly different address extractions merge correctly.
         branch = normalize_branch(branch_raw)
+        from .normalize import derive_city_from_address
+        city_distilled = derive_city_from_address(branch_raw)
+        if city_distilled:
+            branch = normalize_branch(city_distilled)
+
         inv_date = normalize_date_strict(invoice_date_raw)
 
         # Re-check after normalization
@@ -95,8 +103,10 @@ def run_grouping_logic(tenant_id: str, upload_session_id: str = None):
             r.save()
             continue
 
-        # Grouping Key (Step 3)
-        group_key = f"{gstin}|{inv_no}|{branch}|{inv_date}"
+        # Grouping Key (Step 3) - Use SHA256 to ensure it fits in 64 chars (DB limit)
+        raw_key = f"{gstin}|{inv_no}|{branch}|{inv_date}"
+        import hashlib
+        group_key = hashlib.sha256(raw_key.encode()).hexdigest()
         
         if group_key not in groups:
             groups[group_key] = []
@@ -148,6 +158,7 @@ def run_grouping_logic(tenant_id: str, upload_session_id: str = None):
                     merged_data["total_invoice_value"] = last.extracted_data.get("total_invoice_value")
                 
                 # Update Primary record
+                merged_data["_merged_count"] = len(group_records)
                 primary.extracted_data = merged_data
                 primary.group_id = key
                 primary.is_primary = True

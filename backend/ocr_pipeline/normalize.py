@@ -102,7 +102,15 @@ def derive_city_from_address(address: str) -> str:
 
     addr = address.strip()
 
-    # Strategy 1: word(s) immediately before a 6-digit PIN code
+    # Strategy 1 (Highest Priority): match known Indian cities in the address (case-insensitive)
+    addr_lower = addr.lower()
+    for city in sorted(_KNOWN_CITIES, key=len, reverse=True):  # longest match first
+        if re.search(r'\b' + re.escape(city) + r'\b', addr_lower):
+            result = city.title()
+            logger.info(f"BRANCH (known city match): '{result}' from address")
+            return result
+
+    # Strategy 2 (Secondary): word(s) immediately before a 6-digit PIN code
     # Handles: "Coimbatore - 641001", "Coimbatore 641 001", "Coimbatore, 626 001"
     match = re.search(
         r'([A-Za-z][A-Za-z\s,\-]+?)\s*[-–,]?\s*(\d{3}\s?\d{3})\b',
@@ -117,18 +125,17 @@ def derive_city_from_address(address: str) -> str:
             r'^(Dist\.?|District|Taluk|Village|Ward|Area|Near|Opp\.?|S\.?\s?No\.?|Plot\.?|No\.?|Phase|Block)\s*',
             '', candidate, flags=re.IGNORECASE
         ).strip()
+        
+        # FINAL CHECK: If candidate contains a known city, use that instead of the whole candidate
+        cand_lower = candidate.lower()
+        for city in sorted(_KNOWN_CITIES, key=len, reverse=True):
+            if city in cand_lower:
+                logger.info(f"BRANCH (PIN + City match): '{city.title()}' from candidate '{candidate}'")
+                return city.title()
+
         if 2 <= len(candidate) <= 40:
-            logger.info(f"BRANCH (PIN strategy): '{candidate}' from address")
-            return candidate
-
-
-    # Strategy 2: scan for known cities in the address (case-insensitive)
-    addr_lower = addr.lower()
-    for city in sorted(_KNOWN_CITIES, key=len, reverse=True):  # longest match first
-        if re.search(r'\b' + re.escape(city) + r'\b', addr_lower):
-            result = city.title()
-            logger.info(f"BRANCH (known city match): '{result}' from address")
-            return result
+            logger.info(f"BRANCH (PIN strategy): '{candidate.title()}' from address")
+            return candidate.title()
 
     return ""
 
