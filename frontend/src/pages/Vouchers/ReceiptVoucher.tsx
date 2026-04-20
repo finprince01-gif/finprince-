@@ -531,10 +531,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     }
 
                     // Resolve the outstanding amount using the actual payment balance
-                    let outstandingAmount = Number(item.payment_details?.payment_balance ?? 0);
-                    if (outstandingAmount <= 0 && rawStatus !== 'received') {
-                        outstandingAmount = Number(item.payment_details?.payment_invoice_value ?? item.total ?? 0);
-                    }
+                    // DO NOT FALL BACK to total amount if balance is 0, unless it's a completely fresh invoice
+                    let outstandingAmount = item.payment_details ? Number(item.payment_details.payment_balance ?? 0) : Number(item.total_amount ?? item.total ?? 0);
 
                     const dueDate = new Date(d1);
                     dueDate.setDate(dueDate.getDate() + creditPeriod);
@@ -556,10 +554,12 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     };
                 });
 
-                // Filter: Only Due, Partially Received, Due Today. EXCLUDE fully Received (amount > 0 already filters them)
+                // Filter: Only Due, Partially Received, Due Today. 
+                // CRITICAL: Filter out items with 0 or negative balance, and those with 'Received' status.
                 const validTransactions = mappedTransactions.filter(t =>
-                    t.amount > 0 && t.status !== 'Received' &&
-                    (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today')
+                    t.amount > 0 && 
+                    t.status.trim().toLowerCase() !== 'received' &&
+                    (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today' || t.status === 'Not Due')
                 );
 
                 setBulkTransactions(validTransactions);

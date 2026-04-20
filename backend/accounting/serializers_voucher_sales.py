@@ -11,9 +11,10 @@ from accounting.utils_ledger import get_standard_ledger
 from customerportal.database import CustomerMasterCustomerBasicDetails
 from .models import Voucher
 from inventory.models import InventoryOperationOutward
-from accounting.services.inventory_sync import sync_sales_to_outward
-import json
 import decimal
+from accounting.services.inventory_sync import sync_sales_to_outward
+from .services.portal_mirror_service import mirror_sales_to_portal
+
 
 class VoucherSalesItemsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -130,7 +131,8 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             payment_obj = None
             adv_refs = None
             if payment_data:
-                adv_refs = payment_data.pop('advance_references', None)
+                # Keep advance_references in payment_data so it's saved in create()
+                adv_refs = payment_data.get('advance_references')
                 payment_obj = VoucherSalesPaymentDetails.objects.create(invoice=invoice, tenant_id=tenant_id, **payment_data)
                 
             # Create Dispatch Details
@@ -182,7 +184,8 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 except Exception as ex:
                     print(f"[SalesSerializer] Advance allocation failed: {ex}")
 
-        self._mirror_to_customer_portal(invoice)
+        mirror_sales_to_portal(invoice)
+
         # Auto-sync to Inventory > Operations > Outward Slip
         sync_sales_to_outward(invoice)
         print(f"Voucher {invoice.sales_invoice_no} saved successfully (ID: {invoice.id})")
@@ -336,7 +339,8 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 except Exception as ex:
                     print(f"[SalesSerializer] Advance allocation update failed: {ex}")
 
-        self._mirror_to_customer_portal(instance)
+        mirror_sales_to_portal(instance)
+
         
         # Refresh double-entry posting
         self._post_journal_entries(instance)
@@ -350,124 +354,4 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
 
         return instance
 
-    def _mirror_to_customer_portal(self, invoice):
-        """Cross-database sync to Customer Portal table (customer_transaction)"""
-        try:
-            from customerportal.models import CustomerTransaction, CustomerMasterCustomer
-            
-            # 1. Resolve portal customer record (By ID first, then fallback to Name)
-            portal_customer = None
-            if invoice.customer_id:
-                portal_customer = CustomerMasterCustomer.objects.filter(
-                    tenant_id=invoice.tenant_id, 
-                    id=invoice.customer_id
-                ).first()
-            
-            if not portal_customer and invoice.customer_name:
-                portal_customer = CustomerMasterCustomer.objects.filter(
-                    tenant_id=invoice.tenant_id, 
-                    customer_name__iexact=str(invoice.customer_name).strip()
-                ).first()
-            
-            if not portal_customer:
-                print(f"!!! Portal Mirror Error: Portal customer '{invoice.customer_name}' (ID: {invoice.customer_id}) not found")
-                return
 
-            payment_details = invoice.payment_details if hasattr(invoice, 'payment_details') else None
-            total_invoice_val = payment_details.payment_invoice_value if payment_details else 0
-            
-            # 2. Mirror the Invoice header itself
-            # We mirror the invoice as an 'invoice' type transaction. 
-            # This ensures it shows up in unified transaction lists/ledgers in the portal.
-            CustomerTransaction.objects.update_or_create(
-                tenant_id=invoice.tenant_id,
-                transaction_number=invoice.sales_invoice_no,
-                transaction_type='invoice',
-                customer_id=portal_customer.id,
-                defaults={
-                    'transaction_date': invoice.date,
-                    'total_amount': total_invoice_val,
-                    'amount': total_invoice_val,
-                    'payment_status': invoice.status,
-                    'reference_number': invoice.sales_invoice_no,
-                    'notes': invoice.voucher_name or "Sales Invoice"
-                }
-            )
-
-            # 3. Mirror Advance Adjustments
-            # We also mirror the advance adjustments to the customer_transaction table.            
-            if payment_details and payment_details.payment_advance and float(payment_details.payment_advance) > 0:
-                # Idempotency: Remove existing mirrored advance adjustments for this invoice
-                # These are identified by the '-ADJ{id}I' suffix in transaction_number
-                CustomerTransaction.objects.filter(
-                    tenant_id=invoice.tenant_id,
-                    customer_id=portal_customer.id,
-                    transaction_type='RECEIPT',
-                    transaction_number__contains=f"-ADJ{invoice.id}I"
-                ).delete()
-
-                # We record the adjustment as a 'receipt' or 'payment' type transaction linked to the same invoice reference
-                # This ensures it shows up in the allocation view under this invoice
-                
-                adv_refs_str = payment_details.advance_references
-                adv_refs = []
-                if adv_refs_str:
-                    try:
-                        if isinstance(adv_refs_str, str):
-                            adv_refs = json.loads(adv_refs_str)
-                        else:
-                            adv_refs = adv_refs_str
-                    except:
-                        pass
-                
-                # If we have multiple advance references, we could create one entry per reference or one total
-                # The user specifically mentioned fetching the Reference No.
-                
-                if adv_refs and isinstance(adv_refs, list):
-                    for idx, ref in enumerate(adv_refs):
-                        # Filter strictly by 'appliedNow' flag found in the voucher data
-                        is_selected = ref.get('appliedNow') is True or ref.get('selected') is True
-                        allocated_amt = ref.get('amount') or ref.get('allocated_amount') or 0
-                        
-                        if is_selected and float(allocated_amt) > 0:
-                            ref_no = ref.get('refNo') or ref.get('reference_no') or 'Advance'
-                            
-                            # We use a naming convention that the portal UI can trim to show the original ref_no
-                            # Convention: {RefNo}-ADJ{InvoiceID}I{Index}
-                            display_ref = f"{ref_no}-ADJ{invoice.id}I{idx}"
-                            
-                            CustomerTransaction.objects.update_or_create(
-                                tenant_id=invoice.tenant_id,
-                                customer_id=portal_customer.id,
-                                transaction_number=display_ref,
-                                transaction_type='RECEIPT', # Consistent with receipt mirroring
-                                defaults={
-                                    'transaction_date': invoice.date,
-                                    'amount': allocated_amt,
-                                    'total_amount': allocated_amt,
-                                    'payment_status': 'Advance Applied',
-                                    'reference_number': invoice.sales_invoice_no, # Group with this invoice
-                                    'notes': f"Advance adjusted from Ref: {ref_no}"
-                                }
-                            )
-                else:
-                    # Fallback to single entry if no detailed refs but total amount exists
-                    CustomerTransaction.objects.update_or_create(
-                        tenant_id=invoice.tenant_id,
-                        customer_id=portal_customer.id,
-                        transaction_number=f"ADJ-{invoice.sales_invoice_no}",
-                        transaction_type='RECEIPT',
-                        defaults={
-                            'transaction_date': invoice.date,
-                            'amount': payment_details.payment_advance,
-                            'total_amount': payment_details.payment_advance,
-                            'payment_status': 'Advance Applied',
-                            'reference_number': invoice.sales_invoice_no,
-                            'notes': "Advance adjusted"
-                        }
-                    )
-
-            print(f"!!! Portal Mirror Sales OK: {invoice.sales_invoice_no}")
-        except Exception as e:
-            print(f"!!! Portal Mirror Sales Failed: {str(e)}")
-            pass

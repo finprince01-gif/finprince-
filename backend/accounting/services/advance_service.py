@@ -169,8 +169,51 @@ def write_allocations(*, tenant_id, voucher_id: int, voucher_type: str,
         # Resolve the Source Voucher object
         advance_v = Voucher.objects.filter(reference_id=source.transaction_id, tenant_id__in=tenant_variants).first()
         if not advance_v:
-             advance_v = Voucher.objects.filter(voucher_number=(source.advance_ref_no or source.reference_number), tenant_id__in=tenant_variants).first()
-        
+            advance_v = Voucher.objects.filter(voucher_number=(source.advance_ref_no or source.reference_number), tenant_id__in=tenant_variants).first()
+        # Third fallback: the custom advance_ref_no may differ from the receipt voucher number;
+        # try matching by the source's reference_number (which holds the receipt voucher number).
+        if not advance_v and getattr(source, 'reference_number', None):
+            advance_v = Voucher.objects.filter(
+                voucher_number=source.reference_number,
+                type='receipt',
+                tenant_id__in=tenant_variants
+            ).first()
+        # Fourth fallback: match by the ReceiptVoucher's voucher_number via the transaction FK,
+        # and if still missing, auto-create (backfill for receipts posted before the serializer fix).
+        if not advance_v and source.transaction_id:
+            from accounting.models import ReceiptVoucher
+            rv_for_backfill = ReceiptVoucher.objects.filter(id=source.transaction_id, tenant_id__in=tenant_variants).first()
+            if rv_for_backfill:
+                advance_v = Voucher.objects.filter(
+                    voucher_number=rv_for_backfill.voucher_number,
+                    type='receipt',
+                    tenant_id__in=tenant_variants
+                ).first()
+                # If still not found, backfill-create the missing generic Voucher on-demand
+                if not advance_v:
+                    try:
+                        advance_v, was_created = Voucher.objects.get_or_create(
+                            tenant_id=hyphen_tenant,
+                            type='receipt',
+                            voucher_number=rv_for_backfill.voucher_number,
+                            defaults={
+                                'date': rv_for_backfill.date,
+                                'amount': rv_for_backfill.amount or rv_for_backfill.total_amount or 0,
+                                'total': rv_for_backfill.total_amount or rv_for_backfill.amount or 0,
+                                'reference_id': rv_for_backfill.id,
+                                'source': 'auto_backfill',
+                                'ledger_id_val': rv_for_backfill.ledger_id_val,
+                                'party_customer_id': rv_for_backfill.party_customer_id,
+                                'party_vendor_id': rv_for_backfill.party_vendor_id,
+                            }
+                        )
+                        tag = "Auto-created (backfill)" if was_created else "Found existing"
+                        print(f"[AdvanceService] {tag} Voucher for ReceiptVoucher {rv_for_backfill.voucher_number}.")
+                    except Exception as vex:
+                        print(f"[AdvanceService] Voucher backfill failed for RV id={source.transaction_id}: {vex}")
+
+
+
         if not advance_v:
             print(f"[AdvanceService] SKIP: Could not resolve Voucher for Source ID {source.id} (Ref: {ref_no}).")
             continue
@@ -178,7 +221,16 @@ def write_allocations(*, tenant_id, voucher_id: int, voucher_type: str,
         # 4. Validate remaining
         source_id = source.id
         source_type = 'payment' if 'payment' in str(getattr(source, 'type', '')).lower() else 'receipt'
-        total_amt = Decimal(str(source.amount or source.allocated_amount or 0))
+        # Resolve total amount: prefer original_amount (most reliable for advances),
+        # then amount, then allocated_amount, then fall back to advance_v.amount
+        raw_total = (
+            getattr(source, 'original_amount', None) or
+            getattr(source, 'amount', None) or
+            getattr(source, 'allocated_amount', None) or
+            (getattr(advance_v, 'amount', None) if advance_v else None) or
+            0
+        )
+        total_amt = Decimal(str(raw_total))
         allocated = get_allocated_amount(source_id, source_type, hex_tenant, ref_no=ref_no)
         remaining = total_amt - allocated
 

@@ -616,8 +616,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                             const isFullyPaid = paidAmount >= amount && amount > 0;
                             const isPartiallyPaid = (paidAmount > 0 && paidAmount < amount) || t.status?.toLowerCase().includes('partial');
 
-                            if (isFullyPaid || t.due_status === 'Paid') return 'Received';
-                            if (isPartiallyPaid || t.due_status === 'Partially Received') return 'Partially Received';
+                            if (isFullyPaid || t.due_status === 'Paid') return 'Paid';
+                            if (isPartiallyPaid || t.due_status === 'Partially Paid') return 'Partially Paid';
 
                             // If not paid, use the due status calculated from credit period
                             if (t.due_status === 'Due') return 'Due';
@@ -648,11 +648,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                 if (usedAmt > 0) return 'Partially Utilized';
                                 return 'Not Utilized';
                             }
-                            return paidAmount >= amount ? 'Received' : paidAmount > 0 ? 'Partially Received' : 'Not Due';
+                            return paidAmount >= amount ? 'Paid' : paidAmount > 0 ? 'Partially Paid' : 'Not Due';
                         }
                         // ── Fallback ───────────────────────────────────────────────
                         const s = (t.status || '').toLowerCase();
-                        if (s === 'paid' || s === 'received') return 'Received';
+                        if (s === 'paid' || s === 'received') return 'Paid';
                         if (s === 'advance') return 'Not Utilized';
                         return 'Not Due';
                     })(),
@@ -921,8 +921,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     const totalSourceAmtRounded = Math.round(totalSourceAmt * 100);
                     const totalAppAmtRounded = Math.round(totalAppAmt * 100);
                     const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
-                        ? 'Received'
-                        : (totalAppAmtRounded > 0 ? 'Partially Received' : firstSource.status);
+                        ? 'Paid'
+                        : (totalAppAmtRounded > 0 ? 'Partially Paid' : firstSource.status);
 
                     applications.forEach((app, appIdx) => {
                         const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
@@ -5885,8 +5885,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                             <option value="">All Statuses</option>
                                                                                             <option value="Not Due">Not Due</option>
                                                                                             <option value="Due">Due</option>
-                                                                                            <option value="Partially Received">Partially Received</option>
-                                                                                            <option value="Received">Received</option>
+                                                                                            <option value="Partially Paid">Partially Paid</option>
+                                                                                            <option value="Paid">Paid</option>
                                                                                             <option value="Utilized">Utilized</option>
                                                                                             <option value="Not Utilized">Not Utilized</option>
                                                                                         </select>
@@ -5998,9 +5998,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.referenceNo || entry.ledger}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
                                                                                 entry.status === 'Due' ? 'bg-red-100 text-red-800' :
-                                                                                    entry.status === 'Partially Received' ? 'bg-orange-100 text-orange-700' :
+                                                                                    entry.status === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
                                                                                         entry.status === 'Utilized' ? 'bg-blue-100 text-blue-700' :
                                                                                             entry.status === 'Not Utilized' ? 'bg-purple-100 text-purple-700' :
                                                                                                 'bg-gray-100 text-gray-600'
@@ -6086,9 +6086,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                 {entry.referenceNo}
                                                                             </td>
                                                                             <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
-                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
                                                                                     entry.status === 'Due' ? 'bg-red-100 text-red-800' :
-                                                                                        entry.status === 'Partially Received' ? 'bg-orange-100 text-orange-700' :
+                                                                                        entry.status === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
                                                                                             entry.status === 'Utilized' ? 'bg-blue-100 text-blue-700' :
                                                                                                 entry.status === 'Not Utilized' ? 'bg-purple-100 text-purple-700' :
                                                                                                     'bg-gray-100 text-gray-600'
@@ -6596,8 +6596,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         {row.isFirstInSource && (
                                                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
                                                                                 <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                                                                    row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                                                    row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                                                    row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                    row.status?.toLowerCase() === 'partially paid' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                                                                                     row.status?.toLowerCase() === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
                                                                                     'bg-indigo-50 text-indigo-600 border border-indigo-100'
                                                                                 }`}>
@@ -6607,7 +6607,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         )}
                                                                         {row.isFirstInSource && (
                                                                             <td rowSpan={row.rowSpan} className="px-6 py-4 whitespace-nowrap text-center align-top">
-                                                                                {(row.status === 'Due' || row.status === 'Partially Received') && (
+                                                                                {(row.status === 'Due' || row.status === 'Partially Paid') && (
                                                                                     <button
                                                                                         onClick={() => {
                                                                                             setSelectedAdvanceRow(row);
