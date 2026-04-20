@@ -5963,18 +5963,18 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
 
                     if (isFullyPaid || t.due_status === 'Paid') {
                         finalStatus = 'Received';
-                    } else if (isPartiallyPaid || t.due_status === 'Partially Received') {
-                        finalStatus = 'Partially Received';
-                    } else if (t.due_status === 'Due') {
-                        finalStatus = 'Due';
-                    } else if (t.due_status === 'Not Due') {
-                        finalStatus = 'Not Due';
                     } else {
+                        // Check credit period even if partially paid
                         const cp = parseInt(customer.credit_period || '0', 10);
                         const invDate = new Date(t.date);
                         const today = new Date();
                         const diffDays = Math.floor((today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
-                        finalStatus = diffDays > cp ? 'Due' : 'Not Due';
+                        
+                        if (diffDays > cp) {
+                            finalStatus = isPartiallyPaid || t.due_status === 'Partially Received' ? 'Partially Received' : 'Due';
+                        } else {
+                            finalStatus = 'Not Due';
+                        }
                     }
                 } else if (transType === 'Receipt' || transType === 'Credit Note') {
                     const paidAmt = parseFloat(t.paid_amount || 0);
@@ -6128,22 +6128,21 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     const totalRounded = Math.round((total || 0) * 100);
                     const paidRounded = Math.round((paid || 0) * 100);
 
+                    const cp = parseInt(customer.credit_period || '0', 10);
+                    const invDate = new Date(entry.date);
+                    const todayD = new Date();
+                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                    const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+                    const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+
                     if (paidRounded >= totalRounded && totalRounded > 0) {
                         updatedStatus = 'Received';
-                    } else if (paidRounded > 0) {
-                        updatedStatus = 'Partially Received';
+                    } else if (diffDays > cp) {
+                        // After credit period
+                        updatedStatus = (paidRounded > 0) ? 'Partially Received' : 'Due';
                     } else {
-                        // Nothing paid yet — re-apply due-date logic using customer credit period
-                        if (entry.postFrom === 'Sales' || (entry.postFrom as string).toLowerCase() === 'invoice') {
-                            const cp = parseInt(customer.credit_period || '0', 10);
-                            const invDate = new Date(entry.date);
-                            const todayD = new Date();
-                            const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-                            const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
-                            const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-                            // Always show aging status for unpaid sales invoices in the ledger
-                            updatedStatus = diffDays > cp ? 'Due' : (diffDays === cp ? 'Due Today' : 'Not Due');
-                        }
+                        // Within credit period
+                        updatedStatus = 'Not Due';
                     }
                 }
             }
