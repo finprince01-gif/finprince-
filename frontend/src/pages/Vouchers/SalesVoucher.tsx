@@ -339,11 +339,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         setPortCode('');
         setShippingBillNumber('');
         setShippingBillDate('');
-        
+
         // Reset items
         setItemRows([{ id: 1, itemCode: '', itemName: '', hsnSac: '', qty: '', uom: '', itemRate: '', taxableValue: '0', salesLedger: '', description: '', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0', invoiceValue: '0', alternateUnit: '', gstRate: '0', selected: true }]);
         setForeignItemRows([]);
-        
+
         setPaymentTdsIncomeTax('');
         setPaymentTdsGst('');
         setPaymentAdvance('');
@@ -351,7 +351,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         setPaymentPostingNote('');
         setTermsConditions('');
         setAdvanceReferences([{ id: 1, date: '', refNo: '', amount: '', originalAmount: '', remainingAmount: '', appliedNow: false }]);
-        
+
         setDispatchFrom('');
         setModeOfTransport('Road');
         setDispatchDate('');
@@ -518,7 +518,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         });
 
         if (filtered.length === 0 && outwardSlipsData.length > 0 && customerName) {
-            console.log(`[SalesVoucher] No matching slips for customer "${customerName}". Available slips authors:`, 
+            console.log(`[SalesVoucher] No matching slips for customer "${customerName}". Available slips authors:`,
                 outwardSlipsData.map(s => s.customer_name || s.customerName)
             );
         }
@@ -831,12 +831,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     };
 
     const handleAdvanceCheckedChange = (id: number | string, checked: boolean) => {
-        setAdvanceReferences(prev => prev.map(ref => 
-            ref.id === id ? { 
-                ...ref, 
+        setAdvanceReferences(prev => prev.map(ref =>
+            ref.id === id ? {
+                ...ref,
                 appliedNow: checked,
                 // Auto-fill amount with full remaining amount when checked
-                amount: checked ? (ref.amount && parseFloat(ref.amount) > 0 ? ref.amount : (ref.remainingAmount || ref.originalAmount)) : "" 
+                amount: checked ? (ref.amount && parseFloat(ref.amount) > 0 ? ref.amount : (ref.remainingAmount || ref.originalAmount)) : ""
             } : ref
         ));
     };
@@ -1805,6 +1805,20 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     };
 
     const handlePost = async () => {
+        // Mandatory Field Validation
+        if (!date || !salesInvoiceNo || !voucherName || !customerName || !customerBranch) {
+            showError("Please fill all mandatory fields (Date, Invoice No, Series, Customer, Branch)");
+            setActiveTab('invoice');
+            return;
+        }
+
+        const validItems = itemRows.filter(row => row.itemCode || row.itemName);
+        if (validItems.length === 0) {
+            showError("Please add at least one item.");
+            setActiveTab(showForeignTabs ? 'item_tax_inr' : 'item_tax');
+            return;
+        }
+
         // Validate Qty match between Foreign Currency and INR tabs
         if (!validateQtyMatch()) {
             setActiveTab('item_tax_inr');
@@ -2010,7 +2024,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         } catch (error: any) {
             console.error('Failed to save sales voucher:', error);
             const serverError = error.response?.data;
-            const errorMessage = serverError 
+            const errorMessage = serverError
                 ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
                 : error.message;
             showError(`Failed to save voucher.\n${errorMessage}`);
@@ -2082,7 +2096,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         } catch (error: any) {
             console.error('Failed to save sales voucher:', error);
             const serverError = error.response?.data;
-            const errorMessage = serverError 
+            const errorMessage = serverError
                 ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
                 : error.message;
             showError(`Failed to save voucher.\n${errorMessage}`);
@@ -2127,14 +2141,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 if (field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
                     // Reset qty whenever item selection changes
                     updatedRow.qty = '';
-                    
+
                     let matchedItem = (inventoryItems as any[]).find(item => {
                         if (field === 'itemCode') return item.item_code === value;
                         if (field === 'itemName') return (item.name === value || item.item_name === value);
                         if (field === 'hsnSac') return (item.hsn_code === value || item.hsnCode === value || item.hsn_sac === value || item.hsnSac === value);
                         return false;
                     });
-    
+
                     let isService = false;
                     if (!matchedItem) {
                         matchedItem = (serviceItems as any[]).find(item => {
@@ -2145,7 +2159,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         });
                         if (matchedItem) isService = true;
                     }
-    
+
                     if (matchedItem) {
                         let inrRate = 0;
                         const hsn = matchedItem.hsn_code || matchedItem.hsnCode || matchedItem.hsn_sac || matchedItem.hsnSac || matchedItem.sacCode || matchedItem.sac_code || '';
@@ -4087,134 +4101,119 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 </table>
                             </div>
 
-                            {/* Main Content Grid */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Main Content Grid - Middle column expanded for Advance References */}
+                            <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-6">
                                 {/* Left Column - Payment Summary */}
                                 <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Invoice Value
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={calculateTotals().invoiceValue.toFixed(2)}
-                                            readOnly
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <div className="flex items-center justify-between mb-1">
-                                            <label className="block text-sm font-medium text-gray-700">
-                                                TDS/TCS under Income Tax
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                                Invoice Value
                                             </label>
-                                            <div className="flex gap-1">
-                                                {customerTcsRate > 0 && (
-                                                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5" title="TCS Rate">
-                                                        TCS: {(customerTcsRate * 100).toFixed(customerTcsRate < 0.01 ? 2 : 0)}%
-                                                    </span>
-                                                )}
-                                                {customerTdsRate > 0 && (
-                                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5" title="TDS Rate">
-                                                        TDS: {(customerTdsRate * 100).toFixed(customerTdsRate < 0.01 ? 2 : 0)}%
-                                                    </span>
-                                                )}
-                                            </div>
+                                            <input
+                                                type="text"
+                                                value={calculateTotals().invoiceValue.toFixed(2)}
+                                                readOnly
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                                            />
                                         </div>
-                                        <input
-                                            type="text"
-                                            value={paymentTdsIncomeTax}
-                                            readOnly
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right cursor-not-allowed"
-                                            placeholder="0.00"
-                                            title={customerTcsRate + customerTdsRate > 0
-                                                ? `Auto-calculated: Invoice Value × ${((customerTcsRate + customerTdsRate) * 100).toFixed(2)}%`
-                                                : 'No TCS or TDS rate configured for this customer'}
-                                        />
-                                        {customerTcsRate === 0 && customerTdsRate === 0 && (
-                                            <p className="text-xs text-gray-400 mt-1">No TDS/TCS section configured for this customer</p>
-                                        )}
+
+                                        <div>
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                                    TDS/TCS Under Income Tax
+                                                </label>
+                                                <div className="flex gap-1">
+                                                    {(customerTcsRate > 0 || customerTdsRate > 0) && (
+                                                        <span className="text-[10px] items-center font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5" title="Rates applied">
+                                                            {customerTcsRate > 0 && `TCS:${(customerTcsRate*100).toFixed(0)}% `}
+                                                            {customerTdsRate > 0 && `TDS:${(customerTdsRate*100).toFixed(0)}%`}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={paymentTdsIncomeTax}
+                                                readOnly
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right cursor-not-allowed font-semibold"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                                TDS/TCS Under GST
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={paymentTdsGst}
+                                                onChange={(e) => setPaymentTdsGst(e.target.value)}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right font-semibold"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                                Gross Amount Receivable
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={(() => {
+                                                    const invVal = calculateTotals().invoiceValue;
+                                                    const tdsIT = parseFloat(paymentTdsIncomeTax) || 0;
+                                                    const tdsGst = parseFloat(paymentTdsGst) || 0;
+                                                    const isTcsActive = customerTcsEnabled || customerTcsRate > 0;
+                                                    return isTcsActive ? (invVal + tdsIT - tdsGst).toFixed(2) : (invVal - tdsIT - tdsGst).toFixed(2);
+                                                })()}
+                                                readOnly
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right cursor-not-allowed font-semibold"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                                Advance
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={paymentAdvance}
+                                                readOnly
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                                Payable
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={paymentPayable}
+                                                readOnly
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-lg text-indigo-700"
+                                            />
+                                        </div>
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            TDS/TCS under GST
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={paymentTdsGst}
-                                            onChange={(e) => setPaymentTdsGst(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Gross Amount Receivable
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={(() => {
-                                                const invVal = calculateTotals().invoiceValue;
-                                                const tdsIT = parseFloat(paymentTdsIncomeTax) || 0;
-                                                const tdsGst = parseFloat(paymentTdsGst) || 0;
-                                                const isTcsActive = customerTcsEnabled || customerTcsRate > 0;
-
-                                                // If TCS is configured: Invoice Value + IT - GST
-                                                if (isTcsActive) {
-                                                    return (invVal + tdsIT - tdsGst).toFixed(2);
-                                                }
-                                                // Default/TDS configured: Invoice Value - IT - GST
-                                                return (invVal - tdsIT - tdsGst).toFixed(2);
-                                            })()}
-                                            readOnly
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right cursor-not-allowed"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Advance
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={paymentAdvance}
-                                            readOnly
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Payable
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={paymentPayable}
-                                            readOnly
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">
                                             Posting Note:
                                         </label>
                                         <textarea
                                             value={paymentPostingNote}
                                             onChange={(e) => setPaymentPostingNote(e.target.value)}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                                            rows={6}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none h-24"
                                             placeholder="Enter posting notes..."
                                         />
                                     </div>
                                 </div>
 
                                 {/* Middle Column - Advance References */}
-                                <div className="border border-gray-300 rounded-[4px] p-4 bg-blue-50 h-full">
-                                    <div className="space-y-3 h-full flex flex-col">
-                                        <div className="grid grid-cols-[100px_1fr_100px_120px] gap-2 text-xs font-semibold text-gray-700 border-b border-gray-200 pb-2">
+                                <div className="border border-gray-300 rounded-[4px] p-4 bg-slate-50/50 flex flex-col h-full">
+                                    <div className="space-y-3 flex-1 flex flex-col">
+                                        <div className="grid grid-cols-[110px_1fr_110px_150px] gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-200 pb-2">
                                             <div className="text-center">Date</div>
                                             <div className="text-center">Reference No.</div>
                                             <div className="text-right pr-2">Available</div>
@@ -4222,35 +4221,48 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         </div>
 
                                         {advanceReferences.length === 0 ? (
-                                            <div className="text-center py-8 text-gray-500 text-sm">
-                                                No advance references available
+                                            <div className="text-center py-8 text-gray-500 text-sm italic">
+                                                No unutilized advance receipts found for this customer.
                                             </div>
                                         ) : (
-                                            advanceReferences.map((ref) => (
-                                                <div key={ref.id} className="grid grid-cols-[100px_1fr_100px_120px] gap-2 items-center text-sm py-1 border-b border-blue-100/50">
-                                                    <div className="text-center text-gray-500 text-xs">{ref.date}</div>
-                                                    <div className="text-center truncate px-1" title={ref.refNo}>{ref.refNo}</div>
-                                                    <div className="text-right pr-2 font-medium text-gray-700">
-                                                        {Number(ref.remainingAmount || ref.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!ref.appliedNow}
-                                                            onChange={(e) => handleAdvanceCheckedChange(ref.id, e.target.checked)}
-                                                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                                                        />
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            value={!ref.appliedNow ? "" : ref.amount}
-                                                            placeholder="0.00"
-                                                            onChange={(e) => handleAdvanceAmountChange(ref.id, e.target.value)}
-                                                            className="w-full px-1.5 py-1 border border-gray-300 rounded text-xs text-right bg-white focus:ring-1 focus:ring-indigo-500 font-semibold"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            ))
+                                            <div className="max-h-[450px] overflow-y-auto space-y-2 flex-1 scrollbar-thin">
+                                                {advanceReferences.map((ref, idx) => {
+                                                    const isAllocated = !!ref.appliedNow;
+                                                    return (
+                                                        <div key={ref.id || idx} className="grid grid-cols-[110px_1fr_110px_150px] gap-2 items-center text-sm py-2 border-b border-slate-200 hover:bg-white transition-colors">
+                                                            <div className="text-center text-gray-500 text-[10px]">{ref.date}</div>
+                                                            <div className="font-medium text-slate-900 truncate px-1 text-center" title={ref.refNo}>{ref.refNo}</div>
+                                                            <div className="text-right pr-2 font-semibold text-emerald-700">
+                                                                {Number(ref.remainingAmount || ref.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isAllocated}
+                                                                    title="Check to use full amount"
+                                                                    onChange={(e) => handleAdvanceCheckedChange(ref.id, e.target.checked)}
+                                                                    className="h-5 w-5 text-indigo-600 focus:ring-indigo-200 border-gray-300 rounded cursor-pointer transition-transform hover:scale-110"
+                                                                />
+                                                                <div className="relative w-full">
+                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">₹</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.01"
+                                                                        value={!ref.appliedNow ? "" : ref.amount}
+                                                                        placeholder="0.00"
+                                                                        title="Enter partial amount to allocate"
+                                                                        onChange={(e) => handleAdvanceAmountChange(ref.id, e.target.value)}
+                                                                        className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right transition-all outline-none ${isAllocated
+                                                                            ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-100 font-bold text-indigo-950"
+                                                                            : "bg-gray-50/50 border-gray-200 text-gray-400"
+                                                                            }`}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -4261,7 +4273,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         <div className="flex items-center justify-between pb-4 border-b border-gray-200">
                                             <button
                                                 type="button"
-                                                className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors text-sm font-medium shadow-none border border-slate-200-none border border-slate-200"
+                                                className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors text-[11px] font-bold uppercase tracking-wider shadow-none"
                                             >
                                                 Terms & Conditions
                                             </button>
@@ -4270,11 +4282,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                 onClick={openTermsModal}
                                                 disabled={!customerName}
                                                 title={!customerName ? "Please select a customer first" : "Edit Customer Terms"}
-                                                className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${
-                                                    !customerName 
-                                                        ? 'bg-indigo-300 text-white cursor-not-allowed opacity-70' 
-                                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                                }`}
+                                                className={`px-4 py-2 rounded-[4px] transition-colors text-[11px] font-bold uppercase tracking-wider shadow-none border ${!customerName
+                                                        ? 'bg-indigo-300 text-white cursor-not-allowed opacity-70 border-indigo-300'
+                                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                                                    }`}
                                             >
                                                 EDIT MASTERS
                                             </button>
@@ -4284,8 +4295,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                             <textarea
                                                 value={termsConditions}
                                                 readOnly
-                                                className="w-full px-4 py-3 border border-gray-200 rounded-[4px] text-gray-700 resize-none bg-white cursor-default select-none"
-                                                rows={8}
+                                                className="w-full px-4 py-3 border border-gray-200 rounded-[4px] text-gray-700 text-sm resize-none bg-white cursor-default select-none"
+                                                rows={12}
                                                 placeholder="Select a customer to auto-load their terms & conditions, or click Edit Masters to add manually."
                                             />
                                         </div>

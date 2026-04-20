@@ -371,6 +371,7 @@ class CustomerTransactionViewSet(viewsets.ModelViewSet):
                 if raw.isdigit():
                     credit_period_days = int(raw)
                 else:
+                    import re
                     m = re.search(r'(\d+)', raw)
                     if m:
                         credit_period_days = int(m.group(1))
@@ -380,22 +381,36 @@ class CustomerTransactionViewSet(viewsets.ModelViewSet):
         def calculate_due_status(transaction_date, credit_days):
             if not transaction_date:
                 return "Not Due", None
+            
+            # Ensure transaction_date is a date object
+            if isinstance(transaction_date, str):
+                try:
+                    transaction_date = datetime.strptime(transaction_date[:10], '%Y-%m-%d').date()
+                except:
+                    return "Not Due", None
+            elif isinstance(transaction_date, datetime):
+                transaction_date = transaction_date.date()
+                
             due_dt = transaction_date + timedelta(days=credit_days)
-            status_str = "Due" if date.today() > due_dt else "Not Due"
+            # Becomes 'Due' ON the due date (e.g. after 2 days)
+            status_str = "Due" if date.today() >= due_dt else "Not Due"
             return status_str, due_dt.strftime('%Y-%m-%d')
 
-        # ── Serialize and enrich ───────────────────────────────────────────
-        serializer = self.get_serializer(transactions, many=True)
-        data = serializer.data
+        # ── Fetch data ───────────────────────────────────────────────────
+        all_transactions = CustomerTransaction.objects.filter(
+            tenant_id=tenant_id, customer_id=customer_id
+        ).order_by('-transaction_date', '-id')
 
-        for item in data:
+        # Sales-specific list (used for some views)
+        transactions = all_transactions.filter(transaction_type__in=['sales', 'invoice', 'debit_note'])
+
+        # ── Enrich function ───────────────────────────────────────────────
+        def enrich_item(item):
             tx_type = (item.get('transaction_type') or '').lower()
-
-            if tx_type in ('sales', 'invoice'):
+            if tx_type in ('sales', 'invoice', 'debit_note'):
                 tx_date_raw = item.get('transaction_date') or item.get('date')
                 total_amt = Decimal(str(item.get('total_amount') or item.get('amount') or 0))
 
-                # Sum all receipts/credit-notes linked to this sales transaction
                 ref_no = item.get('reference_number') or item.get('transaction_number')
                 paid_sum = Decimal('0')
                 if ref_no:
@@ -415,40 +430,51 @@ class CustomerTransactionViewSet(viewsets.ModelViewSet):
                 item['payment_balance'] = float(total_amt - paid_sum)
 
                 if total_amt > 0 and paid_sum >= total_amt:
+                    item['payment_status'] = 'Received'
                     item['due_status'] = 'Received'
                     item['due_date'] = None
                 elif paid_sum > 0 and paid_sum < total_amt:
-                    item['due_status'] = 'Partially Received'
-                    if tx_date_raw:
-                        try:
-                            parsed_date = datetime.strptime(str(tx_date_raw), '%Y-%m-%d').date()
-                            _, due_date_str = calculate_due_status(parsed_date, credit_period_days)
-                            item['due_date'] = due_date_str
-                        except Exception:
-                            item['due_date'] = None
+                    due_status, due_date_str = calculate_due_status(tx_date_raw, credit_period_days)
+                    if due_status == 'Due':
+                        item['payment_status'] = 'Partially Received'
+                        item['due_status'] = 'Partially Received'
                     else:
-                        item['due_date'] = None
-                elif tx_date_raw:
-                    try:
-                        parsed_date = datetime.strptime(str(tx_date_raw), '%Y-%m-%d').date()
-                        due_status, due_date_str = calculate_due_status(parsed_date, credit_period_days)
-                        item['due_status'] = due_status
-                        item['due_date'] = due_date_str
-                    except Exception:
+                        item['payment_status'] = 'Not Due'
                         item['due_status'] = 'Not Due'
-                        item['due_date'] = None
+                    item['due_date'] = due_date_str
+                elif tx_date_raw:
+                    due_status, due_date_str = calculate_due_status(tx_date_raw, credit_period_days)
+                    item['payment_status'] = due_status
+                    item['due_status'] = due_status
+                    item['due_date'] = due_date_str
                 else:
+                    item['payment_status'] = 'Not Due'
                     item['due_status'] = 'Not Due'
                     item['due_date'] = None
 
                 item['credit_period_days'] = credit_period_days
+            return item
 
-            else:
-                item['due_status'] = None
-                item['due_date'] = None
-                item['credit_period_days'] = 0
+        # ── Serialize and return ───────────────────────────────────────────
+        all_tx_data = self.get_serializer(all_transactions, many=True).data
+        sales_tx_data = self.get_serializer(transactions, many=True).data
 
-        return Response(data)
+        enriched_all = [enrich_item(i) for i in all_tx_data]
+        enriched_sales = [enrich_item(i) for i in sales_tx_data]
+
+        customer = CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, id=customer_id).first()
+        c_id = customer.id if customer else customer_id
+        c_name = customer.customer_name if customer else "Customer"
+
+        return Response({
+            'allTransactions': enriched_all,
+            'transactions': enriched_sales,
+            'customer': {
+                'id': c_id,
+                'name': c_name,
+                'credit_period': credit_period_days
+            }
+        })
 
 
 # class CustomerSalesQuotationViewSet(viewsets.ModelViewSet):

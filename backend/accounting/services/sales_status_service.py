@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import Sum
 from ..models_voucher_sales import VoucherSalesInvoiceDetails, VoucherSalesPaymentDetails
 from ..models import PendingTransaction
+from .portal_mirror_service import mirror_sales_to_portal
 
 def update_sales_invoice_payment_status(tenant_id, invoice_id):
     """
@@ -62,7 +63,7 @@ def update_sales_invoice_payment_status(tenant_id, invoice_id):
             payment_details.save(update_fields=['payment_received', 'payment_balance'])
 
             # Update Header Status
-            if receipt_total >= payable_anchor and payable_anchor > 0:
+            if receipt_total >= payable_anchor:
                 invoice.status = 'received'
             elif receipt_total > 0:
                 invoice.status = 'partially received'
@@ -72,6 +73,12 @@ def update_sales_invoice_payment_status(tenant_id, invoice_id):
             
             invoice.save(update_fields=['status'])
             
+            # --- SYNC TO PORTAL ---
+            try:
+                mirror_sales_to_portal(invoice)
+            except Exception as mirror_err:
+                print(f"!!! Portal Sync Warning in Status Update: {mirror_err}")
+
             print(f"!!! Success: Updated {invoice.sales_invoice_no} (Recv: {receipt_total}, Bal: {payment_details.payment_balance})")
             return True
             

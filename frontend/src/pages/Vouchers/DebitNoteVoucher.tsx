@@ -163,9 +163,9 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         allPurchaseInvoices
             .filter(inv => selectedSupplierInvoices.includes(inv.invoice_no))
             .forEach(inv => {
-                const invItems = inv.supply_inr_details?.line_items || inv.supply_inr_details?.items || 
-                                 inv.supply_foreign_details?.line_items || inv.supply_foreign_details?.items || 
-                                 inv.items_data || inv.items || [];
+                const invItems = inv.supply_inr_details?.line_items || inv.supply_inr_details?.items ||
+                    inv.supply_foreign_details?.line_items || inv.supply_foreign_details?.items ||
+                    inv.items_data || inv.items || [];
                 invItems.forEach((item: any) => {
                     items.push({
                         ...item,
@@ -222,9 +222,15 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
     const handlePost = async (shouldPrint: boolean = false) => {
         // Basic Validation
-        if (!vendorName) { showError('Please select a Vendor.'); return; }
+        if (!date) { showError('Please select a Date.'); return; }
         if (!selectedSeriesId) { showError('Please select a Voucher Series.'); return; }
         if (!debitNoteNo) { showError('Voucher Number is required.'); return; }
+        if (!vendorName) { showError('Please select a Vendor.'); return; }
+        if (!vendorBranch) { showError('Please select a Branch.'); return; }
+        if (!selectedSupplierInvoices || selectedSupplierInvoices.length === 0) {
+            showError('Please select at least one Supplier Invoice No.');
+            return;
+        }
         if (itemRows.length === 0) { showError('Please add at least one item.'); return; }
 
         // 1. Format addresses as plain strings (backend expects text)
@@ -235,7 +241,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         };
 
         const payload = {
-            id: '', 
+            id: '',
             type: 'Debit Note',
             date,
             debit_note_series: selectedSeriesId,
@@ -258,7 +264,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             exchange_rate: Number(exchangeRate) || 1,
             foreign_currency: foreignCurrency,
             narration: narration,
-            
+
             // Nested Tab 2: Supply
             supply_details: {
                 items: itemRows.map(row => ({
@@ -358,11 +364,11 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             if (vendor.credit_terms) parts.push(`Credit Terms: ${vendor.credit_terms}`);
             if (vendor.penalty_terms) parts.push(`Penalty Terms: ${vendor.penalty_terms}`);
             if (vendor.delivery_terms) parts.push(`Delivery Terms: ${vendor.delivery_terms}`);
-            
+
             const warranty = vendor.warranty_details || vendor.warranty_guarantee_details;
             if (warranty) parts.push(`Warranty / Guarantee: ${warranty}`);
             if (vendor.force_majeure) parts.push(`Force Majeure: ${vendor.force_majeure}`);
-            
+
             const dispute = vendor.dispute_terms || vendor.dispute_redressal_terms;
             if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
 
@@ -478,7 +484,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 branch.branch_state,
                 branch.branch_pincode
             ].filter(Boolean).join(', ');
-            
+
             setBillFromAddress({
                 line1: branch.branch_address || '',
                 line2: '',
@@ -619,7 +625,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
             if (isManualTaxMode) {
                 if (isFinancial === 'Yes') updatedRow.qty = '1';
-                
+
                 // If user directly edits taxableValue, sync itemRate to it if qty is 1
                 if (updates.taxableValue !== undefined && updatedRow.qty === '1') {
                     updatedRow.itemRate = (parseFloat(updates.taxableValue) || 0).toString();
@@ -696,7 +702,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     useEffect(() => {
         setItemRows(prev => prev.map((row) => {
             const isManualTaxMode = isFinancial === 'Yes' || reverseGstTcs === 'Yes';
-            
+
             // If in manual mode, don't overwrite user's manual edits for taxes
             if (isManualTaxMode) {
                 const tv = parseFloat(row.taxableValue || '0') || 0;
@@ -757,82 +763,91 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         }
     }, [sameAsBillTo, billFromAddress]);
     const handleInvoiceSelectionChange = (newSelection: string[]) => {
+        console.log("Debit Note: Invoice Selection Changed:", newSelection);
         setSelectedSupplierInvoices(newSelection);
 
         // Auto-fill Purchase Voucher No and Date
-        const selectedInvoicesData = allPurchaseInvoices.filter(inv => newSelection.includes(inv.invoice_no));
+        // Use resilient matching (trimming both sides)
+        const selectedInvoicesData = allPurchaseInvoices.filter(inv =>
+            newSelection.some(sel => sel.trim() === String(inv.invoice_no || '').trim())
+        );
+
+        console.log("Debit Note: Matched Voucher Data:", selectedInvoicesData);
+
         const vNos = selectedInvoicesData.map(inv => inv.purchase_voucher_no || inv.voucher_no).filter(Boolean);
         const vDates = selectedInvoicesData.map(inv => inv.date).filter(Boolean);
 
         setPurchaseVoucherNo(vNos.join(', '));
         setPurchaseVoucherDate(vDates.join(', '));
 
-        // Extract and set items from selected invoices
+        // Extract and set items from selected invoices 
         const newItems: any[] = [];
-        selectedInvoicesData.forEach((inv: any) => {
-            // Very aggressive item search
-            let items: any[] = [];
-            
-            // 1. Try known nested locations
-            if (inv.supply_inr_details?.line_items) items = inv.supply_inr_details.line_items;
-            else if (inv.supply_inr_details?.items) items = inv.supply_inr_details.items;
-            else if (inv.supply_foreign_details?.line_items) items = inv.supply_foreign_details.line_items;
-            else if (inv.supply_foreign_details?.items) items = inv.supply_foreign_details.items;
-            else if (inv.items_data) items = inv.items_data;
-            else if (inv.items) items = inv.items;
-            else if (inv.Items) items = inv.Items;
-            
-            // 2. Try parsing strings
-            if ((!items || items.length === 0) && typeof inv.supply_inr_details === 'string') {
-                try {
-                    const parsed = JSON.parse(inv.supply_inr_details);
-                    if (parsed.items) items = parsed.items;
-                } catch (e) {}
-            }
-            if ((!items || items.length === 0) && typeof inv.items_data === 'string') {
-                try {
-                    items = JSON.parse(inv.items_data);
-                } catch (e) {}
+        selectedInvoicesData.forEach(inv => {
+            const invNo = inv.invoice_no || inv.supplier_invoice_no || inv.voucher_no || '';
+
+            // Aggressive search for items in nested structures
+            let rawItems: any[] = [];
+            if (inv.line_items) rawItems = inv.line_items; // NEWest top level
+            else if (inv.supply_inr_details?.line_items) rawItems = inv.supply_inr_details.line_items;
+            else if (inv.supply_inr_details?.items) rawItems = inv.supply_inr_details.items;
+            else if (inv.supply_foreign_details?.line_items) rawItems = inv.supply_foreign_details.line_items;
+            else if (inv.supply_foreign_details?.items) rawItems = inv.supply_foreign_details.items;
+            else if (inv.items) rawItems = inv.items;
+
+            console.log(`Debit Note: Extraction for ${invNo}: Found ${rawItems.length} items. Raw:`, inv);
+
+            // Fallback for string-encoded items (legacy)
+            if (rawItems.length === 0 && typeof inv.items_data === 'string') {
+                try { rawItems = JSON.parse(inv.items_data); } catch (e) { }
             }
 
-            // 3. Fallback: Search all object keys for any array that might be items
-            if (!items || items.length === 0) {
-                Object.keys(inv).forEach(key => {
-                    if (Array.isArray((inv as any)[key]) && (inv as any)[key].length > 0) {
-                        const firstItem = (inv as any)[key][0];
-                        if (firstItem && (firstItem.itemCode || firstItem.itemName || firstItem.code || firstItem.name)) {
-                            items = (inv as any)[key];
+            if (Array.isArray(rawItems)) {
+                rawItems.forEach((item: any) => {
+                    // Extract numeric values safely
+                    const qty = parseFloat(item.quantity || item.qty || '0') || 0;
+                    const rate = parseFloat(item.rate || item.itemRate || item.item_rate || '0') || 0;
+                    const txVal = parseFloat(item.taxable_value || item.taxableValue || item.amount || '0') || 0;
+                    const igst = parseFloat(item.igst_amount || item.igst || '0') || 0;
+                    const cgst = parseFloat(item.cgst_amount || item.cgst || '0') || 0;
+                    const sgst = parseFloat(item.sgst_amount || item.sgst || '0') || 0;
+                    const cess = parseFloat(item.cess_amount || item.cess || '0') || 0;
+                    const invVal = parseFloat(item.invoice_value || item.invoiceValue || '0') || 0;
+
+                    // CRITICAL: Determine GST Rate to prevent auto-calc from wiping out taxes
+                    let gstRate = parseFloat(item.gst_rate || item.gstRate || item.igst_rate || '0');
+                    if (gstRate === 0 && txVal > 0) {
+                        const totalTax = igst || (cgst + sgst);
+                        if (totalTax > 0) {
+                            gstRate = Math.round((totalTax / txVal) * 100);
                         }
                     }
-                });
-            }
-            
-            if (Array.isArray(items)) {
-                items.forEach((item: any) => {
+
                     newItems.push({
                         id: Date.now() + Math.random(),
-                        supplierInvoiceNo: inv.invoice_no,
-                        itemCode: item.itemCode || item.item_code || item.code || '',
-                        itemName: item.itemName || item.item_name || item.name || '',
-                        hsnSac: item.hsnSac || item.hsn_sac || '',
-                        qty: item.qty || item.quantity || '0',
-                        uom: item.uom || 'PCS',
-                        itemRate: item.itemRate || item.rate || '0',
-                        taxableValue: item.taxableValue || item.taxable_value || '0',
-                        igst: item.igst || item.igst_amount || '0',
-                        cgst: item.cgst || item.cgst_amount || '0',
-                        sgst: item.sgst || item.sgst_amount || '0',
-                        cess: item.cess || item.cess_amount || '0',
-                        invoiceValue: item.invoiceValue || item.invoice_value || '0',
-                        purchaseLedger: item.purchaseLedger || item.purchase_ledger || '',
+                        supplierInvoiceNo: invNo,
+                        itemCode: item.item_code || item.itemCode || '',
+                        itemName: item.item_name || item.itemName || item.name || '',
+                        hsnSac: item.hsn_sac || item.hsnSac || '',
+                        qty: String(qty),
+                        uom: item.uom || '',
+                        alternateUnit: item.alternateUnit || '',
+                        itemRate: String(rate),
+                        taxableValue: txVal.toFixed(2),
+                        igst: igst.toFixed(2),
+                        cgst: cgst.toFixed(2),
+                        sgst: sgst.toFixed(2),
+                        cess: cess.toFixed(2),
+                        cessRate: String(item.cessRate || item.cess_rate || '0'),
+                        invoiceValue: invVal.toFixed(2),
+                        purchaseLedger: inv.purchase_ledger || item.purchaseLedger || item.purchase_ledger || '',
                         description: item.description || '',
-                        gstRate: item.gstRate || item.gst_rate || '0',
+                        gstRate: String(gstRate),
                         selected: true,
                         reasonForReturn: '',
-                        invoiceRef: inv.invoice_no || '',
-                        fcRate: item.fcRate || '0',
-                        fcAmount: item.fcAmount || '0',
-                        ledgerNarration: ''
+                        invoiceRef: invNo,
+                        fcRate: String(item.fcRate || item.foreign_rate || '0'),
+                        fcAmount: String(item.fcAmount || item.foreign_amount || '0'),
+                        ledgerNarration: item.ledgerNarration || ''
                     });
                 });
             }
@@ -871,7 +886,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
             // Construct FormData for multipart/form-data (required for file upload)
             const formData = new FormData();
-            
+
             // Basic fields (Mapped to VoucherDebitNoteSupplierDetailsSerializer)
             formData.append('date', date);
             formData.append('debit_note_series', selectedSeriesId.toString());
@@ -880,22 +895,22 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             formData.append('vendor_id', vendorId.toString());
             formData.append('gstin', gstin);
             formData.append('branch', vendorBranch);
-            
+
             // TextField fields in Backend (Comma-separated strings)
             formData.append('supplier_invoice_nos', selectedSupplierInvoices.join(', '));
             formData.append('purchase_voucher_nos', purchaseVoucherNo);
             formData.append('purchase_voucher_dates', purchaseVoucherDate);
             formData.append('outward_slip_nos', outwardSlipNos.join(', '));
-            
+
             const billAddrStr = `${billFromAddress.line1}, ${billFromAddress.line2}, ${billFromAddress.line3}, ${billFromAddress.city}, ${billFromAddress.pincode}`;
             const shipAddrStr = `${shipFromAddress.line1}, ${shipFromAddress.line2}, ${shipFromAddress.line3}, ${shipFromAddress.city}, ${shipFromAddress.pincode}`;
             formData.append('bill_to', billAddrStr);
             formData.append('ship_to', shipAddrStr);
-            
+
             formData.append('nature_of_supply', natureOfSupply);
             formData.append('reverse_charge', reverseCharge);
             formData.append('place_of_supply', placeOfSupply);
-            
+
             formData.append('invoice_in_foreign_currency', (natureOfSupply === 'Re-Export' || natureOfSupply === 'Deemed Export') ? 'Yes' : 'No');
             formData.append('exchange_rate', exchangeRate);
             formData.append('foreign_currency', foreignCurrency);
@@ -984,11 +999,11 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             const response = await httpClient.postFormData<any>('/api/accounting/vouchers/debit-note/', formData);
 
             showSuccess('Debit Note Saved Successfully!');
-            
+
             if (onAddVouchers) {
                 onAddVouchers([response]);
             }
-            handleCancel(); 
+            handleCancel();
         } catch (error: any) {
             console.error('Error posting Debit Note:', error);
             const serverError = error.response?.data;
@@ -1576,7 +1591,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 )}
 
 
-                
+
                 {activeTab === 'item_tax_fc' && (
                     <div className="space-y-6">
                         <div className="flex flex-wrap justify-between items-end gap-4">
@@ -1813,13 +1828,13 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         <SearchableDropdown disabled={isFinancial === 'Yes'} options={availableItems.map(it => it.itemName).filter(Boolean)} value={row.itemName} onChange={(val) => updateItemRow(index, { itemName: val })} placeholder="Item name" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input 
-                                                            disabled={isFinancial === 'Yes'} 
-                                                            type="text" 
-                                                            value={row.hsnSac} 
+                                                        <input
+                                                            disabled={isFinancial === 'Yes'}
+                                                            type="text"
+                                                            value={row.hsnSac}
                                                             onChange={(e) => updateItemRow(index, { hsnSac: e.target.value })}
-                                                            className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} 
-                                                            placeholder="HSN" 
+                                                            className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                                                            placeholder="HSN"
                                                         />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
@@ -1994,75 +2009,86 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                             </table>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-6">
                             {/* Left Column: Payment Summary */}
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Value</label>
-                                    <input
-                                        type="number"
-                                        readOnly
-                                        value={totalInvoiceValue.toFixed(2)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
-                                    />
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Invoice Value</label>
+                                        <input
+                                            type="number"
+                                            readOnly
+                                            value={totalInvoiceValue.toFixed(2)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reverse TCS on the Debit Note</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={reverseTcs}
+                                            onChange={(e) => setReverseTcs(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right font-semibold"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reverse TDS on the Debit Note</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={reverseTds}
+                                            onChange={(e) => setReverseTds(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right font-semibold"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">TDS/TCS under Income Tax</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={tdsIt}
+                                            onChange={(e) => setTdsIt(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right font-semibold"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Gross Amount Due</label>
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={grossAmountDue.toFixed(2)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Net Amount Due</label>
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={netAmountDue.toFixed(2)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-lg text-indigo-700"
+                                        />
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Reverse TCS on the Debit Note</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={reverseTcs}
-                                        onChange={(e) => setReverseTcs(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
-                                        placeholder="0.00"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Reverse TDS on the Debit Note</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={reverseTds}
-                                        onChange={(e) => setReverseTds(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
-                                        placeholder="0.00"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">TDS/TCS under Income Tax</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={tdsIt}
-                                        onChange={(e) => setTdsIt(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
-                                        placeholder="0.00"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Gross Amount Due</label>
-                                    <input
-                                        type="text"
-                                        readOnly
-                                        value={grossAmountDue.toFixed(2)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Net Amount Due</label>
-                                    <input
-                                        type="text"
-                                        readOnly
-                                        value={netAmountDue.toFixed(2)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-lg text-indigo-700"
+                                <div className="mt-2">
+                                    <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Narration / Posting Note:</label>
+                                    <textarea
+                                        value={narration}
+                                        onChange={(e) => setNarration(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none h-24"
+                                        placeholder="Enter narration or posting notes..."
                                     />
                                 </div>
                             </div>
 
                             {/* Middle Column: Supplier Invoices Application */}
-                            <div className="border border-gray-300 rounded-[4px] p-4 bg-indigo-50/50 flex flex-col h-full">
-                                <h3 className="text-sm font-semibold text-gray-800 mb-4 border-b border-gray-200 pb-2">Supplier Invoices</h3>
-                                <div className="space-y-4 flex-1">
+                            <div className="border border-gray-300 rounded-[4px] p-4 bg-slate-50/50 flex flex-col h-full">
+                                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">Supplier Invoices</h3>
+                                <div className="space-y-4 flex-1 scrollbar-thin">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Selected Supplier Invoices</label>
                                         <div className="min-h-[80px] p-3 bg-white border border-gray-200 rounded-[4px] text-sm text-gray-600">
@@ -2103,15 +2129,6 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                             readOnly={!isTermsEditable}
                                             className={`w-full px-4 py-3 border rounded-[4px] text-xs h-32 resize-none placeholder:text-gray-300 focus:ring-1 focus:ring-indigo-500 transition-all font-medium ${!isTermsEditable ? 'bg-gray-100 border-gray-200 cursor-not-allowed text-gray-600' : 'bg-white border-indigo-300'}`}
                                             placeholder="Enter terms & conditions..."
-                                        />
-                                    </div>
-                                    <div className="pt-2">
-                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Narration/Notes:</label>
-                                        <textarea
-                                            value={narration}
-                                            onChange={(e) => setNarration(e.target.value)}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-[4px] bg-white text-xs h-24 resize-none placeholder:text-gray-300 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
-                                            placeholder="Enter additional notes about this debit note..."
                                         />
                                     </div>
                                 </div>
