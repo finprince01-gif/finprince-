@@ -5872,7 +5872,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
         try {
             const [salesData, transactionsData] = await Promise.all([
                 httpClient.get<any[]>(`/api/voucher-sales-new/?show_all=true`),
-                httpClient.get<any[]>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
+                httpClient.get<any>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
             ]);
 
             let ledgerEntriesByLedger: any[] = [];
@@ -5935,7 +5935,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 };
             });
 
-            const transactionEntries: LedgerEntry[] = (transactionsData || []).map((t: any) => {
+            const allTransactions = Array.isArray(transactionsData) ? transactionsData : (transactionsData?.allTransactions || []);
+            const transactionEntries: LedgerEntry[] = (allTransactions || []).map((t: any) => {
                 const rawType = t.transaction_type?.toLowerCase() || '';
                 let transType = 'Sales';
                 if (rawType.includes('receipt')) transType = 'Receipt';
@@ -5962,18 +5963,18 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
 
                     if (isFullyPaid || t.due_status === 'Paid') {
                         finalStatus = 'Received';
-                    } else if (isPartiallyPaid || t.due_status === 'Partially Received') {
-                        finalStatus = 'Partially Received';
-                    } else if (t.due_status === 'Due') {
-                        finalStatus = 'Due';
-                    } else if (t.due_status === 'Not Due') {
-                        finalStatus = 'Not Due';
                     } else {
+                        // Check credit period even if partially paid
                         const cp = parseInt(customer.credit_period || '0', 10);
                         const invDate = new Date(t.date);
                         const today = new Date();
                         const diffDays = Math.floor((today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
-                        finalStatus = diffDays > cp ? 'Due' : 'Not Due';
+                        
+                        if (diffDays > cp) {
+                            finalStatus = isPartiallyPaid || t.due_status === 'Partially Received' ? 'Partially Received' : 'Due';
+                        } else {
+                            finalStatus = 'Not Due';
+                        }
                     }
                 } else if (transType === 'Receipt' || transType === 'Credit Note') {
                     const paidAmt = parseFloat(t.paid_amount || 0);
@@ -6122,27 +6123,26 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 const ref = entry.referenceNo?.trim()?.toLowerCase();
                 if (ref && refBalances[ref]) {
                     const { total, paid } = refBalances[ref];
-                    
+
                     // Use a small epsilon for float comparison
                     const totalRounded = Math.round((total || 0) * 100);
                     const paidRounded = Math.round((paid || 0) * 100);
 
+                    const cp = parseInt(customer.credit_period || '0', 10);
+                    const invDate = new Date(entry.date);
+                    const todayD = new Date();
+                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                    const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+                    const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+
                     if (paidRounded >= totalRounded && totalRounded > 0) {
                         updatedStatus = 'Received';
-                    } else if (paidRounded > 0) {
-                        updatedStatus = 'Partially Received';
+                    } else if (diffDays > cp) {
+                        // After credit period
+                        updatedStatus = (paidRounded > 0) ? 'Partially Received' : 'Due';
                     } else {
-                        // Nothing paid yet — re-apply due-date logic using customer credit period
-                        if (entry.postFrom === 'Sales' || (entry.postFrom as string).toLowerCase() === 'invoice') {
-                            const cp = parseInt(customer.credit_period || '0', 10);
-                            const invDate = new Date(entry.date);
-                            const todayD = new Date();
-                            const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-                            const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
-                            const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-                            // Always show aging status for unpaid sales invoices in the ledger
-                            updatedStatus = diffDays > cp ? 'Due' : (diffDays === cp ? 'Due Today' : 'Not Due');
-                        }
+                        // Within credit period
+                        updatedStatus = 'Not Due';
                     }
                 }
             }
@@ -6291,8 +6291,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             // Must be an advance/unutilized type
             (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced' || e.is_advance) &&
             // AND must NOT have an invoice reference yet
-            (!e.originalInv?.reference_number || 
-             ['ADVANCE', '', '-', 'N/A'].includes(e.originalInv.reference_number.toUpperCase().trim())
+            (!e.originalInv?.reference_number ||
+                ['ADVANCE', '', '-', 'N/A'].includes(e.originalInv.reference_number.toUpperCase().trim())
             )
         );
 
@@ -6353,8 +6353,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                     key={idx}
                                                     onClick={() => setSelectedAdvance(adv)}
                                                     className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedAdvance?.id === adv.id
-                                                            ? 'bg-indigo-50/50'
-                                                            : ''
+                                                        ? 'bg-indigo-50/50'
+                                                        : ''
                                                         }`}
                                                 >
                                                     <td className="px-4 py-3">
@@ -6423,8 +6423,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                         onClose();
                                     }}
                                     className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAdvance
-                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
-                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
                                         }`}
                                 >
                                     Proceed Allocation
@@ -6531,7 +6531,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     const totalAppAmtRounded = Math.round(totalAppAmt * 100);
                     const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
                         ? 'Received'
-                        : (totalAppAmtRounded > 0 ? 'Partially Received' : firstSource.status);
+                        : (totalAppAmtRounded > 0
+                            ? (firstSource.status === 'Not Due' ? 'Not Due' : 'Partially Received')
+                            : firstSource.status);
 
                     applications.forEach((app, appIdx) => {
                         const appAmt = (app.credit || 0) - (app.debit || 0);
@@ -6590,8 +6592,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
                                                 <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${row.postedFrom === 'Sales'
-                                                        ? 'bg-blue-50 text-blue-600 border-blue-100'
-                                                        : 'bg-amber-50 text-amber-600 border-amber-100'
+                                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                                    : 'bg-amber-50 text-amber-600 border-amber-100'
                                                     }`}>
                                                     {row.postedFrom}
                                                 </span>
@@ -6614,9 +6616,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                         <>
                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
                                                 <span className={`px-2 py-0.5 rounded text-[11px] font-bold border uppercase tracking-tighter shadow-sm ${row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                        row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'partially due' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                                            row.status?.toLowerCase() === 'due' || row.status?.toLowerCase() === 'due today' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                                                                'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                    row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'partially due' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                        row.status?.toLowerCase() === 'due' || row.status?.toLowerCase() === 'due today' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                            'bg-indigo-50 text-indigo-600 border border-indigo-100'
                                                     }`}>
                                                     {row.status}
                                                 </span>
@@ -6812,8 +6814,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                 <button
                                     onClick={() => setViewMode(viewMode === 'allocation' ? 'invoice-wise' : 'allocation')}
                                     className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-all shadow-sm ${viewMode === 'allocation'
-                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
                                         }`}
                                 >
                                     ALLOCATION VIEW

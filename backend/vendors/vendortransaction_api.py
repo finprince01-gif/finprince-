@@ -66,7 +66,7 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                         transaction_date=timezone.now().date(),
                         amount=amt,
                         total_amount=amt,
-                        status='Received',
+                        status='Paid',
                         reference_number=instance.reference_number or instance.transaction_number,
                         notes=f"Allocated from {ref_no}"
                     )
@@ -166,11 +166,11 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                 item['payment_balance'] = float(total_amt - paid_sum)
 
                 if tx_status == 'paid' or tx_status == 'received' or (total_amt > 0 and paid_sum >= total_amt):
-                    item['due_status'] = 'Received'
+                    item['due_status'] = 'Paid'
                     item['due_date'] = None
                     item['credit_period_days'] = credit_period_days
                 elif tx_status == 'partially paid' or tx_status == 'partially received' or (paid_sum > 0 and paid_sum < total_amt):
-                    item['due_status'] = 'Partially Received'
+                    item['due_status'] = 'Partially Paid'
                     # still show due date calculated
                     if tx_date:
                         try:

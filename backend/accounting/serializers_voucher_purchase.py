@@ -23,7 +23,7 @@ class VoucherPurchaseItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'item_code', 'item_name', 'hsn_sac', 'quantity', 'uom', 'rate',
             'taxable_value', 'igst_amount', 'cgst_amount', 'sgst_amount', 'cess_amount',
-            'invoice_value', 'currency', 'exchange_rate'
+            'gst_rate', 'invoice_value', 'currency', 'exchange_rate'
         ]
 
 class VoucherPurchaseAdvanceLinkSerializer(serializers.ModelSerializer):
@@ -112,6 +112,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
     due_details = VoucherPurchaseDueDetailsSerializer(required=False, allow_null=True)  # type: ignore[call-arg]
     transit_details = VoucherPurchaseTransitDetailsSerializer(required=False, allow_null=True)  # type: ignore[call-arg]
     transit_document = serializers.FileField(required=False, write_only=True)
+    line_items = VoucherPurchaseItemSerializer(many=True, read_only=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -130,7 +131,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             'bill_from', 'ship_from', 'input_type', 'invoice_in_foreign_currency',
             'supporting_document', 'transit_document',
             'supply_foreign_details', 'supply_inr_details',
-            'due_details', 'transit_details', 'created_at',
+            'due_details', 'transit_details', 'line_items', 'created_at',
         ]
 
     # ------------------------------------------------------------------
@@ -278,7 +279,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             )
 
         # Sync legacy JSON to new relational tables
-        self._sync_relational_data(supplier_instance, supply_inr_data, supply_inr_data, due_data)
+        self._sync_relational_data(supplier_instance, supply_inr_data, supply_foreign_data, due_data)
 
         # 5. Advance Allocations (Main Accounting)
         try:
@@ -411,6 +412,9 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             print(f"!!! Advance Allocation Update Failed: {alloc_e}")
 
         self._mirror_to_vendor_portal(instance)
+        
+        # Auto-sync to Inventory > Operations > GRN
+        sync_purchase_to_grn(instance, supply_inr_data, supply_foreign_data)
 
         # Refresh double-entry posting
         self._post_journal_entries(instance, voucher_id, purchase_total_gross, supply_inr_data, supply_foreign_data, due_data)
@@ -426,43 +430,42 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         if hasattr(supplier_instance, 'due_details'):
             VoucherPurchaseAdvanceLink.objects.filter(due_details=supplier_instance.due_details).delete()
 
-        # 2. Sync INR Items
-        if inr_data and 'items' in inr_data:
-            for item in inr_data['items']:
-                if not isinstance(item, dict): continue
-                VoucherPurchaseItem.objects.create(
-                    supplier_details=supplier_instance,
-                    tenant_id=tenant_id,
-                    item_code=item.get('itemCode', ''),
-                    item_name=item.get('itemName', ''),
-                    hsn_sac=item.get('hsnSac', ''),
-                    quantity=Decimal(str(item.get('qty', 0))),
-                    uom=item.get('uom', ''),
-                    rate=Decimal(str(item.get('itemRate', 0))),
-                    taxable_value=Decimal(str(item.get('taxableValue', 0))),
-                    igst_amount=Decimal(str(item.get('igst', 0))),
-                    cgst_amount=Decimal(str(item.get('cgst', 0))),
-                    sgst_amount=Decimal(str(item.get('sgst', 0))),
-                    cess_amount=Decimal(str(item.get('cess', 0))),
-                    invoice_value=Decimal(str(item.get('invoiceValue', 0))).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP),
-                    currency='INR',
-                    exchange_rate=1.0
-                )
+        # 2. Sync Items (avoid duplication by chosen primary source)
+        is_foreign = supplier_instance.invoice_in_foreign_currency == 'Yes'
+        source_data = foreign_data if is_foreign else inr_data
+        # Fallback if preferred source is missing
+        if not source_data:
+            source_data = inr_data if inr_data else foreign_data
 
-        # 3. Sync Foreign Items
-        if foreign_data and 'items' in foreign_data:
-            ex_rate = Decimal(str(foreign_data.get('exchange_rate', 1.0)))
-            cur = supplier_instance.invoice_in_foreign_currency # This might need better lookup
-            for item in foreign_data['items']:
+        if source_data and 'items' in source_data:
+            ex_rate = Decimal(str(source_data.get('exchange_rate', 1.0)))
+            cur = supplier_instance.invoice_in_foreign_currency if is_foreign else 'INR'
+            if cur == 'No': cur = 'INR'
+            
+            for item in source_data['items']:
                 if not isinstance(item, dict): continue
+                # In normalized frontend, 'qty' and 'itemRate' are standard
+                q = item.get('qty') or item.get('quantity') or 0
+                r = item.get('itemRate') or item.get('rate') or 0
+                tx_val = item.get('taxableValue') or item.get('amount') or 0
+                inv_val = item.get('invoiceValue') or item.get('amount') or 0
+                
                 VoucherPurchaseItem.objects.create(
                     supplier_details=supplier_instance,
                     tenant_id=tenant_id,
                     item_code=item.get('itemCode', item.get('item_code', '')),
                     item_name=item.get('itemName', item.get('item_name', '')),
-                    quantity=Decimal(str(item.get('qty', item.get('quantity', 0)))),
-                    rate=Decimal(str(item.get('itemRate', item.get('rate', 0))),),
-                    invoice_value=Decimal(str(item.get('amount', 0))),
+                    hsn_sac=item.get('hsnSac', item.get('hsn_sac', '')),
+                    quantity=Decimal(str(q)),
+                    uom=item.get('uom', ''),
+                    rate=Decimal(str(r)),
+                    taxable_value=Decimal(str(tx_val)),
+                    igst_amount=Decimal(str(item.get('igst', 0))),
+                    cgst_amount=Decimal(str(item.get('cgst', 0))),
+                    sgst_amount=Decimal(str(item.get('sgst', 0))),
+                    cess_amount=Decimal(str(item.get('cess', 0))),
+                    gst_rate=Decimal(str(item.get('gstRate', item.get('gst_rate', 0)))),
+                    invoice_value=Decimal(str(inv_val)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP),
                     currency=cur,
                     exchange_rate=ex_rate
                 )

@@ -27,14 +27,14 @@ class VoucherSalesViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         status_param = self.request.query_params.get('status')
         
         if not show_all and status_param != 'all':
+            from django.db.models import Q
             # EXCLUDE FULLY PAID INVOICES
-            # This ensures they only disappear when status is 'received'
             queryset = queryset.exclude(status='received')
 
-            # MANDATORY: Only show vouchers with positive outstanding payable
+            # MANDATORY: Only show vouchers with positive outstanding balance OR fresh ones without details
             queryset = queryset.filter(
-                payment_details__payment_payable__isnull=False,
-                payment_details__payment_payable__gt=0
+                Q(payment_details__payment_balance__gt=0) | 
+                Q(payment_details__isnull=True)
             ).select_related('payment_details')
         
         # Optional: Filter by customer ID/name/branch if provided

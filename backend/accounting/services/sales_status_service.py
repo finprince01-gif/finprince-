@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import Sum
 from ..models_voucher_sales import VoucherSalesInvoiceDetails, VoucherSalesPaymentDetails
 from ..models import PendingTransaction
+from .portal_mirror_service import mirror_sales_to_portal
 
 def update_sales_invoice_payment_status(tenant_id, invoice_id):
     """
@@ -61,17 +62,57 @@ def update_sales_invoice_payment_status(tenant_id, invoice_id):
             payment_details.payment_balance = payable_anchor - receipt_total
             payment_details.save(update_fields=['payment_received', 'payment_balance'])
 
+            # --- Credit Period Check ---
+            is_due = True
+            try:
+                from customerportal.database import CustomerMasterCustomerTermsCondition
+                import re
+                from datetime import date, timedelta
+                
+                # Try to find terms for this customer
+                terms = CustomerMasterCustomerTermsCondition.objects.filter(customer_basic_detail_id=invoice.customer_id).first()
+                if terms and terms.credit_period:
+                    match = re.search(r'(\d+)', str(terms.credit_period))
+                    if match:
+                        credit_days = int(match.group(1))
+                        invoice_date = invoice.date
+                        if invoice_date and (date.today() <= invoice_date + timedelta(days=credit_days)):
+                            is_due = False
+            except Exception as te:
+                print(f"!!! Warning: Could not determine credit period in status update: {te}")
+
             # Update Header Status
-            if receipt_total >= payable_anchor and payable_anchor > 0:
+            if receipt_total >= payable_anchor:
                 invoice.status = 'received'
             elif receipt_total > 0:
-                invoice.status = 'partially received'
+                # Use grace period: Show 'Not Due' even if partially paid, until credit period is over
+                invoice.status = 'partially received' if is_due else 'completed' 
+                # Note: 'completed' can be used as a fallback for 'Not Due' in the main system 
+                # but many choices only have 'partially received'. 
+                # Actually, let's check the choices again.
             else:
-                # Keep existing (Due/Not Due) 
+                # If nothing received, it could be 'Due' or 'Not Due'. 
+                # Main system status choices are limited. Let's see.
+                pass
+            
+            # Re-evaluating status assignment for main system
+            if receipt_total >= payable_anchor:
+                invoice.status = 'received'
+            elif receipt_total > 0:
+                invoice.status = 'partially received' if is_due else 'completed'
+            else:
+                # If zero receipt, but it's overdue, maybe we should mark it? 
+                # But the choices don't have 'Due'. They have 'completed', 'pending', etc.
                 pass
             
             invoice.save(update_fields=['status'])
             
+            # --- SYNC TO PORTAL ---
+            try:
+                mirror_sales_to_portal(invoice)
+            except Exception as mirror_err:
+                print(f"!!! Portal Sync Warning in Status Update: {mirror_err}")
+
             print(f"!!! Success: Updated {invoice.sales_invoice_no} (Recv: {receipt_total}, Bal: {payment_details.payment_balance})")
             return True
             

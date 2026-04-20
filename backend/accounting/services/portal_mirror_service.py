@@ -1,8 +1,11 @@
 import logging
+import json
+import re
+from datetime import date, timedelta
 from decimal import Decimal
 from django.db import transaction, models
 from vendors.models import VendorTransaction, VendorMasterBasicDetail
-from customerportal.database import CustomerTransaction, CustomerMasterCustomer
+from customerportal.database import CustomerTransaction, CustomerMasterCustomer, CustomerMasterCustomerTermsCondition
 from accounting.models import AdvanceAllocation, PendingTransaction, TransactionAllocation
 
 logger = logging.getLogger(__name__)
@@ -84,6 +87,7 @@ def mirror_sales_to_portal(sales_header):
         payment_details = sales_header.payment_details if hasattr(sales_header, 'payment_details') else None
         total_amt = Decimal(str(payment_details.payment_invoice_value if payment_details else 0))
 
+        # 1. Mirror the Invoice header itself
         CustomerTransaction.objects.update_or_create(
             tenant_id=tenant_id,
             transaction_number=sales_header.sales_invoice_no,
@@ -95,12 +99,80 @@ def mirror_sales_to_portal(sales_header):
                 'amount': total_amt,
                 'payment_status': sales_header.status or 'Unpaid',
                 'reference_number': sales_header.sales_invoice_no,
-                'reference_type': 'invoice',
-                'is_advance': False,
                 'notes': sales_header.voucher_name or "Sales Invoice",
-                'ledger_name': 'Sales'
             }
         )
+
+        # 2. Mirror Advance Adjustments
+        if payment_details and payment_details.payment_advance and float(payment_details.payment_advance) > 0:
+            # Idempotency: Remove existing mirrored advance adjustments for this invoice
+            CustomerTransaction.objects.filter(
+                tenant_id=tenant_id,
+                customer_id=customer.id,
+                transaction_type='RECEIPT',
+                transaction_number__contains=f"-ADJ{sales_header.id}I"
+            ).delete()
+
+            adv_refs_raw = payment_details.advance_references
+            adv_refs = []
+            if adv_refs_raw:
+                try:
+                    if isinstance(adv_refs_raw, str):
+                        adv_refs = json.loads(adv_refs_raw)
+                    else:
+                        adv_refs = adv_refs_raw
+                except:
+                    adv_refs = []
+            
+            # If we have multiple advance references, create one entry per reference
+            if adv_refs and isinstance(adv_refs, list):
+                for idx, ref in enumerate(adv_refs):
+                    # Filter strictly by 'appliedNow' or 'selected' flag
+                    is_selected = ref.get('appliedNow') is True or ref.get('selected') is True
+                    allocated_amt = ref.get('amount') or ref.get('allocated_amount') or 0
+                    
+                    if is_selected and float(allocated_amt) > 0:
+                        ref_no = ref.get('refNo') or ref.get('reference_no') or 'Advance'
+                        
+                        # Convention: {RefNo}-ADJ{InvoiceID}I{Index}
+                        display_ref = f"{ref_no}-ADJ{sales_header.id}I{idx}"
+                        
+                        CustomerTransaction.objects.update_or_create(
+                            tenant_id=tenant_id,
+                            customer_id=customer.id,
+                            transaction_number=display_ref,
+                            transaction_type='RECEIPT',
+                            defaults={
+                                'transaction_date': sales_header.date,
+                                'amount': Decimal(str(allocated_amt)),
+                                'total_amount': Decimal(str(allocated_amt)),
+                                'payment_status': 'Advance Applied',
+                                'reference_number': sales_header.sales_invoice_no,
+                                'notes': f"Advance adjusted from Ref: {ref_no}"
+                            }
+                        )
+            else:
+                # Fallback to single entry if no detailed refs but total amount exists
+                CustomerTransaction.objects.update_or_create(
+                    tenant_id=tenant_id,
+                    customer_id=customer.id,
+                    transaction_number=f"ADJ-{sales_header.sales_invoice_no}",
+                    transaction_type='RECEIPT',
+                    defaults={
+                        'transaction_date': sales_header.date,
+                        'amount': payment_details.payment_advance,
+                        'total_amount': payment_details.payment_advance,
+                        'payment_status': 'Advance Applied',
+                        'reference_number': sales_header.sales_invoice_no,
+                        'notes': "Advance adjusted"
+                    }
+                )
+
+        logger.info(f"!!! Portal Mirror Sales OK: {sales_header.sales_invoice_no}")
+        
+        # Immediately refresh status based on linked transactions in portal
+        _update_portal_sales_status(tenant_id, customer.id, sales_header.sales_invoice_no)
+
     except Exception as e:
         logger.error(f"Portal Mirror Sync Error (Sales): {e}")
 
@@ -191,6 +263,69 @@ def _mirror_receipt_item(voucher, item, customer):
             'ledger_name': 'Receipt'
         }
     )
+
+    # Refresh status of the linked invoice in customer portal
+    if status != 'Advance' and ref and ref != '-':
+        _update_portal_sales_status(voucher.tenant_id, customer.id, ref)
+
+def _update_portal_sales_status(tenant_id, customer_id, ref_no):
+    """Refreshes a mirrored sales invoice's status based on total receipts found in portal"""
+    try:
+        invoice = CustomerTransaction.objects.filter(
+            tenant_id=tenant_id, 
+            customer_id=customer_id, 
+            transaction_type='invoice', 
+            reference_number=ref_no
+        ).first()
+        
+        if invoice:
+            total_amt = Decimal(str(invoice.total_amount or 0))
+            if total_amt <= 0: return
+
+            # Sum all receipts and credit notes
+            received = CustomerTransaction.objects.filter(
+                tenant_id=tenant_id,
+                customer_id=customer_id,
+                transaction_type__in=['receipt', 'credit_note'],
+                reference_number=ref_no
+            ).aggregate(s=models.Sum('total_amount'))['s'] or 0
+
+            # Subtract debit notes
+            debits = CustomerTransaction.objects.filter(
+                tenant_id=tenant_id,
+                customer_id=customer_id,
+                transaction_type__in=['debit_note'],
+                reference_number=ref_no
+            ).aggregate(s=models.Sum('total_amount'))['s'] or 0
+
+            net_received = Decimal(str(received)) - Decimal(str(debits))
+
+            # --- Credit Period Enrichment ---
+            is_due = True
+            try:
+                terms = CustomerMasterCustomerTermsCondition.objects.filter(customer_basic_detail_id=customer_id).first()
+                if terms and terms.credit_period:
+                    match = re.search(r'(\d+)', str(terms.credit_period))
+                    if match:
+                        credit_days = int(match.group(1))
+                        invoice_date = invoice.transaction_date
+                        if invoice_date and (date.today() <= invoice_date + timedelta(days=credit_days)):
+                            is_due = False
+            except Exception as te:
+                logger.warning(f"Failed to fetch credit terms for customer {customer_id}: {te}")
+
+            if net_received >= total_amt:
+                invoice.payment_status = 'Received'
+            elif net_received > 0:
+                # User preference: Show 'Not Due' even if saved with advance if within credit period
+                invoice.payment_status = 'Not Due' if not is_due else 'Partially Received'
+            else:
+                invoice.payment_status = 'Due' if is_due else 'Not Due'
+            
+            invoice.save(update_fields=['payment_status'])
+            print(f"!!! Portal Invoice {ref_no} Status Updated to {invoice.payment_status} (Net Recv: {net_received})")
+    except Exception as e:
+        logger.error(f"Failed to update portal sales status: {e}")
 
 def _update_portal_purchase_status(tenant_id, vendor_id, ref_no):
     """Refreshes a mirrored purchase's status based on total payments found in portal"""

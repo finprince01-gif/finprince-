@@ -5375,41 +5375,41 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </table>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-6">
                   {/* Left Column: Payment Summary */}
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Value</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Invoice Value</label>
                       <input
                         type="number"
                         readOnly
                         value={(purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)).toFixed(2)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">TDS/TCS under Income Tax</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">TDS/TCS under Income Tax</label>
                       <input
                         type="text"
                         value={purchaseTdsIt}
                         onChange={(e) => setPurchaseTdsIt(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right text-sm"
                         placeholder="0.00"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Advance Paid</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Advance Paid</label>
                       <input
                         type="text"
                         readOnly
                         value={purchaseAdvancePaid}
                         title="Sum of Applied Now column from the Advance grid (auto-calculated)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold text-sm"
                         placeholder="0.00"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
                         Gross Amount Due
                         {purchaseTaxIsTcs && Number(purchaseTdsIt) > 0 && (
                           <span className="ml-2 text-xs text-orange-600 font-normal">(TCS added)</span>
@@ -5423,11 +5423,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           + (purchaseTaxIsTcs ? (Number(purchaseTdsIt) || 0) : -(Number(purchaseTdsIt) || 0))
                         ).toFixed(2)}
                         title="Invoice Value ± TDS/TCS (before advance deduction)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-indigo-600">
                         Net Amount Due
                       </label>
                       <input
@@ -5439,24 +5439,24 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           - (Number(purchaseAdvancePaid) || 0)
                         ).toFixed(2)}
                         title="Net Amount Due = Gross Amount Due − Advance Paid (auto-calculated)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-lg"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-base text-indigo-700"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note:</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Posting Note:</label>
                       <textarea
                         value={purchasePostingNote}
                         onChange={(e) => setPurchasePostingNote(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none h-24"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none h-20 text-sm"
                         placeholder="Enter posting notes..."
                       />
                     </div>
                   </div>
 
                   {/* Middle Column: Advance Reference Grid */}
-                  <div className="border border-gray-300 rounded-[4px] p-4 bg-indigo-50/50 flex flex-col h-full">
+                  <div className="border border-gray-300 rounded-[4px] p-4 bg-slate-50/50 flex flex-col h-full">
                     <div className="space-y-3 flex-1 flex flex-col">
-                      <div className="grid grid-cols-[100px_1fr_100px_120px] gap-2 text-xs font-semibold text-gray-700 border-b border-gray-200 pb-2">
+                      <div className="grid grid-cols-[110px_1fr_110px_150px] gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-200 pb-2">
                         <div className="text-center">Date</div>
                         <div className="text-center">Reference No.</div>
                         <div className="text-right pr-2">Available</div>
@@ -5468,9 +5468,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           {purchaseAdvanceRefs.map((ref, idx) => {
                             const isAllocated = Number(ref.appliedNow) > 0;
                             return (
-                              <div key={ref.id || idx} className="grid grid-cols-[110px_1fr_100px_130px] gap-2 items-center text-sm py-2 border-b border-indigo-100/50 hover:bg-white transition-colors">
+                              <div key={ref.id || idx} className="grid grid-cols-[110px_1fr_110px_150px] gap-2 items-center text-sm py-2 border-b border-indigo-100/50 hover:bg-white transition-colors">
                                 <div className="text-center text-gray-500 text-xs">{ref.date}</div>
-                                <div className="font-medium text-indigo-900 truncate px-1" title={ref.refNo}>{ref.refNo}</div>
+                                <div className="font-medium text-indigo-900 truncate px-1 text-center" title={ref.refNo}>{ref.refNo}</div>
                                 <div className="text-right pr-2 font-semibold text-emerald-700">
                                   {Number(ref.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </div>
@@ -5481,7 +5481,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                     title="Check to use full amount"
                                     onChange={(e) => {
                                       const newVal = e.target.checked ? String(ref.amount) : "0";
-                                      handlePurchaseAdvanceRefChange(idx, 'allocatedNow', newVal);
+                                      handlePurchaseAdvanceRefChange(idx, 'appliedNow', newVal);
                                     }}
                                     className="h-5 w-5 text-indigo-600 focus:ring-indigo-200 border-gray-300 rounded cursor-pointer transition-transform hover:scale-110"
                                   />
@@ -5490,10 +5490,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                     <input
                                       type="number"
                                       step="0.01"
-                                      value={(ref as any).allocatedNow === "0" || !(ref as any).allocatedNow ? "" : (ref as any).allocatedNow}
+                                      value={(ref as any).appliedNow === "0" || !(ref as any).appliedNow ? "" : (ref as any).appliedNow}
                                       placeholder="0.00"
                                       title="Enter partial amount to allocate"
-                                      onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'allocatedNow', e.target.value)}
+                                      onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'appliedNow', e.target.value)}
                                       className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right transition-all outline-none ${isAllocated
                                         ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-100 font-bold text-indigo-950"
                                         : "bg-gray-50/50 border-gray-200 text-gray-400"
@@ -8222,7 +8222,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
 
                   <div className="space-y-3 flex-1 flex flex-col">
-                    <div className="grid grid-cols-[100px_1fr_100px_120px] gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-gray-200 pb-2">
+                    <div className="grid grid-cols-[110px_1fr_110px_150px] gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-gray-200 pb-2">
                       <div className="text-center">Date</div>
                       <div className="text-center">Reference No.</div>
                       <div className="text-right pr-2">Available</div>
@@ -8237,9 +8237,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           const isAllocated = parseFloat(appliedItem.appliedAmount) > 0;
 
                           return (
-                            <div key={invNo} className={`grid grid-cols-[100px_1fr_100px_120px] gap-2 items-center text-sm py-2.5 border-b border-indigo-50/50 hover:bg-white transition-all group rounded-sm px-1 ${isAllocated ? 'bg-indigo-50/20' : ''}`}>
+                            <div key={invNo} className={`grid grid-cols-[110px_1fr_110px_150px] gap-2 items-center text-sm py-2.5 border-b border-indigo-50/50 hover:bg-white transition-all group rounded-sm px-1 ${isAllocated ? 'bg-indigo-50/20' : ''}`}>
                               <div className="text-center text-gray-400 text-[10px] font-bold font-mono">{invoiceDetail?.date || '-'}</div>
-                              <div className="font-bold text-slate-700 truncate px-1 text-[11px] group-hover:text-indigo-600" title={invNo}>{invNo}</div>
+                              <div className="font-bold text-slate-700 truncate px-1 text-[11px] group-hover:text-indigo-600 text-center" title={invNo}>{invNo}</div>
                               <div className="text-right pr-2 font-black text-gray-900 font-mono text-[11px]">
                                 {Number(invoiceDetail?.balance_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                               </div>

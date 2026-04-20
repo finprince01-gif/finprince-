@@ -363,10 +363,15 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
 
             # --- Update Payment Status in Sales Module ---
             try:
-                # Track unique invoice IDs to avoid redundant updates
+                # Track unique invoice IDs to avoid redundant updates.
+                # Skip advance-type items: their `id` is an advance source row id,
+                # not a VoucherSalesInvoiceDetails id.
                 updated_invoices = set()
                 for item in items_data:
-                    it_ref_id = item.get('reference_id') or item.get('id')
+                    ref_type = str(item.get('reference_type', '')).upper()
+                    if ref_type == 'ADVANCE':
+                        continue  # Advance receipts don't link to a sales invoice directly
+                    it_ref_id = item.get('reference_id')
                     if it_ref_id and str(it_ref_id) not in updated_invoices:
                         update_sales_invoice_payment_status(tenant_id, str(it_ref_id))
                         updated_invoices.add(str(it_ref_id))
@@ -422,15 +427,18 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             items_data = []
             party_names = set()
             for item in items_qs:
-                if item.customer:
-                    party_names.add(item.customer.name)
+                # Use pay_from_ledger (customer/vendor) for party name resolution
+                item_party = getattr(item, 'pay_from_ledger', None) or receipt.pay_from_ledger
+                if item_party:
+                    party_names.add(item_party.name)
+                
                 items_data.append({
-                    "customer": item.customer.name if item.customer else "Unknown",
-                    "reference_type": item.reference_type,
-                    "amount": float(item.amount),
-                    "received_amount": float(item.received_amount),
-                    "is_advance": item.is_advance,
-                    "advance_ref_no": item.advance_ref_no
+                    "customer": item_party.name if item_party else "Unknown",
+                    "reference_type": getattr(item, 'reference_type', 'invoice'),
+                    "amount": float(getattr(item, 'amount', 0)),
+                    "received_amount": float(getattr(item, 'allocated_amount', 0)),
+                    "is_advance": getattr(item, 'is_advance', False),
+                    "advance_ref_no": getattr(item, 'advance_ref_no', None)
                 })
 
             Voucher.objects.create(
@@ -439,7 +447,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 type='receipt',
                 date=receipt.date,
                 party=", ".join(party_names) if party_names else "Bulk",
-                account=receipt.receive_in.name if receipt.receive_in else None,
+                account=getattr(receipt.receive_in, 'name', None),
                 amount=receipt.amount,
                 total=receipt.total_amount,
                 source=getattr(receipt, 'source', 'manual'),
@@ -449,17 +457,17 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 party_customer_id=receipt.party_customer_id,
                 party_vendor_id=receipt.party_vendor_id
             )
-        except Exception:
-            pass
+        except Exception as e:
+            import traceback
+            print(f"[ReceiptSerializer] _mirror_to_generic_voucher failed: {e}\n{traceback.format_exc()}")
     def _mirror_to_vendor_portal(self, receipt):
         """Mirror Vendor specific receipts to the Vendor Portal ledger"""
         from vendors.models import VendorMasterBasicDetail, VendorTransaction
         try:
             items_qs = receipt.get_items()
             for item in items_qs:
-                party = item.customer
-                if not party:
-                    party = receipt.customer
+                # Use pay_from_ledger (customer/vendor) for party name resolution
+                party = getattr(item, 'pay_from_ledger', None) or receipt.pay_from_ledger
                 if not party:
                     continue
 
@@ -510,11 +518,12 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 # Robust customer lookup
                 portal_customer = None
                 
-                # 1. Try by direct FK
-                if hasattr(item, 'customer') and item.customer:
+                # 1. Try by direct FK (pay_from_ledger stores the party)
+                item_party = getattr(item, 'pay_from_ledger', None) or receipt.pay_from_ledger
+                if item_party:
                     portal_customer = CustomerMasterCustomer.objects.filter(
                         tenant_id=receipt.tenant_id, 
-                        customer_name__iexact=item.customer.name
+                        customer_name__iexact=item_party.name
                     ).first()
                 
                 # 2. Try by ledger_id (most reliable for core engine)

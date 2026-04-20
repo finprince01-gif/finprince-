@@ -4,14 +4,15 @@ import { ChevronDown, Search } from 'lucide-react';
 
 interface SearchableDropdownProps {
     options: string[];
-    value: string;
-    onChange: (value: string) => void;
+    value: string | string[];
+    onChange: (value: any) => void;
     placeholder?: string;
     disabled?: boolean;
     required?: boolean;
     label?: string;
     noResultsText?: string;
     onCreateAction?: { label: string; onClick: () => void };
+    isMulti?: boolean;
 }
 
 const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
@@ -22,7 +23,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     disabled = false,
     required = false,
     noResultsText = 'No results found',
-    onCreateAction
+    onCreateAction,
+    isMulti = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -107,19 +109,39 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                 type="button"
                 onClick={toggleDropdown}
                 disabled={disabled}
-                className={`w-full px-3 py-2 text-left border rounded-[4px] flex justify-between items-center bg-white transition-all
+                className={`min-h-[42px] w-full px-3 py-2 text-left border rounded-[4px] flex justify-between items-center bg-white transition-all
                     ${disabled ? 'bg-gray-100 cursor-not-allowed border-gray-300 text-gray-500' : 'border-gray-300 focus:ring-1 focus:ring-indigo-500 hover:border-indigo-400'}
-                    ${!value ? 'text-gray-500' : 'text-gray-900 shadow-sm'}
+                    ${!value || (Array.isArray(value) && value.length === 0) ? 'text-gray-500' : 'text-gray-900 shadow-sm'}
                 `}
             >
-                <span className="truncate block font-medium">{value || placeholder}</span>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <div className="flex flex-wrap gap-1 flex-1 overflow-hidden">
+                    {isMulti && Array.isArray(value) && value.length > 0 ? (
+                        value.map(val => (
+                            <span key={val} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded border border-indigo-100 flex items-center gap-1">
+                                {val}
+                                <span 
+                                    className="hover:text-red-500 cursor-pointer font-bold ml-1"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const newValue = (value as string[]).filter(v => v !== val);
+                                        onChange(newValue);
+                                    }}
+                                >×</span>
+                            </span>
+                        ))
+                    ) : (
+                        <span className="truncate block font-medium">
+                            {Array.isArray(value) ? (value.length > 0 ? value.join(', ') : placeholder) : (value || placeholder)}
+                        </span>
+                    )}
+                </div>
+                <ChevronDown className={`w-4 h-4 text-gray-400 ml-2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {required && (
                 <input
                     type="text"
-                    value={value}
+                    value={Array.isArray(value) ? value.join(',') : value}
                     required={required}
                     className="absolute opacity-0 h-0 w-0"
                     onChange={() => { }}
@@ -195,22 +217,42 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
 
                     <div className="overflow-y-scroll flex-1 overscroll-contain custom-scrollbar" style={{ minHeight: '100px' }}>
                         {filteredOptions.length > 0 ? (
-                            filteredOptions.map((option) => (
-                                <div
-                                    key={option}
-                                    onClick={() => {
-                                        onChange(option);
-                                        setIsOpen(false);
-                                    }}
-                                    className={`px-4 py-2.5 cursor-pointer text-sm transition-colors
-                                        ${value === option
-                                            ? 'bg-indigo-600 text-white font-semibold'
-                                            : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700'}
-                                    `}
-                                >
-                                    {option}
-                                </div>
-                            ))
+                            filteredOptions.map((option) => {
+                                const isSelected = Array.isArray(value) ? value.includes(option) : value === option;
+                                return (
+                                    <div
+                                        key={option}
+                                        onClick={(e) => {
+                                            if (isMulti) {
+                                                e.stopPropagation();
+                                                const currentArr = Array.isArray(value) ? value : [];
+                                                const next = isSelected 
+                                                    ? currentArr.filter(v => v !== option)
+                                                    : [...currentArr, option];
+                                                onChange(next);
+                                            } else {
+                                                onChange(option);
+                                                setIsOpen(false);
+                                            }
+                                        }}
+                                        className={`px-4 py-2.5 cursor-pointer text-sm transition-colors flex items-center gap-2
+                                            ${isSelected && !isMulti
+                                                ? 'bg-indigo-600 text-white font-semibold'
+                                                : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700'}
+                                        `}
+                                    >
+                                        {isMulti && (
+                                            <input 
+                                                type="checkbox" 
+                                                checked={isSelected} 
+                                                readOnly 
+                                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            />
+                                        )}
+                                        {option}
+                                    </div>
+                                );
+                            })
                         ) : (
                             <div className="p-8 text-center text-sm text-gray-400 italic">{noResultsText}</div>
                         )}

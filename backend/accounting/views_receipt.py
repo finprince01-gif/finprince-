@@ -11,6 +11,8 @@ from .models import (
 ) # type: ignore
 from .serializers_receipt import ReceiptVoucherSerializer # type: ignore
 from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink # type: ignore
+from .services.sales_status_service import update_sales_invoice_payment_status
+from .services.portal_mirror_service import delete_transaction_from_portal
 
 class ReceiptVoucherViewSet(viewsets.ModelViewSet):
     """
@@ -118,6 +120,28 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
             serializer.save(tenant_id=user.branch_id)
         else:
             serializer.save()
+
+    def perform_destroy(self, instance):
+        tenant_id = instance.tenant_id
+        items = list(instance.get_items()) # Capture before deletion
+        
+        # 1. Mirror deletion to portal
+        try:
+            delete_transaction_from_portal(instance)
+        except Exception as e:
+            print(f"!!! Failed to delete portal mirror: {e}")
+
+        # 2. Delete the actual voucher
+        instance.delete()
+        
+        # 3. Recalculate status for all affected invoices
+        for it in items:
+            ref_id = getattr(it, 'reference_id', None)
+            if ref_id and str(ref_id).strip():
+                try:
+                    update_sales_invoice_payment_status(tenant_id, str(ref_id))
+                except Exception as status_err:
+                    print(f"!!! Status cleanup failed for invoice {ref_id}: {status_err}")
 
     @action(detail=False, methods=['get'], url_path='check-uniqueness')
     def check_uniqueness(self, request):

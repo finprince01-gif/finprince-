@@ -2247,12 +2247,35 @@ const InventoryPage: React.FC = () => {
     fetchOutwardSalesOrders(customerName);
   };
 
-  const handleOutwardSupplierInvoiceChange = (invNumber: string) => {
+  const handleOutwardSupplierInvoiceChange = async (invNumber: string) => {
     setOutwardSupplierInvoice(invNumber);
     const inv = outwardSupplierInvoiceOptions.find(i => i.voucher_number === invNumber || i.id?.toString() === invNumber || i.supplier_invoice_no === invNumber);
     if (inv) {
       if (inv.party_name) {
-        handlePurchaseReturnVendorChange(inv.party_name);
+        // Set vendor name directly first to avoid the useEffect triggering with empty vendor
+        setOutwardVendorName(inv.party_name);
+        
+        // Then run the full vendor change logic to get branches
+        const vendor = vendors.find(v => v.vendor_name === inv.party_name);
+        if (vendor) {
+          try {
+            const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
+            const mappedBranches = Array.isArray(branchResponse) ? branchResponse.map((b: any) => ({
+              ...b,
+              reference_name: b.reference_name || b.defaultRef || b.branch_name || b.name || b.gstin || `Branch ${b.id}` || 'Main',
+              branch_address: b.branch_address || b.address
+            })) : [];
+            setOutwardBranchOptions(mappedBranches);
+            
+            // If the invoice has a branch, use it. Otherwise use the first available branch.
+            const targetBranch = inv.branch || (mappedBranches.length > 0 ? mappedBranches[0].reference_name : '');
+            if (targetBranch) {
+              handleOutwardBranchChange(targetBranch);
+            }
+          } catch (error) {
+            handleApiError(error, "Fetching vendor details for invoice");
+          }
+        }
       }
     }
   };
@@ -2687,8 +2710,16 @@ const InventoryPage: React.FC = () => {
           if (outwardType === 'sales') {
             fetchOutwardSalesOrders(outwardCustomerName);
           } else if (outwardType === 'purchase_return') {
-            const response = await apiService.getVouchers('Purchase');
-            setOutwardSupplierInvoiceOptions(Array.isArray(response) ? response : []);
+            if (outwardVendorName && outwardBranch) {
+              const response = await apiService.getVendorPurchaseInvoices(outwardVendorName, outwardBranch);
+              setOutwardSupplierInvoiceOptions(Array.isArray(response) ? response : []);
+            } else if (outwardVendorName) {
+              const response = await apiService.getVendorPurchaseInvoices(outwardVendorName);
+              setOutwardSupplierInvoiceOptions(Array.isArray(response) ? response : []);
+            } else {
+              const response = await apiService.getVouchers('Purchase');
+              setOutwardSupplierInvoiceOptions(Array.isArray(response) ? response : []);
+            }
           }
         } catch (error) {
           console.error("Error fetching outward options", error);
@@ -2696,7 +2727,7 @@ const InventoryPage: React.FC = () => {
       };
       fetchOutwardData();
     }
-  }, [showIssueSlipForm, issueSlipTab, outwardType, outwardCustomerName]);
+  }, [showIssueSlipForm, issueSlipTab, outwardType, outwardCustomerName, outwardVendorName, outwardBranch]);
 
   useEffect(() => {
     if (showIssueSlipForm && issueSlipTab === 'scrap') {
@@ -7295,11 +7326,7 @@ const InventoryPage: React.FC = () => {
                                       if (code && !uniqueMap.has(code)) uniqueMap.set(code, i);
                                     });
                                     const allUniqueItems = Array.from(uniqueMap.values());
-                                    const scrapOnlyItems = allUniqueItems.filter(i => {
-                                      const cat = (i.category_name || i.categoryPath || i.category || i.group || '').toString().toLowerCase();
-                                      const name = (i.name || i.item_name || i.itemName || '').toString().toLowerCase();
-                                      return cat.includes('scrap') || name.includes('scrap');
-                                    });
+                                    const scrapOnlyItems = allUniqueItems;
 
                                     return (
                                       <tr key={idx}>
