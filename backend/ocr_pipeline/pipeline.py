@@ -3,7 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 from google import genai
 from core.ai_proxy import api_key_manager
-from .extraction import extract_invoice
+from ocr_pipeline.extraction import extract_invoice
 from .normalize import normalize
 from .repository import InvoiceTempOCR
 from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails
@@ -27,62 +27,49 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
     print("PIPELINE EXECUTED")
     logger.info(f"NEW OCR PIPELINE ACTIVE - Start processing record {record.id}...")
     
-    max_retries = 3
-    last_err = None
-    
-    for attempt in range(max_retries):
-        try:
-            # Get API key
-            api_key = api_key_manager.get_healthy_key()
-            if not api_key:
-                raise RuntimeError("No healthy Gemini API keys available")
-
-            # Initialize Gemini Client
-            client = genai.Client(
-                api_key=api_key,
-                http_options=types.HttpOptions(timeout=None)
-            )
-
-            # Phase 1: High-Precision Extraction (Gemini)
-            extracted = extract_invoice(client, file_bytes, voucher_type=record.voucher_type or 'Purchase')
+    # STEP 1: Process Extraction
+    try:
+        # Phase 1: High-Precision Extraction (Gemini via central Proxy)
+        # We no longer need to initialize a client here as extract_invoice handles it via the proxy
+        extracted = extract_invoice(
+            client=None, # Client is now handled internally by the proxy
+            file_bytes=file_bytes, 
+            voucher_type=record.voucher_type or 'Purchase',
+            public_ip="0.0.0.0",
+            user_id='system',
+            tenant_id=str(record.tenant_id or 'system')
+        )
+        
+        # Phase 2: Hierarchical Normalization
+        normalized = normalize(extracted)
+        
+        # STEP 2: Save extracted data immediately
+        record.extracted_data = normalized
+        record.status = 'EXTRACTED'
+        record.save()
             
-            # Phase 2: Hierarchical Normalization
-            normalized = normalize(extracted)
-            
-            # STEP 1: Save extracted data immediately
-            record.extracted_data = normalized
-            record.status = 'EXTRACTED'
-            record.save()
-            
-            # STEP 2: IMMEDIATELY call validation and processing
-            logger.info(f"PIPELINE: Extraction complete for record {record.id}. Starting immediate validation...")
-            res = validate_and_process(record)
-            
-            return {
-                "data": normalized,
-                "validation": res
-            }
-        except Exception as e:
-            last_err = e
-            err_msg = str(e).upper()
-            if ("429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg) and attempt < max_retries - 1:
-                logger.warning(f"Rate limited (429) for record {record.id} on attempt {attempt+1}. Retrying with fresh key...")
-                api_key_manager.mark_key_unhealthy(api_key)
-                
-                # Exponential backoff: 5s, 10s
-                sleep_time = (attempt + 1) * 5
-                time.sleep(sleep_time)
-                continue
-            
-            logger.error(f"PIPELINE CRITICAL FAILURE for record {record.id}: {str(e)}")
-            record.status = 'FAILED'
-            record.validation_status = 'ERROR'
-            record.validation_message = f"Extraction Error: {str(e)}"
-            record.save()
-            return {
-                "data": {},
-                "validation": {"status": "ERROR", "error": str(e)}
-            }
+        # STEP 3: IMMEDIATELY call validation and processing
+        logger.info(f"PIPELINE: Extraction complete for record {record.id}. Starting immediate validation...")
+        res = validate_and_process(record)
+        
+        return {
+            "data": normalized,
+            "validation": res
+        }
+    except Exception as e:
+        err_msg = str(e).upper()
+        # Note: ai_service already handles its internal retries. 
+        # If it bubbles up to here, it's a terminal failure for this record.
+        
+        logger.error(f"PIPELINE CRITICAL FAILURE for record {record.id}: {str(e)}")
+        record.status = 'FAILED'
+        record.validation_status = 'ERROR'
+        record.validation_message = f"Extraction Error: {str(e)}"
+        record.save()
+        return {
+            "data": {},
+            "validation": {"status": "ERROR", "error": str(e)}
+        }
 
 def finalize_merged_records(records, auto_save: bool = True):
     """
@@ -120,6 +107,15 @@ def finalize_merged_records(records, auto_save: bool = True):
     merged_data["sections"]["supply_details"] = last_sections.get("supply_details", {})
     merged_data["sections"]["due_details"] = last_sections.get("due_details", {})
     merged_data["sections"]["transit_details"] = last_sections.get("transit_details", {})
+    
+    # ── Phase 2.5: Re-Normalize ──
+    # Important: Clear _raw_source so normalize() uses the newly merged items and totals
+    if "_raw_source" in merged_data:
+        del merged_data["_raw_source"]
+    
+    # Re-run normalization to trigger tax type reconciliation across the combined items
+    print("RE-NORMALIZING merged multi-page record to reconcile tax types...")
+    merged_data = normalize(merged_data)
     
     # Update top-level field for consistency
     if last_record.extracted_data:

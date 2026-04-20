@@ -105,4 +105,7 @@ urlpatterns = [
 
     # Hsn Details API
     path('api/hsn-details/', HsnDetailsAPIView.as_view(), name='hsn-details'),
+
+    # GST Reconciliation & Computation (New Module)
+    path('api/gst/', include('gst_reconciliation.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

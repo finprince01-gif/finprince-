@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'vouchers',
     'ocr_pipeline',
+    'gst_reconciliation',
 ]
 
 MIDDLEWARE = [

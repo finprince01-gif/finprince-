@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import GSTR1Page from './GSTR1';
+import GSTR2Reconciliation from './GSTR2Reconciliation';
+import GSTR3BPreview from './GSTR3BPreview';
 import { usePermissions } from '../../hooks/usePermissions';
 
 export default function GSTPage() {
@@ -53,21 +55,13 @@ export default function GSTPage() {
                 )}
 
                 {activeTab === 'GSTR2' && (
-                    <div className="erp-container py-20 text-center">
-                        <h3 className="section-title border-none pb-0">GSTR2 - Inward Supplies</h3>
-                        <p className="helper-text">Automated inward supplies reconciliation module is coming soon.</p>
-                    </div>
+                    <GSTR2Reconciliation />
                 )}
 
                 {activeTab === 'GSTR3B' && (
-                    <div className="erp-container py-20 text-center">
-                        <h3 className="section-title border-none pb-0">GSTR3B - Monthly Summary</h3>
-                        <p className="helper-text">Monthly summary return and auto-computation from GSTR1/2 is coming soon.</p>
-                    </div>
+                    <GSTR3BPreview />
                 )}
             </div>
         </div>
     );
 }
-
-

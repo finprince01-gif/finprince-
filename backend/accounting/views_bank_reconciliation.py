@@ -52,6 +52,7 @@ from .models_bank_reconciliation import BankStatementTransaction, BankReconcilia
 from .models import AmountTransaction, MasterLedger, Voucher, JournalEntry  # type: ignore[import]
 from .models import VoucherPaymentSingle  # type: ignore[import]
 from .models import VoucherReceiptSingle  # type: ignore[import]
+from ocr_pipeline.extraction import extract_bank_statement
 from .serializers_bank_reconciliation import (  # type: ignore[import]
     BankStatementTransactionSerializer,
     BankReconciliationLinkSerializer,
@@ -68,6 +69,7 @@ ACCEPTED_CONTENT_TYPES = {
     'application/csv',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/pdf',
     'application/octet-stream',  # some browsers
 }
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -422,8 +424,6 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
 
 
     def get_queryset(self):
-        with open(r'c:\108\muthu\AI-accounting-0.03\backend\debug_api.txt', 'a') as f:
-            f.write(f"HIT get_queryset params={self.request.query_params}\n")
         tenant_id = self._get_tenant_id(self.request)
         params = self.request.query_params
         
@@ -505,6 +505,7 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
             filename.endswith('.csv')
             or filename.endswith('.xlsx')
             or filename.endswith('.xls')
+            or filename.endswith('.pdf')
             or content_type in ACCEPTED_CONTENT_TYPES
         ):
             return Response(
@@ -570,6 +571,23 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
                 except UnicodeDecodeError:
                     file_obj.seek(0)
                     df = pd.read_csv(file_obj, encoding='latin1')
+            elif filename.endswith('.pdf'):
+                # AI-powered PDF parsing
+                file_obj.seek(0)
+                extracted_data = extract_bank_statement(
+                    file_obj.read(), 
+                    user_id=getattr(self.request.user, 'username', 'system'),
+                    tenant_id=tenant_id
+                )
+                raw_list = extracted_data.get('transactions', [])
+                df = pd.DataFrame(raw_list)
+                
+                # Normalize column names to match what _smart_detect_columns expects or bypass it
+                if not df.empty:
+                    # Map AI schema to human-readable names that _smart_detect can handle
+                    # but actually we can just use the AI keys directly if we want.
+                    # Let's let _smart_detect_columns handle it if possible.
+                    pass
             else:
                 df = pd.read_excel(file_obj, engine='openpyxl')
 
@@ -996,12 +1014,12 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
         # Get all unlinked vouchers for filtering (Isolated by bank ledger)
         payments_single = list(VoucherPaymentSingle.objects.filter(
             tenant_id=tenant_id, 
-            pay_from_id=bank_ledger_id,  # Use pay_from_id to match the ForeignKey attribute
+            pay_from_ledger_id=bank_ledger_id,
             bank_reconciled=False
         ))
         receipts_single = list(VoucherReceiptSingle.objects.filter(
             tenant_id=tenant_id, 
-            receive_in_id=bank_ledger_id,  # Use receive_in_id to match the ForeignKey attribute
+            receive_in_ledger_id_val=bank_ledger_id,
             bank_reconciled=False
         ))
         
@@ -1109,8 +1127,6 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def pending_matches(self, request):
-        with open(r'c:\108\muthu\AI-accounting-0.03\backend\debug_api.txt', 'a') as f:
-            f.write(f"HIT pending_matches params={request.query_params}\n")
         params = request.query_params
         bank_ledger_id = params.get('bank_ledger_id')
         tenant_id = self._get_tenant_id(request)
@@ -1471,36 +1487,38 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
                 else:
                     voucher_date = st_txn.transaction_date
 
-                # 1. Create the specific voucher record (Payment/Receipt)
+                # 1. Create the specific voucher record (Unified Transaction model)
                 if is_payment:
                     specific_voucher = VoucherPaymentSingle.objects.create(
                         tenant_id=tenant_id,
-                        voucher_type='Payment',
+                        transaction_type='PAYMENT',
                         voucher_number=voucher_number,
                         date=voucher_date,
-                        pay_from=bank_ledger,
-                        pay_to=party_ledger,
-                        total_payment=float(amount),
+                        pay_from_ledger=bank_ledger,
+                        pay_to_ledger=party_ledger,
+                        total_amount=float(amount),
+                        amount=float(amount),
                         bank_reconciled=True,
                         bank_reconcile_date=st_txn.transaction_date,
                         bank_statement_id=st_txn.id,
                         bank_reference_number=st_txn.reference_number,
-                        source='bank_reconciliation'
+                        narration=narration
                     )
                 else:
                     specific_voucher = VoucherReceiptSingle.objects.create(
                         tenant_id=tenant_id,
-                        voucher_type='Receipt',
+                        transaction_type='RECEIPT',
                         voucher_number=voucher_number,
                         date=voucher_date,
-                        receive_in=bank_ledger,
-                        receive_from=party_ledger,
-                        total_receipt=float(amount),
+                        pay_to_ledger=bank_ledger,    # Receipts go TO the bank
+                        pay_from_ledger=party_ledger, # Receipts come FROM the party
+                        total_amount=float(amount),
+                        amount=float(amount),
                         bank_reconciled=True,
                         bank_reconcile_date=st_txn.transaction_date,
                         bank_statement_id=st_txn.id,
                         bank_reference_number=st_txn.reference_number,
-                        source='bank_reconciliation'
+                        narration=narration
                     )
 
                 # 2. Create the main generic Voucher record (for overall audit trail and reporting)
@@ -1520,46 +1538,59 @@ class BankReconciliationViewSet(viewsets.ModelViewSet):
                 # 3. Insert journal entries for double-entry accounting
                 amount_dec = Decimal(str(amount))
                 zero_dec = Decimal("0.00")
+                v_type = 'payment' if is_payment else 'receipt'
 
                 if is_payment:
                     # Debit -> Counterparty, Credit -> Bank
                     JournalEntry.objects.create(
                         tenant_id=tenant_id,
-                        voucher=main_voucher,
-                        ledger=party_ledger.name,
+                        voucher_type=v_type,
+                        voucher_id=main_voucher.id,
+                        voucher_number=voucher_number,
+                        transaction_date=voucher_date,
+                        narration=main_voucher.narration,
+                        ledger=party_ledger,
+                        ledger_name=party_ledger.name,
                         debit=amount_dec,
-                        credit=zero_dec,
-                        created_at=timezone.now(),
-                        updated_at=timezone.now()
+                        credit=zero_dec
                     )
                     JournalEntry.objects.create(
                         tenant_id=tenant_id,
-                        voucher=main_voucher,
-                        ledger=bank_ledger.name,
+                        voucher_type=v_type,
+                        voucher_id=main_voucher.id,
+                        voucher_number=voucher_number,
+                        transaction_date=voucher_date,
+                        narration=main_voucher.narration,
+                        ledger=bank_ledger,
+                        ledger_name=bank_ledger.name,
                         debit=zero_dec,
-                        credit=amount_dec,
-                        created_at=timezone.now(),
-                        updated_at=timezone.now()
+                        credit=amount_dec
                     )
                 else:
                     # Debit -> Bank, Credit -> Counterparty
                     JournalEntry.objects.create(
                         tenant_id=tenant_id,
-                        voucher=main_voucher,
-                        ledger=bank_ledger.name,
+                        voucher_type=v_type,
+                        voucher_id=main_voucher.id,
+                        voucher_number=voucher_number,
+                        transaction_date=voucher_date,
+                        narration=main_voucher.narration,
+                        ledger=bank_ledger,
+                        ledger_name=bank_ledger.name,
                         debit=amount_dec,
-                        credit=zero_dec,
-                        created_at=timezone.now(),
-                        updated_at=timezone.now()
+                        credit=zero_dec
                     )
                     JournalEntry.objects.create(
                         tenant_id=tenant_id,
-                        voucher=main_voucher,
-                        ledger=party_ledger.name,
+                        voucher_type=v_type,
+                        voucher_id=main_voucher.id,
+                        voucher_number=voucher_number,
+                        transaction_date=voucher_date,
+                        narration=main_voucher.narration,
+                        ledger=party_ledger,
+                        ledger_name=party_ledger.name,
                         debit=zero_dec,
-                        credit=amount_dec,
-                        created_at=timezone.now(),
-                        updated_at=timezone.now()
+                        credit=amount_dec
                     )
 
                 # 4. Store reconciliation link

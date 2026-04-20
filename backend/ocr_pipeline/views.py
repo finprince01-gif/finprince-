@@ -38,16 +38,17 @@ class CleanOCRStagingView(views.APIView):
         if not files:
             return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
-        print(f"DEBUG: Processing upload for {len(files)} files. Branch: {tenant_id}")
-        results = []
-        for uploaded_file in files:
+        import concurrent.futures
+        from django.db import connection
+
+        def process_file_item(uploaded_file):
             try:
-                # Read bytes
+                # Need to reset connection for each thread in Django if using DB
+                # Actually for small tasks it might be okay, but safer to wrap
+                # process_invoice_upload handles its own DB transactions usually.
                 file_bytes = uploaded_file.read()
                 file_hash = hashlib.sha256(file_bytes).hexdigest()
                 
-                # Persistence for Rescan feature
-                # Save bytes to media/ocr_temp/
                 temp_dir = os.path.join(settings.MEDIA_ROOT, 'ocr_temp')
                 if not os.path.exists(temp_dir):
                     os.makedirs(temp_dir)
@@ -57,18 +58,24 @@ class CleanOCRStagingView(views.APIView):
                     with open(temp_file_path, 'wb') as f:
                         f.write(file_bytes)
                 
-                # Process upload
-                result = process_invoice_upload(
+                return process_invoice_upload(
                     file_bytes=file_bytes,
                     voucher_type=voucher_type,
                     file_name=uploaded_file.name,
                     upload_session_id=upload_session_id,
                     tenant_id=tenant_id
                 )
-                results.append(result)
             except Exception as e:
-                logger.error(f"POST API Processing failure: {str(e)}")
-                results.append({"file_name": uploaded_file.name, "status": "FAILED", "error": str(e)})
+                logger.error(f"Threaded API Processing failure: {str(e)}")
+                return {"file_name": uploaded_file.name, "status": "FAILED", "error": str(e)}
+            finally:
+                connection.close()
+
+        print(f"DEBUG: Processing upload for {len(files)} files in PARALLEL. Branch: {tenant_id}")
+        results = []
+        # Support up to 6 concurrent extractions to maximize throughput without hitting AI rate limits too hard
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            results = list(executor.map(process_file_item, files))
 
         # STEP 5: Run Grouping Preprocessor (Multi-page Merge)
         try:
@@ -117,10 +124,9 @@ class CleanOCRStagingView(views.APIView):
             print(f"DEBUG: No session ID, file_paths or resume flag provided. Returning empty list.")
             records = InvoiceTempOCR.objects.none()
 
-        # ── Step 3.5: Apply Grouping filter (Hide secondary pages) ──
-        # If records exist, only show primary aggregated records
-        if records.exists():
-            records = records.filter(Q(is_primary=True) | Q(group_id__isnull=True))
+        # ── Step 3.5: Apply Grouping filter (Commented out to allow frontend toggling of all pages) ──
+        # if records.exists():
+        #     records = records.filter(Q(is_primary=True) | Q(group_id__isnull=True))
 
         # ── Step 4: Optional Filter ──
         v_filter = request.query_params.get('filter')
@@ -227,7 +233,10 @@ class CleanOCRStagingView(views.APIView):
             
             # Instead of calling old validate_vendor(), run the full pipeline validate_and_process
             # so the status, vendor_id and branch matching all stay in sync.
-            record.extracted_data = updated_data  # Store hierarchical data as-is (Sections intact)
+            
+            # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
+            normalized_patch = normalize(updated_data)
+            record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
             record.status = 'EXTRACTED'
             record.supplier_invoice_no = (
                 sections.get('supplier_details', {}).get('supplier_invoice_no') or 
@@ -404,6 +413,12 @@ class OCRStagingRescanView(views.APIView):
             record.save()
             
             execution_res = run_ocr_pipeline(file_bytes, record)
+            
+            # Re-run grouping in case rescan fixed details that allow merging
+            try:
+                from .grouping import run_grouping_logic
+                run_grouping_logic(tenant_id, record.upload_session_id)
+            except: pass
             
             return Response({
                 "success": True,

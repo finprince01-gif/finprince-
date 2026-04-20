@@ -55,7 +55,7 @@ import type { AgentMessage } from '../types';
 import Icon from './Icon';
 
 // Import assets
-import kikiLogo from '../assets/fox-logo-transparent.png';
+import kikiLogo from '../assets/kiki-agent-orange.png';
 
 /**
  * Props for AIAgent component
@@ -160,14 +160,20 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-end justify-end">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-md h-[70vh] m-8 rounded-[4px] shadow-none border border-slate-200 dark:border-slate-800 flex flex-col transform transition-transform duration-300 ease-out animate-slide-in">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800">
+    <div className="fixed bottom-0 right-0 z-50 pointer-events-none p-8 flex items-end justify-end">
+      <div 
+        className="bg-white dark:bg-slate-900 w-full max-w-md h-[75vh] rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex flex-col transform transition-transform duration-300 ease-out animate-slide-in pointer-events-auto overflow-hidden"
+        style={{
+          border: '3px solid transparent',
+          background: 'linear-gradient(white, white) padding-box, linear-gradient(135deg, #f97316, #ea580c, #fb923c) border-box',
+        }}
+      >
+        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
           <div className="flex items-center space-x-3">
-            <div className="w-20 h-20 flex items-center justify-center">
-              <img src={kikiLogo} alt="Kiki" className="w-full h-full object-contain" />
+            <div className="w-14 h-14 flex items-center justify-center p-0.5 bg-white rounded-full border-2 border-orange-100 shadow-sm overflow-hidden">
+              <img src={kikiLogo} alt="Kiki" className="w-full h-full object-contain scale-110" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Kiki Agent</h3>
+            <h3 className="text-base font-black text-gray-800 dark:text-slate-100 uppercase tracking-tighter">KIKI AI AGENT</h3>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200">
             <Icon name="close" className="w-6 h-6" />
@@ -260,7 +266,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
                 <div className="block bg-gray-200 dark:bg-slate-700 w-10 h-6 rounded-[4px]"></div>
                 <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-[4px] transition-transform ${useGrounding ? 'translate-x-full bg-indigo-600' : ''}`}></div>
               </div>
-              <div className="ml-3 text-xs text-gray-600 dark:text-slate-400">Search the web</div>
+              <div className="ml-3 text-[10px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-widest">Search the web</div>
             </label>
           </div>
         </div>
