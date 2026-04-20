@@ -68,7 +68,7 @@ import { showError, showSuccess } from '../utils/toast';
 
 
 // Import assets
-import kikiLogo from '../assets/fox-logo-transparent.png';
+import kikiLogo from '../assets/kiki-agent-orange.png';
 
 // ============================================================================
 // SERVICE IMPORTS
@@ -1435,8 +1435,8 @@ const App: React.FC = () => {
           width: '56px',
           height: '56px',
           backgroundColor: '#ffffff',
-          borderRadius: '50%',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
           position: 'fixed',
           bottom: '16px',
           right: '16px',
@@ -1444,10 +1444,10 @@ const App: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 0,
-          margin: 0,
+          padding: '2px', // Space for the border
+          background: 'linear-gradient(white, white) padding-box, linear-gradient(45deg, #f97316, #ea580c) border-box',
+          border: '2px solid transparent',
           cursor: 'pointer',
-          border: 'none',
           outline: 'none',
           overflow: 'hidden'
         }}
@@ -1461,7 +1461,7 @@ const App: React.FC = () => {
             width: '100%',
             height: '100%',
             objectFit: 'contain',
-            transform: 'scale(1.6)'
+            borderRadius: '10px' // Slightly less than button for fit
           }}
         />
       </button>

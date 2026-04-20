@@ -227,7 +227,10 @@ class CleanOCRStagingView(views.APIView):
             
             # Instead of calling old validate_vendor(), run the full pipeline validate_and_process
             # so the status, vendor_id and branch matching all stay in sync.
-            record.extracted_data = updated_data  # Store hierarchical data as-is (Sections intact)
+            
+            # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
+            normalized_patch = normalize(updated_data)
+            record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
             record.status = 'EXTRACTED'
             record.supplier_invoice_no = (
                 sections.get('supplier_details', {}).get('supplier_invoice_no') or 

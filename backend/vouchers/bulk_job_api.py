@@ -119,6 +119,41 @@ class BulkUploadAPIView(APIView):
             return Response({'status': 'already_processing',
                              'message': 'Duplicate request received'})
 
+        # ── GATE 6: Instant Extraction (No Persistence) ──────────────────
+        no_persist = request.data.get('no_persist') == 'true' or request.query_params.get('no_persist') == 'true'
+        if no_persist:
+            try:
+                results = []
+                voucher_type = request.data.get('voucher_type', 'Purchase')
+                from ocr_pipeline.service import process_invoice_upload
+                
+                for uploaded_file in files:
+                    file_bytes = uploaded_file.read()
+                    # We use a dummy session_id for non-persistent tracking in the response if needed
+                    res = process_invoice_upload(
+                        file_bytes=file_bytes,
+                        voucher_type=voucher_type,
+                        file_name=uploaded_file.name,
+                        upload_session_id="INSTANT",
+                        tenant_id=tenant_id
+                    )
+                    # IMMEDIATELY DELETE from Staging (InvoiceTempOCR) to ensure "no save in any tables"
+                    from ocr_pipeline.repository import InvoiceTempOCR
+                    InvoiceTempOCR.objects.filter(id=res.get('id')).delete()
+                    
+                    results.append(res)
+                
+                lock.release()
+                return Response({
+                    'status': 'completed',
+                    'results': results,
+                    'total_files': len(files)
+                })
+            except Exception as e:
+                lock.release()
+                logger.error(f"[UPLOAD] Instant extraction failed: {e}")
+                return Response({'error': str(e)}, status=500)
+
         try:
             return self._create_and_enqueue(request, tenant_id, files, batch_fingerprint, lock)
         except Exception as e:

@@ -85,7 +85,7 @@ const BankStatementUpload: React.FC<BankStatementUploadProps> = ({
                         <Icon name="upload" className="w-10 h-10" />
                     </div>
                     <h2 className="text-3xl font-black text-slate-800 tracking-tight">Upload Bank Statement</h2>
-                    <p className="text-slate-500 font-medium mt-2">Import your CSV or Excel bank transactions</p>
+                    <p className="text-slate-500 font-medium mt-2">Import your CSV, Excel or PDF bank transactions</p>
                 </div>
 
                 <div className="space-y-6">
@@ -112,7 +112,7 @@ const BankStatementUpload: React.FC<BankStatementUploadProps> = ({
                             <input
                                 type="file"
                                 onChange={handleFileChange}
-                                accept=".csv,.xlsx,.xls"
+                                accept=".csv,.xlsx,.xls,.pdf"
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                             />
                             <div className={`w-full p-8 border-2 border-dashed rounded-3xl transition-all flex flex-col items-center justify-center gap-4 ${
@@ -123,7 +123,7 @@ const BankStatementUpload: React.FC<BankStatementUploadProps> = ({
                                     <p className={`text-sm font-bold ${file ? 'text-emerald-700' : 'text-slate-500'}`}>
                                         {file ? file.name : 'Click to browse or drag & drop'}
                                     </p>
-                                    {!file && <p className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">CSV, XLS, or XLSX up to 10MB</p>}
+                                    {!file && <p className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">CSV, XLS, XLSX or PDF up to 10MB</p>}
                                 </div>
                                 {file && (
                                     <button 

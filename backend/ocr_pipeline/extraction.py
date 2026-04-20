@@ -28,12 +28,12 @@ def extract_json_from_text(text):
     
     return text.strip()
 
-def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.0.0"):
+def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.0.0", user_id='system', tenant_id='system'):
     """
-    Extracts invoice data using Gemini 2.0 Flash.
+    Extracts invoice data using the central AI Proxy service with fallbacks.
     Returns a unified JSON object matching the internal schema.
     """
-    prompt = f"""
+    prompt_text = f"""
 Extract invoice data from this {voucher_type} document into the EXACT JSON format below.
 
 # 🎯 SCHEMA
@@ -75,63 +75,132 @@ Extract invoice data from this {voucher_type} document into the EXACT JSON forma
 
 ---
 
+---
+
 # 🧠 EXTRACTION STRATEGY
 
-## 1. TAX & TOTALS
-* MANDATORY: If IGST Rate, CGST Rate, or SGST Rate are present at the bottom summary of the invoice, you MUST distribute those rates (e.g. 9.0, 18.0) to every line item in the JSON. NO EXCEPTIONS.
-* Even if it is handwritten symbols like "@", "9 %", or "GST", identify them as tax rates.
-* Taxable Value per item should be the base amount (Rate * Qty) before any Discount. If it is NOT explicitly in the row, you MUST compute it as Qty * Rate.
-* The `total_amount` in the header should be the Grand Total of the invoice.
+## 1. VENDOR/SUPPLIER IDENTIFICATION (CRITICAL)
+* The **VENDOR/SUPPLIER** is the entity issuing the bill (Letterhead/Top).
+* The **BUYER/CUSTOMER** (Bill To/Ship To/Consignee) is NOT the vendor.
+* **STRICT RULE**: Extract the entity charging money. Ignoring the Buyer is mandatory.
+* Use the GSTIN associated with the Letterhead name.
 
-## 2. LINE ITEM ALIGNMENT
-* Extract all items in the table. 
-* Ensure `description` is exactly as written.
-* If `hsn_code` is present, extract it for each row.
+## 2. LINE ITEM EXTRACTION (MANDATORY)
+* **EXTRACT EVERY SINGLE LINE ITEM**. Do not summarize or skip.
+* Every row in the document must have a corresponding entry in `line_items`.
+* Merge multi-line descriptions into a single string.
 
-## 3. ADDRESS EXTRACTION
-* Extract the FULL multi-line address for the vendor/supplier.
-* Identify the GSTIN of the vendor.
+## 3. TAX & TOTALS
+* Distribute header/footer tax rates (CGST/SGST/IGST) to all line items.
+* Total Amount must be the Grand Total of the invoice.
+
+## 4. ADDRESS & GSTIN
+* Extract the full address of the Supplier/Vendor from the Letterhead.
+* Do not extract the Buyer's GSTIN.
 
 ---
 
 # 🚫 RULES
 * Return ONLY valid JSON.
-* Ensure all numeric fields are numbers (not strings).
-* If a field is missing, use "" for strings or 0 for numbers.
-* DO NOT hallucinate the invoice total into the line item amounts.
+* Ensure all numeric fields are numbers.
+* NEVER hallucinate Buyer info as Vendor info.
+* NEVER truncate the items list.
 """
     
-    # Process blob directly
+    import base64
+    from core.ai_proxy import ai_service
+    
+    # Process via central proxy to benefit from key rotation and model fallback
     try:
-        logger.info(f"AI OCR Call: gemini-2.0-flash | Outbound IP: {public_ip}")
-        response = client.models.generate_content(
-            model="gemini-2.0-flash", 
-            contents=[
-                prompt,
-                {"inline_data": {"mime_type": "application/pdf", "data": file_bytes}}
-            ],
-            config=types.GenerateContentConfig(
-                http_options=types.HttpOptions(timeout=None)
-            )
-        )
+        # Encode file for proxy
+        file_b64 = base64.b64encode(file_bytes).decode('utf-8')
         
-        # Parse result
-        raw_text = response.text.strip()
-        logger.info(f"RAW AI RESPONSE (Length: {len(raw_text)} chars)")
+        request_data = {
+            'prompt': prompt_text,
+            'image_data': file_b64,
+            'mime_type': 'application/pdf',
+            'voucher_type': voucher_type
+        }
         
+        logger.info(f"AI OCR Request dispatched to proxy (Type: extraction, User: {user_id})")
+        response = ai_service.make_request('extraction', request_data, user_id, tenant_id)
+        
+        if 'error' in response:
+            raise RuntimeError(response['error'])
+
+        raw_text = response.get('reply', '').strip()
         cleaned_json_text = extract_json_from_text(raw_text)
         
         try:
             result = json.loads(cleaned_json_text)
-            logger.info("Successfully parsed Gemini JSON response.")
+            logger.info("Successfully parsed Proxy-mediated Gemini response.")
             return result
         except json.JSONDecodeError as jde:
-            logger.error(f"JSON Decode Error: {str(jde)}")
-            logger.error(f"Partial text that failed: {cleaned_json_text[:200]}...")
-            # Fallback for visibility
+            logger.error(f"JSON Decode Error in Proxy response: {str(jde)}")
             return {"_error": "JSON_DECODE_FAILED", "_raw": raw_text}
 
     except Exception as e:
-        logger.error(f"Extraction failed: {str(e)}")
+        logger.error(f"Extraction failed via proxy: {str(e)}")
         raise RuntimeError(f"Extraction failed: {str(e)}")
+
+def extract_bank_statement(file_bytes, user_id='system', tenant_id='system'):
+    """
+    Extracts bank transactions from PDF statement using AI.
+    """
+    prompt_text = """
+Extract EVERY single transaction from this bank statement into the EXACT JSON format below.
+# 🎯 SCHEMA
+{
+  "transactions": [
+    {
+      "date": "DD/MM/YYYY",
+      "narration": "",
+      "reference_number": "",
+      "cheque_number": "",
+      "debit_amount": 0,
+      "credit_amount": 0,
+      "running_balance": 0
+    }
+  ]
+}
+
+---
+# 🧠 EXTRACTION STRATEGY
+1. **MULTI-PAGE DETECTION**: Review all pages of the document. Continue extraction until the very last transaction on the final page.
+2. **ROW-BY-ROW**: Every row in the transaction table MUST be an entry in the JSON.
+3. **VALIDATION**: If the statement provides a summary (e.g., "Dr Count" or "Cr Count"), ensure your extracted list matches those counts exactly.
+4. **NARRATION**: Capture the full narration, even if it spans multiple lines.
+
+# 🚫 RULES
+* DO NOT summarize.
+* DO NOT skip any entries at the end of pages or near the footer.
+* DO NOT stop until you reach the closing balance of the statement.
+* Return ONLY valid JSON.
+"""
+    
+    import base64
+    from core.ai_proxy import ai_service
+    
+    try:
+        file_b64 = base64.b64encode(file_bytes).decode('utf-8')
+        request_data = {
+            'prompt': prompt_text,
+            'image_data': file_b64,
+            'mime_type': 'application/pdf',
+            'voucher_type': 'Bank Statement'
+        }
+        
+        response = ai_service.make_request('extraction', request_data, user_id, tenant_id)
+        if 'error' in response:
+            raise RuntimeError(response['error'])
+
+        raw_text = response.get('reply', '').strip()
+        cleaned_json_text = extract_json_from_text(raw_text)
+        
+        result = json.loads(cleaned_json_text)
+        return result
+    except Exception as e:
+        logger.error(f"Bank extraction failed: {str(e)}")
+        raise RuntimeError(f"Bank extraction failed: {str(e)}")
+
 

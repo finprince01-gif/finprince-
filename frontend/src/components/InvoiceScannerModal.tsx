@@ -540,7 +540,22 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             formData.append('upload_session_id', currentSessionId); 
             formData.append('voucher_type', voucherType);
 
+            // ── OTHERS Mode: No Persistence (Instant Extraction) ──
+            const isOthersMode = extractionMode !== 'ai_native';
+            if (isOthersMode) {
+                formData.append('no_persist', 'true');
+            }
+
             const response = await httpClient.postFormData<any>('/api/bulk-upload/', formData);
+            
+            if (isOthersMode && response.results) {
+                // Map results immediately (they are already extracted and deleted from DB)
+                handleInstantResults(response.results);
+                setIsExtracting(false);
+                showSuccess(`✅ ${response.results.length} files extracted instantly (non-persistent).`);
+                return;
+            }
+
             if (response.job_id) {
                 // Tracking uploaded file paths to ensure scope parity (Step 3: store currentFile)
                 const newPaths = response.file_paths || [response.file_path].filter(Boolean) || [];
@@ -564,6 +579,52 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         } finally {
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
+    };
+
+    // ── Helper to map instant results without DB fetching ──
+    const handleInstantResults = (results: any[]) => {
+        const mappedResults: InvoiceResult[] = results.map((item: any) => {
+            const extData = item.data || {};
+            const resData = extData;
+            
+            const flattenedHeader = {
+                ...(resData.sections?.supplier_details || {}),
+                ...(resData.sections?.supply_details || {}),
+                ...(resData.data || resData)
+            };
+            
+            const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
+            const normalizedHeader: Record<string, string> = {};
+            const colsToMap = extractionMode === 'tally' ? ALL_COLUMNS : HEADER_FIELDS;
+            
+            colsToMap.forEach(field => {
+                normalizedHeader[field] = getCellValue(flattenedHeader, field);
+            });
+            const fileName = item.file_name || 'Invoice.pdf';
+            normalizedHeader['Voucher Type Name'] = fileName;
+            normalizedHeader['File Name'] = fileName;
+
+            const normalizedItems = rawItems.map((ritem: any) => {
+                const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
+                const ni: any = {};
+                const itemColsToMap = extractionMode === 'tally' ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
+                itemColsToMap.forEach(f => {
+                    ni[f] = getCellValue(flatItem, f);
+                });
+                return ni;
+            });
+
+            return {
+                invoice: normalizedHeader,
+                items: normalizedItems,
+                headerMapping: {},
+                itemMapping: {},
+                file_hash: item.file_hash,
+                cacheRecordId: null // No DB record
+            };
+        });
+
+        setInvoiceResults(mappedResults);
     };
 
     const fetchStagingData = async () => {
