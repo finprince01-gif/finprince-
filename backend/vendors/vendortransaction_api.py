@@ -2,17 +2,17 @@
 API endpoints for Vendor Transactions.
 This handles the PROCUREMENT ledger and all vendor portal transaction data.
 """
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import viewsets, status # type: ignore
+from rest_framework.decorators import action # type: ignore
+from rest_framework.response import Response # type: ignore
+from rest_framework.permissions import IsAuthenticated # type: ignore
 import logging
 import re
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import uuid
-from django.utils import timezone
-from django.db.models import Sum
+from django.utils import timezone # type: ignore
+from django.db.models import Sum # type: ignore
 from .models import VendorTransaction, VendorMasterTerms
 from .vendortransaction_serializers import VendorTransactionSerializer
 
@@ -42,7 +42,7 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         instance = serializer.save()
         try:
-            from accounting.services.portal_mirror_service import sync_portal_allocation_to_main_ledger
+            from accounting.services.portal_mirror_service import sync_portal_allocation_to_main_ledger # type: ignore
             sync_portal_allocation_to_main_ledger(instance)
         except Exception as e:
             logger.error(f"Failed to reverse-sync vendor portal allocation: {e}")
@@ -165,38 +165,35 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                 item['paid_amount'] = float(paid_sum)
                 item['payment_balance'] = float(total_amt - paid_sum)
 
-                if tx_status == 'paid' or tx_status == 'received' or (total_amt > 0 and paid_sum >= total_amt):
-                    item['due_status'] = 'Paid'
-                    item['due_date'] = None
-                    item['credit_period_days'] = credit_period_days
-                elif tx_status == 'partially paid' or tx_status == 'partially received' or (paid_sum > 0 and paid_sum < total_amt):
-                    item['due_status'] = 'Partially Paid'
-                    # still show due date calculated
-                    if tx_date:
-                        try:
-                            parsed_date = datetime.strptime(str(tx_date), '%Y-%m-%d').date()
-                            _, due_date_str = calculate_due_status(parsed_date, credit_period_days)
-                            item['due_date'] = due_date_str
-                        except:
-                            item['due_date'] = None
-                    else:
-                        item['due_date'] = None
-                    item['credit_period_days'] = credit_period_days
-                elif tx_date:
+                # Determine payment status
+                is_fully_paid = (tx_status == 'paid' or tx_status == 'received' or (total_amt > 0 and paid_sum >= total_amt))
+                is_partially_paid = (tx_status == 'partially paid' or tx_status == 'partially received' or (paid_sum > 0 and paid_sum < total_amt))
+                
+                # Default status calculation
+                due_status = 'Not Due'
+                due_date_str = None
+                if tx_date:
                     try:
                         parsed_date = datetime.strptime(str(tx_date), '%Y-%m-%d').date()
                         due_status, due_date_str = calculate_due_status(parsed_date, credit_period_days)
-                        item['due_status'] = due_status
-                        item['due_date'] = due_date_str
-                        item['credit_period_days'] = credit_period_days
                     except (ValueError, TypeError):
-                        item['due_status'] = 'Not Due'
-                        item['due_date'] = None
-                        item['credit_period_days'] = credit_period_days
-                else:
+                        pass
+
+                # Apply priority logic: Paid > Not Due (Grace Period) > Partially Paid/Due
+                if is_fully_paid:
+                    item['due_status'] = 'Paid'
+                elif due_status == 'Not Due':
+                    # Within credit period - always show Not Due unless fully paid
                     item['due_status'] = 'Not Due'
-                    item['due_date'] = None
-                    item['credit_period_days'] = credit_period_days
+                else:
+                    # Credit period expired - show actual payment status
+                    if is_partially_paid:
+                        item['due_status'] = 'Partially Paid'
+                    else:
+                        item['due_status'] = 'Due'
+                
+                item['due_date'] = due_date_str
+                item['credit_period_days'] = credit_period_days
             else:
                 # Non-purchase transactions don't have a due status from credit period
                 item['due_status'] = None

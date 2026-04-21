@@ -799,8 +799,30 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     billFromCity,
     billFromPincode,
     billFromState,
-    billFromCountry
-  ]);
+     billFromCountry
+   ]);
+ 
+   // Sync Credit Note Ship From with Bill From when toggle is on
+   useEffect(() => {
+     if (cnSameAsBillFrom) {
+       setShipFromAddress1(billFromAddress1);
+       setShipFromAddress2(billFromAddress2);
+       setShipFromAddress3(billFromAddress3);
+       setShipFromCity(billFromCity);
+       setShipFromPincode(billFromPincode);
+       setShipFromState(billFromState);
+       setShipFromCountry(billFromCountry);
+     }
+   }, [
+     cnSameAsBillFrom,
+     billFromAddress1,
+     billFromAddress2,
+     billFromAddress3,
+     billFromCity,
+     billFromPincode,
+     billFromState,
+     billFromCountry
+   ]);
 
 
   const [purchaseInputTypes, setPurchaseInputTypes] = useState<string[]>(['Intrastate']); // Default to Same State
@@ -2524,7 +2546,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setCnGrnRefNo('');
     setCnBillFrom('');
     setCnShipFrom('');
-    setCnSameAsBillFrom(true);
+    setCnSameAsBillFrom(false);
     setCnInputType(['Intrastate']);
     setCnInForeignCurrency('No');
     setCnItems([
@@ -7304,7 +7326,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <input
                         type="checkbox"
                         checked={cnSameAsBillFrom}
-                        onChange={(e) => setCnSameAsBillFrom(e.target.checked)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setCnSameAsBillFrom(checked);
+                          if (!checked) {
+                            setShipFromAddress1('');
+                            setShipFromAddress2('');
+                            setShipFromAddress3('');
+                            setShipFromCity('');
+                            setShipFromPincode('');
+                            setShipFromState('');
+                            setShipFromCountry('India');
+                          }
+                        }}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-xs font-bold text-gray-500 uppercase">SAME AS BILL TO ADDRESS</span>

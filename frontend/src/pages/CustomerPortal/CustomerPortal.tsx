@@ -6467,9 +6467,12 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
 
             // Process groups and sort by source date
             const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
-                const dateA = groups[aRef][0]?.date || '0000-00-00';
-                const dateB = groups[bRef][0]?.date || '0000-00-00';
-                return new Date(dateB).getTime() - new Date(dateA).getTime();
+                const firstA = groups[aRef][0];
+                const firstB = groups[bRef][0];
+                const dDiff = new Date(firstA?.date || 0).getTime() - new Date(firstB?.date || 0).getTime();
+                if (dDiff !== 0) return dDiff;
+                // Within same date, maintain chronological order via ID
+                return parseInt(firstA?.id?.toString().replace('t-', '') || '0') - parseInt(firstB?.id?.toString().replace('t-', '') || '0');
             });
 
             sortedGroupRefs.forEach(ref => {
@@ -6478,7 +6481,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 // If it's a standalone group
                 if (ref.startsWith('standalone-')) {
                     const entry = entries[0];
-                    if (!['Sales', 'Debit Note'].includes(entry.postFrom)) return;
+                    if (entry.postFrom !== 'Sales') return;
 
                     const amt = (entry.debit || 0) - (entry.credit || 0);
                     rows.push({
@@ -6498,13 +6501,19 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 }
 
                 // For linked groups
-                const sources = entries.filter(e => ['Sales', 'Debit Note'].includes(e.postFrom))
-                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                const sources = entries.filter(e => ['Sales'].includes(e.postFrom))
+                    .sort((a, b) => {
+                        const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+                        return d !== 0 ? d : parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
+                    });
 
                 if (sources.length === 0) return;
 
                 const applications = entries.filter(e => ['Receipt', 'Credit Note', 'Journal'].includes(e.postFrom))
-                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                    .sort((a, b) => {
+                        const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+                        return d !== 0 ? d : parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
+                    });
 
                 // Combine all sources in the group for one span
                 const totalSourceAmt = sources.reduce((sum, s) => sum + ((s.debit || 0) - (s.credit || 0)), 0);
