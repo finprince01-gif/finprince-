@@ -94,6 +94,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     const buildHierarchySets = (rows: any[]) => {
         const nonLeaf = new Set<string>();
         const leaf = new Set<string>();
+        const selectableMap = new Map<string, any>();
 
         for (const r of rows || []) {
             const mg = normalizeName(r.major_group_1);
@@ -111,10 +112,18 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
             // Deepest value is treated as a selectable endpoint for dropdown purposes.
             const endpoint = led || sg3 || sg2 || sg1 || g || mg;
-            if (endpoint) leaf.add(endpoint);
+            if (endpoint) {
+                leaf.add(endpoint);
+                selectableMap.set(endpoint, {
+                    id: r.id,
+                    name: r.ledger_1 || r.sub_group_3_1 || r.sub_group_2_1 || r.sub_group_1_1 || r.group_1 || r.major_group_1,
+                    group: r.group_1,
+                    category: r.major_group_1
+                });
+            }
         }
 
-        return { nonLeaf, leaf };
+        return { nonLeaf, leaf, selectableMap };
     };
 
     // For ReceiveFrom dropdown we do NOT want hierarchy headings (group/sub-groups)
@@ -149,7 +158,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     // Filter Receive In (Debit) options: Cash, Bank, CC, OD, and Loans/Borrowings
     const receiveInLedgers = useMemo(() => {
-        return allLedgers.filter(l => {
+        const filtered = allLedgers.filter(l => {
             const group = (l.group || '').toLowerCase();
             const category = (l.category || '').toLowerCase();
             const words = group.split(/[\s-]+/); // split by space or hyphen
@@ -166,19 +175,34 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 words.some(w => ['cash', 'bank', 'od', 'cc', 'borrowing', 'loan'].includes(w))
             );
         });
+        // Deduplicate by name
+        return Array.from(new Map<string, any>(filtered.map(l => [(l.name || '').toLowerCase(), l])).values());
     }, [allLedgers]);
 
-    // Filter Receive From (Credit) options: All ledgers (allowing transfers) + Portal entities
     const receiveFromOptions = useMemo(() => {
         const sets = buildHierarchySets(hierarchy);
 
-        // Construct synthetic ledger objects for portal entities to make them selectable
+        // 1. Hierarchy seeded ledgers (the "Red Italic" endpoints)
+        const hierarchySeedLedgers = Array.from(sets.selectableMap.values())
+            .filter((l: any) => {
+                // Allow ALL "Red Italic" leaf nodes to appear in the list.
+                // Structural headings (groups/subgroups) are filtered by sets.nonLeaf check.
+                return !sets.nonLeaf.has(normalizeName(l.name)!);
+            })
+            .map((l: any) => ({
+                id: `hierarchy-${l.id}`,
+                name: l.name,
+                group: l.group,
+                category: l.category,
+                type: 'ledger'
+            }));
+
         const custOptions = portalCustomers.map(c => ({
             id: `portal-cust-${c.id}`,
             name: c.customer_name || c.name,
             group: 'Sundry Debtors',
             isPortal: true,
-            type: 'Customer'
+            type: 'customer'
         }));
 
         const vendOptions = portalVendors.map(v => ({
@@ -186,32 +210,29 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             name: v.vendor_name || v.name,
             group: 'Sundry Creditors',
             isPortal: true,
-            type: 'Vendor'
+            type: 'vendor'
         }));
 
-        // Map existing ledgers and assign types
         const ledgerOptions = allLedgers
-            // Exclude hierarchy headings accidentally saved as "ledgers"
-            .filter(l => !isHierarchyHeadingName(l.name, sets))
+            .filter(l => {
+                return !isHierarchyHeadingName(l.name, sets);
+            })
             .map(l => ({
                 ...l,
-                type: l.group === 'Sundry Debtors' ? 'Customer' :
-                    l.group === 'Sundry Creditors' ? 'Vendor' : 'Ledger'
+                type: l.group === 'Sundry Debtors' ? 'customer' :
+                    l.group === 'Sundry Creditors' ? 'vendor' : 'ledger'
             }));
 
-        // Combine all, avoiding duplicates if name matches exactly with an existing ledger
-        const combined = [...ledgerOptions];
-        const existingNames = new Set(ledgerOptions.map(l => l.name.toLowerCase()));
+        // Combine and deduplicate
+        // Preference: portal entities > tenant ledgers > hierarchy seeds
+        const masterMap = new Map<string, any>();
+        hierarchySeedLedgers.forEach(o => masterMap.set(o.name.toLowerCase(), o));
+        ledgerOptions.forEach(l => masterMap.set(l.name.toLowerCase(), l));
+        [...custOptions, ...vendOptions].forEach(o => masterMap.set(o.name.toLowerCase(), o));
 
-        [...custOptions, ...vendOptions].forEach(portalEntity => {
-            if (!existingNames.has(portalEntity.name.toLowerCase())) {
-                combined.push(portalEntity as any);
-                existingNames.add(portalEntity.name.toLowerCase());
-            }
-        });
-
-        return combined;
+        return Array.from(masterMap.values()).sort((a,b) => a.name.localeCompare(b.name));
     }, [allLedgers, portalCustomers, portalVendors, hierarchy]);
+
 
     // Receipt Voucher Configuration state
     const [receiptVoucherConfigs, setReceiptVoucherConfigs] = useState<any[]>([]);
@@ -557,7 +578,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 // Filter: Only Due, Partially Received, Due Today. 
                 // CRITICAL: Filter out items with 0 or negative balance, and those with 'Received' status.
                 const validTransactions = mappedTransactions.filter(t =>
-                    t.amount > 0 && 
+                    t.amount > 0 &&
                     t.status.trim().toLowerCase() !== 'received' &&
                     (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today' || t.status === 'Not Due')
                 );
@@ -1039,7 +1060,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         handleCustomerSelect(val);
                                     }}
                                     options={receiveFromOptions.map(l => ({
-                                        label: (l as any).type ? `${l.name} (${(l as any).type})` : l.name,
+                                        label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
                                         value: l.name
                                     }))}
                                     placeholder="Select Receive From"
@@ -1298,7 +1319,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 value={row.receiveFrom}
                                                 onChange={val => handleReceiptRowChange(row.id, 'receiveFrom', val)}
                                                 options={receiveFromOptions.map(l => ({
-                                                    label: (l as any).type ? `${l.name} (${(l as any).type})` : l.name,
+                                                    label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
                                                     value: l.name
                                                 }))}
                                                 placeholder="Select Receive From"

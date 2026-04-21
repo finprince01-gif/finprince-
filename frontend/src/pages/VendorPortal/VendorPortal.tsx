@@ -156,19 +156,19 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
         (e.is_advance || (e.status && ['Advance', 'Not Utilized', 'Partially Utilized'].includes(e.status))) &&
         // AND it must NOT be allocated to a specific invoice yet
         (
-            !e.rawVoucher?.reference_number || 
+            !e.rawVoucher?.reference_number ||
             e.rawVoucher.reference_number.toUpperCase() === 'ADVANCE' ||
             e.rawVoucher.reference_number.trim() === '' ||
             e.rawVoucher.reference_number === '-'
         )
     ).filter(e => e.status !== 'Utilized' && e.status !== 'Paid') // Only show those that still have balance
-    .map(e => ({
-        id: e.id,
-        voucherNo: e.voucherNo,
-        date: e.date,
-        amount: e.debit !== '-' ? parseFloat(e.debit.replace(/,/g, '')) : 0,
-        status: e.status
-    }));
+        .map(e => ({
+            id: e.id,
+            voucherNo: e.voucherNo,
+            date: e.date,
+            amount: e.debit !== '-' ? parseFloat(e.debit.replace(/,/g, '')) : 0,
+            status: e.status
+        }));
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -220,15 +220,15 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 bg-white">
                                         {advances.map((adv, idx) => (
-                                            <tr 
-                                                key={idx} 
+                                            <tr
+                                                key={idx}
                                                 onClick={() => setSelectedAdvance(adv)}
                                                 className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedAdvance?.id === adv.id ? 'bg-indigo-50/50' : ''}`}
                                             >
                                                 <td className="px-4 py-3">
-                                                    <input 
-                                                        type="radio" 
-                                                        name="advance-selection" 
+                                                    <input
+                                                        type="radio"
+                                                        name="advance-selection"
                                                         checked={selectedAdvance?.id === adv.id}
                                                         onChange={() => setSelectedAdvance(adv)}
                                                         className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
@@ -250,15 +250,15 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
                             <p className="text-[10px] text-gray-400 mt-1">Vouchers with "Advance" or "Not Utilized" status will appear here.</p>
                         </div>
                     )}
-                    
+
                     <div className="mt-8 flex gap-3">
-                        <button 
+                        <button
                             onClick={onClose}
                             className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors uppercase tracking-widest text-[10px]"
                         >
                             Close Window
                         </button>
-                        <button 
+                        <button
                             onClick={() => {
                                 if (setPrefilledVoucherData && onNavigate) {
                                     setPrefilledVoucherData({
@@ -275,11 +275,11 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
                             Create New Advance
                         </button>
                         {advances.length > 0 && (
-                            <button 
+                            <button
                                 onClick={() => onProceed && onProceed(selectedAdvance, row.refNo)}
                                 disabled={!selectedAdvance}
-                                className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAdvance 
-                                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200' 
+                                className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAdvance
+                                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
                                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                             >
                                 Proceed Allocation
@@ -412,8 +412,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     setAllAdvancePayments(advListAll);
 
                     if (activeProcurementSubTab !== 'Dashboard') {
-                         const advListSpec: any[] = Array.isArray(advResSpecific) ? advResSpecific : ((advResSpecific as any)?.results || []);
-                         setAdvancePayments(advListSpec);
+                        const advListSpec: any[] = Array.isArray(advResSpecific) ? advResSpecific : ((advResSpecific as any)?.results || []);
+                        setAdvancePayments(advListSpec);
                     }
                 } catch (error) {
                     handleApiError(error, 'Fetch Procurement Data');
@@ -446,7 +446,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
             if ((poCat || '').toLowerCase().includes(categoryName.toLowerCase()) &&
                 ['Draft', 'Pending Approval', 'Approved', 'Mailed'].includes(po.status)) {
-                
+
                 const vendor = vendorList.find(v => v.vendor_name === po.vendorName);
                 if (vendor) {
                     const vendorId = vendor.id.toString();
@@ -613,16 +613,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         // ── PURCHASE: use backend credit-period due status ──────────
                         // ── PURCHASE: use backend credit-period due status ──────────
                         if (txType === 'purchase') {
+                            // Trust the backend-calculated status which considers credit period grace
+                            if (t.due_status) return t.due_status;
+
+                            // Fallback logic
                             const isFullyPaid = paidAmount >= amount && amount > 0;
-                            const isPartiallyPaid = (paidAmount > 0 && paidAmount < amount) || t.status?.toLowerCase().includes('partial');
-
-                            if (isFullyPaid || t.due_status === 'Paid') return 'Paid';
-                            if (isPartiallyPaid || t.due_status === 'Partially Paid') return 'Partially Paid';
-
-                            // If not paid, use the due status calculated from credit period
-                            if (t.due_status === 'Due') return 'Due';
-                            if (t.due_status === 'Not Due') return 'Not Due';
-
+                            if (isFullyPaid) return 'Paid';
+                            if (paidAmount > 0) return 'Partially Paid';
                             return 'Not Due';
                         }
 
@@ -633,15 +630,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         // ── ADVANCE / GENERIC UNALLOCATED entries ─────────────────
                         if (txType === 'payment' || txType === 'receipt') {
                             const isGenericPayment = t.transaction_number && t.reference_number && t.transaction_number.startsWith(t.reference_number + '-');
-                            
-                            const isAdvanceEntry = (t.reference_type || '').toUpperCase() === 'ADVANCE' || 
-                                                 t.is_advance || 
-                                                 (t.status || '').toLowerCase() === 'advance' ||
-                                                 !t.reference_number || 
-                                                 t.reference_number.toUpperCase() === 'ADVANCE' || 
-                                                 t.reference_number.trim() === '' ||
-                                                 isGenericPayment;
-                            
+
+                            const isAdvanceEntry = (t.reference_type || '').toUpperCase() === 'ADVANCE' ||
+                                t.is_advance ||
+                                (t.status || '').toLowerCase() === 'advance' ||
+                                !t.reference_number ||
+                                t.reference_number.toUpperCase() === 'ADVANCE' ||
+                                t.reference_number.trim() === '' ||
+                                isGenericPayment;
+
                             if (isAdvanceEntry) {
                                 const usedAmt = parseFloat(t.paid_amount || t.used_amount || 0);
                                 if (usedAmt >= amount && amount > 0) return 'Utilized';
@@ -665,9 +662,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
             // Calculate running balance using numeric data (Credit balance = Liability for vendors)
             const sortedEntries = allEntries.sort((a, b) => {
-                const dateA = new Date(a.date).getTime();
-                const dateB = new Date(b.date).getTime();
-                if (dateA !== dateB) return dateA - dateB;
+                const dA = new Date(a.date).getTime();
+                const dB = new Date(b.date).getTime();
+                if (dA !== dB) return dA - dB;
+                // Within same date, use numeric ID fallback
                 return parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
             });
 
@@ -836,9 +834,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
         // Process groups and sort by source date
         const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
-            const dateA = groups[aRef][0]?.date || '0000-00-00';
-            const dateB = groups[bRef][0]?.date || '0000-00-00';
-            return new Date(dateB).getTime() - new Date(dateA).getTime();
+            const firstA = groups[aRef][0];
+            const firstB = groups[bRef][0];
+            const dDiff = new Date(firstA?.date || 0).getTime() - new Date(firstB?.date || 0).getTime();
+            if (dDiff !== 0) return dDiff;
+            // Within same date, maintain chronological order via ID
+            return parseInt(firstA?.id?.toString().replace('t-', '') || '0') - parseInt(firstB?.id?.toString().replace('t-', '') || '0');
         });
 
         sortedGroupRefs.forEach(ref => {
@@ -870,37 +871,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
             // For linked groups
             const sources = entries.filter(e => ['Purchase', 'Sales'].includes(e.transferFrom))
-                                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                .sort((a, b) => {
+                    const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+                    return d !== 0 ? d : parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
+                });
 
-            // USER REQUEST: Only Purchase entries. If no source (Purchase/Sales header), skip group main row.
+            // If no Purchase (source) exists in this group, do not show it in Allocation View
             if (sources.length === 0) return;
 
             const applications = entries.filter(e => ['Payment', 'Receipt', 'Debit Note', 'Credit Note'].includes(e.transferFrom))
-                                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            
-            if (sources.length === 0 && applications.length > 0) {
-                // Standalone applications with a shared ref but no source
-                applications.forEach(app => {
-                    const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
-                    rows.push({
-                        date: app.date,
-                        postedFrom: app.transferFrom,
-                        refNo: app.referenceNo !== '-' ? app.referenceNo : app.voucherNo,
-                        netAmount: appAmt,
-                        appliedDate: '-',
-                        appliedRefNo: '-',
-                        appliedAmount: '-',
-                        pendingBalance: 0,
-                        status: app.status,
-                        rowSpan: 1,
-                        isFirstInSource: true
-                    });
+                .sort((a, b) => {
+                    const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+                    return d !== 0 ? d : parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
                 });
-            } else {
-                // Combine all sources in the group for one span
+
+            // Combine all sources in the group for one span
                 const totalSourceAmt = sources.reduce((sum, s) => sum + parseFloat((s.debit !== '-' ? s.debit : s.credit !== '-' ? s.credit : '0').toString().replace(/,/g, '')), 0);
                 const firstSource = sources[0];
-                
+
                 if (applications.length === 0) {
                     rows.push({
                         date: firstSource.date,
@@ -922,7 +910,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     const totalAppAmtRounded = Math.round(totalAppAmt * 100);
                     const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
                         ? 'Paid'
-                        : (totalAppAmtRounded > 0 ? 'Partially Paid' : firstSource.status);
+                        : (firstSource.status === 'Not Due' ? 'Not Due' : (totalAppAmtRounded > 0 ? 'Partially Paid' : 'Due'));
 
                     applications.forEach((app, appIdx) => {
                         const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
@@ -943,7 +931,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         lastPending = currentPending;
                     });
                 }
-            }
         });
 
         return rows;
@@ -1130,7 +1117,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     category: po.category_name || po.category || po.po_category || '',
                     amount: po.total_value ? po.total_value.toString() : '0.00'
                 }));
-                
+
                 // Always set state even if empty to clear dummy data
                 setPurchaseOrders(mapped);
             }
@@ -1984,9 +1971,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
 
 
-    
-    
-    
+
+
+
 
 
 
@@ -4150,19 +4137,19 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                             placeholder="Numeric only"
                                                                                         />
                                                                                     </div>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
-                                                                {record.registrationType === 'Unregistered' ?
-                                                                    'Add a branch manually to continue.' :
-                                                                    'No places of business found. Fetch via GSTIN or add manually.'
-                                                                }
-                                                            </div>
-                                                        )}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
+                                                                    {record.registrationType === 'Unregistered' ?
+                                                                        'Add a branch manually to continue.' :
+                                                                        'No places of business found. Fetch via GSTIN or add manually.'
+                                                                    }
+                                                                </div>
+                                                            )}
                                                     </div>
                                                 </div>
                                             )}
@@ -5532,7 +5519,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                             <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wider">Advances</p>
                                                                         </div>
                                                                         {totalDueAmount > 0 && (
-                                                                             <div className="text-right mr-2">
+                                                                            <div className="text-right mr-2">
                                                                                 <p className="text-lg font-bold text-gray-800">
                                                                                     {totalDueAmount >= 1000 ? `₹${(totalDueAmount / 1000).toFixed(1)}k` : `₹${Math.round(totalDueAmount)}`}
                                                                                 </p>
@@ -6569,13 +6556,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                             <>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
-                                                                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                                                                        row.postedFrom === 'Purchase' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                                                                                        row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                                                        row.postedFrom === 'Debit Note' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
-                                                                                        row.postedFrom === 'Credit Note' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
-                                                                                        'bg-slate-50 text-slate-600 border border-slate-100'
-                                                                                    }`}>
+                                                                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.postedFrom === 'Purchase' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                                                                                            row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                                row.postedFrom === 'Debit Note' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                                                                                                    row.postedFrom === 'Credit Note' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                                                                                                        'bg-slate-50 text-slate-600 border border-slate-100'
+                                                                                        }`}>
                                                                                         {row.postedFrom}
                                                                                     </span>
                                                                                 </td>
@@ -6595,12 +6581,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         </td>
                                                                         {row.isFirstInSource && (
                                                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
-                                                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                                                                    row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                                                    row.status?.toLowerCase() === 'partially paid' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                                                                    row.status?.toLowerCase() === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                                                                                    'bg-indigo-50 text-indigo-600 border border-indigo-100'
-                                                                                }`}>
+                                                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                        row.status?.toLowerCase() === 'partially paid' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                                                            row.status?.toLowerCase() === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                                                                'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                                                    }`}>
                                                                                     {row.status}
                                                                                 </span>
                                                                             </td>

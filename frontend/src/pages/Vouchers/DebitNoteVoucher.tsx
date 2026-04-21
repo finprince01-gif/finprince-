@@ -1362,7 +1362,13 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                         <input
                                             type="checkbox"
                                             checked={sameAsBillTo}
-                                            onChange={(e) => setSameAsBillTo(e.target.checked)}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setSameAsBillTo(checked);
+                                                if (!checked) {
+                                                    setShipFromAddress({ line1: '', line2: '', line3: '', city: '', pincode: '' });
+                                                }
+                                            }}
                                             className="mr-2 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 shadow-sm"
                                         />
                                         SAME AS BILL TO ADDRESS
