@@ -2891,6 +2891,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     }
 
     const [inventoryItems, setInventoryItems] = useState<SimplifiedInventoryItem[]>([]);
+    const [units, setUnits] = useState<any[]>([]);
     const [items, setItems] = useState<ProductServiceItem[]>([
         { id: 1, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
         { id: 2, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
@@ -2906,7 +2907,17 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 handleApiError(error, 'Fetch Inventory Items');
             }
         };
+
+        const fetchUnits = async () => {
+            try {
+                const response = await httpClient.get<any[]>('/api/inventory/units/');
+                setUnits(response);
+            } catch (error) {
+                handleApiError(error, 'Fetch Units');
+            }
+        };
         fetchItems();
+        fetchUnits();
 
         const fetchLedgers = async () => {
             try {
@@ -8250,12 +8261,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         ...categories.map(c => ({ label: c.category, value: c.category }))
                     ],
                     'TDS Section': Object.keys(TDS_RATES_MASTER).map(s => ({ label: s, value: s })),
+                    'TCS Section': Object.keys(TCS_RATES_MASTER).map(s => ({ label: s, value: s })),
                     'Billing Currency': [
                         { label: 'Indian Rupee (INR)', value: 'INR' },
                         { label: 'US Dollar (USD)', value: 'USD' },
                         { label: 'Euro (EUR)', value: 'EUR' }
                     ],
-                    'State': getAvailableStates('IN').map(s => ({ label: s.name, value: s.name }))
+                    'State': getAvailableStates('IN').map(s => ({ label: s.name, value: s.name })),
+                    'UOM': units.map(u => ({ label: u.symbol || u.name, value: u.symbol || u.name })),
+                    'Item Code': inventoryItems.map(i => ({ label: i.item_code || '', value: i.item_code || '', full: i })),
+                    'Item Name': inventoryItems.map(i => ({ label: i.item_name || '', value: i.item_name || '', full: i }))
                 }}
             />
         </div >

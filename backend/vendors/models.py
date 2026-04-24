@@ -304,6 +304,7 @@ class VendorMasterBasicDetail(models.Model):
     
     # Metadata
     is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False, help_text="Soft delete flag")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.CharField(max_length=100, blank=True, null=True, help_text="Created by user")
@@ -319,6 +320,7 @@ class VendorMasterBasicDetail(models.Model):
             models.Index(fields=['tenant_id', 'vendor_name']),
             models.Index(fields=['email']),
             models.Index(fields=['pan_no']),
+            models.Index(fields=['is_deleted']),
         ]
         unique_together = [['tenant_id', 'vendor_code']]
 

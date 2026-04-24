@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import Icon from './Icon';
+import { Country, State, City } from 'country-state-city';
 
 interface BulkImportFeedbackModalProps {
     isOpen: boolean;
@@ -9,7 +10,7 @@ interface BulkImportFeedbackModalProps {
     onEditImported?: (record: any) => void;
     onUpload?: (file: File | any[], dryRun?: boolean) => void;
     isProcessing?: boolean;
-    dropdownOptions?: Record<string, { label: string, value: string }[]>;
+    dropdownOptions?: Record<string, { label: string, value: string, full?: any }[]>;
 }
 
 export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = ({ 
@@ -28,6 +29,42 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
     const [activeTab, setActiveTab] = useState<'all' | 'success' | 'failed'>('all');
     const [editingItem, setEditingItem] = useState<{ type: 'success' | 'error'; index: number; data: any } | null>(null);
     const [editingTab, setEditingTab] = useState<string>('Basic Details');
+
+    // Default 'India' and map products
+    useEffect(() => {
+        if (editingItem) {
+            let changed = false;
+            const newData = { ...editingItem.data };
+
+            if (!newData['Country']) {
+                newData['Country'] = 'India';
+                changed = true;
+            }
+
+            // Map flat product columns to products array if products is empty
+            if (!newData['products'] || (Array.isArray(newData['products']) && newData['products'].length === 0)) {
+                const hasProductData = newData['Item Code'] || newData['Item Name'] || newData['HSN/SAC Code'] || newData['HSN/SAC'];
+                if (hasProductData) {
+                    newData['products'] = [{
+                        'Item Code': newData['Item Code'] || '',
+                        'Item Name': newData['Item Name'] || '',
+                        'HSN/SAC Code': newData['HSN/SAC Code'] || newData['HSN/SAC'] || '',
+                        'UOM': newData['UOM'] || '',
+                        'Customer Item Code': newData['Customer Item Code'] || newData['Cust Item Code'] || '',
+                        'Customer Item Name': newData['Customer Item Name'] || newData['Cust Item Name'] || '',
+                        'Supplier Item Code': newData['Supplier Item Code'] || newData['Supp Item Code'] || '',
+                        'Supplier Item Name': newData['Supplier Item Name'] || newData['Supp Item Name'] || '',
+                        'Packing Notes': newData['Packing Notes'] || '',
+                    }];
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                setEditingItem({ ...editingItem, data: newData });
+            }
+        }
+    }, [editingItem?.index, editingItem?.type]);
 
     useEffect(() => {
         if (initialSummary) {
@@ -95,6 +132,23 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
 
     const handleQuickSave = (updatedData: any) => {
         if (!editingItem || !summary) return;
+
+        // Validation before saving
+        const isVendor = title.toLowerCase().includes('vendor');
+        const requiredFields = isVendor ? 
+            ['Vendor Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2'] :
+            ['Customer Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2'];
+
+        const missing = requiredFields.filter(f => {
+            const val = updatedData[f];
+            return !val || val.toString().trim() === '' || val.toString().toLowerCase() === 'n/a';
+        });
+
+        if (missing.length > 0) {
+            // Show error in modal instead of alert if possible, but for now blocking save
+            // The UI already shows red warnings, so we just prevent moving to success list
+            return; 
+        }
 
         const newSummary = { ...summary };
         if (editingItem.type === 'error') {
@@ -223,14 +277,17 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         title: 'GST & Address Details',
                                         fields: [
                                             { label: 'GSTIN', key: 'GSTIN', placeholder: '22AAAAA0000A1Z5' },
-                                            { label: 'BRANCH NAME', key: 'Branch Name', placeholder: 'Main Branch' },
-                                            { label: 'ADDRESS LINE 1', key: 'Address Line 1', placeholder: 'Building/Street' },
-                                            { label: 'ADDRESS LINE 2', key: 'Address Line 2', placeholder: 'Area/Landmark' },
+                                            { label: 'BRANCH NAME', key: 'Branch Name', placeholder: 'Main Branch', required: true },
+                                            { label: 'ADDRESS LINE 1', key: 'Address Line 1', placeholder: 'Building/Street', required: true },
+                                            { label: 'ADDRESS LINE 2', key: 'Address Line 2', placeholder: 'Area/Landmark', required: true },
                                             { label: 'ADDRESS LINE 3', key: 'Address Line 3', placeholder: 'Locality' },
-                                            { label: 'CITY', key: 'City', placeholder: 'City Name' },
+                                            { label: 'COUNTRY', key: 'Country', type: 'select', placeholder: 'SELECT COUNTRY' },
                                             { label: 'STATE', key: 'State', type: 'select', placeholder: 'SELECT STATE' },
+                                            { label: 'CITY', key: 'City', type: 'select', placeholder: 'SELECT CITY' },
                                             { label: 'PINCODE', key: 'Pincode', placeholder: '600001' },
-                                            { label: 'COUNTRY', key: 'Country', placeholder: 'India' },
+                                            { label: 'CONTACT PERSON', key: 'Branch Contact Person', placeholder: 'Branch contact name' },
+                                            { label: 'EMAIL ADDRESS', key: 'Branch Email Address', placeholder: 'branch@example.com' },
+                                            { label: 'CONTACT NO', key: 'Branch Contact Number', placeholder: '+91 XXXXX XXXXX' },
                                         ]
                                     },
                                     {
@@ -250,6 +307,8 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                             { label: 'BANK NAME', key: 'Bank Name', placeholder: 'Enter bank name' },
                                             { label: 'IFSC CODE', key: 'IFSC Code', placeholder: 'SBIN000XXXX' },
                                             { label: 'BANK BRANCH', key: 'Bank Branch', placeholder: 'Enter branch name' },
+                                            { label: 'SWIFT CODE', key: 'Swift Code', placeholder: 'Enter swift code' },
+                                            { label: 'ASSOCIATED BRANCH', key: 'Associated Branch', type: 'select', placeholder: 'SELECT BRANCH' },
                                         ]
                                     },
                                     {
@@ -266,7 +325,20 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     {
                                         title: 'Products/Services',
                                         fields: [
-                                            { label: 'PRODUCTS/SERVICES', key: 'Products Services', placeholder: 'Enter products or services' }
+                                            { 
+                                                label: 'Products & Services List', 
+                                                key: 'products', 
+                                                type: 'table',
+                                                columns: [
+                                                    { label: 'ITEM CODE', key: 'Item Code', placeholder: 'ITM-XXXX' },
+                                                    { label: 'ITEM NAME', key: 'Item Name', placeholder: 'Item name' },
+                                                    { label: 'HSN/SAC', key: 'HSN/SAC Code', placeholder: 'XXXX' },
+                                                    { label: 'UOM', key: 'UOM', type: 'select', placeholder: 'Select' },
+                                                    { label: 'SUPPLIER ITEM CODE', key: 'Supplier Item Code', placeholder: 'Optional' },
+                                                    { label: 'SUPPLIER ITEM NAME', key: 'Supplier Item Name', placeholder: 'Optional' },
+                                                    { label: 'PACKING NOTES', key: 'Packing Notes', placeholder: 'Notes' },
+                                                ]
+                                            }
                                         ]
                                     }
                                 ] : [
@@ -289,14 +361,17 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         title: 'GST & Address Details',
                                         fields: [
                                             { label: 'GSTIN', key: 'GSTIN', placeholder: '22AAAAA0000A1Z5' },
-                                            { label: 'BRANCH NAME', key: 'Branch Name', placeholder: 'Main Branch' },
-                                            { label: 'ADDRESS LINE 1', key: 'Address Line 1', placeholder: 'Building/Street' },
-                                            { label: 'ADDRESS LINE 2', key: 'Address Line 2', placeholder: 'Area/Landmark' },
+                                            { label: 'BRANCH NAME', key: 'Branch Name', placeholder: 'Main Branch', required: true },
+                                            { label: 'ADDRESS LINE 1', key: 'Address Line 1', placeholder: 'Building/Street', required: true },
+                                            { label: 'ADDRESS LINE 2', key: 'Address Line 2', placeholder: 'Area/Landmark', required: true },
                                             { label: 'ADDRESS LINE 3', key: 'Address Line 3', placeholder: 'Locality' },
-                                            { label: 'CITY', key: 'City', placeholder: 'City Name' },
+                                            { label: 'COUNTRY', key: 'Country', type: 'select', placeholder: 'SELECT COUNTRY' },
                                             { label: 'STATE', key: 'State', type: 'select', placeholder: 'SELECT STATE' },
+                                            { label: 'CITY', key: 'City', type: 'select', placeholder: 'SELECT CITY' },
                                             { label: 'PINCODE', key: 'Pincode', placeholder: '600001' },
-                                            { label: 'COUNTRY', key: 'Country', placeholder: 'India' },
+                                            { label: 'CONTACT PERSON', key: 'Branch Contact Person', placeholder: 'Branch contact name' },
+                                            { label: 'EMAIL ADDRESS', key: 'Branch Email Address', placeholder: 'branch@example.com' },
+                                            { label: 'CONTACT NO', key: 'Branch Contact Number', placeholder: '+91 XXXXX XXXXX' },
                                         ]
                                     },
                                     {
@@ -316,6 +391,8 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                             { label: 'BANK NAME', key: 'Bank Name', placeholder: 'Enter bank name' },
                                             { label: 'IFSC CODE', key: 'IFSC Code', placeholder: 'SBIN000XXXX' },
                                             { label: 'BANK BRANCH', key: 'Bank Branch', placeholder: 'Enter branch name' },
+                                            { label: 'SWIFT CODE', key: 'Swift Code', placeholder: 'Enter swift code' },
+                                            { label: 'ASSOCIATED BRANCH', key: 'Associated Branch', type: 'select', placeholder: 'SELECT BRANCH' },
                                         ]
                                     },
                                     {
@@ -332,7 +409,28 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     {
                                         title: 'Products/Services',
                                         fields: [
-                                            { label: 'PRODUCTS/SERVICES', key: 'Products Services', placeholder: 'Enter products or services' }
+                                            { 
+                                                label: 'Products & Services List', 
+                                                key: 'products', 
+                                                type: 'table',
+                                                columns: [
+                                                    { label: 'ITEM CODE', key: 'Item Code', placeholder: 'ITM-XXXX' },
+                                                    { label: 'ITEM NAME', key: 'Item Name', placeholder: 'Item name' },
+                                                    { label: 'HSN/SAC CODE', key: 'HSN/SAC Code', placeholder: 'XXXX' },
+                                                    { label: 'UOM', key: 'UOM', type: 'select', placeholder: 'Select' },
+                                                    { 
+                                                        label: title.toLowerCase().includes('vendor') ? 'SUPPLIER ITEM CODE' : 'CUSTOMER ITEM CODE', 
+                                                        key: title.toLowerCase().includes('vendor') ? 'Supplier Item Code' : 'Customer Item Code', 
+                                                        placeholder: 'Optional' 
+                                                    },
+                                                    { 
+                                                        label: title.toLowerCase().includes('vendor') ? 'SUPPLIER ITEM NAME' : 'CUSTOMER ITEM NAME', 
+                                                        key: title.toLowerCase().includes('vendor') ? 'Supplier Item Name' : 'Customer Item Name', 
+                                                        placeholder: 'Optional' 
+                                                    },
+                                                    { label: 'PACKING NOTES', key: 'Packing Notes', placeholder: 'Notes' },
+                                                ]
+                                            }
                                         ]
                                     }
                                 ];
@@ -353,16 +451,171 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                 const hasWarning = field.required && isEmpty;
 
                                                 // Check if this field should be a dropdown
-                                                const fieldOptions = dropdownOptions?.[key] || dropdownOptions?.[key.toLowerCase()] || dropdownOptions?.[key.replace(/ /g, '_').toLowerCase()];
+                                                let fieldOptions = dropdownOptions?.[key] || dropdownOptions?.[key.toLowerCase()] || dropdownOptions?.[key.replace(/ /g, '_').toLowerCase()];
+
+                                                // Dynamic Country-State-City Logic
+                                                if (key === 'Country') {
+                                                    fieldOptions = Country.getAllCountries().map(c => ({ label: c.name, value: c.name }));
+                                                } else if (key === 'State') {
+                                                    const selectedCountryName = editingItem.data['Country'];
+                                                    const country = Country.getAllCountries().find(c => c.name === selectedCountryName);
+                                                    if (country) {
+                                                        fieldOptions = State.getStatesOfCountry(country.isoCode).map(s => ({ label: s.name, value: s.name }));
+                                                    }
+                                                } else if (key === 'City') {
+                                                    const selectedCountryName = editingItem.data['Country'];
+                                                    const selectedStateName = editingItem.data['State'];
+                                                    const country = Country.getAllCountries().find(c => c.name === selectedCountryName);
+                                                    const state = country ? State.getStatesOfCountry(country.isoCode).find(s => s.name === selectedStateName) : null;
+                                                    if (country && state) {
+                                                        fieldOptions = City.getCitiesOfState(country.isoCode, state.isoCode).map(c => ({ label: c.name, value: c.name }));
+                                                    }
+                                                }
+
+                                                // Mutual exclusivity for TDS/TCS
+                                                const isTDS = key === 'TDS Section';
+                                                const isTCS = key === 'TCS Section';
+                                                const tdsValue = editingItem.data['TDS Section'];
+                                                const tcsValue = editingItem.data['TCS Section'];
+                                                const isFieldDisabled = (isTDS && !!tcsValue && tcsValue !== '' && (!tdsValue || tdsValue === '')) || 
+                                                                      (isTCS && !!tdsValue && tdsValue !== '' && (!tcsValue || tcsValue === ''));
 
                                                 return (
-                                                    <div key={fIdx} className="space-y-2.5">
+                                                    <div key={fIdx} className={`space-y-2.5 ${field.type === 'table' ? 'col-span-full' : ''}`}>
                                                         <label className={`text-[10px] font-black uppercase tracking-[0.15em] transition-colors ${hasWarning ? 'text-rose-500' : 'text-gray-500'}`}>
                                                             {field.label}
                                                             {field.required && <span className="ml-1 text-rose-500 font-black">*</span>}
                                                         </label>
 
-                                                        {field.type === 'toggle' ? (
+                                                        {field.type === 'table' ? (
+                                                            <div className="col-span-full border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                                                                <div className="overflow-x-hidden">
+                                                                    <table className="w-full text-xs">
+                                                                        <thead>
+                                                                            <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                                                <th className="px-4 py-3 text-left font-black text-gray-500 uppercase tracking-[0.1em] whitespace-nowrap">NO</th>
+                                                                                {(field.columns || []).map((col: any) => (
+                                                                                    <th key={col.key} className="px-4 py-3 text-left font-black text-gray-500 uppercase tracking-[0.1em] whitespace-nowrap">
+                                                                                        {col.label}
+                                                                                    </th>
+                                                                                ))}
+                                                                                <th className="px-4 py-3 w-10"></th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody className="divide-y divide-gray-100">
+                                                                            {(value || [{}]).map((row: any, rIdx: number) => (
+                                                                                <tr key={rIdx} className="hover:bg-gray-50/50 transition-colors">
+                                                                                    <td className="px-4 py-4 text-gray-400 font-bold">{rIdx + 1}</td>
+                                                                                    {(field.columns || []).map((col: any) => {
+                                                                                        const colOptions = dropdownOptions?.[col.key] || dropdownOptions?.[col.key.toLowerCase()];
+                                                                                        return (
+                                                                                            <td key={col.key} className="px-2 py-2">
+                                                                                                {col.type === 'select' || colOptions ? (
+                                                                                                    <select
+                                                                                                        value={row[col.key] || ''}
+                                                                                                        onChange={(e) => {
+                                                                                                            const newVal = e.target.value;
+                                                                                                            const newProducts = [...(value || [{}])];
+                                                                                                            let updatedRow = { ...newProducts[rIdx], [col.key]: newVal };
+                                                                                                            
+                                                                                                            if (col.key === 'Item Code' || col.key === 'Item Name') {
+                                                                                                                const selectedOption = (colOptions || []).find((opt: any) => opt.value === newVal);
+                                                                                                                if (selectedOption?.full) {
+                                                                                                                    const item = selectedOption.full;
+                                                                                                                    updatedRow = {
+                                                                                                                        ...updatedRow,
+                                                                                                                        'Item Code': item.item_code || item.code || '',
+                                                                                                                        'Item Name': item.item_name || item.name || '',
+                                                                                                                        'HSN/SAC Code': item.hsn_code || item.hsnCode || item.hsn_sac || '',
+                                                                                                                        'UOM': (typeof item.uom === 'object' ? (item.uom?.symbol || item.uom?.name) : item.uom) || 
+                                                                                                                               (typeof item.unit === 'object' ? (item.unit?.symbol || item.unit?.name) : item.unit) || 
+                                                                                                                               item.uom || item.unit || ''
+                                                                                                                    };
+                                                                                                                }
+                                                                                                            }
+                                                                                                            
+                                                                                                            newProducts[rIdx] = updatedRow;
+                                                                                                            editingItem.data[key] = newProducts;
+                                                                                                            setEditingItem({ ...editingItem });
+                                                                                                        }}
+                                                                                                        className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                                                                                    >
+                                                                                                        <option value="">{col.placeholder || 'Select'}</option>
+                                                                                                        {(colOptions || []).map((opt: any) => (
+                                                                                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                                                                        ))}
+                                                                                                    </select>
+                                                                                                ) : (
+                                                                                                    <input
+                                                                                                        value={row[col.key] || ''}
+                                                                                                        placeholder={col.placeholder}
+                                                                                                        onChange={(e) => {
+                                                                                                            const newVal = e.target.value;
+                                                                                                            const newProducts = [...(value || [{}])];
+                                                                                                            let updatedRow = { ...newProducts[rIdx], [col.key]: newVal };
+                                                                                                            
+                                                                                                            if (col.key === 'HSN/SAC Code' && newVal && newVal.length >= 4) {
+                                                                                                                const masterList = dropdownOptions?.['Item Code'] || dropdownOptions?.['Item Name'] || [];
+                                                                                                                const match = masterList.find((opt: any) => {
+                                                                                                                    const item = opt.full;
+                                                                                                                    if (!item) return false;
+                                                                                                                    const itemHsn = item.hsn_code || item.hsnCode || item.hsn_sac || '';
+                                                                                                                    return itemHsn === newVal;
+                                                                                                                });
+                                                                                                                
+                                                                                                                if (match?.full) {
+                                                                                                                    const item = match.full;
+                                                                                                                    updatedRow = {
+                                                                                                                        ...updatedRow,
+                                                                                                                        'Item Code': item.item_code || item.code || '',
+                                                                                                                        'Item Name': item.item_name || item.name || '',
+                                                                                                                        'UOM': (typeof item.uom === 'object' ? (item.uom?.symbol || item.uom?.name) : item.uom) || 
+                                                                                                                               (typeof item.unit === 'object' ? (item.unit?.symbol || item.unit?.name) : item.unit) || 
+                                                                                                                               item.uom || item.unit || ''
+                                                                                                                    };
+                                                                                                                }
+                                                                                                            }
+                                                                                                            
+                                                                                                            newProducts[rIdx] = updatedRow;
+                                                                                                            editingItem.data[key] = newProducts;
+                                                                                                            setEditingItem({ ...editingItem });
+                                                                                                        }}
+                                                                                                        className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                                                                                    />
+                                                                                                )}
+                                                                                            </td>
+                                                                                        );
+                                                                                    })}
+                                                                                    <td className="px-4 py-4">
+                                                                                        <button 
+                                                                                            onClick={() => {
+                                                                                                const newProducts = (value || [{}]).filter((_: any, i: number) => i !== rIdx);
+                                                                                                editingItem.data[key] = newProducts.length ? newProducts : [{}];
+                                                                                                setEditingItem({ ...editingItem });
+                                                                                            }}
+                                                                                            className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                                                                        >
+                                                                                            <Icon name="trash" className="w-4 h-4" />
+                                                                                        </button>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const newProducts = [...(value || [{}]), {}];
+                                                                        editingItem.data[key] = newProducts;
+                                                                        setEditingItem({ ...editingItem });
+                                                                    }}
+                                                                    className="w-full py-3 bg-gray-50/50 hover:bg-indigo-50 text-indigo-600 text-xs font-black uppercase tracking-widest border-t border-gray-100 transition-all flex items-center justify-center gap-2"
+                                                                >
+                                                                    <Icon name="plus" className="w-4 h-4" />
+                                                                    Add Row
+                                                                </button>
+                                                            </div>
+                                                        ) : field.type === 'toggle' ? (
                                                             <div className="flex gap-4">
                                                                 {['YES', 'NO'].map(opt => {
                                                                     const isActive = (opt === 'YES' && (value === true || value?.toString().toLowerCase() === 'yes')) || 
@@ -391,10 +644,19 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                     value={value || ''}
                                                                     onChange={(e) => {
                                                                         editingItem.data[key] = e.target.value;
+                                                                        if (key === 'Country') {
+                                                                            editingItem.data['State'] = '';
+                                                                            editingItem.data['City'] = '';
+                                                                        } else if (key === 'State') {
+                                                                            editingItem.data['City'] = '';
+                                                                        }
                                                                         setEditingItem({ ...editingItem });
                                                                     }}
+                                                                    disabled={isFieldDisabled}
                                                                     className={`w-full px-5 py-4 rounded-2xl text-sm font-bold transition-all focus:ring-4 outline-none appearance-none bg-no-repeat bg-[right_1.25rem_center] bg-[length:1.2em_1.2em] ${
-                                                                        hasWarning 
+                                                                        isFieldDisabled
+                                                                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                                                        : hasWarning 
                                                                         ? 'bg-rose-50 border-2 border-rose-100 focus:border-rose-500 focus:ring-rose-500/10' 
                                                                         : 'bg-gray-50/50 border-2 border-gray-100 focus:border-indigo-500 focus:ring-indigo-500/10 group-hover:border-indigo-200'
                                                                     }`}
@@ -410,15 +672,18 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                             <input 
                                                                 type="text"
                                                                 value={value || ''}
+                                                                placeholder={field.placeholder}
+                                                                disabled={isFieldDisabled}
                                                                 onChange={(e) => {
                                                                     editingItem.data[key] = e.target.value;
                                                                     setEditingItem({ ...editingItem });
                                                                 }}
-                                                                placeholder={field.placeholder || `Enter ${field.label}...`}
                                                                 className={`w-full px-5 py-4 rounded-2xl text-sm font-bold transition-all focus:ring-4 outline-none ${
-                                                                    hasWarning 
+                                                                    isFieldDisabled
+                                                                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                                                    : hasWarning 
                                                                     ? 'bg-rose-50 border-2 border-rose-100 focus:border-rose-500 focus:ring-rose-500/10' 
-                                                                    : 'bg-gray-50/50 border-2 border-gray-100 focus:border-indigo-500 focus:ring-indigo-500/10'
+                                                                    : 'bg-gray-50/50 border-2 border-gray-100 focus:border-indigo-500 focus:ring-indigo-500/10 group-hover:border-indigo-200'
                                                                 }`}
                                                             />
                                                         )}

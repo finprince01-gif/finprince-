@@ -85,6 +85,38 @@ const ADDITIONAL_STATES: Record<string, { name: string; isoCode: string }[]> = {
     ]
 };
 
+// TDS Rates Master Data
+const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
+    'Section 194C - Individual/HUF': { tdsRate: '1%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF)' },
+    'Section 194C - Others': { tdsRate: '2%', penaltyRate: '20%', description: 'Payment to Contractors other than Individuals & HUF' },
+    'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
+    'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
+    'Section 194-I - Rent- Land, Building, Furniture & fitting': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & Fitting paid to any entity' },
+    'Section 194-I - Rent- Plant & Machinery, Equipment': { tdsRate: '10%', penaltyRate: '20%', description: 'Rent on Plant & Machinery, or Equipment paid to any entity' },
+    'Section 194J - Technical Services': { tdsRate: '2%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films' },
+    'Section 194J - Professional Services': { tdsRate: '10%', penaltyRate: '20%', description: 'Professional Services, Royalty from other than films, Non-Compete Fees, etc.' },
+    "Section 194J - Director's Remuneration": { tdsRate: '10%', penaltyRate: '20%', description: "Director's Remuneration (other than salary)" },
+    'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
+    'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
+    'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
+    'Section 194-IA': { tdsRate: '1%', penaltyRate: '20%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
+    'Section 194-IB': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
+    'Section 194-IC': { tdsRate: '10%', penaltyRate: '20%', description: 'Payment of monetary consideration under a specified Joint Development Agreements' },
+    'Section 194M': { tdsRate: '5%', penaltyRate: '20%', description: 'Payment exceeding Rs 50 Lakhs to contractors or professionals by Individuals & HUFs who are not subject to tax audit' },
+    'Section 194-O': { tdsRate: '1%', penaltyRate: '5%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
+    'Section 195': { tdsRate: 'Specify "Rate" & "Nature"', penaltyRate: '-', description: 'Any payment subject to tax made to a Non-Resident or Foreign Company' }
+};
+
+// TCS Rates Master Data
+const TCS_RATES_MASTER: { [key: string]: { tcsRate: string; penaltyRate: string; description: string } } = {
+    'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Scrap, Alcoholic Liquor, or Minerals' },
+    'Section 206C(1) - Sale of Tendu Leaves': { tcsRate: '5%', penaltyRate: '5%', description: 'Sale of Tendu Leaves' },
+    'Section 206C(1) - Sale of Forest Produce': { tcsRate: '2%', penaltyRate: '5%', description: 'Sale of Forest Produce (other than Tendu Leaves & Timber)' },
+    'Section 206C(1) - Sale of Timber': { tcsRate: '2%', penaltyRate: '5%', description: 'Sale of Timber obtained under a forest lease or by any mode' },
+    'Section 206C(1F) - Sale of Motor Vehicles': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Motor Vehicles exceeding Rs. 10 Lakhs' },
+    'Section 206C(1F) - Sale of Specified Luxury Goods': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Specified Luxury Goods (watches, art, bags, etc.) exceeding Rs. 10 Lakhs' },
+};
+
 const getAvailableStates = (countryCode: string) => {
     const libStates = State.getStatesOfCountry(countryCode) || [];
     const extra = ADDITIONAL_STATES[countryCode] || [];
@@ -3432,7 +3464,12 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                         { label: 'India', value: 'India' },
                         { label: 'United States', value: 'United States' },
                         { label: 'United Kingdom', value: 'United Kingdom' }
-                    ]
+                    ],
+                    'UOM': units.map(u => ({ label: u.symbol || u.name, value: u.symbol || u.name })),
+                    'Item Code': stockItems.map(i => ({ label: i.code, value: i.code, full: i })),
+                    'Item Name': stockItems.map(i => ({ label: i.name, value: i.name, full: i })),
+                    'TDS Section': Object.keys(TDS_RATES_MASTER).map(s => ({ label: s, value: s })),
+                    'TCS Section': Object.keys(TCS_RATES_MASTER).map(s => ({ label: s, value: s }))
                 }}
             />
         </div>

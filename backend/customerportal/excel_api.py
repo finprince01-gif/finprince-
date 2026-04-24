@@ -16,7 +16,8 @@ from .database import (
     CustomerMasterCustomerBanking,
     CustomerMasterCustomerTDS,
     CustomerMasterCustomerTermsCondition,
-    CustomerMasterCategory
+    CustomerMasterCategory,
+    CustomerMasterCustomerProductService
 )
 from accounting.models import MasterLedger
 
@@ -43,6 +44,9 @@ CUSTOMER_COLUMNS = [
     {"label": "State", "key": "state", "required": False},
     {"label": "Pincode", "key": "pincode", "required": False},
     {"label": "Country", "key": "country", "required": False},
+    {"label": "Branch Contact Person", "key": "branch_contact_person", "required": False},
+    {"label": "Branch Email Address", "key": "branch_email", "required": False},
+    {"label": "Branch Contact Number", "key": "branch_contact_number", "required": False},
     {"label": "MSME No", "key": "msme_no", "required": False},
     {"label": "FSSAI No", "key": "fssai_no", "required": False},
     {"label": "IEC Code", "key": "iec_code", "required": False},
@@ -60,6 +64,15 @@ CUSTOMER_COLUMNS = [
     {"label": "Bank Name", "key": "bank_name", "required": False},
     {"label": "IFSC Code", "key": "ifsc_code", "required": False},
     {"label": "Bank Branch", "key": "bank_branch", "required": False},
+    {"label": "Swift Code", "key": "swift_code", "required": False},
+    {"label": "Associated Branch", "key": "associated_branch", "required": False},
+    {"label": "Item Code", "key": "item_code", "required": False},
+    {"label": "Item Name", "key": "item_name", "required": False},
+    {"label": "HSN/SAC Code", "key": "hsn_code", "required": False},
+    {"label": "UOM", "key": "uom", "required": False},
+    {"label": "Customer Item Code", "key": "cust_item_code", "required": False},
+    {"label": "Customer Item Name", "key": "cust_item_name", "required": False},
+    {"label": "Packing Notes", "key": "packing_notes", "required": False},
 ]
 
 class CustomerExcelTemplateDownloadView(APIView):
@@ -135,7 +148,10 @@ class CustomerExcelExportView(APIView):
                 "City": gst.city if gst else "",
                 "State": gst.state if gst else "",
                 "Pincode": gst.pincode if gst else "",
-                "Country": gst.country if gst else "",
+                "Country": gst.country if (gst and gst.country) else "India",
+                "Branch Contact Person": gst.branch_contact_person if gst else "",
+                "Branch Email Address": gst.branch_email if gst else "",
+                "Branch Contact Number": gst.branch_contact_number if gst else "",
                 "MSME No": tds.msme_no if tds else "",
                 "FSSAI No": tds.fssai_no if tds else "",
                 "IEC Code": tds.iec_code if tds else "",
@@ -154,6 +170,19 @@ class CustomerExcelExportView(APIView):
                 "IFSC Code": banking.ifsc_code if banking else "",
                 "Bank Branch": banking.branch_name if banking else "",
             }
+            
+            # Fetch products
+            products = CustomerMasterCustomerProductService.objects.filter(customer_basic_detail=customer).first()
+            if products:
+                data.update({
+                    "Item Code": products.item_code,
+                    "Item Name": products.item_name,
+                    "HSN/SAC Code": products.hsn_code,
+                    "UOM": products.uom,
+                    "Customer Item Code": products.customer_item_code,
+                    "Customer Item Name": products.customer_item_name,
+                    "Packing Notes": products.packing_notes,
+                })
             
             for col_idx, col_def in enumerate(CUSTOMER_COLUMNS, 1):
                 ws.cell(row=row_idx, column=col_idx, value=data.get(col_def["label"], ""))
@@ -218,8 +247,13 @@ class CustomerExcelUploadView(APIView):
                 
                 if not row_data: continue
                 
+                def is_empty(val):
+                    if val is None: return True
+                    s = str(val).strip().lower()
+                    return s in ['', 'none', 'n/a', 'nan', 'null', 'n / a']
+
                 c_name = row_data.get("Customer Name") or row_data.get("customer_name")
-                if not c_name:
+                if is_empty(c_name):
                     results["failed"] += 1
                     results["errors"].append({
                         "message": f"Row {row_idx}: Customer Name is missing",
@@ -228,12 +262,61 @@ class CustomerExcelUploadView(APIView):
                     })
                     continue
                 
-                # Mandatory Category Check
                 cat_name = row_data.get("Category") or row_data.get("category")
-                if not cat_name:
+                if is_empty(cat_name):
                     results["failed"] += 1
                     results["errors"].append({
-                        "message": f"Row {row_idx}: Category is mandatory. Please select a category.",
+                        "message": f"Row {row_idx}: Category is mandatory",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                email = row_data.get("Email Address") or row_data.get("email_address") or row_data.get("email")
+                if is_empty(email):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Email Address is mandatory",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                contact = row_data.get("Contact Number") or row_data.get("contact_number") or row_data.get("contact")
+                if is_empty(contact):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Contact Number is mandatory",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                branch = row_data.get("Branch Name") or row_data.get("branch_name")
+                if is_empty(branch):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Branch Name is mandatory",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                addr1 = row_data.get("Address Line 1") or row_data.get("address_line_1")
+                if is_empty(addr1):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Address Line 1 is mandatory",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                addr2 = row_data.get("Address Line 2") or row_data.get("address_line_2")
+                if is_empty(addr2):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Address Line 2 is mandatory",
                         "row_data": row_data,
                         "row_index": row_idx
                     })
@@ -316,7 +399,10 @@ class CustomerExcelUploadView(APIView):
                                 city=row_data.get("City"),
                                 state=row_data.get("State"),
                                 pincode=row_data.get("Pincode"),
-                                country=row_data.get("Country", "India"),
+                                country=row_data.get("Country") or row_data.get("country") or "India",
+                                branch_contact_person=row_data.get("Branch Contact Person") or row_data.get("branch_contact_person"),
+                                branch_email=row_data.get("Branch Email Address") or row_data.get("branch_email"),
+                                branch_contact_number=row_data.get("Branch Contact Number") or row_data.get("branch_contact_number"),
                                 created_by=username
                             )
                         else:
@@ -337,6 +423,8 @@ class CustomerExcelUploadView(APIView):
                                 bank_name=row_data.get("Bank Name"),
                                 ifsc_code=row_data.get("IFSC Code"),
                                 branch_name=row_data.get("Bank Branch"),
+                                swift_code=row_data.get("Swift Code"),
+                                associated_branches=[row_data.get("Associated Branch")] if row_data.get("Associated Branch") else [],
                                 created_by=username
                             )
                         else:
@@ -368,6 +456,43 @@ class CustomerExcelUploadView(APIView):
                             dispute_terms=row_data.get("Dispute Terms"),
                             created_by=username
                         )
+                        
+                        # 6. Products/Services
+                        products = row_data.get("products", [])
+                        if not products:
+                            # Try to get from flat fields
+                            item_code = row_data.get("Item Code") or row_data.get("item_code")
+                            if item_code:
+                                products = [{
+                                    "Item Code": item_code,
+                                    "Item Name": row_data.get("Item Name") or row_data.get("item_name"),
+                                    "HSN/SAC Code": row_data.get("HSN/SAC Code") or row_data.get("HSN/SAC") or row_data.get("hsn_code") or row_data.get("hsn_sac_code"),
+                                    "UOM": row_data.get("UOM") or row_data.get("uom"),
+                                    "Customer Item Code": row_data.get("Customer Item Code") or row_data.get("Cust Item Code") or row_data.get("cust_item_code"),
+                                    "Customer Item Name": row_data.get("Customer Item Name") or row_data.get("Cust Item Name") or row_data.get("cust_item_name"),
+                                    "Packing Notes": row_data.get("Packing Notes") or row_data.get("packing_notes"),
+                                }]
+                        
+                        for p in products:
+                            item_code = p.get("Item Code") or p.get("item_code")
+                            if not item_code: continue
+                            
+                            hsn = p.get("HSN/SAC Code") or p.get("HSN/SAC") or p.get("hsn_code") or p.get("hsn_sac_code")
+                            if hsn and not str(hsn).replace(" ", "").isdigit():
+                                raise Exception(f"Invalid HSN/SAC Code: '{hsn}'. HSN codes must be numeric.")
+
+                            CustomerMasterCustomerProductService.objects.create(
+                                tenant_id=tenant_id,
+                                customer_basic_detail=customer,
+                                item_code=item_code,
+                                item_name=p.get("Item Name") or p.get("item_name"),
+                                hsn_code=hsn,
+                                uom=p.get("UOM") or p.get("uom"),
+                                customer_item_code=p.get("Customer Item Code") or p.get("Cust Item Code") or p.get("cust_item_code") or p.get("customer_item_code"),
+                                customer_item_name=p.get("Customer Item Name") or p.get("Cust Item Name") or p.get("cust_item_name") or p.get("customer_item_name"),
+                                packing_notes=p.get("Packing Notes") or p.get("packing_notes"),
+                                created_by=username
+                            )
                         
                         results["successful_imports"].append({
                             "id": None if dry_run else customer.id,

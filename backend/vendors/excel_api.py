@@ -18,6 +18,7 @@ from .models import (
     VendorMasterTerms,
     VendorMasterCategory
 )
+from .vendorproduct_database import VendorProductServiceDatabase
 from accounting.models import MasterLedger
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ VENDOR_COLUMNS = [
     {"label": "State", "key": "branch_state", "required": False},
     {"label": "Pincode", "key": "branch_pincode", "required": False},
     {"label": "Country", "key": "branch_country", "required": False},
+    {"label": "Branch Contact Person", "key": "branch_contact_person", "required": False},
+    {"label": "Branch Email Address", "key": "branch_email", "required": False},
+    {"label": "Branch Contact Number", "key": "branch_contact_no", "required": False},
     {"label": "MSME No", "key": "msme_udyam_no", "required": False},
     {"label": "FSSAI No", "key": "fssai_license_no", "required": False},
     {"label": "IEC Code", "key": "import_export_code", "required": False},
@@ -59,6 +63,15 @@ VENDOR_COLUMNS = [
     {"label": "Bank Name", "key": "bank_name", "required": False},
     {"label": "IFSC Code", "key": "ifsc_code", "required": False},
     {"label": "Bank Branch", "key": "branch_name", "required": False},
+    {"label": "Swift Code", "key": "swift_code", "required": False},
+    {"label": "Associated Branch", "key": "vendor_branch", "required": False},
+    {"label": "Item Code", "key": "item_code", "required": False},
+    {"label": "Item Name", "key": "item_name", "required": False},
+    {"label": "HSN/SAC Code", "key": "hsn_code", "required": False},
+    {"label": "UOM", "key": "uom", "required": False},
+    {"label": "Supplier Item Code", "key": "supplier_item_code", "required": False},
+    {"label": "Supplier Item Name", "key": "supplier_item_name", "required": False},
+    {"label": "Packing Notes", "key": "packing_notes", "required": False},
 ]
 
 class VendorExcelTemplateDownloadView(APIView):
@@ -132,7 +145,10 @@ class VendorExcelExportView(APIView):
                 "City": gst.branch_city if gst else "",
                 "State": gst.branch_state if gst else "",
                 "Pincode": gst.branch_pincode if gst else "",
-                "Country": gst.branch_country if gst else "",
+                "Country": gst.branch_country if (gst and gst.branch_country) else "India",
+                "Branch Contact Person": gst.branch_contact_person if gst else "",
+                "Branch Email Address": gst.branch_email if gst else "",
+                "Branch Contact Number": gst.branch_contact_no if gst else "",
                 "MSME No": tds.msme_udyam_no if tds else "",
                 "FSSAI No": tds.fssai_license_no if tds else "",
                 "IEC Code": tds.import_export_code if tds else "",
@@ -152,6 +168,18 @@ class VendorExcelExportView(APIView):
                 "IFSC Code": banking.ifsc_code if banking else "",
                 "Bank Branch": banking.branch_name if banking else "",
             }
+            
+            # Fetch products
+            prod_data = VendorProductServiceDatabase.get_by_vendor(vendor.id)
+            if prod_data and prod_data.get("items"):
+                p = prod_data["items"][0]
+                data.update({
+                    "Item Code": p.get("item_code"),
+                    "Item Name": p.get("item_name"),
+                    "HSN/SAC Code": p.get("hsn_sac_code"),
+                    "Supplier Item Code": p.get("supplier_item_code"),
+                    "Supplier Item Name": p.get("supplier_item_name"),
+                })
             
             for col_idx, col_def in enumerate(VENDOR_COLUMNS, 1):
                 ws.cell(row=row_idx, column=col_idx, value=data.get(col_def["label"], ""))
@@ -219,7 +247,10 @@ class VendorExcelUploadView(APIView):
                 email = row_data.get("Email Address") or row_data.get("email")
                 contact = row_data.get("Contact Number") or row_data.get("contact_no")
                 
-                if not v_name or not email or not contact:
+                def is_empty(val):
+                    return not val or str(val).strip().lower() in ['n/a', 'none', 'nan', 'null', '']
+
+                if is_empty(v_name) or is_empty(email) or is_empty(contact):
                     results["failed"] += 1
                     results["errors"].append({
                         "message": f"Row {row_idx}: Name, Email, or Contact is missing",
@@ -230,10 +261,40 @@ class VendorExcelUploadView(APIView):
 
                 # Mandatory Category Check
                 cat_name = row_data.get("Category") or row_data.get("vendor_category")
-                if not cat_name:
+                if is_empty(cat_name):
                     results["failed"] += 1
                     results["errors"].append({
                         "message": f"Row {row_idx}: Category is mandatory. Please select a category.",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                branch = row_data.get("Branch Name") or row_data.get("branch_name")
+                if is_empty(branch):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Branch Name is mandatory",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                addr1 = row_data.get("Address Line 1") or row_data.get("address_line_1")
+                if is_empty(addr1):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Address Line 1 is mandatory",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                addr2 = row_data.get("Address Line 2") or row_data.get("address_line_2")
+                if is_empty(addr2):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Address Line 2 is mandatory",
                         "row_data": row_data,
                         "row_index": row_idx
                     })
@@ -308,7 +369,10 @@ class VendorExcelUploadView(APIView):
                                 branch_city=row_data.get("City") or row_data.get("branch_city"),
                                 branch_state=row_data.get("State") or row_data.get("branch_state"),
                                 branch_pincode=row_data.get("Pincode") or row_data.get("branch_pincode"),
-                                branch_country=row_data.get("Country") or row_data.get("branch_country", "India"),
+                                branch_country=row_data.get("Country") or row_data.get("branch_country") or "India",
+                                branch_contact_person=row_data.get("Branch Contact Person") or row_data.get("branch_contact_person"),
+                                branch_email=row_data.get("Branch Email Address") or row_data.get("branch_email"),
+                                branch_contact_no=row_data.get("Branch Contact Number") or row_data.get("branch_contact_no"),
                                 created_by=username
                             )
                         
@@ -322,6 +386,8 @@ class VendorExcelUploadView(APIView):
                                 bank_name=row_data.get("Bank Name") or row_data.get("bank_name"),
                                 ifsc_code=row_data.get("IFSC Code") or row_data.get("ifsc_code"),
                                 branch_name=row_data.get("Bank Branch") or row_data.get("branch_name"),
+                                swift_code=row_data.get("Swift Code") or row_data.get("swift_code"),
+                                vendor_branch=row_data.get("Associated Branch") or row_data.get("vendor_branch"),
                                 created_by=username
                             )
                         else:
@@ -353,6 +419,48 @@ class VendorExcelUploadView(APIView):
                             dispute_redressal_terms=row_data.get("Dispute Terms") or row_data.get("dispute_redressal_terms"),
                             created_by=username
                         )
+                        
+                        # 6. Products/Services
+                        products_raw = row_data.get("products", [])
+                        products_to_save = []
+                        if products_raw:
+                            for p in products_raw:
+                                products_to_save.append({
+                                    "item_code": p.get("Item Code") or p.get("item_code") or "",
+                                    "item_name": p.get("Item Name") or p.get("item_name") or "",
+                                    "hsn_sac_code": p.get("HSN/SAC Code") or p.get("HSN/SAC") or p.get("hsn_sac_code") or "",
+                                    "uom": p.get("UOM") or p.get("uom") or "",
+                                    "supplier_item_code": p.get("Supplier Item Code") or p.get("Supp Item Code") or p.get("supplier_item_code") or "",
+                                    "supplier_item_name": p.get("Supplier Item Name") or p.get("Supp Item Name") or p.get("supplier_item_name") or "",
+                                    "packing_notes": p.get("Packing Notes") or p.get("packing_notes") or "",
+                                })
+                        else:
+                            # Try to get from flat fields
+                            item_code = row_data.get("Item Code") or row_data.get("item_code")
+                            if item_code:
+                                products_to_save = [{
+                                    "item_code": item_code,
+                                    "item_name": row_data.get("Item Name") or row_data.get("item_name"),
+                                    "hsn_sac_code": row_data.get("HSN/SAC Code") or row_data.get("HSN/SAC") or row_data.get("hsn_code") or row_data.get("hsn_sac_code"),
+                                    "uom": row_data.get("UOM") or row_data.get("uom"),
+                                    "supplier_item_code": row_data.get("Supplier Item Code") or row_data.get("Supp Item Code") or row_data.get("supplier_item_code"),
+                                    "supplier_item_name": row_data.get("Supplier Item Name") or row_data.get("Supp Item Name") or row_data.get("supplier_item_name"),
+                                    "packing_notes": row_data.get("Packing Notes") or row_data.get("packing_notes"),
+                                }]
+                        
+                        if products_to_save:
+                            # HSN Validation
+                            for p in products_to_save:
+                                hsn = p.get("hsn_sac_code")
+                                if hsn and not str(hsn).replace(" ", "").isdigit():
+                                    raise Exception(f"Invalid HSN/SAC Code: '{hsn}'. HSN codes must be numeric.")
+
+                            VendorProductServiceDatabase.upsert_product_services(
+                                tenant_id=tenant_id,
+                                vendor_basic_detail_id=vendor.id,
+                                items=products_to_save,
+                                created_by=username
+                            )
                         
                         results["successful_imports"].append({
                             "id": None if dry_run else vendor.id,
