@@ -13,6 +13,7 @@ interface SearchableDropdownProps {
     noResultsText?: string;
     onCreateAction?: { label: string; onClick: () => void };
     isMulti?: boolean;
+    allowCustomValue?: boolean;
 }
 
 const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
@@ -24,7 +25,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     required = false,
     noResultsText = 'No results found',
     onCreateAction,
-    isMulti = false
+    isMulti = false,
+    allowCustomValue = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -63,6 +65,13 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
         }
     };
 
+    const handleCustomValueSubmit = () => {
+        if (allowCustomValue && searchTerm.trim()) {
+            onChange(searchTerm.trim());
+            setIsOpen(false);
+        }
+    };
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as Node;
@@ -75,7 +84,6 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
         };
 
         const handleScroll = (event: Event) => {
-            // Only close if scrolling something other than the dropdown itself
             if (dropdownRef.current && dropdownRef.current.contains(event.target as Node)) {
                 return;
             }
@@ -84,7 +92,6 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
 
         if (isOpen) {
             document.addEventListener('mousedown', handleClickOutside);
-            // Use capture phase for scroll to catch it before it bubbles
             window.addEventListener('scroll', handleScroll, true);
             window.addEventListener('resize', () => setIsOpen(false));
             updatePosition();
@@ -191,12 +198,37 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                                 type="text"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (filteredOptions.length > 0) {
+                                            onChange(filteredOptions[0]);
+                                            setIsOpen(false);
+                                        } else {
+                                            handleCustomValueSubmit();
+                                        }
+                                    }
+                                }}
                                 placeholder="Search..."
                                 className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                 autoFocus
                             />
                         </div>
                     </div>
+
+                    {allowCustomValue && searchTerm.trim() && !options.includes(searchTerm.trim()) && (
+                        <div className="border-b border-gray-100 bg-teal-50/50">
+                            <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={handleCustomValueSubmit}
+                                className="w-full px-4 py-2 text-left text-sm text-teal-700 font-semibold hover:bg-teal-100 transition-colors flex items-center gap-1.5"
+                            >
+                                <span className="text-base leading-none font-bold">+</span>
+                                Use custom: "{searchTerm}"
+                            </button>
+                        </div>
+                    )}
 
                     {onCreateAction && (
                         <div className="border-b border-gray-100 bg-indigo-50/50">
@@ -254,7 +286,10 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                                 );
                             })
                         ) : (
-                            <div className="p-8 text-center text-sm text-gray-400 italic">{noResultsText}</div>
+                            !allowCustomValue && <div className="p-8 text-center text-sm text-gray-400 italic">{noResultsText}</div>
+                        )}
+                        {allowCustomValue && filteredOptions.length === 0 && !searchTerm.trim() && (
+                            <div className="p-8 text-center text-sm text-gray-400 italic">Type to add custom value...</div>
                         )}
                     </div>
                 </div>,

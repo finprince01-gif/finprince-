@@ -314,6 +314,13 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
         customer.save()
         return Response({'status': 'customer deactivated'})
 
+    def destroy(self, request, *args, **kwargs):
+        """Override delete to perform soft delete"""
+        customer = self.get_object()
+        customer.is_deleted = True
+        customer.save()
+        return Response({'status': 'customer deleted successfully'}, status=status.HTTP_200_OK)
+
 
 class CustomerTransactionViewSet(viewsets.ModelViewSet):
     """

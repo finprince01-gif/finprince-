@@ -18,6 +18,11 @@ from .api import (
     CustomerTransactionSalesQuotationSpecificViewSet,
     CustomerTransactionSalesOrderViewSet
 )
+from .excel_api import (
+    CustomerExcelTemplateDownloadView,
+    CustomerExcelExportView,
+    CustomerExcelUploadView
+)
 
 # Create router and register viewsets
 router = DefaultRouter()
@@ -39,5 +44,8 @@ from .api import SalesCustomerCreateView
 urlpatterns = [
     path('', include(router.urls)),
     path('sales/customers/create/', SalesCustomerCreateView.as_view(), name='sales-customers-create'),
+    path('excel/template/', CustomerExcelTemplateDownloadView.as_view(), name='customer-excel-template'),
+    path('excel/export/', CustomerExcelExportView.as_view(), name='customer-excel-export'),
+    path('excel/upload/', CustomerExcelUploadView.as_view(), name='customer-excel-upload'),
 ]
 

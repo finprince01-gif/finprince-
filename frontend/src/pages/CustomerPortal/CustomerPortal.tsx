@@ -16,10 +16,12 @@ import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import SalesOrderList from './SalesOrderList';
 import SalesOrderViewModal from './SalesOrderViewModal';
-import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt, Check } from 'lucide-react';
+import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt, Check, Download } from 'lucide-react';
 import CustomerViewModal from './CustomerViewModal';
 import SalesGSTViewModal from './SalesGSTViewModal';
 import { formatDate } from '../../utils/formatting';
+import { BulkImportFeedbackModal } from '../../components/BulkImportFeedbackModal';
+import SearchableDropdown from '../../components/SearchableDropdown';
 
 type MainTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'Sales Quotation & Order' | 'Customer' | 'Long-term Contracts';
@@ -1225,12 +1227,123 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         }
     };
 
+
+    const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
+    const downloadDropdownRef = React.useRef<HTMLDivElement>(null);
+
+    const [importSummary, setImportSummary] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(event.target as Node)) {
+                setIsDownloadDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const [isImporting, setIsImporting] = useState(false);
+
+    const handleCustomerExcelUploadFromModal = async (input: File | any[], isPreview: boolean = false) => {
+        setIsImporting(true);
+        try {
+            const formData = new FormData();
+            if (input instanceof File) {
+                formData.append('file', input);
+            } else {
+                // If it's an array, it's our JSON data from the Quick Fix feature
+                formData.append('data', JSON.stringify(input));
+            }
+
+            const response = await httpClient.post<any>(
+                `/api/customerportal/excel/upload/?dry_run=${isPreview}`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                }
+            );
+            
+            if (response.summary) {
+                // Ensure the summary contains the preview flag from the backend
+                setImportSummary({
+                    ...response.summary,
+                    is_preview: response.is_preview
+                });
+            } else {
+                showSuccess(response.message || 'Customers imported successfully!');
+                setIsImportModalOpen(false);
+            }
+            
+            if (!isPreview) {
+                fetchCustomers(); // Refresh the list only on actual save
+            }
+        } catch (error: any) {
+            handleApiError(error, 'Excel Upload');
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const handleCustomerExcelDownload = async (type: 'template' | 'export') => {
+        try {
+            const endpoint = type === 'template' 
+                ? '/api/customerportal/excel/template/' 
+                : '/api/customerportal/excel/export/';
+            
+            showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
+            
+            const response: any = await httpClient.get(endpoint, {}, {
+                responseType: 'blob'
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', type === 'template' ? 'customer_template.xlsx' : 'customers_export.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showSuccess(`${type === 'template' ? 'Template' : 'Excel'} downloaded successfully!`);
+        } catch (error: any) {
+            handleApiError(error, 'Excel Download');
+        }
+    };
+
     const handleEditCustomerById = async (customer: any) => {
         try {
             const fullCustomer = await fetchFullCustomerById(customer.id);
             handleEditCustomer(fullCustomer);
         } catch (error) {
             handleApiError(error, 'Fetch Customer For Edit');
+        }
+    };
+
+    const handleEditImportedCustomer = async (record: { id: number; name: string; code?: string }) => {
+        try {
+            const fullCustomer = await fetchFullCustomerById(record.id);
+            if (fullCustomer) {
+                // Close the modal first
+                setIsImportModalOpen(false);
+                // Open for editing
+                handleEditCustomer(fullCustomer);
+            }
+        } catch (error) {
+            handleApiError(error, 'Fetch Customer for Edit');
+        }
+    };
+
+    const handleDeleteCustomer = async (customerId: number) => {
+        if (!window.confirm('Are you sure you want to delete this customer?')) return;
+        try {
+            await httpClient.delete(`/api/customerportal/customers/${customerId}/`);
+            showSuccess('Customer deleted successfully!');
+            fetchCustomers();
+        } catch (error) {
+            handleApiError(error, 'Delete Customer');
         }
     };
 
@@ -1354,17 +1467,21 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Category</label>
-                                <select
-                                    value={customerFormData.customer_category}
-                                    onChange={(e) => handleCustomerFieldChange('customer_category', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 bg-white">
-                                    <option value="">Select Category</option>
-                                    {categories.map((cat) => (
-                                        <option key={cat.id} value={String(cat.id)}>
-                                            {cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')}
-                                        </option>
-                                    ))}
-                                </select>
+                                <SearchableDropdown
+                                    options={categories.map(cat => cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > '))}
+                                    value={categories.find(cat => String(cat.id) === customerFormData.customer_category)?.full_path || categories.find(cat => String(cat.id) === customerFormData.customer_category)?.category || customerFormData.customer_category || ''}
+                                    onChange={(val) => {
+                                        const selectedCat = categories.find(cat => (cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')) === val);
+                                        if (selectedCat) {
+                                            handleCustomerFieldChange('customer_category', String(selectedCat.id));
+                                        } else {
+                                            // Handle custom value - save as string directly
+                                            handleCustomerFieldChange('customer_category', val);
+                                        }
+                                    }}
+                                    placeholder="Select Category"
+                                    allowCustomValue={true}
+                                />
                             </div>
 
                             {/* Row 2 */}
@@ -1422,18 +1539,13 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Billing Currency</label>
-                                <select
+                                <SearchableDropdown
+                                    options={BILLING_CURRENCIES.map(curr => curr.code)}
                                     value={customerFormData.billing_currency}
-                                    onChange={(e) => handleCustomerFieldChange('billing_currency', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 bg-white"
-                                >
-                                    <option value="">Select Currency</option>
-                                    {BILLING_CURRENCIES.map((curr) => (
-                                        <option key={curr.code} value={curr.code}>
-                                            {curr.code} - {curr.name} ({curr.symbol})
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => handleCustomerFieldChange('billing_currency', val)}
+                                    placeholder="Select Currency"
+                                    allowCustomValue={true}
+                                />
                             </div>
 
                             {/* Radio Groups */}
@@ -3109,26 +3221,62 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         <div className="p-8">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-gray-900">Customer Management</h3>
-                <button
-                    onClick={() => {
-                        // Generate a new customer code when creating a new customer
-                        setCustomerFormData({
-                            customer_name: '',
-                            customer_code: `CUST-${Date.now().toString().slice(-6)}`,
-                            customer_category: '',
-                            pan_number: '',
-                            contact_person: '',
-                            email_address: '',
-                            contact_number: '',
-                            billing_currency: '',
-                            gst_tds_applicable: false
-                        });
-                        setView('create');
-                    }}
-                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
-                >
-                    <span>+</span> Create New Customer
-                </button>
+                <div className="flex gap-3">
+
+                    <div className="relative" ref={downloadDropdownRef}>
+                        <button 
+                            onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                            <Download className="w-4 h-4" /> Download
+                        </button>
+                        {isDownloadDropdownOpen && (
+                            <div className="absolute right-0 z-[100] mt-2 w-52 bg-white border border-gray-200 rounded-[4px] shadow-lg py-1">
+                                <button 
+                                    onClick={() => { handleCustomerExcelDownload('template'); setIsDownloadDropdownOpen(false); }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                    <Icon name="file-spreadsheet" className="w-4 h-4" /> Download Template
+                                </button>
+                                <button 
+                                    onClick={() => { handleCustomerExcelDownload('export'); setIsDownloadDropdownOpen(false); }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                    <Icon name="download" className="w-4 h-4" /> Export All Data
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => {
+                            setImportSummary(null);
+                            setIsImportModalOpen(true);
+                        }}
+                        className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                        <Icon name="upload" className="w-4 h-4" /> UPLOAD EXCEL
+                    </button>
+                    <button
+                        onClick={() => {
+                            // Generate a new customer code when creating a new customer
+                            setCustomerFormData({
+                                customer_name: '',
+                                customer_code: `CUST-${Date.now().toString().slice(-6)}`,
+                                customer_category: '',
+                                pan_number: '',
+                                contact_person: '',
+                                email_address: '',
+                                contact_number: '',
+                                billing_currency: '',
+                                gst_tds_applicable: false
+                            });
+                            setView('create');
+                        }}
+                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                    >
+                        <span>+</span> Create New Customer
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -3239,6 +3387,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                         <button
                                             className="text-red-600 hover:text-red-900 transition-colors"
                                             title="Delete"
+                                            onClick={() => handleDeleteCustomer(customer.id)}
                                         >
                                             <Trash2 className="w-5 h-5" />
                                         </button>
@@ -3261,7 +3410,31 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 />
             )}
 
-
+            {/* Import Feedback Modal */}
+            <BulkImportFeedbackModal 
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                summary={importSummary}
+                title="Customer Bulk Import"
+                onEditImported={handleEditImportedCustomer}
+                onUpload={handleCustomerExcelUploadFromModal}
+                isProcessing={isImporting}
+                dropdownOptions={{
+                    'Category': categories.map(c => ({ label: c.category, value: c.category })),
+                    'Billing Currency': [
+                        { label: 'Indian Rupee (INR)', value: 'INR' },
+                        { label: 'US Dollar (USD)', value: 'USD' },
+                        { label: 'Euro (EUR)', value: 'EUR' },
+                        { label: 'British Pound (GBP)', value: 'GBP' }
+                    ],
+                    'State': getAvailableStates('IN').map(s => ({ label: s.name, value: s.name })),
+                    'Country': [
+                        { label: 'India', value: 'India' },
+                        { label: 'United States', value: 'United States' },
+                        { label: 'United Kingdom', value: 'United Kingdom' }
+                    ]
+                }}
+            />
         </div>
     );
 };

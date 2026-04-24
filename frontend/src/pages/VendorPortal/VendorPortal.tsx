@@ -1,6 +1,7 @@
 // Vendor Portal - Master Configuration
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter, ChevronLeft, X, Receipt, Check } from 'lucide-react';
+import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter, ChevronLeft, X, Receipt, Check, Download } from 'lucide-react';
+import Icon from '../../components/Icon';
 import { Country, State, City } from 'country-state-city';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
@@ -9,6 +10,7 @@ import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalD
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { showError, showSuccess, showInfo, showWarning, confirm } from '../../utils/toast';
+import { BulkImportFeedbackModal } from '../../components/BulkImportFeedbackModal';
 import { handleApiError } from '../../utils/errorHandler';
 import { BILLING_CURRENCIES } from '../../constants/customerPortalConstants';
 import { formatDate } from '../../utils/formatting';
@@ -126,6 +128,23 @@ interface VendorBasicDetail {
     created_at: string;
     updated_at: string;
 }
+
+const ADDITIONAL_STATES: Record<string, { name: string; isoCode: string }[]> = {
+    'GL': [
+        { name: 'Avannaata', isoCode: 'AV' },
+        { name: 'Kujalleq', isoCode: 'KU' },
+        { name: 'Qeqertalik', isoCode: 'QT' },
+        { name: 'Qeqqata', isoCode: 'QE' },
+        { name: 'Sermersooq', isoCode: 'SM' },
+    ]
+};
+
+const getAvailableStates = (countryCode: string) => {
+    const libStates = State.getStatesOfCountry(countryCode) || [];
+    const extra = ADDITIONAL_STATES[countryCode] || [];
+    const formattedExtra = extra.map(s => ({ ...s, countryCode, latitude: '', longitude: '' }));
+    return [...libStates, ...formattedExtra];
+};
 
 interface VendorPortalProps {
     onLogout?: () => void;
@@ -1170,6 +1189,85 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         setActiveMasterSubTab('Vendor Creation');
     };
 
+
+    const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
+    const downloadDropdownRef = React.useRef<HTMLDivElement>(null);
+
+    const [importSummary, setImportSummary] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(event.target as Node)) {
+                setIsDownloadDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const [isImporting, setIsImporting] = useState(false);
+
+    const handleVendorExcelUploadFromModal = async (input: File | any[], dryRun: boolean = false) => {
+        setIsImporting(true);
+        try {
+            const formData = new FormData();
+            if (input instanceof File) {
+                formData.append('file', input);
+            } else {
+                formData.append('data', JSON.stringify(input));
+            }
+
+            const response: any = await httpClient.post(`/api/vendors/excel/upload/?dry_run=${dryRun}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            
+            if (response.summary) {
+                // Ensure the summary contains the preview flag from the backend
+                setImportSummary({
+                    ...response.summary,
+                    is_preview: response.is_preview
+                });
+            } else {
+                showSuccess(response.message || 'Vendors imported successfully!');
+                setIsImportModalOpen(false);
+            }
+            
+            if (!dryRun) {
+                fetchVendors(); // Refresh the list only on actual save
+            }
+        } catch (error: any) {
+            handleApiError(error, 'Excel Upload');
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const handleVendorExcelDownload = async (type: 'template' | 'export') => {
+        try {
+            const endpoint = type === 'template' 
+                ? '/api/vendors/excel/template/' 
+                : '/api/vendors/excel/export/';
+            
+            showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
+            
+            const response: any = await httpClient.get(endpoint, {}, {
+                responseType: 'blob'
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', type === 'template' ? 'vendor_template.xlsx' : 'vendors_export.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showSuccess(`${type === 'template' ? 'Template' : 'Excel'} downloaded successfully!`);
+        } catch (error: any) {
+            handleApiError(error, 'Excel Download');
+        }
+    };
+
     const handleEditVendor = async (vendor: VendorBasicDetail) => {
         try {
             // Reset state first to be clean
@@ -1346,6 +1444,21 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             setActiveMasterSubTab('Vendor Creation');
         } catch (error) {
             handleApiError(error, 'Edit Vendor');
+        }
+    };
+
+    const handleEditImportedVendor = async (record: { id: number; name: string; code?: string }) => {
+        try {
+            // Fetch the full vendor object from backend
+            const vendor: any = await httpClient.get(`/api/vendors/basic-details/${record.id}/`);
+            if (vendor) {
+                // Close the modal first so we can see the edit form
+                setIsImportModalOpen(false);
+                // Open for editing
+                handleEditVendor(vendor);
+            }
+        } catch (error) {
+            handleApiError(error, 'Fetch Vendor for Edit');
         }
     };
 
@@ -3354,12 +3467,48 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                     <>
                                         <div className="flex justify-between items-center mb-6">
                                             <h3 className="text-xl font-bold text-gray-900">Vendor Management</h3>
-                                            <button
-                                                onClick={handleCreateNewVendor}
-                                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
-                                            >
-                                                <Plus className="w-4 h-4" /> Create New Vendor
-                                            </button>
+                                            <div className="flex gap-3">
+
+                                                <div className="relative" ref={downloadDropdownRef}>
+                                                    <button 
+                                                        onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
+                                                        className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
+                                                    >
+                                                        <Download className="w-4 h-4" /> Download
+                                                    </button>
+                                                    {isDownloadDropdownOpen && (
+                                                        <div className="absolute right-0 z-[100] mt-2 w-52 bg-white border border-gray-200 rounded-[4px] shadow-lg py-1">
+                                                            <button 
+                                                                onClick={() => { handleVendorExcelDownload('template'); setIsDownloadDropdownOpen(false); }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                            >
+                                                                <Icon name="file-spreadsheet" className="w-4 h-4" /> Download Template
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => { handleVendorExcelDownload('export'); setIsDownloadDropdownOpen(false); }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                            >
+                                                                <Icon name="download" className="w-4 h-4" /> Export All Data
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setImportSummary(null);
+                                                        setIsImportModalOpen(true);
+                                                    }}
+                                                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2"
+                                                >
+                                                    <Icon name="upload" className="w-4 h-4" /> UPLOAD EXCEL
+                                                </button>
+                                                <button
+                                                    onClick={handleCreateNewVendor}
+                                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                                                >
+                                                    <Plus className="w-4 h-4" /> Create New Vendor
+                                                </button>
+                                            </div>
                                         </div>
 
                                         {/* Filters */}
@@ -3597,34 +3746,26 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             <label className="label-text">
                                                 Vendor Category <span className="text-red-500">*</span>
                                             </label>
-                                            <CategoryHierarchicalDropdown
-                                                apiEndpoint="/api/vendors/categories/"
-                                                systemCategories={VENDOR_SYSTEM_CATEGORIES}
-                                                mergeSystem={true}
+                                            <SearchableDropdown
+                                                options={categories.map(cat => cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > '))}
                                                 value={vendorCategory}
-                                                onSelect={(selection) => setVendorCategory(selection.fullPath)}
+                                                onChange={(val) => setVendorCategory(val)}
                                                 placeholder="Select Category"
-                                                className="w-full"
+                                                allowCustomValue={true}
                                             />
                                         </div>
 
-                                        {/* Billing Currency */}
                                         <div>
                                             <label className="label-text">
                                                 Billing Currency
                                             </label>
-                                            <select
+                                            <SearchableDropdown
+                                                options={BILLING_CURRENCIES.map(curr => curr.code)}
                                                 value={billingCurrency}
-                                                onChange={(e) => setBillingCurrency(e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                            >
-                                                <option value="">Select Currency</option>
-                                                {BILLING_CURRENCIES.map((curr) => (
-                                                    <option key={curr.code} value={curr.code}>
-                                                        {curr.code} - {curr.name} ({curr.symbol})
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                onChange={(val) => setBillingCurrency(val)}
+                                                placeholder="Select Currency"
+                                                allowCustomValue={true}
+                                            />
                                         </div>
 
                                         {/* PAN No */}
@@ -8093,6 +8234,30 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     onProceed={handleProceedAllocation}
                 />
             )}
+
+            {/* Import Feedback Modal */}
+            <BulkImportFeedbackModal 
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                summary={importSummary}
+                title="Vendor Bulk Import"
+                onEditImported={handleEditImportedVendor}
+                onUpload={handleVendorExcelUploadFromModal}
+                isProcessing={isImporting}
+                dropdownOptions={{
+                    'Category': [
+                        ...VENDOR_SYSTEM_CATEGORIES.map(c => ({ label: c, value: c })),
+                        ...categories.map(c => ({ label: c.category, value: c.category }))
+                    ],
+                    'TDS Section': Object.keys(TDS_RATES_MASTER).map(s => ({ label: s, value: s })),
+                    'Billing Currency': [
+                        { label: 'Indian Rupee (INR)', value: 'INR' },
+                        { label: 'US Dollar (USD)', value: 'USD' },
+                        { label: 'Euro (EUR)', value: 'EUR' }
+                    ],
+                    'State': getAvailableStates('IN').map(s => ({ label: s.name, value: s.name }))
+                }}
+            />
         </div >
     )
 };
