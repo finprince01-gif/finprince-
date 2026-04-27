@@ -314,6 +314,13 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
         customer.save()
         return Response({'status': 'customer deactivated'})
 
+    def destroy(self, request, *args, **kwargs):
+        """Override delete to perform soft delete"""
+        customer = self.get_object()
+        customer.is_deleted = True
+        customer.save()
+        return Response({'status': 'customer deleted successfully'}, status=status.HTTP_200_OK)
+
 
 class CustomerTransactionViewSet(viewsets.ModelViewSet):
     """
@@ -330,20 +337,151 @@ class CustomerTransactionViewSet(viewsets.ModelViewSet):
         if tenant_id:
             return CustomerTransaction.objects.filter(tenant_id=tenant_id)
         return CustomerTransaction.objects.none()
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        try:
+            from accounting.services.portal_mirror_service import sync_portal_allocation_to_main_ledger
+            sync_portal_allocation_to_main_ledger(instance)
+        except Exception as e:
+            logger.error(f"Failed to reverse-sync portal allocation: {e}")
     
     @action(detail=False, methods=['get'])
     def by_customer(self, request):
-        """Get all transactions for a specific customer"""
+        """
+        Get all transactions for a specific customer, enriched with due_status
+        calculated from the customer's credit period (mirrors vendor portal by_vendor).
+        """
+        import re
+        from datetime import date, timedelta, datetime
+        from decimal import Decimal
+
         customer_id = request.query_params.get('customer_id')
         if not customer_id:
             return Response(
                 {'error': 'customer_id parameter required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        tenant_id = getattr(request.user, 'tenant_id', None)
         transactions = self.get_queryset().filter(customer_id=customer_id)
-        serializer = self.get_serializer(transactions, many=True)
-        return Response(serializer.data)
+
+        # ── Fetch customer credit period ───────────────────────────────────
+        credit_period_days = 0
+        try:
+            from .models import CustomerMasterCustomerTermsCondition
+            terms = CustomerMasterCustomerTermsCondition.objects.filter(
+                customer_basic_detail_id=customer_id
+            ).first()
+            if terms and terms.credit_period:
+                raw = str(terms.credit_period).strip()
+                if raw.isdigit():
+                    credit_period_days = int(raw)
+                else:
+                    import re
+                    m = re.search(r'(\d+)', raw)
+                    if m:
+                        credit_period_days = int(m.group(1))
+        except Exception as e:
+            logger.warning(f"Could not fetch credit period for customer {customer_id}: {e}")
+
+        def calculate_due_status(transaction_date, credit_days):
+            if not transaction_date:
+                return "Not Due", None
+            
+            # Ensure transaction_date is a date object
+            if isinstance(transaction_date, str):
+                try:
+                    transaction_date = datetime.strptime(transaction_date[:10], '%Y-%m-%d').date()
+                except:
+                    return "Not Due", None
+            elif isinstance(transaction_date, datetime):
+                transaction_date = transaction_date.date()
+                
+            due_dt = transaction_date + timedelta(days=credit_days)
+            # Becomes 'Due' ON the due date (e.g. after 2 days)
+            status_str = "Due" if date.today() >= due_dt else "Not Due"
+            return status_str, due_dt.strftime('%Y-%m-%d')
+
+        # ── Fetch data ───────────────────────────────────────────────────
+        all_transactions = CustomerTransaction.objects.filter(
+            tenant_id=tenant_id, customer_id=customer_id
+        ).order_by('-transaction_date', '-id')
+
+        # Sales-specific list (used for some views)
+        transactions = all_transactions.filter(transaction_type__in=['sales', 'invoice', 'debit_note'])
+
+        # ── Enrich function ───────────────────────────────────────────────
+        def enrich_item(item):
+            tx_type = (item.get('transaction_type') or '').lower()
+            if tx_type in ('sales', 'invoice', 'debit_note'):
+                tx_date_raw = item.get('transaction_date') or item.get('date')
+                total_amt = Decimal(str(item.get('total_amount') or item.get('amount') or 0))
+
+                ref_no = item.get('reference_number') or item.get('transaction_number')
+                paid_sum = Decimal('0')
+                if ref_no:
+                    linking_txs = CustomerTransaction.objects.filter(
+                        tenant_id=tenant_id,
+                        customer_id=customer_id,
+                        reference_number=ref_no
+                    ).exclude(id=item.get('id'))
+                    for ltx in linking_txs:
+                        ltype = (ltx.transaction_type or '').lower()
+                        if ltype in ('receipt', 'credit_note'):
+                            paid_sum += Decimal(str(ltx.total_amount or 0))
+                        elif ltype in ('debit_note',):
+                            paid_sum -= Decimal(str(ltx.total_amount or 0))
+
+                item['paid_amount'] = float(paid_sum)
+                item['payment_balance'] = float(total_amt - paid_sum)
+
+                if total_amt > 0 and paid_sum >= total_amt:
+                    item['payment_status'] = 'Received'
+                    item['due_status'] = 'Received'
+                    item['due_date'] = None
+                elif paid_sum > 0 and paid_sum < total_amt:
+                    due_status, due_date_str = calculate_due_status(tx_date_raw, credit_period_days)
+                    if due_status == 'Due':
+                        item['payment_status'] = 'Partially Received'
+                        item['due_status'] = 'Partially Received'
+                    else:
+                        item['payment_status'] = 'Not Due'
+                        item['due_status'] = 'Not Due'
+                    item['due_date'] = due_date_str
+                elif tx_date_raw:
+                    due_status, due_date_str = calculate_due_status(tx_date_raw, credit_period_days)
+                    item['payment_status'] = due_status
+                    item['due_status'] = due_status
+                    item['due_date'] = due_date_str
+                else:
+                    item['payment_status'] = 'Not Due'
+                    item['due_status'] = 'Not Due'
+                    item['due_date'] = None
+
+                item['credit_period_days'] = credit_period_days
+            return item
+
+        # ── Serialize and return ───────────────────────────────────────────
+        all_tx_data = self.get_serializer(all_transactions, many=True).data
+        sales_tx_data = self.get_serializer(transactions, many=True).data
+
+        enriched_all = [enrich_item(i) for i in all_tx_data]
+        enriched_sales = [enrich_item(i) for i in sales_tx_data]
+
+        customer = CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, id=customer_id).first()
+        c_id = customer.id if customer else customer_id
+        c_name = customer.customer_name if customer else "Customer"
+
+        return Response({
+            'allTransactions': enriched_all,
+            'transactions': enriched_sales,
+            'customer': {
+                'id': c_id,
+                'name': c_name,
+                'credit_period': credit_period_days
+            }
+        })
 
 
 # class CustomerSalesQuotationViewSet(viewsets.ModelViewSet):
@@ -626,6 +764,10 @@ class CustomerTransactionSalesOrderViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status__in=['pending', 'approved'])
         elif status_param:
             queryset = queryset.filter(status=status_param)
+
+        customer_name = self.request.query_params.get('customer_name')
+        if customer_name:
+            queryset = queryset.filter(customer_name=customer_name)
             
         return queryset.order_by('-created_at')
     

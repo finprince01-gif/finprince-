@@ -35,13 +35,7 @@ class VendorGSTDetailsViewSet(viewsets.ModelViewSet):
         if user.is_anonymous:
             return 'default_tenant'
             
-        if hasattr(user, 'tenant_id') and user.branch_id:
-            return user.branch_id
-        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id') and user.tenant.tenant_id:
-            return user.tenant.tenant_id
-            
-        # Fallback if user has ID but no tenant (unlikely in prod but possible in dev)
-        return str(getattr(user, 'id', 'default_tenant')) or 'default_tenant'
+        return getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None) or getattr(user, 'id', 'default_tenant')
     
     def get_username(self):
         """Get username from request"""

@@ -38,13 +38,7 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
     def get_tenant_id(self):
         """Extract tenant_id from authenticated user"""
         user = self.request.user
-        if hasattr(user, 'tenant_id'):
-            return user.branch_id
-        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
-            return user.tenant.tenant_id
-        else:
-            # Fallback for development/testing
-            return getattr(user, 'id', 'default_tenant')
+        return getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None) or getattr(user, 'id', 'default_tenant')
     
     def get_username(self):
         """Get username from request"""
@@ -63,9 +57,9 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
         
         # Search or filter
         if search:
-            return VendorBasicDetailDatabase.search_vendors_basic_detail(tenant_id, search)
+            return VendorBasicDetailDatabase.search_vendors_basic_detail(tenant_id, search).filter(is_deleted=False)
         else:
-            return VendorBasicDetailDatabase.get_vendors_basic_detail_by_tenant(tenant_id, active_filter)
+            return VendorBasicDetailDatabase.get_vendors_basic_detail_by_tenant(tenant_id, active_filter).filter(is_deleted=False)
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
@@ -240,12 +234,15 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
         can_delete, reason = VendorFlow.can_delete_vendor_basic_detail(instance)
         
         if not can_delete:
+            # Fallback to soft delete if hard delete is blocked
+            instance.is_deleted = True
+            instance.save()
             return Response(
-                {'detail': reason},
-                status=status.HTTP_400_BAD_REQUEST
+                {'message': 'Vendor has transactions and was deactivated/hidden instead of deleted.'},
+                status=status.HTTP_200_OK
             )
             
-        success = VendorBasicDetailDatabase.delete_vendor_basic_detail(instance.id, soft_delete=False)
+        success = VendorBasicDetailDatabase.delete_vendor_basic_detail(instance.id, soft_delete=True) # Default to soft delete for safety
         
         if success:
             return Response(

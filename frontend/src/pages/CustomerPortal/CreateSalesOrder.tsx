@@ -634,12 +634,9 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                                         // Fetch preview number when series changes
                                         if (selectedSeries && !editId) {
                                             try {
-                                                const seriesObj = soSeriesList.find(s => s.series_name === selectedSeries);
-                                                if (seriesObj) {
-                                                    const res = await httpClient.get<any>(`/api/customerportal/sales-orders-series/${seriesObj.id}/preview/`);
-                                                    if (res && res.preview) {
-                                                        setSONumber(res.preview);
-                                                    }
+                                                const response = await httpClient.get<any>(`/api/customerportal/sales-order-series/${selectedSeries}/preview/`);
+                                                if (response && response.preview) {
+                                                    setSONumber(response.preview);
                                                 }
                                             } catch (error) {
                                                 console.error('Error fetching SO preview:', error);
@@ -650,7 +647,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                                 >
                                     <option value="">Select series</option>
                                     {soSeriesList.map(s => (
-                                        <option key={s.id} value={s.series_name}>{s.series_name}</option>
+                                        <option key={s.id} value={s.id}>{s.series_name}</option>
                                     ))}
                                 </select>
                                 <p className="text-xs text-gray-500 mt-1">Data from masters</p>

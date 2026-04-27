@@ -33,6 +33,7 @@ class MasterLedgerGroupSerializer(BranchModelSerializerMixin, serializers.ModelS
 class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerializer):
     question_answers = serializers.JSONField(source='additional_data', required=False, allow_null=True)
     balance = serializers.SerializerMethodField()
+    ledger_type = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = MasterLedger
@@ -42,26 +43,30 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
             'sub_group_1', 'sub_group_2', 'sub_group_3', 'ledger_type',
             'gstin', 'registration_type', 'state',
             'extended_data',
-            'additional_data',  # Include additional_data for balances
-            'question_answers', # Maps to additional_data
+            'additional_data',
+            'question_answers',
+            'opening_balance',
+            'opening_balance_type',
             'balance',  # Computed balance from journal entries
             'parent_ledger_id',
             'tenant_id', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'code', 'balance', 'tenant_id', 'created_at', 'updated_at']
         extra_kwargs = {
-            # NOTE: category is NOT NULL in DB — do NOT allow null here
+            'name': {'required': False, 'allow_null': True, 'allow_blank': True},
             'category': {'required': False, 'allow_blank': True, 'default': ''},
             'group': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_1': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_2': {'required': False, 'allow_null': True, 'allow_blank': True},
             'sub_group_3': {'required': False, 'allow_null': True, 'allow_blank': True},
-            'ledger_type': {'required': False, 'allow_null': True, 'allow_blank': True},
             'gstin': {'required': False, 'allow_null': True, 'allow_blank': True},
             'registration_type': {'required': False, 'allow_null': True, 'allow_blank': True},
             'state': {'required': False, 'allow_null': True, 'allow_blank': True},
             'extended_data': {'required': False, 'allow_null': True},
+            'additional_data': {'required': False, 'allow_null': True},
             'parent_ledger_id': {'required': False, 'allow_null': True},
+            'opening_balance': {'required': False, 'default': 0.00},
+            'opening_balance_type': {'required': False, 'allow_blank': True, 'default': 'Dr'},
         }
     
     def get_balance(self, obj):
@@ -83,20 +88,18 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
             except Exception as e:
                 logger.debug(f"AmountTransaction lookup failed: {e}")
             
-            # Try TransactionFile (gracefully handle if table doesn't exist)
-            try:
-                from accounting.models import TransactionFile
-                transaction_file = TransactionFile.objects.filter(
-                    tenant_id=obj.tenant_id,
-                    ledger_name=obj.name
-                ).first()
-                
-                logger.debug(f"TransactionFile query result: {transaction_file}")
-                
-                if transaction_file and transaction_file.transactions:
-                    return transaction_file.transactions.get('balance', 0)
-            except Exception as tf_err:
-                logger.debug(f"TransactionFile lookup failed (table may not exist): {tf_err}")
+            # Try TransactionFile
+            from accounting.models import TransactionFile
+            transaction_file = TransactionFile.objects.filter(
+                tenant_id=obj.tenant_id,
+                ledger_name=obj.name
+            ).first()
+            
+            logger.debug(f"TransactionFile query result: {transaction_file}")
+            
+            if transaction_file and transaction_file.transactions:
+                print("FOUND TRANSACTION_FILE BALANCE:", transaction_file.transactions.get('balance', 0))
+                return transaction_file.transactions.get('balance', 0)
             
             # Fallback to journal entries (if table exists)
             try:
@@ -108,42 +111,77 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
                     ledger=obj
                 )
                 
-                total_debit = entries.aggregate(Sum('debit'))['debit__sum'] or 0
-                total_credit = entries.aggregate(Sum('credit'))['credit__sum'] or 0
+                total_debit = float(entries.aggregate(Sum('debit'))['debit__sum'] or 0)
+                total_credit = float(entries.aggregate(Sum('credit'))['credit__sum'] or 0)
                 
-                # Calculate balance based on ledger category
+                # Calculate balance using the direct DB columns for opening balance
+                ob = float(obj.opening_balance or 0)
+                ob_type = str(obj.opening_balance_type or 'Dr').strip()
+                # Normalise to 'Dr'/'Cr' (accept legacy 'debit'/'credit' too)
+                is_debit = ob_type.lower() in ('debit', 'dr')
+
                 if obj.category in ['Asset', 'Expenditure', 'Expense']:
                     balance = total_debit - total_credit
+                    balance += ob if is_debit else -ob
                 else:  # Liability, Income, Capital
                     balance = total_credit - total_debit
+                    balance += ob if not is_debit else -ob
                 
                 return float(balance)
             except Exception as je:
-                logger.debug(f"Journal entries not available: {je}")
+                logger.error(f"Journal entries lookup failed: {je}")
                 return 0
             
         except Exception as e:
             # If any error, return 0
-
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error in get_balance: {e}")
             return 0.0
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Keep frontend-safe string values even for subgroup-only rows.
+        if ret.get('name') is None:
+            ret['name'] = ''
+        if ret.get('ledger_type') in (None, ''):
+            ret['ledger_type'] = ret.get('name') or ''
+        return ret
 
 
     def create(self, validated_data):
+        ledger_type = validated_data.pop('ledger_type', None)
+        if ledger_type is not None:
+            validated_data['name'] = (ledger_type or '').strip() or None
+        elif not (validated_data.get('name') or '').strip():
+            validated_data['name'] = None
+
         # Guard: category is NOT NULL in DB — never allow null to reach Django ORM
         if not validated_data.get('category'):
             validated_data['category'] = ''
         # Guard: group is nullable in DB but let's keep consistent
         if validated_data.get('group') is None:
             validated_data['group'] = ''
+        # Ensure opening_balance_type fits VARCHAR(2)
+        raw_type = str(validated_data.get('opening_balance_type', 'Dr') or 'Dr')
+        validated_data['opening_balance_type'] = 'Dr' if raw_type.lower() in ('debit', 'dr') else 'Cr'
+
         instance = super().create(validated_data)
         return instance
 
     def update(self, instance, validated_data):
+        ledger_type = validated_data.pop('ledger_type', None)
+        if ledger_type is not None:
+            validated_data['name'] = (ledger_type or '').strip() or None
+        elif 'name' in validated_data and not (validated_data.get('name') or '').strip():
+            validated_data['name'] = None
+
         # Update Master Ledger fields
         if 'category' in validated_data and validated_data['category'] is None:
             validated_data['category'] = ''
+        # Ensure opening_balance_type fits VARCHAR(2)
+        if 'opening_balance_type' in validated_data:
+            raw_type = str(validated_data['opening_balance_type'] or 'Dr')
+            validated_data['opening_balance_type'] = 'Dr' if raw_type.lower() in ('debit', 'dr') else 'Cr'
+
         instance = super().update(instance, validated_data)
         return instance
 
@@ -208,9 +246,11 @@ class AmountTransactionSerializer(BranchModelSerializerMixin, serializers.ModelS
 # ============================================================================
 
 class JournalEntrySerializer(serializers.ModelSerializer):
+    ledger_name = serializers.CharField(source='ledger.name', read_only=True)
+    
     class Meta:
         model = JournalEntry
-        fields = ['id', 'ledger', 'debit', 'credit']
+        fields = ['id', 'ledger', 'ledger_name', 'debit', 'credit', 'voucher_type', 'voucher_number', 'transaction_date', 'voucher_id']
         read_only_fields = ['id']
 
 
@@ -400,7 +440,9 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
                     voucher_type=v_type.upper(),
                     voucher_id=voucher.id,
                     tenant_id=tenant_id,
-                    entries=entries
+                    entries=entries,
+                    transaction_date=voucher.date,
+                    voucher_number=voucher.voucher_number
                 )
         except Exception as e:
             logger.error(f"Failed to post Journal Entries for voucher {voucher.id}: {str(e)}")
@@ -462,4 +504,3 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         return ret
-

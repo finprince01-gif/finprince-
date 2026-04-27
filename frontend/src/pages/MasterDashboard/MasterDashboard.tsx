@@ -77,6 +77,7 @@ const MasterDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
     
     // Accounting Data State (for ReportsPage)
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
+    const [entries, setEntries] = useState<any[]>([]); // New state for journal entries
     const [ledgers, setLedgers] = useState<Ledger[]>([]);
     const [ledgerGroups, setLedgerGroups] = useState<LedgerGroupMaster[]>([]);
     const [stockItems, setStockItems] = useState<StockItem[]>([]);
@@ -138,6 +139,7 @@ const MasterDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
             const data = await masterApiService.getReports(tenantId === 'all' ? undefined : tenantId);
 
             setVouchers(data.vouchers || []);
+            setEntries(data.entries || []); // Handle entries from new backend response
             setLedgers(data.ledgers || []);
             setLedgerGroups(data.ledger_groups || []);
             setStockItems(data.stock_items || []);
@@ -272,7 +274,7 @@ const MasterDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
                     </select>
                 </div>
                 <div className="bg-white rounded-[32px] border border-gray-100 shadow-2xl overflow-hidden min-h-[800px]">
-                    <ReportsPage vouchers={vouchers} ledgers={ledgers} ledgerGroups={ledgerGroups} stockItems={stockItems} />
+                    <ReportsPage vouchers={vouchers} entries={entries} ledgers={ledgers} ledgerGroups={ledgerGroups} stockItems={stockItems} />
                 </div>
             </div>
         );

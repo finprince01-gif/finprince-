@@ -381,10 +381,18 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
             </form>
           </div>
 
-          <footer className="mt-12 pt-8 border-t border-slate-100 w-full flex items-center justify-center gap-6">
+          <footer className="mt-12 pt-8 border-t border-slate-100 w-full flex flex-col items-center gap-4">
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                   Already registered? <button onClick={() => { window.location.href = '/master/login'; }} className="text-indigo-600 ml-1 hover:underline font-black">Sign In to Dashboard</button>
               </p>
+              
+              <button
+                  onClick={() => window.location.href = (import.meta as any).env?.VITE_LANDING_URL || 'http://localhost:3000'}
+                  className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] hover:text-indigo-600 transition-all flex items-center gap-2"
+              >
+                  <Icon name="link" size={12} />
+                  Return to Main Website
+              </button>
           </footer>
         </div>
       </div>

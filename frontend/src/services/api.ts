@@ -150,11 +150,13 @@ class ApiService {
     }
 
     async updateLedger(id: number, data: Partial<Ledger>) {
-        return httpClient.put<{ success: boolean }>(`/api/masters/ledgers/${id}/`, data);
+        // Backend returns the updated ledger object, not a {success:true} wrapper.
+        return httpClient.put<Ledger>(`/api/masters/ledgers/${id}/`, data);
     }
 
     async deleteLedger(id: number) {
-        return httpClient.delete<{ success: boolean }>(`/api/masters/ledgers/${id}/`);
+        // Backend returns 204 No Content.
+        return httpClient.delete<any>(`/api/masters/ledgers/${id}/`);
     }
 
     // ============================================================================
@@ -226,6 +228,13 @@ class ApiService {
         return httpClient.get<any[]>(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
     }
 
+    /**
+     * Get Vendor Categories
+     */
+    async getVendorCategories(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/vendors/categories/', undefined, options);
+    }
+
     // ============================================================================
     // INVENTORY - ITEMS
     // ============================================================================
@@ -245,6 +254,18 @@ class ApiService {
 
     async getStockItems(options: AxiosRequestConfig = {}) {
         return httpClient.get<StockItem[]>('/api/inventory/items/', undefined, options);
+    }
+
+    async getMasterVoucherSales(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/masters/master-voucher-sales/', undefined, options);
+    }
+
+    async getNextVoucherNumber(seriesId: number | string) {
+        return httpClient.get<any>(`/api/masters/master-voucher-sales/${seriesId}/next-number/`);
+    }
+
+    async getServiceItems(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/services/?is_active=true', undefined, options);
     }
 
     async getServices(params?: string | Record<string, any>) {
@@ -326,19 +347,23 @@ class ApiService {
     /**
      * Get Pending GRNs for reference in Vouchers
      */
-    async getPendingGRNs(vendorName?: string) {
-        let url = '/api/inventory/operations/pending-grns/';
-        if (vendorName) {
-            url += `?vendor_name=${encodeURIComponent(vendorName)}`;
-        }
+    async getPendingGRNs(params: { vendor_name?: string, customer_name?: string, grn_type?: 'purchases' | 'sales_return' } = {}) {
+        let url = '/api/inventory/operations/pending-grns/?';
+        if (params.vendor_name) url += `vendor_name=${encodeURIComponent(params.vendor_name)}&`;
+        if (params.customer_name) url += `customer_name=${encodeURIComponent(params.customer_name)}&`;
+        if (params.grn_type) url += `grn_type=${params.grn_type}&`;
         return httpClient.get<any[]>(url);
     }
 
     /**
      * Get Job Work Outward Slips (for reference in Receipt)
      */
-    async getJobWorkOutwardSlips() {
-        return httpClient.get<any[]>('/api/inventory/operations/job-work/?operation_type=outward');
+    async getJobWorkOutwardSlips(vendorName?: string) {
+        let url = '/api/inventory/operations/job-work/?operation_type=outward';
+        if (vendorName) {
+            url += `&vendor_name=${encodeURIComponent(vendorName)}`;
+        }
+        return httpClient.get<any[]>(url);
     }
 
     /**
@@ -709,6 +734,22 @@ class ApiService {
         );
     }
 
+    /**
+     * Zoho Adapter: Transform normalized OCR JSON into Zoho-compliant rows.
+     * Reconstructs items, fixes alignment, and validates schema.
+     */
+    async transformToZoho(data: { invoices: any[] }) {
+        return httpClient.post<any>('/api/zoho-adapter/', data);
+    }
+
+    /**
+     * Zoho Reconstruct: Returns reconstructed invoices (Step 1-3)
+     * before flattening. Used for UI display in Zoho mode.
+     */
+    async reconstructZohoInvoices(data: { invoices: any[] }) {
+        return httpClient.post<any>('/api/zoho-reconstruct/', data);
+    }
+
     // ============================================================================
     // BULK OCR STAGING WORKFLOW
     // ============================================================================
@@ -771,7 +812,7 @@ class ApiService {
 
     /** Get blank template for Sales Excel Upload. */
     async getSalesExcelTemplate() {
-        return httpClient.get<Blob>('/api/sales-excel/workflow/template/');
+        return httpClient.get<Blob>('/api/sales-excel/workflow/template/', undefined, { responseType: 'blob' });
     }
 
     /** Upload Sales Excel → returns in-memory invoices with validation status. */
@@ -1409,63 +1450,6 @@ class ApiService {
         return httpClient.post<{ success: boolean }>('/api/subscription/update/', { plan });
     }
 
-    // ============================================================================
-    // BANK RECONCILIATION
-    // ============================================================================
-
-    async uploadBankStatement(file: File, bankLedgerId: number) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('bank_ledger_id', String(bankLedgerId));
-        return httpClient.postFormData<any>('/api/bank-reconciliation/upload/', formData);
-    }
-
-    async runBankMatching(bankLedgerId: number) {
-        return httpClient.post<any>('/api/bank-reconciliation/run-matching/', { bank_ledger_id: bankLedgerId });
-    }
-
-    async autoReconcileBank(bankLedgerId: number) {
-        return httpClient.post<any>('/api/bank-reconciliation/auto-reconcile/', { bank_ledger_id: bankLedgerId });
-    }
-
-    async getPendingBankMatches(bankLedgerId?: number, params?: any) {
-        let url = '/api/bank-reconciliation/pending_matches/';
-        const queryParams = new URLSearchParams();
-        if (bankLedgerId) queryParams.append('bank_ledger_id', String(bankLedgerId));
-        if (params) {
-            Object.keys(params).forEach(key => {
-                if (params[key] !== undefined && params[key] !== null) {
-                    queryParams.append(key, String(params[key]));
-                }
-            });
-        }
-        const queryString = queryParams.toString();
-        if (queryString) url += `?${queryString}`;
-        return httpClient.get<any[]>(url);
-    }
-
-    async linkBankVoucher(txnId: number, voucherId: number, voucherType: string) {
-        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/link_voucher/`, {
-            voucher_id: voucherId,
-            voucher_type: voucherType
-        });
-    }
-
-    async ignoreBankTransaction(txnId: number) {
-        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/ignore/`, {});
-    }
-
-    async createBankVoucher(txnId: number, data: { voucher_type: string; bank_ledger_id: number; counterparty_ledger_id: number; amount: number; voucher_date?: string; reference?: string; narration?: string; bank_transaction_id: number }) {
-        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/create_voucher/`, data);
-    }
-
-    async downloadBankReconciliationStatement(bankLedgerId: number) {
-        return httpClient.get<string>(`/api/bank-reconciliation/export-statement/?bank_ledger_id=${bankLedgerId}`);
-    }
-
-    async downloadMatchedTransactionsSummary(bankLedgerId: number) {
-        return httpClient.get<string>(`/api/bank-reconciliation/export-summary/?bank_ledger_id=${bankLedgerId}`);
-    }
 
     // ============================================================================
     // HEALTH CHECK

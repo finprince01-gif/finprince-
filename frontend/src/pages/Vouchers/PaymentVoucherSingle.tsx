@@ -88,22 +88,71 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     const [payFromOptions, setPayFromOptions] = useState<Ledger[]>([]);
     const [vendors, setVendors] = useState<any[]>([]);
     const [customers, setCustomers] = useState<any[]>([]);
+    const [hierarchy, setHierarchy] = useState<any[]>([]);
 
-    // Fetch ledgers and Pay From options on mount
+    const normalizeName = (s: any) => (s ?? '').toString().trim().toLowerCase();
+
+    const buildHierarchySets = (rows: any[]) => {
+        const nonLeaf = new Set<string>();
+        const leaf = new Set<string>();
+        const selectableMap = new Map<string, any>();
+
+        for (const r of rows || []) {
+            const mg = normalizeName(r.major_group_1);
+            const g = normalizeName(r.group_1);
+            const sg1 = normalizeName(r.sub_group_1_1);
+            const sg2 = normalizeName(r.sub_group_2_1);
+            const sg3 = normalizeName(r.sub_group_3_1);
+            const led = normalizeName(r.ledger_1);
+
+            if (mg) nonLeaf.add(mg);
+            if (g) nonLeaf.add(g);
+            if (sg1) nonLeaf.add(sg1);
+            if (sg2) nonLeaf.add(sg2);
+            if (sg3) nonLeaf.add(sg3);
+
+            // Treat the deepest non-null value in the row as a selectable endpoint.
+            const endpoint = led || sg3 || sg2 || sg1 || g || mg;
+            if (endpoint) {
+                leaf.add(endpoint);
+                // Also store the rich row data for synthetic ledgers
+                selectableMap.set(endpoint, {
+                    id: r.id,
+                    name: r.ledger_1 || r.sub_group_3_1 || r.sub_group_2_1 || r.sub_group_1_1 || r.group_1 || r.major_group_1,
+                    group: r.group_1,
+                    category: r.major_group_1
+                });
+            }
+        }
+
+        return { nonLeaf, leaf, selectableMap };
+    };
+
+    // For PayTo/ReceiveFrom dropdowns we do NOT want hierarchy headings (group/sub-groups)
+    // even if the hierarchy marks them as endpoints. Only real ledgers/vendors/customers.
+    const isHierarchyHeadingName = (name: string, sets: { nonLeaf: Set<string>, leaf: Set<string> }) => {
+        const n = normalizeName(name);
+        return !!n && sets.nonLeaf.has(n);
+    };
+
+    // Fetch ledgers and master data on mount
     useEffect(() => {
         const fetchAllData = async () => {
             try {
-                const [ledgersData, payFromData, vendorsData, customersData, configsData] = await Promise.all([
+                const [ledgersData, payFromData, vendorsData, customersData, configsData, payToData, hierarchyData] = await Promise.all([
                     apiService.getLedgers(),
                     apiService.getPayFromLedgers(),
                     apiService.getRichVendors(),
                     apiService.getRichCustomers(),
-                    httpClient.get<any[]>('/api/masters/master-voucher-payments/')
+                    httpClient.get<any[]>('/api/masters/master-voucher-payments/'),
+                    apiService.getPayToLedgers(),
+                    apiService.getHierarchy(),
                 ]);
                 setAllLedgers(ledgersData || []);
                 setPayFromOptions(payFromData || []);
                 setVendors(vendorsData || []);
                 setCustomers(customersData || []);
+                setHierarchy(Array.isArray(hierarchyData) ? hierarchyData : []);
 
                 const configs = (configsData || []).map(config => ({
                     ...config,
@@ -113,6 +162,60 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 if (configs && configs.length === 1) {
                     setSelectedPaymentConfig(configs[0].voucher_name);
                 }
+
+                // Filter Pay To so we don't show hierarchy headings
+                // and STRICTLY exclude internal accounting ledgers (Sales, Purchase, Taxes).
+                const sets = buildHierarchySets(Array.isArray(hierarchyData) ? hierarchyData : []);
+
+                // 1. Hierarchy seeded ledgers (the "Red Italic" endpoints)
+                const hierarchySeedLedgers = Array.from(sets.selectableMap.values())
+                    .filter((l: any) => {
+                        // Allow ALL "Red Italic" items (leaf nodes) to appear
+                        // Structural headings (groups/subgroups) are filtered by sets.nonLeaf check.
+                        return !sets.nonLeaf.has(normalizeName(l.name)!);
+                    })
+                    .map((l: any) => ({
+                        id: `hierarchy-${l.id}`,
+                        name: l.name,
+                        group: l.group,
+                        category: l.category,
+                        type: 'ledger'
+                    }));
+
+                // 2. Real tenant ledgers + portal entities
+                const portalEntities = [
+                    ...vendorsData.map((v: any) => ({
+                        id: `portal-vend-${v.id}`,
+                        name: v.vendor_name || v.name,
+                        group: 'Sundry Creditors',
+                        isPortal: true,
+                        type: 'vendor'
+                    })),
+                    ...customersData.map((c: any) => ({
+                        id: `portal-cust-${c.id}`,
+                        name: c.customer_name || c.name,
+                        group: 'Sundry Debtors',
+                        isPortal: true,
+                        type: 'customer'
+                    }))
+                ];
+
+                const ledgerOptions = (ledgersData || [])
+                    .filter((l: any) => {
+                        return !isHierarchyHeadingName(l.name, sets);
+                    })
+                    .map((l: any) => ({
+                        ...l,
+                        type: l.group === 'Sundry Debtors' ? 'customer' :
+                            l.group === 'Sundry Creditors' ? 'vendor' : 'ledger'
+                    }));
+
+                const masterMap = new Map<string, any>();
+                hierarchySeedLedgers.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
+                ledgerOptions.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
+                portalEntities.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
+
+                setPayToOptions(Array.from(masterMap.values()).sort((a,b) => a.name.localeCompare(b.name)));
             } catch (error) {
                 console.error('Error fetching data:', error);
                 showError('Failed to fetch master data');
@@ -121,20 +224,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         fetchAllData();
     }, []);
 
-    // Filter Pay To options: All ledgers EXCEPT those in Pay From + Vendors + Customers
+    // Pay To options are fetched + filtered in fetchAllData()
     const [payToOptions, setPayToOptions] = useState<any[]>([]);
-
-    useEffect(() => {
-        const fetchPayTo = async () => {
-            try {
-                const data = await apiService.getPayToLedgers();
-                setPayToOptions(data);
-            } catch (error) {
-                console.error('Failed to fetch Pay To options:', error);
-            }
-        };
-        fetchPayTo();
-    }, []);
 
     // Single mode state
     const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
@@ -787,7 +878,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     items.push({
                         pay_to_ledger: selectedOpt.ledger_id,
                         amount: totalPayment,
-                        reference_type: 'INVOICE'
+                        reference_type: 'ADVANCE',
+                        advance_ref_no: 'ADVANCE'
                     });
                 }
             } else {
@@ -842,7 +934,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         items.push({
                             pay_to_ledger: opt.ledger_id,
                             amount: remainder,
-                            reference_type: 'INVOICE',
+                            reference_type: 'ADVANCE',
+                            advance_ref_no: 'ADVANCE',
                             narration: 'Balance payment'
                         });
                     }
@@ -1131,12 +1224,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                        txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
-                                                            ? 'bg-red-100 text-red-600 border border-red-200'
-                                                            : (txn.dueStatus === 'Partially Received' || txn.dueStatus === 'Partially Paid')
-                                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
-                                                                : 'bg-green-100 text-green-600 border border-green-200'
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
+                                                        ? 'bg-red-100 text-red-600 border border-red-200'
+                                                        : (txn.dueStatus === 'Partially Received' || txn.dueStatus === 'Partially Paid')
+                                                            ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                            : 'bg-green-100 text-green-600 border border-green-200'
                                                         }`}>
                                                         {txn.dueStatus}
                                                     </span>
@@ -1420,12 +1512,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                                     )}
                                                                 </td>
                                                                 <td className="py-3 px-2 text-center text-sm text-gray-700">
-                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                                        transaction.status === 'Due' || transaction.status === 'Due Today'
-                                                                            ? 'bg-red-100 text-red-600 border border-red-200'
-                                                                            : (transaction.status === 'Partially Received' || transaction.status === 'Partially Paid')
-                                                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
-                                                                                : (transaction.status === 'Not Due' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200')
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${transaction.status === 'Due' || transaction.status === 'Due Today'
+                                                                        ? 'bg-red-100 text-red-600 border border-red-200'
+                                                                        : (transaction.status === 'Partially Received' || transaction.status === 'Partially Paid')
+                                                                            ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                                            : (transaction.status === 'Not Due' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200')
                                                                         }`}>
                                                                         {transaction.status || 'Pending'}
                                                                     </span>

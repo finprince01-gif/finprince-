@@ -49,11 +49,17 @@ const PurchaseVoucher: React.FC<PurchaseVoucherProps> = ({
     }, []);
 
     const purchasePartyOptions = useMemo(() => {
+        // Only vendor ledgers (avoid showing generic ledgers like Output GST)
+        const isVendorLedger = (l: Ledger) => {
+            const g = (l.group || '').toLowerCase().trim();
+            return g.includes('sundry creditors') || g.includes('trade payables');
+        };
+
         return [...new Set([
-            ...ledgers.filter(l => !isCashBank(l)).map(l => l.name),
+            ...ledgers.filter(isVendorLedger).map(l => l.name),
             ...richVendors.map(v => v.vendor_name)
         ])].filter(Boolean);
-    }, [ledgers, richVendors, isCashBank]);
+    }, [ledgers, richVendors]);
 
     const allLedgerOptions = useMemo(() => {
         return [...new Set(ledgers.map(l => l.name))].filter(Boolean);

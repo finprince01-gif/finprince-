@@ -143,15 +143,47 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     const [ifscCache, setIfscCache] = useState<Record<string, { bank: string, branch: string }>>({});
     const [deliveryTerms, setDeliveryTerms] = useState('');
 
-    const [uploadedFiles, setUploadedFiles] = useState<{
-        msmeFile: File | null;
-        fssaiFile: File | null;
-        iecFile: File | null;
-    }>({
-        msmeFile: null,
-        fssaiFile: null,
-        iecFile: null,
-    });
+    const [categories, setCategories] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                // Use a standard set of defaults matching backend/vendorcategory_api.py
+                const DEFAULT_CATEGORIES = [
+                    "Raw Material", "Work in Progress", "Services", "Jobwork", "Stores and Spares",
+                    "Packing Material", "Stock in Trade", "Fixed Assets", "Capital Goods", "Consumables"
+                ];
+
+                const res: any = await httpClient.get('/api/vendors/categories/');
+                const arr = Array.isArray(res) ? res : (res.results || []);
+
+                const dbPaths = arr.map((item: any) => {
+                    const parts = [item.category];
+                    if (item.group) parts.push(item.group);
+                    if (item.subgroup) parts.push(item.subgroup);
+                    return parts.join(' > ');
+                }).filter(Boolean);
+
+                const allPaths = [...DEFAULT_CATEGORIES, ...dbPaths];
+                const uniquePaths: string[] = [];
+                const seen = new Set<string>();
+
+                allPaths.forEach(path => {
+                    const lower = path.toLowerCase();
+                    if (!seen.has(lower)) {
+                        seen.add(lower);
+                        uniquePaths.push(path);
+                    }
+                });
+
+                setCategories(uniquePaths.sort((a, b) => a.localeCompare(b)));
+            } catch (error) {
+                console.error('Error fetching vendor categories:', error);
+            }
+        };
+
+        fetchCategories();
+    }, []);
 
     const handleFileUpload = (type: keyof typeof uploadedFiles, file: File | null) => {
         if (file) {
@@ -206,6 +238,16 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
             setCreateCustomerOption(null);
         }
     }, [isAlsoCustomer, vendorName, panNo]);
+
+    const [uploadedFiles, setUploadedFiles] = useState<{
+        msmeFile: File | null;
+        fssaiFile: File | null;
+        iecFile: File | null;
+    }>({
+        msmeFile: null,
+        fssaiFile: null,
+        iecFile: null,
+    });
 
     /* ─── GST helpers ──────────────────────── */
     const addGstRecord = () => setGstRecords(prev => [...prev, {
@@ -407,26 +449,33 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                 const existingGstList: any[] = Array.isArray(existingGst) ? existingGst : (existingGst.results || []);
 
                 for (const gst of gstRecords) {
-                    if (!gst.gstin) continue;
+                    const registrationType = gst.registrationType || 'Regular';
+                    const isUnregistered = registrationType === 'Unregistered';
+                    const normalizedGstin = (gst.gstin || '').trim().toUpperCase();
+
+                    if (!isUnregistered && !normalizedGstin) continue;
+
                     const branches = gst.placesOfBusiness.length > 0
                         ? gst.placesOfBusiness
                         : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '' }];
 
-                    for (const branch of branches) {
+                    for (let branchIndex = 0; branchIndex < branches.length; branchIndex++) {
+                        const branch = branches[branchIndex];
+                        const resolvedReferenceName = (branch.referenceName || '').trim() || `Branch ${branchIndex + 1}`;
                         const gstPayload = {
                             vendor_basic_detail: newId,
-                            gstin: gst.gstin,
-                            gst_registration_type: mapRegType(gst.registrationType),
-                            legal_name: gst.legalName || 'N/A',
-                            trade_name: gst.tradeName || gst.legalName || 'N/A',
-                            reference_name: branch.referenceName || '',
+                            gstin: isUnregistered ? '' : normalizedGstin,
+                            gst_registration_type: mapRegType(registrationType),
+                            legal_name: gst.legalName || vendorName || 'N/A',
+                            trade_name: gst.tradeName || gst.legalName || vendorName || 'N/A',
+                            reference_name: resolvedReferenceName,
                             branch_address: branch.address || '',
                             branch_contact_person: (branch as any).contactPerson || '',
                             branch_email: branch.email || '',
                             branch_contact_no: (branch as any).contactNumber || '',
                         };
                         const existing = existingGstList.find(g =>
-                            g.gstin === gst.gstin && g.reference_name === (branch.referenceName || ''),
+                            (g.gstin || '') === gstPayload.gstin && (g.reference_name || '') === resolvedReferenceName,
                         );
                         if (existing) {
                             await httpClient.patch(`/api/vendors/gst-details/${existing.id}/`, gstPayload);
@@ -575,7 +624,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                     <label className={labelCls}>Vendor Category <span className="text-red-500">*</span></label>
                     <select className={inputCls} value={vendorCategory} onChange={e => setVendorCategory(e.target.value)}>
                         <option value="">Select Category</option>
-                        {VENDOR_SYSTEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
                 <div>

@@ -48,7 +48,6 @@ const PayrollPage = React.lazy(() => import('../pages/Payroll'));
 const ServicePage = React.lazy(() => import('../pages/Service'));
 const GSTPage = React.lazy(() => import('../pages/GST'));
 const DashboardBuilderPage = React.lazy(() => import('../pages/DashboardBuilder'));
-const BankingPage = React.lazy(() => import('../pages/Banking'));
 
 // Auth Pages - Static imports for instant first-paint
 import LoginPage from '../pages/Login';
@@ -68,7 +67,7 @@ import { showError, showSuccess } from '../utils/toast';
 
 
 // Import assets
-import kikiLogo from '../assets/fox-logo-transparent.png';
+import kikiLogo from '../assets/kiki-agent-orange.png';
 
 // ============================================================================
 // SERVICE IMPORTS
@@ -208,6 +207,9 @@ const App: React.FC = () => {
   // Vouchers - all transactions (sales, purchase, payment, receipt, etc.)
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
 
+  // Journal Entries - the double-entry source of truth for reports
+  const [journalEntries, setJournalEntries] = useState<any[]>([]);
+
   // RICH DATA for AI Agency (Emails, Phones, etc.)
   const [richVendors, setRichVendors] = useState<any[]>([]);
   const [richCustomers, setRichCustomers] = useState<any[]>([]);
@@ -339,6 +341,7 @@ const App: React.FC = () => {
         backendLedgers,
         backendLedgerGroups,
         backendVouchers,
+        backendJournalEntries,
         backendStockItems,
         backendRichVendors,
         backendRichCustomers,
@@ -349,6 +352,7 @@ const App: React.FC = () => {
         apiService.getLedgers().catch(() => []),
         apiService.getLedgerGroups().catch(() => []),
         apiService.getVouchers().catch(() => []),
+        apiService.getJournalEntries().catch(() => []),
         apiService.getStockItems().catch(() => []),
         apiService.getRichVendors().catch(() => []),
         apiService.getRichCustomers().catch(() => []),
@@ -362,6 +366,7 @@ const App: React.FC = () => {
         ledgers: Array.isArray(backendLedgers) ? backendLedgers : [],
         ledgerGroups: Array.isArray(backendLedgerGroups) ? backendLedgerGroups : [],
         vouchers: Array.isArray(backendVouchers) ? backendVouchers : [],
+        journalEntries: Array.isArray(backendJournalEntries) ? backendJournalEntries : [],
         stockItems: Array.isArray(backendStockItems) ? backendStockItems : [],
         richVendors: Array.isArray(backendRichVendors) ? backendRichVendors : [],
         richCustomers: Array.isArray(backendRichCustomers) ? backendRichCustomers : [],
@@ -375,6 +380,7 @@ const App: React.FC = () => {
       setLedgers(newData.ledgers);
       setLedgerGroups(newData.ledgerGroups);
       setVouchers(newData.vouchers);
+      setJournalEntries(newData.journalEntries);
       setStockItems(newData.stockItems);
       setRichVendors(newData.richVendors);
       setRichCustomers(newData.richCustomers);
@@ -618,8 +624,10 @@ const App: React.FC = () => {
     try {
       const response = await apiService.saveLedger(ledger);
       if (response && response.id) {
-        setLedgers(prev => [...prev, response].sort((a, b) => a.name.localeCompare(b.name)));
-        showSuccess(`Ledger "${response.name}" saved successfully.`);
+        // Preserve backend table order (no client-side alphabetical sorting).
+        setLedgers(prev => [...prev, response]);
+        const savedName = response.ledger_type || response.name || 'Ledger entry';
+        showSuccess(`Ledger "${savedName}" saved successfully.`);
       } else {
         console.error(`Failed to save ledger ${ledger.name}: No ID in response`, response);
         showError(`Failed to save ledger "${ledger.name}". Please try again.`);
@@ -641,14 +649,17 @@ const App: React.FC = () => {
 
       if (ledgerId) {
         const response = await apiService.updateLedger(ledgerId, ledger);
-        if (response.success) {
-
-          setLedgers(prev => prev.map(l => l.id === ledgerId ? { ...l, ...ledger } : l).sort((a, b) => a.name.localeCompare(b.name)));
+        if (response && (response as any).id) {
+          // Preserve backend order; replace in place.
+          setLedgers(prev => prev.map(l => l.id === ledgerId ? response : l));
+        } else {
+          // Fallback: optimistic local merge if backend response shape changes.
+          setLedgers(prev => prev.map(l => l.id === ledgerId ? { ...l, ...ledger } : l));
         }
       } else {
         // Fallback: update by name if no ID available
 
-        setLedgers(prev => prev.map(l => l.name === idOrName ? { ...l, ...ledger } : l).sort((a, b) => a.name.localeCompare(b.name)));
+        setLedgers(prev => prev.map(l => l.name === idOrName ? { ...l, ...ledger } : l));
       }
     } catch (err) {
       console.error(`Error updating ledger ${idOrName}:`);
@@ -1203,7 +1214,6 @@ const App: React.FC = () => {
       case 'Payroll': return <PayrollPage />;
       case 'Service': return <ServicePage />;
       case 'GST': return <GSTPage />;
-      case 'Banking': return <BankingPage />;
       case 'Dashboard Builder': return <DashboardBuilderPage vouchers={vouchers} ledgers={ledgers} onNavigate={handleNavigate} />;
       default: return <div>Page not found</div>;
     }
@@ -1442,8 +1452,8 @@ const App: React.FC = () => {
           width: '56px',
           height: '56px',
           backgroundColor: '#ffffff',
-          borderRadius: '50%',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
           position: 'fixed',
           bottom: '16px',
           right: '16px',
@@ -1451,10 +1461,10 @@ const App: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 0,
-          margin: 0,
+          padding: '2px', // Space for the border
+          background: 'linear-gradient(white, white) padding-box, linear-gradient(45deg, #f97316, #ea580c) border-box',
+          border: '2px solid transparent',
           cursor: 'pointer',
-          border: 'none',
           outline: 'none',
           overflow: 'hidden'
         }}
@@ -1468,7 +1478,7 @@ const App: React.FC = () => {
             width: '100%',
             height: '100%',
             objectFit: 'contain',
-            transform: 'scale(1.6)'
+            borderRadius: '10px' // Slightly less than button for fit
           }}
         />
       </button>

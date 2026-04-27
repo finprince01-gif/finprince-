@@ -87,20 +87,67 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     const [allLedgers, setAllLedgers] = useState<Ledger[]>([]);
     const [portalCustomers, setPortalCustomers] = useState<any[]>([]);
     const [portalVendors, setPortalVendors] = useState<any[]>([]);
+    const [hierarchy, setHierarchy] = useState<any[]>([]);
+
+    const normalizeName = (s: any) => (s ?? '').toString().trim().toLowerCase();
+
+    const buildHierarchySets = (rows: any[]) => {
+        const nonLeaf = new Set<string>();
+        const leaf = new Set<string>();
+        const selectableMap = new Map<string, any>();
+
+        for (const r of rows || []) {
+            const mg = normalizeName(r.major_group_1);
+            const g = normalizeName(r.group_1);
+            const sg1 = normalizeName(r.sub_group_1_1);
+            const sg2 = normalizeName(r.sub_group_2_1);
+            const sg3 = normalizeName(r.sub_group_3_1);
+            const led = normalizeName(r.ledger_1);
+
+            if (mg) nonLeaf.add(mg);
+            if (g) nonLeaf.add(g);
+            if (sg1) nonLeaf.add(sg1);
+            if (sg2) nonLeaf.add(sg2);
+            if (sg3) nonLeaf.add(sg3);
+
+            // Deepest value is treated as a selectable endpoint for dropdown purposes.
+            const endpoint = led || sg3 || sg2 || sg1 || g || mg;
+            if (endpoint) {
+                leaf.add(endpoint);
+                selectableMap.set(endpoint, {
+                    id: r.id,
+                    name: r.ledger_1 || r.sub_group_3_1 || r.sub_group_2_1 || r.sub_group_1_1 || r.group_1 || r.major_group_1,
+                    group: r.group_1,
+                    category: r.major_group_1
+                });
+            }
+        }
+
+        return { nonLeaf, leaf, selectableMap };
+    };
+
+    // For ReceiveFrom dropdown we do NOT want hierarchy headings (group/sub-groups)
+    // even if the hierarchy marks them as endpoints. Only real ledgers/vendors/customers.
+    const isHierarchyHeadingName = (name: string, sets: { nonLeaf: Set<string>, leaf: Set<string> }) => {
+        const n = normalizeName(name);
+        return !!n && sets.nonLeaf.has(n);
+    };
 
     // Fetch data on mount
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [ledgersData, customersData, vendorsData] = await Promise.all([
+                const [ledgersData, customersData, vendorsData, hierarchyData] = await Promise.all([
                     apiService.getLedgers(),
                     apiService.getRichCustomers(),
-                    apiService.getRichVendors()
+                    apiService.getRichVendors(),
+                    apiService.getHierarchy(),
                 ]);
 
                 setAllLedgers(ledgersData || []);
                 setPortalCustomers(customersData || []);
                 setPortalVendors(vendorsData || []);
+                setHierarchy(Array.isArray(hierarchyData) ? hierarchyData : []);
             } catch (error) {
                 console.error('Error fetching data:', error);
                 showError('Failed to fetch required data');
@@ -111,36 +158,51 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     // Filter Receive In (Debit) options: Cash, Bank, CC, OD, and Loans/Borrowings
     const receiveInLedgers = useMemo(() => {
-        return allLedgers.filter(l => {
+        const filtered = allLedgers.filter(l => {
             const group = (l.group || '').toLowerCase();
             const category = (l.category || '').toLowerCase();
+            const words = group.split(/[\s-]+/); // split by space or hyphen
+
+            // Explicitly exclude Purchase/Expense groups to prevent false positives
+            if (group.includes('purchase') || group.includes('direct') || group.includes('indirect')) {
+                return false;
+            }
+
             return (
-                (category.includes('asset') && group.includes('cash')) ||
-                (category.includes('asset') && group.includes('bank')) ||
-                (category.includes('asset') && group.includes('od')) ||
-                (category.includes('asset') && group.includes('cc')) ||
-                (category.includes('liability') && group.includes('borrowing')) ||
-                (category.includes('liability') && group.includes('loan')) ||
-                // Fallbacks
-                group.includes('cash') ||
-                group.includes('bank') ||
-                group.includes('od') ||
-                group.includes('cc') ||
-                group.includes('borrowing') ||
-                group.includes('loan')
+                (category.includes('asset') && words.some(w => ['cash', 'bank', 'od', 'cc'].includes(w))) ||
+                (category.includes('liability') && words.some(w => ['borrowing', 'loan', 'od', 'cc'].includes(w))) ||
+                // Fallbacks for less structured data
+                words.some(w => ['cash', 'bank', 'od', 'cc', 'borrowing', 'loan'].includes(w))
             );
         });
+        // Deduplicate by name
+        return Array.from(new Map<string, any>(filtered.map(l => [(l.name || '').toLowerCase(), l])).values());
     }, [allLedgers]);
 
-    // Filter Receive From (Credit) options: All ledgers (allowing transfers) + Portal entities
     const receiveFromOptions = useMemo(() => {
-        // Construct synthetic ledger objects for portal entities to make them selectable
+        const sets = buildHierarchySets(hierarchy);
+
+        // 1. Hierarchy seeded ledgers (the "Red Italic" endpoints)
+        const hierarchySeedLedgers = Array.from(sets.selectableMap.values())
+            .filter((l: any) => {
+                // Allow ALL "Red Italic" leaf nodes to appear in the list.
+                // Structural headings (groups/subgroups) are filtered by sets.nonLeaf check.
+                return !sets.nonLeaf.has(normalizeName(l.name)!);
+            })
+            .map((l: any) => ({
+                id: `hierarchy-${l.id}`,
+                name: l.name,
+                group: l.group,
+                category: l.category,
+                type: 'ledger'
+            }));
+
         const custOptions = portalCustomers.map(c => ({
             id: `portal-cust-${c.id}`,
             name: c.customer_name || c.name,
             group: 'Sundry Debtors',
             isPortal: true,
-            type: 'Customer'
+            type: 'customer'
         }));
 
         const vendOptions = portalVendors.map(v => ({
@@ -148,29 +210,29 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             name: v.vendor_name || v.name,
             group: 'Sundry Creditors',
             isPortal: true,
-            type: 'Vendor'
+            type: 'vendor'
         }));
 
-        // Map existing ledgers and assign types
-        const ledgerOptions = allLedgers.map(l => ({
-            ...l,
-            type: l.group === 'Sundry Debtors' ? 'Customer' :
-                l.group === 'Sundry Creditors' ? 'Vendor' : 'Ledger'
-        }));
+        const ledgerOptions = allLedgers
+            .filter(l => {
+                return !isHierarchyHeadingName(l.name, sets);
+            })
+            .map(l => ({
+                ...l,
+                type: l.group === 'Sundry Debtors' ? 'customer' :
+                    l.group === 'Sundry Creditors' ? 'vendor' : 'ledger'
+            }));
 
-        // Combine all, avoiding duplicates if name matches exactly with an existing ledger
-        const combined = [...ledgerOptions];
-        const existingNames = new Set(ledgerOptions.map(l => l.name.toLowerCase()));
+        // Combine and deduplicate
+        // Preference: portal entities > tenant ledgers > hierarchy seeds
+        const masterMap = new Map<string, any>();
+        hierarchySeedLedgers.forEach(o => masterMap.set(o.name.toLowerCase(), o));
+        ledgerOptions.forEach(l => masterMap.set(l.name.toLowerCase(), l));
+        [...custOptions, ...vendOptions].forEach(o => masterMap.set(o.name.toLowerCase(), o));
 
-        [...custOptions, ...vendOptions].forEach(portalEntity => {
-            if (!existingNames.has(portalEntity.name.toLowerCase())) {
-                combined.push(portalEntity as any);
-                existingNames.add(portalEntity.name.toLowerCase());
-            }
-        });
+        return Array.from(masterMap.values()).sort((a,b) => a.name.localeCompare(b.name));
+    }, [allLedgers, portalCustomers, portalVendors, hierarchy]);
 
-        return combined;
-    }, [allLedgers, portalCustomers, portalVendors]);
 
     // Receipt Voucher Configuration state
     const [receiptVoucherConfigs, setReceiptVoucherConfigs] = useState<any[]>([]);
@@ -231,8 +293,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             if (prefilledData.sellerName) {
                 const ledgerName = findLedgerName(prefilledData.sellerName);
                 if (ledgerName) {
-                     setReceiveFrom(ledgerName);
-                     handleCustomerSelect(ledgerName);
+                    setReceiveFrom(ledgerName);
+                    handleCustomerSelect(ledgerName);
                 }
             }
             if ((prefilledData as any).account) setReceiveIn(findLedgerName((prefilledData as any).account));
@@ -243,7 +305,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 // Since this is specifically for an advance, we might just set the advance amount directly.
                 setSingleAdvanceAmount(prefilledData.totalAmount);
                 setShowSingleAdvanceSection(true);
-                
+
                 // Set the Advance Reference Number
                 if (prefilledData.invoiceNumber) {
                     setSingleAdvanceRefNo(prefilledData.invoiceNumber);
@@ -253,11 +315,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                 // If user meant the TOP voucher number, set it here (overrides auto/manual briefly)
                 if ((prefilledData as any).receiptVoucherNumber) {
-                     setVoucherNumber((prefilledData as any).receiptVoucherNumber);
+                    setVoucherNumber((prefilledData as any).receiptVoucherNumber);
                 } else if (prefilledData.invoiceNumber) {
-                     // Since they circled the top voucher number, let's also prefill it with the invoice ref for now, 
-                     // or let it auto-gen. The auto-gen will overwrite it if a config is selected. 
-                     // Let's rely on Advance Receipt section's Reference No.
+                    // Since they circled the top voucher number, let's also prefill it with the invoice ref for now, 
+                    // or let it auto-gen. The auto-gen will overwrite it if a config is selected. 
+                    // Let's rely on Advance Receipt section's Reference No.
                 }
             }
             if ((prefilledData as any).narration) {
@@ -345,14 +407,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         // When a total amount is entered manually, we don't auto-allocate to invoices.
         // Instead, we update the total and assign any difference relative to current allocations to Advance.
         const currentAllocated = pendingTransactions.reduce((sum, txn) => sum + (txn.receipt || 0), 0);
-        
+
         const advanceNeeded = val - currentAllocated;
         if (advanceNeeded > 0) {
             setSingleAdvanceAmount(Number(advanceNeeded.toFixed(2)));
         } else {
             setSingleAdvanceAmount(0);
         }
-        
+
         setTotalReceipt(val);
     };
 
@@ -475,7 +537,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
                     const rawStatus = (item.status || '').toString().trim().toLowerCase();
-                    
+
                     // Priority 1: Follow project specific status
                     let status = (rawStatus === 'partially received') ? 'Partially Received' : 'Not Due';
 
@@ -490,10 +552,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     }
 
                     // Resolve the outstanding amount using the actual payment balance
-                    let outstandingAmount = Number(item.payment_details?.payment_balance ?? 0);
-                    if (outstandingAmount <= 0 && rawStatus !== 'received') {
-                        outstandingAmount = Number(item.payment_details?.payment_invoice_value ?? item.total ?? 0);
-                    }
+                    // DO NOT FALL BACK to total amount if balance is 0, unless it's a completely fresh invoice
+                    let outstandingAmount = item.payment_details ? Number(item.payment_details.payment_balance ?? 0) : Number(item.total_amount ?? item.total ?? 0);
 
                     const dueDate = new Date(d1);
                     dueDate.setDate(dueDate.getDate() + creditPeriod);
@@ -515,12 +575,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     };
                 });
 
-                // Filter: Only Due, Partially Received, Due Today. EXCLUDE fully Received (amount > 0 already filters them)
-                const validTransactions = mappedTransactions.filter(t => 
-                    t.amount > 0 && t.status !== 'Received' &&
-                    (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today')
+                // Filter: Only Due, Partially Received, Due Today. 
+                // CRITICAL: Filter out items with 0 or negative balance, and those with 'Received' status.
+                const validTransactions = mappedTransactions.filter(t =>
+                    t.amount > 0 &&
+                    t.status.trim().toLowerCase() !== 'received' &&
+                    (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today' || t.status === 'Not Due')
                 );
-                
+
                 setBulkTransactions(validTransactions);
                 const mappedPending: PendingTransaction[] = validTransactions.map(t => ({
                     id: t.id,
@@ -701,7 +763,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 pending_before: Number(Number(t.amount).toFixed(2)),
                                 received_amount: Number(Number(t.receipt).toFixed(2)),
                                 balance_after: Number(Math.max(0, t.amount - t.receipt).toFixed(2)),
-                                invoice_date: t.date 
+                                invoice_date: t.date
                             })),
                         // Advance item if applicable
                         ...(singleAdvanceAmount > 0 ? [{
@@ -998,7 +1060,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         handleCustomerSelect(val);
                                     }}
                                     options={receiveFromOptions.map(l => ({
-                                        label: (l as any).type ? `${l.name} (${(l as any).type})` : l.name,
+                                        label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
                                         value: l.name
                                     }))}
                                     placeholder="Select Receive From"
@@ -1100,12 +1162,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                        txn.status === 'Due' || txn.status === 'Due Today'
-                                                            ? 'bg-red-100 text-red-600 border border-red-200'
-                                                            : txn.status === 'Partially Received'
-                                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
-                                                                : 'bg-green-100 text-green-600 border border-green-200'
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.status === 'Due' || txn.status === 'Due Today'
+                                                        ? 'bg-red-100 text-red-600 border border-red-200'
+                                                        : txn.status === 'Partially Received'
+                                                            ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                            : 'bg-green-100 text-green-600 border border-green-200'
                                                         }`}>
                                                         {txn.status}
                                                     </span>
@@ -1258,7 +1319,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 value={row.receiveFrom}
                                                 onChange={val => handleReceiptRowChange(row.id, 'receiveFrom', val)}
                                                 options={receiveFromOptions.map(l => ({
-                                                    label: (l as any).type ? `${l.name} (${(l as any).type})` : l.name,
+                                                    label: l.type ? `${l.name} (${l.type.charAt(0).toUpperCase() + l.type.slice(1)})` : l.name,
                                                     value: l.name
                                                 }))}
                                                 placeholder="Select Receive From"

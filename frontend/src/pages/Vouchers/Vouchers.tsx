@@ -45,6 +45,17 @@ interface VouchersPageProps {
 }
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
+const UPLOAD_OPTIONS_CONFIG: Record<string, string[]> = {
+  purchase: ["purchase_scan", "others"],
+  sales: ["sales_excel_upload", "others"],
+  payment: ["others"],
+  receipt: ["others"],
+  contra: ["others"],
+  journal: ["others"],
+  expenses: ["others"],
+  "credit note": ["others"],
+  "debit note": ["others"],
+};
 
 
 
@@ -127,7 +138,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const arr = Array.isArray(ledgerData) ? ledgerData : ((ledgerData as any)?.results ?? []);
       if (arr.length > 0) setFreshLedgers(arr);
       if (Array.isArray(hierarchyData) && hierarchyData.length > 0) setHierarchy(hierarchyData);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const fetchRichData = useCallback(async () => {
@@ -185,9 +196,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       console.warn('Failed to fetch Stock Items', err);
     }
 
-    // 5. Pending GRNs
+    // 5. Pending GRNs (Default load for Purchases)
     try {
-      const grns = await apiService.getPendingGRNs();
+      const grns = await apiService.getPendingGRNs({ grn_type: 'purchases' });
       setPendingGRNs(Array.isArray(grns) ? grns : ((grns as any).results || []));
     } catch (err) {
       console.warn('Failed to fetch Pending GRNs', err);
@@ -255,8 +266,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const { subscriptionUsage, isLimitReached, refetch } = useSubscriptionUsage();
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isSalesExcelWorkflowOpen, setIsSalesExcelWorkflowOpen] = useState(false);
-  const [isQuickVoucherModalOpen, setIsQuickVoucherModalOpen] = useState(false);
-  const [selectedStatementTransaction, setSelectedStatementTransaction] = useState<any>(null);
   const [isCreatingVoucher, setIsCreatingVoucher] = useState(false);
 
   const handleScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -272,7 +281,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const files = e.target.files;
     if (!files || files.length === 0) return;
     if (files.length > 1) {
-      showError('FINPIXE SINGLE SCAN allows only one invoice. Use FINPIXE BULK SCAN for multiple invoices.');
+      showError('PURCHASE SINGLE SCAN allows only one invoice. Use PURCHASE BULK SCAN for multiple invoices.');
       if (singleScanInputRef.current) singleScanInputRef.current.value = '';
       return;
     }
@@ -680,7 +689,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnTransitUptoPortStationLoading, setCnTransitUptoPortStationLoading] = useState('');
   const [cnTransitUptoPortStationDischarge, setCnTransitUptoPortStationDischarge] = useState('');
   const [cnItems, setCnItems] = useState([
-    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null, salesInvoiceNo: null as string | null, financialAmount: 0 }
+    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 0, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null, salesInvoiceNo: null as string | null, financialAmount: 0 }
   ]);
 
   // Automatic calculation for Reverse IT (TCS/TDS)
@@ -690,13 +699,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
       cnSelectedSalesInvoices.forEach(invNo => {
         const cleanInvNo = String(invNo || '').trim().toLowerCase();
-        
+
         // Find the original invoice details from the list (which was fetched when customer was selected)
-        const invoice = cnSalesInvoicesList.find(i => 
-          String(i.sales_invoice_no || '').trim().toLowerCase() === cleanInvNo || 
+        const invoice = cnSalesInvoicesList.find(i =>
+          String(i.sales_invoice_no || '').trim().toLowerCase() === cleanInvNo ||
           String(i.voucher_no || '').trim().toLowerCase() === cleanInvNo
         );
-        
+
         if (invoice) {
           // Check for nested payment_details (full view) or flattened fields (list view)
           const origTaxable = parseFloat(String(invoice.payment_details?.payment_taxable_value || invoice.taxable_value || 0)) || 0;
@@ -715,7 +724,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             if (cnTaxableForThisInv > 0) {
               // Formula: (Credit Note Taxable Value / Original Invoice Taxable Value) * Original IT Amount (TCS/TDS)
               let reverseItValue = (cnTaxableForThisInv / origTaxable) * origItAmount;
-              
+
               // Validation: Must be less than or equal to the IT amount linked to the Sales Invoice
               if (reverseItValue > origItAmount) {
                 reverseItValue = origItAmount;
@@ -791,6 +800,28 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     billFromCountry
   ]);
 
+  // Sync Credit Note Ship From with Bill From when toggle is on
+  useEffect(() => {
+    if (cnSameAsBillFrom) {
+      setShipFromAddress1(billFromAddress1);
+      setShipFromAddress2(billFromAddress2);
+      setShipFromAddress3(billFromAddress3);
+      setShipFromCity(billFromCity);
+      setShipFromPincode(billFromPincode);
+      setShipFromState(billFromState);
+      setShipFromCountry(billFromCountry);
+    }
+  }, [
+    cnSameAsBillFrom,
+    billFromAddress1,
+    billFromAddress2,
+    billFromAddress3,
+    billFromCity,
+    billFromPincode,
+    billFromState,
+    billFromCountry
+  ]);
+
 
   const [purchaseInputTypes, setPurchaseInputTypes] = useState<string[]>(['Intrastate']); // Default to Same State
   const [invoiceInForeignCurrency, setInvoiceInForeignCurrency] = useState<'Yes' | 'No'>('No');
@@ -819,7 +850,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [selectedPurchaseItems, setSelectedPurchaseItems] = useState<string[]>([]);
   const [showPurchaseMismatches, setShowPurchaseMismatches] = useState(false);
   const [purchaseItems, setPurchaseItems] = useState([
-    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }
+    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 0, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }
   ]);
 
   const calculatePurchaseTotals = () => {
@@ -1222,13 +1253,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     fetchMultiplePODetails();
   }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty, exchangeRate, allItems, wasPartyAutoSet]);
 
-  // Fetch Pending GRNs based on selected vendor for Purchase Vouchers
+  // Fetch Pending GRNs based on selected vendor for Purchase Vouchers or customer for Credit Note
   useEffect(() => {
-    const fetchPendingGRNsForVendor = async () => {
-      if (voucherType !== 'Purchase') return;
+    const fetchPendingGRNsForEntity = async () => {
+      if (voucherType !== 'Purchase' && voucherType !== 'Credit Note') return;
 
-      const match = party?.match(/^(.*) \((.*)\)$/);
-      const entityName = match ? match[1] : party;
+      const isPurchase = voucherType === 'Purchase';
+      const entityToMatch = isPurchase ? party : cnCustomer;
+
+      const match = entityToMatch?.match(/^(^(.*) \((.*)\)$)|(^(.*)$)/);
+      const entityName = (match ? (match[2] || match[5]) : entityToMatch)?.trim();
 
       if (!entityName) {
         setPendingGRNs([]);
@@ -1236,7 +1270,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
 
       try {
-        const res = await apiService.getPendingGRNs(entityName);
+        const params = isPurchase
+          ? { vendor_name: entityName, grn_type: 'purchases' as const }
+          : { customer_name: entityName, grn_type: 'sales_return' as const };
+
+        const res = await apiService.getPendingGRNs(params);
         if (res && Array.isArray(res)) {
           setPendingGRNs(res);
         } else {
@@ -1248,8 +1286,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     };
 
-    fetchPendingGRNsForVendor();
-  }, [party, voucherType]);
+    fetchPendingGRNsForEntity();
+  }, [party, cnCustomer, voucherType]);
 
   // Logic to auto-fill items from GRN when selected
   useEffect(() => {
@@ -2506,7 +2544,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setCnGrnRefNo('');
     setCnBillFrom('');
     setCnShipFrom('');
-    setCnSameAsBillFrom(true);
+    setCnSameAsBillFrom(false);
     setCnInputType(['Intrastate']);
     setCnInForeignCurrency('No');
     setCnItems([
@@ -2850,12 +2888,62 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const mergedMap = new Map<string, Ledger>();
     ledgers.forEach(l => mergedMap.set(String(l.id ?? l.name), l));
     freshLedgers.forEach(l => mergedMap.set(String(l.id ?? l.name), l));
-    const effectiveLedgers = Array.from(mergedMap.values());
+    const effectiveLedgers = Array.from(mergedMap.values()).map((l) => ({
+      ...l,
+      // Canonical display name should be actual ledger endpoint when available.
+      name: (l.ledger_type || l.name || '').toString().trim()
+    }));
 
     // Helper to identify cash/bank accounts robustly
     const isCashBank = (l: Ledger) => {
       const g = (l.group || '').toLowerCase();
       return g.includes('cash') || g.includes('bank') || g.includes('od') || g.includes('cc');
+    };
+
+    // Exclude hierarchy heading names accidentally saved as "ledgers" (group/sub-group nodes).
+    // Keep true endpoints from the hierarchy (deepest value per row), and any custom ledger names.
+    const normalizeName = (s: any) => (s ?? '').toString().trim().toLowerCase();
+    const nonLeaf = new Set<string>();
+    const leaf = new Set<string>();
+    hierarchy.forEach((r: any) => {
+      const mg = normalizeName(r.major_group_1);
+      const g = normalizeName(r.group_1);
+      const sg1 = normalizeName(r.sub_group_1_1);
+      const sg2 = normalizeName(r.sub_group_2_1);
+      const sg3 = normalizeName(r.sub_group_3_1);
+      const led = normalizeName(r.ledger_1);
+      if (mg) nonLeaf.add(mg);
+      if (g) nonLeaf.add(g);
+      if (sg1) nonLeaf.add(sg1);
+      if (sg2) nonLeaf.add(sg2);
+      if (sg3) nonLeaf.add(sg3);
+      const endpoint = led || sg3 || sg2 || sg1 || g || mg;
+      if (endpoint) leaf.add(endpoint);
+    });
+    const isHierarchyHeadingName = (name: string) => {
+      const n = normalizeName(name);
+      return !!n && nonLeaf.has(n);
+    };
+
+    const isRealLedgerLeaf = (l: Ledger) => {
+      const n = normalizeName(l.name);
+      if (!n) return false;
+      // Exclude any structural nodes (group/sub-groups/categories) accidentally saved in ledgers.
+      if (isHierarchyHeadingName(l.name)) return false;
+      if (
+        n === normalizeName(l.group as any) ||
+        n === normalizeName(l.sub_group_1 as any) ||
+        n === normalizeName(l.sub_group_2 as any) ||
+        n === normalizeName(l.sub_group_3 as any)
+      ) return false;
+      return true;
+    };
+
+    // Only show true vendor ledgers in "Vendor Name" dropdown (Purchase).
+    // This prevents unrelated ledgers like "Output GST" from appearing.
+    const isVendorLedger = (l: Ledger) => {
+      const g = (l.group || '').toLowerCase().trim();
+      return g.includes('sundry creditors') || g.includes('trade payables');
     };
 
     const accountLedgers = cashBankLedgers.length > 0
@@ -2864,16 +2952,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     const allLedgers = [...effectiveLedgers];
 
-    const partyLedgers = effectiveLedgers.filter(l => !isCashBank(l));
+    const partyLedgers = effectiveLedgers.filter(l => !isCashBank(l) && isRealLedgerLeaf(l));
 
     const partyOptions = [...new Set([
-      ...effectiveLedgers.filter(l => !isCashBank(l)).map(l => l.name),
+      ...effectiveLedgers.filter(l => !isCashBank(l) && isRealLedgerLeaf(l)).map(l => l.name),
       ...richVendors.map(v => v.vendor_name),
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);
 
     const purchasePartyOptions = [...new Set([
-      ...effectiveLedgers.filter(l => !isCashBank(l)).map(l => l.name),
+      ...effectiveLedgers.filter(l => isVendorLedger(l) && isRealLedgerLeaf(l)).map(l => l.name),
       ...richVendors.map(v => v.vendor_name)
     ])].filter(Boolean);
 
@@ -2881,22 +2969,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);
 
-    // Build the complete ledger options list:
-    // 1. User-created + fresh fetched ledgers
-    const userLedgerNames = effectiveLedgers.map(l => l.name);
-    // 2. Default/pre-built hierarchy ledgers (same logic as SalesVoucher)
-    const hierarchyLedgers = new Set<string>();
-    hierarchy.forEach(row => {
-      if (row.ledger_1) hierarchyLedgers.add(row.ledger_1);
-      if (row.sub_group_3_1) hierarchyLedgers.add(row.sub_group_3_1);
-      if (row.sub_group_2_1) hierarchyLedgers.add(row.sub_group_2_1);
-      if (row.sub_group_1_1) hierarchyLedgers.add(row.sub_group_1_1);
-      if (row.group_1) hierarchyLedgers.add(row.group_1);
-      if (row.major_group_1) hierarchyLedgers.add(row.major_group_1);
-    });
-    const allLedgerOptions = Array.from(
-      new Set([...userLedgerNames, ...Array.from(hierarchyLedgers)])
-    ).filter(Boolean);
+    // Ledger lists used in voucher account dropdowns must only contain true ledgers.
+    const allLedgerOptions = Array.from(new Set(
+      effectiveLedgers.filter(isRealLedgerLeaf).map(l => l.name)
+    )).filter(Boolean);
 
     return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
@@ -3043,6 +3119,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }
   }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers, setGrnRefNo, setSelectedPurchasePOs, setPurchaseItems, setPurchaseAdvanceRefs, fetchVendorAdvances]);
+
+  // Keep purchase addresses and GSTIN in sync when user changes branch after selecting a vendor.
+  useEffect(() => {
+    if (voucherType !== 'Purchase' || !vendorId) return;
+    if (!selectedBranch) return;
+
+    const selectedGstRecord = vendorGstDetails.find(
+      (g: any) => g.vendor_basic_detail === vendorId && g.reference_name === selectedBranch
+    );
+    if (!selectedGstRecord) return;
+
+    if (selectedGstRecord.gstin) setGstin(selectedGstRecord.gstin);
+    if (selectedGstRecord.branch_address) {
+      setAddressFields(selectedGstRecord.branch_address);
+    }
+  }, [voucherType, vendorId, selectedBranch, vendorGstDetails, setAddressFields, setGstin]);
 
   const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string, branch: string = '') => {
     try {
@@ -3526,6 +3618,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     if (voucher) {
       onAddVouchers([voucher]);
+      showSuccess(`${voucherType} Voucher Saved Successfully!`);
       resetForm();
       refetch(); // Refresh usage statistics
 
@@ -3613,6 +3706,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       (item as any)[field] = value;
     }
 
+    // Default qty to 1 if HSN/SAC starts with 99 (Services)
+    if (field === 'hsnSac' && value?.toString().startsWith('99')) {
+      item.qty = 1;
+    }
+
     // ── ITEM RATE VALIDATION ──────────────────────────────────────────────
     if (field === 'rate') {
       const enteredRate = typeof value === 'string' ? parseFloat(value) || 0 : (value as number);
@@ -3665,13 +3763,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }
 
-    // Auto-populate based on Item Code or Name
-    if (field === 'itemCode' || field === 'itemName') {
+    // Auto-populate based on Item Code, Name or HSN/SAC
+    if (field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
+      // Reset qty whenever item selection changes
+      item.qty = 0;
+
       let selectedItem: any;
       if (field === 'itemCode') {
         selectedItem = allItems.find((i: any) => (i.item_code || i.code) === value);
       } else if (field === 'itemName') {
         selectedItem = allItems.find((i: any) => (i.name || i.item_name) === value);
+      } else if (field === 'hsnSac') {
+        selectedItem = allItems.find((i: any) => (i.hsn_sac || i.hsn || i.hsn_code || i.hsn_sac_code) === value?.toString());
       }
 
       if (selectedItem) {
@@ -3679,6 +3782,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         item.itemName = selectedItem.name || selectedItem.item_name || item.itemName;
         item.uom = selectedItem.unit || selectedItem.uom || item.uom;
         item.hsnSac = selectedItem.hsn_sac || selectedItem.hsn || selectedItem.hsn_code || selectedItem.hsn_sac_code || item.hsnSac;
+
+        // Default qty to 1 if HSN/SAC starts with 99 (Services)
+        if (item.hsnSac?.toString().startsWith('99')) {
+          item.qty = 1;
+        }
 
         // ── RATE FETCHING LOGIC ──────────────────────────────────────────────
         let fetchedRate: number | null = null;
@@ -3860,7 +3968,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       itemCode: '',
       itemName: '',
       hsnSac: '',
-      qty: 1,
+      qty: 0,
       uom: '',
       rate: 0,
       taxableValue: 0,
@@ -5287,41 +5395,41 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </table>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-6">
                   {/* Left Column: Payment Summary */}
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Value</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Invoice Value</label>
                       <input
                         type="number"
                         readOnly
                         value={(purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)).toFixed(2)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">TDS/TCS under Income Tax</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">TDS/TCS under Income Tax</label>
                       <input
                         type="text"
                         value={purchaseTdsIt}
                         onChange={(e) => setPurchaseTdsIt(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right text-sm"
                         placeholder="0.00"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Advance Paid</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Advance Paid</label>
                       <input
                         type="text"
                         readOnly
                         value={purchaseAdvancePaid}
                         title="Sum of Applied Now column from the Advance grid (auto-calculated)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold text-sm"
                         placeholder="0.00"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
                         Gross Amount Due
                         {purchaseTaxIsTcs && Number(purchaseTdsIt) > 0 && (
                           <span className="ml-2 text-xs text-orange-600 font-normal">(TCS added)</span>
@@ -5335,11 +5443,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           + (purchaseTaxIsTcs ? (Number(purchaseTdsIt) || 0) : -(Number(purchaseTdsIt) || 0))
                         ).toFixed(2)}
                         title="Invoice Value ± TDS/TCS (before advance deduction)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-indigo-600">
                         Net Amount Due
                       </label>
                       <input
@@ -5351,24 +5459,24 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           - (Number(purchaseAdvancePaid) || 0)
                         ).toFixed(2)}
                         title="Net Amount Due = Gross Amount Due − Advance Paid (auto-calculated)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-lg"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-base text-indigo-700"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note:</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Posting Note:</label>
                       <textarea
                         value={purchasePostingNote}
                         onChange={(e) => setPurchasePostingNote(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none h-24"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none h-20 text-sm"
                         placeholder="Enter posting notes..."
                       />
                     </div>
                   </div>
 
                   {/* Middle Column: Advance Reference Grid */}
-                  <div className="border border-gray-300 rounded-[4px] p-4 bg-indigo-50/50 flex flex-col h-full">
+                  <div className="border border-gray-300 rounded-[4px] p-4 bg-slate-50/50 flex flex-col h-full">
                     <div className="space-y-3 flex-1 flex flex-col">
-                      <div className="grid grid-cols-[100px_1fr_100px_120px] gap-2 text-xs font-semibold text-gray-700 border-b border-gray-200 pb-2">
+                      <div className="grid grid-cols-[110px_1fr_110px_150px] gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-200 pb-2">
                         <div className="text-center">Date</div>
                         <div className="text-center">Reference No.</div>
                         <div className="text-right pr-2">Available</div>
@@ -5380,9 +5488,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           {purchaseAdvanceRefs.map((ref, idx) => {
                             const isAllocated = Number(ref.appliedNow) > 0;
                             return (
-                              <div key={ref.id || idx} className="grid grid-cols-[110px_1fr_100px_130px] gap-2 items-center text-sm py-2 border-b border-indigo-100/50 hover:bg-white transition-colors">
+                              <div key={ref.id || idx} className="grid grid-cols-[110px_1fr_110px_150px] gap-2 items-center text-sm py-2 border-b border-indigo-100/50 hover:bg-white transition-colors">
                                 <div className="text-center text-gray-500 text-xs">{ref.date}</div>
-                                <div className="font-medium text-indigo-900 truncate px-1" title={ref.refNo}>{ref.refNo}</div>
+                                <div className="font-medium text-indigo-900 truncate px-1 text-center" title={ref.refNo}>{ref.refNo}</div>
                                 <div className="text-right pr-2 font-semibold text-emerald-700">
                                   {Number(ref.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </div>
@@ -5393,7 +5501,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                     title="Check to use full amount"
                                     onChange={(e) => {
                                       const newVal = e.target.checked ? String(ref.amount) : "0";
-                                      handlePurchaseAdvanceRefChange(idx, 'allocatedNow', newVal);
+                                      handlePurchaseAdvanceRefChange(idx, 'appliedNow', newVal);
                                     }}
                                     className="h-5 w-5 text-indigo-600 focus:ring-indigo-200 border-gray-300 rounded cursor-pointer transition-transform hover:scale-110"
                                   />
@@ -5402,10 +5510,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                     <input
                                       type="number"
                                       step="0.01"
-                                      value={(ref as any).allocatedNow === "0" || !(ref as any).allocatedNow ? "" : (ref as any).allocatedNow}
+                                      value={(ref as any).appliedNow === "0" || !(ref as any).appliedNow ? "" : (ref as any).appliedNow}
                                       placeholder="0.00"
                                       title="Enter partial amount to allocate"
-                                      onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'allocatedNow', e.target.value)}
+                                      onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'appliedNow', e.target.value)}
                                       className={`w-full pl-5 pr-2 py-1.5 border rounded-[4px] text-xs text-right transition-all outline-none ${isAllocated
                                         ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-100 font-bold text-indigo-950"
                                         : "bg-gray-50/50 border-gray-200 text-gray-400"
@@ -6628,13 +6736,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       (item as any)[field] = value;
     }
 
-    // Auto-populate based on Item Code or Name
-    if (field === 'itemCode' || field === 'itemName') {
+    // Default qty to 1 if HSN/SAC starts with 99 (Services)
+    if (field === 'hsnSac' && value?.toString().startsWith('99')) {
+      item.qty = 1;
+    }
+
+    // Auto-populate based on Item Code, Name or HSN/SAC
+    if (field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
+      // Reset qty whenever item selection changes
+      item.qty = 0;
+
       let selectedItem: any;
       if (field === 'itemCode') {
         selectedItem = allItems.find((i: any) => (i.item_code || i.code) === value);
       } else if (field === 'itemName') {
         selectedItem = allItems.find((i: any) => (i.name || i.item_name) === value);
+      } else if (field === 'hsnSac') {
+        selectedItem = allItems.find((i: any) => (i.hsn_sac || i.hsn || i.hsn_code || i.hsn_sac_code) === value?.toString());
       }
 
       if (selectedItem) {
@@ -6642,6 +6760,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         item.itemName = selectedItem.name || selectedItem.item_name || item.itemName;
         item.uom = selectedItem.unit || selectedItem.uom || item.uom;
         item.hsnSac = selectedItem.hsn_sac || selectedItem.hsn || selectedItem.hsn_code || selectedItem.hsn_sac_code || item.hsnSac;
+
+        // Default qty to 1 if HSN/SAC starts with 99 (Services)
+        if (item.hsnSac?.toString().startsWith('99')) {
+          item.qty = 1;
+        }
       }
     }
 
@@ -6712,7 +6835,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   };
 
   const addCreditNoteItem = () => {
-    setCnItems([...cnItems, { id: Date.now().toString(), itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }]);
+    setCnItems([...cnItems, { id: Date.now().toString(), itemCode: '', itemName: '', hsnSac: '', qty: 0, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }]);
   };
 
   const removeCreditNoteItem = (id: string) => {
@@ -6935,9 +7058,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         cnSelectedSalesInvoices.map(no => (
                           <span key={no} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded border border-indigo-100 flex items-center gap-1">
                             {no}
-                            <button onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setCnSelectedSalesInvoices(prev => prev.filter(p => p !== no)); 
+                            <button onClick={(e) => {
+                              e.stopPropagation();
+                              setCnSelectedSalesInvoices(prev => prev.filter(p => p !== no));
                               setCnItems(prev => {
                                 const filtered = prev.filter(item => item.sourcePoNo !== no);
                                 return filtered.length > 0 ? filtered : [{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }];
@@ -7201,7 +7324,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <input
                         type="checkbox"
                         checked={cnSameAsBillFrom}
-                        onChange={(e) => setCnSameAsBillFrom(e.target.checked)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setCnSameAsBillFrom(checked);
+                          if (!checked) {
+                            setShipFromAddress1('');
+                            setShipFromAddress2('');
+                            setShipFromAddress3('');
+                            setShipFromCity('');
+                            setShipFromPincode('');
+                            setShipFromState('');
+                            setShipFromCountry('India');
+                          }
+                        }}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-xs font-bold text-gray-500 uppercase">SAME AS BILL TO ADDRESS</span>
@@ -7422,180 +7557,180 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <React.Fragment key={row.id}>
                         <tr className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                           <td className="px-2 py-3 text-center text-sm border-r border-gray-200">
-                          <div className="flex items-center justify-center gap-2">
-                            <input type="checkbox" className="w-4 h-4 rounded text-indigo-600" />
-                            {index + 1}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
-                            value={row.salesInvoiceNo || row.sourcePoNo || ''}
-                            readOnly
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium text-indigo-700 font-bold"
-                            placeholder="Auto"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
-                            value={row.itemCode}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'itemCode', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            placeholder="Code"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <SearchableDropdown
-                            value={row.itemName}
-                            options={allItems.map(i => i.name || i.item_name)}
-                            onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
-                            placeholder="Select/Enter item"
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-center text-sm">
-                          <input
-                            type="text"
-                            value={row.hsnSac}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'hsnSac', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            placeholder="HSN"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.qty}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
-                            value={row.uom}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            placeholder="Unit"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.rate}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'rate', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-medium pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm bg-gray-50/30 pr-2">
-                          {(row.taxableValue || 0).toFixed(2)}
-                        </td>
-                        {cnInputType.includes('CGST & SGST') ? (
-                          <>
-                            <td className="px-2 py-2 border-r border-gray-200">
-                              <input
-                                type="number"
-                                value={row.cgst}
-                                onChange={(e) => handleCreditNoteItemChange(index, 'cgst', e.target.value)}
-                                readOnly={cnReverseGstTcs === 'No'}
-                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
-                                step="0.01"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-r border-gray-200">
-                              <input
-                                type="number"
-                                value={row.sgst}
-                                onChange={(e) => handleCreditNoteItemChange(index, 'sgst', e.target.value)}
-                                readOnly={cnReverseGstTcs === 'No'}
-                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
-                                step="0.01"
-                              />
-                            </td>
-                          </>
-                        ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <input type="checkbox" className="w-4 h-4 rounded text-indigo-600" />
+                              {index + 1}
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="text"
+                              value={row.salesInvoiceNo || row.sourcePoNo || ''}
+                              readOnly
+                              className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium text-indigo-700 font-bold"
+                              placeholder="Auto"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="text"
+                              value={row.itemCode}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'itemCode', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              placeholder="Code"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <SearchableDropdown
+                              value={row.itemName}
+                              options={allItems.map(i => i.name || i.item_name)}
+                              onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
+                              placeholder="Select/Enter item"
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-center text-sm">
+                            <input
+                              type="text"
+                              value={row.hsnSac}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'hsnSac', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              placeholder="HSN"
+                            />
+                          </td>
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
                               type="number"
-                              value={row.igst}
-                              onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
+                              value={row.qty}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="text"
+                              value={row.uom}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              placeholder="Unit"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              value={row.rate}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'rate', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-medium pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm bg-gray-50/30 pr-2">
+                            {(row.taxableValue || 0).toFixed(2)}
+                          </td>
+                          {cnInputType.includes('CGST & SGST') ? (
+                            <>
+                              <td className="px-2 py-2 border-r border-gray-200">
+                                <input
+                                  type="number"
+                                  value={row.cgst}
+                                  onChange={(e) => handleCreditNoteItemChange(index, 'cgst', e.target.value)}
+                                  readOnly={cnReverseGstTcs === 'No'}
+                                  className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
+                                  step="0.01"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-r border-gray-200">
+                                <input
+                                  type="number"
+                                  value={row.sgst}
+                                  onChange={(e) => handleCreditNoteItemChange(index, 'sgst', e.target.value)}
+                                  readOnly={cnReverseGstTcs === 'No'}
+                                  className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
+                                  step="0.01"
+                                />
+                              </td>
+                            </>
+                          ) : (
+                            <td className="px-2 py-2 border-r border-gray-200">
+                              <input
+                                type="number"
+                                value={row.igst}
+                                onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
+                                readOnly={cnReverseGstTcs === 'No'}
+                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
+                                step="0.01"
+                              />
+                            </td>
+                          )}
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              value={row.cess}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
                               readOnly={cnReverseGstTcs === 'No'}
                               className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                               step="0.01"
                             />
                           </td>
-                        )}
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.cess}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
-                            readOnly={cnReverseGstTcs === 'No'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-gray-50/50 pr-2">
-                          {(row.invoiceValue || 0).toFixed(2)}
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <button
-                            onClick={() => removeCreditNoteItem(row.id)}
-                            className="text-red-500 hover:text-red-700 p-1 transition-colors"
-                          >
-                            <Icon name="trash-2" className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                      {/* Sales Ledger and Description Row */}
-                      <tr className="border-b border-gray-200 bg-gray-50/30">
-                        <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
-                          <div className="flex items-center gap-3">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
-                            <div className="flex-1">
-                              <SearchableDropdown
-                                value={row.salesLedger}
-                                options={salesLedgerOptions}
-                                onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
-                                placeholder="Select Sales Ledger"
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td colSpan={cnInputType.includes('CGST & SGST') ? 10 : 9} className="px-4 py-2">
-                          <div className="flex items-center gap-3">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
-                            <input
-                              type="text"
-                              value={row.description}
-                              onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
-                              placeholder="Enter ledger narration"
-                              className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
-                            />
-                            {String(cnIsFinancial).toLowerCase() === 'yes' && (
-                              <div className="flex items-center gap-2 ml-4">
-                                <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
-                                <input
-                                  type="number"
-                                  value={row.financialAmount || row.taxableValue || 0}
-                                  onChange={(e) => handleCreditNoteItemChange(index, 'financialAmount', e.target.value)}
-                                  placeholder="0.00"
-                                  className="w-24 border-b border-indigo-200 focus:border-indigo-500 bg-transparent py-1 text-sm font-bold text-indigo-700 outline-none transition-colors text-right"
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-gray-50/50 pr-2">
+                            {(row.invoiceValue || 0).toFixed(2)}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <button
+                              onClick={() => removeCreditNoteItem(row.id)}
+                              className="text-red-500 hover:text-red-700 p-1 transition-colors"
+                            >
+                              <Icon name="trash-2" className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                        {/* Sales Ledger and Description Row */}
+                        <tr className="border-b border-gray-200 bg-gray-50/30">
+                          <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
+                              <div className="flex-1">
+                                <SearchableDropdown
+                                  value={row.salesLedger}
+                                  options={salesLedgerOptions}
+                                  onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
+                                  placeholder="Select Sales Ledger"
                                 />
                               </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    </React.Fragment>
-                  ))}
+                            </div>
+                          </td>
+                          <td colSpan={cnInputType.includes('CGST & SGST') ? 10 : 9} className="px-4 py-2">
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                              <input
+                                type="text"
+                                value={row.description}
+                                onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
+                                placeholder="Enter ledger narration"
+                                className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
+                              />
+                              {String(cnIsFinancial).toLowerCase() === 'yes' && (
+                                <div className="flex items-center gap-2 ml-4">
+                                  <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
+                                  <input
+                                    type="number"
+                                    value={row.financialAmount || row.taxableValue || 0}
+                                    onChange={(e) => handleCreditNoteItemChange(index, 'financialAmount', e.target.value)}
+                                    placeholder="0.00"
+                                    className="w-24 border-b border-indigo-200 focus:border-indigo-500 bg-transparent py-1 text-sm font-bold text-indigo-700 outline-none transition-colors text-right"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    ))}
                   </tbody>
                   <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                     <tr>
@@ -7655,7 +7790,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
           {creditNoteActiveTab === 'items_foreign' && (
             <div className="space-y-6">
-              
+
               {/* Floating Exchange Rate Input */}
               <div className="flex justify-end">
                 <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-[4px] shadow-none">
@@ -7668,7 +7803,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       setCnExchangeRate(exRateVal);
 
                       // Auto-update all INR rates based on the new exchange rate
-                      const exRateNum = parseFloat(exRateVal) || 1; 
+                      const exRateNum = parseFloat(exRateVal) || 1;
                       const updatedItems = cnItems.map(item => {
                         const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
                         const qty = parseFloat(item.qty.toString()) || 0;
@@ -7746,90 +7881,90 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             />
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200 uppercase font-mono text-[11px] text-gray-500">
-                          {row.itemCode || '-'}
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <SearchableDropdown
-                            value={row.itemName}
-                            options={allItems.map(i => i.name || i.item_name)}
-                            onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
-                            placeholder="Select item"
-                            disabled={cnIsFinancial === 'Yes'}
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.qty}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
-                            value={row.uom}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            placeholder="Unit"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.foreignRate}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'foreignRate', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-bold text-indigo-700 pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-indigo-50/20 pr-2">
-                          {(row.foreignAmount || 0).toFixed(2)}
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <button
-                            onClick={() => removeCreditNoteItem(row.id)}
-                            className="text-red-500 hover:text-red-700 p-1 transition-colors"
-                          >
-                            <Icon name="trash-2" className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                      {/* Sales Ledger and Description Row (Foreign Currency Tab) */}
-                      <tr className="border-b border-gray-200 bg-gray-50/20">
-                        <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
-                          <div className="flex items-center gap-3">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
-                            <div className="flex-1">
-                              <SearchableDropdown
-                                value={row.salesLedger}
-                                options={salesLedgerOptions}
-                                onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
-                                placeholder="Select Sales Ledger"
-                                disabled={cnIsFinancial === 'Yes'}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td colSpan={5} className="px-4 py-2">
-                          <div className="flex items-center gap-3">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                            {row.itemCode || '-'}
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <SearchableDropdown
+                              value={row.itemName}
+                              options={allItems.map(i => i.name || i.item_name)}
+                              onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
+                              placeholder="Select item"
+                              disabled={cnIsFinancial === 'Yes'}
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              value={row.qty}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
                             <input
                               type="text"
-                              value={row.description}
-                              onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
-                              placeholder="Enter ledger narration"
-                              className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
+                              value={row.uom}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              placeholder="Unit"
                             />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              value={row.foreignRate}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'foreignRate', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-bold text-indigo-700 pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-indigo-50/20 pr-2">
+                            {(row.foreignAmount || 0).toFixed(2)}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <button
+                              onClick={() => removeCreditNoteItem(row.id)}
+                              className="text-red-500 hover:text-red-700 p-1 transition-colors"
+                            >
+                              <Icon name="trash-2" className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                        {/* Sales Ledger and Description Row (Foreign Currency Tab) */}
+                        <tr className="border-b border-gray-200 bg-gray-50/20">
+                          <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
+                              <div className="flex-1">
+                                <SearchableDropdown
+                                  value={row.salesLedger}
+                                  options={salesLedgerOptions}
+                                  onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
+                                  placeholder="Select Sales Ledger"
+                                  disabled={cnIsFinancial === 'Yes'}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td colSpan={5} className="px-4 py-2">
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                              <input
+                                type="text"
+                                value={row.description}
+                                onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
+                                placeholder="Enter ledger narration"
+                                className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
+                              />
 
-                          </div>
-                        </td>
-                      </tr>
-                    </React.Fragment>
-                  ))}
+                            </div>
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    ))}
                   </tbody>
                   <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                     <tr>
@@ -8119,7 +8254,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
 
                   <div className="space-y-3 flex-1 flex flex-col">
-                    <div className="grid grid-cols-[100px_1fr_100px_120px] gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-gray-200 pb-2">
+                    <div className="grid grid-cols-[110px_1fr_110px_150px] gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-gray-200 pb-2">
                       <div className="text-center">Date</div>
                       <div className="text-center">Reference No.</div>
                       <div className="text-right pr-2">Available</div>
@@ -8134,9 +8269,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           const isAllocated = parseFloat(appliedItem.appliedAmount) > 0;
 
                           return (
-                            <div key={invNo} className={`grid grid-cols-[100px_1fr_100px_120px] gap-2 items-center text-sm py-2.5 border-b border-indigo-50/50 hover:bg-white transition-all group rounded-sm px-1 ${isAllocated ? 'bg-indigo-50/20' : ''}`}>
+                            <div key={invNo} className={`grid grid-cols-[110px_1fr_110px_150px] gap-2 items-center text-sm py-2.5 border-b border-indigo-50/50 hover:bg-white transition-all group rounded-sm px-1 ${isAllocated ? 'bg-indigo-50/20' : ''}`}>
                               <div className="text-center text-gray-400 text-[10px] font-bold font-mono">{invoiceDetail?.date || '-'}</div>
-                              <div className="font-bold text-slate-700 truncate px-1 text-[11px] group-hover:text-indigo-600" title={invNo}>{invNo}</div>
+                              <div className="font-bold text-slate-700 truncate px-1 text-[11px] group-hover:text-indigo-600 text-center" title={invNo}>{invNo}</div>
                               <div className="text-right pr-2 font-black text-gray-900 font-mono text-[11px]">
                                 {Number(invoiceDetail?.balance_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                               </div>
@@ -9975,8 +10110,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     try {
       const response = await httpClient.post('/api/vouchers/expenses/', payload);
-
-      showSuccess('Expense voucher saved successfully!');
+      const savedNo = (response as any)?.voucher_number || voucherNumber;
+      showSuccess(`Expense voucher ${savedNo} saved successfully.`);
 
       // Reset form
       setExpenseRows([{
@@ -10500,190 +10635,216 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   {isScannerMenuOpen && (
                     <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
                       <div className="py-1" role="menu">
+                        {(() => {
+                          const currentVoucherType = voucherType.toLowerCase();
+                          const allowedOptions = UPLOAD_OPTIONS_CONFIG[currentVoucherType] || ["others"];
 
-                        <button
-                          onClick={() => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); }}
-                          className={`flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`}
-                          role="menuitem"
-                        >
-                          <Icon name="scanner" className={`w-4 h-4 mr-3 ${isLimitReached ? 'text-red-500' : 'text-emerald-500'}`} />
-                          Finpixe AI Scan {isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>}
-                        </button>
-                        <button
-                          onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
-                          className="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          role="menuitem"
-                        >
-                          <div className="flex items-center">
-                            <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />
-                            Others
-                          </div>
-                          <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
-                        </button>
+                          const UPLOAD_OPTION_META: Record<string, any> = {
+                            purchase_scan: {
+                              id: 'purchase_scan',
+                              label: "Purchase Scan",
+                              icon: <Icon name="scanner" className={`w-4 h-4 mr-3 ${isLimitReached ? 'text-red-500' : 'text-emerald-500'}`} />,
+                              onClick: () => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); },
+                              className: `flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`,
+                              extraLabel: isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>
+                            },
+                            sales_excel_upload: {
+                              id: 'sales_excel_upload',
+                              label: "Sales Excel Upload",
+                              icon: <Icon name="file-spreadsheet" className="w-4 h-4 mr-3 text-blue-500" />,
+                              onClick: () => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); },
+                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            },
+                            others: {
+                              id: 'others',
+                              label: "Others",
+                              icon: <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />,
+                              onClick: () => setIsOthersSubmenuOpen(prev => !prev),
+                              className: "flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100",
+                              hasSubmenu: true
+                            }
+                          };
 
-                        <button
-                          onClick={() => { onNavigate('Banking' as any); setIsScannerMenuOpen(false); }}
-                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
-                          role="menuitem"
-                        >
-                          <Icon name="bank" className="w-4 h-4 mr-3 text-blue-500" />
-                          Banking
-                        </button>
+                          return allowedOptions.map((key) => {
+                            const option = UPLOAD_OPTION_META[key];
+                            if (!option) return null;
 
-                        {isOthersSubmenuOpen && (
-                          <div className="bg-gray-50 py-1 shadow-inner">
-                            <button
-                              onClick={() => setIsTallySubmenuOpen(prev => !prev)}
-                              className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                              role="menuitem"
-                            >
-                              <div className="flex items-center">
-                                <Icon name="document" className="w-3 h-3 mr-3" />
-                                Tally
-                              </div>
-                              <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
-                            </button>
-
-                            {isTallySubmenuOpen && (
-                              <div className="bg-gray-100/50 py-0.5 shadow-inner">
+                            return (
+                              <React.Fragment key={key}>
                                 <button
-                                  onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                                  className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                                  onClick={option.onClick}
+                                  className={option.className}
                                   role="menuitem"
                                 >
-                                  <Icon name="plus" className="w-3 h-3 mr-2" />
-                                  Voucher
+                                  <div className="flex items-center">
+                                    {option.icon}
+                                    {option.label}
+                                    {option.extraLabel}
+                                  </div>
+                                  {option.hasSubmenu && (
+                                    <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
+                                  )}
                                 </button>
-                                <button
-                                  onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                                  className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
-                                  role="menuitem"
-                                >
-                                  <Icon name="masters" className="w-3 h-3 mr-2" />
-                                  Master
-                                </button>
-                              </div>
-                            )}
-                            <button
-                              onClick={() => { zohoScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
-                              className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                              role="menuitem"
-                            >
-                              <Icon name="document" className="w-3 h-3 mr-3" />
-                              Zoho
-                            </button>
-                            <button
-                              onClick={() => { sapScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
-                              className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                              role="menuitem"
-                            >
-                              <Icon name="document" className="w-3 h-3 mr-3" />
-                              SAP
-                            </button>
-                          </div>
-                        )}
 
-                        <div className="border-t border-gray-100 my-1"></div>
-                        <button
-                          onClick={() => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); }}
-                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          role="menuitem"
-                        >
-                          <Icon name="file-spreadsheet" className="w-4 h-4 mr-3 text-blue-500" />
-                          Sales Excel Upload
-                        </button>
+                                {key === 'others' && isOthersSubmenuOpen && (
+                                  <div className="bg-gray-50 py-1 shadow-inner">
+                                    <button
+                                      onClick={() => setIsTallySubmenuOpen(prev => !prev)}
+                                      className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                                      role="menuitem"
+                                    >
+                                      <div className="flex items-center">
+                                        <Icon name="document" className="w-3 h-3 mr-3" />
+                                        Tally
+                                      </div>
+                                      <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
+                                    </button>
 
-
+                                    {isTallySubmenuOpen && (
+                                      <div className="bg-gray-100/50 py-0.5 shadow-inner">
+                                        <button
+                                          onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                          className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                                          role="menuitem"
+                                        >
+                                          <Icon name="plus" className="w-3 h-3 mr-2" />
+                                          Voucher
+                                        </button>
+                                        <button
+                                          onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                          className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                                          role="menuitem"
+                                        >
+                                          <Icon name="masters" className="w-3 h-3 mr-2" />
+                                          Master
+                                        </button>
+                                      </div>
+                                    )}
+                                    <button
+                                      onClick={() => { 
+                                        setExtractionMode('zoho'); 
+                                        setScanType('bulk'); 
+                                        setScannerFiles(null); 
+                                        setIsInvoiceScannerOpen(true); 
+                                        setIsScannerMenuOpen(false); 
+                                        setIsOthersSubmenuOpen(false); 
+                                      }}
+                                      className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                                      role="menuitem"
+                                    >
+                                      <Icon name="document" className="w-3 h-3 mr-3" />
+                                      Zoho
+                                    </button>
+                                    <button
+                                      onClick={() => { 
+                                        setExtractionMode('sap'); 
+                                        setScanType('bulk'); 
+                                        setScannerFiles(null); 
+                                        setIsInvoiceScannerOpen(true); 
+                                        setIsScannerMenuOpen(false); 
+                                        setIsOthersSubmenuOpen(false); 
+                                      }}
+                                      className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                                      role="menuitem"
+                                    >
+                                      <Icon name="document" className="w-3 h-3 mr-3" />
+                                      SAP
+                                    </button>
+                                  </div>
+                                )}
+                              </React.Fragment>
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                   )}
                 </div>
-
-
-                {/* Single scan input */}
-                <input
-                  type="file"
-                  ref={singleScanInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleSingleScanFileChange}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                />
-
-                {/* Multi-file scanner input for tally/other modes */}
-                <input
-                  type="file"
-                  ref={scannerInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleScannerFileChange}
-                  accept="image/*,.pdf"
-                  multiple
-                  className="hidden"
-                />
-
-                <input
-                  type="file"
-                  ref={masterScannerInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleMasterScannerFileChange}
-                  accept="image/*,.pdf"
-                  multiple
-                  className="hidden"
-                />
-
-                {/* Zoho multi-file scanner input */}
-                <input
-                  type="file"
-                  ref={zohoScannerInputRef}
-                  onChange={handleZohoScannerFileChange}
-                  accept="image/*,.pdf,.xlsx,.xls,.csv"
-                  multiple
-                  className="hidden"
-                />
-
-                {/* SAP multi-file scanner input */}
-                <input
-                  type="file"
-                  ref={sapScannerInputRef}
-                  onChange={handleSapScannerFileChange}
-                  accept="image/*,.pdf,.xlsx,.xls,.csv"
-                  multiple
-                  className="hidden"
-                />
-
-                <input
-                  type="file"
-                  ref={excelInputRef}
-                  onChange={handleExcelFileChange}
-                  accept=".xlsx, .xls"
-                  className="hidden"
-                />
-
-
-
-                <input
-                  type="file"
-                  ref={jsonInputRef}
-                  onChange={handleJsonFileChange}
-                  accept=".json"
-                  className="hidden"
-                />
-
-                <input
-                  type="file"
-                  ref={imageInputRef}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
-                      showInfo(`File "${file.name}" attached for manual entry.`);
-                    }
-                  }}
-                  accept="image/*,.pdf"
-                  className="hidden"
-                />
               </div>
             </div>
+
+            {/* Single scan input */}
+            <input
+              type="file"
+              ref={singleScanInputRef}
+              onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+              onChange={handleSingleScanFileChange}
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="hidden"
+            />
+
+            {/* Multi-file scanner input for tally/other modes */}
+            <input
+              type="file"
+              ref={scannerInputRef}
+              onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+              onChange={handleScannerFileChange}
+              accept="image/*,.pdf"
+              multiple
+              className="hidden"
+            />
+
+            <input
+              type="file"
+              ref={masterScannerInputRef}
+              onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+              onChange={handleMasterScannerFileChange}
+              accept="image/*,.pdf"
+              multiple
+              className="hidden"
+            />
+
+            {/* Zoho multi-file scanner input */}
+            <input
+              type="file"
+              ref={zohoScannerInputRef}
+              onChange={handleZohoScannerFileChange}
+              accept="image/*,.pdf,.xlsx,.xls,.csv"
+              multiple
+              className="hidden"
+            />
+
+            {/* SAP multi-file scanner input */}
+            <input
+              type="file"
+              ref={sapScannerInputRef}
+              onChange={handleSapScannerFileChange}
+              accept="image/*,.pdf,.xlsx,.xls,.csv"
+              multiple
+              className="hidden"
+            />
+
+            <input
+              type="file"
+              ref={excelInputRef}
+              onChange={handleExcelFileChange}
+              accept=".xlsx, .xls"
+              className="hidden"
+            />
+
+
+
+            <input
+              type="file"
+              ref={jsonInputRef}
+              onChange={handleJsonFileChange}
+              accept=".json"
+              className="hidden"
+            />
+
+            <input
+              type="file"
+              ref={imageInputRef}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
+                  showInfo(`File "${file.name}" attached for manual entry.`);
+                }
+              }}
+              accept="image/*,.pdf"
+              className="hidden"
+            />
 
             <style dangerouslySetInnerHTML={{
               __html: `
@@ -10777,7 +10938,33 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               )
             )}
 
-            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Debit Note'].includes(voucherType) && (
+            {voucherType === 'Credit Note' && (
+              creditNoteActiveTab !== 'transit' ? (
+                <button
+                  onClick={() => {
+                    const creditTabs = cnInForeignCurrency === 'Yes'
+                      ? ['invoice', 'items_foreign', 'items_inr', 'due', 'transit']
+                      : ['invoice', 'items', 'due', 'transit'];
+
+                    const idx = creditTabs.indexOf(creditNoteActiveTab);
+                    if (idx >= 0 && idx < creditTabs.length - 1) {
+                      setCreditNoteActiveTab(creditTabs[idx + 1] as any);
+                    }
+                  }}
+                  className="erp-button-primary"
+                >
+                  Next
+                </button>
+              ) : (
+                <div className="flex space-x-3">
+                  <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                  <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                  <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                </div>
+              )
+            )}
+
+            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Credit Note', 'Debit Note'].includes(voucherType) && (
               <div className="flex space-x-3">
                 <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                 <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
@@ -11055,15 +11242,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {/* Create GRN Modal */}
           {isCreateGRNModalOpen && (
             <CreateGRNModal
-              mainVendorName={cnCustomer}
-              mainBranch={cnBranch}
-              mainGstin={cnGstin}
-              context="Credit Note"
+              mainVendorName={voucherType === 'Purchase' ? party : cnCustomer}
+              mainBranch={voucherType === 'Purchase' ? selectedBranch : cnBranch}
+              mainGstin={voucherType === 'Purchase' ? gstin : cnGstin}
+              context={voucherType === 'Purchase' ? 'Purchase' : 'Credit Note'}
               onClose={() => setIsCreateGRNModalOpen(false)}
               onSave={async (data) => {
                 try {
                   const response = await apiService.createInventoryOperationGRN(data);
-                  setGrnRefNo(response.grn_no);
+                  if (voucherType === 'Purchase') {
+                    setGrnRefNo(response.grn_no);
+                  } else {
+                    setCnGrnRefNo(response.grn_no);
+                  }
                   showSuccess('GRN Created Successfully!');
 
                   if (data.items && data.items.length > 0) {
@@ -11101,7 +11292,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   // Add to pending list and select it
                   if (response.grn_no) {
                     setPendingGRNs(prev => [...prev, response]);
-                    setGrnRefNo(response.grn_no);
+                    if (voucherType === 'Purchase') {
+                      setGrnRefNo(response.grn_no);
+                    } else {
+                      setCnGrnRefNo(response.grn_no);
+                    }
                   }
 
                   setIsCreateGRNModalOpen(false);

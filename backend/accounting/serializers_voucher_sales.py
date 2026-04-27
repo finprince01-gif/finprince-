@@ -11,8 +11,10 @@ from accounting.utils_ledger import get_standard_ledger
 from customerportal.database import CustomerMasterCustomerBasicDetails
 from .models import Voucher
 from inventory.models import InventoryOperationOutward
-import json
 import decimal
+from accounting.services.inventory_sync import sync_sales_to_outward
+from .services.portal_mirror_service import mirror_sales_to_portal
+
 
 class VoucherSalesItemsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,6 +35,14 @@ class VoucherSalesPaymentDetailsSerializer(serializers.ModelSerializer):
         model = VoucherSalesPaymentDetails
         exclude = ('invoice', 'tenant_id')
         read_only_fields = ('id', 'created_at', 'updated_at', 'payment_received', 'payment_balance')
+
+    def validate(self, data):
+        """Round all decimal fields to 2 decimal places to prevent validation errors."""
+        from decimal import Decimal, ROUND_HALF_UP
+        for field, value in data.items():
+            if isinstance(value, Decimal):
+                data[field] = value.quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
+        return data
 
 class VoucherSalesDispatchDetailsSerializer(serializers.ModelSerializer):
     dispatch_document = serializers.FileField(required=False, allow_null=True)
@@ -73,10 +83,99 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             'items', 'foreign_items', 'payment_details', 'dispatch_details', 'eway_bill_details'
         ]
         read_only_fields = ('id', 'tenant_id', 'created_at', 'updated_at', 'posting_status', 'posting_error')
+    
+    def _sync_numbering_series(self, tenant_id, voucher_name, sales_invoice_no):
+        """
+        Ensures that the Master numbering series is ahead of any manually provided invoice number.
+        Useful for syncing after Excel uploads.
+        """
+        from masters.models import MasterVoucherSales
+        import re
+        try:
+            series = MasterVoucherSales.objects.filter(
+                tenant_id=tenant_id, 
+                voucher_name=voucher_name,
+                enable_auto_numbering=True
+            ).first()
+            if not series:
+                return
+
+            next_num = (series.current_number or series.start_from or 1)
+            
+            if sales_invoice_no:
+                clean_no = str(sales_invoice_no)
+                if series.prefix and clean_no.startswith(series.prefix):
+                    clean_no = clean_no[len(series.prefix):]
+                if series.suffix and clean_no.endswith(series.suffix):
+                    clean_no = clean_no[:-len(series.suffix)]
+                
+                # Extract numeric part (handles cases like INV000172 -> 172)
+                match = re.search(r'(\d+)', clean_no)
+                if match:
+                    num_str = match.group(1)
+                    extracted_num = int(num_str)
+                    
+                    # Typo protection: ignore abnormally long numbers
+                    required_digits = series.required_digits or 4
+                    if len(num_str) <= required_digits + 2:
+                        next_num = max(next_num, extracted_num + 1)
+                    else:
+                        print(f"[SalesSerializer] Ignoring suspicious outlier: {num_str}")
+            
+            series.current_number = next_num
+            series.save(update_fields=['current_number', 'updated_at'])
+            print(f"[SalesSerializer] Series '{voucher_name}' sync: current_number set to {next_num}")
+        except Exception as e:
+            print(f"[SalesSerializer] Failed to sync numbering series: {e}")
+
+    def _get_next_number_from_series(self, tenant_id, voucher_name):
+        from masters.models import MasterVoucherSales
+        try:
+            series = MasterVoucherSales.objects.filter(
+                tenant_id=tenant_id, 
+                voucher_name=voucher_name,
+                is_active=True
+            ).first()
+            if not series:
+                return None
+            
+            num = series.current_number or series.start_from or 1
+            digits = series.required_digits or 4
+            prefix = series.prefix or ''
+            suffix = series.suffix or ''
+            
+            formatted = f"{prefix}{str(num).zfill(digits)}{suffix}"
+            
+            # Increment the counter
+            series.current_number = num + 1
+            series.save(update_fields=['current_number', 'updated_at'])
+            
+            return formatted
+        except Exception as e:
+            print(f"[SalesSerializer] Auto-number failed: {e}")
+            return None
 
     def create(self, validated_data):
         # Part 2: Debug Incoming Data
         print("DEBUG VALIDATED_DATA:", validated_data)
+
+        # 0. Sync Numbering Series
+        voucher_name = validated_data.get('voucher_name')
+        sales_invoice_no = validated_data.get('sales_invoice_no')
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        tenant_id = getattr(user, 'tenant_id', None)
+        
+        if voucher_name and tenant_id:
+            if not sales_invoice_no:
+                # If number is missing (e.g. Excel upload), generate it from series
+                generated_no = self._get_next_number_from_series(tenant_id, voucher_name)
+                if generated_no:
+                    validated_data['sales_invoice_no'] = generated_no
+                    print(f"[SalesSerializer] Auto-generated invoice number: {generated_no}")
+            else:
+                # If number is provided, ensure the series counter is ahead of it
+                self._sync_numbering_series(tenant_id, voucher_name, sales_invoice_no)
 
         # Part 1: Validate Input (MANDATORY)
         customer_id = validated_data.get("customer_id")
@@ -121,7 +220,8 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             payment_obj = None
             adv_refs = None
             if payment_data:
-                adv_refs = payment_data.pop('advance_references', None)
+                # Keep advance_references in payment_data so it's saved in create()
+                adv_refs = payment_data.get('advance_references')
                 payment_obj = VoucherSalesPaymentDetails.objects.create(invoice=invoice, tenant_id=tenant_id, **payment_data)
                 
             # Create Dispatch Details
@@ -132,13 +232,18 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             for eway_data in eway_bill_details_data:
                 VoucherSalesEwayBill.objects.create(invoice=invoice, tenant_id=tenant_id, **eway_data)
 
+            # Round total to 2 decimal places
+            final_total = decimal.Decimal(str(payment_obj.payment_invoice_value if payment_obj else 0)).quantize(
+                decimal.Decimal('0.00'), rounding=decimal.ROUND_HALF_UP
+            )
+
             voucher = Voucher.objects.create(
                 tenant_id=tenant_id,
                 type="sales",
                 voucher_number=invoice.sales_invoice_no or f"SAL-{invoice.id}",
                 date=invoice.date,
                 party=invoice.customer_name,
-                total=payment_obj.payment_invoice_value if payment_obj else 0,
+                total=final_total,
                 invoice_no=invoice.sales_invoice_no,
                 source="sales_invoice",
                 reference_id=invoice.id
@@ -168,114 +273,94 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 except Exception as ex:
                     print(f"[SalesSerializer] Advance allocation failed: {ex}")
 
+        mirror_sales_to_portal(invoice)
 
-        self._mirror_to_customer_portal(invoice)
+        # Auto-sync to Inventory > Operations > Outward Slip
+        sync_sales_to_outward(invoice)
         print(f"Voucher {invoice.sales_invoice_no} saved successfully (ID: {invoice.id})")
 
-        # ACCOUNTING POSTING (OUTSIDE atomic transaction)
-        if payment_obj:
-            try:
-                # Part 2: Introduce Posting Control Logic
-                total_amount = float(payment_obj.payment_invoice_value or 0)
-                is_zero_invoice = total_amount == 0
+        # --- Double-Entry Posting for Sales (entries table) ---
+        self._post_journal_entries(invoice)
 
-                if is_zero_invoice:
-                    print("Accounting skipped (zero invoice)")
-                    invoice.posting_status = "SKIPPED"
-                    invoice.save(update_fields=['posting_status'])
-                    return invoice
-
-                # Build Entries
-                customer = CustomerMasterCustomerBasicDetails.objects.get(
-                    id=customer_id, 
-                    tenant_id=tenant_id
-                )
-                
-                sales_ledger = get_standard_ledger(tenant_id, 'Sales Account', 'Sales Accounts', 'Income')
-                gst_output_ledger = get_standard_ledger(tenant_id, 'Output GST', 'Duties & Taxes', 'Liability')
-
-                entries = []
-
-                # Mandatory Entry: Customer (Debit)
-                entries.append({
-                    "ledger_id": customer.ledger_id,
-                    "debit": total_amount,
-                    "credit": 0,
-                    "customer_id": customer.id
-                })
-
-                # Mandatory Entry: Sales (Credit)
-                entries.append({
-                    "ledger_id": sales_ledger.id,
-                    "debit": 0,
-                    "credit": float(payment_obj.payment_taxable_value or 0)
-                })
-
-                # Optional Tax Entries
-                taxes = [
-                    (payment_obj.payment_igst, 'IGST'),
-                    (payment_obj.payment_cgst, 'CGST'),
-                    (payment_obj.payment_sgst, 'SGST'),
-                    (payment_obj.payment_cess, 'CESS'),
-                    (payment_obj.payment_state_cess, 'State Cess')
-                ]
-
-                for tax_val, _ in taxes:
-                    if tax_val and float(tax_val) > 0:
-                        entries.append({
-                            "ledger_id": gst_output_ledger.id,
-                            "debit": 0,
-                            "credit": float(tax_val)
-                        })
-
-                # Filter Zero Entries
-                entries = [e for e in entries if e["debit"] > 0 or e["credit"] > 0]
-
-                # Part 3: Validate Entries Before Posting
-                has_debit = any(e["debit"] > 0 for e in entries)
-                has_credit = any(e["credit"] > 0 for e in entries)
-
-                if len(entries) < 2 or not has_debit or not has_credit:
-                    print(f"Accounting skipped: Invalid entries count ({len(entries)}) or missing Dr/Cr")
-                    invoice.posting_status = "SKIPPED"
-                    invoice.posting_error = "Insufficient valid entries for posting (less than 2 or missing Dr/Cr)"
-                    invoice.save(update_fields=['posting_status', 'posting_error'])
-                    return invoice
-
-                total_debit = sum(e["debit"] for e in entries)
-                total_credit = sum(e["credit"] for e in entries)
-
-                if abs(total_debit - total_credit) > 0.01:
-                    print(f"WARNING: Debit/Credit mismatch! Diff: {total_debit - total_credit}")
-                    # We still try to post, or we could mark as FAILED. 
-                    # For strictness, let's let post_transaction handle the mismatch throw if it's too large.
-
-                print("FINAL ENTRIES:", entries)
-
-                # Part 4 & 5: Posting Status Tracking & Error Handling
-                post_transaction(
-                    voucher_type="SALES",
-                    voucher_id=voucher.id,
-                    tenant_id=tenant_id,
-                    entries=entries
-                )
-                
-                print("Accounting posted successfully")
-                invoice.posting_status = "POSTED"
-                invoice.save(update_fields=['posting_status'])
-                
-            except Exception as e:
-                print(f"ACCOUNTING POSTING FAILED: {str(e)}")
-                invoice.posting_status = "FAILED"
-                invoice.posting_error = str(e)
-                invoice.save(update_fields=['posting_status', 'posting_error'])
-                # DO NOT RE-RAISE. We want the voucher saved.
-        else:
-            print("Accounting skipped (no payment details)")
-            invoice.posting_status = "SKIPPED"
-            invoice.save(update_fields=['posting_status'])
+        # Recalculate status centrally
+        try:
+            from .services.sales_status_service import update_sales_invoice_payment_status
+            update_sales_invoice_payment_status(tenant_id, str(invoice.id))
+        except Exception as e:
+            print(f"!!! Status Sync Error in Create: {str(e)}")
 
         return invoice
+
+    def _post_journal_entries(self, invoice):
+        """Internal helper to post double-entry bookkeeping for the invoice"""
+        try:
+            from accounting.services.ledger_service import post_transaction
+            from accounting.utils_ledger import get_standard_ledger
+            
+            tenant_id = self.context.get('request').user.tenant_id
+            payment_obj = getattr(invoice, 'payment_details', None)
+            if not payment_obj:
+                print("[SalesSerializer] Skipped posting: No payment details found on instance")
+                return
+
+            total_amount = float(payment_obj.payment_invoice_value or 0)
+            if total_amount == 0:
+                print("[SalesSerializer] Skipped posting: Zero amount")
+                return
+
+            from customerportal.database import CustomerMasterCustomer
+            customer = CustomerMasterCustomer.objects.filter(id=invoice.customer_id).first()
+            if not customer:
+                 print(f"[SalesSerializer] Posting Error: Customer {invoice.customer_id} not found.")
+                 return
+
+            sales_ledger = get_standard_ledger(tenant_id, 'Sales Account', 'Sales Accounts', 'Income')
+            gst_output_ledger = get_standard_ledger(tenant_id, 'Output GST', 'Duties & Taxes', 'Liability')
+
+            entries = []
+            if customer.ledger_id:
+                entries.append({"ledger_id": customer.ledger_id, "debit": total_amount, "credit": 0})
+            else:
+                print(f"[SalesSerializer] Posting Error: Customer {customer.name} has no ledger mapping.")
+                return
+            
+            # Sales (Credit)
+            entries.append({"ledger_id": sales_ledger.id, "debit": 0, "credit": float(payment_obj.payment_taxable_value or 0)})
+
+            # Taxes
+            taxes = [
+                payment_obj.payment_igst, payment_obj.payment_cgst, payment_obj.payment_sgst, 
+                payment_obj.payment_cess, payment_obj.payment_state_cess
+            ]
+            for tax_val in taxes:
+                if tax_val and float(tax_val) > 0:
+                    entries.append({"ledger_id": gst_output_ledger.id, "debit": 0, "credit": float(tax_val)})
+
+            # Resolve Voucher ID
+            v_id = getattr(invoice, 'voucher_id', None) or invoice.id
+            
+            # Post
+            post_transaction(
+                voucher_type="SALES",
+                voucher_id=v_id,
+                tenant_id=tenant_id,
+                transaction_date=invoice.date,
+                voucher_number=invoice.sales_invoice_no,
+                entries=entries
+            )
+            
+            invoice.posting_status = 'POSTED'
+            invoice.posting_error = None
+            invoice.save()
+            print(f"[SalesSerializer] Double-entry posted for {invoice.sales_invoice_no}")
+
+        except Exception as e:
+            print(f"[SalesSerializer] CRITICAL POSTING ERROR: {e}")
+            invoice.posting_status = 'FAILED'
+            invoice.posting_error = str(e)
+            try:
+                invoice.save()
+            except: pass
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
@@ -343,111 +428,19 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 except Exception as ex:
                     print(f"[SalesSerializer] Advance allocation update failed: {ex}")
 
-        self._mirror_to_customer_portal(instance)
+        mirror_sales_to_portal(instance)
+
+        
+        # Refresh double-entry posting
+        self._post_journal_entries(instance)
+
+        # Recalculate status centrally
+        try:
+            from .services.sales_status_service import update_sales_invoice_payment_status
+            update_sales_invoice_payment_status(instance.tenant_id, str(instance.id))
+        except Exception as e:
+            print(f"!!! Status Sync Error in Update: {str(e)}")
+
         return instance
 
-    def _mirror_to_customer_portal(self, invoice):
-        """Cross-database sync to Customer Portal table (customer_transaction)"""
-        try:
-            from customerportal.models import CustomerTransaction, CustomerMasterCustomer
-            
-            # 1. Resolve portal customer record (By ID first, then fallback to Name)
-            portal_customer = None
-            if invoice.customer_id:
-                portal_customer = CustomerMasterCustomer.objects.filter(
-                    tenant_id=invoice.tenant_id, 
-                    id=invoice.customer_id
-                ).first()
-            
-            if not portal_customer and invoice.customer_name:
-                portal_customer = CustomerMasterCustomer.objects.filter(
-                    tenant_id=invoice.tenant_id, 
-                    customer_name__iexact=str(invoice.customer_name).strip()
-                ).first()
-            
-            if not portal_customer:
-                print(f"!!! Portal Mirror Error: Portal customer '{invoice.customer_name}' (ID: {invoice.customer_id}) not found")
-                return
 
-            payment_details = invoice.payment_details if hasattr(invoice, 'payment_details') else None
-            total_invoice_val = payment_details.payment_invoice_value if payment_details else 0
-            
-            # 2. Mirror Advance Adjustments only
-            # The Invoice itself is already fetched from the main Sales table by the portal UI,
-            # so we only mirror the advance adjustments to the customer_transaction table.
-            
-            if payment_details and payment_details.payment_advance and float(payment_details.payment_advance) > 0:
-                # Idempotency: Remove existing mirrored advance adjustments for this invoice
-                # These are identified by the '-ADJ{id}I' suffix in transaction_number
-                CustomerTransaction.objects.filter(
-                    tenant_id=invoice.tenant_id,
-                    customer_id=portal_customer.id,
-                    transaction_type='RECEIPT',
-                    transaction_number__contains=f"-ADJ{invoice.id}I"
-                ).delete()
-
-                # We record the adjustment as a 'receipt' or 'payment' type transaction linked to the same invoice reference
-                # This ensures it shows up in the allocation view under this invoice
-                
-                adv_refs_str = payment_details.advance_references
-                adv_refs = []
-                if adv_refs_str:
-                    try:
-                        if isinstance(adv_refs_str, str):
-                            adv_refs = json.loads(adv_refs_str)
-                        else:
-                            adv_refs = adv_refs_str
-                    except:
-                        pass
-                
-                # If we have multiple advance references, we could create one entry per reference or one total
-                # The user specifically mentioned fetching the Reference No.
-                
-                if adv_refs and isinstance(adv_refs, list):
-                    for idx, ref in enumerate(adv_refs):
-                        # Filter strictly by 'appliedNow' flag found in the voucher data
-                        is_selected = ref.get('appliedNow') is True or ref.get('selected') is True
-                        allocated_amt = ref.get('amount') or ref.get('allocated_amount') or 0
-                        
-                        if is_selected and float(allocated_amt) > 0:
-                            ref_no = ref.get('refNo') or ref.get('reference_no') or 'Advance'
-                            
-                            # We use a naming convention that the portal UI can trim to show the original ref_no
-                            # Convention: {RefNo}-ADJ{InvoiceID}I{Index}
-                            display_ref = f"{ref_no}-ADJ{invoice.id}I{idx}"
-                            
-                            CustomerTransaction.objects.update_or_create(
-                                tenant_id=invoice.tenant_id,
-                                customer_id=portal_customer.id,
-                                transaction_number=display_ref,
-                                transaction_type='RECEIPT', # Consistent with receipt mirroring
-                                defaults={
-                                    'transaction_date': invoice.date,
-                                    'amount': allocated_amt,
-                                    'total_amount': allocated_amt,
-                                    'payment_status': 'Advance Applied',
-                                    'reference_number': invoice.sales_invoice_no, # Group with this invoice
-                                    'notes': f"Advance adjusted from Ref: {ref_no}"
-                                }
-                            )
-                else:
-                    # Fallback to single entry if no detailed refs but total amount exists
-                    CustomerTransaction.objects.update_or_create(
-                        tenant_id=invoice.tenant_id,
-                        customer_id=portal_customer.id,
-                        transaction_number=f"ADJ-{invoice.sales_invoice_no}",
-                        transaction_type='RECEIPT',
-                        defaults={
-                            'transaction_date': invoice.date,
-                            'amount': payment_details.payment_advance,
-                            'total_amount': payment_details.payment_advance,
-                            'payment_status': 'Advance Applied',
-                            'reference_number': invoice.sales_invoice_no,
-                            'notes': "Advance adjusted"
-                        }
-                    )
-
-            print(f"!!! Portal Mirror Sales OK: {invoice.sales_invoice_no}")
-        except Exception as e:
-            print(f"!!! Portal Mirror Sales Failed: {str(e)}")
-            pass

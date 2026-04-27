@@ -26,10 +26,10 @@ from .models import (
     VendorMasterGSTDetails,
     VendorMasterTDS,
     VendorMasterBanking,
-    VendorMasterTerms,
-    VendorMasterProductService
+    VendorMasterTerms
 )
 from .vendor_database import VendorDatabase
+from .vendorproduct_database import VendorProductServiceDatabase
 from accounting.models import TransactionAllocation as PaymentVoucherItem
 from accounting.serializers_payment import PaymentVoucherItemSerializer
 
@@ -47,13 +47,7 @@ class VendorViewSet(viewsets.ModelViewSet):
     def get_tenant_id(self):
         """Extract tenant_id from authenticated user"""
         user = self.request.user
-        if hasattr(user, 'tenant_id'):
-            return user.branch_id
-        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
-            return user.tenant.tenant_id
-        else:
-            # Fallback for development/testing
-            return getattr(user, 'id', 'default_tenant')
+        return getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None) or getattr(user, 'id', 'default_tenant')
     
     def get_username(self):
         """Get username from request"""
@@ -515,11 +509,7 @@ class PurchaseVendorCreateView(APIView):
 
     def get_tenant_id(self):
         user = self.request.user
-        if hasattr(user, 'tenant_id') and user.branch_id:
-            return user.branch_id
-        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
-            return user.tenant.tenant_id
-        return None
+        return getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None)
             
     def get_username(self):
         user = self.request.user
@@ -536,6 +526,7 @@ class PurchaseVendorCreateView(APIView):
         branch = request.data.get('branch', '').strip()
         address = request.data.get('address', '').strip()
         state = request.data.get('state', '').strip()
+        vendor_category = request.data.get('vendor_category', '').strip()
         supplier_items = request.data.get('supplier_items', [])
         
         # Step 1: Pre-creation Validation (Branch-based rules)
@@ -547,7 +538,7 @@ class PurchaseVendorCreateView(APIView):
             branch=branch
         )
 
-        if val_result['status'] == 'FOUND':
+        if val_result['status'] in ['FOUND', 'EXISTING_VENDOR']:
             # Rule 1: Exact Duplicate (Name + GSTIN + Branch match)
             # We treat this as "CREATED" to maintain idempotency in the creation flow
             return Response({
@@ -582,7 +573,7 @@ class PurchaseVendorCreateView(APIView):
             "pan_no": gstin[2:12] if gstin and len(gstin) >= 15 else None,
             "email": f"pending_{tenant_prefix}@example.com",
             "contact_no": "+910000000000",
-            "vendor_category": "Supplier",
+            "vendor_category": vendor_category if vendor_category else "Supplier",
         }
         
         try:
@@ -656,9 +647,9 @@ class PurchaseVendorCreateView(APIView):
                                 "supplier_item_name": s_name
                             })
                 
-                VendorMasterProductService.objects.create(
+                VendorProductServiceDatabase.upsert_product_services(
                     tenant_id=effective_tenant_id,
-                    vendor_basic_detail=vendor,
+                    vendor_basic_detail_id=vendor.id,
                     items=valid_items,
                     created_by=username
                 )
@@ -679,12 +670,7 @@ class PurchaseVendorValidateView(APIView):
 
     def get_tenant_id(self):
         user = self.request.user
-        if hasattr(user, 'tenant_id'):
-            return user.branch_id
-        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
-            return user.tenant.tenant_id
-        else:
-            return getattr(user, 'id', 'default_tenant')
+        return getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None) or getattr(user, 'id', 'default_tenant')
 
     def post(self, request, *args, **kwargs):
         from .vendor_validation_logic import validate_vendor
@@ -708,7 +694,7 @@ class PurchaseVendorValidateView(APIView):
             state=state
         )
         
-        if result['status'] == 'FOUND':
+        if result['status'] in ['FOUND', 'EXISTING_VENDOR']:
             print(f"Found vendor by {result['matched_by']} match: {result['vendor_name']}")
         elif result['status'] == 'GSTIN_CONFLICT':
             print(f"GSTIN {gstin} found but name mismatch: {result['message']}")
@@ -729,11 +715,7 @@ class PurchaseVendorResolveConflictView(APIView):
 
     def get_tenant_id(self):
         user = self.request.user
-        if hasattr(user, 'tenant_id'):
-            return user.branch_id
-        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
-            return user.tenant.tenant_id
-        return getattr(user, 'id', 'default_tenant')
+        return getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None) or getattr(user, 'id', 'default_tenant')
 
     def post(self, request, *args, **kwargs):
         from .models import VendorMasterBasicDetail, VendorMasterGSTDetails

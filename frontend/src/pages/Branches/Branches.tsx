@@ -45,6 +45,8 @@ const BranchesPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [businessTypes, setBusinessTypes] = useState<string[]>([]);
+    const [businessType, setBusinessType] = useState('');
 
     // Address states
     const [addressLine1, setAddressLine1] = useState('');
@@ -63,7 +65,17 @@ const BranchesPage: React.FC = () => {
     useEffect(() => {
         loadData();
         fetchGeoData();
+        fetchBusinessTypes();
     }, []);
+
+    const fetchBusinessTypes = async () => {
+        try {
+            const types = await masterApiService.getBusinessTypes();
+            setBusinessTypes(types || []);
+        } catch (err) {
+            console.error("Failed to fetch business types", err);
+        }
+    };
 
     const fetchGeoData = async () => {
         try {
@@ -87,14 +99,62 @@ const BranchesPage: React.FC = () => {
         }
     };
 
+    const validateStep = (step: number) => {
+        setError(null);
+        if (step === 1) {
+            if (!businessType) return "Business Type is required";
+            if (!branchGstin) return "Branch GSTIN is required";
+            if (branchGstin.length !== 15) return "GSTIN must be exactly 15 characters";
+
+            // Instant local uniqueness check
+            const isDuplicate = branches.some(b => b.gstin === branchGstin);
+            if (isDuplicate) return `Branch with GSTIN ${branchGstin} already exists in the system.`;
+
+            if (!addressLine1) return "Address Line 1 is required";
+            if (!selectedCountry) return "Country is required";
+            if (!selectedState) return "State is required";
+            if (!selectedDistrict) return "District is required";
+            if (!pincode) return "Pincode is required";
+        }
+        if (step === 2) {
+            if (!adminName) return "Admin Name is required";
+            if (!email) return "Admin Email is required";
+            if (!phone) return "Admin Phone is required";
+            if (!username) return "Username is required";
+            if (!password) return "Password is required";
+            if (password.length < 8) return "Password must be at least 8 characters";
+        }
+        return null;
+    };
+
+    const handleNextStep = (next: number) => {
+        const validationError = validateStep(currentStep);
+        if (validationError) {
+            setError(validationError);
+            const modalBody = document.querySelector('.custom-scrollbar');
+            if (modalBody) modalBody.scrollTop = 0;
+            return;
+        }
+        setCurrentStep(next);
+        setError(null);
+    };
+
     const handleCreateBranch = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Final validation check for all steps
+        const step1Err = validateStep(1);
+        if (step1Err) { setError(step1Err); setCurrentStep(1); return; }
+        const step2Err = validateStep(2);
+        if (step2Err) { setError(step2Err); setCurrentStep(2); return; }
+
         setIsProcessing(true);
         setError(null);
 
         try {
             await masterApiService.createBranch({
                 name: branchName,
+                business_type: businessType,
                 gstin: branchGstin,
                 phone,
                 email,
@@ -112,7 +172,13 @@ const BranchesPage: React.FC = () => {
             resetForm();
             loadData();
         } catch (err: any) {
-            setError(err.message || 'Failed to create branch');
+            // Handle server-side errors (like duplicate GSTIN)
+            console.error("Server Error:", err);
+            const msg = err.response?.data?.error || err.response?.data?.detail || err.message || 'Failed to create branch';
+            setError(msg);
+            // Scroll to top to see error
+            const modalBody = document.querySelector('.custom-scrollbar');
+            if (modalBody) modalBody.scrollTop = 0;
         } finally {
             setIsProcessing(false);
         }
@@ -147,7 +213,9 @@ const BranchesPage: React.FC = () => {
 
     const resetForm = () => {
         setCurrentStep(1);
-        setSelectedPlan('FREE'); setBranchName('');
+        setSelectedPlan('FREE');
+        setBranchName('');
+        setBusinessType('');
         setAdminName(''); setBranchGstin(''); setPhone(''); setEmail(''); setUsername(''); setPassword('');
         setAddressLine1(''); setAddressLine2(''); setAddressLine3('');
         setSelectedCountry('India'); setSelectedState(''); setSelectedDistrict('');
@@ -238,7 +306,7 @@ const BranchesPage: React.FC = () => {
                                 <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-[10px] font-bold text-amber-700 border-2 border-white">B</div>
                             </div>
                             <div className="flex gap-2">
-                                <button 
+                                <button
                                     onClick={() => {
                                         setSelectedBranchId(branch.id);
                                         setIsResetPasswordModalOpen(true);
@@ -283,7 +351,19 @@ const BranchesPage: React.FC = () => {
                 </div>
 
                 <form onSubmit={handleCreateBranch} className="space-y-8 max-h-[65vh] overflow-y-auto px-6 py-4 custom-scrollbar">
-                    
+                    {/* Error display inside Modal */}
+                    {error && (
+                        <div className="p-4 rounded-xl bg-red-50 border-l-4 border-red-500 text-red-600 shadow-sm flex items-center gap-3 animate-headshake sticky top-0 z-10 bg-white/95 backdrop-blur-sm mb-6">
+                            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                                <Icon name="x" className="w-4 h-4 text-red-600" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest">Action Blocked</p>
+                                <p className="text-xs font-bold leading-tight mt-0.5">{error}</p>
+                            </div>
+                        </div>
+                    )}
+
                     {currentStep === 1 && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                             {/* Basic Info */}
@@ -293,30 +373,39 @@ const BranchesPage: React.FC = () => {
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Branch Legal Name</label>
-                                        <input 
-                                            id="branch-name" 
-                                            type="text" 
-                                            value={branchName} 
-                                            onChange={e => setBranchName(e.target.value)} 
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Type of Business</label>
+                                        <select
+                                            id="branch-name"
+                                            value={businessType}
+                                            onChange={e => {
+                                                setBusinessType(e.target.value);
+                                                // If we're replacing the name, maybe use business type as name
+                                                // but since name must be unique, we might need more.
+                                                // For now, let's just use it as the name too.
+                                                setBranchName(e.target.value);
+                                            }}
                                             onKeyDown={e => handleEnter(e, 'branch-gstin')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="e.g. Acme Mumbai" 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
                                             autoFocus
-                                            required 
-                                        />
+                                            required
+                                        >
+                                            <option value="">Select Business Type</option>
+                                            {businessTypes.map((type) => (
+                                                <option key={type} value={type}>{type}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Branch GSTIN</label>
-                                        <input 
-                                            id="branch-gstin" 
-                                            type="text" 
-                                            value={branchGstin} 
-                                            onChange={e => setBranchGstin(e.target.value.toUpperCase())} 
+                                        <input
+                                            id="branch-gstin"
+                                            type="text"
+                                            value={branchGstin}
+                                            onChange={e => setBranchGstin(e.target.value.toUpperCase())}
                                             onKeyDown={e => handleEnter(e, 'address-1')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="15-digit GSTIN" 
-                                            required 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="15-digit GSTIN"
+                                            required
                                         />
                                     </div>
                                 </div>
@@ -329,45 +418,45 @@ const BranchesPage: React.FC = () => {
                                 </h4>
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-1 gap-4">
-                                        <input 
-                                            id="address-1" 
-                                            type="text" 
-                                            value={addressLine1} 
-                                            onChange={e => setAddressLine1(e.target.value)} 
+                                        <input
+                                            id="address-1"
+                                            type="text"
+                                            value={addressLine1}
+                                            onChange={e => setAddressLine1(e.target.value)}
                                             onKeyDown={e => handleEnter(e, 'address-2')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="Address Line 1" 
-                                            required 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="Address Line 1"
+                                            required
                                         />
-                                        <input 
-                                            id="address-2" 
-                                            type="text" 
-                                            value={addressLine2} 
-                                            onChange={e => setAddressLine2(e.target.value)} 
+                                        <input
+                                            id="address-2"
+                                            type="text"
+                                            value={addressLine2}
+                                            onChange={e => setAddressLine2(e.target.value)}
                                             onKeyDown={e => handleEnter(e, 'address-3')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="Address Line 2 (Optional)" 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="Address Line 2 (Optional)"
                                         />
-                                        <input 
-                                            id="address-3" 
-                                            type="text" 
-                                            value={addressLine3} 
-                                            onChange={e => setAddressLine3(e.target.value)} 
+                                        <input
+                                            id="address-3"
+                                            type="text"
+                                            value={addressLine3}
+                                            onChange={e => setAddressLine3(e.target.value)}
                                             onKeyDown={e => handleEnter(e, 'country')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="Address Line 3 (Optional)" 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="Address Line 3 (Optional)"
                                         />
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Country</label>
-                                            <select 
-                                                id="country" 
-                                                value={selectedCountry} 
-                                                onChange={e => { setSelectedCountry(e.target.value); setSelectedState(''); }} 
+                                            <select
+                                                id="country"
+                                                value={selectedCountry}
+                                                onChange={e => { setSelectedCountry(e.target.value); setSelectedState(''); }}
                                                 onKeyDown={e => handleEnter(e, 'state')}
-                                                className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
+                                                className="erp-input w-full h-12 text-sm font-bold shadow-sm"
                                                 required
                                             >
                                                 {geoData.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
@@ -375,12 +464,12 @@ const BranchesPage: React.FC = () => {
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">State / Province</label>
-                                            <select 
-                                                id="state" 
-                                                value={selectedState} 
-                                                onChange={e => { setSelectedState(e.target.value); setSelectedDistrict(''); }} 
+                                            <select
+                                                id="state"
+                                                value={selectedState}
+                                                onChange={e => { setSelectedState(e.target.value); setSelectedDistrict(''); }}
                                                 onKeyDown={e => handleEnter(e, 'district')}
-                                                className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
+                                                className="erp-input w-full h-12 text-sm font-bold shadow-sm"
                                                 required
                                             >
                                                 <option value="">Select State</option>
@@ -393,12 +482,12 @@ const BranchesPage: React.FC = () => {
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">District</label>
                                             {selectedCountry === 'India' ? (
-                                                <select 
-                                                    id="district" 
-                                                    value={selectedDistrict} 
-                                                    onChange={e => setSelectedDistrict(e.target.value)} 
+                                                <select
+                                                    id="district"
+                                                    value={selectedDistrict}
+                                                    onChange={e => setSelectedDistrict(e.target.value)}
                                                     onKeyDown={e => handleEnter(e, 'pincode')}
-                                                    className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
+                                                    className="erp-input w-full h-12 text-sm font-bold shadow-sm"
                                                     required
                                                 >
                                                     <option value="">Select District</option>
@@ -410,15 +499,15 @@ const BranchesPage: React.FC = () => {
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pincode / ZIP</label>
-                                            <input 
-                                                id="pincode" 
-                                                type="text" 
-                                                value={pincode} 
-                                                onChange={e => setPincode(e.target.value)} 
+                                            <input
+                                                id="pincode"
+                                                type="text"
+                                                value={pincode}
+                                                onChange={e => setPincode(e.target.value)}
                                                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setCurrentStep(2); } }}
-                                                className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                                placeholder="e.g. 400001" 
-                                                required 
+                                                className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                                placeholder="e.g. 400001"
+                                                required
                                             />
                                         </div>
                                     </div>
@@ -426,7 +515,7 @@ const BranchesPage: React.FC = () => {
                             </div>
 
                             <div className="flex gap-4 pt-4 sticky bottom-0 bg-white pb-2 border-t border-slate-100">
-                                <button type="button" onClick={() => setCurrentStep(2)} className="flex-[2] h-14 bg-indigo-600 text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-slate-900 transition-all active:scale-95">
+                                <button type="button" onClick={() => handleNextStep(2)} className="flex-[2] h-14 bg-indigo-600 text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-slate-900 transition-all active:scale-95">
                                     Next: Administrative Access <Icon name="arrow-right" className="inline w-4 h-4 ml-1" />
                                 </button>
                             </div>
@@ -443,72 +532,72 @@ const BranchesPage: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Full Name</label>
-                                        <input 
-                                            id="admin-name" 
-                                            type="text" 
-                                            value={adminName} 
-                                            onChange={e => setAdminName(e.target.value)} 
+                                        <input
+                                            id="admin-name"
+                                            type="text"
+                                            value={adminName}
+                                            onChange={e => setAdminName(e.target.value)}
                                             onKeyDown={e => handleEnter(e, 'admin-email')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="John Doe" 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="John Doe"
                                             autoFocus
-                                            required 
+                                            required
                                         />
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Email</label>
-                                        <input 
-                                            id="admin-email" 
-                                            type="email" 
-                                            value={email} 
-                                            onChange={e => setEmail(e.target.value)} 
+                                        <input
+                                            id="admin-email"
+                                            type="email"
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
                                             onKeyDown={e => handleEnter(e, 'admin-phone')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="contact@branch.com" 
-                                            required 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="contact@branch.com"
+                                            required
                                         />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 gap-5">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Phone (Admin)</label>
-                                        <input 
-                                            id="admin-phone" 
-                                            type="tel" 
-                                            value={phone} 
-                                            onChange={e => setPhone(e.target.value)} 
+                                        <input
+                                            id="admin-phone"
+                                            type="tel"
+                                            value={phone}
+                                            onChange={e => setPhone(e.target.value)}
                                             onKeyDown={e => handleEnter(e, 'username')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="Phone number" 
-                                            required 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="Phone number"
+                                            required
                                         />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Login Username</label>
-                                        <input 
-                                            id="username" 
-                                            type="text" 
-                                            value={username} 
-                                            onChange={e => setUsername(e.target.value)} 
+                                        <input
+                                            id="username"
+                                            type="text"
+                                            value={username}
+                                            onChange={e => setUsername(e.target.value)}
                                             onKeyDown={e => handleEnter(e, 'password')}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="Login username" 
-                                            required 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="Login username"
+                                            required
                                         />
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Login Password</label>
-                                        <input 
-                                            id="password" 
-                                            type="password" 
-                                            value={password} 
-                                            onChange={e => setPassword(e.target.value)} 
+                                        <input
+                                            id="password"
+                                            type="password"
+                                            value={password}
+                                            onChange={e => setPassword(e.target.value)}
                                             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setCurrentStep(3); } }}
-                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm" 
-                                            placeholder="Initial access password" 
-                                            required 
+                                            className="erp-input w-full h-12 text-sm font-bold shadow-sm"
+                                            placeholder="Initial access password"
+                                            required
                                         />
                                     </div>
                                 </div>
@@ -518,7 +607,7 @@ const BranchesPage: React.FC = () => {
                                 <button type="button" onClick={() => setCurrentStep(1)} className="flex-1 h-14 bg-slate-50 border border-slate-200 text-slate-600 rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all shadow-sm">
                                     <Icon name="arrow-left" className="inline w-4 h-4 mr-1" /> Back
                                 </button>
-                                <button type="button" onClick={() => setCurrentStep(3)} className="flex-[2] h-14 bg-indigo-600 text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-slate-900 transition-all active:scale-95">
+                                <button type="button" onClick={() => handleNextStep(3)} className="flex-[2] h-14 bg-indigo-600 text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-slate-900 transition-all active:scale-95">
                                     Next: Subscription Plan <Icon name="arrow-right" className="inline w-4 h-4 ml-1" />
                                 </button>
                             </div>
@@ -567,6 +656,13 @@ const BranchesPage: React.FC = () => {
                 type="warning"
             >
                 <form onSubmit={handleResetPassword} className="p-6 space-y-6">
+                    {/* Error display inside Modal */}
+                    {error && (
+                        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-3 animate-headshake">
+                            <Icon name="x" className="w-4 h-4" />
+                            {error}
+                        </div>
+                    )}
                     <div className="text-center">
                         <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">🔑</div>
                         <h3 className="text-lg font-black text-slate-800">Security Override</h3>
@@ -580,9 +676,9 @@ const BranchesPage: React.FC = () => {
 
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">New Secure Password</label>
-                        <input 
-                            type="password" 
-                            value={newPassword} 
+                        <input
+                            type="password"
+                            value={newPassword}
                             onChange={e => setNewPassword(e.target.value)}
                             className="erp-input w-full h-12 text-center text-lg tracking-widest font-black bg-slate-50 border-2 focus:border-indigo-500 transition-all rounded-xl"
                             placeholder="••••••••"
@@ -594,15 +690,15 @@ const BranchesPage: React.FC = () => {
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={() => setIsResetPasswordModalOpen(false)}
                             className="flex-1 h-12 bg-white border border-slate-200 text-slate-600 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
                         >
                             Cancel
                         </button>
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={isProcessing || newPassword.length < 8}
                             className="flex-[2] h-12 bg-slate-900 text-white border-none rounded-xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-black transition-all disabled:opacity-50 active:scale-95"
                         >

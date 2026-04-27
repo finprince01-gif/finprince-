@@ -192,11 +192,10 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
         return value
     
     def validate_email(self, value):
-        """Check if email already exists - email must be unique globally"""
-        if value and value.strip():  # Only validate if email is provided
-            if User.objects.filter(email=value).exists():
-                raise serializers.ValidationError("This email address is already registered")
-        return value
+        """Email is optional in Users & Roles onboarding."""
+        if value and value.strip():
+            return value.strip()
+        return None
     
     def validate_role_ids(self, value):
         """Validate that all role IDs exist and belong to the same tenant"""
@@ -232,10 +231,21 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
             raise serializers.ValidationError({"detail": "Cannot determine organization (Branch ID) from your session. Please re-login."})
 
         try:
+            # Email in User model is globally unique. To avoid blocking seat creation
+            # when same email is reused, fall back to NULL (not empty string).
+            requested_email = (validated_data.get('email') or '').strip()
+            email_for_user = requested_email or None
+            if requested_email and User.objects.filter(email=requested_email).exists():
+                logger.warning(
+                    "RBAC user create: email '%s' already exists. Creating user without email.",
+                    requested_email
+                )
+                email_for_user = None
+
             # Create user with tenant_id from request
             user = User.objects.create_user(
                 username=validated_data['username'],
-                email=validated_data.get('email', ''),
+                email=email_for_user,
                 password=validated_data['password'],
                 phone=validated_data.get('phone', ''),
                 tenant_id=tenant_id,
@@ -252,7 +262,7 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
                         user=user,
                         role=role,
                         username=user.username,
-                        email=user.email,
+                        email=requested_email or user.email,
                         phone=user.phone,
                         tenant_id=tenant_id,
                         assigned_by=request.user

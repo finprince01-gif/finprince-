@@ -16,7 +16,7 @@ if not SECRET_KEY:
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
 # Production: Specify exact domains (no wildcards)
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,testserver,16.171.255.74,13.63.35.153').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,.finpixe.com,testserver,16.171.255.74,13.63.35.153,13.235.91.238,13.203.204.171,13.203.204.1').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'vouchers',
     'ocr_pipeline',
+    'gst_reconciliation',
 ]
 
 MIDDLEWARE = [
@@ -93,7 +94,7 @@ DATABASES = {
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '3306'),
         # PRODUCTION: Persistent connections to reduce handshake overhead
-        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '1200')),  # 20 minutes
+        'CONN_MAX_AGE': 0 if DEBUG else int(os.getenv('DB_CONN_MAX_AGE', '1200')), # No persistence in Dev
         'CONN_HEALTH_CHECKS': True,  # Test connections before use to prevent crashes
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES', INTERACTIVE_TIMEOUT=1200, WAIT_TIMEOUT=1200",
@@ -170,6 +171,10 @@ CORS_ALLOWED_ORIGINS = [
     "https://api.finpixe.com",
     "http://16.171.255.74",
     "https://16.171.255.74",
+    "http://13.235.91.238",
+    "https://13.235.91.238",
+    "http://13.203.204.171",
+    "https://13.203.204.171",
     # Development (only if DEBUG=True)
     "http://localhost:5173",
     "http://localhost:5174",
@@ -180,6 +185,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://16.171.255.74",
     "http://13.63.35.153",
+    "http://13.235.91.238",
+    "http://13.203.204.171",
 ]
 
 # Filter out localhost in production
@@ -193,6 +200,10 @@ CSRF_TRUSTED_ORIGINS = [
     'https://api.finpixe.com',
     'http://16.171.255.74',
     'https://16.171.255.74',
+    'http://13.235.91.238',
+    'https://13.235.91.238',
+    'http://13.203.204.171',
+    'https://13.203.204.171',
     # Development (only if DEBUG=True)
     'http://localhost:5173',
     'http://localhost:5174',
@@ -202,6 +213,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://16.171.255.74',
     'http://13.63.35.153',
+    'http://13.235.91.238',
+    'http://13.203.204.171',
 ]
 
 # Filter out localhost in production
@@ -269,6 +282,10 @@ BULK_AI_RATE_LIMITER_SLOTS = int(os.getenv('BULK_AI_SLOTS', '100000'))
 BULK_AI_CALL_GAP_SECONDS = float(os.getenv('BULK_AI_CALL_GAP', '0.5'))
 BULK_MAX_RETRIES = int(os.getenv('BULK_MAX_RETRIES', '3'))
 BULK_STUCK_THRESHOLD_MINUTES = int(os.getenv('BULK_STUCK_THRESHOLD', '5'))
+
+# Increase upload limits for large bulk scans (effectively infinite)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 1073741824  # 1GB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1073741824  # 1GB
 
 # ============================================================================
 # LOGIN SECURITY SETTINGS
@@ -348,6 +365,7 @@ LOGGING = {
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
             'formatter': 'verbose',
+            'encoding': 'utf-8',
         },
         'file_debug': {
             'level': 'DEBUG',
@@ -356,6 +374,7 @@ LOGGING = {
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
             'formatter': 'verbose',
+            'encoding': 'utf-8',
         },
     },
     'root': {

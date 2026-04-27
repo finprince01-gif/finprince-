@@ -274,7 +274,7 @@ class VendorBasicDetailDatabase:
         
         Args:
             vendor_id: ID of the vendor to delete
-            soft_delete: If True, set is_active to False; if False, delete from DB
+            soft_delete: If True, set is_deleted to True; if False, delete from DB
             
         Returns:
             True if successful, False otherwise
@@ -282,7 +282,7 @@ class VendorBasicDetailDatabase:
         try:
             vendor = VendorMasterBasicDetail.objects.get(id=vendor_id)
             if soft_delete:
-                vendor.is_active = False
+                vendor.is_deleted = True
                 vendor.save()
             else:
                 vendor.delete()

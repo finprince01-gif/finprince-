@@ -33,31 +33,47 @@ class VendorProductServiceDatabase:
             dict: The saved record as a plain dict.
         """
         username = created_by or 'system'
-        items_json = json.dumps(items)
 
         logger.info(
             f"Upserting product services: tenant={tenant_id}, "
             f"vendor_id={vendor_basic_detail_id}, items_count={len(items)}"
         )
 
-        # MySQL ON DUPLICATE KEY UPDATE – works with the UNIQUE KEY on vendor_basic_detail_id
-        query = """
-            INSERT INTO vendor_master_vendorcreation_productservices
-                (tenant_id, vendor_basic_detail_id, items, is_active, created_at, updated_at, created_by, updated_by)
-            VALUES
-                (%s, %s, %s, 1, NOW(6), NOW(6), %s, %s)
-            ON DUPLICATE KEY UPDATE
-                items      = VALUES(items),
-                is_active  = 1,
-                updated_at = NOW(6),
-                updated_by = VALUES(updated_by)
+        # 1. Delete existing items for this vendor
+        delete_query = """
+            DELETE FROM vendor_master_vendorcreation_productservices_items
+            WHERE vendor_basic_detail_id = %s
         """
-
-        params = [tenant_id, vendor_basic_detail_id, items_json, username, username]
+        
+        # 2. Insert new items
+        insert_query = """
+            INSERT INTO vendor_master_vendorcreation_productservices_items
+                (tenant_id, vendor_basic_detail_id, hsn_sac_code, item_code, item_name, 
+                 supplier_item_code, supplier_item_name, is_active, created_at, updated_at, created_by, updated_by)
+            VALUES
+                (%s, %s, %s, %s, %s, %s, %s, 1, NOW(6), NOW(6), %s, %s)
+        """
 
         try:
             with connection.cursor() as cursor:
-                cursor.execute(query, params)
+                cursor.execute(delete_query, [vendor_basic_detail_id])
+                
+                if items:
+                    params_list = [
+                        (
+                            tenant_id, 
+                            vendor_basic_detail_id,
+                            item.get('hsn_sac_code', ''),
+                            item.get('item_code', ''),
+                            item.get('item_name', ''),
+                            item.get('supplier_item_code', ''),
+                            item.get('supplier_item_name', ''),
+                            username,
+                            username
+                        )
+                        for item in items
+                    ]
+                    cursor.executemany(insert_query, params_list)
 
             logger.info(f"Product services upserted for vendor {vendor_basic_detail_id}")
             return VendorProductServiceDatabase.get_by_vendor(vendor_basic_detail_id)
@@ -78,34 +94,43 @@ class VendorProductServiceDatabase:
             dict | None
         """
         query = """
-            SELECT id, tenant_id, vendor_basic_detail_id, items, is_active,
+            SELECT tenant_id, hsn_sac_code, item_code, item_name, 
+                   supplier_item_code, supplier_item_name, is_active,
                    created_at, updated_at, created_by, updated_by
-            FROM vendor_master_vendorcreation_productservices
+            FROM vendor_master_vendorcreation_productservices_items
             WHERE vendor_basic_detail_id = %s
         """
         try:
             with connection.cursor() as cursor:
                 cursor.execute(query, [vendor_basic_detail_id])
-                row = cursor.fetchone()
+                rows = cursor.fetchall()
 
-            if not row:
+            if not rows:
                 return None
 
-            raw_items = row[3]
-            if isinstance(raw_items, str):
-                raw_items = json.loads(raw_items)
-
-            return {
-                'id': row[0],
-                'tenant_id': row[1],
-                'vendor_basic_detail': row[2],
-                'items': raw_items,
-                'is_active': bool(row[4]),
-                'created_at': str(row[5]) if row[5] else None,
-                'updated_at': str(row[6]) if row[6] else None,
-                'created_by': row[7],
-                'updated_by': row[8],
+            # Base metadata from first row
+            first_row = rows[0]
+            result = {
+                'tenant_id': first_row[0],
+                'vendor_basic_detail': vendor_basic_detail_id,
+                'items': [],
+                'is_active': bool(first_row[6]),
+                'created_at': str(first_row[7]) if first_row[7] else None,
+                'updated_at': str(first_row[8]) if first_row[8] else None,
+                'created_by': first_row[9],
+                'updated_by': first_row[10],
             }
+
+            for row in rows:
+                result['items'].append({
+                    'hsn_sac_code': row[1] or '',
+                    'item_code': row[2] or '',
+                    'item_name': row[3] or '',
+                    'supplier_item_code': row[4] or '',
+                    'supplier_item_name': row[5] or ''
+                })
+
+            return result
 
         except Exception as e:
             logger.error(f"Error fetching product services for vendor {vendor_basic_detail_id}: {e}")
@@ -120,34 +145,41 @@ class VendorProductServiceDatabase:
             list[dict]
         """
         query = """
-            SELECT id, tenant_id, vendor_basic_detail_id, items, is_active,
+            SELECT vendor_basic_detail_id, tenant_id, hsn_sac_code, item_code, item_name, 
+                   supplier_item_code, supplier_item_name, is_active,
                    created_at, updated_at, created_by, updated_by
-            FROM vendor_master_vendorcreation_productservices
+            FROM vendor_master_vendorcreation_productservices_items
             WHERE tenant_id = %s AND is_active = 1
-            ORDER BY updated_at DESC
+            ORDER BY vendor_basic_detail_id, updated_at DESC
         """
         try:
             with connection.cursor() as cursor:
                 cursor.execute(query, [tenant_id])
                 rows = cursor.fetchall()
 
-            results = []
+            grouped = {}
             for row in rows:
-                raw_items = row[3]
-                if isinstance(raw_items, str):
-                    raw_items = json.loads(raw_items)
-                results.append({
-                    'id': row[0],
-                    'tenant_id': row[1],
-                    'vendor_basic_detail': row[2],
-                    'items': raw_items,
-                    'is_active': bool(row[4]),
-                    'created_at': str(row[5]) if row[5] else None,
-                    'updated_at': str(row[6]) if row[6] else None,
-                    'created_by': row[7],
-                    'updated_by': row[8],
+                vendor_id = row[0]
+                if vendor_id not in grouped:
+                    grouped[vendor_id] = {
+                        'tenant_id': row[1],
+                        'vendor_basic_detail': vendor_id,
+                        'items': [],
+                        'is_active': bool(row[7]),
+                        'created_at': str(row[8]) if row[8] else None,
+                        'updated_at': str(row[9]) if row[9] else None,
+                        'created_by': row[10],
+                        'updated_by': row[11],
+                    }
+                grouped[vendor_id]['items'].append({
+                    'hsn_sac_code': row[2] or '',
+                    'item_code': row[3] or '',
+                    'item_name': row[4] or '',
+                    'supplier_item_code': row[5] or '',
+                    'supplier_item_name': row[6] or ''
                 })
-            return results
+
+            return list(grouped.values())
 
         except Exception as e:
             logger.error(f"Error listing product services for tenant {tenant_id}: {e}")
@@ -158,13 +190,13 @@ class VendorProductServiceDatabase:
         """Soft- or hard-delete the record for a vendor."""
         if soft:
             query = """
-                UPDATE vendor_master_vendorcreation_productservices
+                UPDATE vendor_master_vendorcreation_productservices_items
                 SET is_active = 0, updated_at = NOW(6)
                 WHERE vendor_basic_detail_id = %s
             """
         else:
             query = """
-                DELETE FROM vendor_master_vendorcreation_productservices
+                DELETE FROM vendor_master_vendorcreation_productservices_items
                 WHERE vendor_basic_detail_id = %s
             """
         try:

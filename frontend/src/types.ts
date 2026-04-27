@@ -1,4 +1,4 @@
-export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Banking' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'GST' | 'Users & Roles' | 'Dashboard Builder';
+export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'GST' | 'Users & Roles' | 'Dashboard Builder';
 
 export interface CompanyDetails {
   name: string;
@@ -52,6 +52,8 @@ export interface Ledger {
 
   // Auto-generated code based on hierarchy
   ledger_code?: string;
+  // Backend also returns this field name
+  code?: string;
 
   gstin?: string;
   registrationType?: 'Registered' | 'Unregistered' | 'Composition';
@@ -72,7 +74,6 @@ export interface Ledger {
   tenureYears?: string;
   bankAccountNumber?: string;
   gstinPan?: string;
-  enableBankReconciliation?: boolean;
   bankName?: string;
   ifscCode?: string;
   branch?: string;

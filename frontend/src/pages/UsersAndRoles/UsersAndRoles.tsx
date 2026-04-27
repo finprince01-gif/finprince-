@@ -44,9 +44,10 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
     // Form states
     const [userForm, setUserForm] = useState({
         username: '',
+        email: '',
         password: '',
         phone: '',
-        is_active: false,
+        is_active: true,
         access_expiry: '',
         role_ids: [] as number[]
     });
@@ -174,6 +175,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
         setEditingUser(null);
         setUserForm({
             username: '',
+            email: '',
             password: '',
             phone: '',
             is_active: true,
@@ -187,6 +189,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
         setEditingUser(user);
         setUserForm({
             username: user.username,
+            email: user.email || '',
             password: '',
             phone: user.phone || '',
             is_active: user.is_active,
@@ -203,6 +206,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
             if (editingUser) {
                 await apiService.updateUser(editingUser.id, {
                     username: userForm.username,
+                    email: userForm.email || '',
                     phone: userForm.phone,
                     is_active: userForm.is_active,
                     access_expiry: userForm.access_expiry || null
@@ -395,6 +399,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, roles, loading, onCreateUser
                         <tr key={user.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-6 py-4">
                                 <div className="font-bold text-slate-900">{user.username}</div>
+                                {user.email && (
+                                    <div className="text-xs text-slate-500 mt-1">{user.email}</div>
+                                )}
                             </td>
                             <td className="px-6 py-4">
                                 <div className="flex flex-wrap gap-1">
@@ -487,6 +494,10 @@ const UserModal: React.FC<UserModalProps> = ({ user, form, roles, onFormChange, 
                     <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Username</label>
                         <input className="erp-input w-full" placeholder="john_doe" value={form.username} onChange={e => onFormChange({ ...form, username: e.target.value })} disabled={!!user} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Email Address</label>
+                        <input className="erp-input w-full" placeholder="john@example.com" type="email" value={form.email || ''} onChange={e => onFormChange({ ...form, email: e.target.value })} />
                     </div>
                 </div>
 

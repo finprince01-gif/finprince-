@@ -304,6 +304,7 @@ class VendorMasterBasicDetail(models.Model):
     
     # Metadata
     is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False, help_text="Soft delete flag")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.CharField(max_length=100, blank=True, null=True, help_text="Created by user")
@@ -319,6 +320,7 @@ class VendorMasterBasicDetail(models.Model):
             models.Index(fields=['tenant_id', 'vendor_name']),
             models.Index(fields=['email']),
             models.Index(fields=['pan_no']),
+            models.Index(fields=['is_deleted']),
         ]
         unique_together = [['tenant_id', 'vendor_code']]
 
@@ -438,56 +440,8 @@ class VendorMasterGSTDetails(models.Model):
         return None
 
 
-class VendorMasterProductService(models.Model):
-    """
-    Model for storing Vendor Products and Services.
-    Stores all items as a JSON array in a single row per vendor.
-    JSON structure: [{"hsn_sac_code": "", "item_code": "", "item_name": "",
-                       "supplier_item_code": "", "supplier_item_name": ""}]
-    """
-    
-    tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
-    vendor_basic_detail = models.OneToOneField(
-        VendorMasterBasicDetail,
-        on_delete=models.CASCADE,
-        related_name='product_services',
-        null=True,
-        blank=True,
-        help_text="Link to vendor basic details"
-    )
-    # All items stored as a JSON array
-    items = models.JSONField(
-        default=list,
-        help_text="JSON array of product/service items"
-    )
-    
-    # Metadata
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True, help_text="Created by user")
-    updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
-
-    class Meta:
-
-        db_table = 'vendors_vendormasterproductservice'
-        verbose_name = 'Vendor Master Product/Service'
-        verbose_name_plural = 'Vendor Master Products/Services'
-
-    def __str__(self):
-        count = len(self.items) if self.items else 0
-        return f"Products for vendor {self.vendor_basic_detail_id} ({count} items)"
-
-
 class VendorProductServiceItem(models.Model):
     """Normalized items for Vendor Master Product/Service"""
-    product_service = models.ForeignKey(
-        VendorMasterProductService,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='items_rel'
-    )
     hsn_sac_code = models.CharField(max_length=20, null=True, blank=True)
     item_code = models.CharField(max_length=100, null=True, blank=True)
     item_name = models.CharField(max_length=255, null=True, blank=True)
@@ -848,6 +802,8 @@ class VendorTransaction(models.Model):
     
     # Reference and Notes
     reference_number = models.CharField(max_length=100, null=True, blank=True)
+    reference_type = models.CharField(max_length=50, null=True, blank=True)
+    is_advance = models.BooleanField(default=False)
     notes = models.TextField(null=True, blank=True)
     
     # Additional Fields from Voucher for display
@@ -866,4 +822,3 @@ class VendorTransaction(models.Model):
     
     def __str__(self):
         return f"{self.transaction_number} - {self.transaction_type}"
-

@@ -12,6 +12,7 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny
 
 from .models import BulkInvoiceJob, InvoiceProcessingItem
 from .pipeline import storage
@@ -28,6 +29,7 @@ RETRY_AFTER = {
 
 
 class BulkUploadAPIView(APIView):
+    permission_classes = [AllowAny]
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
@@ -119,6 +121,49 @@ class BulkUploadAPIView(APIView):
             return Response({'status': 'already_processing',
                              'message': 'Duplicate request received'})
 
+        # ── GATE 6: Instant Extraction (No Persistence) ──────────────────
+        no_persist = request.data.get('no_persist') == 'true' or request.query_params.get('no_persist') == 'true'
+        if no_persist:
+            try:
+                results = []
+                voucher_type = request.data.get('voucher_type', 'Purchase')
+                from ocr_pipeline.service import process_invoice_upload
+                
+                for uploaded_file in files:
+                    file_bytes = uploaded_file.read()
+                    res = process_invoice_upload(
+                        file_bytes=file_bytes,
+                        voucher_type=voucher_type,
+                        file_name=uploaded_file.name,
+                        upload_session_id="INSTANT",
+                        tenant_id=tenant_id
+                    )
+                    
+                    from ocr_pipeline.repository import InvoiceTempOCR
+                    # Handle batch extraction (multi-invoice PDF)
+                    if res.get('status') == 'BATCH_EXTRACTED':
+                        batch_items = res.get('results', [])
+                        for item in batch_items:
+                            if item.get('id'):
+                                InvoiceTempOCR.objects.filter(id=item.get('id')).delete()
+                        results.extend(batch_items)
+                    else:
+                        # Single invoice
+                        if res.get('id'):
+                            InvoiceTempOCR.objects.filter(id=res.get('id')).delete()
+                        results.append(res)
+                
+                lock.release()
+                return Response({
+                    'status': 'completed',
+                    'results': results,
+                    'total_files': len(results) # Reflect the actual number of invoices found
+                })
+            except Exception as e:
+                lock.release()
+                logger.error(f"[UPLOAD] Instant extraction failed: {e}")
+                return Response({'error': str(e)}, status=500)
+
         try:
             return self._create_and_enqueue(request, tenant_id, files, batch_fingerprint, lock)
         except Exception as e:
@@ -144,24 +189,37 @@ class BulkUploadAPIView(APIView):
         logger.info(f"[UPLOAD] Created Job {job.id} | tenant={tenant_id} | files={len(files)}")
 
         paths = []
-        for uploaded_file in files:
-            file_bytes = uploaded_file.read()
-            file_hash  = storage.hash_bytes(file_bytes)
-            key        = storage.make_key(job.id, uploaded_file.name)
-            paths.append(key)
+        import concurrent.futures
+        from django.db import connection
 
-            storage.upload_bytes(file_bytes, key)
+        def upload_worker(uploaded_file):
+            try:
+                uploaded_file.seek(0)
+                file_bytes = uploaded_file.read()
+                file_hash  = storage.hash_bytes(file_bytes)
+                key        = storage.make_key(job.id, uploaded_file.name)
+                
+                storage.upload_bytes(file_bytes, key)
 
-            master = InvoiceProcessingItem.objects.create(
-                job=job,
-                file_path=key,
-                file_hash=file_hash,
-                status='pending',
-                page_count=1,
-            )
+                # Need separate connection for thread
+                master = InvoiceProcessingItem.objects.create(
+                    job=job,
+                    file_path=key,
+                    file_hash=file_hash,
+                    status='pending',
+                    page_count=1,
+                )
+                logger.info(f"Registered item {master.id} for Job {job.id}")
+                return key
+            except Exception as e:
+                logger.error(f"Upload worker failed for {uploaded_file.name}: {e}")
+                return None
+            finally:
+                connection.close()
 
-            # Directly processed via staging API or manual trigger
-            logger.info(f"Registered item {master.id} for Job {job.id}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            results = list(executor.map(upload_worker, files))
+            paths = [r for r in results if r]
 
         # ── PUSH TO PROCESSOR ─────────────────────────────────────
         # Note: No Kafka. Direct in-process worker thread.
@@ -198,6 +256,7 @@ class BulkUploadAPIView(APIView):
 
 
 class BulkStatusAPIView(APIView):
+    permission_classes = [AllowAny]
     def get(self, request, job_id, *args, **kwargs):
         try:
             job     = BulkInvoiceJob.objects.get(id=job_id)

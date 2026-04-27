@@ -6,46 +6,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
-// Hardcoded groups and ledgers for dropdown
-const hardcodedGroups = [
-  "Bank Accounts",
-  "Cash-in-Hand",
-  "Duties & Taxes",
-  "Provisions",
-  "Reserves & Surplus",
-  "Secured Loans",
-  "Sundry Creditors",
-  "Sundry Debtors",
-  "Unsecured Loans",
-  "Stock-in-Hand",
-  "Bank OD A/c"
-];
-
-const hardcodedLedgers = [
-  "Cash",
-  "HDFC Bank",
-  "Sales",
-  "Purchases",
-  "Consulting Income",
-  "CGST",
-  "SGST",
-  "IGST",
-  "Balamurugan Fabricators",
-  "Local Supplier",
-  "Global Tech Supplies",
-  "Local Customer",
-  "Prime Retail Customer",
-  "Rent Expense",
-  "Office Supplies",
-  "Owner Capital"
-];
 
 // Ledger Selector Component
 interface LedgerSelectorProps {
   selectedValue: string;
   onChange: (value: string) => void;
-  groups: string[];
-  ledgers: string[];
+  groups: LedgerGroupMaster[];
+  ledgers: Ledger[];
 }
 
 const LedgerSelector: React.FC<LedgerSelectorProps> = ({
@@ -60,12 +27,12 @@ const LedgerSelector: React.FC<LedgerSelectorProps> = ({
       onChange={(e) => onChange(e.target.value)}
       className="erp-select"
     >
-      <option value="">All Ledgers</option>
+      <option value="all">All Ledgers</option>
       <optgroup label="Groups">
-        {groups.map(g => <option key={g} value={`group:${g}`}>{g}</option>)}
+        {groups.map(g => <option key={g.id || g.name} value={`group:${g.name}`}>{g.name}</option>)}
       </optgroup>
       <optgroup label="Ledgers">
-        {ledgers.map(l => <option key={l} value={`ledger:${l}`}>{l}</option>)}
+        {ledgers.map(l => <option key={l.id || l.name} value={`ledger:${l.name}`}>{l.name}</option>)}
       </optgroup>
     </select>
   );
@@ -132,7 +99,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     }
   }, [availableReports, reportType]);
 
-  const [selectedLedger, setSelectedLedger] = useState<string>('');
+  const [selectedLedger, setSelectedLedger] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   // Drill-down: null = summary view (all ledgers list), string = detail view for that ledger
@@ -158,7 +125,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      if (reportType === 'LedgerReport' && selectedLedger) {
+      if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
         // Extract actual name if it has prefix
         const cleanName = selectedLedger.includes(':') ? selectedLedger.split(':')[1] : selectedLedger;
         params.append('ledger', cleanName);
@@ -973,18 +940,24 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
     let filtered = vouchers;
 
-    if (reportType === 'LedgerReport' && selectedLedger) {
+    if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
+      const [prefix, name] = selectedLedger.split(':');
+      
+      const filteredLedgers = prefix === 'group' 
+        ? ledgers.filter(l => l.group === name).map(l => l.name)
+        : [name];
+
       filtered = filtered.filter(v => {
         switch (v.type) {
           case 'Purchase':
           case 'Sales':
           case 'Payment':
           case 'Receipt':
-            return v.party === selectedLedger || ('account' in v && v.account === selectedLedger);
+            return filteredLedgers.includes(v.party) || ('account' in v && filteredLedgers.includes(v.account));
           case 'Contra':
-            return v.fromAccount === selectedLedger || v.toAccount === selectedLedger;
+            return filteredLedgers.includes(v.fromAccount) || filteredLedgers.includes(v.toAccount);
           case 'Journal':
-            return v.entries && Array.isArray(v.entries) && v.entries.some(e => e && e.ledger === selectedLedger);
+            return v.entries && Array.isArray(v.entries) && v.entries.some(e => e && filteredLedgers.includes(e.ledger));
           default:
             return false;
         }
@@ -1003,7 +976,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     }
 
     return filtered;
-  }, [vouchers, reportType, selectedLedger, startDate, endDate]);
+  }, [vouchers, reportType, selectedLedger, startDate, endDate, ledgers]);
 
   const getVoucherAmount = (v: Voucher) => {
     if ('total' in v && v.total != null) {
@@ -1242,7 +1215,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           break;
         case 'Journal':
           if (v.entries && Array.isArray(v.entries)) {
-            const entry = v.entries.find(e => e.ledger === selectedLedger);
+            const entry = v.entries.find(e => e.ledger === name);
             if (entry) {
               debit = Number(entry.debit) || 0;
               credit = Number(entry.credit) || 0;
@@ -1268,7 +1241,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         balanceType
       };
     });
-  }, [reportType, selectedLedger, filteredVouchers]);
+  }, [reportType, selectedLedger, filteredVouchers, entries, startDate, endDate, ledgers]);
 
   // ═══ LEDGER SUMMARY useMemo ════════════════════════════════════════════════
   const ledgerSummary = useMemo(() => {
@@ -1916,8 +1889,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 <LedgerSelector
                   selectedValue={selectedLedger}
                   onChange={setSelectedLedger}
-                  groups={hardcodedGroups}
-                  ledgers={hardcodedLedgers}
+                  groups={ledgerGroups}
+                  ledgers={ledgers}
                 />
               </div>
               <div className="min-w-[200px]">

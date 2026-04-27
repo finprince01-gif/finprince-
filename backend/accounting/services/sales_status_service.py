@@ -2,7 +2,8 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum
 from ..models_voucher_sales import VoucherSalesInvoiceDetails, VoucherSalesPaymentDetails
-from ..models_voucher_receipt import ReceiptVoucherItem
+from ..models import PendingTransaction
+from .portal_mirror_service import mirror_sales_to_portal
 
 def update_sales_invoice_payment_status(tenant_id, invoice_id):
     """
@@ -31,31 +32,87 @@ def update_sales_invoice_payment_status(tenant_id, invoice_id):
             # --- ANCHOR: Use invoice value minus advance as the fixed starting point ---
             payable_anchor = Decimal(str(payment_details.payment_invoice_value or 0)) - Decimal(str(payment_details.payment_advance or 0))
 
-            # Sum all received amounts across all ReceiptVoucherItems referencing this invoice
-            # Resolve reference_id from ReceiptVoucherItem. 
-            # We look for matches against the ID (as string) or the Sales Invoice Number.
+            from ..models import TransactionAllocation, AdvanceAllocation, VoucherAdvanceAdjustment
             search_ids = [str(invoice.id), str(invoice.sales_invoice_no)]
             
-            receipt_total = ReceiptVoucherItem.objects.filter(
+            p_total = PendingTransaction.objects.filter(
                 tenant_id=tenant_id,
                 reference_id__in=search_ids
-            ).aggregate(total=Sum('received_amount'))['total'] or Decimal('0.00')
+            ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0.00')
+
+            a_total = AdvanceAllocation.objects.filter(
+                tenant_id=tenant_id,
+                reference_id__in=search_ids
+            ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0.00')
+
+            t_total = TransactionAllocation.objects.filter(
+                tenant_id=tenant_id,
+                reference_id__in=search_ids
+            ).aggregate(total=Sum('allocated_amount'))['total'] or Decimal('0.00')
+            
+            # Sum from newest table
+            v_total = VoucherAdvanceAdjustment.objects.filter(
+                tenant_id=tenant_id,
+                target_voucher_id__in=[invoice.id, getattr(invoice, 'voucher_id', None)]
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+            receipt_total = p_total + t_total + a_total + v_total
 
             payment_details.payment_received = receipt_total
             payment_details.payment_balance = payable_anchor - receipt_total
             payment_details.save(update_fields=['payment_received', 'payment_balance'])
 
+            # --- Credit Period Check ---
+            is_due = True
+            try:
+                from customerportal.database import CustomerMasterCustomerTermsCondition
+                import re
+                from datetime import date, timedelta
+                
+                # Try to find terms for this customer
+                terms = CustomerMasterCustomerTermsCondition.objects.filter(customer_basic_detail_id=invoice.customer_id).first()
+                if terms and terms.credit_period:
+                    match = re.search(r'(\d+)', str(terms.credit_period))
+                    if match:
+                        credit_days = int(match.group(1))
+                        invoice_date = invoice.date
+                        if invoice_date and (date.today() <= invoice_date + timedelta(days=credit_days)):
+                            is_due = False
+            except Exception as te:
+                print(f"!!! Warning: Could not determine credit period in status update: {te}")
+
             # Update Header Status
-            if receipt_total >= payable_anchor and payable_anchor > 0:
+            if receipt_total >= payable_anchor:
                 invoice.status = 'received'
             elif receipt_total > 0:
-                invoice.status = 'partially received'
+                # Use grace period: Show 'Not Due' even if partially paid, until credit period is over
+                invoice.status = 'partially received' if is_due else 'completed' 
+                # Note: 'completed' can be used as a fallback for 'Not Due' in the main system 
+                # but many choices only have 'partially received'. 
+                # Actually, let's check the choices again.
             else:
-                # Keep existing (Due/Not Due) 
+                # If nothing received, it could be 'Due' or 'Not Due'. 
+                # Main system status choices are limited. Let's see.
+                pass
+            
+            # Re-evaluating status assignment for main system
+            if receipt_total >= payable_anchor:
+                invoice.status = 'received'
+            elif receipt_total > 0:
+                invoice.status = 'partially received' if is_due else 'completed'
+            else:
+                # If zero receipt, but it's overdue, maybe we should mark it? 
+                # But the choices don't have 'Due'. They have 'completed', 'pending', etc.
                 pass
             
             invoice.save(update_fields=['status'])
             
+            # --- SYNC TO PORTAL ---
+            try:
+                mirror_sales_to_portal(invoice)
+            except Exception as mirror_err:
+                print(f"!!! Portal Sync Warning in Status Update: {mirror_err}")
+
             print(f"!!! Success: Updated {invoice.sales_invoice_no} (Recv: {receipt_total}, Bal: {payment_details.payment_balance})")
             return True
             

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
+import { apiService } from '../services/api';
 
 interface SupplierItem {
     id: string;
@@ -16,6 +17,7 @@ interface CreateVendorModalProps {
         gstin: string;
         address: string;
         state: string;
+        vendor_category?: string;
         branch?: string;
         supplier_items?: Array<{
             supplierItemCode: string;
@@ -45,6 +47,12 @@ const buildInitialItems = (
     return [{ id: generateId(), supplierItemCode: '', supplierItemName: '', hsnSac: '' }];
 };
 
+// Default categories matching the backend's standard defaults
+const DEFAULT_CATEGORIES = [
+    "Raw Material", "Work in Progress", "Services", "Jobwork", "Stores and Spares",
+    "Packing Material", "Stock in Trade", "Fixed Assets", "Capital Goods", "Consumables"
+];
+
 const CreateVendorModal: React.FC<CreateVendorModalProps> = ({ onClose, onSave, initialData }) => {
     const [vendorName, setVendorName] = useState(initialData.vendor_name || '');
     const [gstin, setGstin] = useState(initialData.gstin || '');
@@ -52,9 +60,46 @@ const CreateVendorModal: React.FC<CreateVendorModalProps> = ({ onClose, onSave, 
     const [address, setAddress] = useState(initialData.address || '');
     const [state, setState] = useState(initialData.state || '');
     const [branch, setBranch] = useState(initialData.branch || '');
+    const [vendorCategory, setVendorCategory] = useState(initialData.vendor_category || '');
+    const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+
     const [supplierItems, setSupplierItems] = useState<SupplierItem[]>(
         buildInitialItems(initialData.supplier_items)
     );
+
+    // Fetch and format categories from backend
+    useEffect(() => {
+        apiService.getVendorCategories().then(res => {
+            const arr = Array.isArray(res) ? res : ((res as any).results || []);
+            
+            // 1. Build list of paths from DB records
+            const dbPaths = arr.map((item: any) => {
+                const parts = [item.category];
+                if (item.group) parts.push(item.group);
+                if (item.subgroup) parts.push(item.subgroup);
+                return parts.join(' > ');
+            }).filter(Boolean);
+
+            // 2. Merge with defaults
+            const allPaths = [...DEFAULT_CATEGORIES, ...dbPaths];
+
+            // 3. De-duplicate case-insensitively but preserve original casing
+            const uniquePaths: string[] = [];
+            const seen = new Set<string>();
+
+            allPaths.forEach(path => {
+                const lower = path.toLowerCase();
+                if (!seen.has(lower)) {
+                    seen.add(lower);
+                    uniquePaths.push(path);
+                }
+            });
+
+            setCategories(uniquePaths.sort((a, b) => a.localeCompare(b)));
+        }).catch(err => {
+            console.error("Failed to fetch vendor categories", err);
+        });
+    }, []);
 
     // Auto-update PAN whenever GSTIN changes
     useEffect(() => {
@@ -86,6 +131,7 @@ const CreateVendorModal: React.FC<CreateVendorModalProps> = ({ onClose, onSave, 
             address,
             state,
             branch,
+            vendor_category: vendorCategory,
             supplier_items: supplierItems.map(({ id, ...rest }) => rest)
         });
     };
@@ -161,7 +207,7 @@ const CreateVendorModal: React.FC<CreateVendorModalProps> = ({ onClose, onSave, 
                         />
                     </div>
 
-                    {/* State + Branch side by side */}
+                    {/* State + Branch + Category grid */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
@@ -182,6 +228,24 @@ const CreateVendorModal: React.FC<CreateVendorModalProps> = ({ onClose, onSave, 
                                 placeholder="e.g. Main Branch"
                             />
                         </div>
+                    </div>
+
+                    {/* Vendor Category */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Vendor Category <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            value={vendorCategory}
+                            onChange={e => setVendorCategory(e.target.value)}
+                            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                            required
+                        >
+                            <option value="">Select Category</option>
+                            {categories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
                     </div>
 
                     {/* ── Supplier Items Section ── */}

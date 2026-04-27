@@ -8,7 +8,6 @@ from .models_transaction import TransactionFile # pyre-fixme
 from .models_voucher_expense import VoucherExpense # pyre-fixme
 from .models_voucher_contra import VoucherContra # pyre-fixme
 from .models_voucher_journal import VoucherJournal # pyre-fixme
-from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink # pyre-fixme
 from .models_voucher_purchase import ( # pyre-fixme
     VoucherPurchaseSupplierDetails, 
     VoucherPurchaseSupplyForeignDetails, 
@@ -108,7 +107,9 @@ class MasterLedger(BaseModel):
         ('Unregistered', 'Unregistered'),
         ('Composition', 'Composition'),
     ]
-    name = models.CharField(max_length=255)
+    # Canonical ledger endpoint name stored in DB column `ledger_type`.
+    # Kept as `name` at ORM/API level for backward compatibility.
+    name = models.CharField(max_length=255, null=True, blank=True, db_column='ledger_type')
     group = models.CharField(max_length=255, null=True, blank=True, help_text="Ledger group name")
     
     # NEW: Proper group linking
@@ -120,7 +121,6 @@ class MasterLedger(BaseModel):
     sub_group_1 = models.CharField(max_length=255, null=True, blank=True)
     sub_group_2 = models.CharField(max_length=255, null=True, blank=True)
     sub_group_3 = models.CharField(max_length=255, null=True, blank=True)
-    ledger_type = models.CharField(max_length=255, null=True, blank=True)
     
     gstin = models.CharField(max_length=15, null=True, blank=True)
     registration_type = models.CharField(max_length=20, choices=REG_TYPE_CHOICES, null=True, blank=True)
@@ -144,7 +144,7 @@ class MasterLedger(BaseModel):
         max_length=50,
         null=True,
         blank=True,
-        unique=True,
+        unique=False,
         db_column='ledger_code',
         help_text="Auto-generated code based on hierarchy position"
     )
@@ -156,6 +156,21 @@ class MasterLedger(BaseModel):
         help_text="Stores answers to dynamic questions (e.g., opening balance, GSTIN, credit limit)"
     )
 
+    # Opening balance fields — these columns exist in the MySQL schema
+    # They must be declared here so Django includes them in INSERT statements
+    opening_balance = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=0.00,
+        help_text="Opening balance amount for this ledger"
+    )
+    opening_balance_type = models.CharField(
+        max_length=2,
+        default='Dr',
+        blank=True,
+        help_text="Opening balance type: 'Dr' or 'Cr'"
+    )
+
     # Auto-restored missing columns
     major_group = models.CharField(max_length=255, null=True, blank=True)
     financial_reporting = models.CharField(max_length=255, null=True, blank=True)
@@ -164,10 +179,22 @@ class MasterLedger(BaseModel):
     class Meta:
 
         db_table = 'master_ledgers'
-        unique_together = ('name', 'tenant_id')
+        unique_together = (
+            ('name', 'tenant_id'),
+            ('tenant_id', 'code'),
+        )
 
     def __str__(self):
-        return f"{self.name} ({self.group})"
+        return f"{self.name or '-'} ({self.group})"
+
+    @property
+    def ledger_type(self):
+        """Compatibility alias: logical ledger_type maps to canonical `name`."""
+        return self.name
+
+    @ledger_type.setter
+    def ledger_type(self, value):
+        self.name = value
 
 # class MasterVoucherConfig(BaseModel):
 #     name = models.CharField(max_length=255, default='__NUMBERING__')
@@ -272,7 +299,7 @@ class Voucher(BaseModel):
     amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     total = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
-    source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, bank_reconciliation)")
+    source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, ocr)")
     
     # Sales/Purchase specific
     invoice_no = models.CharField(max_length=50, null=True, blank=True)
@@ -298,11 +325,6 @@ class Voucher(BaseModel):
     party_customer_id = models.BigIntegerField(null=True, blank=True)
     party_vendor_id   = models.BigIntegerField(null=True, blank=True)
 
-    # Bank Reconciliation fields (for compatibility)
-    bank_reconciled        = models.BooleanField(default=False)
-    bank_reconcile_date    = models.DateField(null=True, blank=True)
-    bank_statement_id      = models.BigIntegerField(null=True, blank=True)
-    bank_reference_number  = models.CharField(max_length=100, null=True, blank=True)
 
     @property
     def pay_from(self): return self.account
@@ -365,6 +387,33 @@ class Voucher(BaseModel):
             models.Index(fields=['type', 'tenant_id', 'date']),
             models.Index(fields=['tenant_id', 'date']),
         ]
+
+class VoucherAdvanceAdjustment(BaseModel):
+    """
+    Dedicated table for tracking adjustments between an Advance and a Voucher (Invoice/Bill).
+    """
+    tenant_id = models.CharField(max_length=50, db_index=True)
+    # The source of the money (the Advance Voucher)
+    advance_voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='adjustments_out')
+    # The target consuming the money (the Invoice/Bill Voucher)
+    target_voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='adjustments_in')
+    
+    ref_no = models.CharField(max_length=150, db_index=True)
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    adjustment_date = models.DateField()
+    
+    # Metadata for reporting
+    customer_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    vendor_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    type = models.CharField(max_length=20, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'voucher_advance_adjustments'
+        unique_together = ('tenant_id', 'advance_voucher', 'target_voucher', 'ref_no')
+
+    def __str__(self):
+        return f"{self.ref_no}: {self.amount} ({self.advance_voucher.voucher_number} -> {self.target_voucher.voucher_number})"
 
 class JournalEntry(BaseModel):
     voucher_type = models.CharField(max_length=50)
@@ -898,11 +947,6 @@ class Transaction(BaseModel):
         null=True, blank=True
     )
     
-    # Bank Reconciliation
-    bank_reconciled = models.BooleanField(default=False)
-    bank_reconcile_date = models.DateField(null=True, blank=True)
-    bank_statement_id = models.BigIntegerField(null=True, blank=True)
-    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
     
     # NEW: Accounting alignment
     debit  = models.DecimalField(max_digits=15, decimal_places=2, default=0)

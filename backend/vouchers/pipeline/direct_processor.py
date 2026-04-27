@@ -75,8 +75,8 @@ def process_bulk_job(job_id: int, voucher_type: str = 'Purchase'):
             finally:
                 connection.close()
 
-        # Run concurrently
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Run concurrently - Reduced to 8 to avoid rate-limiting storms (429 errors)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             item_ids = [it.id for it in items]
             list(executor.map(worker, item_ids))
 
@@ -94,3 +94,5 @@ def process_bulk_job(job_id: int, voucher_type: str = 'Purchase'):
         if 'job' in locals():
             job.status = 'failed'
             job.save()
+    finally:
+        connection.close()

@@ -635,15 +635,20 @@ def _is_cash_or_bank_ledger(ledger):
         
     group_lower = ledger.group.lower().strip()
     
-    # Match common cash/bank keywords
-    keywords = ['cash', 'bank', 'od', 'cc', 'hand', 'balances', 'accounts']
+    # Match common cash/bank keywords safely
+    # We use space padding or specific checks to avoid matching 'cc' inside 'accounts'
+    group_words = group_lower.split()
     
-    # Strong matches for cash/bank groups
-    if any(k in group_lower for k in ['cash', 'bank', 'od', 'cc']):
-        # Safety check: avoid things like 'Bank Charges' or 'Cash Discount' which are usually Expenses
-        # But wait, if they are in Asset/Liability category they are likely accounts.
-        # For now, let's be inclusive but exclude known expense-like terms if needed.
-        if 'charges' in group_lower or 'discount' in group_lower:
+    # Check for specific isolated keywords
+    if any(k in group_words for k in ['cash', 'bank', 'od', 'cc']):
+        # Extra safety check: avoid known expense/purchase groups
+        if any(bad in group_lower for bad in ['charges', 'discount', 'purchase', 'direct']):
+            return False
+        return True
+    
+    # Fallback for combined strings like "bankaccounts" or "cashinhand"
+    if 'cash' in group_lower or 'bank' in group_lower:
+        if 'charges' in group_lower or 'discount' in group_lower or 'purchase' in group_lower:
             return False
         return True
     

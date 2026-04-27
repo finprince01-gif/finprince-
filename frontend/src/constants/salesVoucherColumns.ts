@@ -54,7 +54,7 @@ export const SALES_VOUCHER_COLUMNS: SalesVoucherColumn[] = [
     // TAB 1 — Invoice Details
     // ══════════════════════════════════════════════════════════════
     { label: 'Date', key: 'date', tab: 'Invoice Details', required: false, type: 'date' },
-    { label: 'Voucher Type Name', key: 'voucher_name', tab: 'Invoice Details', required: false, type: 'string' },
+    { label: 'Sales Invoice Series', key: 'voucher_name', tab: 'Invoice Details', required: false, type: 'string' },
     { label: 'Sales Invoice No.', key: 'sales_invoice_no', tab: 'Invoice Details', required: true, type: 'string' },
     { label: 'Outward Slip No.', key: 'outward_slip_no', tab: 'Invoice Details', required: false, type: 'string' },
     { label: 'Customer Name', key: 'customer_name', tab: 'Invoice Details', required: false, type: 'string' },
@@ -86,6 +86,7 @@ export const SALES_VOUCHER_COLUMNS: SalesVoucherColumn[] = [
 
     // Export / E-Commerce (conditional but included for completeness)
     { label: 'Export Type', key: 'export_type', tab: 'Invoice Details', required: false, type: 'string' },
+    { label: 'GST Export Type', key: 'gst_export_type', tab: 'Invoice Details', required: false, type: 'string' },
     { label: 'Port Code', key: 'port_code', tab: 'Invoice Details', required: false, type: 'string' },
     { label: 'Shipping Bill Number', key: 'shipping_bill_number', tab: 'Invoice Details', required: false, type: 'string' },
     { label: 'Shipping Bill Date', key: 'shipping_bill_date', tab: 'Invoice Details', required: false, type: 'date' },
@@ -95,12 +96,12 @@ export const SALES_VOUCHER_COLUMNS: SalesVoucherColumn[] = [
     // ══════════════════════════════════════════════════════════════
     // TAB 2 — Item & Tax Details
     // ══════════════════════════════════════════════════════════════
-    { label: 'Sales Order No.', key: 'sales_order_no', tab: 'Item & Tax Details', required: false, type: 'string' },
+    { label: 'Sales Order/Quotation No.', key: 'sales_order_no', tab: 'Item & Tax Details', required: false, type: 'string' },
     { label: 'Item Code', key: 'item_code', tab: 'Item & Tax Details', required: false, type: 'string' },
     { label: 'Item Name', key: 'item_name', tab: 'Item & Tax Details', required: false, type: 'string' },
     { label: 'HSN / SAC', key: 'hsn_sac', tab: 'Item & Tax Details', required: false, type: 'string' },
     { label: 'Quantity', key: 'qty', tab: 'Item & Tax Details', required: false, type: 'number' },
-    { label: 'UOM', key: 'uom', tab: 'Item & Tax Details', required: false, type: 'string' },
+    { label: 'UQC / UOM', key: 'uom', tab: 'Item & Tax Details', required: false, type: 'string' },
     { label: 'Alternate Unit', key: 'alternate_unit', tab: 'Item & Tax Details', required: false, type: 'string' },
     { label: 'Rate', key: 'item_rate', tab: 'Item & Tax Details', required: false, type: 'number' },
     { label: 'Taxable Value', key: 'taxable_value', tab: 'Item & Tax Details', required: false, type: 'number' },
@@ -110,7 +111,7 @@ export const SALES_VOUCHER_COLUMNS: SalesVoucherColumn[] = [
     { label: 'Cess', key: 'cess', tab: 'Item & Tax Details', required: false, type: 'number' },
     { label: 'Invoice Value', key: 'invoice_value', tab: 'Item & Tax Details', required: false, type: 'number' },
     { label: 'Sales Ledger', key: 'sales_ledger', tab: 'Item & Tax Details', required: false, type: 'string' },
-    { label: 'Item Narration', key: 'description', tab: 'Item & Tax Details', required: false, type: 'string' },
+    { label: 'ledger narration', key: 'description', tab: 'Item & Tax Details', required: false, type: 'string' },
 
     // ══════════════════════════════════════════════════════════════
     // TAB 2b — Foreign Currency (Item & Tax Details)
@@ -126,20 +127,21 @@ export const SALES_VOUCHER_COLUMNS: SalesVoucherColumn[] = [
     { label: 'FC - Rate (Foreign Currency)', key: 'fc_item_rate', tab: 'Foreign Currency (Item & Tax Details)', required: false, type: 'number' },
     { label: 'FC - Amount (Foreign Currency)', key: 'fc_invoice_value', tab: 'Foreign Currency (Item & Tax Details)', required: false, type: 'number' },
     { label: 'FC - Sales Ledger', key: 'fc_sales_ledger', tab: 'Foreign Currency (Item & Tax Details)', required: false, type: 'string' },
-    { label: 'FC - Item Narration', key: 'fc_description', tab: 'Foreign Currency (Item & Tax Details)', required: false, type: 'string' },
+    { label: 'FC - ledger narration', key: 'fc_description', tab: 'Foreign Currency (Item & Tax Details)', required: false, type: 'string' },
 
     // ══════════════════════════════════════════════════════════════
-    { label: 'Total Taxable Value', key: 'payment_taxable_value', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'Total CGST', key: 'payment_cgst', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'Total SGST / UTGST', key: 'payment_sgst', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'Total IGST', key: 'payment_igst', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'Total Cess', key: 'payment_cess', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'Taxable Value', key: 'payment_taxable_value', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'CGST', key: 'payment_cgst', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'SGST/UTGST', key: 'payment_sgst', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'IGST', key: 'payment_igst', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'Cess', key: 'payment_cess', tab: 'Payment Details', required: false, type: 'number' },
     { label: 'State Cess', key: 'payment_state_cess', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'Grand Total', key: 'payment_invoice_value', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'TDS (Income Tax)', key: 'payment_tds_income_tax', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'TDS (GST)', key: 'payment_tds_gst', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'Advance Adjusted', key: 'payment_advance', tab: 'Payment Details', required: false, type: 'number' },
-    { label: 'Net Payable', key: 'payment_payable', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'Invoice Value', key: 'payment_invoice_value', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'TDS/TCS Under Income Tax', key: 'payment_tds_income_tax', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'TDS/TCS Under GST', key: 'payment_tds_gst', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'Gross Amount Receivable', key: 'payment_gross_receivable', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'Advance', key: 'payment_advance', tab: 'Payment Details', required: false, type: 'number' },
+    { label: 'Payable', key: 'payment_payable', tab: 'Payment Details', required: false, type: 'number' },
     { label: 'Posting Note', key: 'posting_note', tab: 'Payment Details', required: false, type: 'string' },
     { label: 'Terms & Conditions', key: 'terms_conditions', tab: 'Payment Details', required: false, type: 'string' },
 

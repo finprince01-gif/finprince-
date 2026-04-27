@@ -68,10 +68,8 @@ class CustomJWTAuthentication(JWTAuthentication):
         # IMPORTANT: Ensure tenant_id is set on user object from token
         # This is crucial for tenant validation in flow layers
         token_tenant_id = validated_token.get('tenant_id')
-        if token_tenant_id and not hasattr(user, 'tenant_id'):
-            user.tenant_id = token_tenant_id
-        elif token_tenant_id and user.tenant_id != token_tenant_id:
-            # Update if token has different tenant_id (shouldn't happen, but safety check)
+        if token_tenant_id:
+            # Always set/override from token if present, as the token is the ground truth for this session
             user.tenant_id = token_tenant_id
 
         return user

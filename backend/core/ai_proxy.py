@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import base64
 import time
 import hashlib
@@ -177,12 +178,20 @@ rate_limiter = RateLimiter()
 
 def generate_cache_key(request_data: dict) -> str:
     """Generate cache key from request data"""
+    
+    # Crucial: Include image data hash if present to prevent collisions between different invoices
+    image_hash = None
+    if 'image_data' in request_data:
+        image_hash = hashlib.md5(str(request_data['image_data']).encode()).hexdigest()
+
     cacheable_data = json.dumps({
         'type': request_data.get('type'),
         'message': request_data.get('message', ''),
         'contextData': request_data.get('contextData', ''),
         'useGrounding': request_data.get('useGrounding', False),
-        'file_hash': request_data.get('file_hash')  # For invoice files
+        'file_hash': request_data.get('file_hash'),
+        'image_hash': image_hash,
+        'prompt': request_data.get('prompt', '') # Also include prompt to avoid mixing different workflows
     }, sort_keys=True)
     return hashlib.md5(cacheable_data.encode()).hexdigest()
 
@@ -378,17 +387,22 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     base_delay = 2
     api_key_used = api_key
     
-    # VALID MODELS (Updated for stability)
+    # VALID MODELS (Compatible with the 2026 environment)
     candidate_models = [
         'gemini-2.0-flash',
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-pro-latest'
+        'gemini-2.5-flash',
+        'gemini-3.1-flash-lite-preview'
     ]
 
     # Get public IP for debugging (Log once or occasionally)
     try:
         import urllib.request
-        public_ip = urllib.request.urlopen('https://api.ipify.org').read().decode('utf8')
+        # Cache IP for 10 minutes to avoid overhead
+        now = time.time()
+        if not hasattr(execute_with_retry, '_public_ip') or now - getattr(execute_with_retry, '_ip_time', 0) > 600:
+            execute_with_retry._public_ip = urllib.request.urlopen('https://api.ipify.org').read().decode('utf8')
+            execute_with_retry._ip_time = now
+        public_ip = execute_with_retry._public_ip
     except Exception:
         public_ip = "unknown"
 
@@ -397,8 +411,7 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     logger.info(f"AI Prompt Size: {len(prompt_str)} chars")
 
     for attempt in range(max_attempts):
-        # Initialize client with NO timeout (Let it use defaults)
-        # OR set to a very large value. We'll try None to avoid the 1s bug.
+        # Initialize client
         client = genai.Client(
             api_key=api_key_used,
             http_options=types.HttpOptions(timeout=None)
@@ -411,12 +424,15 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
                 logger.info(f"AI Call Attempt {attempt+1}: {model_name} (IP: {public_ip})")
                 
                 t_start = time.monotonic()
-                # We do NOT set http_options here to avoid overriding client defaults
+                
+                # Determine if we need AFC (Only for agentic chat)
+                is_agent = request_data.get('type') == 'agent'
+                
                 response = client.models.generate_content(
                     model=model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=not is_agent)
                     )
                 )
                 t_end = time.monotonic()
@@ -426,25 +442,44 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
                     logger.warning(f"AI returned empty response for {model_name}. Check safety filters.")
                     continue
                 
-                print("🧠 RAW AI RESPONSE START ----------------", flush=True)
-                print(response.text, flush=True)
-                print("🧠 RAW AI RESPONSE END ----------------", flush=True)
-                
                 logger.info(f"AI Response Status: SUCCESS | Model: {model_name} | Time: {time.monotonic() - t_start:.2f}s")
-                return response.text.strip()
+                
+                # Robust Extraction: Remove markdown blocks if present
+                clean_text = response.text.strip()
+                if "```json" in clean_text:
+                    clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean_text:
+                    clean_text = clean_text.split("```")[1].split("```")[0].strip()
+                
+                # BASIC JSON REPAIR (Safety Layer)
+                try:
+                    # Check if it's already valid JSON
+                    json.loads(clean_text)
+                except json.JSONDecodeError:
+                    # Attempt simple repairs
+                    # 1. Replace single quotes with double quotes (common AI error)
+                    repaired = re.sub(r"\'", '"', clean_text)
+                    # 2. Remove trailing commas before closing braces/brackets
+                    repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+                    try:
+                        json.loads(repaired)
+                        clean_text = repaired
+                        logger.info("Successfully repaired AI JSON output.")
+                    except:
+                        pass # If repair failed, return original and let the caller handle error
+                
+                return clean_text
 
             except exceptions.NotFound as e:
-                # 404 -> CONFIGURATION ERROR
-                logger.error(f"[ERROR] Configuration Error (404) for model {model_name}: {str(e)}")
-                # Log full response body if available
-                if hasattr(e, 'response'):
-                    logger.error(f"Response Body: {e.response.text if hasattr(e.response, 'text') else str(e.response)}")
-                # DO NOT retry others if it's a 404 (model name or config issue)
-                raise e
+                # 404 -> Model not found or not supported
+                logger.warning(f"[CONFIG] Model {model_name} not found or unsupported. Trying next candidate...")
+                last_error = e
+                continue
 
             except exceptions.ResourceExhausted as e:
-                # 429 -> RATE LIMIT
-                logger.warning(f"[RATE LIMIT] Rate Limit (429) for model {model_name}. Attempt {attempt+1}")
+                # 429 -> RATE LIMIT. Mark key as unhealthy so rotation picks a different one.
+                logger.warning(f"[RATE LIMIT] Key {api_key_used[:8]}... exhausted for {model_name}. Marking unhealthy.")
+                api_key_manager.mark_key_unhealthy(api_key_used)
                 last_error = e
                 continue
 
@@ -462,19 +497,15 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
 
             except Exception as e:
                 logger.error(f"[ERROR] Unexpected Error for {model_name}: {str(e)}")
-                with open("real_err.txt", "w", encoding="utf-8") as _dump_f:
-                    import traceback
-                    traceback.print_exc(file=_dump_f)
                 last_error = e
                 continue
         
         # If we get here, all models in candidate_models failed for this attempt
         if attempt < max_attempts - 1:
             # Check if we should retry based on error type
-            # Retry for rate limits, timeouts, and connection issues
             is_retryable = isinstance(last_error, (exceptions.ResourceExhausted, exceptions.DeadlineExceeded))
             
-            # Check for generic timeout/connection errors that might not be wrapped in google.api_core.exceptions
+            # Check for generic timeout/connection errors
             err_msg = str(last_error).lower()
             if "timeout" in err_msg or "handshake" in err_msg or "connection" in err_msg:
                 is_retryable = True
@@ -484,9 +515,10 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
                 logger.info(f"Retrying AI pipeline in {sleep_time}s due to service busy or timeout... (Retry count: {attempt+1})")
                 time.sleep(sleep_time)
                 
-                # Try switching key if rate limited or timeout
+                # Try switching key for the next attempt
                 new_key = api_key_manager.get_healthy_key()
                 if new_key and new_key != api_key_used:
+                    logger.info("Switching to fresh API key for retry attempt.")
                     api_key_used = new_key
                 continue
             else:

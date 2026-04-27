@@ -14,7 +14,7 @@ from .models import (
     InventoryOperationLocationChange, InventoryOperationProduction,
     InventoryOperationConsumption, InventoryOperationScrap,
     InventoryOperationOutward,
-    InventoryOperationNewGRN,
+    InventoryOperationNewGRN, InventoryOperationNewGRNItem,
     InventoryStockItem, StockMovement
 )
 from .serializers import (
@@ -164,20 +164,24 @@ class InventoryMasterGRNViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='next-number')
     def next_number(self, request, pk=None):
         """
-        Returns the next auto-generated Issue Slip number for this series from the master preview.
-        Exactly like GRN.
+        Returns the next auto-generated GRN number for this series from the master preview.
         """
         series = self.get_object()
-        return Response({'outward_slip_no': series.preview, 'series_name': series.name})
+        return Response({'grn_no': series.preview, 'series_name': series.name})
 
-def increment_issue_slip_series(tenant_id, series_name):
+def increment_issue_slip_series(tenant_id, series_name, series_id=None):
     """
     Utility to increment the preview number for an Issue Slip Series.
     """
-    if not series_name:
+    if not series_name and not series_id:
         return
     try:
-        series = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, name=series_name).first()
+        series = None
+        if series_id:
+            series = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, id=series_id).first()
+        elif series_name:
+            series = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, name=series_name).first()
+            
         if series and series.preview:
             match = re.search(r'(\d+)$', series.preview)
             if match:
@@ -299,7 +303,17 @@ class InventoryOperationJobWorkViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        return InventoryOperationJobWork.objects.filter(tenant_id=tenant_id)
+        queryset = InventoryOperationJobWork.objects.filter(tenant_id=tenant_id)
+        
+        operation_type = self.request.query_params.get('operation_type')
+        if operation_type:
+            queryset = queryset.filter(operation_type=operation_type)
+            
+        vendor_name = self.request.query_params.get('vendor_name')
+        if vendor_name:
+            queryset = queryset.filter(vendor_name=vendor_name)
+            
+        return queryset.order_by('-id')
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
@@ -563,8 +577,9 @@ class InventoryOperationOutwardViewSet(viewsets.ModelViewSet):
             instance = serializer.save(tenant_id=tenant_id)
             
             # Increment
+            series_id = self.request.data.get('issue_slip_series_id')
             series_name = self.request.data.get('issue_slip_series')
-            increment_issue_slip_series(tenant_id, series_name)
+            increment_issue_slip_series(tenant_id, series_name, series_id)
 
             # Record Movement
             items_data = self.request.data.get('items', [])
@@ -639,20 +654,25 @@ class InventoryOperationNewGRNViewSet(viewsets.ModelViewSet):
         instance = serializer.save(tenant_id=tenant_id)
         
         # Increment the preview number in the GRN master series
+        series_id = self.request.data.get('grn_series_id')
         series_name = self.request.data.get('grn_series_name')
-        if series_name:
+        series = None
+        if series_id:
+            series = InventoryMasterGRN.objects.filter(tenant_id=tenant_id, id=series_id).first()
+        elif series_name:
             series = InventoryMasterGRN.objects.filter(tenant_id=tenant_id, name=series_name).first()
-            if series and series.preview:
-                import re
-                match = re.search(r'(\d+)$', series.preview)
-                if match:
-                    num_str = match.group(1)
-                    num = int(num_str) + 1
-                    prefix = series.preview[:match.start()]
-                    series.preview = f"{prefix}{num:0{len(num_str)}d}"
-                else:
-                    series.preview = f"{series.preview}-1"
-                series.save()
+
+        if series and series.preview:
+            import re
+            match = re.search(r'(\d+)$', series.preview)
+            if match:
+                num_str = match.group(1)
+                num = int(num_str) + 1
+                prefix = series.preview[:match.start()]
+                series.preview = f"{prefix}{num:0{len(num_str)}d}"
+            else:
+                series.preview = f"{series.preview}-1"
+            series.save()
         
         # Record Stock Movement for GRN
         items_data = self.request.data.get('items', [])
@@ -722,17 +742,22 @@ class PendingGRNListView(generics.ListAPIView):
 
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
+        grn_type = self.request.query_params.get('grn_type', 'purchases')
         vendor_name = self.request.query_params.get('vendor_name')
+        customer_name = self.request.query_params.get('customer_name')
         
-        # 1. Get all Posted GRNs for this tenant
+        # 1. Base queryset for this tenant and status
         qs = InventoryOperationNewGRN.objects.filter(
             tenant_id=tenant_id, 
             status='Posted',
-            grn_type='purchases' # Explicitly fetch only Purchase-type GRNs
+            grn_type=grn_type
         )
 
         if vendor_name:
-            qs = qs.filter(vendor_name=vendor_name)
+            qs = qs.filter(vendor_name__iexact=vendor_name.strip())
+        
+        if customer_name:
+            qs = qs.filter(customer_name__iexact=customer_name.strip())
         
         # 2. Get list of GRN numbers already used in Purchase Vouchers
         used_grns = VoucherPurchaseSupplierDetails.objects.filter(
@@ -996,8 +1021,14 @@ class StockMovementSummaryViewSet(viewsets.ReadOnlyModelViewSet):
         item_code = request.query_params.get('itemCode')
         
         movements = StockMovement.objects.filter(tenant_id=tenant_id)
+        uom = ""
         if item_code:
             movements = movements.filter(item_code=item_code)
+            # Try to get UOM from StockItem or Master Item
+            from .models import InventoryStockItem
+            stock_item = InventoryStockItem.objects.filter(tenant_id=tenant_id, item_code=item_code).first()
+            if stock_item:
+                uom = stock_item.unit
             
         movements = movements.order_by('date', 'time')
         
@@ -1017,7 +1048,7 @@ class StockMovementSummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 'particulars': m.voucher_type,
                 'refNo': m.voucher_no,
                 'location': m.location,
-                'uom': '', # Can fetch from item if needed
+                'uom': uom,
                 'openingQty': opening,
                 'openingValue': 0, # Placeholder
                 'inwardQty': float(m.inward_qty),

@@ -14,11 +14,6 @@ class VoucherJournal(BaseModel):
     total_credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     narration = models.TextField(null=True, blank=True)
     
-    # Reconciliation Fields
-    bank_reconciled = models.BooleanField(default=False)
-    bank_reconcile_date = models.DateField(null=True, blank=True)
-    bank_statement_id = models.BigIntegerField(null=True, blank=True)
-    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
     
 
     class Meta:

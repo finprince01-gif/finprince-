@@ -31,10 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     { name: 'Settings', icon: 'settings' },
   ];
 
-  const displayItems = allNavItems.filter(item => {
-    if (item.name === 'Dashboard') return true;
-    return hasPageAccess(item.name);
-  });
+  const displayItems = allNavItems.filter(item => hasPageAccess(item.name));
 
   const usagePercent = Math.min(
     100,

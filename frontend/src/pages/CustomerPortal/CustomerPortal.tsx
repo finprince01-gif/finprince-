@@ -16,10 +16,12 @@ import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import SalesOrderList from './SalesOrderList';
 import SalesOrderViewModal from './SalesOrderViewModal';
-import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt, Check } from 'lucide-react';
+import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt, Check, Download } from 'lucide-react';
 import CustomerViewModal from './CustomerViewModal';
 import SalesGSTViewModal from './SalesGSTViewModal';
 import { formatDate } from '../../utils/formatting';
+import { BulkImportFeedbackModal } from '../../components/BulkImportFeedbackModal';
+import SearchableDropdown from '../../components/SearchableDropdown';
 
 type MainTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'Sales Quotation & Order' | 'Customer' | 'Long-term Contracts';
@@ -60,7 +62,7 @@ interface LedgerEntry {
     originalInv?: any;
     voucherNo?: string; // Own voucher number (e.g., REC0001)
     amount?: number;
-
+    is_advance?: boolean;
 }
 
 interface Category {
@@ -81,6 +83,38 @@ const ADDITIONAL_STATES: Record<string, { name: string; isoCode: string }[]> = {
         { name: 'Qeqqata', isoCode: 'QE' },
         { name: 'Sermersooq', isoCode: 'SM' },
     ]
+};
+
+// TDS Rates Master Data
+const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
+    'Section 194C - Individual/HUF': { tdsRate: '1%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF)' },
+    'Section 194C - Others': { tdsRate: '2%', penaltyRate: '20%', description: 'Payment to Contractors other than Individuals & HUF' },
+    'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
+    'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
+    'Section 194-I - Rent- Land, Building, Furniture & fitting': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & Fitting paid to any entity' },
+    'Section 194-I - Rent- Plant & Machinery, Equipment': { tdsRate: '10%', penaltyRate: '20%', description: 'Rent on Plant & Machinery, or Equipment paid to any entity' },
+    'Section 194J - Technical Services': { tdsRate: '2%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films' },
+    'Section 194J - Professional Services': { tdsRate: '10%', penaltyRate: '20%', description: 'Professional Services, Royalty from other than films, Non-Compete Fees, etc.' },
+    "Section 194J - Director's Remuneration": { tdsRate: '10%', penaltyRate: '20%', description: "Director's Remuneration (other than salary)" },
+    'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
+    'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
+    'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
+    'Section 194-IA': { tdsRate: '1%', penaltyRate: '20%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
+    'Section 194-IB': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
+    'Section 194-IC': { tdsRate: '10%', penaltyRate: '20%', description: 'Payment of monetary consideration under a specified Joint Development Agreements' },
+    'Section 194M': { tdsRate: '5%', penaltyRate: '20%', description: 'Payment exceeding Rs 50 Lakhs to contractors or professionals by Individuals & HUFs who are not subject to tax audit' },
+    'Section 194-O': { tdsRate: '1%', penaltyRate: '5%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
+    'Section 195': { tdsRate: 'Specify "Rate" & "Nature"', penaltyRate: '-', description: 'Any payment subject to tax made to a Non-Resident or Foreign Company' }
+};
+
+// TCS Rates Master Data
+const TCS_RATES_MASTER: { [key: string]: { tcsRate: string; penaltyRate: string; description: string } } = {
+    'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Scrap, Alcoholic Liquor, or Minerals' },
+    'Section 206C(1) - Sale of Tendu Leaves': { tcsRate: '5%', penaltyRate: '5%', description: 'Sale of Tendu Leaves' },
+    'Section 206C(1) - Sale of Forest Produce': { tcsRate: '2%', penaltyRate: '5%', description: 'Sale of Forest Produce (other than Tendu Leaves & Timber)' },
+    'Section 206C(1) - Sale of Timber': { tcsRate: '2%', penaltyRate: '5%', description: 'Sale of Timber obtained under a forest lease or by any mode' },
+    'Section 206C(1F) - Sale of Motor Vehicles': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Motor Vehicles exceeding Rs. 10 Lakhs' },
+    'Section 206C(1F) - Sale of Specified Luxury Goods': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Specified Luxury Goods (watches, art, bags, etc.) exceeding Rs. 10 Lakhs' },
 };
 
 const getAvailableStates = (countryCode: string) => {
@@ -386,6 +420,11 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         } catch (error) {
             handleApiError(error, 'Fetch Customers');
         }
+    };
+
+    const fetchFullCustomerById = async (customerId: number) => {
+        const response = await httpClient.get<any>(`/api/customerportal/customer-master/${customerId}/`);
+        return response;
     };
 
     const fetchStockItems = async () => {
@@ -1204,6 +1243,142 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         setActiveTab('Basic Details');
     };
 
+    const handleViewCustomer = async (customer: any) => {
+        try {
+            const fullCustomer = await fetchFullCustomerById(customer.id);
+            let resolvedCategoryName = '';
+            if (fullCustomer?.customer_category_name) {
+                resolvedCategoryName = fullCustomer.customer_category_name;
+            } else if (categories.length > 0 && fullCustomer?.customer_category) {
+                const cat = categories.find((c: Category) => c.id === fullCustomer.customer_category);
+                if (cat) resolvedCategoryName = cat.full_path || cat.category;
+            }
+            setViewCustomer({ ...fullCustomer, customer_category_name: resolvedCategoryName });
+        } catch (error) {
+            handleApiError(error, 'Fetch Customer Details');
+        }
+    };
+
+
+    const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
+    const downloadDropdownRef = React.useRef<HTMLDivElement>(null);
+
+    const [importSummary, setImportSummary] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(event.target as Node)) {
+                setIsDownloadDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const [isImporting, setIsImporting] = useState(false);
+
+    const handleCustomerExcelUploadFromModal = async (input: File | any[], isPreview: boolean = false) => {
+        setIsImporting(true);
+        try {
+            const formData = new FormData();
+            if (input instanceof File) {
+                formData.append('file', input);
+            } else {
+                // If it's an array, it's our JSON data from the Quick Fix feature
+                formData.append('data', JSON.stringify(input));
+            }
+
+            const response = await httpClient.post<any>(
+                `/api/customerportal/excel/upload/?dry_run=${isPreview}`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                }
+            );
+            
+            if (response.summary) {
+                // Ensure the summary contains the preview flag from the backend
+                setImportSummary({
+                    ...response.summary,
+                    is_preview: response.is_preview
+                });
+            } else {
+                showSuccess(response.message || 'Customers imported successfully!');
+                setIsImportModalOpen(false);
+            }
+            
+            if (!isPreview) {
+                fetchCustomers(); // Refresh the list only on actual save
+            }
+        } catch (error: any) {
+            handleApiError(error, 'Excel Upload');
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const handleCustomerExcelDownload = async (type: 'template' | 'export') => {
+        try {
+            const endpoint = type === 'template' 
+                ? '/api/customerportal/excel/template/' 
+                : '/api/customerportal/excel/export/';
+            
+            showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
+            
+            const response: any = await httpClient.get(endpoint, {}, {
+                responseType: 'blob'
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', type === 'template' ? 'customer_template.xlsx' : 'customers_export.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showSuccess(`${type === 'template' ? 'Template' : 'Excel'} downloaded successfully!`);
+        } catch (error: any) {
+            handleApiError(error, 'Excel Download');
+        }
+    };
+
+    const handleEditCustomerById = async (customer: any) => {
+        try {
+            const fullCustomer = await fetchFullCustomerById(customer.id);
+            handleEditCustomer(fullCustomer);
+        } catch (error) {
+            handleApiError(error, 'Fetch Customer For Edit');
+        }
+    };
+
+    const handleEditImportedCustomer = async (record: { id: number; name: string; code?: string }) => {
+        try {
+            const fullCustomer = await fetchFullCustomerById(record.id);
+            if (fullCustomer) {
+                // Close the modal first
+                setIsImportModalOpen(false);
+                // Open for editing
+                handleEditCustomer(fullCustomer);
+            }
+        } catch (error) {
+            handleApiError(error, 'Fetch Customer for Edit');
+        }
+    };
+
+    const handleDeleteCustomer = async (customerId: number) => {
+        if (!window.confirm('Are you sure you want to delete this customer?')) return;
+        try {
+            await httpClient.delete(`/api/customerportal/customers/${customerId}/`);
+            showSuccess('Customer deleted successfully!');
+            fetchCustomers();
+        } catch (error) {
+            handleApiError(error, 'Delete Customer');
+        }
+    };
+
     const filteredCustomers = (customers || []).filter(customer => {
         const name = customer.customer_name || customer.name || '';
         const code = customer.customer_code || customer.code || '';
@@ -1324,17 +1499,21 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Category</label>
-                                <select
-                                    value={customerFormData.customer_category}
-                                    onChange={(e) => handleCustomerFieldChange('customer_category', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 bg-white">
-                                    <option value="">Select Category</option>
-                                    {categories.map((cat) => (
-                                        <option key={cat.id} value={String(cat.id)}>
-                                            {cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')}
-                                        </option>
-                                    ))}
-                                </select>
+                                <SearchableDropdown
+                                    options={categories.map(cat => cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > '))}
+                                    value={categories.find(cat => String(cat.id) === customerFormData.customer_category)?.full_path || categories.find(cat => String(cat.id) === customerFormData.customer_category)?.category || customerFormData.customer_category || ''}
+                                    onChange={(val) => {
+                                        const selectedCat = categories.find(cat => (cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')) === val);
+                                        if (selectedCat) {
+                                            handleCustomerFieldChange('customer_category', String(selectedCat.id));
+                                        } else {
+                                            // Handle custom value - save as string directly
+                                            handleCustomerFieldChange('customer_category', val);
+                                        }
+                                    }}
+                                    placeholder="Select Category"
+                                    allowCustomValue={true}
+                                />
                             </div>
 
                             {/* Row 2 */}
@@ -1392,18 +1571,13 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Billing Currency</label>
-                                <select
+                                <SearchableDropdown
+                                    options={BILLING_CURRENCIES.map(curr => curr.code)}
                                     value={customerFormData.billing_currency}
-                                    onChange={(e) => handleCustomerFieldChange('billing_currency', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 bg-white"
-                                >
-                                    <option value="">Select Currency</option>
-                                    {BILLING_CURRENCIES.map((curr) => (
-                                        <option key={curr.code} value={curr.code}>
-                                            {curr.code} - {curr.name} ({curr.symbol})
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => handleCustomerFieldChange('billing_currency', val)}
+                                    placeholder="Select Currency"
+                                    allowCustomValue={true}
+                                />
                             </div>
 
                             {/* Radio Groups */}
@@ -3079,26 +3253,62 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         <div className="p-8">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-gray-900">Customer Management</h3>
-                <button
-                    onClick={() => {
-                        // Generate a new customer code when creating a new customer
-                        setCustomerFormData({
-                            customer_name: '',
-                            customer_code: `CUST-${Date.now().toString().slice(-6)}`,
-                            customer_category: '',
-                            pan_number: '',
-                            contact_person: '',
-                            email_address: '',
-                            contact_number: '',
-                            billing_currency: '',
-                            gst_tds_applicable: false
-                        });
-                        setView('create');
-                    }}
-                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
-                >
-                    <span>+</span> Create New Customer
-                </button>
+                <div className="flex gap-3">
+
+                    <div className="relative" ref={downloadDropdownRef}>
+                        <button 
+                            onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                            <Download className="w-4 h-4" /> Download
+                        </button>
+                        {isDownloadDropdownOpen && (
+                            <div className="absolute right-0 z-[100] mt-2 w-52 bg-white border border-gray-200 rounded-[4px] shadow-lg py-1">
+                                <button 
+                                    onClick={() => { handleCustomerExcelDownload('template'); setIsDownloadDropdownOpen(false); }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                    <Icon name="file-spreadsheet" className="w-4 h-4" /> Download Template
+                                </button>
+                                <button 
+                                    onClick={() => { handleCustomerExcelDownload('export'); setIsDownloadDropdownOpen(false); }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                    <Icon name="download" className="w-4 h-4" /> Export All Data
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => {
+                            setImportSummary(null);
+                            setIsImportModalOpen(true);
+                        }}
+                        className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                        <Icon name="upload" className="w-4 h-4" /> UPLOAD EXCEL
+                    </button>
+                    <button
+                        onClick={() => {
+                            // Generate a new customer code when creating a new customer
+                            setCustomerFormData({
+                                customer_name: '',
+                                customer_code: `CUST-${Date.now().toString().slice(-6)}`,
+                                customer_category: '',
+                                pan_number: '',
+                                contact_person: '',
+                                email_address: '',
+                                contact_number: '',
+                                billing_currency: '',
+                                gst_tds_applicable: false
+                            });
+                            setView('create');
+                        }}
+                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                    >
+                        <span>+</span> Create New Customer
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -3195,30 +3405,21 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                         <button
                                             className="text-indigo-600 hover:text-indigo-900 transition-colors"
                                             title="View"
-                                            onClick={() => {
-                                                // Enrich customer object with resolved category name
-                                                let resolvedCategoryName = '';
-                                                if (customer.customer_category_name) {
-                                                    resolvedCategoryName = customer.customer_category_name;
-                                                } else if (categories.length > 0 && customer.customer_category) {
-                                                    const cat = categories.find((c: Category) => c.id === customer.customer_category);
-                                                    if (cat) resolvedCategoryName = cat.full_path || cat.category;
-                                                }
-                                                setViewCustomer({ ...customer, customer_category_name: resolvedCategoryName });
-                                            }}
+                                            onClick={() => handleViewCustomer(customer)}
                                         >
                                             <Eye className="w-5 h-5" />
                                         </button>
                                         <button
                                             className="text-blue-600 hover:text-blue-900 transition-colors"
                                             title="Edit"
-                                            onClick={() => handleEditCustomer(customer)}
+                                            onClick={() => handleEditCustomerById(customer)}
                                         >
                                             <Pencil className="w-5 h-5" />
                                         </button>
                                         <button
                                             className="text-red-600 hover:text-red-900 transition-colors"
                                             title="Delete"
+                                            onClick={() => handleDeleteCustomer(customer.id)}
                                         >
                                             <Trash2 className="w-5 h-5" />
                                         </button>
@@ -3241,7 +3442,36 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 />
             )}
 
-
+            {/* Import Feedback Modal */}
+            <BulkImportFeedbackModal 
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                summary={importSummary}
+                title="Customer Bulk Import"
+                onEditImported={handleEditImportedCustomer}
+                onUpload={handleCustomerExcelUploadFromModal}
+                isProcessing={isImporting}
+                dropdownOptions={{
+                    'Category': categories.map(c => ({ label: c.category, value: c.category })),
+                    'Billing Currency': [
+                        { label: 'Indian Rupee (INR)', value: 'INR' },
+                        { label: 'US Dollar (USD)', value: 'USD' },
+                        { label: 'Euro (EUR)', value: 'EUR' },
+                        { label: 'British Pound (GBP)', value: 'GBP' }
+                    ],
+                    'State': getAvailableStates('IN').map(s => ({ label: s.name, value: s.name })),
+                    'Country': [
+                        { label: 'India', value: 'India' },
+                        { label: 'United States', value: 'United States' },
+                        { label: 'United Kingdom', value: 'United Kingdom' }
+                    ],
+                    'UOM': units.map(u => ({ label: u.symbol || u.name, value: u.symbol || u.name })),
+                    'Item Code': stockItems.map(i => ({ label: i.code, value: i.code, full: i })),
+                    'Item Name': stockItems.map(i => ({ label: i.name, value: i.name, full: i })),
+                    'TDS Section': Object.keys(TDS_RATES_MASTER).map(s => ({ label: s, value: s })),
+                    'TCS Section': Object.keys(TCS_RATES_MASTER).map(s => ({ label: s, value: s }))
+                }}
+            />
         </div>
     );
 };
@@ -5852,10 +6082,34 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
         try {
             const [salesData, transactionsData] = await Promise.all([
                 httpClient.get<any[]>(`/api/voucher-sales-new/?show_all=true`),
-                httpClient.get<any[]>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
+                httpClient.get<any>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
             ]);
 
-            const customerInvoices = salesData.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
+            let ledgerEntriesByLedger: any[] = [];
+            if (customer.ledger_id) {
+                try {
+                    const ledgerData = await httpClient.get<any[]>(`/api/allocations/ledger/${customer.ledger_id}/entries/`);
+                    if (Array.isArray(ledgerData)) {
+                        ledgerEntriesByLedger = ledgerData;
+                    }
+                } catch (ledgerErr) {
+                    console.warn('Ledger fallback fetch failed:', ledgerErr);
+                }
+            }
+
+            const normalize = (v: any) => String(v ?? '').trim().toLowerCase();
+            const selectedCustomerId = customer.id?.toString();
+            const selectedCustomerName = normalize(customer.name);
+
+            const customerInvoices = (salesData || []).filter(inv => {
+                const byId =
+                    selectedCustomerId &&
+                    inv?.customer_id !== null &&
+                    inv?.customer_id !== undefined &&
+                    inv.customer_id.toString() === selectedCustomerId;
+                const byName = selectedCustomerName && normalize(inv?.customer_name) === selectedCustomerName;
+                return Boolean(byId || byName);
+            });
 
             const invoiceEntries: LedgerEntry[] = customerInvoices.map((inv: any) => {
                 const creditPeriod = parseInt(customer.credit_period || '0', 10);
@@ -5874,14 +6128,12 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     referenceNo: inv.sales_invoice_no,
                     ledger: 'Sales',
                     status: (() => {
-                        const total_val = parseFloat(inv.payment_details?.payment_invoice_value || 0);
-                        const balance_val = parseFloat(inv.payment_details?.payment_balance ?? total_val);
-                        if (inv.status?.toLowerCase() === 'received' || (balance_val <= 0 && total_val > 0)) return 'Received';
-                        if (inv.status?.toLowerCase() === 'partially received' || (balance_val < total_val && balance_val > 0)) return 'Partially Received';
-                        if (inv.posting_status === 'POSTED') {
-                            return diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due');
-                        }
-                        return 'Not Utilized';
+                        // NOTE: payment_balance defaults to 0 in DB, so we CANNOT use it to detect 'Received'.
+                        // The processedEntries refBalances logic will upgrade status to 'Received'/'Partially Received'
+                        // based on actual receipt transactions with matching referenceNo.
+                        // Here we only set the due-date status.
+                        // Any voucher showing in the ledger should show its aging status if it's a Sales invoice
+                        return diffDays > creditPeriod ? 'Due' : (diffDays === creditPeriod ? 'Due Today' : 'Not Due');
                     })() as SalesStatus,
                     debit: parseFloat(inv.payment_details?.payment_invoice_value || 0),
                     credit: 0,
@@ -5893,7 +6145,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 };
             });
 
-            const transactionEntries: LedgerEntry[] = (transactionsData || []).map((t: any) => {
+            const allTransactions = Array.isArray(transactionsData) ? transactionsData : (transactionsData?.allTransactions || []);
+            const transactionEntries: LedgerEntry[] = (allTransactions || []).map((t: any) => {
                 const rawType = t.transaction_type?.toLowerCase() || '';
                 let transType = 'Sales';
                 if (rawType.includes('receipt')) transType = 'Receipt';
@@ -5902,32 +6155,46 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 else if (rawType.includes('debit')) transType = 'Debit Note';
                 else if (rawType.includes('journal')) transType = 'Journal';
 
-                // For customers, a 'Payment' (refund) is a Debit, and a 'Receipt' is a Credit.
-                // A 'Credit Note' acts like a receipt (Credit), 'Debit Note' acts like sales (Debit).
                 let d = parseFloat(t.debit || 0);
                 let c = parseFloat(t.credit || 0);
 
-                // Fallbacks in case debit/credit wasn't properly categorized by backend
                 if ((transType === 'Payment' || transType === 'Debit Note') && c > 0 && d === 0) {
-                    d = c;
-                    c = 0;
+                    d = c; c = 0;
                 } else if ((transType === 'Receipt' || transType === 'Credit Note') && d > 0 && c === 0) {
-                    c = d;
-                    d = 0;
+                    c = d; d = 0;
                 }
 
-                const creditPeriod = parseInt(customer.credit_period || '0', 10);
-                const invDate = new Date(t.date);
-                const today = new Date();
-                const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-                const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                const diffTime = d2.getTime() - d1.getTime();
-                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                const isDue = diffDays > creditPeriod;
+                let finalStatus: string;
+                if (transType === 'Sales' || rawType === 'invoice') {
+                    const paidAmt = parseFloat(t.paid_amount || 0);
+                    const totalAmt = parseFloat(t.total_amount || t.amount || 0);
+                    const isFullyPaid = paidAmt >= totalAmt && totalAmt > 0;
+                    const isPartiallyPaid = paidAmt > 0 && paidAmt < totalAmt;
 
-                let finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending')
-                    ? t.payment_status
-                    : (transType === 'Receipt' ? 'Not Utilized' : (transType === 'Sales' ? (isDue ? 'Due' : 'Not Due') : 'Not Due'));
+                    if (isFullyPaid || t.due_status === 'Paid') {
+                        finalStatus = 'Received';
+                    } else {
+                        // Check credit period even if partially paid
+                        const cp = parseInt(customer.credit_period || '0', 10);
+                        const invDate = new Date(t.date);
+                        const today = new Date();
+                        const diffDays = Math.floor((today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
+                        
+                        if (diffDays > cp) {
+                            finalStatus = isPartiallyPaid || t.due_status === 'Partially Received' ? 'Partially Received' : 'Due';
+                        } else {
+                            finalStatus = 'Not Due';
+                        }
+                    }
+                } else if (transType === 'Receipt' || transType === 'Credit Note') {
+                    const paidAmt = parseFloat(t.paid_amount || 0);
+                    const totalAmt = parseFloat(t.total_amount || t.amount || 0);
+                    if (paidAmt >= totalAmt && totalAmt > 0) finalStatus = 'Utilized';
+                    else if (paidAmt > 0) finalStatus = 'Partially Utilized';
+                    else finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending') ? t.payment_status : 'Not Utilized';
+                } else {
+                    finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending') ? t.payment_status : 'Not Due';
+                }
 
                 return {
                     id: `T-${t.id}`,
@@ -5948,7 +6215,56 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 };
             });
 
-            setLedgerEntries([...invoiceEntries, ...transactionEntries]);
+            const fallbackTransactionEntries: LedgerEntry[] = (ledgerEntriesByLedger || [])
+                .filter((row: any) => row && row.voucher_type && String(row.voucher_type).toLowerCase() !== 'opening balance')
+                .map((row: any) => {
+                    const rawType = String(row.voucher_type || '').toLowerCase();
+                    let transType = 'Sales';
+                    if (rawType.includes('receipt')) transType = 'Receipt';
+                    else if (rawType.includes('payment')) transType = 'Payment';
+                    else if (rawType.includes('credit')) transType = 'Credit Note';
+                    else if (rawType.includes('debit')) transType = 'Debit Note';
+                    else if (rawType.includes('journal')) transType = 'Journal';
+                    else if (rawType.includes('contra')) transType = 'Contra';
+
+                    return {
+                        id: `L-${row.id}`,
+                        date: row.date,
+                        postFrom: transType as TransactionType,
+                        referenceNo: row.voucher_number || row.narration || 'N/A',
+                        ledger: transType,
+                        status: 'Not Due' as SalesStatus,
+                        debit: parseFloat(row.debit || 0),
+                        credit: parseFloat(row.credit || 0),
+                        runningBalance: 0,
+                        posting_status: 'POSTED',
+                        originalInv: row,
+                        voucherNo: row.voucher_number || row.id?.toString(),
+                        amount: parseFloat(row.debit || 0) + parseFloat(row.credit || 0)
+                    };
+                })
+                .filter((entry: LedgerEntry) => entry.postFrom !== 'Sales');
+
+            const dedupeKey = (entry: LedgerEntry) => [
+                entry.postFrom,
+                (entry.voucherNo || '').toString().toLowerCase(),
+                entry.date || '',
+                Number(entry.debit || 0).toFixed(2),
+                Number(entry.credit || 0).toFixed(2)
+            ].join('|');
+
+            const mergedTransactions: LedgerEntry[] = [];
+            const seen = new Set<string>();
+
+            [...invoiceEntries, ...transactionEntries, ...fallbackTransactionEntries].forEach((entry) => {
+                const key = dedupeKey(entry);
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    mergedTransactions.push(entry);
+                }
+            });
+
+            setLedgerEntries(mergedTransactions);
         } catch (err: any) {
             console.error('Failed to fetch ledger data:', err);
             setError(err?.message || 'Unable to connect to the server.');
@@ -5961,7 +6277,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     useEffect(() => {
 
         fetchLedgerData();
-    }, [customer.id]);
+    }, [customer.id, customer.ledger_id, customer.name, customer.credit_period]);
 
     const handleProceedAllocation = async (selectedAdvance: any, invoiceRef: string) => {
         try {
@@ -5973,7 +6289,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             // Update the transaction's reference_number to match the invoice reference
             await httpClient.patch(`/api/customerportal/transactions/${transId}/`, {
                 reference_number: invoiceRef,
-                payment_status: 'utilized'
+                payment_status: 'Utilized'
             });
 
             showSuccess(`Successfully allocated ${selectedAdvance.voucherNo} to ${invoiceRef}`);
@@ -6017,15 +6333,26 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 const ref = entry.referenceNo?.trim()?.toLowerCase();
                 if (ref && refBalances[ref]) {
                     const { total, paid } = refBalances[ref];
-                    
+
                     // Use a small epsilon for float comparison
                     const totalRounded = Math.round((total || 0) * 100);
                     const paidRounded = Math.round((paid || 0) * 100);
 
+                    const cp = parseInt(customer.credit_period || '0', 10);
+                    const invDate = new Date(entry.date);
+                    const todayD = new Date();
+                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                    const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+                    const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+
                     if (paidRounded >= totalRounded && totalRounded > 0) {
                         updatedStatus = 'Received';
-                    } else if (paidRounded > 0) {
-                        updatedStatus = 'Partially Received';
+                    } else if (diffDays > cp) {
+                        // After credit period
+                        updatedStatus = (paidRounded > 0) ? 'Partially Received' : 'Due';
+                    } else {
+                        // Within credit period
+                        updatedStatus = 'Not Due';
                     }
                 }
             }
@@ -6171,9 +6498,12 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
         // Find exclusively pure unutilized or generic advance receipts for this customer (omitting those already allocated or with custom advance references)
         const advances = (ledgerEntries || []).filter(e =>
             e.postFrom === 'Receipt' &&
-            (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced') &&
-            (!e.originalInv?.reference_number || e.originalInv.reference_number.toUpperCase() === 'ADVANCE' || e.originalInv.reference_number.trim() === '')
-
+            // Must be an advance/unutilized type
+            (e.status === 'Not Utilized' || e.status === 'Partially Utilized' || e.status === 'Advance' || e.status === 'Partially Advanced' || e.is_advance) &&
+            // AND must NOT have an invoice reference yet
+            (!e.originalInv?.reference_number ||
+                ['ADVANCE', '', '-', 'N/A'].includes(e.originalInv.reference_number.toUpperCase().trim())
+            )
         );
 
         return (
@@ -6233,8 +6563,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                     key={idx}
                                                     onClick={() => setSelectedAdvance(adv)}
                                                     className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedAdvance?.id === adv.id
-                                                            ? 'bg-indigo-50/50'
-                                                            : ''
+                                                        ? 'bg-indigo-50/50'
+                                                        : ''
                                                         }`}
                                                 >
                                                     <td className="px-4 py-3">
@@ -6303,8 +6633,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                         onClose();
                                     }}
                                     className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAdvance
-                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
-                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
                                         }`}
                                 >
                                     Proceed Allocation
@@ -6347,9 +6677,12 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
 
             // Process groups and sort by source date
             const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
-                const dateA = groups[aRef][0]?.date || '0000-00-00';
-                const dateB = groups[bRef][0]?.date || '0000-00-00';
-                return new Date(dateB).getTime() - new Date(dateA).getTime();
+                const firstA = groups[aRef][0];
+                const firstB = groups[bRef][0];
+                const dDiff = new Date(firstA?.date || 0).getTime() - new Date(firstB?.date || 0).getTime();
+                if (dDiff !== 0) return dDiff;
+                // Within same date, maintain chronological order via ID
+                return parseInt(firstA?.id?.toString().replace('t-', '') || '0') - parseInt(firstB?.id?.toString().replace('t-', '') || '0');
             });
 
             sortedGroupRefs.forEach(ref => {
@@ -6358,7 +6691,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 // If it's a standalone group
                 if (ref.startsWith('standalone-')) {
                     const entry = entries[0];
-                    if (!['Sales', 'Debit Note'].includes(entry.postFrom)) return;
+                    if (entry.postFrom !== 'Sales') return;
 
                     const amt = (entry.debit || 0) - (entry.credit || 0);
                     rows.push({
@@ -6378,13 +6711,19 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 }
 
                 // For linked groups
-                const sources = entries.filter(e => ['Sales', 'Debit Note'].includes(e.postFrom))
-                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                const sources = entries.filter(e => ['Sales'].includes(e.postFrom))
+                    .sort((a, b) => {
+                        const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+                        return d !== 0 ? d : parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
+                    });
 
                 if (sources.length === 0) return;
 
                 const applications = entries.filter(e => ['Receipt', 'Credit Note', 'Journal'].includes(e.postFrom))
-                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                    .sort((a, b) => {
+                        const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+                        return d !== 0 ? d : parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
+                    });
 
                 // Combine all sources in the group for one span
                 const totalSourceAmt = sources.reduce((sum, s) => sum + ((s.debit || 0) - (s.credit || 0)), 0);
@@ -6411,7 +6750,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     const totalAppAmtRounded = Math.round(totalAppAmt * 100);
                     const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
                         ? 'Received'
-                        : (totalAppAmtRounded > 0 ? 'Partially Received' : firstSource.status);
+                        : (totalAppAmtRounded > 0
+                            ? (firstSource.status === 'Not Due' ? 'Not Due' : 'Partially Received')
+                            : firstSource.status);
 
                     applications.forEach((app, appIdx) => {
                         const appAmt = (app.credit || 0) - (app.debit || 0);
@@ -6470,8 +6811,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
                                                 <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${row.postedFrom === 'Sales'
-                                                        ? 'bg-blue-50 text-blue-600 border-blue-100'
-                                                        : 'bg-amber-50 text-amber-600 border-amber-100'
+                                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                                    : 'bg-amber-50 text-amber-600 border-amber-100'
                                                     }`}>
                                                     {row.postedFrom}
                                                 </span>
@@ -6494,9 +6835,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                         <>
                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
                                                 <span className={`px-2 py-0.5 rounded text-[11px] font-bold border uppercase tracking-tighter shadow-sm ${row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'received' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                        row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'partially due' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                                            row.status?.toLowerCase() === 'due' || row.status?.toLowerCase() === 'due today' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                                                                'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                    row.status?.toLowerCase() === 'partially paid' || row.status?.toLowerCase() === 'partially received' || row.status?.toLowerCase() === 'partially due' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                        row.status?.toLowerCase() === 'due' || row.status?.toLowerCase() === 'due today' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                            'bg-indigo-50 text-indigo-600 border border-indigo-100'
                                                     }`}>
                                                     {row.status}
                                                 </span>
@@ -6692,8 +7033,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                 <button
                                     onClick={() => setViewMode(viewMode === 'allocation' ? 'invoice-wise' : 'allocation')}
                                     className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-all shadow-sm ${viewMode === 'allocation'
-                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
                                         }`}
                                 >
                                     ALLOCATION VIEW
@@ -6776,9 +7117,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
                                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Status</th>
-                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Running Balance</th>
                                                     <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
-                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Credit (₹)</th>
+                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Credit (₹)</th>
+                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
                                                 </tr>
                                             </thead>
                                         ) : (
@@ -6886,11 +7227,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                     </th>
                                                     <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-end relative text-gray-400">
-                                                            <span>Running Balance</span>
-                                                        </div>
-                                                    </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
-                                                        <div className="flex items-center justify-end relative text-gray-400">
                                                             <span>Debit</span>
                                                             <div className="ml-2">
                                                                 <Filter
@@ -6918,7 +7254,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                             </div>
                                                         </div>
                                                     </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-end relative text-gray-400">
                                                             <span>Credit</span>
                                                             <div className="ml-2">
@@ -6947,6 +7283,11 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                             </div>
                                                         </div>
                                                     </th>
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                                        <div className="flex items-center justify-end relative text-gray-400">
+                                                            <span>Running Balance</span>
+                                                        </div>
+                                                    </th>
                                                 </tr>
                                             </thead>
                                         )}
@@ -6967,7 +7308,11 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-50">
                                                                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
                                                                 </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900 border-r border-gray-50">
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold border-r border-gray-50">
+                                                                    {entry.credit !== 0 ? `₹${entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
                                                                     {entry.runningBalance === 0 ? '-' : (
                                                                         <span>
                                                                             {formatCurrency(Math.abs(entry.runningBalance))}
@@ -6976,10 +7321,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                             </span>
                                                                         </span>
                                                                     )}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold">
-                                                                    {entry.credit !== 0 ? `₹${entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                                 </td>
                                                             </tr>
                                                             {/* BREAKDOWN ROWS */}
@@ -7001,7 +7342,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                     </tr>
 
@@ -7033,7 +7374,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                                 <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         );
@@ -7055,7 +7396,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
                                                                         <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                     </tr>
 
@@ -7113,7 +7454,9 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-semibold">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">
                                                                 {entry.runningBalance === 0 ? '-' : (
                                                                     <span>
                                                                         {formatCurrency(Math.abs(entry.runningBalance))}
@@ -7123,8 +7466,6 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                                     </span>
                                                                 )}
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-medium">{formatCurrency(entry.credit)}</td>
                                                         </tr>
                                                     )}
                                                 </React.Fragment>
@@ -7139,9 +7480,10 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                         </tbody>
                                         <tfoot className="bg-gray-50 font-semibold">
                                             <tr>
-                                                <td colSpan={6} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
+                                                <td colSpan={5} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200"></td>
                                             </tr>
                                         </tfoot>
                                     </table>

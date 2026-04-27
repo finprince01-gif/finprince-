@@ -14,7 +14,6 @@ from .serializers_payment import (
     VoucherPaymentBulkSerializer,
     AdvancePaymentSerializer
 )
-from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink  # type: ignore
 from django.utils import timezone  # type: ignore
 from django.db import transaction as db_transaction  # type: ignore
 import datetime
@@ -204,83 +203,15 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
 
     def create(self, request, *args, **kwargs):
-        bank_transaction_id = request.data.get('bank_transaction_id')
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         with db_transaction.atomic():
             self.perform_create(serializer)
-            voucher_record = serializer.instance
-            accounting_voucher_id = getattr(
-                voucher_record, '_accounting_voucher_id', voucher_record.id
-            )
-
-            # Link to bank transaction if ID provided
-            reconciliation_link_created = False
-            if bank_transaction_id:
-                try:
-                    tenant_id = (
-                        self.request.user.branch_id
-                        if hasattr(self.request.user, 'tenant_id')
-                        else None
-                    )
-                    st_txn = BankStatementTransaction.objects.get(
-                        id=bank_transaction_id, tenant_id=tenant_id
-                    )
-
-                    link, created = BankReconciliationLink.objects.get_or_create(
-                        bank_transaction=st_txn,
-                        defaults=dict(
-                            tenant_id=tenant_id,
-                            voucher_id=accounting_voucher_id,
-                            voucher_type='payment',
-                            reconciliation_type='manual',
-                            reconciliation_date=datetime.date.today(),
-                            reconciliation_status='Reconciled',
-                            match_method='manual_create',
-                            confidence_score=100,
-                            cheque_number=st_txn.cheque_number,
-                            reconciled_at=timezone.now(),
-                        ),
-                    )
-                    if not created:
-                        link.voucher_id = accounting_voucher_id
-                        link.voucher_type = 'payment'
-                        link.reconciliation_type = 'manual'
-                        link.reconciliation_date = datetime.date.today()
-                        link.reconciliation_status = 'Reconciled'
-                        link.match_method = 'manual_create'
-                        link.confidence_score = 100
-                        link.cheque_number = st_txn.cheque_number
-                        link.reconciled_at = timezone.now()
-                        link.save()
-
-                    st_txn.status = 'MANUAL_MATCHED'
-                    st_txn.matched_voucher_id = accounting_voucher_id
-                    st_txn.reconciled_at = timezone.now()
-                    st_txn.is_ignored = False
-                    st_txn.save(update_fields=[
-                        'status', 'matched_voucher_id', 'reconciled_at', 'is_ignored'
-                    ])
-
-                    PaymentVoucher.objects.filter(id=voucher_record.id).update(
-                        bank_reconciled=True,
-                        bank_reconcile_date=st_txn.transaction_date,
-                        bank_statement_id=st_txn.id,
-                        bank_reference_number=st_txn.reference_number,
-                    )
-                    reconciliation_link_created = True
-
-                except BankStatementTransaction.DoesNotExist:
-                    pass  # Invalid bank_transaction_id – save voucher without linking
-
+            
         headers = self.get_success_headers(serializer.data)
         response_data = dict(serializer.data)
         response_data['voucher_created'] = True
-        response_data['reconciliation_link_created'] = reconciliation_link_created
-        if bank_transaction_id:
-            response_data['bank_transaction_id'] = bank_transaction_id
 
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -319,41 +250,87 @@ class VoucherPaymentBulkViewSet(PaymentVoucherViewSet):
 
 def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
     """
-    Common function to fetch advance payments for a specific ledger.
-    Optionally filters by category (for Portal tiles).
+    Common function to fetch advance payments for a specific ledger from all sources.
+    Matches against pay_to_ledger (Vendor-side) or pay_from_ledger (Customer-side).
     """
-    # Advances are exclusively stored in AdvanceAllocation in the new system
-    qs = AdvanceAllocation.objects.filter(
+    from django.db.models import Q
+    from accounting.models import AdvanceAllocation, PendingTransaction
+    
+    # ── Source 1: AdvanceAllocation (Voucher-based and Portal-based advances) ──
+    payment_qs = AdvanceAllocation.objects.filter(
         amount__gt=0
-    ).select_related('pay_to_ledger')
+    ).select_related('pay_to_ledger', 'pay_from_ledger')
     
     if ledger_id:
-        qs = qs.filter(pay_to_ledger_id=ledger_id)
-
+        payment_qs = payment_qs.filter(
+            Q(pay_to_ledger_id=ledger_id) | Q(pay_from_ledger_id=ledger_id)
+        )
     if tenant_id:
-        qs = qs.filter(tenant_id=tenant_id)
+        payment_qs = payment_qs.filter(tenant_id=tenant_id)
         
     if category:
         from django.db.models.functions import Trim, Upper
-        # Check if it's a vendor or customer to apply category filter correctly
-        # We try to join both but it's safe since they are different related_names
-        qs = qs.annotate(
+        payment_qs = payment_qs.annotate(
             v_cat=Upper(Trim('pay_to_ledger__vendors_basic__vendor_category')),
-            c_cat=Upper(Trim('pay_to_ledger__customers_basic__customer_category__category'))
+            c_cat=Upper(Trim('pay_to_ledger__customers_basic__customer_category__category')),
+            c_from_cat=Upper(Trim('pay_from_ledger__customers_basic__customer_category__category'))
         ).filter(
-            Q(v_cat=category.strip().upper()) | 
-            Q(c_cat=category.strip().upper())
+            Q(v_cat=category.strip().upper()) |
+            Q(c_cat=category.strip().upper()) |
+            Q(c_from_cat=category.strip().upper())
         )
-        
-    return qs
+
+    # ── Source 2: PendingTransaction (Receipt-based advances direct from core logic) ──
+    # Note: Only needed if not already synced to AdvanceAllocation
+    receipt_qs = PendingTransaction.objects.filter(
+        is_advance=True,
+        amount__gt=0
+    ).select_related('pay_from_ledger', 'pay_to_ledger')
+    
+    if ledger_id:
+        receipt_qs = receipt_qs.filter(
+            Q(pay_from_ledger_id=ledger_id) | Q(pay_to_ledger_id=ledger_id)
+        )
+    if tenant_id:
+        receipt_qs = receipt_qs.filter(tenant_id=tenant_id)
+
+    # ── Combine and De-duplicate ──
+    results = []
+    seen_combinations = set()
+
+    def process_qs(qs, source_type_default):
+        for r in qs:
+            # Mark the type for allocation logic
+            is_payment = 'payment' in str(getattr(r, 'type', '')).lower()
+            
+            # Label as receipt if the ledger we filtered for is the sender (customer side)
+            if source_type_default == 'payment' and ledger_id and str(r.pay_from_ledger_id) == str(ledger_id):
+                r._source = 'receipt'
+            else:
+                r._source = source_type_default or ('payment' if is_payment else 'receipt')
+            
+            # Fix display name mapping for Serializer get_pay_to_name
+            # If it's a customer-receipt-advance, Serializer expects customer in pay_to_ledger
+            if r._source == 'receipt' and r.pay_from_ledger and not getattr(r, '_party_fixed', False):
+                r.pay_to_ledger = r.pay_from_ledger
+                r._party_fixed = True
+
+            combo = (r.__class__.__name__, r.id)
+            if combo not in seen_combinations:
+                results.append(r)
+                seen_combinations.add(combo)
+
+    process_qs(payment_qs, 'payment')
+    process_qs(receipt_qs, 'receipt')
+
+    return results
 
 class AdvancePaymentViewSet(viewsets.ModelViewSet):
-
     """
     API for managing Advance Payments.
-    Filters by ledger_id and category (for Vendors/Customers).
+    Fetches available advances from both payments and receipts.
     """
-    queryset = PaymentVoucherItem.objects.all()
+    queryset = AdvanceAllocation.objects.none() # Dummy for router
     serializer_class = AdvancePaymentSerializer
     permission_classes = [IsAuthenticated, IsBranchMember]
 
@@ -362,65 +339,48 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
         ledger_id = self.request.query_params.get('ledger_id')
         category = self.request.query_params.get('category')
 
-        # 1. Fetch Advances (AdvanceAllocation now stores both payment and receipt advances)
+        # 1. Fetch Advances from all sources
         combined = list(get_advances_by_ledger(ledger_id, tenant_id, category))
 
-        
-        # 3. Calculate Remaining and Filter (Phase 3 & 4A)
+        # 2. Calculate Remaining and Filter
         from decimal import Decimal
         from accounting.services.advance_service import get_allocated_amount
+        import datetime
         
         final_list = []
         for adv in combined:
-            # Type is stored in AdvanceAllocation as payment_single, receipt_bulk, etc.
-            is_payment = 'payment' in str(adv.type).lower()
-            source_type = 'payment' if is_payment else 'receipt'
+            source_type = getattr(adv, '_source', 'payment')
             
-            # Amount is now definitively stored in amount
-            total_amt = Decimal(str(adv.amount or 0))
+            # Resolve total amount (handles different field names in subclasses)
+            total_amt = Decimal(str(getattr(adv, 'amount', 0) or getattr(adv, 'received_amount', 0) or 0))
             
-            allocated = get_allocated_amount(adv.id, source_type, tenant_id)
+            ref_no = getattr(adv, 'advance_ref_no', None) or getattr(adv, 'reference_number', None)
+            allocated = get_allocated_amount(adv.id, source_type, tenant_id, ref_no=ref_no)
             remaining = total_amt - allocated
             
             # Attach to object for serializer
             adv._allocated = allocated
             adv._remaining = remaining
             
-            # Only include if remaining balance is positive (> 0.01 tolerance)
+            # Only include if remaining balance is positive
             if remaining > Decimal('0.01'):
                 final_list.append(adv)
         
-        # Sort by date descending
-        import datetime
-        final_list.sort(key=lambda x: getattr(x, 'voucher_date', getattr(getattr(x, 'voucher', None), 'date', None)) or datetime.date.min, reverse=True)
+        # 3. Sort by date descending
+        def get_best_date(obj):
+            for f in ['voucher_date', 'transaction_date', 'invoice_date', 'date']:
+                d = getattr(obj, f, None)
+                if d: return d
+            if hasattr(obj, 'voucher') and obj.voucher:
+                return getattr(obj.voucher, 'date', None)
+            return None
+
+        final_list.sort(key=lambda x: get_best_date(x) or datetime.date.min, reverse=True)
 
         serializer = self.get_serializer(final_list, many=True)
         return Response(serializer.data)
 
-    def _get_receipt_advances(self, ledger_id, tenant_id=None, category=None):
-        from .models_voucher_receipt import ReceiptVoucherItem
-        qs = ReceiptVoucherItem.objects.filter(
-            # matches either bool or string as some legacy code uses types
-            Q(is_advance=True) | Q(reference_type__iexact='advance'),
-            amount__gt=0
-        ).select_related('voucher', 'customer')
-
-        if ledger_id:
-            qs = qs.filter(customer_id=ledger_id)
-        if tenant_id:
-            qs = qs.filter(voucher__tenant_id=tenant_id)
-        if category:
-            from django.db.models.functions import Trim, Upper
-            qs = qs.annotate(
-                v_cat=Upper(Trim('customer__vendors_basic__vendor_category')),
-                c_cat=Upper(Trim('customer__customers_basic__customer_category__category'))
-            ).filter(
-                Q(v_cat=category.strip().upper()) | 
-                Q(c_cat=category.strip().upper())
-            )
-        return qs
-
     def get_queryset(self):
-        # Fallback for other ModelViewSet default methods
         tenant_id = get_tenant_from_request(self.request)
-        return PaymentVoucherItem.objects.filter(voucher__tenant_id=tenant_id, reference_type='ADVANCE')
+        return AdvanceAllocation.objects.filter(tenant_id=tenant_id)
+

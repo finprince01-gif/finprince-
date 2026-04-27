@@ -309,15 +309,18 @@ class VendorFlow:
             # 3. Check for Accounting Ledgers and Journal Entries
             from accounting.models import MasterLedger, JournalEntry, AmountTransaction
             
-            # Check by name in MasterLedger
-            ledger = MasterLedger.objects.filter(
-                tenant_id=tenant_id,
-                name=instance.vendor_name
-            ).first()
+            # Use linked ledger if available, otherwise search by name
+            ledger = instance.ledger
+            if not ledger:
+                ledger = MasterLedger.objects.filter(
+                    tenant_id=tenant_id,
+                    name=instance.vendor_name
+                ).first()
             
             if ledger:
-                # Check for Journal Entries
-                if JournalEntry.objects.filter(tenant_id=tenant_id, ledger=ledger.name).exists():
+                # Check for Journal Entries (by FK or by name)
+                if JournalEntry.objects.filter(tenant_id=tenant_id, ledger=ledger).exists() or \
+                   JournalEntry.objects.filter(tenant_id=tenant_id, ledger_name=ledger.name).exists():
                     return False, "Unable to delete vendor as this vendor is currently live"
                     
                 # Check for Amount Transactions (Bank/Cash related)

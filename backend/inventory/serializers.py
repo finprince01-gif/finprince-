@@ -74,7 +74,7 @@ class InventoryMasterIssueSlipSerializer(serializers.ModelSerializer):
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
 
-class InventoryOperationItemSyncMixin:
+class InventoryOperationItemSyncMixin(serializers.Serializer):
     items = serializers.JSONField(write_only=True, required=False)
     eway_bill_details = serializers.JSONField(write_only=True, required=False)
     delivery_challan = serializers.JSONField(write_only=True, required=False)
@@ -247,7 +247,7 @@ class InventoryOperationJobWorkSerializer(InventoryOperationItemSyncMixin, seria
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
+        dc_data = validated_data.pop('delivery_challan', None)
 
         if dc_data:
             validated_data['dispatch_from'] = dc_data.get('dispatch_from')
@@ -281,7 +281,7 @@ class InventoryOperationJobWorkSerializer(InventoryOperationItemSyncMixin, seria
         return instance
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
+        dc_data = validated_data.pop('delivery_challan', None)
         
         if dc_data:
             instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
@@ -327,7 +327,7 @@ class InventoryOperationInterUnitSerializer(InventoryOperationItemSyncMixin, ser
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
+        dc_data = validated_data.pop('delivery_challan', None)
 
         if dc_data:
             validated_data['dispatch_from'] = dc_data.get('dispatch_from')
@@ -361,7 +361,7 @@ class InventoryOperationInterUnitSerializer(InventoryOperationItemSyncMixin, ser
         return instance
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
+        dc_data = validated_data.pop('delivery_challan', None)
         
         if dc_data:
             instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
@@ -407,7 +407,7 @@ class InventoryOperationLocationChangeSerializer(InventoryOperationItemSyncMixin
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
+        dc_data = validated_data.pop('delivery_challan', None)
 
         if dc_data:
             validated_data['dispatch_from'] = dc_data.get('dispatch_from')
@@ -441,7 +441,7 @@ class InventoryOperationLocationChangeSerializer(InventoryOperationItemSyncMixin
         return instance
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
+        dc_data = validated_data.pop('delivery_challan', None)
         
         if dc_data:
             instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
@@ -591,7 +591,7 @@ class InventoryOperationScrapSerializer(InventoryOperationItemSyncMixin, seriali
         return instance
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.get('delivery_challan', None)
+        dc_data = validated_data.pop('delivery_challan', None)
         if dc_data:
             instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
             if not instance.dispatch_from and dc_data.get('dispatch_address'):
@@ -645,6 +645,11 @@ class InventoryOperationOutwardSerializer(InventoryOperationItemSyncMixin, seria
              self._sync_delivery_challan(instance, 'outward', dc_data)
         return instance
 
+    def to_representation(self, instance):
+        repr = super().to_representation(instance)
+        repr['items'] = InventoryOperationOutwardItemSerializer(instance.items_rel.all(), many=True).data
+        return repr
+
     class Meta:
         model = InventoryOperationOutward
         fields = '__all__'
@@ -674,6 +679,11 @@ class InventoryOperationNewGRNSerializer(InventoryOperationItemSyncMixin, serial
         if dc_data is not None:
              self._sync_delivery_challan(instance, 'grn', dc_data)
         return instance
+
+    def to_representation(self, instance):
+        repr = super().to_representation(instance)
+        repr['items'] = InventoryOperationNewGRNItemSerializer(instance.items_rel.all(), many=True).data
+        return repr
 
     class Meta:
         model = InventoryOperationNewGRN

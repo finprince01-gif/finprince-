@@ -33,7 +33,7 @@ def _resolve_ledger(value, tenant_id=None):
 
     return None
 
-def post_transaction(voucher_type, voucher_id, tenant_id, entries):
+def post_transaction(voucher_type, voucher_id, tenant_id, entries, transaction_date=None, voucher_number=None):
     """
     Actual double-entry accounting posting.
     Validates:
@@ -65,33 +65,39 @@ def post_transaction(voucher_type, voucher_id, tenant_id, entries):
         raise ValueError(f"Accounting mismatch: Sum(debit)={total_debit} != Sum(credit)={total_credit}")
 
     with transaction.atomic():
-        # Duplicate check
-        if JournalEntry.objects.filter(
+        # Phase 3.1: Add SAFE CLEANUP before insert
+        JournalEntry.objects.filter(
             tenant_id=tenant_id, 
             voucher_type=voucher_type, 
             voucher_id=voucher_id
-        ).exists():
-            raise Exception(f"Duplicate posting error: {voucher_type} ID {voucher_id} already posted")
+        ).delete()
 
-        # Create JournalEntry rows
+        # Phase 3.2: Create JournalEntry rows with STRICT ledger_id usage
         journal_objects = []
         for entry in entries:
+            # Resolve ledger source
+            l_id = entry.get('ledger_id')
+            if not l_id:
+                # Fallback check
+                l_id = entry.get('ledger_id_val')
+
+            if not l_id:
+                continue
+
             journal_objects.append(JournalEntry(
                 tenant_id=tenant_id,
                 voucher_type=voucher_type,
                 voucher_id=voucher_id,
-                ledger_id=entry.get('ledger_id'),
+                voucher_number=voucher_number,
+                transaction_date=transaction_date,
+                ledger_id=l_id,
                 debit=Decimal(str(entry.get('debit', 0))),
                 credit=Decimal(str(entry.get('credit', 0))),
-                # New explicit columns
-                ledger_id_val=entry.get('ledger_id_val') or entry.get('ledger_id'),
-                party_customer_id=entry.get('party_customer_id') or entry.get('customer_id'),
-                party_vendor_id=entry.get('party_vendor_id') or entry.get('vendor_id'),
-                # Foreign Key Columns (via db_column in model)
-                customer_id=entry.get('customer_id') or entry.get('party_customer_id'),
-                vendor_id=entry.get('vendor_id') or entry.get('party_vendor_id')
-
+                # Descriptive fields kept for backward compatibility but ignored for core logic
+                ledger_name=getattr(_resolve_ledger(l_id, tenant_id), 'name', None),
+                ledger_id_val=l_id
             ))
         
-        JournalEntry.objects.bulk_create(journal_objects)
+        if journal_objects:
+            JournalEntry.objects.bulk_create(journal_objects)
         return True

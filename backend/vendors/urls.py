@@ -25,6 +25,15 @@ router.register(r'terms', VendorMasterTermsViewSet, basename='vendor-terms')
 router.register(r'purchase-orders', VendorPOViewSet, basename='vendor-purchase-orders')
 router.register(r'transactions', VendorTransactionViewSet, basename='vendor-transactions')
 
+from .excel_api import (
+    VendorExcelTemplateDownloadView,
+    VendorExcelExportView,
+    VendorExcelUploadView
+)
+
 urlpatterns = [
     path('', include(router.urls)),
+    path('excel/template/', VendorExcelTemplateDownloadView.as_view(), name='vendor-excel-template'),
+    path('excel/export/', VendorExcelExportView.as_view(), name='vendor-excel-export'),
+    path('excel/upload/', VendorExcelUploadView.as_view(), name='vendor-excel-upload'),
 ]

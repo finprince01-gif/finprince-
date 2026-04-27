@@ -104,7 +104,7 @@ const PaymentVoucherBulk: React.FC = () => {
 
   // Filter Pay From options (Cash and Bank accounts)
   const payFromLedgers = useMemo(() => {
-    return allLedgers.filter(l => {
+    const filtered = allLedgers.filter(l => {
       const group = (l.group || '').toLowerCase();
       return (
         group.includes('cash') ||
@@ -113,11 +113,12 @@ const PaymentVoucherBulk: React.FC = () => {
         group.includes('cc')
       );
     });
+    return Array.from(new Map(filtered.map(l => [(l.name || '').toLowerCase(), l])).values());
   }, [allLedgers]);
 
   // Filter Pay To options: All ledgers (allowing transfers)
   const payToOptions = useMemo(() => {
-    return allLedgers;
+    return Array.from(new Map(allLedgers.map(l => [(l.name || '').toLowerCase(), l])).values());
   }, [allLedgers]);
 
   // Fetch data

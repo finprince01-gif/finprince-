@@ -226,7 +226,8 @@ class VoucherPurchaseItem(BaseModel):
     cgst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     sgst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     cess_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
     invoice_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
     # Currency details (inherited from SupplyForeignDetails if applicable)
