@@ -579,7 +579,16 @@ class ApiService {
         }));
     }
 
+    async getJournalEntriesReport(ledgerId?: number | string, startDate?: string, endDate?: string) {
+        const params = new URLSearchParams();
+        if (ledgerId) params.append('ledger_id', String(ledgerId));
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        return httpClient.get<any[]>(`/api/vouchers/journal/report/?${params.toString()}`);
+    }
+
     async saveVoucher(data: Voucher) {
+
         const normalizedData = { ...data, type: this.normalizeVoucherType(data.type) };
         const response = await httpClient.post<Voucher>('/api/vouchers/', normalizedData);
 

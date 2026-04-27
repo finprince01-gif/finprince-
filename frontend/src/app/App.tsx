@@ -217,6 +217,8 @@ const App: React.FC = () => {
 
   // Stock Items - inventory items for sales/purchase
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [entries, setEntries] = useState<any[]>([]);
+
 
   // ============================================================================
   // STATE VARIABLES - AI Features
@@ -339,16 +341,20 @@ const App: React.FC = () => {
         backendVouchers,
         backendStockItems,
         backendRichVendors,
-        backendRichCustomers
+        backendRichCustomers,
+        backendEntries
       ] = await Promise.all([
+
         apiService.getCompanyDetails().catch(() => defaultCompanyDetails),
         apiService.getLedgers().catch(() => []),
         apiService.getLedgerGroups().catch(() => []),
         apiService.getVouchers().catch(() => []),
         apiService.getStockItems().catch(() => []),
         apiService.getRichVendors().catch(() => []),
-        apiService.getRichCustomers().catch(() => [])
+        apiService.getRichCustomers().catch(() => []),
+        apiService.getJournalEntriesReport().catch(() => [])
       ]);
+
 
       // Update state with tenant data
       const newData = {
@@ -358,8 +364,10 @@ const App: React.FC = () => {
         vouchers: Array.isArray(backendVouchers) ? backendVouchers : [],
         stockItems: Array.isArray(backendStockItems) ? backendStockItems : [],
         richVendors: Array.isArray(backendRichVendors) ? backendRichVendors : [],
-        richCustomers: Array.isArray(backendRichCustomers) ? backendRichCustomers : []
+        richCustomers: Array.isArray(backendRichCustomers) ? backendRichCustomers : [],
+        entries: Array.isArray(backendEntries) ? (backendEntries as any) : []
       };
+
 
       if (newData.companyDetails) {
         setCompanyDetails(prev => ({ ...prev, ...newData.companyDetails }));
@@ -370,6 +378,8 @@ const App: React.FC = () => {
       setStockItems(newData.stockItems);
       setRichVendors(newData.richVendors);
       setRichCustomers(newData.richCustomers);
+      setEntries(newData.entries);
+
 
       // Cache the data if we have a tenant ID
       if (tenantId) {
@@ -1180,10 +1190,12 @@ const App: React.FC = () => {
       />;
       case 'Reports': return <ErrorBoundary><ReportsPage
         vouchers={vouchers}
+        entries={entries}
         ledgers={ledgers}
         ledgerGroups={ledgerGroups}
         stockItems={stockItems}
       /></ErrorBoundary>;
+
       case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />;
       case 'Users & Roles': return <UsersAndRolesPage onNavigate={handleNavigate} />;
       case 'Vendor Portal': return <VendorPortalPage onLogout={handleLogout} onNavigate={handleNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;

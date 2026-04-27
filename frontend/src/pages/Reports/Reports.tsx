@@ -73,10 +73,12 @@ const LedgerSelector: React.FC<LedgerSelectorProps> = ({
 
 interface ReportsPageProps {
   vouchers: Voucher[];
+  entries?: any[];
   ledgers: Ledger[];
   ledgerGroups: LedgerGroupMaster[];
   stockItems: StockItem[];
 }
+
 
 type ReportType = 'DayBook' | 'LedgerReport' | 'TrialBalance' | 'BalanceSheet' | 'StockSummary' | 'GSTReports' | 'AIReport' | 'GSTR1';
 
@@ -84,7 +86,7 @@ type GSTForm = 'GSTR-1' | 'GSTR-2' | 'GSTR-2A' | 'GSTR-2B' | 'GSTR-3B' | 'GSTR-4
 
 type GSTTab = 'B2B' | 'B2C-L' | 'B2C-S' | 'Exports' | 'CDN' | 'Advances' | 'ITC-Eligible' | 'ITC-Ineligible' | 'RCM-Liability' | 'ITC-Available' | 'ITC-Reversal' | 'Outward' | 'ITC' | 'Payment';
 
-const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
+const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
   // Report Options Mapping
   const { hasTabAccess, isSuperuser } = usePermissions();
 
@@ -133,6 +135,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
   const [selectedLedger, setSelectedLedger] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  // Drill-down: null = summary view (all ledgers list), string = detail view for that ledger
+  const [drillDownLedger, setDrillDownLedger] = useState<string | null>(null);
 
   // Download mappings for each report type
   const downloadMappings: { [key in ReportType]: { endpoint: string; filename: string } } = {
@@ -1015,55 +1019,224 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
   const getVoucherParty = (v: Voucher) => ('party' in v ? v.party : 'N/A');
 
   const ledgerEntries = useMemo(() => {
-    if (reportType !== 'LedgerReport' || !selectedLedger || !filteredVouchers.length) return [];
+    const [prefix, nameOrId] = (selectedLedger || '').split(':');
+    
+    // If we have direct journal entries, use them as the source of truth for Ledger Report
+    if (entries && entries.length > 0) {
+      let balance = 0;
+      let targetEntries = entries;
+      
+      // Filter by ledger if selected
+      if (selectedLedger && selectedLedger !== 'all' && prefix === 'ledger') {
+        targetEntries = entries.filter(e => e.ledger === nameOrId || String(e.ledger_id) === nameOrId);
+      } else if (selectedLedger && selectedLedger !== 'all' && prefix === 'group') {
+        const groupLedgers = ledgers.filter(l => l.group === nameOrId).map(l => l.name);
+        targetEntries = entries.filter(e => groupLedgers.includes(e.ledger));
+      }
 
-    let balance = 0;
+      // Apply date filters if set
+      if (startDate) {
+        const s = new Date(startDate);
+        targetEntries = targetEntries.filter(e => new Date(e.date || e.transaction_date) >= s);
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        targetEntries = targetEntries.filter(e => new Date(e.date || e.transaction_date) <= e);
+      }
+
+      return targetEntries.map(e => {
+        const dr = Number(e.debit) || 0;
+        const cr = Number(e.credit) || 0;
+        // If backend already computed balance+balance_type, use them directly
+        const backendBalance = e.balance !== undefined ? Number(e.balance) : null;
+        const backendBalanceType: string = e.balance_type || '';
+        if (backendBalance === null) {
+          balance += dr - cr;
+        }
+        const finalBalance = backendBalance !== null ? backendBalance : Math.abs(balance);
+        const finalBalanceType = backendBalance !== null
+          ? backendBalanceType
+          : (balance > 0 ? 'Dr' : balance < 0 ? 'Cr' : '');
+        return {
+          id: e.id,
+          date: e.date || e.transaction_date,
+          type: e.type || e.voucher_type,
+          // Backend now sends correct counterpart name as 'particulars'
+          particulars: e.particulars || e.ledger || 'N/A',
+          debit: dr,
+          credit: cr,
+          balance: finalBalance,
+          balanceType: finalBalanceType
+        };
+      });
+    }
+
+    // Fallback to deriving from vouchers if entries prop is empty
+    if (!filteredVouchers.length) return [];
+
+        // Handle ALL Ledgers case — shows every debit/credit line across all accounts
+        if (selectedLedger === 'all') {
+          const ledgerRunningBals: { [ledger: string]: number } = {};
+          const allEntries: any[] = [];
+
+          filteredVouchers.forEach(v => {
+            const addEntry = (ledger: string, dr: number, cr: number, part: string, id: string | number) => {
+                const currentBal = (ledgerRunningBals[ledger] || 0) + dr - cr;
+                ledgerRunningBals[ledger] = currentBal;
+                allEntries.push({
+                    id, date: v.date, type: v.type, particulars: part, debit: dr, credit: cr,
+                    balance: Math.abs(currentBal),
+                    balanceType: currentBal > 0 ? 'Dr' : currentBal < 0 ? 'Cr' : ''
+                });
+            };
+
+            if ('entries' in v && v.entries && Array.isArray(v.entries)) {
+              (v as any).entries.forEach((e: any, idx: number) => {
+                const dr = Number(e.debit) || 0;
+                const cr = Number(e.credit) || 0;
+                const counterparts = (v as any).entries.filter((x: any) => x !== e).map((x: any) => x.ledger).join(', ') || e.ledger || 'N/A';
+                addEntry(e.ledger, dr, cr, counterparts, `${v.id}-${idx}`);
+              });
+            } else {
+              const amount = getVoucherAmount(v);
+              if (v.type === 'Payment') {
+                // Payment: Pay FROM cash (CREDIT cash) → Pay TO vendor (DEBIT vendor)
+                const vendorName = (v as any).party   || 'Vendor';
+                const cashName   = (v as any).account || 'Cash/Bank';
+                // vendor1 → Debit (liability reduced; we paid them)
+                addEntry(vendorName, amount, 0, cashName,   `${v.id}-1`);
+                // cash1   → Credit (money leaves)
+                addEntry(cashName,   0, amount, vendorName, `${v.id}-2`);
+
+              } else if (v.type === 'Receipt') {
+                // Receipt: Receive FROM customer (CREDIT customer) INTO cash (DEBIT cash)
+                const custName = (v as any).party   || 'Customer';
+                const cashName = (v as any).account || 'Cash/Bank';
+                // customer → Credit (receivable settled)
+                addEntry(custName, 0, amount, cashName, `${v.id}-1`);
+                // cash    → Debit (money arrives)
+                addEntry(cashName, amount, 0, custName, `${v.id}-2`);
+
+              } else if (v.type === 'Contra') {
+                // Contra: Transfer FROM one account TO another
+                // fromAccount → Credit (money leaves), toAccount → Debit (money arrives)
+                const fromAcc = (v as any).fromAccount || 'Account';
+                const toAcc   = (v as any).toAccount   || 'Account';
+                addEntry(fromAcc, 0, amount, toAcc,   `${v.id}-1`);
+                addEntry(toAcc,   amount, 0, fromAcc, `${v.id}-2`);
+
+              } else {
+                // Sales → Debit customer. Purchase → Credit vendor.
+                const partyName = getVoucherParty(v);
+                const isSales   = v.type === 'Sales';
+                addEntry(
+                  partyName,
+                  isSales ? amount : 0,
+                  isSales ? 0 : amount,
+                  isSales ? 'Sales' : 'Purchases',
+                  v.id
+                );
+              }
+            }
+          });
+
+          return allEntries;
+        }
+
+    // Single Ledger view
+    const name = nameOrId;
+      if (prefix === 'group') {
+        // Handle group view
+        const groupLedgers = ledgers.filter(l => l.group === name).map(l => l.name);
+        let balance = 0;
+        const groupEntries: any[] = [];
+        
+        filteredVouchers.forEach(v => {
+          if ('entries' in v && v.entries && Array.isArray(v.entries)) {
+            (v as any).entries.forEach((e: any) => {
+              if (groupLedgers.includes(e.ledger)) {
+                const dr = Number(e.debit) || 0;
+                const cr = Number(e.credit) || 0;
+                balance += dr - cr;
+                groupEntries.push({
+                  id: v.id,
+                  date: v.date,
+                  type: v.type,
+                  particulars: e.ledger,
+                  debit: dr,
+                  credit: cr,
+                  balance
+                });
+              }
+            });
+          }
+        });
+        
+        return groupEntries;
+      }
+
+    let runningBalance = 0;
     return filteredVouchers.map(v => {
       let debit = 0, credit = 0, particulars = '';
 
       switch (v.type) {
         case 'Purchase':
-          if (v.party === selectedLedger) {
-            credit = v.total || 0;
+          // Vendor (party/pay_to) is CREDITED when we purchase on credit
+          // Purchase account is DEBITED
+          if (v.party === name) {
+            // This ledger is the Vendor/Supplier — they are the CREDITOR
+            credit = Number(v.total) || 0;
             particulars = 'Purchases';
-          } else if ('account' in v && v.account === selectedLedger) {
-            debit = v.total || 0;
+          } else if ('account' in v && v.account === name) {
+            debit = Number(v.total) || 0;
             particulars = v.party;
           }
           break;
         case 'Sales':
-          if (v.party === selectedLedger) {
-            debit = v.total || 0;
+          // Customer (party) is DEBITED — they owe us money
+          // Sales account is CREDITED
+          if (v.party === name) {
+            debit = Number(v.total) || 0;
             particulars = 'Sales';
-          } else if ('account' in v && v.account === selectedLedger) {
-            credit = v.total || 0;
+          } else if ('account' in v && v.account === name) {
+            credit = Number(v.total) || 0;
             particulars = v.party;
           }
           break;
         case 'Payment':
-          if (v.party === selectedLedger) {
-            debit = v.amount || 0;
-            particulars = v.account;
-          } else if (v.account === selectedLedger) {
-            credit = v.amount || 0;
-            particulars = v.party;
+          // Payment: Pay FROM cash/bank (CREDIT cash) → Pay TO vendor (DEBIT vendor, reduces liability)
+          // v.party = vendor (pay_to), v.account = cash/bank (pay_from)
+          if (v.party === name) {
+            // This is the Vendor ledger — being DEBITED (liability reduced)
+            debit = Number(v.amount) || 0;
+            particulars = v.account || 'Cash/Bank';
+          } else if (v.account === name) {
+            // This is the Cash/Bank ledger — being CREDITED (money goes out)
+            credit = Number(v.amount) || 0;
+            particulars = v.party || 'Vendor';
           }
           break;
         case 'Receipt':
-          if (v.party === selectedLedger) {
-            credit = v.amount || 0;
-            particulars = v.account;
-          } else if (v.account === selectedLedger) {
-            debit = v.amount || 0;
-            particulars = v.party;
+          // Receipt: Receive INTO cash/bank (DEBIT cash) ← FROM customer (CREDIT customer)
+          // v.party = customer (receive_from), v.account = cash/bank (receive_into)
+          if (v.party === name) {
+            // Customer ledger — being CREDITED (receivable settled)
+            credit = Number(v.amount) || 0;
+            particulars = v.account || 'Cash/Bank';
+          } else if (v.account === name) {
+            // Cash/Bank ledger — being DEBITED (money comes in)
+            debit = Number(v.amount) || 0;
+            particulars = v.party || 'Customer';
           }
           break;
         case 'Contra':
-          if (v.fromAccount === selectedLedger) {
-            credit = v.amount || 0;
+          // Contra: Transfer between cash/bank accounts
+          // fromAccount is CREDITED (money leaves), toAccount is DEBITED (money arrives)
+          if (v.fromAccount === name) {
+            credit = Number(v.amount) || 0;
             particulars = v.toAccount;
-          } else if (v.toAccount === selectedLedger) {
-            debit = v.amount || 0;
+          } else if (v.toAccount === name) {
+            debit = Number(v.amount) || 0;
             particulars = v.fromAccount;
           }
           break;
@@ -1071,15 +1244,18 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
           if (v.entries && Array.isArray(v.entries)) {
             const entry = v.entries.find(e => e.ledger === selectedLedger);
             if (entry) {
-              debit = entry.debit || 0;
-              credit = entry.credit || 0;
-              particulars = v.entries.filter(e => e.ledger !== selectedLedger).map(e => e.ledger).join(', ') || 'Journal Entry';
+              debit = Number(entry.debit) || 0;
+              credit = Number(entry.credit) || 0;
+              particulars = v.entries.filter(e => e.ledger !== name).map(e => e.ledger).join(', ') || 'Journal Entry';
             }
           }
           break;
       }
 
-      balance += debit - credit;
+      // Running balance: Dr entries increase balance, Cr entries decrease it
+      runningBalance += debit - credit;
+      const balanceAbs = Math.abs(runningBalance);
+      const balanceType = runningBalance > 0 ? 'Dr' : runningBalance < 0 ? 'Cr' : '';
 
       return {
         id: v.id,
@@ -1088,10 +1264,96 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         particulars,
         debit,
         credit,
-        balance
+        balance: balanceAbs,
+        balanceType
       };
     });
   }, [reportType, selectedLedger, filteredVouchers]);
+
+  // ═══ LEDGER SUMMARY useMemo ════════════════════════════════════════════════
+  const ledgerSummary = useMemo(() => {
+    const map = new Map<string, number>();
+    const add = (name: string, delta: number) => name && map.set(name, (map.get(name) || 0) + delta);
+    
+    // 1. Initialize with Opening Balances
+    if (ledgers && ledgers.length > 0) {
+      ledgers.forEach(l => {
+        if (l.name && l.opening_balance) {
+          const bal = Number(l.opening_balance) || 0;
+          const type = l.opening_balance_type || 'Dr';
+          if (bal > 0) {
+            add(l.name, type === 'Dr' ? bal : -bal);
+          }
+        }
+      });
+    }
+
+    // 2. Process Transactions
+    if (entries && entries.length > 0) {
+      entries.forEach(e => {
+        const n = e.ledger_name || e.ledger || e.particulars;
+        add(n, (Number(e.debit) || 0) - (Number(e.credit) || 0));
+      });
+    } else {
+      filteredVouchers.forEach(v => {
+        const amt = getVoucherAmount(v);
+        if (v.type === 'Payment') { add((v as any).party||'Vendor', +amt); add((v as any).account||'Cash/Bank', -amt); }
+        else if (v.type === 'Receipt') { add((v as any).party||'Customer', -amt); add((v as any).account||'Cash/Bank', +amt); }
+        else if (v.type === 'Contra') { add((v as any).fromAccount||'Account', -amt); add((v as any).toAccount||'Account', +amt); }
+        else if ('entries' in v && Array.isArray((v as any).entries)) {
+          (v as any).entries.forEach((e: any) => add(e.ledger, (Number(e.debit)||0)-(Number(e.credit)||0)));
+        } else { const p = getVoucherParty(v); add(p, v.type==='Sales' ? +amt : -amt); }
+      });
+    }
+    return Array.from(map.entries())
+      .map(([name, net]) => ({ name, balance: Math.abs(net), balanceType: net > 0 ? 'Dr' : net < 0 ? 'Cr' : '' }))
+      .filter(r => r.balance > 0).sort((a, b) => a.name.localeCompare(b.name));
+  }, [entries, filteredVouchers, ledgers]);
+
+  // ═══ DRILL-DOWN ENTRIES useMemo ════════════════════════════════════════════
+  const drillDownEntries = useMemo(() => {
+    if (!drillDownLedger) return [];
+    const name = drillDownLedger;
+    let running = 0;
+    const rows: any[] = [];
+    
+    // 1. Add Opening Balance Row
+    const ledger = ledgers?.find(l => l.name === name);
+    if (ledger && ledger.opening_balance) {
+      const bal = Number(ledger.opening_balance) || 0;
+      if (bal > 0) {
+        const type = ledger.opening_balance_type || 'Dr';
+        running += type === 'Dr' ? bal : -bal;
+        rows.push({
+          date: '', particulars: 'Opening Balance', voucherType: 'Opening', voucherNo: '-',
+          debit: type === 'Dr' ? bal : 0, credit: type === 'Cr' ? bal : 0,
+          balance: Math.abs(running), balanceType: type
+        });
+      }
+    }
+
+    const push = (date: string, particulars: string, voucherType: string, voucherNo: string, dr: number, cr: number) => {
+      running += dr - cr;
+      rows.push({ date, particulars, voucherType, voucherNo, debit: dr, credit: cr,
+        balance: Math.abs(running), balanceType: running > 0 ? 'Dr' : running < 0 ? 'Cr' : '' });
+    };
+
+    if (entries && entries.length > 0) {
+      const rel = entries.filter(e => (e.ledger_name||e.ledger||'') === name || selectedLedger === `ledger:${name}`);
+      if (rel.length > 0) { rel.forEach(e => push(e.transaction_date||e.date||'', e.particulars||e.ledger||'N/A', e.voucher_type||e.type||'', e.voucher_number||'', Number(e.debit)||0, Number(e.credit)||0)); return rows; }
+    }
+    filteredVouchers.forEach(v => {
+      const amt = getVoucherAmount(v);
+      const vNo = (v as any).voucher_number||(v as any).voucherNumber||'';
+      if (v.type==='Payment') { const vn=(v as any).party||'Vendor', cn=(v as any).account||'Cash/Bank'; if(vn===name) push(v.date,cn,v.type,vNo,amt,0); if(cn===name) push(v.date,vn,v.type,vNo,0,amt); }
+      else if (v.type==='Receipt') { const cn=(v as any).party||'Customer', an=(v as any).account||'Cash/Bank'; if(cn===name) push(v.date,an,v.type,vNo,0,amt); if(an===name) push(v.date,cn,v.type,vNo,amt,0); }
+      else if (v.type==='Contra') { const fa=(v as any).fromAccount||'Account', ta=(v as any).toAccount||'Account'; if(fa===name) push(v.date,ta,v.type,vNo,0,amt); if(ta===name) push(v.date,fa,v.type,vNo,amt,0); }
+      else if ('entries' in v && Array.isArray((v as any).entries)) {
+        (v as any).entries.forEach((e: any) => { if(e.ledger===name) { const cp=(v as any).entries.filter((x:any)=>x!==e).map((x:any)=>x.ledger).join(', ')||'Journal'; push(v.date,cp,v.type,vNo,Number(e.debit)||0,Number(e.credit)||0); } });
+      } else { const p=getVoucherParty(v); if(p===name) { const s=v.type==='Sales'; push(v.date,s?'Sales':'Purchases',v.type,vNo,s?amt:0,s?0:amt); } }
+    });
+    return rows;
+  }, [drillDownLedger, entries, filteredVouchers, selectedLedger, ledgers]);
 
   const renderDayBook = () => (
     <div className="erp-table-container">
@@ -1124,43 +1386,136 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
     </div>
   );
 
-  const renderLedger = () => (
+  // ═══ LEVEL 1: Summary view — Ledger Name + Balance only (clickable) ════════
+  const renderLedgerSummary = () => (
     <div className="erp-table-container">
-      <table className="erp-table">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
-            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Particulars</th>
-            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Voucher Type</th>
-            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Debit</th>
-            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Credit</th>
-            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Balance</th>
+      <table className="erp-table w-full">
+        <thead>
+          <tr className="bg-indigo-50">
+            <th className="px-6 py-3 text-left text-xs font-bold text-indigo-700 uppercase tracking-wider w-2/3">Ledger Name</th>
+            <th className="px-6 py-3 text-right text-xs font-bold text-indigo-700 uppercase tracking-wider w-1/3">Balance</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
-          {ledgerEntries.length > 0 ? ledgerEntries.map((entry, idx) => (
-            <tr key={`ledger-${entry.date}-${entry.type}-${entry.id || idx}`} className="hover:bg-gray-50 transition-colors">
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(entry.date).toLocaleDateString()}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{entry.particulars}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{entry.type}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">{entry.debit > 0 ? `₹${entry.debit.toFixed(2)}` : ''}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">{entry.credit > 0 ? `₹${entry.credit.toFixed(2)}` : ''}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">₹{entry.balance.toFixed(2)}</td>
-            </tr>
-          )) : (
-            <tr>
-              <td colSpan={6} className="px-6 py-12 text-sm text-center text-gray-500">
-                {!selectedLedger ? 'Please select a ledger.' :
-                  (startDate || endDate) ? 'No transactions found for the selected filter.' :
-                    'No transactions found.'
-                }
+          {ledgerSummary.length > 0 ? ledgerSummary.map((row, idx) => (
+            <tr key={`ls-${idx}`} onClick={() => setDrillDownLedger(row.name)}
+              className="hover:bg-indigo-50 transition-colors cursor-pointer group" title={`View ${row.name} transactions`}>
+              <td className="px-6 py-3 whitespace-nowrap">
+                <span className="text-sm font-semibold text-indigo-700 group-hover:underline flex items-center gap-1">
+                  {row.name}
+                  <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </span>
+              </td>
+              <td className="px-6 py-3 whitespace-nowrap text-right">
+                <span className={`text-sm font-mono font-bold ${row.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>
+                  ₹{row.balance.toFixed(2)}
+                  <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded font-semibold ${row.balanceType==='Dr'?'bg-orange-100 text-orange-700':'bg-green-100 text-green-700'}`}>{row.balanceType}</span>
+                </span>
               </td>
             </tr>
+          )) : (
+            <tr><td colSpan={2} className="px-6 py-12 text-sm text-center text-gray-400">No ledger data found. Add some vouchers first.</td></tr>
           )}
         </tbody>
+        {ledgerSummary.length > 0 && (
+          <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+            <tr>
+              <td className="px-6 py-3 text-sm font-bold text-gray-600">{ledgerSummary.length} Ledgers</td>
+              <td className="px-6 py-3 text-right text-sm font-bold text-orange-600">
+                Dr: ₹{ledgerSummary.filter(r=>r.balanceType==='Dr').reduce((s,r)=>s+r.balance,0).toFixed(2)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
+
+  // ═══ LEVEL 2: Detail view — full transactions for a specific ledger ═════════
+  const renderLedgerDetail = () => {
+    const last = drillDownEntries[drillDownEntries.length - 1];
+    return (
+      <div>
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 mb-5 text-sm">
+          <button onClick={() => setDrillDownLedger(null)}
+            className="flex items-center gap-1 text-indigo-600 hover:text-indigo-900 font-semibold transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            All Ledgers
+          </button>
+          <span className="text-gray-300">/</span>
+          <span className="font-bold text-gray-800">{drillDownLedger}</span>
+        </div>
+        {/* Header card */}
+        <div className="mb-5 p-5 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-indigo-100 flex items-center justify-between">
+          <div>
+            <div className="text-xs text-indigo-500 uppercase font-bold tracking-widest mb-1">Ledger Account</div>
+            <div className="text-2xl font-bold text-indigo-900">{drillDownLedger}</div>
+          </div>
+          {last && (
+            <div className="text-right">
+              <div className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">Closing Balance</div>
+              <div className={`text-3xl font-bold ${last.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>
+                ₹{last.balance.toFixed(2)}
+                <span className={`ml-2 text-sm px-2 py-1 rounded font-semibold ${last.balanceType==='Dr'?'bg-orange-100 text-orange-700':'bg-green-100 text-green-700'}`}>{last.balanceType}</span>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Detail table */}
+        <div className="erp-table-container">
+          <table className="erp-table w-full">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Particulars</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Voucher No</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Type</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">Debit</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">Credit</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">Balance</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {drillDownEntries.length > 0 ? drillDownEntries.map((e, idx) => (
+                <tr key={`dd-${idx}`} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{e.date ? new Date(e.date).toLocaleDateString('en-IN') : '-'}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{e.particulars||'-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap font-mono">{e.voucherNo||'-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 capitalize whitespace-nowrap">{e.voucherType||'-'}</td>
+                  <td className="px-4 py-3 text-sm font-mono text-right font-semibold text-gray-900">{e.debit>0?`₹${e.debit.toFixed(2)}`:''}</td>
+                  <td className="px-4 py-3 text-sm font-mono text-right font-semibold text-gray-900">{e.credit>0?`₹${e.credit.toFixed(2)}`:''}</td>
+                  <td className={`px-4 py-3 text-sm font-mono text-right font-bold whitespace-nowrap ${e.balanceType==='Dr'?'text-orange-600':e.balanceType==='Cr'?'text-green-700':'text-gray-400'}`}>
+                    {e.balance > 0
+                      ? <>{`₹${e.balance.toFixed(2)} `}<span className={`text-xs px-1 py-0.5 rounded ${e.balanceType==='Dr'?'bg-orange-100 text-orange-700':'bg-green-100 text-green-700'}`}>{e.balanceType}</span></>
+                      : <span className="text-gray-300">₹0.00</span>}
+                  </td>
+                </tr>
+              )) : (
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-400">No transactions found for <strong>{drillDownLedger}</strong>.</td></tr>
+              )}
+            </tbody>
+            {drillDownEntries.length > 0 && (
+              <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-bold">
+                <tr>
+                  <td colSpan={4} className="px-4 py-3 text-sm text-gray-700">Total</td>
+                  <td className="px-4 py-3 text-sm font-mono text-right text-orange-600">₹{drillDownEntries.reduce((s,e)=>s+e.debit,0).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-sm font-mono text-right text-green-700">₹{drillDownEntries.reduce((s,e)=>s+e.credit,0).toFixed(2)}</td>
+                  <td className={`px-4 py-3 text-sm font-mono text-right ${last?.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>
+                    {last ? `₹${last.balance.toFixed(2)} ${last.balanceType}` : ''}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   const renderTrialBalance = () => (
     <div className="erp-table-container">
@@ -1915,7 +2270,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         <div className="overflow-x-auto">
           {reportType === 'DayBook' && renderDayBook()}
-          {reportType === 'LedgerReport' && renderLedger()}
+          {reportType === 'LedgerReport' && (drillDownLedger ? renderLedgerDetail() : renderLedgerSummary())}
           {reportType === 'TrialBalance' && renderTrialBalance()}
           {reportType === 'StockSummary' && renderStockSummary()}
         </div>
