@@ -248,7 +248,14 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def report(self, request):
-        """Dedicated Ledger Report API following strict double-entry source."""
+        """
+        Dedicated Ledger Report API following strict double-entry accounting.
+
+        For a given ledger_id, shows all journal entries affecting that ledger with:
+          - particulars = the OPPOSITE (counterpart) ledger name on the same voucher
+          - debit / credit as recorded in the entry
+          - running balance (Dr positive, Cr negative convention)
+        """
         ledger_id = request.query_params.get('ledger_id')
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
@@ -256,36 +263,92 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         # Normalize input
         if ledger_id in [None, "", "ALL", "0", "null"]:
             ledger_id = None
-            
+
+        tenant_id = getattr(request.user, 'tenant_id', None)
+
         # Base queryset with branch isolation handled by mixin
         queryset = self.get_queryset().select_related('ledger').order_by('transaction_date', 'id')
-        
+
         if ledger_id:
             queryset = queryset.filter(ledger_id=ledger_id)
-            
+
         if start_date:
             queryset = queryset.filter(transaction_date__gte=start_date)
-            
+
         if end_date:
             queryset = queryset.filter(transaction_date__lte=end_date)
-            
-        # Map fields for UI compatibility
+
+        # Pre-fetch all entries for each voucher to resolve counterpart ledger names
+        # Group voucher_ids so we can look up the opposite side
+        from django.db.models import Q as DQ
+        voucher_ids = list(queryset.values_list('voucher_id', flat=True).distinct())
+
+        # Build a map: voucher_id -> list of (ledger_id, ledger_name)
+        counterpart_map = {}
+        if voucher_ids:
+            all_entries_for_vouchers = JournalEntry.objects.filter(
+                tenant_id=tenant_id,
+                voucher_id__in=voucher_ids
+            ).select_related('ledger').values('voucher_id', 'ledger_id', 'ledger__name', 'ledger_name')
+
+            for ae in all_entries_for_vouchers:
+                vid = ae['voucher_id']
+                lid = ae['ledger_id']
+                lname = ae['ledger__name'] or ae['ledger_name'] or 'N/A'
+                counterpart_map.setdefault(vid, []).append((lid, lname))
+
+        # Build response with running balance
         data = []
+        running_balance = 0.0  # Positive = Dr balance, Negative = Cr balance
+
         for e in queryset:
-            # Determine particulars: If we are looking at a specific ledger, 
-            # particulars usually shows the 'opposite' ledger. 
-            # But in a simple list, showing the entry's own ledger name is a start.
+            dr = float(e.debit)
+            cr = float(e.credit)
+
+            # Determine particulars: find the OTHER ledger(s) in this voucher
+            vid = e.voucher_id
+            own_lid = e.ledger_id
+            counterparts = counterpart_map.get(vid, [])
+            opposite_names = [
+                lname for (lid, lname) in counterparts
+                if lid != own_lid
+            ]
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_opposites = []
+            for n in opposite_names:
+                if n not in seen:
+                    seen.add(n)
+                    unique_opposites.append(n)
+
+            particulars = ', '.join(unique_opposites) if unique_opposites else (
+                e.ledger.name if e.ledger else e.ledger_name or 'N/A'
+            )
+
+            # Running balance: Dr increases balance, Cr decreases it
+            running_balance += dr - cr
+
+            # Balance type label
+            if running_balance > 0:
+                balance_type = 'Dr'
+            elif running_balance < 0:
+                balance_type = 'Cr'
+            else:
+                balance_type = ''
+
             data.append({
                 'id': e.id,
                 'transaction_date': e.transaction_date,
-                'particulars': e.ledger.name if e.ledger else e.ledger_name or 'N/A',
+                'particulars': particulars,
                 'voucher_type': e.voucher_type,
                 'voucher_number': e.voucher_number,
-                'debit': float(e.debit),
-                'credit': float(e.credit),
+                'debit': dr,
+                'credit': cr,
+                'balance': abs(running_balance),
+                'balance_type': balance_type,  # 'Dr' or 'Cr'
                 'voucher_id': e.voucher_id
             })
-            
+
         return Response(data)
 
 

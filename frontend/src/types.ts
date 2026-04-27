@@ -100,6 +100,8 @@ export interface Ledger {
     [key: string]: any;
   };
   balance?: number;  // Computed balance from journal entries
+  opening_balance?: number | string;
+  opening_balance_type?: string;
 }
 
 
