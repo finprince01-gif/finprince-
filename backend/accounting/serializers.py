@@ -246,9 +246,11 @@ class AmountTransactionSerializer(BranchModelSerializerMixin, serializers.ModelS
 # ============================================================================
 
 class JournalEntrySerializer(serializers.ModelSerializer):
+    ledger_name = serializers.CharField(source='ledger.name', read_only=True)
+    
     class Meta:
         model = JournalEntry
-        fields = ['id', 'ledger', 'debit', 'credit']
+        fields = ['id', 'ledger', 'ledger_name', 'debit', 'credit', 'voucher_type', 'voucher_number', 'transaction_date', 'voucher_id']
         read_only_fields = ['id']
 
 

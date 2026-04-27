@@ -18,13 +18,16 @@ from .sales_validation_logic import validate_sales_customer_and_invoice
 import io
 import json
 import base64
+from inventory.models import InventoryItem
+from services.models import Service
+from core.models import Tenant
 
 # Single Source of Truth for Sales Voucher Columns
 # Mirrors frontend src/constants/salesVoucherColumns.ts exactly
 SALES_VOUCHER_COLUMNS = [
     # ── Tab 1: Invoice Details ──────────────────────────────────────────────
     {"label": "Date",                      "key": "date",                  "tab": "Invoice Details",              "required": False, "type": "date"},
-    {"label": "Voucher Type Name",         "key": "voucher_name",          "tab": "Invoice Details",              "required": False, "type": "string"},
+    {"label": "Sales Invoice Series",      "key": "voucher_name",          "tab": "Invoice Details",              "required": False, "type": "string"},
     {"label": "Sales Invoice No.",         "key": "sales_invoice_no",      "tab": "Invoice Details",              "required": True,  "type": "string"},
     {"label": "Outward Slip No.",          "key": "outward_slip_no",       "tab": "Invoice Details",              "required": False, "type": "string"},
     {"label": "Customer Name",             "key": "customer_name",         "tab": "Invoice Details",              "required": False, "type": "string"},
@@ -63,12 +66,12 @@ SALES_VOUCHER_COLUMNS = [
     {"label": "E-Commerce GSTIN",          "key": "ecommerce_gstin",       "tab": "Invoice Details",              "required": False, "type": "string"},
 
     # ── Tab 2: Item & Tax Details ───────────────────────────────────────────
-    {"label": "Sales Order No.",            "key": "sales_order_no",        "tab": "Item & Tax Details",           "required": False, "type": "string"},
+    {"label": "Sales Order/Quotation No.",   "key": "sales_order_no",        "tab": "Item & Tax Details",           "required": False, "type": "string"},
     {"label": "Item Code",                 "key": "item_code",             "tab": "Item & Tax Details",           "required": False, "type": "string"},
     {"label": "Item Name",                 "key": "item_name",             "tab": "Item & Tax Details",           "required": False, "type": "string"},
     {"label": "HSN / SAC",                 "key": "hsn_sac",               "tab": "Item & Tax Details",           "required": False, "type": "string"},
     {"label": "Quantity",                  "key": "qty",                   "tab": "Item & Tax Details",           "required": False, "type": "number"},
-    {"label": "UOM",                       "key": "uom",                   "tab": "Item & Tax Details",           "required": False, "type": "string"},
+    {"label": "UQC / UOM",                 "key": "uom",                   "tab": "Item & Tax Details",           "required": False, "type": "string"},
     {"label": "Alternate Unit",            "key": "alternate_unit",        "tab": "Item & Tax Details",           "required": False, "type": "string"},
     {"label": "Rate",                      "key": "item_rate",             "tab": "Item & Tax Details",           "required": False, "type": "number"},
     {"label": "Taxable Value",             "key": "taxable_value",         "tab": "Item & Tax Details",           "required": False, "type": "number"},
@@ -78,7 +81,7 @@ SALES_VOUCHER_COLUMNS = [
     {"label": "Cess",                      "key": "cess",                  "tab": "Item & Tax Details",           "required": False, "type": "number"},
     {"label": "Invoice Value",             "key": "invoice_value",         "tab": "Item & Tax Details",           "required": False, "type": "number"},
     {"label": "Sales Ledger",              "key": "sales_ledger",          "tab": "Item & Tax Details",           "required": False, "type": "string"},
-    {"label": "Item Narration",            "key": "description",           "tab": "Item & Tax Details",           "required": False, "type": "string"},
+    {"label": "ledger narration",          "key": "description",           "tab": "Item & Tax Details",           "required": False, "type": "string"},
 
     # ── Tab 2b: Foreign Currency (Item & Tax Details) ─────────────────────
     {"label": "Billing Currency",              "key": "fc_billing_currency", "tab": "Foreign Currency (Item & Tax Details)", "required": False, "type": "string"},
@@ -90,7 +93,7 @@ SALES_VOUCHER_COLUMNS = [
     {"label": "FC - Rate (Foreign Currency)",  "key": "fc_item_rate",        "tab": "Foreign Currency (Item & Tax Details)", "required": False, "type": "number"},
     {"label": "FC - Amount (Foreign Currency)", "key": "fc_invoice_value",    "tab": "Foreign Currency (Item & Tax Details)", "required": False, "type": "number"},
     {"label": "FC - Sales Ledger",             "key": "fc_sales_ledger",     "tab": "Foreign Currency (Item & Tax Details)", "required": False, "type": "string"},
-    {"label": "FC - Item Narration",           "key": "fc_description",      "tab": "Foreign Currency (Item & Tax Details)", "required": False, "type": "string"},
+    {"label": "FC - ledger narration",     "key": "fc_description",      "tab": "Foreign Currency (Item & Tax Details)", "required": False, "type": "string"},
 
     # ── Tab 3: Payment Details ──────────────────────────────────────────────
     {"label": "Total Taxable Value",       "key": "payment_taxable_value", "tab": "Payment Details",              "required": False, "type": "number"},
@@ -420,10 +423,13 @@ class SalesExcelUploadView(APIView):
             # 5. Process Each Group
             created_vouchers = []
             creation_errors = []
-            total_items_count = 0
-            
-            # Map for quick key lookup
-            LABEL_TO_KEY = {c["label"]: c["key"] for c in SALES_VOUCHER_COLUMNS}
+            # Pre-fetch inventory and service masters for auto-filling item details
+            inventory_master = list(InventoryItem.objects.filter(tenant_id=tenant_id, is_active=True).values(
+                'item_code', 'item_name', 'hsn_code', 'uom', 'rate', 'gst_rate'
+            ))
+            service_master = list(Service.objects.filter(tenant_id=tenant_id, is_active=True).values(
+                'service_code', 'service_name', 'sac_code', 'uom', 'gst_rate'
+            ))
 
             for v_no, group_rows in vouchers_groups.items():
                 first = group_rows[0]
@@ -504,6 +510,62 @@ class SalesExcelUploadView(APIView):
                             else:
                                 item_obj[col["key"]] = 0.0 if col["type"] == "number" else None
                     if has_data:
+                        # Auto-fill details from Master if missing
+                        code = str(item_obj.get("item_code") or "").strip()
+                        name = str(item_obj.get("item_name") or "").strip()
+                        
+                        master_item = None
+                        if code:
+                            master_item = next((m for m in inventory_master if str(m['item_code']).strip().upper() == code.upper()), None)
+                            if not master_item:
+                                master_item = next((m for m in service_master if str(m['service_code']).strip().upper() == code.upper()), None)
+                        
+                        if not master_item and name:
+                            master_item = next((m for m in inventory_master if str(m['item_name']).strip().upper() == name.upper()), None)
+                            if not master_item:
+                                master_item = next((m for m in service_master if str(m['service_name']).strip().upper() == name.upper()), None)
+                        
+                        if master_item:
+                            # Fill missing basic info
+                            if not item_obj.get("item_code"): item_obj["item_code"] = master_item.get("item_code") or master_item.get("service_code")
+                            if not item_obj.get("item_name") or item_obj["item_name"] == "Imported Item": 
+                                item_obj["item_name"] = master_item.get("item_name") or master_item.get("service_name")
+                            if not item_obj.get("hsn_sac"): item_obj["hsn_sac"] = master_item.get("hsn_code") or master_item.get("sac_code")
+                            if not item_obj.get("uom"): item_obj["uom"] = master_item.get("uom")
+                            
+                            # Fill Rate if missing or zero
+                            m_rate = _safe_float(master_item.get("rate") or 0)
+                            if (not item_obj.get("item_rate") or item_obj["item_rate"] == 0) and m_rate > 0:
+                                item_obj["item_rate"] = m_rate
+                                
+                            # Calculate Taxable Value if missing
+                            qty = _safe_float(item_obj.get("qty") or 0)
+                            rate = _safe_float(item_obj.get("item_rate") or 0)
+                            if (not item_obj.get("taxable_value") or item_obj["taxable_value"] == 0) and qty > 0 and rate > 0:
+                                item_obj["taxable_value"] = round(qty * rate, 2)
+                            
+                            # Auto-calculate Taxes if master has GST Rate and columns are empty
+                            m_gst = _safe_float(master_item.get("gst_rate") or 0)
+                            taxable = _safe_float(item_obj.get("taxable_value") or 0)
+                            
+                            has_any_tax = any(_safe_float(item_obj.get(k) or 0) > 0 for k in ["cgst", "sgst", "igst", "cess"])
+                            
+                            if m_gst > 0 and taxable > 0 and not has_any_tax:
+                                # Determine if Intra-state or Inter-state
+                                pos = str(invoice_payload.get("place_of_supply") or "").strip().lower()
+                                
+                                # Fetch company state from tenant
+                                tenant_obj = Tenant.objects.filter(id=tenant_id).first()
+                                company_state = str(tenant_obj.state or "tamil nadu").strip().lower()
+                                
+                                total_tax = round(taxable * (m_gst / 100), 2)
+                                
+                                if pos and company_state and company_state not in pos:
+                                    item_obj["igst"] = total_tax
+                                else:
+                                    item_obj["cgst"] = round(total_tax / 2, 2)
+                                    item_obj["sgst"] = round(total_tax / 2, 2)
+
                         if not item_obj.get("item_name"): item_obj["item_name"] = "Imported Item"
                         items.append(item_obj)
                     
@@ -1035,19 +1097,26 @@ class SalesExcelWorkflowFinalizeView(APIView):
                         if serializer.is_valid():
                             serializer.save()
                             summary["created"] += 1
+                            inv["created"] = True
                         else:
                             summary["failed"] += 1
                             summary["errors"].append({
                                 "invoice_no": inv["invoice_no"],
                                 "errors": serializer.errors
                             })
+                            inv["status"] = "VALIDATION_FAILED"
+                            # Store field-level errors for frontend highlighting
+                            inv["field_errors"] = serializer.errors
+                            inv["message"] = "Voucher creation failed. Click Edit & Fix to resolve errors."
                 except Exception as e:
                     logger.error(f"Finalize error for {inv.get('invoice_no')}: {e}", exc_info=True)
                     summary["failed"] += 1
                     summary["errors"].append({"invoice_no": inv["invoice_no"], "errors": str(e)})
+                    inv["status"] = "VALIDATION_FAILED"
+                    inv["message"] = f"System Error: {str(e)}"
 
             # Remove from cache if all processed? Or partial?
-            remaining = [inv for inv in invoices if inv["status"] != "READY"]
+            remaining = [inv for inv in invoices if not inv.get("created")]
             if not remaining:
                 cache.delete(cache_key)
             else:

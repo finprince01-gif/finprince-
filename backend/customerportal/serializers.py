@@ -135,6 +135,34 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'tenant_id', 'created_by', 'created_at', 'updated_at']
 
+    def validate_pan_number(self, value):
+        """Ensure PAN number is unique per tenant if provided."""
+        if not value:
+            return value
+            
+        request = self.context.get('request')
+        if not request or not hasattr(request, 'user'):
+            return value
+            
+        tenant_id = getattr(request.user, 'tenant_id', None)
+        if not tenant_id:
+            return value
+            
+        # Check uniqueness
+        queryset = CustomerMasterCustomer.objects.filter(
+            tenant_id=tenant_id,
+            pan_number__iexact=value,
+            is_deleted=False
+        )
+        
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+            
+        if queryset.exists():
+            raise serializers.ValidationError(f"Customer with PAN {value} already exists.")
+            
+        return value
+
     def to_representation(self, instance):
         """
         Convert the model instance to a dictionary for JSON serialization

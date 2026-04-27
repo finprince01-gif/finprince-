@@ -256,6 +256,18 @@ class ApiService {
         return httpClient.get<StockItem[]>('/api/inventory/items/', undefined, options);
     }
 
+    async getMasterVoucherSales(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/masters/master-voucher-sales/', undefined, options);
+    }
+
+    async getNextVoucherNumber(seriesId: number | string) {
+        return httpClient.get<any>(`/api/masters/master-voucher-sales/${seriesId}/next-number/`);
+    }
+
+    async getServiceItems(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/services/?is_active=true', undefined, options);
+    }
+
     async getServices(params?: string | Record<string, any>) {
         if (typeof params === 'string') {
             return httpClient.get<any[]>(`/api/services/${params ? '?' + params : ''}`);
@@ -592,6 +604,13 @@ class ApiService {
         }));
     }
 
+    /**
+     * Get all journal entries (the double-entry source of truth)
+     */
+    async getJournalEntries(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/journal-entries/', undefined, options);
+    }
+
     async saveVoucher(data: Voucher) {
         const normalizedData = { ...data, type: this.normalizeVoucherType(data.type) };
         const response = await httpClient.post<Voucher>('/api/vouchers/', normalizedData);
@@ -775,7 +794,7 @@ class ApiService {
 
     /** Get blank template for Sales Excel Upload. */
     async getSalesExcelTemplate() {
-        return httpClient.get<Blob>('/api/sales-excel/workflow/template/');
+        return httpClient.get<Blob>('/api/sales-excel/workflow/template/', undefined, { responseType: 'blob' });
     }
 
     /** Upload Sales Excel → returns in-memory invoices with validation status. */

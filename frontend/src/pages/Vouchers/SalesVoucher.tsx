@@ -4126,8 +4126,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                 <div className="flex gap-1">
                                                     {(customerTcsRate > 0 || customerTdsRate > 0) && (
                                                         <span className="text-[10px] items-center font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5" title="Rates applied">
-                                                            {customerTcsRate > 0 && `TCS:${(customerTcsRate*100).toFixed(0)}% `}
-                                                            {customerTdsRate > 0 && `TDS:${(customerTdsRate*100).toFixed(0)}%`}
+                                                            {customerTcsRate > 0 && `TCS:${(customerTcsRate * 100).toFixed(0)}% `}
+                                                            {customerTdsRate > 0 && `TDS:${(customerTdsRate * 100).toFixed(0)}%`}
                                                         </span>
                                                     )}
                                                 </div>
@@ -4283,8 +4283,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                 disabled={!customerName}
                                                 title={!customerName ? "Please select a customer first" : "Edit Customer Terms"}
                                                 className={`px-4 py-2 rounded-[4px] transition-colors text-[11px] font-bold uppercase tracking-wider shadow-none border ${!customerName
-                                                        ? 'bg-indigo-300 text-white cursor-not-allowed opacity-70 border-indigo-300'
-                                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                                                    ? 'bg-indigo-300 text-white cursor-not-allowed opacity-70 border-indigo-300'
+                                                    : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
                                                     }`}
                                             >
                                                 EDIT MASTERS

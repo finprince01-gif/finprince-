@@ -17,6 +17,15 @@ interface AddNewCustomerModalProps {
     isOpen: boolean;
     onClose: () => void;
     onCustomerCreated: (customerName: string) => void;
+    initialData?: {
+        customer_name?: string;
+        gstin?: string;
+        address?: string;
+        state?: string;
+        branch?: string;
+        email?: string;
+        phone?: string;
+    };
 }
 
 const TABS = [
@@ -32,7 +41,7 @@ const getAvailableStates = (countryCode: string) => {
     return State.getStatesOfCountry(countryCode) || [];
 };
 
-const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClose, onCustomerCreated }) => {
+const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClose, onCustomerCreated, initialData }) => {
     const [activeTab, setActiveTab] = useState('Basic Details');
     const [isSaving, setIsSaving] = useState(false);
     const [categories, setCategories] = useState<any[]>([]);
@@ -107,6 +116,49 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
 
     useEffect(() => {
         if (!isOpen) return;
+
+        // Pre-fill if initialData is provided
+        if (initialData) {
+            setFormData(prev => ({
+                ...prev,
+                // Only pre-fill customer name — do NOT pre-fill pan_number, email, or phone
+                // as these are not from Excel and may conflict with existing records
+                customer_name: initialData.customer_name || prev.customer_name,
+            }));
+
+            if (initialData.gstin) {
+                setIsUnregistered(false);
+                setSelectedGSTINs([initialData.gstin]);
+                setGstInput('');
+                // Prepare registered branch with initial info
+                setRegisteredBranches([{
+                    gstin: initialData.gstin,
+                    defaultRef: initialData.branch || 'Main Branch',
+                    addressLine1: initialData.address || '',
+                    addressLine2: '',
+                    addressLine3: '',
+                    city: '',
+                    pincode: '',
+                    state: initialData.state || '',
+                    country: 'India',
+                    contactPerson: '',
+                    contactNumber: '',
+                    email: ''
+                }]);
+                setShowBranchDetails(true);
+            } else {
+                setIsUnregistered(true);
+                setUnregisteredBranches([{
+                    ...emptyUnregBranch(1),
+                    referenceName: initialData.branch || 'Main Branch',
+                    addressLine1: initialData.address || '',
+                    state: initialData.state || '',
+                    contactNumber: '',
+                    email: ''
+                }]);
+            }
+        }
+
         // Fetch categories and stock items
         httpClient.get<any[]>('/api/customerportal/categories/').then(res => {
             setCategories(Array.isArray(res) ? res : (res as any).results || []);
@@ -115,7 +167,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
             const items = Array.isArray(res) ? res : (res as any).results || [];
             setStockItems(items.map((i: any) => ({ code: i.item_code, name: i.item_name, uom: i.uom || '' })));
         }).catch(() => { });
-    }, [isOpen]);
+    }, [isOpen, initialData]);
 
     const resetForm = () => {
         setActiveTab('Basic Details');
@@ -145,18 +197,6 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
             setActiveTab('Basic Details');
             return;
         }
-        if (!formData.pan_number || !formData.pan_number.trim()) {
-            showError('PAN Number is required');
-            setActiveTab('Basic Details');
-            return;
-        }
-        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-        if (!panRegex.test(formData.pan_number.toUpperCase())) {
-            showError('Invalid PAN format. Expected: ABCDE1234F');
-            setActiveTab('Basic Details');
-            return;
-        }
-
         if (formData.email_address && formData.email_address.trim()) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(formData.email_address)) {
@@ -165,6 +205,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                 return;
             }
         }
+
         setIsSaving(true);
         try {
             const payload = {
@@ -212,7 +253,29 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
             onCustomerCreated(formData.customer_name);
             resetForm();
         } catch (err: any) {
-            showError(err?.message || 'Failed to create customer');
+            let errorMsg = err?.message || 'Failed to create customer';
+            
+            // Extract DRF field validation errors (e.g., pan_number uniqueness)
+            if (err?.data && typeof err.data === 'object' && !Array.isArray(err.data)) {
+                const ignoreKeys = ['error', 'message', 'detail', 'status', 'code'];
+                const fieldErrors = Object.entries(err.data)
+                    .filter(([k]) => !ignoreKeys.includes(k))
+                    .map(([k, v]) => {
+                        const val = Array.isArray(v) ? v[0] : v;
+                        // Keep PAN capitalized, otherwise title case
+                        const niceKey = k === 'pan_number' ? 'PAN Number' 
+                                      : k.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                        return `${niceKey}: ${val}`;
+                    });
+                
+                if (fieldErrors.length > 0) {
+                    errorMsg = fieldErrors.join(' | ');
+                } else if (err.data.error || err.data.detail) {
+                    errorMsg = err.data.error || err.data.detail;
+                }
+            }
+            
+            showError(errorMsg);
         } finally {
             setIsSaving(false);
         }
@@ -227,16 +290,6 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                 showError('Customer Name is required');
                 return;
             }
-            if (!formData.pan_number || !formData.pan_number.trim()) {
-                showError('PAN Number is required');
-                return;
-            }
-            const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-            if (!panRegex.test(formData.pan_number.toUpperCase())) {
-                showError('Invalid PAN format. Correct format: ABCDE1234F');
-                return;
-            }
-
             if (formData.email_address && formData.email_address.trim()) {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailRegex.test(formData.email_address)) {
@@ -314,13 +367,12 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                 // Validate if trying to move away from current tab to a later tab
                                 if (i > tabIndex) {
                                     if (activeTab === 'Basic Details') {
-                                        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
                                         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                                         const isEmailValid = !formData.email_address?.trim() || emailRegex.test(formData.email_address);
 
-                                        if (!formData.customer_name.trim() || !formData.pan_number?.trim() || !panRegex.test(formData.pan_number.toUpperCase()) || !isEmailValid) {
+                                        if (!formData.customer_name.trim() || !isEmailValid) {
                                             if (!isEmailValid) showError('Please enter a valid email address.');
-                                            else showError('Please enter a valid Customer Name and PAN Number before moving.');
+                                            else showError('Please enter a Customer Name before moving.');
                                             return;
                                         }
                                     }
@@ -366,7 +418,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">PAN Number <span className="text-red-500">*</span></label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">PAN Number</label>
                                 <input type="text" value={formData.pan_number} onChange={e => setFormData(p => ({ ...p, pan_number: e.target.value.toUpperCase() }))}
                                     className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="ABCDE1234F" maxLength={10} />
                             </div>

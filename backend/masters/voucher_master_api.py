@@ -92,9 +92,109 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
             # Non-numeric or missing suffix: pad number then append suffix
             return f"{prefix}{str(num).zfill(digits)}{suffix}"
 
+    def _get_db_max_number(self, series) -> int:
+        """
+        Heuristic to find the maximum sequential number used in the database for this series.
+        Helps recover from counter jumps or out-of-sync master tables.
+        """
+        from django.apps import apps
+        from django.db.models import Max
+        import re
+        
+        # Mapping from Master model to Transaction model
+        model_map = {
+            'MasterVoucherSales': ('accounting.VoucherSalesInvoiceDetails', 'sales_invoice_no'),
+            'MasterVoucherCreditNote': ('accounting.VoucherSalesInvoiceDetails', 'sales_invoice_no'),
+            'MasterVoucherPurchases': ('accounting.VoucherPurchaseDetails', 'purchase_invoice_no'),
+            'MasterVoucherDebitNote': ('accounting.VoucherPurchaseDetails', 'purchase_invoice_no'),
+            'MasterVoucherReceipts': ('accounting.VoucherReceiptDetails', 'receipt_no'),
+            'MasterVoucherPayments': ('accounting.VoucherPaymentDetails', 'payment_no'),
+        }
+        
+        type_name = series.__class__.__name__
+        if type_name not in model_map:
+            return None
+            
+        model_path, field_name = model_map[type_name]
+        
+        try:
+            Model = apps.get_model(model_path)
+            v_name_clean = series.voucher_name.strip()
+            
+            # Phase 1: Direct DB Max (Efficient for large tables)
+            db_res = Model.objects.filter(
+                tenant_id=series.tenant_id,
+                voucher_name__iexact=v_name_clean
+            ).aggregate(max_val=Max(field_name))
+            
+            max_val = db_res.get('max_val')
+            required_digits = series.required_digits or 4
+            
+            if max_val:
+                clean_no = str(max_val)
+                if series.prefix and clean_no.startswith(series.prefix):
+                    clean_no = clean_no[len(series.prefix):]
+                if series.suffix and clean_no.endswith(series.suffix):
+                    clean_no = clean_no[:-len(series.suffix)]
+                
+                match = re.search(r'(\d+)', clean_no)
+                if match:
+                    try:
+                        num_str = match.group(1)
+                        num = int(num_str)
+                        if len(num_str) <= required_digits + 2:
+                            return num
+                    except: pass
+
+            # Phase 2: Fallback Scan (Scan last 500 records)
+            records = Model.objects.filter(
+                tenant_id=series.tenant_id,
+                voucher_name__iexact=v_name_clean
+            ).order_by('-id')[:500].values_list(field_name, flat=True)
+            
+            max_num = 0
+            for no in records:
+                if not no: continue
+                clean_no = str(no)
+                if series.prefix and clean_no.startswith(series.prefix):
+                    clean_no = clean_no[len(series.prefix):]
+                if series.suffix and clean_no.endswith(series.suffix):
+                    clean_no = clean_no[:-len(series.suffix)]
+                
+                match = re.search(r'(\d+)', clean_no)
+                if match:
+                    try:
+                        num_str = match.group(1)
+                        num = int(num_str)
+                        if len(num_str) <= required_digits + 2:
+                            if num > max_num:
+                                max_num = num
+                    except: pass
+            
+            return max_num if max_num > 0 else None
+        except Exception as e:
+            print(f"[VoucherMaster] Failed to fetch DB max for {type_name}: {e}")
+            return None
+
     @action(detail=True, methods=['get'], url_path='next-number')
     def next_number(self, request, pk=None):
         series = self.get_object()
+        
+        # SMART SYNC: Align counter with actual database state
+        db_max = self._get_db_max_number(series)
+        expected_next = (series.current_number or series.start_from or 1)
+        
+        needs_save = False
+        if db_max is not None:
+            # If counter is behind DB or wildly ahead, align it
+            if db_max >= expected_next or expected_next > db_max + 1:
+                series.current_number = db_max + 1
+                needs_save = True
+        
+        if needs_save:
+            series.save(update_fields=['current_number', 'updated_at'])
+            print(f"[VoucherMaster] Corrected series '{series.voucher_name}' to {series.current_number} (DB Max was {db_max})")
+        
         invoice_number = self._format_invoice_number(series)
         return Response({
             'invoice_number': invoice_number,
