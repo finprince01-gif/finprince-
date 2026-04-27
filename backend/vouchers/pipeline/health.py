@@ -12,7 +12,7 @@ import time
 logger = logging.getLogger(__name__)
 
 HEALTH_CACHE_TTL = 30.0   # seconds between AI re-checks
-MAX_PAGES_PER_JOB = int(os.environ.get('MAX_PAGES_PER_JOB', '50'))
+MAX_PAGES_PER_JOB = int(os.environ.get('MAX_PAGES_PER_JOB', '10000'))
 
 
 # ─────────────────────────────────────────────────────────────

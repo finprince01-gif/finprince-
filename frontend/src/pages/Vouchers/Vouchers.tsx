@@ -48,8 +48,8 @@ const getTodayDate = () => new Date().toISOString().split('T')[0];
 const UPLOAD_OPTIONS_CONFIG: Record<string, string[]> = {
   purchase: ["purchase_scan", "others"],
   sales: ["sales_excel_upload", "others"],
-  payment: ["banking", "others"],
-  receipt: ["banking", "others"],
+  payment: ["others"],
+  receipt: ["others"],
   contra: ["others"],
   journal: ["others"],
   expenses: ["others"],
@@ -138,7 +138,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const arr = Array.isArray(ledgerData) ? ledgerData : ((ledgerData as any)?.results ?? []);
       if (arr.length > 0) setFreshLedgers(arr);
       if (Array.isArray(hierarchyData) && hierarchyData.length > 0) setHierarchy(hierarchyData);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const fetchRichData = useCallback(async () => {
@@ -266,8 +266,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const { subscriptionUsage, isLimitReached, refetch } = useSubscriptionUsage();
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isSalesExcelWorkflowOpen, setIsSalesExcelWorkflowOpen] = useState(false);
-  const [isQuickVoucherModalOpen, setIsQuickVoucherModalOpen] = useState(false);
-  const [selectedStatementTransaction, setSelectedStatementTransaction] = useState<any>(null);
   const [isCreatingVoucher, setIsCreatingVoucher] = useState(false);
 
   const handleScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -701,13 +699,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
       cnSelectedSalesInvoices.forEach(invNo => {
         const cleanInvNo = String(invNo || '').trim().toLowerCase();
-        
+
         // Find the original invoice details from the list (which was fetched when customer was selected)
-        const invoice = cnSalesInvoicesList.find(i => 
-          String(i.sales_invoice_no || '').trim().toLowerCase() === cleanInvNo || 
+        const invoice = cnSalesInvoicesList.find(i =>
+          String(i.sales_invoice_no || '').trim().toLowerCase() === cleanInvNo ||
           String(i.voucher_no || '').trim().toLowerCase() === cleanInvNo
         );
-        
+
         if (invoice) {
           // Check for nested payment_details (full view) or flattened fields (list view)
           const origTaxable = parseFloat(String(invoice.payment_details?.payment_taxable_value || invoice.taxable_value || 0)) || 0;
@@ -726,7 +724,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             if (cnTaxableForThisInv > 0) {
               // Formula: (Credit Note Taxable Value / Original Invoice Taxable Value) * Original IT Amount (TCS/TDS)
               let reverseItValue = (cnTaxableForThisInv / origTaxable) * origItAmount;
-              
+
               // Validation: Must be less than or equal to the IT amount linked to the Sales Invoice
               if (reverseItValue > origItAmount) {
                 reverseItValue = origItAmount;
@@ -799,30 +797,30 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     billFromCity,
     billFromPincode,
     billFromState,
-     billFromCountry
-   ]);
- 
-   // Sync Credit Note Ship From with Bill From when toggle is on
-   useEffect(() => {
-     if (cnSameAsBillFrom) {
-       setShipFromAddress1(billFromAddress1);
-       setShipFromAddress2(billFromAddress2);
-       setShipFromAddress3(billFromAddress3);
-       setShipFromCity(billFromCity);
-       setShipFromPincode(billFromPincode);
-       setShipFromState(billFromState);
-       setShipFromCountry(billFromCountry);
-     }
-   }, [
-     cnSameAsBillFrom,
-     billFromAddress1,
-     billFromAddress2,
-     billFromAddress3,
-     billFromCity,
-     billFromPincode,
-     billFromState,
-     billFromCountry
-   ]);
+    billFromCountry
+  ]);
+
+  // Sync Credit Note Ship From with Bill From when toggle is on
+  useEffect(() => {
+    if (cnSameAsBillFrom) {
+      setShipFromAddress1(billFromAddress1);
+      setShipFromAddress2(billFromAddress2);
+      setShipFromAddress3(billFromAddress3);
+      setShipFromCity(billFromCity);
+      setShipFromPincode(billFromPincode);
+      setShipFromState(billFromState);
+      setShipFromCountry(billFromCountry);
+    }
+  }, [
+    cnSameAsBillFrom,
+    billFromAddress1,
+    billFromAddress2,
+    billFromAddress3,
+    billFromCity,
+    billFromPincode,
+    billFromState,
+    billFromCountry
+  ]);
 
 
   const [purchaseInputTypes, setPurchaseInputTypes] = useState<string[]>(['Intrastate']); // Default to Same State
@@ -1272,7 +1270,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
 
       try {
-        const params = isPurchase 
+        const params = isPurchase
           ? { vendor_name: entityName, grn_type: 'purchases' as const }
           : { customer_name: entityName, grn_type: 'sales_return' as const };
 
@@ -3769,7 +3767,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
       // Reset qty whenever item selection changes
       item.qty = 0;
-      
+
       let selectedItem: any;
       if (field === 'itemCode') {
         selectedItem = allItems.find((i: any) => (i.item_code || i.code) === value);
@@ -6747,7 +6745,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
       // Reset qty whenever item selection changes
       item.qty = 0;
-      
+
       let selectedItem: any;
       if (field === 'itemCode') {
         selectedItem = allItems.find((i: any) => (i.item_code || i.code) === value);
@@ -7060,9 +7058,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         cnSelectedSalesInvoices.map(no => (
                           <span key={no} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded border border-indigo-100 flex items-center gap-1">
                             {no}
-                            <button onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setCnSelectedSalesInvoices(prev => prev.filter(p => p !== no)); 
+                            <button onClick={(e) => {
+                              e.stopPropagation();
+                              setCnSelectedSalesInvoices(prev => prev.filter(p => p !== no));
                               setCnItems(prev => {
                                 const filtered = prev.filter(item => item.sourcePoNo !== no);
                                 return filtered.length > 0 ? filtered : [{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: '', financialAmount: 0 }];
@@ -7559,180 +7557,180 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <React.Fragment key={row.id}>
                         <tr className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                           <td className="px-2 py-3 text-center text-sm border-r border-gray-200">
-                          <div className="flex items-center justify-center gap-2">
-                            <input type="checkbox" className="w-4 h-4 rounded text-indigo-600" />
-                            {index + 1}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
-                            value={row.salesInvoiceNo || row.sourcePoNo || ''}
-                            readOnly
-                            className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium text-indigo-700 font-bold"
-                            placeholder="Auto"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
-                            value={row.itemCode}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'itemCode', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            placeholder="Code"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <SearchableDropdown
-                            value={row.itemName}
-                            options={allItems.map(i => i.name || i.item_name)}
-                            onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
-                            placeholder="Select/Enter item"
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-center text-sm">
-                          <input
-                            type="text"
-                            value={row.hsnSac}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'hsnSac', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            placeholder="HSN"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.qty}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
-                            value={row.uom}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            placeholder="Unit"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.rate}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'rate', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-medium pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm bg-gray-50/30 pr-2">
-                          {(row.taxableValue || 0).toFixed(2)}
-                        </td>
-                        {cnInputType.includes('CGST & SGST') ? (
-                          <>
-                            <td className="px-2 py-2 border-r border-gray-200">
-                              <input
-                                type="number"
-                                value={row.cgst}
-                                onChange={(e) => handleCreditNoteItemChange(index, 'cgst', e.target.value)}
-                                readOnly={cnReverseGstTcs === 'No'}
-                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
-                                step="0.01"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-r border-gray-200">
-                              <input
-                                type="number"
-                                value={row.sgst}
-                                onChange={(e) => handleCreditNoteItemChange(index, 'sgst', e.target.value)}
-                                readOnly={cnReverseGstTcs === 'No'}
-                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
-                                step="0.01"
-                              />
-                            </td>
-                          </>
-                        ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <input type="checkbox" className="w-4 h-4 rounded text-indigo-600" />
+                              {index + 1}
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="text"
+                              value={row.salesInvoiceNo || row.sourcePoNo || ''}
+                              readOnly
+                              className="w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium text-indigo-700 font-bold"
+                              placeholder="Auto"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="text"
+                              value={row.itemCode}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'itemCode', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              placeholder="Code"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <SearchableDropdown
+                              value={row.itemName}
+                              options={allItems.map(i => i.name || i.item_name)}
+                              onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
+                              placeholder="Select/Enter item"
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-center text-sm">
+                            <input
+                              type="text"
+                              value={row.hsnSac}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'hsnSac', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center placeholder:text-gray-300 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              placeholder="HSN"
+                            />
+                          </td>
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
                               type="number"
-                              value={row.igst}
-                              onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
+                              value={row.qty}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="text"
+                              value={row.uom}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              placeholder="Unit"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              value={row.rate}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'rate', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-medium pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm bg-gray-50/30 pr-2">
+                            {(row.taxableValue || 0).toFixed(2)}
+                          </td>
+                          {cnInputType.includes('CGST & SGST') ? (
+                            <>
+                              <td className="px-2 py-2 border-r border-gray-200">
+                                <input
+                                  type="number"
+                                  value={row.cgst}
+                                  onChange={(e) => handleCreditNoteItemChange(index, 'cgst', e.target.value)}
+                                  readOnly={cnReverseGstTcs === 'No'}
+                                  className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
+                                  step="0.01"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-r border-gray-200">
+                                <input
+                                  type="number"
+                                  value={row.sgst}
+                                  onChange={(e) => handleCreditNoteItemChange(index, 'sgst', e.target.value)}
+                                  readOnly={cnReverseGstTcs === 'No'}
+                                  className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
+                                  step="0.01"
+                                />
+                              </td>
+                            </>
+                          ) : (
+                            <td className="px-2 py-2 border-r border-gray-200">
+                              <input
+                                type="number"
+                                value={row.igst}
+                                onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
+                                readOnly={cnReverseGstTcs === 'No'}
+                                className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
+                                step="0.01"
+                              />
+                            </td>
+                          )}
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              value={row.cess}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
                               readOnly={cnReverseGstTcs === 'No'}
                               className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
                               step="0.01"
                             />
                           </td>
-                        )}
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.cess}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
-                            readOnly={cnReverseGstTcs === 'No'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right pr-1 ${cnReverseGstTcs === 'No' ? 'text-gray-500 cursor-default' : 'text-indigo-600 font-medium'}`}
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-gray-50/50 pr-2">
-                          {(row.invoiceValue || 0).toFixed(2)}
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <button
-                            onClick={() => removeCreditNoteItem(row.id)}
-                            className="text-red-500 hover:text-red-700 p-1 transition-colors"
-                          >
-                            <Icon name="trash-2" className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                      {/* Sales Ledger and Description Row */}
-                      <tr className="border-b border-gray-200 bg-gray-50/30">
-                        <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
-                          <div className="flex items-center gap-3">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
-                            <div className="flex-1">
-                              <SearchableDropdown
-                                value={row.salesLedger}
-                                options={salesLedgerOptions}
-                                onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
-                                placeholder="Select Sales Ledger"
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td colSpan={cnInputType.includes('CGST & SGST') ? 10 : 9} className="px-4 py-2">
-                          <div className="flex items-center gap-3">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
-                            <input
-                              type="text"
-                              value={row.description}
-                              onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
-                              placeholder="Enter ledger narration"
-                              className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
-                            />
-                            {String(cnIsFinancial).toLowerCase() === 'yes' && (
-                              <div className="flex items-center gap-2 ml-4">
-                                <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
-                                <input
-                                  type="number"
-                                  value={row.financialAmount || row.taxableValue || 0}
-                                  onChange={(e) => handleCreditNoteItemChange(index, 'financialAmount', e.target.value)}
-                                  placeholder="0.00"
-                                  className="w-24 border-b border-indigo-200 focus:border-indigo-500 bg-transparent py-1 text-sm font-bold text-indigo-700 outline-none transition-colors text-right"
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-gray-50/50 pr-2">
+                            {(row.invoiceValue || 0).toFixed(2)}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <button
+                              onClick={() => removeCreditNoteItem(row.id)}
+                              className="text-red-500 hover:text-red-700 p-1 transition-colors"
+                            >
+                              <Icon name="trash-2" className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                        {/* Sales Ledger and Description Row */}
+                        <tr className="border-b border-gray-200 bg-gray-50/30">
+                          <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
+                              <div className="flex-1">
+                                <SearchableDropdown
+                                  value={row.salesLedger}
+                                  options={salesLedgerOptions}
+                                  onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
+                                  placeholder="Select Sales Ledger"
                                 />
                               </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    </React.Fragment>
-                  ))}
+                            </div>
+                          </td>
+                          <td colSpan={cnInputType.includes('CGST & SGST') ? 10 : 9} className="px-4 py-2">
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                              <input
+                                type="text"
+                                value={row.description}
+                                onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
+                                placeholder="Enter ledger narration"
+                                className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
+                              />
+                              {String(cnIsFinancial).toLowerCase() === 'yes' && (
+                                <div className="flex items-center gap-2 ml-4">
+                                  <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
+                                  <input
+                                    type="number"
+                                    value={row.financialAmount || row.taxableValue || 0}
+                                    onChange={(e) => handleCreditNoteItemChange(index, 'financialAmount', e.target.value)}
+                                    placeholder="0.00"
+                                    className="w-24 border-b border-indigo-200 focus:border-indigo-500 bg-transparent py-1 text-sm font-bold text-indigo-700 outline-none transition-colors text-right"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    ))}
                   </tbody>
                   <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                     <tr>
@@ -7792,7 +7790,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
           {creditNoteActiveTab === 'items_foreign' && (
             <div className="space-y-6">
-              
+
               {/* Floating Exchange Rate Input */}
               <div className="flex justify-end">
                 <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-[4px] shadow-none">
@@ -7805,7 +7803,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       setCnExchangeRate(exRateVal);
 
                       // Auto-update all INR rates based on the new exchange rate
-                      const exRateNum = parseFloat(exRateVal) || 1; 
+                      const exRateNum = parseFloat(exRateVal) || 1;
                       const updatedItems = cnItems.map(item => {
                         const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
                         const qty = parseFloat(item.qty.toString()) || 0;
@@ -7883,90 +7881,90 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             />
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200 uppercase font-mono text-[11px] text-gray-500">
-                          {row.itemCode || '-'}
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <SearchableDropdown
-                            value={row.itemName}
-                            options={allItems.map(i => i.name || i.item_name)}
-                            onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
-                            placeholder="Select item"
-                            disabled={cnIsFinancial === 'Yes'}
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.qty}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
-                            value={row.uom}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            placeholder="Unit"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200">
-                          <input
-                            type="number"
-                            value={row.foreignRate}
-                            onChange={(e) => handleCreditNoteItemChange(index, 'foreignRate', e.target.value)}
-                            disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
-                            className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-bold text-indigo-700 pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-indigo-50/20 pr-2">
-                          {(row.foreignAmount || 0).toFixed(2)}
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <button
-                            onClick={() => removeCreditNoteItem(row.id)}
-                            className="text-red-500 hover:text-red-700 p-1 transition-colors"
-                          >
-                            <Icon name="trash-2" className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                      {/* Sales Ledger and Description Row (Foreign Currency Tab) */}
-                      <tr className="border-b border-gray-200 bg-gray-50/20">
-                        <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
-                          <div className="flex items-center gap-3">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
-                            <div className="flex-1">
-                              <SearchableDropdown
-                                value={row.salesLedger}
-                                options={salesLedgerOptions}
-                                onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
-                                placeholder="Select Sales Ledger"
-                                disabled={cnIsFinancial === 'Yes'}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td colSpan={5} className="px-4 py-2">
-                          <div className="flex items-center gap-3">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                            {row.itemCode || '-'}
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <SearchableDropdown
+                              value={row.itemName}
+                              options={allItems.map(i => i.name || i.item_name)}
+                              onChange={(val) => handleCreditNoteItemChange(index, 'itemName', val)}
+                              placeholder="Select item"
+                              disabled={cnIsFinancial === 'Yes'}
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              value={row.qty}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center font-medium ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
                             <input
                               type="text"
-                              value={row.description}
-                              onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
-                              placeholder="Enter ledger narration"
-                              className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
+                              value={row.uom}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'uom', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-center ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              placeholder="Unit"
                             />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              value={row.foreignRate}
+                              onChange={(e) => handleCreditNoteItemChange(index, 'foreignRate', e.target.value)}
+                              disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
+                              className={`w-full border-none bg-transparent focus:ring-0 p-0 text-sm text-right font-bold text-indigo-700 pr-1 ${String(cnIsFinancial).toLowerCase() === 'yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`}
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-2 py-2 border-r border-gray-200 text-right text-sm font-bold bg-indigo-50/20 pr-2">
+                            {(row.foreignAmount || 0).toFixed(2)}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <button
+                              onClick={() => removeCreditNoteItem(row.id)}
+                              className="text-red-500 hover:text-red-700 p-1 transition-colors"
+                            >
+                              <Icon name="trash-2" className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                        {/* Sales Ledger and Description Row (Foreign Currency Tab) */}
+                        <tr className="border-b border-gray-200 bg-gray-50/20">
+                          <td colSpan={4} className="px-4 py-2 border-r border-gray-200">
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sales Ledger:</label>
+                              <div className="flex-1">
+                                <SearchableDropdown
+                                  value={row.salesLedger}
+                                  options={salesLedgerOptions}
+                                  onChange={(val) => handleCreditNoteItemChange(index, 'salesLedger', val)}
+                                  placeholder="Select Sales Ledger"
+                                  disabled={cnIsFinancial === 'Yes'}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td colSpan={5} className="px-4 py-2">
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Ledger Narration:</label>
+                              <input
+                                type="text"
+                                value={row.description}
+                                onChange={(e) => handleCreditNoteItemChange(index, 'description', e.target.value)}
+                                placeholder="Enter ledger narration"
+                                className="flex-1 border-b border-gray-200 focus:border-indigo-500 bg-transparent py-1 text-sm outline-none transition-colors"
+                              />
 
-                          </div>
-                        </td>
-                      </tr>
-                    </React.Fragment>
-                  ))}
+                            </div>
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    ))}
                   </tbody>
                   <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                     <tr>
@@ -10657,13 +10655,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               onClick: () => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); },
                               className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             },
-                            banking: {
-                              id: 'banking',
-                              label: "Banking",
-                              icon: <Icon name="bank" className="w-4 h-4 mr-3 text-blue-500" />,
-                              onClick: () => { onNavigate('Banking' as any); setIsScannerMenuOpen(false); },
-                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
-                            },
                             others: {
                               id: 'others',
                               label: "Others",
@@ -10730,7 +10721,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       </div>
                                     )}
                                     <button
-                                      onClick={() => { zohoScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                                      onClick={() => { 
+                                        setExtractionMode('zoho'); 
+                                        setScanType('bulk'); 
+                                        setScannerFiles(null); 
+                                        setIsInvoiceScannerOpen(true); 
+                                        setIsScannerMenuOpen(false); 
+                                        setIsOthersSubmenuOpen(false); 
+                                      }}
                                       className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                                       role="menuitem"
                                     >
@@ -10738,7 +10736,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       Zoho
                                     </button>
                                     <button
-                                      onClick={() => { sapScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                                      onClick={() => { 
+                                        setExtractionMode('sap'); 
+                                        setScanType('bulk'); 
+                                        setScannerFiles(null); 
+                                        setIsInvoiceScannerOpen(true); 
+                                        setIsScannerMenuOpen(false); 
+                                        setIsOthersSubmenuOpen(false); 
+                                      }}
                                       className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                                       role="menuitem"
                                     >
@@ -10759,89 +10764,89 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
 
             {/* Single scan input */}
-                <input
-                  type="file"
-                  ref={singleScanInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleSingleScanFileChange}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                />
+            <input
+              type="file"
+              ref={singleScanInputRef}
+              onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+              onChange={handleSingleScanFileChange}
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="hidden"
+            />
 
-                {/* Multi-file scanner input for tally/other modes */}
-                <input
-                  type="file"
-                  ref={scannerInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleScannerFileChange}
-                  accept="image/*,.pdf"
-                  multiple
-                  className="hidden"
-                />
+            {/* Multi-file scanner input for tally/other modes */}
+            <input
+              type="file"
+              ref={scannerInputRef}
+              onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+              onChange={handleScannerFileChange}
+              accept="image/*,.pdf"
+              multiple
+              className="hidden"
+            />
 
-                <input
-                  type="file"
-                  ref={masterScannerInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleMasterScannerFileChange}
-                  accept="image/*,.pdf"
-                  multiple
-                  className="hidden"
-                />
+            <input
+              type="file"
+              ref={masterScannerInputRef}
+              onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+              onChange={handleMasterScannerFileChange}
+              accept="image/*,.pdf"
+              multiple
+              className="hidden"
+            />
 
-                {/* Zoho multi-file scanner input */}
-                <input
-                  type="file"
-                  ref={zohoScannerInputRef}
-                  onChange={handleZohoScannerFileChange}
-                  accept="image/*,.pdf,.xlsx,.xls,.csv"
-                  multiple
-                  className="hidden"
-                />
+            {/* Zoho multi-file scanner input */}
+            <input
+              type="file"
+              ref={zohoScannerInputRef}
+              onChange={handleZohoScannerFileChange}
+              accept="image/*,.pdf,.xlsx,.xls,.csv"
+              multiple
+              className="hidden"
+            />
 
-                {/* SAP multi-file scanner input */}
-                <input
-                  type="file"
-                  ref={sapScannerInputRef}
-                  onChange={handleSapScannerFileChange}
-                  accept="image/*,.pdf,.xlsx,.xls,.csv"
-                  multiple
-                  className="hidden"
-                />
+            {/* SAP multi-file scanner input */}
+            <input
+              type="file"
+              ref={sapScannerInputRef}
+              onChange={handleSapScannerFileChange}
+              accept="image/*,.pdf,.xlsx,.xls,.csv"
+              multiple
+              className="hidden"
+            />
 
-                <input
-                  type="file"
-                  ref={excelInputRef}
-                  onChange={handleExcelFileChange}
-                  accept=".xlsx, .xls"
-                  className="hidden"
-                />
+            <input
+              type="file"
+              ref={excelInputRef}
+              onChange={handleExcelFileChange}
+              accept=".xlsx, .xls"
+              className="hidden"
+            />
 
 
 
-                <input
-                  type="file"
-                  ref={jsonInputRef}
-                  onChange={handleJsonFileChange}
-                  accept=".json"
-                  className="hidden"
-                />
+            <input
+              type="file"
+              ref={jsonInputRef}
+              onChange={handleJsonFileChange}
+              accept=".json"
+              className="hidden"
+            />
 
-                <input
-                  type="file"
-                  ref={imageInputRef}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
-                      showInfo(`File "${file.name}" attached for manual entry.`);
-                    }
-                  }}
-                  accept="image/*,.pdf"
-                  className="hidden"
-                />
+            <input
+              type="file"
+              ref={imageInputRef}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
+                  showInfo(`File "${file.name}" attached for manual entry.`);
+                }
+              }}
+              accept="image/*,.pdf"
+              className="hidden"
+            />
 
-                <style dangerouslySetInnerHTML={{
+            <style dangerouslySetInnerHTML={{
               __html: `
                 .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
                 .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }

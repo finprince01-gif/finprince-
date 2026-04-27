@@ -283,6 +283,10 @@ BULK_AI_CALL_GAP_SECONDS = float(os.getenv('BULK_AI_CALL_GAP', '0.5'))
 BULK_MAX_RETRIES = int(os.getenv('BULK_MAX_RETRIES', '3'))
 BULK_STUCK_THRESHOLD_MINUTES = int(os.getenv('BULK_STUCK_THRESHOLD', '5'))
 
+# Increase upload limits for large bulk scans (effectively infinite)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 1073741824  # 1GB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1073741824  # 1GB
+
 # ============================================================================
 # LOGIN SECURITY SETTINGS
 # ============================================================================

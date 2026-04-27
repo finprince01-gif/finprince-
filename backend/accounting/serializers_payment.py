@@ -646,7 +646,6 @@ class VoucherPaymentSingleSerializer(PaymentVoucherSerializer):
     advance_ref_no = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     advance_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
     transaction_details = serializers.JSONField(required=False, allow_null=True)
-    bank_transaction_id = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:  # type: ignore
         model = PaymentVoucher
@@ -654,7 +653,7 @@ class VoucherPaymentSingleSerializer(PaymentVoucherSerializer):
         fields = [
             'id', 'date', 'voucher_type', 'voucher_number', 'pay_from', 'narration',
             'pay_to', 'total_payment', 'advance_ref_no', 'advance_amount', 
-            'transaction_details', 'bank_transaction_id'
+            'transaction_details'
         ]
 
     def validate_pay_to(self, value):
@@ -663,8 +662,6 @@ class VoucherPaymentSingleSerializer(PaymentVoucherSerializer):
         return _resolve_ledger(value, tenant_id)
 
     def create(self, validated_data):
-        validated_data.pop('bank_transaction_id', None)
-
         if 'items' not in validated_data:
             pay_to    = validated_data.pop('pay_to', None)
             total_pmt = validated_data.pop('total_payment', Decimal('0'))
@@ -723,13 +720,12 @@ class VoucherPaymentBulkSerializer(PaymentVoucherSerializer):
     total_payment = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, source='total_amount')
     posting_note = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     transaction_details = serializers.JSONField(required=False, allow_null=True)
-    bank_transaction_id = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:  # type: ignore
         model = PaymentVoucher
         fields = [
             'id', 'date', 'voucher_type', 'voucher_number', 'pay_from',
-            'payment_rows', 'posting_note', 'transaction_details', 'bank_transaction_id'
+            'payment_rows', 'posting_note', 'transaction_details'
         ]
 
     def validate_payment_rows(self, value):
@@ -748,8 +744,6 @@ class VoucherPaymentBulkSerializer(PaymentVoucherSerializer):
         return items
 
     def create(self, validated_data):
-        validated_data.pop('bank_transaction_id', None)
-
         if 'payment_rows' in validated_data:
             raw_rows = validated_data.pop('payment_rows')
             adv_ref = validated_data.pop('advance_ref_no', None)

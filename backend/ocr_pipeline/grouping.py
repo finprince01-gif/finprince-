@@ -1,177 +1,187 @@
+import fitz  # PyMuPDF
 import re
 import logging
-from typing import List, Dict, Any
-from django.db import transaction
+import hashlib
+import json
+from typing import List, Tuple
 from .repository import InvoiceTempOCR
 
 logger = logging.getLogger(__name__)
 
-def normalize_gstin(gstin: str) -> str:
-    """Uppercase and trim spaces."""
-    if not gstin: return ""
-    return str(gstin).strip().upper()
-
-def normalize_invoice_no(inv_no: str) -> str:
+def segment_pdf_by_boundaries(file_bytes: bytes) -> List[bytes]:
     """
-    Uppercase, remove spaces, replace multiple separators with single standard separator.
-    Remove non-alphanumeric except / and -.
+    STRICT Identity-Based Segmentation Engine.
+    Ensures no merging happens when invoice numbers or totals differ.
     """
-    if not inv_no: return ""
-    # 1. Uppercase
-    s = str(inv_no).upper()
-    # 2. Remove spaces
-    s = s.replace(" ", "")
-    # 3. Handle separators: replace multiple occurrences of - or / with a single one
-    s = re.sub(r'[-/]+', lambda m: m.group(0)[0], s)
-    # 4. Remove non-alphanumeric except / and -
-    s = re.sub(r'[^A-Z0-9/-]', '', s)
-    return s
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+    except Exception as e:
+        logger.error(f"Failed to open PDF for segmentation: {e}")
+        return [file_bytes]
 
-def normalize_branch(branch: str) -> str:
-    """Lowercase, trim, remove punctuation, collapse spaces."""
-    if not branch: return ""
-    # 1. Lowercase & Trim
-    s = str(branch).lower().strip()
-    # 2. Remove punctuation (.,-/)
-    s = re.sub(r'[.,-/]', ' ', s)
-    # 3. Collapse multiple spaces
-    s = re.sub(r'\s+', ' ', s).strip()
-    return s
+    total_pages = len(doc)
+    if total_pages <= 1:
+        return [file_bytes]
 
-def normalize_date_strict(date_val: str) -> str:
-    """Standardize to YYYY-MM-DD."""
-    if not date_val: return ""
-    from .normalize import normalize_date
-    return normalize_date(date_val)
-
-def run_grouping_logic(tenant_id: str, upload_session_id: str = None):
-    """
-    Core implementation of STEP 3-7: Grouping and Merging.
-    """
-    logger.info(f"STARTING GROUPING PREPROCESSOR: tenant={tenant_id}, session={upload_session_id}")
+    invoice_groups: List[List[int]] = []
+    current_group = [0]
     
-    # 1. Fetch relevant unprocessed records
-    query = InvoiceTempOCR.objects.filter(tenant_id=tenant_id, processed=False)
-    if upload_session_id:
-        query = query.filter(upload_session_id=upload_session_id)
+    # ── Rules ──
+    LABEL_PATTERNS = [r"INVOICE\s*NO", r"INVOICE\s*NUMBER", r"BILL\s*NO", r"INV\s*NO", r"INVOICE\s*#"]
+    REJECTION_WORDS = ["HSN", "QTY", "RATE", "AMOUNT", "CGST", "SGST", "TAX", "TOTAL"]
+
+    def is_valid_format(val: str) -> bool:
+        if not val: return False
+        val = val.strip().upper()
+        if len(val) < 3 or len(val) > 25: return False
+        has_special = any(c in val for c in ["/", "-", ".", "_", " "])
+        has_alpha = any(c.isalpha() for c in val)
+        has_digit = any(c.isdigit() for c in val)
+        if val.isdigit() and len(val) > 7: return False
+        return has_digit and (has_special or has_alpha)
+
+    def extract_high_fidelity_invoice_no(page_obj):
+        blocks = page_obj.get_text("blocks")
+        page_height = page_obj.rect.height
+        candidates = []
+
+        for b_idx, b in enumerate(blocks):
+            text = b[4].upper()
+            y_pos = b[1]
+            found_label = any(re.search(lp, text) for lp in LABEL_PATTERNS)
+            if found_label:
+                match = re.search(r"(?:NO|#|NUM)?[\s.:]*([A-Z0-9\/\-\.\_\s]{3,})", text)
+                if match:
+                    val = match.group(1).strip()
+                    if is_valid_format(val):
+                        candidates.append({"val": val, "y": y_pos})
+                if b_idx + 1 < len(blocks):
+                    next_text = blocks[b_idx+1][4].strip().upper()
+                    if is_valid_format(next_text):
+                        candidates.append({"val": next_text, "y": blocks[b_idx+1][1]})
+
+        filtered = [c for c in candidates if not any(rw in c["val"] for rw in REJECTION_WORDS)]
+        if not filtered: return None
+        # Score by position (top of page is best)
+        best = max(filtered, key=lambda c: 100 if c["y"] < (page_height * 0.30) else 0)
+        return best["val"]
+
+    def extract_total_amount(page_obj):
+        blocks = page_obj.get_text("blocks")
+        total_patterns = [r"TOTAL", r"GRAND\s*TOTAL", r"INVOICE\s*VALUE", r"NET\s*AMOUNT"]
+        for b in blocks:
+            text = b[4].upper()
+            if any(re.search(p, text) for p in total_patterns):
+                match = re.search(r"(?:₹|RS\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\b", text)
+                if match:
+                    try:
+                        val = float(match.group(1).replace(",", ""))
+                        if val > 0: return val
+                    except: pass
+        return None
+
+    last_inv_no = extract_high_fidelity_invoice_no(doc[0])
+    last_total = extract_total_amount(doc[0])
     
-    records = list(query.order_by('created_at', 'id'))
-    if not records:
-        logger.info("No records found to group.")
+    for i in range(1, total_pages):
+        page = doc[i]
+        curr_inv_no = extract_high_fidelity_invoice_no(page)
+        curr_total = extract_total_amount(page)
+        text = page.get_text("text").upper()
+        
+        split_decision = False
+        reason = "Continuing same invoice"
+        
+        # --- UPDATED SEGMENTATION LOGIC ---
+        if last_inv_no and curr_inv_no:
+            if last_inv_no == curr_inv_no:
+                split_decision = False
+                reason = "same invoice"
+            else:
+                split_decision = True
+                reason = "mismatch"
+        elif not curr_inv_no:
+            # Safe split if invoice number is missing on current page
+            split_decision = True
+            reason = "missing"
+        else:
+            # Current page has invoice number but previous didn't (or both None)
+            split_decision = True
+            reason = "new invoice detected"
+
+        # DEBUG LOGGING (MANDATORY FORMAT)
+        logger.info(json.dumps({
+            "page": i + 1,
+            "prev_invoice": last_inv_no,
+            "curr_invoice": curr_inv_no,
+            "decision": "split" if split_decision else "merge",
+            "reason": reason
+        }))
+
+        if split_decision:
+            invoice_groups.append(current_group)
+            current_group = [i]
+        else:
+            current_group.append(i)
+
+        if curr_inv_no: last_inv_no = curr_inv_no
+        if curr_total: last_total = curr_total
+
+    invoice_groups.append(current_group)
+
+    # Final Segments Conversion
+    blobs = []
+    for group in invoice_groups:
+        new_doc = fitz.open()
+        new_doc.insert_pdf(doc, from_page=group[0], to_page=group[-1])
+        blobs.append(new_doc.write())
+        new_doc.close()
+
+    doc.close()
+    logger.info(f"SEGMENTATION COMPLETE: Created {len(blobs)} segments.")
+    return blobs
+
+def run_grouping_logic(tenant_id, upload_session_id):
+    """
+    STRICT Grouping logic: Groups only if invoice_no matches EXACTLY.
+    """
+    if not upload_session_id:
         return
-
-    groups = {} # key -> list of records
-
+        
+    logger.info(f"Running STRICT grouping logic for session {upload_session_id}")
+    
+    records = InvoiceTempOCR.objects.filter(
+        tenant_id=str(tenant_id), 
+        upload_session_id=upload_session_id,
+        processed=False
+    ).order_by('created_at', 'id')
+    
+    seen = {} # invoice_no -> group_id
+    
     for r in records:
-        data = r.extracted_data or {}
-        sections = data.get("sections", {})
-        supplier = sections.get("supplier_details", {})
+        inv_no = (r.supplier_invoice_no or "").strip()
         
-        # Field Extraction (Step 1)
-        gstin_raw = r.gstin or supplier.get("gstin")
-        inv_no_raw = r.supplier_invoice_no or supplier.get("supplier_invoice_no")
-        branch_raw = r.branch or supplier.get("branch")
-        invoice_date_raw = data.get("invoice_date") or supplier.get("invoice_date")
-
-        # Edge Cases (Step 8): If any mandatory field is missing, DO NOT group
-        if not gstin_raw or not inv_no_raw or not branch_raw or not invoice_date_raw:
-            logger.info(f"Skipping grouping for record {r.id}: Missing mandatory fields.")
-            r.group_id = None
-            r.is_primary = True # Treat as standalone
-            r.save()
-            continue
-
-        # Normalization (Step 2)
-        gstin = normalize_gstin(gstin_raw)
-        inv_no = normalize_invoice_no(inv_no_raw)
-        
-        # IMPROVEMENT: If branch looks like a full address, try to distill it to city 
-        # to ensure pages with slightly different address extractions merge correctly.
-        branch = normalize_branch(branch_raw)
-        from .normalize import derive_city_from_address
-        city_distilled = derive_city_from_address(branch_raw)
-        if city_distilled:
-            branch = normalize_branch(city_distilled)
-
-        inv_date = normalize_date_strict(invoice_date_raw)
-
-        # Re-check after normalization
-        if not gstin or not inv_no or not branch or not inv_date:
-            logger.info(f"Skipping grouping for record {r.id}: Empty fields after normalization.")
-            r.group_id = None
+        if not inv_no:
+            # Cannot group without invoice number, treat as standalone
             r.is_primary = True
+            r.group_id = None
             r.save()
             continue
-
-        # Grouping Key (Step 3) - Use SHA256 to ensure it fits in 64 chars (DB limit)
-        raw_key = f"{gstin}|{inv_no}|{branch}|{inv_date}"
-        import hashlib
-        group_key = hashlib.sha256(raw_key.encode()).hexdigest()
+            
+        key = inv_no.lower()
+        if key not in seen:
+            # STEP 1: STRICT INVOICE MATCH (New identity)
+            group_id = hashlib.sha256(f"{inv_no}_{upload_session_id}".encode()).hexdigest()[:16]
+            seen[key] = group_id
+            r.is_primary = True
+            r.group_id = group_id
+            logger.info(f"GROUPING: New primary record {r.id} for invoice {inv_no}")
+        else:
+            # Subsquent page for the same invoice number
+            r.is_primary = False
+            r.group_id = seen[key]
+            logger.info(f"GROUPING: Merging record {r.id} into group for invoice {inv_no}")
         
-        if group_key not in groups:
-            groups[group_key] = []
-        groups[group_key].append(r)
-
-    # Merging Logic (Step 4 & 6)
-    for key, group_records in groups.items():
-        if len(group_records) < 1: continue # Should not happen
-        
-        try:
-            with transaction.atomic():
-                if len(group_records) == 1:
-                    # Single page invoice
-                    primary = group_records[0]
-                    primary.group_id = key
-                    primary.is_primary = True
-                    primary.save()
-                    logger.info(f"Merged SINGLE: {key}")
-                    continue
-
-                # Multi-page invoice
-                logger.info(f"Merging group {key} with {len(group_records)} pages.")
-                
-                primary = group_records[0] # FIRST record for Header
-                last = group_records[-1]    # LAST record for Totals/Taxes/Charges
-                
-                # Combine Line Items
-                merged_items = []
-                for r in group_records:
-                    items = (r.extracted_data or {}).get("sections", {}).get("items", [])
-                    merged_items.extend(items)
-                
-                # Create merged_data structure (Step 5)
-                merged_data = primary.extracted_data.copy()
-                if "sections" not in merged_data: merged_data["sections"] = {}
-                
-                # Update Header from Primary (already there)
-                # Update Line Items
-                merged_data["sections"]["items"] = merged_items
-                
-                # Update Totals, Taxes, Charges from LAST record
-                last_sections = (last.extracted_data or {}).get("sections", {})
-                merged_data["sections"]["supply_details"] = last_sections.get("supply_details", {})
-                merged_data["sections"]["due_details"] = last_sections.get("due_details", {})
-                merged_data["sections"]["transit_details"] = last_sections.get("transit_details", {})
-                
-                # Update top-level fields for consistency
-                if last.extracted_data:
-                    merged_data["total_invoice_value"] = last.extracted_data.get("total_invoice_value")
-                
-                # Update Primary record
-                merged_data["_merged_count"] = len(group_records)
-                primary.extracted_data = merged_data
-                primary.group_id = key
-                primary.is_primary = True
-                primary.save()
-                
-                # Mark others as secondary
-                for r in group_records[1:]:
-                    r.group_id = key
-                    r.is_primary = False
-                    r.save()
-                
-                logger.info(f"SUCCESS: Group {key} merged ({len(group_records)} pages).")
-        except Exception as e:
-            logger.error(f"FAILURE: Merging group {key}: {str(e)}")
-
-    logger.info("GROUPING PREPROCESSOR FINISHED.")
+        r.save()
+    
+    logger.info(f"STRICT Grouping complete for session {upload_session_id}.")

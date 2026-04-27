@@ -14,7 +14,6 @@ from .serializers_payment import (
     VoucherPaymentBulkSerializer,
     AdvancePaymentSerializer
 )
-from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink  # type: ignore
 from django.utils import timezone  # type: ignore
 from django.db import transaction as db_transaction  # type: ignore
 import datetime
@@ -204,83 +203,15 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
 
     def create(self, request, *args, **kwargs):
-        bank_transaction_id = request.data.get('bank_transaction_id')
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         with db_transaction.atomic():
             self.perform_create(serializer)
-            voucher_record = serializer.instance
-            accounting_voucher_id = getattr(
-                voucher_record, '_accounting_voucher_id', voucher_record.id
-            )
-
-            # Link to bank transaction if ID provided
-            reconciliation_link_created = False
-            if bank_transaction_id:
-                try:
-                    tenant_id = (
-                        self.request.user.branch_id
-                        if hasattr(self.request.user, 'tenant_id')
-                        else None
-                    )
-                    st_txn = BankStatementTransaction.objects.get(
-                        id=bank_transaction_id, tenant_id=tenant_id
-                    )
-
-                    link, created = BankReconciliationLink.objects.get_or_create(
-                        bank_transaction=st_txn,
-                        defaults=dict(
-                            tenant_id=tenant_id,
-                            voucher_id=accounting_voucher_id,
-                            voucher_type='payment',
-                            reconciliation_type='manual',
-                            reconciliation_date=datetime.date.today(),
-                            reconciliation_status='Reconciled',
-                            match_method='manual_create',
-                            confidence_score=100,
-                            cheque_number=st_txn.cheque_number,
-                            reconciled_at=timezone.now(),
-                        ),
-                    )
-                    if not created:
-                        link.voucher_id = accounting_voucher_id
-                        link.voucher_type = 'payment'
-                        link.reconciliation_type = 'manual'
-                        link.reconciliation_date = datetime.date.today()
-                        link.reconciliation_status = 'Reconciled'
-                        link.match_method = 'manual_create'
-                        link.confidence_score = 100
-                        link.cheque_number = st_txn.cheque_number
-                        link.reconciled_at = timezone.now()
-                        link.save()
-
-                    st_txn.status = 'MANUAL_MATCHED'
-                    st_txn.matched_voucher_id = accounting_voucher_id
-                    st_txn.reconciled_at = timezone.now()
-                    st_txn.is_ignored = False
-                    st_txn.save(update_fields=[
-                        'status', 'matched_voucher_id', 'reconciled_at', 'is_ignored'
-                    ])
-
-                    PaymentVoucher.objects.filter(id=voucher_record.id).update(
-                        bank_reconciled=True,
-                        bank_reconcile_date=st_txn.transaction_date,
-                        bank_statement_id=st_txn.id,
-                        bank_reference_number=st_txn.reference_number,
-                    )
-                    reconciliation_link_created = True
-
-                except BankStatementTransaction.DoesNotExist:
-                    pass  # Invalid bank_transaction_id – save voucher without linking
-
+            
         headers = self.get_success_headers(serializer.data)
         response_data = dict(serializer.data)
         response_data['voucher_created'] = True
-        response_data['reconciliation_link_created'] = reconciliation_link_created
-        if bank_transaction_id:
-            response_data['bank_transaction_id'] = bank_transaction_id
 
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 

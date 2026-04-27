@@ -237,6 +237,19 @@ const ReviewDetailsPanel: React.FC<{ row: ScanResult; onClose: () => void }> = (
                         <span className="text-sm font-black text-indigo-700">₹{row.total_amount || '0.00'}</span>
                     </div>
                 </div>
+
+                {/* Fallback Data */}
+                {data._raw_text && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                        <label className="text-[10px] font-black text-amber-600 uppercase tracking-wider block mb-2 flex items-center gap-1">
+                            <Icon name="info" className="w-3 h-3" />
+                            Fallback Data (Raw AI Output)
+                        </label>
+                        <div className="bg-amber-50/30 rounded-lg p-3 text-[10px] text-gray-600 font-mono overflow-x-auto border border-amber-100/50 max-h-40 overflow-y-auto">
+                            <pre className="whitespace-pre-wrap">{data._raw_text}</pre>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="p-4 border-t bg-white">

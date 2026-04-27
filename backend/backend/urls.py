@@ -4,7 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from vouchers.schema_config import get_voucher_schema_view
 # REMOVED LEGACY OCR IMPORTS
-from ocr_pipeline.views import CleanOCRStagingView, OCRStagingFinalizeView, OCRStagingRescanView, OCRStagingRescanUploadView # NEW IMPORT
+from ocr_pipeline.views import CleanOCRStagingView, OCRStagingFinalizeView, OCRStagingRescanView, OCRStagingRescanUploadView, ZohoAdapterView, ZohoReconstructView # NEW IMPORT
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
 from core.views import AdminSubscriptionsView, AdminPaymentsView
@@ -93,6 +93,8 @@ urlpatterns = [
     path('api/ocr-staging-finalize/', OCRStagingFinalizeView.as_view(), name='ocr-staging-finalize'),
     path('api/ocr-staging-rescan/', OCRStagingRescanView.as_view(), name='ocr-staging-rescan'),
     path('api/ocr-staging-rescan-upload/', OCRStagingRescanUploadView.as_view(), name='ocr-staging-rescan-upload'),
+    path('api/zoho-adapter/', ZohoAdapterView.as_view(), name='zoho-adapter'),
+    path('api/zoho-reconstruct/', ZohoReconstructView.as_view(), name='zoho-reconstruct'),
 
     # Voucher Schema Dynamic API
     path('api/voucher-schema/', get_voucher_schema_view, name='voucher-schema-dynamic'),

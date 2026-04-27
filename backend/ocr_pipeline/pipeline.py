@@ -40,12 +40,22 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
             tenant_id=str(record.tenant_id or 'system')
         )
         
+        # Check for extraction-level errors (e.g. JSON decode failure)
+        if "_error" in extracted:
+            raise RuntimeError(f"Extraction Error: {extracted.get('_error')} - {extracted.get('_raw', '')[:100]}...")
+
         # Phase 2: Hierarchical Normalization
         normalized = normalize(extracted)
         
         # STEP 2: Save extracted data immediately
         record.extracted_data = normalized
         record.status = 'EXTRACTED'
+        
+        # Flatten critical headers to top-level model fields for easier querying/UI display
+        record.supplier_invoice_no = normalized.get("supplier_invoice_no")
+        record.gstin = normalized.get("gstin")
+        record.branch = normalized.get("sections", {}).get("supplier_details", {}).get("branch")
+        
         record.save()
             
         # STEP 3: IMMEDIATELY call validation and processing

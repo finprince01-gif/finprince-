@@ -37,7 +37,6 @@ from .views_voucher_purchase import VoucherPurchaseViewSet # pyre-fixme
 from .views_voucher_debit_note import VoucherDebitNoteViewSet # pyre-fixme
 from .views_voucher_credit_note import VoucherCreditNoteViewSet
 from .views_gst import GSTR1ViewSet # pyre-fixme
-from .views_bank_reconciliation import BankReconciliationViewSet # pyre-fixme
 from .views_allocation import VoucherAllocationViewSet
 
 router = routers.DefaultRouter()
@@ -71,7 +70,6 @@ router.register('vouchers/receipt-bulk', ReceiptVoucherViewSet, basename='receip
 router.register('vouchers/expenses', VoucherExpenseViewSet, basename='expense-vouchers')
 router.register('vouchers/contra', VoucherContraViewSet, basename='contra-vouchers')
 router.register('vouchers/journal', VoucherJournalViewSet, basename='journal-vouchers')
-router.register('bank-reconciliation', BankReconciliationViewSet, basename='bank-reconciliation')
 
 # Sales Invoice endpoints (NEW)
 router.register('invoices', SalesInvoiceViewSet, basename='invoices')

@@ -8,7 +8,6 @@ from .models_transaction import TransactionFile # pyre-fixme
 from .models_voucher_expense import VoucherExpense # pyre-fixme
 from .models_voucher_contra import VoucherContra # pyre-fixme
 from .models_voucher_journal import VoucherJournal # pyre-fixme
-from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink # pyre-fixme
 from .models_voucher_purchase import ( # pyre-fixme
     VoucherPurchaseSupplierDetails, 
     VoucherPurchaseSupplyForeignDetails, 
@@ -300,7 +299,7 @@ class Voucher(BaseModel):
     amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     total = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
-    source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, bank_reconciliation)")
+    source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, ocr)")
     
     # Sales/Purchase specific
     invoice_no = models.CharField(max_length=50, null=True, blank=True)
@@ -326,11 +325,6 @@ class Voucher(BaseModel):
     party_customer_id = models.BigIntegerField(null=True, blank=True)
     party_vendor_id   = models.BigIntegerField(null=True, blank=True)
 
-    # Bank Reconciliation fields (for compatibility)
-    bank_reconciled        = models.BooleanField(default=False)
-    bank_reconcile_date    = models.DateField(null=True, blank=True)
-    bank_statement_id      = models.BigIntegerField(null=True, blank=True)
-    bank_reference_number  = models.CharField(max_length=100, null=True, blank=True)
 
     @property
     def pay_from(self): return self.account
@@ -953,11 +947,6 @@ class Transaction(BaseModel):
         null=True, blank=True
     )
     
-    # Bank Reconciliation
-    bank_reconciled = models.BooleanField(default=False)
-    bank_reconcile_date = models.DateField(null=True, blank=True)
-    bank_statement_id = models.BigIntegerField(null=True, blank=True)
-    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
     
     # NEW: Accounting alignment
     debit  = models.DecimalField(max_digits=15, decimal_places=2, default=0)

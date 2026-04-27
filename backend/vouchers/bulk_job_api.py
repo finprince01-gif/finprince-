@@ -12,6 +12,7 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny
 
 from .models import BulkInvoiceJob, InvoiceProcessingItem
 from .pipeline import storage
@@ -28,6 +29,7 @@ RETRY_AFTER = {
 
 
 class BulkUploadAPIView(APIView):
+    permission_classes = [AllowAny]
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
@@ -129,7 +131,6 @@ class BulkUploadAPIView(APIView):
                 
                 for uploaded_file in files:
                     file_bytes = uploaded_file.read()
-                    # We use a dummy session_id for non-persistent tracking in the response if needed
                     res = process_invoice_upload(
                         file_bytes=file_bytes,
                         voucher_type=voucher_type,
@@ -137,17 +138,26 @@ class BulkUploadAPIView(APIView):
                         upload_session_id="INSTANT",
                         tenant_id=tenant_id
                     )
-                    # IMMEDIATELY DELETE from Staging (InvoiceTempOCR) to ensure "no save in any tables"
-                    from ocr_pipeline.repository import InvoiceTempOCR
-                    InvoiceTempOCR.objects.filter(id=res.get('id')).delete()
                     
-                    results.append(res)
+                    from ocr_pipeline.repository import InvoiceTempOCR
+                    # Handle batch extraction (multi-invoice PDF)
+                    if res.get('status') == 'BATCH_EXTRACTED':
+                        batch_items = res.get('results', [])
+                        for item in batch_items:
+                            if item.get('id'):
+                                InvoiceTempOCR.objects.filter(id=item.get('id')).delete()
+                        results.extend(batch_items)
+                    else:
+                        # Single invoice
+                        if res.get('id'):
+                            InvoiceTempOCR.objects.filter(id=res.get('id')).delete()
+                        results.append(res)
                 
                 lock.release()
                 return Response({
                     'status': 'completed',
                     'results': results,
-                    'total_files': len(files)
+                    'total_files': len(results) # Reflect the actual number of invoices found
                 })
             except Exception as e:
                 lock.release()
@@ -246,6 +256,7 @@ class BulkUploadAPIView(APIView):
 
 
 class BulkStatusAPIView(APIView):
+    permission_classes = [AllowAny]
     def get(self, request, job_id, *args, **kwargs):
         try:
             job     = BulkInvoiceJob.objects.get(id=job_id)

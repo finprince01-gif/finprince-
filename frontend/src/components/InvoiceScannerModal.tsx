@@ -323,6 +323,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const isItemField = (col: string) => {
         return LINE_ITEM_FIELDS.includes(col) || (extractionMode === 'tally' && TALLY_ITEM_HEADERS.includes(col));
     };
+
+    // ── Centralized Zoho Mapping Resolver ──
+    const resolveZohoValue = (header: any, item: any, col: string): string => {
+        const isItem = isItemField(col);
+        
+        // Rule: Invoice Value -> Header Total (for non-tally modes)
+        if (col === "Invoice Value" && extractionMode !== "tally") {
+            return getCellValue(header, "Total Invoice Value");
+        }
+        
+        return isItem ? getCellValue(item, col) : getCellValue(header, col);
+    };
     const fileInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
     const processedFilesRef = useRef<FileList | File[] | null>(null);
@@ -336,20 +348,22 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [estimatedExtractionTime, setEstimatedExtractionTime] = useState<number | null>(null);
     const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
 
-    // -- Countdown Timer Effect --
+    // -- Centralized Countdown Timer Effect --
     useEffect(() => {
-        let timer: any;
-        if (isExtracting && estimatedExtractionTime !== null) {
-            setCountdownSeconds(estimatedExtractionTime);
-            timer = setInterval(() => {
-                setCountdownSeconds(prev => (prev !== null && prev > 0) ? prev - 1 : prev);
-            }, 1000);
-        } else {
+        if (!isExtracting) {
             setCountdownSeconds(null);
-            setEstimatedExtractionTime(null);
+            return;
         }
-        return () => { if (timer) clearInterval(timer); };
-    }, [isExtracting, estimatedExtractionTime]);
+
+        const timer = setInterval(() => {
+            setCountdownSeconds(prev => {
+                if (prev === null || prev <= 0) return 0;
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [isExtracting]);
 
     // ── Auto-Validate Vendor for Purchase Vouchers ───────────────────────────────
     const [vendorValidation, setVendorValidation] = useState<'IDLE' | 'VALIDATING' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT'>('IDLE');
@@ -361,6 +375,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [bulkJobId, setBulkJobId] = useState<number | null>(null);
     const [bulkStatus, setBulkStatus] = useState<{ total: number; processed: number; failed: number; pending: number; status: string } | null>(null);
     const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const startTimeRef = useRef<number | null>(null);
 
     const firstInvoiceVendorStr = invoiceResults.length > 0 && !isExtracting && voucherType === 'Purchase'
         ? String(invoiceResults[0].invoice['Vendor Name'] || '') + '|' + String(invoiceResults[0].invoice['GSTIN'] || '') + '|' + String(invoiceResults[0].invoice['Branch'] || '')
@@ -455,7 +470,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             'voucher_series': ['Voucher Number Series Name', 'Voucher Series'],
             'narration': ['Voucher Narration', 'Narration', 'Remarks', 'Notes'],
             'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type', 'Buyer/Supplier - State', 'Buyer/Supplier - Place of Supply'],
-            
+
             // Items / Ledgers
             'item_name': ['Item Name', 'Description', 'Particulars', 'Item Description', 'Ledger Name'],
             'item_code': ['Item Code', 'Part No', 'Code'],
@@ -493,20 +508,6 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     const { incrementUsage, isLimitReached, subscriptionUsage } = useSubscriptionUsage();
 
-    useEffect(() => {
-        if (isExtracting && estimatedExtractionTime !== null) {
-            setCountdownSeconds(Math.round(estimatedExtractionTime));
-            const interval = setInterval(() => {
-                setCountdownSeconds(prev => {
-                    if (prev === null || prev <= 1) return 0;
-                    return prev - 1;
-                });
-            }, 1000);
-            return () => clearInterval(interval);
-        } else {
-            setCountdownSeconds(null);
-        }
-    }, [isExtracting, estimatedExtractionTime]);
 
     useEffect(() => {
         if (initialFiles && initialFiles.length > 0 && processedFilesRef.current !== initialFiles) {
@@ -532,12 +533,41 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
         setUploadedFileNames(prev => [...prev, ...newNames]);
 
+        // ── "File Analysis" Estimation Logic (Replicated from Purchase Scan) ──
+        let estimatedTasks = 0;
+        newFiles.forEach(f => {
+            if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+                // Estimate ~100KB per page as a heuristic
+                estimatedTasks += Math.max(1, Math.ceil(f.size / 100000));
+            } else {
+                estimatedTasks += 1;
+            }
+        });
+
+        let avgTime = 3.85; // Default fallback
+        try {
+            const avgRes = await apiService.getExtractionAverageTime();
+            if (avgRes && avgRes.average_time_per_invoice) {
+                avgTime = avgRes.average_time_per_invoice;
+            }
+        } catch (e) {
+            console.warn("Failed to fetch average time, using fallback:", e);
+        }
+
+        // Backend uses parallel workers. Purchase scan uses 10 as divisor for "correct" estimate.
+        const batchCount = Math.ceil(estimatedTasks / 10);
+        const zohoBuffer = extractionMode === 'zoho' ? 5 : 0;
+        const initialEstimate = Math.round(batchCount * avgTime) + 2 + zohoBuffer;
+        
+        setEstimatedExtractionTime(initialEstimate);
+        setCountdownSeconds(initialEstimate);
+
         try {
             const currentSessionId = String(Date.now());
             uploadSessionIdRef.current = currentSessionId;
             const formData = new FormData();
             newFiles.forEach(f => formData.append('files', f));
-            formData.append('upload_session_id', currentSessionId); 
+            formData.append('upload_session_id', currentSessionId);
             formData.append('voucher_type', voucherType);
 
             // ── OTHERS Mode: No Persistence (Instant Extraction) ──
@@ -547,7 +577,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             }
 
             const response = await httpClient.postFormData<any>('/api/bulk-upload/', formData);
-            
+
             if (isOthersMode && response.results) {
                 // Map results immediately (they are already extracted and deleted from DB)
                 handleInstantResults(response.results);
@@ -561,7 +591,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 const newPaths = response.file_paths || [response.file_path].filter(Boolean) || [];
                 setStagedFilePaths(prev => [...prev, ...newPaths]);
                 stagedFilePathsRef.current = [...stagedFilePathsRef.current, ...newPaths];
-                
+
                 setBulkJobId(response.job_id);
                 setBulkStatus({
                     total: response.total_files,
@@ -570,7 +600,15 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     pending: response.total_files,
                     status: 'processing'
                 });
-                setEstimatedExtractionTime(response.total_files * 12);
+                startTimeRef.current = Date.now();
+                
+                // Refine estimate based on actual total and analysis
+                const jobBatchCount = Math.ceil(response.total_files / 10); 
+                const jobZohoBuffer = extractionMode === 'zoho' ? 5 : 0;
+                const jobEstimate = Math.round(jobBatchCount * avgTime) + 3 + jobZohoBuffer;
+                
+                setEstimatedExtractionTime(jobEstimate);
+                setCountdownSeconds(prev => Math.max(prev || 0, jobEstimate)); 
                 startPolling(response.job_id);
             }
         } catch (error) {
@@ -586,17 +624,17 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         const mappedResults: InvoiceResult[] = results.map((item: any) => {
             const extData = item.data || {};
             const resData = extData;
-            
+
             const flattenedHeader = {
                 ...(resData.sections?.supplier_details || {}),
                 ...(resData.sections?.supply_details || {}),
                 ...(resData.data || resData)
             };
-            
+
             const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
             const normalizedHeader: Record<string, string> = {};
             const colsToMap = extractionMode === 'tally' ? ALL_COLUMNS : HEADER_FIELDS;
-            
+
             colsToMap.forEach(field => {
                 normalizedHeader[field] = getCellValue(flattenedHeader, field);
             });
@@ -636,26 +674,70 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             }
 
             const response: any = await httpClient.get('/api/ocr-staging/', params);
-            const stagedResults = Array.isArray(response) ? response : (response?.data || []);
+            let stagedResults = Array.isArray(response) ? response : (response?.data || []);
+
+            // ── Step 3.6: Apply Zoho Reconstruction (Step 1-3) ──
+            if (extractionMode === 'zoho' && stagedResults.length > 0) {
+                try {
+                    const invoicesForAdapter = stagedResults.map((r: any) => ({
+                        invoice_number: r.supplier_invoice_no || r.extracted_data?.supplier_invoice_no || r.extracted_data?.invoice_no,
+                        invoice_date: r.extracted_data?.invoice_date,
+                        vendor_name: r.extracted_data?.vendor_name || r.extracted_data?.sections?.supplier_details?.vendor_name,
+                        gstin: r.gstin,
+                        total_taxable_value: r.extracted_data?.total_taxable_value || r.extracted_data?.sections?.supply_details?.total_taxable_value,
+                        total_invoice_value: r.extracted_data?.total_invoice_value || r.extracted_data?.sections?.supply_details?.total_invoice_value,
+                        items: r.extracted_data?.sections?.items || r.extracted_data?.line_items || r.extracted_data?.items || []
+                    }));
+
+                    const adapterRes = await apiService.reconstructZohoInvoices({ invoices: invoicesForAdapter });
+                    if (adapterRes?.invoices) {
+                        // Map reconstructed results back to staged format for the UI mapper below
+                        stagedResults = stagedResults.map((original: any, idx: number) => {
+                            const reconstructed = adapterRes.invoices[idx];
+                            if (!reconstructed) return original;
+                            return {
+                                ...original,
+                                extracted_data: {
+                                    ...original.extracted_data,
+                                    sections: {
+                                        ...original.extracted_data?.sections,
+                                        items: reconstructed.items,
+                                        supply_details: {
+                                            ...original.extracted_data?.sections?.supply_details,
+                                            total_taxable_value: reconstructed.total_taxable_value,
+                                            total_invoice_value: reconstructed.total_invoice_value
+                                        }
+                                    },
+                                    ...reconstructed
+                                }
+                            };
+                        });
+                    }
+                } catch (adapterErr) {
+                    console.error("Zoho Reconstruction failed, falling back to raw data:", adapterErr);
+                }
+            }
 
             const mappedResults: InvoiceResult[] = stagedResults.map((item: any) => {
+                console.log("AUDIT: DATA USED FOR TABLE:", item.extracted_data);
+                console.log("AUDIT: SOURCE IS RECONSTRUCTED:", !!item.extracted_data?.sections?.items);
                 console.log("FORM SOURCE (DB Batch):", item.extracted_data);
                 const extData = item.extracted_data || {};
                 // The new structure has a 'sections' key or flattened top-level
                 const resData = extData;
-                
+
                 // FLATTEN nested sections for the mapping engine (supplier_details, supply_details)
                 const flattenedHeader = {
                     ...(resData.sections?.supplier_details || {}),
                     ...(resData.sections?.supply_details || {}),
                     ...(resData.data || resData)
                 };
-                
+
                 const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
 
                 const normalizedHeader: Record<string, string> = {};
                 const colsToMap = extractionMode === 'tally' ? ALL_COLUMNS : HEADER_FIELDS;
-                
+
                 colsToMap.forEach(field => {
                     normalizedHeader[field] = getCellValue(flattenedHeader, field);
                 });
@@ -669,7 +751,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
                     const ni: any = {};
                     const itemColsToMap = extractionMode === 'tally' ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
-                    
+
                     itemColsToMap.forEach(f => {
                         ni[f] = getCellValue(flatItem, f);
                     });
@@ -715,11 +797,39 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 if (status.status === 'completed' || status.status === 'failed' || status.status === 'success') {
                     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                     setIsExtracting(false);
+                    startTimeRef.current = null;
                     await fetchStagingData();
                     if (status.status !== 'failed') {
                         showSuccess(`✅ Processing completed! ${status.processed} processed, ${status.failed} failed.`);
                     }
                     return;
+                }
+
+                // ── Accurate Time Remaining Calculation ──
+                if (startTimeRef.current && status.total > 0) {
+                    const elapsedMs = Date.now() - startTimeRef.current;
+                    const processedCount = status.processed + status.failed;
+                    const remainingCount = status.total - processedCount;
+
+                    if (processedCount > 0) {
+                        // ── "File Analysis" Polling Update ──
+                        const msPerFile = elapsedMs / processedCount;
+                        // Use the "correct" batch divisor of 10 from the Purchase module
+                        const remainingBatches = Math.ceil(remainingCount / 10);
+                        const zohoBuffer = extractionMode === 'zoho' ? 5 : 0;
+                        const newEstimateSeconds = Math.max(1, Math.round((remainingBatches * msPerFile) / 1000) + zohoBuffer);
+                        
+                        setCountdownSeconds(prev => {
+                            if (prev === null) return newEstimateSeconds;
+                            // Smoothing: If the new estimate is very different, move toward it 
+                            // but avoid huge jumps that feel "random" to the user.
+                            if (Math.abs(prev - newEstimateSeconds) > 3) {
+                                // Gradual adjustment toward the new reality
+                                return newEstimateSeconds > prev ? prev + 2 : prev - 2;
+                            }
+                            return prev;
+                        });
+                    }
                 }
 
                 const progress = (status.processed + status.failed) / status.total;
@@ -889,6 +999,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         const XLSX = await getXLSX();
         if (invoiceResults.length === 0) return;
 
+        console.log("AUDIT: EXCEL EXPORT SOURCE:", invoiceResults);
+
         // Build full rows using same logic as the display table
         const allRows: Record<string, string>[] = [];
         invoiceResults.forEach((res) => {
@@ -896,10 +1008,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             items.forEach((item) => {
                 const row: Record<string, string> = {};
                 ALL_COLUMNS.forEach((col) => {
-                    const isItemField = LINE_ITEM_FIELDS.includes(col);
-                    row[col] = isItemField
-                        ? getCellValue(item, col)
-                        : getCellValue(res.invoice, col);
+                    row[col] = resolveZohoValue(res.invoice, item, col);
                 });
                 allRows.push(row);
             });
@@ -930,16 +1039,16 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const handleDownloadCSV = () => {
         if (invoiceResults.length === 0) return;
 
+        console.log("AUDIT: CSV EXPORT SOURCE:", invoiceResults);
+
         // Build full rows
         const allRows: Record<string, string>[] = [];
         invoiceResults.forEach((res) => {
-            const items = res.items.length > 0 ? res.items : [({})];
+            const items = res.items.length > 0 ? res.items : [{}];
             items.forEach((item) => {
                 const row: Record<string, string> = {};
                 ALL_COLUMNS.forEach((col) => {
-                    row[col] = isItemField(col)
-                        ? getCellValue(item, col)
-                        : getCellValue(res.invoice, col);
+                    row[col] = resolveZohoValue(res.invoice, item, col);
                 });
                 allRows.push(row);
             });
@@ -974,16 +1083,6 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         document.body.removeChild(link);
     };
 
-    // ── File upload & extraction ────────────────────────────────────────────────
-    useEffect(() => {
-        let timer: NodeJS.Timeout;
-        if (isExtracting && countdownSeconds !== null && countdownSeconds > 0) {
-            timer = setInterval(() => {
-                setCountdownSeconds(prev => (prev !== null ? prev - 1 : null));
-            }, 1000);
-        }
-        return () => clearInterval(timer);
-    }, [isExtracting, countdownSeconds]);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
@@ -1278,7 +1377,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             )}
 
                             {isExtracting && (
-                                <span className="text-sm text-gray-600 ml-4 border-l pl-4 border-gray-300">Processing… Please wait</span>
+                                <div className="flex items-center gap-2 ml-4 border-l pl-4 border-gray-300">
+                                    <span className="text-sm text-gray-500">
+                                        {countdownSeconds !== null && countdownSeconds > 0 ? (
+                                            <span className="flex items-center gap-1.5 text-indigo-600 font-medium animate-pulse">
+                                                <Icon name="spinner" className="w-3 h-3 animate-spin" />
+                                                Estimated: {Math.floor(countdownSeconds / 60)}:{(countdownSeconds % 60).toString().padStart(2, '0')} remaining
+                                            </span>
+                                        ) : (
+                                            "Processing… Please wait"
+                                        )}
+                                    </span>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -1316,13 +1426,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
 
                                                 {visibleColumns.map((col) => {
-                                                    const isFieldItem = isItemField(col);
-                                                    const cellValue = isFieldItem
-                                                        ? getCellValue(row.item, col)
-                                                        : getCellValue(row.header, col);
+                                                    const cellValue = resolveZohoValue(row.header, row.item, col);
 
                                                     // Check if field was mapped confidently
                                                     const currentRes = invoiceResults[row.invoiceIdx];
+                                                    const isFieldItem = isItemField(col);
                                                     const isMapped = isFieldItem
                                                         ? (col === 'S.No' || !!currentRes?.itemMapping?.[col])
                                                         : !!currentRes?.headerMapping?.[col];

@@ -106,7 +106,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
   // State for Bank OD/CC Accounts additional fields
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [gstinPan, setGstinPan] = useState('');
-  const [enableBankReconciliation, setEnableBankReconciliation] = useState(false);
   const [bankName, setBankName] = useState('');
   const [ifscCode, setIfscCode] = useState('');
   const [branch, setBranch] = useState('');
@@ -223,7 +222,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
         if (ledgerGroup === 'Bank OD/CC Accounts') {
           updateData.bankAccountNumber = bankAccountNumber;
           updateData.gstinPan = gstinPan;
-          updateData.enableBankReconciliation = enableBankReconciliation;
           updateData.bankName = bankName;
           updateData.ifscCode = ifscCode;
           updateData.branch = branch;
@@ -309,7 +307,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
         if (ledgerGroup === 'Bank OD/CC Accounts') {
           newLedger.bankAccountNumber = bankAccountNumber;
           newLedger.gstinPan = gstinPan;
-          newLedger.enableBankReconciliation = enableBankReconciliation;
           newLedger.bankName = bankName;
           newLedger.ifscCode = ifscCode;
           newLedger.branch = branch;
@@ -375,7 +372,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
     setTenure('');
     setBankAccountNumber('');
     setGstinPan('');
-    setEnableBankReconciliation(false);
     setBankName('');
     setIfscCode('');
     setBranch('');
@@ -409,7 +405,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
     // Populate bank fields if they exist
     if (selectedLedger.bankAccountNumber) setBankAccountNumber(selectedLedger.bankAccountNumber);
     if (selectedLedger.gstinPan) setGstinPan(selectedLedger.gstinPan);
-    if (selectedLedger.enableBankReconciliation !== undefined) setEnableBankReconciliation(selectedLedger.enableBankReconciliation);
     if (selectedLedger.bankName) setBankName(selectedLedger.bankName);
     if (selectedLedger.ifscCode) setIfscCode(selectedLedger.ifscCode);
     if (selectedLedger.branch) setBranch(selectedLedger.branch);
@@ -507,7 +502,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
     setTenure('');
     setBankAccountNumber('');
     setGstinPan('');
-    setEnableBankReconciliation(false);
     setBankName('');
     setIfscCode('');
     setBranch('');
@@ -988,19 +982,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
                 />
               </div>
 
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="enableBankReconciliation"
-                  checked={enableBankReconciliation}
-                  onChange={(e) => setEnableBankReconciliation(e.target.checked)}
-                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  required
-                />
-                <label htmlFor="enableBankReconciliation" className="ml-2 text-sm font-medium text-gray-700">
-                  Enable Bank Reconciliation <span className="text-red-500">*</span>
-                </label>
-              </div>
 
               <div>
                 <label htmlFor="bankName" className="block text-sm font-medium text-gray-500 mb-1">Bank Name</label>

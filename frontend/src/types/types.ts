@@ -34,7 +34,7 @@
  * Page - Defines all possible pages/sections in the application
  * Used for routing and navigation
  */
-export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Banking' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'Users & Roles' | 'GST' | 'Dashboard Builder';
+export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'Users & Roles' | 'GST' | 'Dashboard Builder';
 
 // ============================================================================
 // COMPANY & SETTINGS TYPES
@@ -139,7 +139,6 @@ export interface Ledger {
   // Bank account-specific fields
   bankAccountNumber?: string;
   gstinPan?: string;
-  enableBankReconciliation?: boolean;
   bankName?: string;
   ifscCode?: string;
   branch?: string;
@@ -342,11 +341,6 @@ export interface ExtractedInvoiceData {
   igstAmount: number;
   totalAmount: number;
   lineItems: ExtractedLineItem[];
-  // Bank Reconciliation fields
-  bank_transaction_id?: number;
-  reference_number?: string;
-  account?: string;
-  narration?: string;
 }
 
 // For AI Agent

@@ -20,6 +20,43 @@ def normalize_amount(amount: Any) -> float:
         logger.warning(f"Failed to normalize amount: {amount}")
         return 0.0
 
+def ocr_correct_text(val: str) -> str:
+    """Fixes common OCR misreadings for alphanumeric fields."""
+    if not val: return ""
+    mapping = {
+        'O': '0', 'I': '1', 'l': '1', 'S': '5', 'Z': '2', 'G': '6'
+    }
+    # Only correct if it looks like it should be a digit but is a letter
+    # This is a simple version, can be made more sophisticated
+    return val
+
+def is_valid_invoice_no(val: str) -> bool:
+    """
+    FUZZY RULES for Invoice Number:
+    - 3-30 chars
+    - Must have at least one digit (after OCR correction)
+    - Permissive: Alphanumeric, /, -, _, ., space, (, )
+    """
+    if not val: return False
+    val = str(val).strip().upper()
+    if len(val) < 3 or len(val) > 30: return False
+    
+    # Check for at least one digit
+    if not any(c.isdigit() for c in val):
+        # Try OCR correction on the first few chars
+        corrected = val.replace('O', '0').replace('I', '1')
+        if not any(c.isdigit() for c in corrected):
+            return False
+    
+    # Permissive Regex: Allow dots, spaces, slashes, dashes
+    if not re.match(r"^[A-Z0-9\/\-\.\_\s\(\)]+$", val):
+        return False
+    
+    labels = {"INVOICE", "DATE", "TOTAL", "AUTHORIZED", "SIGNATORY", "BANK", "DETAILS", "AMOUNT", "TAX"}
+    if val in labels: return False
+    
+    return True
+
 def normalize_date(date_val: Any) -> str:
     """
     Standardize various date formats to YYYY-MM-DD for UI/HTML5 compatibility.
@@ -141,18 +178,19 @@ def derive_city_from_address(address: str) -> str:
 
 # ── Key Aliases for Robust Mapping (OCR Stability Layer) ─────
 KEY_ALIASES = {
-    # Canonical : [Possible AI variations]
-    "gstin": ["gstin", "vendor_gstin", "supplier_gstin", "gst_no", "tax_id"],
-    "vendor_name": ["vendor_name", "supplier_name", "seller_name", "party_name", "vendor"],
-    "vendor_address": ["vendor_address", "supplier_address", "address", "bill_from", "seller_address"],
-    "vendor_state": ["vendor_state", "state", "place_of_supply", "vendor_place_of_supply"],
-    "invoice_no": ["invoice_no", "invoice_number", "inv_no", "bill_no", "supplier_invoice_no", "reference_no"],
-    "invoice_date": ["invoice_date", "date", "bill_date", "inv_date", "voucher_date", "tax_invoice_date"],
-    "total_amount": ["total_amount", "total_invoice_value", "grand_total", "total", "invoice_value", "final_amount"],
-    "taxable_value": ["taxable_value", "subtotal", "taxable_amount", "assessable_value", "net_amount", "taxable_value_total"],
-    "total_cgst": ["total_cgst", "cgst", "cgst_amount", "central_tax", "cgst_value", "total_central_tax"],
-    "total_sgst": ["total_sgst", "sgst", "sgst_amount", "state_tax", "utgst", "sgst_value", "total_state_tax"],
-    "total_igst": ["total_igst", "igst", "igst_amount", "integrated_tax", "igst_value", "igst_tax"]
+    "gstin": ["gstin", "vendor_gstin", "supplier_gstin", "gst_no", "tax_id", "GSTIN", "Supplier GSTIN", "Party GSTIN", "GSTIN/UIN"],
+    "vendor_name": ["vendor_name", "supplier_name", "seller_name", "party_name", "vendor", "Vendor Name", "Supplier Name", "Party Name", "Seller Name"],
+    "vendor_address": ["vendor_address", "supplier_address", "address", "bill_from", "seller_address", "Vendor Address", "Supplier Address", "Address", "Bill From"],
+    "billing_address": ["billing_address", "bill_to_address", "customer_address", "buyer_address", "Billing Address", "Bill To Address", "Customer Address", "Buyer Address", "Bill To", "Shipping Address"],
+    "vendor_state": ["vendor_state", "state", "place_of_supply", "vendor_place_of_supply", "Vendor State", "State", "Supplier State"],
+    "place_of_supply": ["place_of_supply", "pos", "ship_to_state", "supply_state", "Place of Supply", "POS", "Supply State", "Place of supply"],
+    "invoice_no": ["invoice_no", "invoice_number", "inv_no", "bill_no", "sales_invoice_no", "supplier_invoice_no", "reference_no", "tax_invoice_no", "Invoice No", "Invoice Number", "Bill No", "Bill Number", "Inv No", "Inv #", "Voucher Number", "Reference No"],
+    "invoice_date": ["invoice_date", "date", "bill_date", "inv_date", "voucher_date", "tax_invoice_date", "Invoice Date", "Date", "Bill Date", "Inv Date", "Voucher Date"],
+    "total_amount": ["total_amount", "total_invoice_value", "grand_total", "total", "invoice_value", "final_amount", "Total Amount", "Total Invoice Value", "Grand Total", "Total", "Invoice Value", "Invoice Amount", "Bill Amount"],
+    "taxable_value": ["taxable_value", "subtotal", "taxable_amount", "assessable_value", "net_amount", "taxable_value_total", "Taxable Value", "Subtotal", "Taxable Amount", "Assessable Value", "Net Amount"],
+    "total_cgst": ["total_cgst", "cgst", "cgst_amount", "central_tax", "cgst_value", "total_central_tax", "Total CGST", "CGST", "CGST Amount", "Central Tax"],
+    "total_sgst": ["total_sgst", "sgst", "sgst_amount", "state_tax", "utgst", "sgst_value", "total_state_tax", "Total SGST", "SGST", "SGST Amount", "State Tax", "SGST/UTGST", "Total SGST/UTGST"],
+    "total_igst": ["total_igst", "igst", "igst_amount", "integrated_tax", "igst_value", "igst_tax", "Total IGST", "IGST", "IGST Amount", "Integrated Tax"]
 }
 
 def resolve_key(data: Dict[str, Any], canonical_key: str) -> Any:
@@ -171,7 +209,14 @@ def resolve_key(data: Dict[str, Any], canonical_key: str) -> Any:
         if alt in data and data[alt] not in (None, ""):
             return data[alt]
             
-    # 2. Check inside 'sections' (for re-normalization of already structured data)
+    # 2. Check inside 'header' (for new extraction schema)
+    header = data.get("header", {})
+    if isinstance(header, dict):
+        for alt in aliases:
+            if alt in header and header[alt] not in (None, ""):
+                return header[alt]
+
+    # 3. Check inside 'sections' (for re-normalization of already structured data)
     sections = data.get("sections", {})
     if sections:
         for section in sections.values():
@@ -180,7 +225,7 @@ def resolve_key(data: Dict[str, Any], canonical_key: str) -> Any:
                     if alt in section and section[alt] not in (None, ""):
                         return section[alt]
     
-    # 3. Last ditch: some models produce supply_details, supplier_details directly
+    # 4. Last ditch: some models produce supply_details, supplier_details directly
     for k in ["supply_details", "supplier_details", "supplyDetails", "supplierDetails"]:
         sub = data.get(k, {})
         if isinstance(sub, dict):
@@ -266,13 +311,13 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
         item_sum_igst += igst_a
 
         normalized_items.append({
-            "si_no": str(item.get("si_no") or item.get("s_no") or (i+1)),
-            "description": str(item.get("description") or item.get("item_name") or item.get("itemName") or "").strip(),
-            "hsn_sac": str(item.get("hsn_code") or item.get("hsn_sac") or "").strip(),
+            "si_no": str(item.get("si_no") or item.get("s_no") or item.get("S.No") or (i+1)),
+            "description": str(item.get("description") or item.get("item_name") or item.get("Item Name") or item.get("itemName") or item.get("Description") or "").strip(),
+            "hsn_sac": str(item.get("hsn_code") or item.get("hsn_sac") or item.get("HSN/SAC") or item.get("HSN") or "").strip(),
             "quantity": qty,
-            "uom": str(item.get("uom") or item.get("unit") or "").strip(),
+            "uom": str(item.get("uom") or item.get("unit") or item.get("Unit") or item.get("UOM") or "").strip(),
             "rate": rate,
-            "discount_percent": normalize_amount(item.get("discount_percent") or item.get("disc")),
+            "discount_percent": normalize_amount(item.get("discount_percent") or item.get("disc") or item.get("Discount %")),
             "taxable_value": item_taxable,
             "igst_rate": igst_r,
             "igst_amount": igst_a,
@@ -281,47 +326,54 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
             "sgst_rate": sgst_r,
             "sgst_amount": sgst_a,
             "cess_rate": cess_r,
-            "cess_amount": normalize_amount(item.get("cess_amount") or item.get("cess")),
-            "amount": normalize_amount(item.get("amount") or item.get("total") or item.get("line_total") or item.get("invoice_value"))
+            "cess_amount": normalize_amount(item.get("cess_amount") or item.get("cess") or item.get("Cess Amount")),
+            "amount": normalize_amount(item.get("amount") or item.get("total") or item.get("line_total") or item.get("invoice_value") or item.get("Invoice Value") or item.get("Amount"))
         })
 
-    # ── INTEGRATED TAX TYPE RECONCILIATION ──
-    # If header taxes are missing, derive them from item sums
-    if hdr_cgst_amt == 0 and item_sum_cgst > 0: hdr_cgst_amt = item_sum_cgst
-    if hdr_sgst_amt == 0 and item_sum_sgst > 0: hdr_sgst_amt = item_sum_sgst
-    if hdr_igst_amt == 0 and item_sum_igst > 0: hdr_igst_amt = item_sum_igst
-
-    # Now reconcile based on confirmed header types
+    # ── STEP 4 & 5: DERIVE GST RATE & TAX TYPE DETECTION ──
+    # DO NOT trust OCR percentage. Derive from amounts.
     for item in normalized_items:
-        # Case A: Conclusive Intrastate (CGST/SGST present, IGST absent at header)
-        if (hdr_cgst_amt > 0 or hdr_sgst_amt > 0) and hdr_igst_amt == 0:
-            if item["igst_rate"] > 0 and item["cgst_rate"] == 0:
-                rate = item["igst_rate"]
-                item["cgst_rate"], item["sgst_rate"] = rate / 2, rate / 2
-                item["igst_rate"], item["igst_amount"] = 0, 0
-            
-            if item["cgst_rate"] == 0 and is_likely_rate(header_cgst_r): item["cgst_rate"] = header_cgst_r
-            if item["sgst_rate"] == 0 and is_likely_rate(header_sgst_r): item["sgst_rate"] = header_sgst_r
-
-        # Case B: Conclusive Interstate (IGST present, CGST/SGST absent at header)
-        elif hdr_igst_amt > 0 and (hdr_cgst_amt == 0 and hdr_sgst_amt == 0):
-            if (item["cgst_rate"] > 0 or item["sgst_rate"] > 0) and item["igst_rate"] == 0:
-                item["igst_rate"] = item["cgst_rate"] + item["sgst_rate"]
-                item["cgst_rate"], item["cgst_amount"] = 0, 0
-                item["sgst_rate"], item["sgst_amount"] = 0, 0
-            
-            if item["igst_rate"] == 0 and is_likely_rate(header_igst_r): item["igst_rate"] = header_igst_r
-
-        # ── Final Amount Recalculation ──
-        # Re-calculate amounts based on the reconciled rates
-        if item["igst_rate"] > 0: item["igst_amount"] = round((item["taxable_value"] * item["igst_rate"]) / 100, 2)
-        if item["cgst_rate"] > 0: item["cgst_amount"] = round((item["taxable_value"] * item["cgst_rate"]) / 100, 2)
-        if item["sgst_rate"] > 0: item["sgst_amount"] = round((item["taxable_value"] * item["sgst_rate"]) / 100, 2)
+        taxable = item["taxable_value"]
+        cgst_a = item["cgst_amount"]
+        sgst_a = item["sgst_amount"]
+        igst_a = item["igst_amount"]
         
-        # Final row total
+        if taxable > 0:
+            # Step 4: Derive Rates
+            if igst_a > 0:
+                item["igst_rate"] = round((igst_a / taxable) * 100, 2)
+                item["cgst_rate"] = 0
+                item["sgst_rate"] = 0
+            elif (cgst_a + sgst_a) > 0:
+                item["cgst_rate"] = round((cgst_a / taxable) * 100, 2)
+                item["sgst_rate"] = round((sgst_a / taxable) * 100, 2)
+                item["igst_rate"] = 0
+        
+        # Step 5: Tax Type Detection & Final Rate Enforcing
+        # Standardize rates to common GST tiers (5, 12, 18, 28) if close
+        def snap_to_gst_tier(rate):
+            tiers = [0, 5, 12, 18, 28]
+            for t in tiers:
+                if abs(rate - t) < 0.5: return float(t)
+                # Also handle split rates (2.5, 6, 9, 14)
+                if abs(rate - t/2) < 0.25: return float(t/2)
+            return rate
+
+        item["cgst_rate"] = snap_to_gst_tier(item["cgst_rate"])
+        item["sgst_rate"] = snap_to_gst_tier(item["sgst_rate"])
+        item["igst_rate"] = snap_to_gst_tier(item["igst_rate"])
+
+        # Final Amount Re-calculation to enforce mathematical integrity
+        if item["igst_rate"] > 0: 
+            item["igst_amount"] = round((item["taxable_value"] * item["igst_rate"]) / 100, 2)
+        else:
+            if item["cgst_rate"] > 0: item["cgst_amount"] = round((item["taxable_value"] * item["cgst_rate"]) / 100, 2)
+            if item["sgst_rate"] > 0: item["sgst_amount"] = round((item["taxable_value"] * item["sgst_rate"]) / 100, 2)
+        
         item["amount"] = round(item["taxable_value"] + item["igst_amount"] + item["cgst_amount"] + item["sgst_amount"] + item["cess_amount"], 2)
 
     vendor_address = str(resolve_key(data, "vendor_address") or "").strip()
+    billing_address = str(resolve_key(data, "billing_address") or "").strip()
 
     # ── Branch Derivation ──────────────────────────────────────
     vendor_city = str(data.get("vendor_city") or "").strip()
@@ -337,11 +389,45 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
     # ── Robust Field Resolution (Aliases Applied) ─────────────
     name = str(resolve_key(data, "vendor_name") or "").strip()
     gstin = str(resolve_key(data, "gstin") or "").replace(" ", "").upper()
-    inv_no = str(resolve_key(data, "invoice_no") or "").strip()
+    
+    raw_inv_no = str(resolve_key(data, "invoice_no") or "").strip()
+    inv_no = raw_inv_no if is_valid_invoice_no(raw_inv_no) else ""
+    
+    # ── Fallback Regex (for missing headers in unstructured responses) ─────
+    full_text = str(data.get("_raw_text") or data.get("ocr_raw_text") or str(data)).upper()
+    
+    if not gstin:
+        gst_match = re.search(r"\b\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}\b", full_text)
+        if gst_match:
+            gstin = gst_match.group(0)
+            logger.info(f"FALLBACK: Found GSTIN via regex: {gstin}")
+
+    if not inv_no:
+        # Look for labels followed by alphanumeric strings
+        # Handles "Invoice No: ABC-123", "Inv #: 123", "Bill No. 456"
+        inv_patterns = [
+            r"(?:TAX\s*)?INVOICE\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
+            r"SI\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
+            r"(?:SALES\s*)?INVOICE\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
+            r"BILL\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
+            r"INV\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
+            r"REF\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
+            r"DOC\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})"
+        ]
+        for pattern in inv_patterns:
+            match = re.search(pattern, full_text)
+            if match:
+                candidate = match.group(1).strip()
+                if is_valid_invoice_no(candidate):
+                    inv_no = candidate
+                    logger.info(f"FALLBACK: Found VALID Invoice No via regex: {inv_no}")
+                    break
+
     inv_date = normalize_date(resolve_key(data, "invoice_date"))
     total_amt = normalize_amount(resolve_key(data, "total_amount"))
     tax_amt = normalize_amount(resolve_key(data, "taxable_value"))
     state = str(resolve_key(data, "vendor_state") or "").strip()
+    pos = str(resolve_key(data, "place_of_supply") or state or "").strip()
 
     # ── Hierarchical structure for UI sections ──────────────────
     result = {
@@ -349,6 +435,7 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
             "supplier_details": {
                 "vendor_name": name,
                 "vendor_address": vendor_address,
+                "billing_address": billing_address,
                 "bill_from": vendor_address,
                 "ship_from": vendor_address,
                 "vendor_city": vendor_city,
@@ -361,7 +448,7 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
                 "gstin": gstin,
                 "supplier_invoice_no": inv_no,
                 "invoice_date": inv_date,
-                "place_of_supply": str(data.get("place_of_supply") or state or "").strip(),
+                "place_of_supply": pos,
                 "branch": branch or None
             },
             "supply_details": {
@@ -387,10 +474,15 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
         # Top-level aliases for table display (Consistency with UI)
         "vendor_name": name,
         "vendor_address": vendor_address,
+        "billing_address": billing_address,
         "gstin": gstin,
+        "invoice_number": inv_no, 
         "supplier_invoice_no": inv_no,
+        "sales_invoice_no": inv_no, # ADDED for Sales UI compatibility
+        "bill_no": inv_no,          # ADDED for generic UI compatibility
         "invoice_date": inv_date,
         "total_invoice_value": total_amt,
+        "place_of_supply": pos,
         "currency": str(data.get("currency") or "INR").upper(),
         # Lossless backup
         "_raw_source": raw_source

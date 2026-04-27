@@ -713,6 +713,22 @@ class ApiService {
         );
     }
 
+    /**
+     * Zoho Adapter: Transform normalized OCR JSON into Zoho-compliant rows.
+     * Reconstructs items, fixes alignment, and validates schema.
+     */
+    async transformToZoho(data: { invoices: any[] }) {
+        return httpClient.post<any>('/api/zoho-adapter/', data);
+    }
+
+    /**
+     * Zoho Reconstruct: Returns reconstructed invoices (Step 1-3)
+     * before flattening. Used for UI display in Zoho mode.
+     */
+    async reconstructZohoInvoices(data: { invoices: any[] }) {
+        return httpClient.post<any>('/api/zoho-reconstruct/', data);
+    }
+
     // ============================================================================
     // BULK OCR STAGING WORKFLOW
     // ============================================================================
@@ -1413,63 +1429,6 @@ class ApiService {
         return httpClient.post<{ success: boolean }>('/api/subscription/update/', { plan });
     }
 
-    // ============================================================================
-    // BANK RECONCILIATION
-    // ============================================================================
-
-    async uploadBankStatement(file: File, bankLedgerId: number) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('bank_ledger_id', String(bankLedgerId));
-        return httpClient.postFormData<any>('/api/bank-reconciliation/upload/', formData);
-    }
-
-    async runBankMatching(bankLedgerId: number) {
-        return httpClient.post<any>('/api/bank-reconciliation/run-matching/', { bank_ledger_id: bankLedgerId });
-    }
-
-    async autoReconcileBank(bankLedgerId: number) {
-        return httpClient.post<any>('/api/bank-reconciliation/auto-reconcile/', { bank_ledger_id: bankLedgerId });
-    }
-
-    async getPendingBankMatches(bankLedgerId?: number, params?: any) {
-        let url = '/api/bank-reconciliation/pending_matches/';
-        const queryParams = new URLSearchParams();
-        if (bankLedgerId) queryParams.append('bank_ledger_id', String(bankLedgerId));
-        if (params) {
-            Object.keys(params).forEach(key => {
-                if (params[key] !== undefined && params[key] !== null) {
-                    queryParams.append(key, String(params[key]));
-                }
-            });
-        }
-        const queryString = queryParams.toString();
-        if (queryString) url += `?${queryString}`;
-        return httpClient.get<any[]>(url);
-    }
-
-    async linkBankVoucher(txnId: number, voucherId: number, voucherType: string) {
-        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/link_voucher/`, {
-            voucher_id: voucherId,
-            voucher_type: voucherType
-        });
-    }
-
-    async ignoreBankTransaction(txnId: number) {
-        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/ignore/`, {});
-    }
-
-    async createBankVoucher(txnId: number, data: { voucher_type: string; bank_ledger_id: number; counterparty_ledger_id: number; amount: number; voucher_date?: string; reference?: string; narration?: string; bank_transaction_id: number }) {
-        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/create_voucher/`, data);
-    }
-
-    async downloadBankReconciliationStatement(bankLedgerId: number) {
-        return httpClient.get<string>(`/api/bank-reconciliation/export-statement/?bank_ledger_id=${bankLedgerId}`);
-    }
-
-    async downloadMatchedTransactionsSummary(bankLedgerId: number) {
-        return httpClient.get<string>(`/api/bank-reconciliation/export-summary/?bank_ledger_id=${bankLedgerId}`);
-    }
 
     // ============================================================================
     // HEALTH CHECK

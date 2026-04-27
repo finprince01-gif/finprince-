@@ -48,7 +48,6 @@ const PayrollPage = React.lazy(() => import('../pages/Payroll'));
 const ServicePage = React.lazy(() => import('../pages/Service'));
 const GSTPage = React.lazy(() => import('../pages/GST'));
 const DashboardBuilderPage = React.lazy(() => import('../pages/DashboardBuilder'));
-const BankingPage = React.lazy(() => import('../pages/Banking'));
 
 // Auth Pages - Static imports for instant first-paint
 import LoginPage from '../pages/Login';
@@ -1196,7 +1195,6 @@ const App: React.FC = () => {
       case 'Payroll': return <PayrollPage />;
       case 'Service': return <ServicePage />;
       case 'GST': return <GSTPage />;
-      case 'Banking': return <BankingPage />;
       case 'Dashboard Builder': return <DashboardBuilderPage vouchers={vouchers} ledgers={ledgers} onNavigate={handleNavigate} />;
       default: return <div>Page not found</div>;
     }

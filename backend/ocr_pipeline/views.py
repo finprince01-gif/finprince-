@@ -14,6 +14,7 @@ from .normalize import normalize
 from .repository import InvoiceTempOCR
 from .pipeline import validate_and_process as finalize_record
 from .grouping import run_grouping_logic
+from .zoho_adapter import get_zoho_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,7 @@ class CleanOCRStagingView(views.APIView):
                 "file_path": r.file_path,
                 "tenant_id": r.tenant_id,
                 "invoice_number": r.supplier_invoice_no or norm.get("supplier_invoice_no") or supplier.get("supplier_invoice_no") or norm.get("invoice_no") or "—",
+                "sales_invoice_no": r.supplier_invoice_no or norm.get("sales_invoice_no") or norm.get("supplier_invoice_no") or "—",
                 "invoice_date": norm.get("invoice_date") or supplier.get("invoice_date") or "—",
                 "total_amount": norm.get("total_invoice_value") or norm.get("total_amount") or "0.00",
                 "branch": branch,
@@ -481,3 +483,51 @@ class OCRStagingRescanUploadView(views.APIView):
             logger.error(f"RESCAN UPLOAD FAILED: {str(e)}")
             return Response({'error': f"Upload & Rescan failed: {str(e)}"}, status=500)
 
+class ZohoAdapterView(views.APIView):
+    """
+    SEPARATE Zoho Adapter Layer.
+    Consumes normalized OCR output and produces Zoho-compliant rows.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        logger.info("API HIT: /api/zoho-adapter/")
+        data = request.data
+        if not data:
+            return Response({"error": "No data provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Expecting format: {"invoices": [...]}
+        if "invoices" not in data and isinstance(data, list):
+            data = {"invoices": data}
+
+        try:
+            adapter = get_zoho_adapter()
+            result = adapter.transform(data)
+            return Response(result)
+        except Exception as e:
+            logger.error(f"Zoho Adapter Failure: {str(e)}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ZohoReconstructView(views.APIView):
+    """
+    Returns reconstructed and normalized invoices (Step 1-3).
+    Useful for displaying reconstructed items in the UI before export.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        logger.info("API HIT: /api/zoho-reconstruct/")
+        data = request.data
+        if not data:
+            return Response({"error": "No data provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if "invoices" not in data and isinstance(data, list):
+            data = {"invoices": data}
+
+        try:
+            adapter = get_zoho_adapter()
+            processed_invoices = adapter.reconstruct_invoices(data)
+            return Response({"invoices": processed_invoices})
+        except Exception as e:
+            logger.error(f"Zoho Reconstruct Failure: {str(e)}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
