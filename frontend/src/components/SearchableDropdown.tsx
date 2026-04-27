@@ -2,9 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search } from 'lucide-react';
 
+interface SearchableOption {
+    label: string;
+    value: any;
+}
+
 interface SearchableDropdownProps {
-    options: string[];
-    value: string | string[];
+    options: (string | SearchableOption)[];
+    value: any;
     onChange: (value: any) => void;
     placeholder?: string;
     disabled?: boolean;
@@ -14,6 +19,8 @@ interface SearchableDropdownProps {
     onCreateAction?: { label: string; onClick: () => void };
     isMulti?: boolean;
     allowCustomValue?: boolean;
+    className?: string;
+    error?: boolean;
 }
 
 const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
@@ -26,12 +33,14 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     noResultsText = 'No results found',
     onCreateAction,
     isMulti = false,
-    allowCustomValue = false
+    allowCustomValue = false,
+    className = '',
+    error = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [filteredOptions, setFilteredOptions] = useState<string[]>(options);
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [filteredOptions, setFilteredOptions] = useState<(string | SearchableOption)[]>(options);
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, dropUp: false });
 
     const containerRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -39,19 +48,25 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     // Update filtered options
     useEffect(() => {
         setFilteredOptions(
-            options.filter(option =>
-                (option || '').toLowerCase().includes(searchTerm.toLowerCase())
-            )
+            options.filter(option => {
+                const label = typeof option === 'string' ? option : option.label;
+                return (label || '').toLowerCase().includes(searchTerm.toLowerCase());
+            })
         );
     }, [searchTerm, options]);
 
     const updatePosition = () => {
         if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const spaceAbove = rect.top;
+            const dropUp = spaceBelow < 250 && spaceAbove > spaceBelow;
+
             setPosition({
-                top: rect.bottom + window.scrollY,
+                top: dropUp ? rect.top + window.scrollY : rect.bottom + window.scrollY,
                 left: rect.left + window.scrollX,
-                width: rect.width
+                width: rect.width,
+                dropUp
             });
         }
     };
@@ -104,11 +119,10 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
         };
     }, [isOpen]);
 
-    useEffect(() => {
-        if (!isOpen) {
-            setSearchTerm('');
-        }
-    }, [isOpen]);
+    const getOptionLabel = (val: any) => {
+        const option = options.find(o => typeof o === 'string' ? o === val : o.value === val);
+        return typeof option === 'string' ? option : (option?.label || val);
+    };
 
     return (
         <div className="relative w-full" ref={containerRef}>
@@ -117,15 +131,18 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                 onClick={toggleDropdown}
                 disabled={disabled}
                 className={`min-h-[42px] w-full px-3 py-2 text-left border rounded-[4px] flex justify-between items-center bg-white transition-all
-                    ${disabled ? 'bg-gray-100 cursor-not-allowed border-gray-300 text-gray-500' : 'border-gray-300 focus:ring-1 focus:ring-indigo-500 hover:border-indigo-400'}
-                    ${!value || (Array.isArray(value) && value.length === 0) ? 'text-gray-500' : 'text-gray-900 shadow-sm'}
+                    ${disabled ? 'bg-gray-100 cursor-not-allowed border-gray-300 text-gray-500' : 
+                      error ? 'border-red-500 bg-red-50 ring-1 ring-red-500' :
+                      'border-gray-300 focus:ring-1 focus:ring-indigo-500 hover:border-indigo-400'}
+                    ${!value || (Array.isArray(value) && value.length === 0) ? (error ? 'text-red-600' : 'text-gray-500') : 'text-gray-900 shadow-sm'}
+                    ${className}
                 `}
             >
                 <div className="flex flex-wrap gap-1 flex-1 overflow-hidden">
                     {isMulti && Array.isArray(value) && value.length > 0 ? (
                         value.map(val => (
                             <span key={val} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded border border-indigo-100 flex items-center gap-1">
-                                {val}
+                                {getOptionLabel(val)}
                                 <span 
                                     className="hover:text-red-500 cursor-pointer font-bold ml-1"
                                     onClick={(e) => {
@@ -138,7 +155,7 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                         ))
                     ) : (
                         <span className="truncate block font-medium">
-                            {Array.isArray(value) ? (value.length > 0 ? value.join(', ') : placeholder) : (value || placeholder)}
+                            {Array.isArray(value) ? (value.length > 0 ? value.map(v => getOptionLabel(v)).join(', ') : placeholder) : (getOptionLabel(value) || placeholder)}
                         </span>
                     )}
                 </div>
@@ -161,7 +178,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                     ref={dropdownRef}
                     className="fixed z-[9999] bg-white border border-slate-200 rounded-[4px] shadow-xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-100"
                     style={{
-                        top: position.top - window.scrollY,
+                        top: position.dropUp ? 'auto' : position.top - window.scrollY,
+                        bottom: position.dropUp ? window.innerHeight - (position.top - window.scrollY) : 'auto',
                         left: position.left - window.scrollX,
                         width: position.width,
                         maxHeight: '250px'
@@ -202,7 +220,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                                     if (e.key === 'Enter') {
                                         e.preventDefault();
                                         if (filteredOptions.length > 0) {
-                                            onChange(filteredOptions[0]);
+                                            const opt = filteredOptions[0];
+                                            onChange(typeof opt === 'string' ? opt : opt.value);
                                             setIsOpen(false);
                                         } else {
                                             handleCustomValueSubmit();
@@ -246,43 +265,40 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                             </button>
                         </div>
                     )}
-
                     <div className="overflow-y-scroll flex-1 overscroll-contain custom-scrollbar" style={{ minHeight: '100px' }}>
                         {filteredOptions.length > 0 ? (
-                            filteredOptions.map((option) => {
-                                const isSelected = Array.isArray(value) ? value.includes(option) : value === option;
+                            filteredOptions.map((option, index) => {
+                                const label = typeof option === 'string' ? option : option.label;
+                                const optValue = typeof option === 'string' ? option : option.value;
+                                const isSelected = isMulti && Array.isArray(value) 
+                                    ? value.includes(optValue)
+                                    : value === optValue;
+
                                 return (
-                                    <div
-                                        key={option}
-                                        onClick={(e) => {
+                                    <button
+                                        key={index}
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
                                             if (isMulti) {
-                                                e.stopPropagation();
-                                                const currentArr = Array.isArray(value) ? value : [];
-                                                const next = isSelected 
-                                                    ? currentArr.filter(v => v !== option)
-                                                    : [...currentArr, option];
-                                                onChange(next);
+                                                const newValue = Array.isArray(value) ? [...value] : [];
+                                                if (newValue.includes(optValue)) {
+                                                    onChange(newValue.filter(v => v !== optValue));
+                                                } else {
+                                                    onChange([...newValue, optValue]);
+                                                }
                                             } else {
-                                                onChange(option);
+                                                onChange(optValue);
                                                 setIsOpen(false);
                                             }
                                         }}
-                                        className={`px-4 py-2.5 cursor-pointer text-sm transition-colors flex items-center gap-2
-                                            ${isSelected && !isMulti
-                                                ? 'bg-indigo-600 text-white font-semibold'
-                                                : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700'}
+                                        className={`w-full px-4 py-2 text-left text-sm transition-colors flex items-center justify-between
+                                            ${isSelected ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'}
                                         `}
                                     >
-                                        {isMulti && (
-                                            <input 
-                                                type="checkbox" 
-                                                checked={isSelected} 
-                                                readOnly 
-                                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                        )}
-                                        {option}
-                                    </div>
+                                        <span className="truncate">{label}</span>
+                                        {isSelected && <span className="text-indigo-600 font-bold">✓</span>}
+                                    </button>
                                 );
                             })
                         ) : (

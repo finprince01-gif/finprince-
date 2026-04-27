@@ -83,10 +83,99 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             'items', 'foreign_items', 'payment_details', 'dispatch_details', 'eway_bill_details'
         ]
         read_only_fields = ('id', 'tenant_id', 'created_at', 'updated_at', 'posting_status', 'posting_error')
+    
+    def _sync_numbering_series(self, tenant_id, voucher_name, sales_invoice_no):
+        """
+        Ensures that the Master numbering series is ahead of any manually provided invoice number.
+        Useful for syncing after Excel uploads.
+        """
+        from masters.models import MasterVoucherSales
+        import re
+        try:
+            series = MasterVoucherSales.objects.filter(
+                tenant_id=tenant_id, 
+                voucher_name=voucher_name,
+                enable_auto_numbering=True
+            ).first()
+            if not series:
+                return
+
+            next_num = (series.current_number or series.start_from or 1)
+            
+            if sales_invoice_no:
+                clean_no = str(sales_invoice_no)
+                if series.prefix and clean_no.startswith(series.prefix):
+                    clean_no = clean_no[len(series.prefix):]
+                if series.suffix and clean_no.endswith(series.suffix):
+                    clean_no = clean_no[:-len(series.suffix)]
+                
+                # Extract numeric part (handles cases like INV000172 -> 172)
+                match = re.search(r'(\d+)', clean_no)
+                if match:
+                    num_str = match.group(1)
+                    extracted_num = int(num_str)
+                    
+                    # Typo protection: ignore abnormally long numbers
+                    required_digits = series.required_digits or 4
+                    if len(num_str) <= required_digits + 2:
+                        next_num = max(next_num, extracted_num + 1)
+                    else:
+                        print(f"[SalesSerializer] Ignoring suspicious outlier: {num_str}")
+            
+            series.current_number = next_num
+            series.save(update_fields=['current_number', 'updated_at'])
+            print(f"[SalesSerializer] Series '{voucher_name}' sync: current_number set to {next_num}")
+        except Exception as e:
+            print(f"[SalesSerializer] Failed to sync numbering series: {e}")
+
+    def _get_next_number_from_series(self, tenant_id, voucher_name):
+        from masters.models import MasterVoucherSales
+        try:
+            series = MasterVoucherSales.objects.filter(
+                tenant_id=tenant_id, 
+                voucher_name=voucher_name,
+                is_active=True
+            ).first()
+            if not series:
+                return None
+            
+            num = series.current_number or series.start_from or 1
+            digits = series.required_digits or 4
+            prefix = series.prefix or ''
+            suffix = series.suffix or ''
+            
+            formatted = f"{prefix}{str(num).zfill(digits)}{suffix}"
+            
+            # Increment the counter
+            series.current_number = num + 1
+            series.save(update_fields=['current_number', 'updated_at'])
+            
+            return formatted
+        except Exception as e:
+            print(f"[SalesSerializer] Auto-number failed: {e}")
+            return None
 
     def create(self, validated_data):
         # Part 2: Debug Incoming Data
         print("DEBUG VALIDATED_DATA:", validated_data)
+
+        # 0. Sync Numbering Series
+        voucher_name = validated_data.get('voucher_name')
+        sales_invoice_no = validated_data.get('sales_invoice_no')
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        tenant_id = getattr(user, 'tenant_id', None)
+        
+        if voucher_name and tenant_id:
+            if not sales_invoice_no:
+                # If number is missing (e.g. Excel upload), generate it from series
+                generated_no = self._get_next_number_from_series(tenant_id, voucher_name)
+                if generated_no:
+                    validated_data['sales_invoice_no'] = generated_no
+                    print(f"[SalesSerializer] Auto-generated invoice number: {generated_no}")
+            else:
+                # If number is provided, ensure the series counter is ahead of it
+                self._sync_numbering_series(tenant_id, voucher_name, sales_invoice_no)
 
         # Part 1: Validate Input (MANDATORY)
         customer_id = validated_data.get("customer_id")

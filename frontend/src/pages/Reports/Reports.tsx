@@ -1022,7 +1022,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           id: e.id,
           date: e.date || e.transaction_date,
           type: e.type || e.voucher_type,
-          particulars: e.ledger || 'N/A',
+          particulars: e.ledger_name || e.ledger || 'N/A',
           debit: dr,
           credit: cr,
           balance

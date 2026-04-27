@@ -207,6 +207,9 @@ const App: React.FC = () => {
   // Vouchers - all transactions (sales, purchase, payment, receipt, etc.)
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
 
+  // Journal Entries - the double-entry source of truth for reports
+  const [journalEntries, setJournalEntries] = useState<any[]>([]);
+
   // RICH DATA for AI Agency (Emails, Phones, etc.)
   const [richVendors, setRichVendors] = useState<any[]>([]);
   const [richCustomers, setRichCustomers] = useState<any[]>([]);
@@ -336,6 +339,7 @@ const App: React.FC = () => {
         backendLedgers,
         backendLedgerGroups,
         backendVouchers,
+        backendJournalEntries,
         backendStockItems,
         backendRichVendors,
         backendRichCustomers
@@ -344,6 +348,7 @@ const App: React.FC = () => {
         apiService.getLedgers().catch(() => []),
         apiService.getLedgerGroups().catch(() => []),
         apiService.getVouchers().catch(() => []),
+        apiService.getJournalEntries().catch(() => []),
         apiService.getStockItems().catch(() => []),
         apiService.getRichVendors().catch(() => []),
         apiService.getRichCustomers().catch(() => [])
@@ -355,6 +360,7 @@ const App: React.FC = () => {
         ledgers: Array.isArray(backendLedgers) ? backendLedgers : [],
         ledgerGroups: Array.isArray(backendLedgerGroups) ? backendLedgerGroups : [],
         vouchers: Array.isArray(backendVouchers) ? backendVouchers : [],
+        journalEntries: Array.isArray(backendJournalEntries) ? backendJournalEntries : [],
         stockItems: Array.isArray(backendStockItems) ? backendStockItems : [],
         richVendors: Array.isArray(backendRichVendors) ? backendRichVendors : [],
         richCustomers: Array.isArray(backendRichCustomers) ? backendRichCustomers : []
@@ -366,6 +372,7 @@ const App: React.FC = () => {
       setLedgers(newData.ledgers);
       setLedgerGroups(newData.ledgerGroups);
       setVouchers(newData.vouchers);
+      setJournalEntries(newData.journalEntries);
       setStockItems(newData.stockItems);
       setRichVendors(newData.richVendors);
       setRichCustomers(newData.richCustomers);
@@ -1184,6 +1191,7 @@ const App: React.FC = () => {
       />;
       case 'Reports': return <ErrorBoundary><ReportsPage
         vouchers={vouchers}
+        entries={journalEntries}
         ledgers={ledgers}
         ledgerGroups={ledgerGroups}
         stockItems={stockItems}
