@@ -71,6 +71,14 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
     const [locations, setLocations] = useState<any[]>([]);
     const [outwardSlips, setOutwardSlips] = useState<any[]>([]);
     const [sameAsBillTo, setSameAsBillTo] = useState(false);
+    const [visibleEwbCount, setVisibleEwbCount] = useState(1);
+
+    useEffect(() => {
+        let count = 1;
+        if (draft.header.ewb3_eway_bill_no || draft.header.ewb3_available === 'Yes') count = 3;
+        else if (draft.header.ewb2_eway_bill_no || draft.header.ewb2_available === 'Yes') count = 2;
+        setVisibleEwbCount(count);
+    }, []);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -267,6 +275,23 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
                             }
                         }).catch(() => { });
                 }
+            }
+
+            // Dispatch Field Logics
+            if (key === 'delivery_type' && value === 'Courier') {
+                newHeader.transporter_id = '';
+                newHeader.transporter_name = '';
+                newHeader.vehicle_no = '';
+            }
+
+            if (key === 'rail_upto_port_delivery_type' && value === 'Courier') {
+                newHeader.rail_upto_port_transporter_id = '';
+                newHeader.rail_upto_port_transporter_name = '';
+                newHeader.rail_upto_port_vehicle_no = '';
+            }
+
+            if (['transporter_id', 'rail_upto_port_transporter_id'].includes(key)) {
+                newHeader[key] = (value || '').toUpperCase().substring(0, 15);
             }
 
             const updatedItems = prev.items;
@@ -492,7 +517,7 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
     }).filter(o => o.label && o.label !== 'No Name'), [stockItems]);
     const ledgerOptions = useMemo(() => Array.from(new Set(ledgers.map(l => l.name).filter(Boolean))), [ledgers]);
 
-    const renderField = (col: SalesVoucherColumn) => {
+    const renderField = (col: SalesVoucherColumn, overrideLabel?: string) => {
         const isValueEmpty = !draft.header[col.key] || String(draft.header[col.key]).trim() === '';
         
         const currentName = String(draft.header.customer_name || '').trim().toLowerCase();
@@ -515,13 +540,18 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
             'voucher_name', 'customer_name', 'customer_branch', 'gstin',
             'place_of_supply', 'reverse_charge', 'invoice_type',
             'bill_to_state', 'bill_to_country', 'ship_to_state', 'ship_to_country',
-            'export_type', 'gst_export_type'
+            'export_type', 'gst_export_type',
+            'dispatch_from', 'mode_of_transport', 'delivery_type', 'rail_upto_port_delivery_type'
         ];
+
+        const isFieldDisabled = 
+            (['transporter_id', 'transporter_name', 'vehicle_no'].includes(col.key) && draft.header.delivery_type === 'Courier') ||
+            (['rail_upto_port_transporter_id', 'rail_upto_port_transporter_name', 'rail_upto_port_vehicle_no'].includes(col.key) && draft.header.rail_upto_port_delivery_type === 'Courier');
 
         return (
             <div key={col.key} className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                    {col.label}
+                <label className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${isFieldDisabled ? 'text-gray-300' : 'text-gray-400'}`}>
+                    {overrideLabel || col.label}
                     {col.required && <span className="text-red-500">*</span>}
                 </label>
                 {dropdownFields.includes(col.key) ? (
@@ -530,25 +560,43 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
                         onChange={val => updateHeader(col.key, val)}
                         options={
                             col.key === 'voucher_name' ? seriesOptions :
-                                col.key === 'customer_name' ? customerOptions :
-                                    col.key === 'customer_branch' ? branchOptions :
-                                        col.key === 'gstin' ? gstinOptions :
-                                            ['place_of_supply', 'bill_to_state', 'ship_to_state'].includes(col.key) ? INDIA_STATE_CODES.map(s => s.name) :
-                                                ['bill_to_country', 'ship_to_country'].includes(col.key) ? ['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'United Arab Emirates', 'Singapore', 'Others'] :
-                                                    col.key === 'reverse_charge' ? ['Y', 'N'] :
-                                                        col.key === 'invoice_type' ? GST_INVOICE_TYPES.map(t => t.label) :
-                                                            ['export_type', 'gst_export_type'].includes(col.key) ? EXPORT_TYPES.map(t => t.label) : []
+                            col.key === 'customer_name' ? customerOptions :
+                            col.key === 'customer_branch' ? branchOptions :
+                            col.key === 'gstin' ? gstinOptions :
+                            ['place_of_supply', 'bill_to_state', 'ship_to_state'].includes(col.key) ? INDIA_STATE_CODES.map(s => s.name) :
+                            ['bill_to_country', 'ship_to_country'].includes(col.key) ? ['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'United Arab Emirates', 'Singapore', 'Others'] :
+                            col.key === 'reverse_charge' ? ['Y', 'N'] :
+                            col.key === 'invoice_type' ? GST_INVOICE_TYPES.map(t => t.label) :
+                            ['export_type', 'gst_export_type'].includes(col.key) ? EXPORT_TYPES.map(t => t.label) :
+                            col.key === 'dispatch_from' ? locations.map(l => l.name || l.location_name) :
+                            col.key === 'mode_of_transport' ? ['Road', 'Air', 'Sea', 'Rail'] :
+                            ['delivery_type', 'rail_upto_port_delivery_type'].includes(col.key) ? ['Self', 'Third Party', 'Courier'] :
+                            SALES_VOUCHER_COLUMNS.find(c => c.key === col.key)?.options || []
                         }
                         placeholder={`Select ${col.label}`}
                         error={hasError}
+                        disabled={isFieldDisabled}
+                    />
+                ) : col.type === 'date' ? (
+                    <input
+                        type="date"
+                        value={draft.header[col.key] || ''}
+                        max={['dispatch_date', 'upto_port_shipping_bill_date', 'beyond_port_shipping_bill_date', 'rail_beyond_port_receipt_date'].includes(col.key) ? new Date().toISOString().split('T')[0] : undefined}
+                        onChange={e => updateHeader(col.key, e.target.value)}
+                        disabled={isFieldDisabled}
+                        className={`min-h-[42px] w-full px-3 py-2 text-left border rounded-[4px] bg-white transition-all
+                            ${isFieldDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60' : hasError ? 'border-red-500 bg-red-50 ring-1 ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-indigo-500 hover:border-indigo-400'}
+                            text-gray-900 shadow-sm
+                        `}
                     />
                 ) : (
                     <input
-                        type={col.type === 'date' ? 'date' : col.type === 'number' ? 'number' : 'text'}
+                        type={col.type === 'number' ? 'number' : 'text'}
                         value={draft.header[col.key] ?? ''}
                         onChange={e => updateHeader(col.key, e.target.value)}
+                        disabled={isFieldDisabled}
                         className={`min-h-[42px] w-full px-3 py-2 text-left border rounded-[4px] flex justify-between items-center bg-white transition-all
-                            ${hasError ? 'border-red-500 bg-red-50 ring-1 ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-indigo-500 hover:border-indigo-400'}
+                            ${isFieldDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60' : hasError ? 'border-red-500 bg-red-50 ring-1 ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-indigo-500 hover:border-indigo-400'}
                             text-gray-900 shadow-sm
                         `}
                         placeholder={`Enter ${col.label}`}
@@ -1134,6 +1182,302 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
                                     .filter((col): col is SalesVoucherColumn => !!col)
                                     .map(col => renderField(col))}
                             </div>
+                        </div>
+                    ) : activeTab === 'E-Invoice & E-Way Bill Details' ? (
+                        <div className="space-y-8">
+                            {/* E-way Bill Entries */}
+                            {Array.from({ length: visibleEwbCount }).map((_, idx) => {
+                                const entryIdx = idx + 1;
+                                const prefix = `ewb${entryIdx}_`;
+                                return (
+                                    <div key={entryIdx} className="border-b border-gray-200 pb-8 last:border-0 last:pb-0">
+                                        <div className="flex items-center justify-between mb-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center font-bold text-sm">
+                                                    {entryIdx}
+                                                </div>
+                                                <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">
+                                                    E-way Bill Details {visibleEwbCount > 1 ? `#${entryIdx}` : ''}
+                                                </h3>
+                                            </div>
+                                            {entryIdx > 1 && entryIdx === visibleEwbCount && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        // Clear fields before removing
+                                                        const keys = ['available', 'eway_bill_no', 'date', 'validity_period', 'distance', 'extension_date', 'extended_ewb_no', 'extension_reason', 'from_place', 'remaining_distance', 'new_validity', 'updated_vehicle_no'];
+                                                        keys.forEach(k => updateHeader(`${prefix}${k}`, ''));
+                                                        setVisibleEwbCount(prev => prev - 1);
+                                                    }}
+                                                    className="flex items-center gap-1.5 text-red-500 hover:text-red-700 text-[11px] font-bold uppercase transition-colors"
+                                                >
+                                                    <Icon name="trash-2" className="w-4 h-4" />
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                                            {/* Left Column */}
+                                            <div className="space-y-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                        Eway Bill - Available
+                                                    </label>
+                                                    <div className="flex gap-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateHeader(`${prefix}available`, 'Yes')}
+                                                            className={`flex-1 h-[42px] border rounded-lg text-xs font-bold transition-all ${draft.header[`${prefix}available`] === 'Yes'
+                                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200'
+                                                                : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300'
+                                                                }`}
+                                                        >
+                                                            Yes
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateHeader(`${prefix}available`, 'No')}
+                                                            className={`flex-1 h-[42px] border rounded-lg text-xs font-bold transition-all ${draft.header[`${prefix}available`] === 'No'
+                                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200'
+                                                                : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300'
+                                                                }`}
+                                                        >
+                                                            No
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-6">
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}eway_bill_no`)!, 'E-Way Bill No')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}date`)!, 'Date')}
+                                                </div>
+                                            </div>
+
+                                            {/* Right Column */}
+                                            <div className="space-y-6">
+                                                <div className="grid grid-cols-2 gap-6">
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}validity_period`)!, 'Validity Period')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}distance`)!, 'Distance (km)')}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-gray-50/50 rounded-xl p-6 border border-gray-100">
+                                            <h4 className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                                                Extended E-way Bill Info
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                <div className="space-y-6">
+                                                    <div className="grid grid-cols-2 gap-6">
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}extension_date`)!, 'Extension Date')}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}extended_ewb_no`)!, 'Extended EWB No')}
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-6">
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}extension_reason`)!, 'Extension Reason')}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}from_place`)!, 'From Place')}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-6">
+                                                    <div className="grid grid-cols-2 gap-6">
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}remaining_distance`)!, 'Remaining Distance')}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}new_validity`)!, 'New Validity')}
+                                                    </div>
+                                                    <div className="w-1/2 pr-3">
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get(`${prefix}updated_vehicle_no`)!, 'Updated Vehicle No')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {visibleEwbCount < 3 && (
+                                <div className="pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setVisibleEwbCount(prev => prev + 1)}
+                                        className="w-full py-4 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest"
+                                    >
+                                        <Icon name="plus" className="w-5 h-5" />
+                                        Add Another E-way Bill
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* E-Invoice Section */}
+                            <div className="mt-12 pt-12 border-t border-gray-200">
+                                <div className="flex items-center gap-3 mb-8">
+                                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                                        <Icon name="vouchers" className="w-6 h-6" />
+                                    </div>
+                                    <h3 className="text-base font-bold text-gray-800">E-Invoice Details</h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                    {renderField(SALES_VOUCHER_KEY_MAP.get('irn')!)}
+                                    {renderField(SALES_VOUCHER_KEY_MAP.get('ack_no')!)}
+                                    {renderField(SALES_VOUCHER_KEY_MAP.get('ack_date')!)}
+                                </div>
+                            </div>
+                        </div>
+                    ) : activeTab === 'Dispatch Details' ? (
+                        <div className="space-y-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                {/* Left Column: Main Dispatch Info */}
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {renderField(SALES_VOUCHER_KEY_MAP.get('dispatch_from')!)}
+                                        {renderField(SALES_VOUCHER_KEY_MAP.get('mode_of_transport')!)}
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {renderField(SALES_VOUCHER_KEY_MAP.get('dispatch_date')!)}
+                                        {renderField(SALES_VOUCHER_KEY_MAP.get('dispatch_time')!)}
+                                    </div>
+                                </div>
+
+                                {/* Right Column: Delivery Details (Only for Road/Default) */}
+                                <div className={`space-y-6 ${['Air', 'Sea', 'Rail'].includes(draft.header.mode_of_transport) ? 'hidden' : ''}`}>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {renderField(SALES_VOUCHER_KEY_MAP.get('delivery_type')!)}
+                                        {renderField(SALES_VOUCHER_KEY_MAP.get('transporter_id')!, 'Transporter ID/GSTIN')}
+                                    </div>
+                                    {renderField(SALES_VOUCHER_KEY_MAP.get('transporter_name')!)}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {renderField(SALES_VOUCHER_KEY_MAP.get('vehicle_no')!)}
+                                        {renderField(SALES_VOUCHER_KEY_MAP.get('lr_gr_consignment')!, 'LR/GR/Consignment')}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Conditional Port Details (Air/Sea) */}
+                            {(draft.header.mode_of_transport === 'Air' || draft.header.mode_of_transport === 'Sea') && (
+                                <div className="space-y-8 mt-12 pt-12 border-t border-gray-200">
+                                    {/* UPTO PORT (Transporter Details) */}
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                                        <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center gap-3">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">UPTO PORT</h3>
+                                        </div>
+                                        <div className="p-8">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                <div className="space-y-6">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('delivery_type')!)}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('transporter_id')!, 'Transporter ID/GSTIN')}
+                                                    </div>
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('transporter_name')!)}
+                                                </div>
+                                                <div className="space-y-6">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('vehicle_no')!)}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('lr_gr_consignment')!, 'LR/GR/Consignment')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* BEYOND PORT (Port Details) */}
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                                        <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center gap-3">
+                                            <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">BEYOND PORT</h3>
+                                        </div>
+                                        <div className="p-8">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                                {/* Left Column */}
+                                                <div className="space-y-6">
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_shipping_bill_no')!, 'Shipping Bill No')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_shipping_bill_date')!, 'Shipping Bill Date')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_ship_port_code')!, 'Ship/Port Code')}
+                                                    <div className="space-y-3">
+                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Origin</label>
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_origin')!, 'City')}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_origin_country')!, 'Country')}
+                                                    </div>
+                                                </div>
+                                                {/* Right Column */}
+                                                <div className="space-y-6">
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_vessel_flight_no')!, 'Vessel/Flight No')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_port_of_loading')!, 'Port of Loading')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_port_of_discharge')!, 'Port of Discharge')}
+                                                    <div className="space-y-3">
+                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Final Destination</label>
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_final_destination')!, 'City')}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('beyond_port_dest_country')!, 'Country')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Conditional Rail Details */}
+                            {draft.header.mode_of_transport === 'Rail' && (
+                                <div className="space-y-8 mt-12 pt-12 border-t border-gray-200">
+                                    {/* RAIL UPTO PORT (Transporter Details) */}
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                                        <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center gap-3">
+                                            <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">UPTO PORT</h3>
+                                        </div>
+                                        <div className="p-8">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                <div className="space-y-6">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('delivery_type')!)}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('transporter_id')!, 'Transporter ID/GSTIN')}
+                                                    </div>
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('transporter_name')!)}
+                                                </div>
+                                                <div className="space-y-6">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('vehicle_no')!)}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('lr_gr_consignment')!, 'LR/GR/Consignment')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* RAIL BEYOND PORT (Rail Details) */}
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                                        <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center gap-3">
+                                            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">BEYOND PORT</h3>
+                                        </div>
+                                        <div className="p-8">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                                {/* Left Column */}
+                                                <div className="space-y-6">
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_receipt_no')!, 'Railway Receipt No')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_receipt_date')!, 'Railway Receipt Date')}
+                                                    <div className="space-y-3">
+                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Origin</label>
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_origin')!, 'City')}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_origin_country')!, 'Country')}
+                                                    </div>
+                                                </div>
+                                                {/* Right Column */}
+                                                <div className="space-y-6">
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_fnr_no')!, 'FNR No')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_station_loading')!, 'Station of Loading')}
+                                                    {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_station_discharge')!, 'Station of Discharge')}
+                                                    <div className="space-y-3">
+                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Final Destination</label>
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_final_destination')!, 'City')}
+                                                        {renderField(SALES_VOUCHER_KEY_MAP.get('rail_beyond_port_dest_country')!, 'Country')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
