@@ -179,7 +179,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         name: l.name,
                         group: l.group,
                         category: l.category,
-                        type: 'ledger'
+                        type: 'ledger',
+                        ledger_id: l.id // Ensure we have a numeric ledger ID
                     }));
 
                 // 2. Real tenant ledgers + portal entities
@@ -189,14 +190,18 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         name: v.vendor_name || v.name,
                         group: 'Sundry Creditors',
                         isPortal: true,
-                        type: 'vendor'
+                        type: 'vendor',
+                        ledger_id: v.ledger_id || v.id, // Fallback if rich vendor has no ledger_id property but is a ledger itself
+                        portal_id: v.id
                     })),
                     ...customersData.map((c: any) => ({
                         id: `portal-cust-${c.id}`,
                         name: c.customer_name || c.name,
                         group: 'Sundry Debtors',
                         isPortal: true,
-                        type: 'customer'
+                        type: 'customer',
+                        ledger_id: c.ledger_id || c.id,
+                        portal_id: c.id
                     }))
                 ];
 
@@ -207,7 +212,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     .map((l: any) => ({
                         ...l,
                         type: l.group === 'Sundry Debtors' ? 'customer' :
-                            l.group === 'Sundry Creditors' ? 'vendor' : 'ledger'
+                            l.group === 'Sundry Creditors' ? 'vendor' : 'ledger',
+                        ledger_id: l.id // Ensure consistency
                     }));
 
                 const masterMap = new Map<string, any>();
@@ -845,8 +851,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 // 1. Invoice Payments
                 pendingTransactions.forEach(t => {
                     if (t.payment > 0) {
+                        const ledgerIdToUse = selectedOpt.ledger_id || (typeof selectedOpt.id === 'number' ? selectedOpt.id : null);
                         items.push({
-                            pay_to_ledger: selectedOpt.ledger_id,
+                            pay_to_ledger: ledgerIdToUse,
                             amount: t.payment,
                             reference_type: 'INVOICE',
                             reference_id: t.id,
@@ -864,8 +871,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
                 // 2. Advance Payment (Separate Row)
                 if (singleAdvanceAmount > 0) {
+                    const ledgerIdToUse = selectedOpt.ledger_id || (typeof selectedOpt.id === 'number' ? selectedOpt.id : null);
                     items.push({
-                        pay_to_ledger: selectedOpt.ledger_id,
+                        pay_to_ledger: ledgerIdToUse,
                         amount: singleAdvanceAmount,
                         reference_type: 'ADVANCE',
                         advance_ref_no: singleAdvanceRefNo,
@@ -875,8 +883,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
                 // 3. Fallback: General Payment if no invoices/advances specified but total > 0
                 if (items.length === 0 && totalPayment > 0) {
+                    const ledgerIdToUse = selectedOpt.ledger_id || (typeof selectedOpt.id === 'number' ? selectedOpt.id : null);
                     items.push({
-                        pay_to_ledger: selectedOpt.ledger_id,
+                        pay_to_ledger: ledgerIdToUse,
                         amount: totalPayment,
                         reference_type: 'ADVANCE',
                         advance_ref_no: 'ADVANCE'
@@ -900,8 +909,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     rowAllocations.forEach(t => {
                         if (t.payNow > 0) {
                             allocatedTotal += t.payNow;
+                            const ledgerIdToUse = opt.ledger_id || (typeof opt.id === 'number' ? opt.id : null);
                             items.push({
-                                pay_to_ledger: opt.ledger_id,
+                                pay_to_ledger: ledgerIdToUse,
                                 amount: t.payNow,
                                 reference_type: 'INVOICE',
                                 reference_id: t.id,
@@ -920,8 +930,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     // 2. Advance
                     if (rowAdvanceAmount > 0) {
                         allocatedTotal += rowAdvanceAmount;
+                        const ledgerIdToUse = opt.ledger_id || (typeof opt.id === 'number' ? opt.id : null);
                         items.push({
-                            pay_to_ledger: opt.ledger_id,
+                            pay_to_ledger: ledgerIdToUse,
                             amount: rowAdvanceAmount,
                             reference_type: 'ADVANCE',
                             advance_ref_no: rowAdvanceRefNo
@@ -931,8 +942,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     // 3. Fallback: If amount entered but not fully allocated, treat remainder as 'On Account'
                     const remainder = row.amount - allocatedTotal;
                     if (remainder > 0.01) {
+                        const ledgerIdToUse = opt.ledger_id || (typeof opt.id === 'number' ? opt.id : null);
                         items.push({
-                            pay_to_ledger: opt.ledger_id,
+                            pay_to_ledger: ledgerIdToUse,
                             amount: remainder,
                             reference_type: 'ADVANCE',
                             advance_ref_no: 'ADVANCE',

@@ -22,6 +22,12 @@ class VoucherContra(BaseModel):
     amount = models.DecimalField(max_digits=15, decimal_places=2)
     narration = models.TextField(null=True, blank=True)
 
+    # Bank Reconciliation
+    bank_reconciled = models.BooleanField(default=False)
+    bank_reconcile_date = models.DateField(null=True, blank=True)
+    bank_statement_id = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
+
 
     # Forex Details
     conversion_rate = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True)

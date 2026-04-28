@@ -91,6 +91,12 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
         tenant_id = self.get_tenant_id()
         logger.info(f"Branch: {tenant_id}, Vendor ID: {vendor_id}")
         
+        if not str(vendor_id).isdigit():
+            # If vendor_id is a portal ID string (e.g. 'portal-vend-11'), 
+            # we might need to look it up or just return empty if it's not a direct ID
+            logger.warning(f"Invalid non-numeric vendor_id: {vendor_id}")
+            return Response([])
+            
         transactions = self.get_queryset().filter(vendor_id=vendor_id)
         count_vendor = transactions.count()
         logger.info(f"Transactions found for vendor {vendor_id}: {count_vendor}")
