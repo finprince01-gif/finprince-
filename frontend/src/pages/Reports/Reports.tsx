@@ -3,6 +3,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import type { Ledger, Voucher, StockItem, SalesPurchaseVoucher, LedgerGroupMaster } from '../../types';
 import { showError } from '../../utils/toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
+import { apiService } from '../../services/api';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -104,6 +105,22 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   const [endDate, setEndDate] = useState<string>('');
   // Drill-down: null = summary view (all ledgers list), string = detail view for that ledger
   const [drillDownLedger, setDrillDownLedger] = useState<string | null>(null);
+  const [drillDownData, setDrillDownData] = useState<any[]>([]);
+  const [isDrillDownLoading, setIsDrillDownLoading] = useState<boolean>(false);
+
+  // When user clicks a ledger, fetch its specific transactions from the API
+  useEffect(() => {
+    if (drillDownLedger && drillDownLedger !== 'all') {
+      setIsDrillDownLoading(true);
+      setDrillDownData([]);
+      const ledgerName = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
+      apiService.getJournalEntriesReport(ledgerName, startDate, endDate)
+        .then(data => { setDrillDownData(Array.isArray(data) ? data : []); setIsDrillDownLoading(false); })
+        .catch(() => { setIsDrillDownLoading(false); setDrillDownData([]); });
+    } else {
+      setDrillDownData([]);
+    }
+  }, [drillDownLedger, startDate, endDate]);
 
   // Download mappings for each report type
   const downloadMappings: { [key in ReportType]: { endpoint: string; filename: string } } = {
@@ -1311,10 +1328,29 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         balance: Math.abs(running), balanceType: running > 0 ? 'Dr' : running < 0 ? 'Cr' : '' });
     };
 
-    if (entries && entries.length > 0) {
-      const rel = entries.filter(e => (e.ledger_name||e.ledger||'') === name || selectedLedger === `ledger:${name}`);
-      if (rel.length > 0) { rel.forEach(e => push(e.transaction_date||e.date||'', e.particulars||e.ledger||'N/A', e.voucher_type||e.type||'', e.voucher_number||'', Number(e.debit)||0, Number(e.credit)||0)); return rows; }
+    // PRIMARY: Use data fetched from the API for this specific ledger
+    if (drillDownData && drillDownData.length > 0) {
+      drillDownData.forEach(e => {
+        push(
+          e.transaction_date || e.date || '',
+          e.particulars || 'N/A',
+          e.voucher_type || e.type || '',
+          e.voucher_number || '',
+          Number(e.debit) || 0,
+          Number(e.credit) || 0
+        );
+      });
+      return rows;
     }
+    // FALLBACK: Try local journal entries filtered by ledger name
+    if (entries && entries.length > 0) {
+      const rel = entries.filter(e => (e.ledger_name || e.ledger || '') === name);
+      if (rel.length > 0) {
+        rel.forEach(e => push(e.transaction_date || e.date || '', e.particulars || e.ledger || 'N/A', e.voucher_type || e.type || '', e.voucher_number || '', Number(e.debit) || 0, Number(e.credit) || 0));
+        return rows;
+      }
+    }
+    // FALLBACK: Try vouchers
     filteredVouchers.forEach(v => {
       const amt = getVoucherAmount(v);
       const vNo = (v as any).voucher_number||(v as any).voucherNumber||'';
@@ -1326,7 +1362,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       } else { const p=getVoucherParty(v); if(p===name) { const s=v.type==='Sales'; push(v.date,s?'Sales':'Purchases',v.type,vNo,s?amt:0,s?0:amt); } }
     });
     return rows;
-  }, [drillDownLedger, entries, filteredVouchers, selectedLedger, ledgers]);
+  }, [drillDownLedger, drillDownData, entries, filteredVouchers, selectedLedger, ledgers]);
 
   const renderDayBook = () => (
     <div className="erp-table-container">
@@ -1440,6 +1476,15 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           )}
         </div>
         {/* Detail table */}
+        {isDrillDownLoading ? (
+          <div className="flex items-center justify-center py-16 gap-3 text-indigo-600">
+            <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            <span className="text-sm font-semibold">Loading transactions...</span>
+          </div>
+        ) : (
         <div className="erp-table-container">
           <table className="erp-table w-full">
             <thead>
@@ -1486,6 +1531,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             )}
           </table>
         </div>
+        )}
       </div>
     );
   };

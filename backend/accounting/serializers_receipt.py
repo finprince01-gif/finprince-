@@ -584,19 +584,34 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             if total_decimal <= 0: return
 
             entries = []
+
+            # Debit side: the bank/cash account money flows INTO (pay_to_ledger on Transaction = receive_in)
+            receive_in_ledger = getattr(receipt, 'pay_to_ledger', None)
+            if not receive_in_ledger:
+                # Fallback to receive_in_ledger_id_val
+                if receipt.receive_in_ledger_id_val:
+                    from accounting.models import MasterLedger
+                    receive_in_ledger = MasterLedger.objects.filter(id=receipt.receive_in_ledger_id_val).first()
+
+            if not receive_in_ledger:
+                print(f"[ReceiptSerializer] No receive_in ledger for receipt {receipt.id} - skipping journal entries")
+                return
+
             entries.append({
-                "ledger_id": receipt.receive_in.id, 
-                "debit": float(total_decimal), 
+                "ledger_id": receive_in_ledger.id,
+                "debit": float(total_decimal),
                 "credit": 0,
-                "ledger_id_val": receipt.ledger_id_val,
-                "party_customer_id": receipt.party_customer_id,
-                "party_vendor_id": receipt.party_vendor_id
             })
-            
+
+            # Credit side: the customer/party ledger (pay_from_ledger on Transaction = receive_from)
             customer_data_map = {}
             for item in receipt.get_items():
-                if not item.ledger_id_val: continue
-                lid = item.ledger_id_val
+                lid = (
+                    item.ledger_id_val
+                    or (item.pay_from_ledger.id if item.pay_from_ledger else None)
+                )
+                if not lid:
+                    continue
                 amt = Decimal(str(item.received_amount))
                 if lid not in customer_data_map:
                     customer_data_map[lid] = {
@@ -606,31 +621,40 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     }
                 customer_data_map[lid]["amount"] += amt
 
+            # If no items resolved, fall back to pay_from_ledger on the header
+            if not customer_data_map:
+                from_ledger = getattr(receipt, 'pay_from_ledger', None)
+                if from_ledger:
+                    customer_data_map[from_ledger.id] = {
+                        "amount": total_decimal,
+                        "c_id": receipt.party_customer_id,
+                        "v_id": receipt.party_vendor_id
+                    }
+
             for lid, data in customer_data_map.items():
                 amt = data["amount"]
                 if amt > 0:
                     entries.append({
-                        "ledger_id": lid, 
-                        "debit": 0, 
+                        "ledger_id": lid,
+                        "debit": 0,
                         "credit": float(amt),
                         "ledger_id_val": lid,
                         "party_customer_id": data["c_id"],
                         "party_vendor_id": data["v_id"],
-                        "customer_id": data["c_id"],
-                        "vendor_id": data["v_id"]
                     })
-            
+
             if len(entries) >= 2:
                 post_transaction(
-                    voucher_type="RECEIPT", 
-                    voucher_id=receipt.id, 
-                    tenant_id=receipt.tenant_id, 
+                    voucher_type="RECEIPT",
+                    voucher_id=receipt.id,
+                    tenant_id=receipt.tenant_id,
                     entries=entries,
                     transaction_date=receipt.date,
                     voucher_number=receipt.voucher_number
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            import traceback
+            print(f"[ReceiptSerializer] _post_journal_entries failed for {receipt.id}: {e}\n{traceback.format_exc()}")
 
     def _safe_int(self, val):
         if val is None: return None

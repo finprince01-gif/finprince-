@@ -604,12 +604,26 @@ class ApiService {
         }));
     }
 
-    async getJournalEntriesReport(ledgerId?: number | string, startDate?: string, endDate?: string) {
+    /**
+     * Get all journal entries for the current tenant
+     * Returns: Array of journal entry objects
+     */
+    async getJournalEntries(options: AxiosRequestConfig = {}) {
+        return httpClient.get<any[]>('/api/journal-entries/', undefined, options);
+    }
+
+    async getJournalEntriesReport(ledgerIdentifier?: number | string, startDate?: string, endDate?: string) {
         const params = new URLSearchParams();
-        if (ledgerId) params.append('ledger_id', String(ledgerId));
+        if (ledgerIdentifier) {
+            if (typeof ledgerIdentifier === 'number' || !isNaN(Number(ledgerIdentifier))) {
+                params.append('ledger_id', String(ledgerIdentifier));
+            } else {
+                params.append('ledger_name', String(ledgerIdentifier));
+            }
+        }
         if (startDate) params.append('start_date', startDate);
         if (endDate) params.append('end_date', endDate);
-        return httpClient.get<any[]>(`/api/vouchers/journal/report/?${params.toString()}`);
+        return httpClient.get<any[]>(`/api/journal-entries/report/?${params.toString()}`);
     }
 
     async saveVoucher(data: Voucher) {

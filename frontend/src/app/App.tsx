@@ -355,8 +355,7 @@ const App: React.FC = () => {
         apiService.getJournalEntries().catch(() => []),
         apiService.getStockItems().catch(() => []),
         apiService.getRichVendors().catch(() => []),
-        apiService.getRichCustomers().catch(() => []),
-        apiService.getJournalEntriesReport().catch(() => [])
+        apiService.getRichCustomers().catch(() => [])
       ]);
 
 
@@ -369,8 +368,7 @@ const App: React.FC = () => {
         journalEntries: Array.isArray(backendJournalEntries) ? backendJournalEntries : [],
         stockItems: Array.isArray(backendStockItems) ? backendStockItems : [],
         richVendors: Array.isArray(backendRichVendors) ? backendRichVendors : [],
-        richCustomers: Array.isArray(backendRichCustomers) ? backendRichCustomers : [],
-        entries: Array.isArray(backendEntries) ? (backendEntries as any) : []
+        richCustomers: Array.isArray(backendRichCustomers) ? backendRichCustomers : []
       };
 
 
@@ -384,7 +382,6 @@ const App: React.FC = () => {
       setStockItems(newData.stockItems);
       setRichVendors(newData.richVendors);
       setRichCustomers(newData.richCustomers);
-      setEntries(newData.entries);
 
 
       // Cache the data if we have a tenant ID
@@ -393,7 +390,7 @@ const App: React.FC = () => {
       }
 
     } catch (error) {
-      console.error('❌ Failed to load tenant data:');
+      console.error('❌ Failed to load tenant data:', error);
       // Keep cached data on error if available
     } finally {
       setIsDataLoaded(true);
@@ -1201,7 +1198,7 @@ const App: React.FC = () => {
       />;
       case 'Reports': return <ErrorBoundary><ReportsPage
         vouchers={vouchers}
-        entries={entries}
+        entries={journalEntries}
         ledgers={ledgers}
         ledgerGroups={ledgerGroups}
         stockItems={stockItems}

@@ -257,12 +257,15 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
           - running balance (Dr positive, Cr negative convention)
         """
         ledger_id = request.query_params.get('ledger_id')
+        ledger_name = request.query_params.get('ledger_name')
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
 
         # Normalize input
         if ledger_id in [None, "", "ALL", "0", "null"]:
             ledger_id = None
+        if ledger_name in [None, "", "ALL", "null"]:
+            ledger_name = None
 
         tenant_id = getattr(request.user, 'tenant_id', None)
 
@@ -271,12 +274,20 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
 
         if ledger_id:
             queryset = queryset.filter(ledger_id=ledger_id)
+        elif ledger_name:
+            queryset = queryset.filter(ledger_name=ledger_name)
 
         if start_date:
-            queryset = queryset.filter(transaction_date__gte=start_date)
+            try:
+                queryset = queryset.filter(transaction_date__gte=start_date)
+            except (ValueError, TypeError):
+                pass
 
         if end_date:
-            queryset = queryset.filter(transaction_date__lte=end_date)
+            try:
+                queryset = queryset.filter(transaction_date__lte=end_date)
+            except (ValueError, TypeError):
+                pass
 
         # Pre-fetch all entries for each voucher to resolve counterpart ledger names
         # Group voucher_ids so we can look up the opposite side

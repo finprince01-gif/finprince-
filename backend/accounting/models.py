@@ -320,6 +320,12 @@ class Voucher(BaseModel):
     reference_id = models.BigIntegerField(null=True, blank=True, help_text="ID of the source document (Invoice/Order)")
     dummy_force = models.IntegerField(null=True, blank=True)
 
+    # Bank Reconciliation
+    bank_reconciled = models.BooleanField(default=False)
+    bank_reconcile_date = models.DateField(null=True, blank=True)
+    bank_statement_id = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
+
     # Party IDs for explicit tracking
     ledger_id_val     = models.BigIntegerField(null=True, blank=True)
     party_customer_id = models.BigIntegerField(null=True, blank=True)
@@ -932,6 +938,12 @@ class Transaction(BaseModel):
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     narration = models.TextField(null=True, blank=True)
+    
+    # Bank Reconciliation
+    bank_reconciled = models.BooleanField(default=False)
+    bank_reconcile_date = models.DateField(null=True, blank=True)
+    bank_statement_id = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
     
     # Financial references
     pay_from_ledger = models.ForeignKey(

@@ -305,8 +305,10 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
             ret['items'] = instance.items_data or []
         
         # Add journal entries for journal vouchers
-        if instance.type == 'journal':
-            entries = instance.journal_entries.all()
+        if instance.type and instance.type.lower() == 'journal':
+            from .models import JournalEntry
+            # Voucher links to JournalEntry via voucher_id (loosely coupled)
+            entries = JournalEntry.objects.filter(voucher_id=instance.id, tenant_id=instance.tenant_id)
             ret['entries'] = JournalEntrySerializer(entries, many=True).data
         
         return ret
