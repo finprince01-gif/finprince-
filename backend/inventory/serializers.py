@@ -509,6 +509,11 @@ class InventoryOperationProductionSerializer(InventoryOperationItemSyncMixin, se
             self._sync_delivery_challan(instance, 'production', dc_data)
         return instance
 
+    def to_representation(self, instance):
+        repr = super().to_representation(instance)
+        repr['items'] = InventoryOperationProductionItemSerializer(instance.items_rel.all(), many=True).data
+        return repr
+
     def validate(self, data):
         items = data.get('items', [])
         if items:

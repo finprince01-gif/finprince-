@@ -3681,6 +3681,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                     <thead className="bg-indigo-600 text-white">
                                         <tr>
                                             <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">S. No.</th>
+                                            {salesOrderNos.length > 0 && (
+                                                <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Sales Order No.</th>
+                                            )}
                                             <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Item Code</th>
                                             <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Item Name</th>
                                             <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">HSN/SAC</th>
@@ -3722,6 +3725,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                             />
                                                             <span className="ml-2">{index + 1}</span>
                                                         </td>
+                                                        {salesOrderNos.length > 0 && (
+                                                            <td className="px-2 py-2 border-r border-gray-200 text-sm text-center text-gray-600">
+                                                                {row.sourceDoc || '-'}
+                                                            </td>
+                                                        )}
                                                         <td className="px-2 py-2 border-r border-gray-200">
                                                             <SearchableDropdown
                                                                 options={itemCodeOptions}
