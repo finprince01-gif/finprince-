@@ -4857,6 +4857,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <thead className="bg-indigo-600 text-white">
                     <tr>
                       <th className="px-3 py-3 text-center w-12 border-r border-indigo-500"></th>
+                      {selectedPurchasePOs.length > 0 && (
+                        <th className="px-3 py-3 text-sm font-semibold text-center border-r border-indigo-500">Purchase Order No.</th>
+                      )}
                       <th className="px-3 py-3 text-sm font-semibold text-center border-r border-indigo-500">Description</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">Inv Qty</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">UQC</th>
@@ -4893,6 +4896,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                             />
                           </td>
+                          {selectedPurchasePOs.length > 0 && (
+                            <td className="px-3 py-2 border-r border-gray-200 text-sm text-center text-gray-600">
+                              {row.sourcePoNo || '-'}
+                            </td>
+                          )}
                           <td className="px-3 py-2 border-r border-gray-200">
                             <SearchableSelect
                               value={row.itemName}
@@ -5103,6 +5111,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <thead className="bg-indigo-600 text-white">
                       <tr>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">S. No.</th>
+                        {selectedPurchasePOs.length > 0 && (
+                          <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Purchase Order No.</th>
+                        )}
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Code</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Name</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">HSN/SAC</th>
@@ -5150,6 +5161,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 {index + 1}
                               </div>
                             </td>
+                            {selectedPurchasePOs.length > 0 && (
+                              <td className="px-2 py-2 border-r border-gray-200 text-sm text-center text-gray-600">
+                                {row.sourcePoNo || '-'}
+                              </td>
+                            )}
                             <td className="px-2 py-2 border-r border-gray-200">
                               <SearchableSelect
                                 value={row.itemCode}

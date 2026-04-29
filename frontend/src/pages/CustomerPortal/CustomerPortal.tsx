@@ -6168,7 +6168,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 if (transType === 'Sales' || rawType === 'invoice') {
                     const paidAmt = parseFloat(t.paid_amount || 0);
                     const totalAmt = parseFloat(t.total_amount || t.amount || 0);
-                    const isFullyPaid = paidAmt >= totalAmt && totalAmt > 0;
+                    const isFullyPaid = paidAmt >= totalAmt;
                     const isPartiallyPaid = paidAmt > 0 && paidAmt < totalAmt;
 
                     if (isFullyPaid || t.due_status === 'Paid') {
@@ -6345,7 +6345,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                     const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
                     const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
 
-                    if (paidRounded >= totalRounded && totalRounded > 0) {
+                    if (paidRounded >= totalRounded) {
                         updatedStatus = 'Received';
                     } else if (diffDays > cp) {
                         // After credit period

@@ -293,10 +293,19 @@ const InventoryPage: React.FC = () => {
   const [issueSlipNumber, setIssueSlipNumber] = useState('');
   const [issueSlipDate, setIssueSlipDate] = useState(todayStr);
   const [issueSlipTime, setIssueSlipTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+  const [isTimeEdited, setIsTimeEdited] = useState(false);
+
+  useEffect(() => {
+    if (isTimeEdited || !showIssueSlipForm) return;
+    const interval = setInterval(() => {
+      setIssueSlipTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isTimeEdited, showIssueSlipForm]);
   const [goodsFromLocation, setGoodsFromLocation] = useState('');
   const [goodsToLocation, setGoodsToLocation] = useState('');
   const [interProcessToLocation, setInterProcessToLocation] = useState('');
-  const [jobWorkOrderNo, setJobWorkOrderNo] = useState('');
+  const [selectedJobWorkOrderNos, setSelectedJobWorkOrderNos] = useState<string[]>([]);
   const [jobWorkOrderNoOptions, setJobWorkOrderNoOptions] = useState<any[]>([]); // Options for Job Work POs
   const [jobWorkReceiptNo, setJobWorkReceiptNo] = useState('');
   const [jobWorkOutwardRefNo, setJobWorkOutwardRefNo] = useState('');
@@ -449,8 +458,30 @@ const InventoryPage: React.FC = () => {
         setSelectedIssueSlipSeriesName(prodSeries[0].name);
         setMaterialIssueSlipNo(prodSeries[0].preview || '');
       }
+    } else if (issueSlipTab === 'scrap') {
+      const scrapSeries = issueSlipSeriesList.filter(s => (s.issueSlipType || '').toLowerCase() === 'scrap');
+      if (scrapSeries.length === 1) {
+        if (scrapSubType === 'production' && !scrapProdSlipSeries) {
+          setScrapProdSlipSeries(scrapSeries[0].name);
+          setScrapProdSlipNo(scrapSeries[0].preview || '');
+        } else if (scrapSubType === 'other' && !scrapOtherSlipSeries) {
+          setScrapOtherSlipSeries(scrapSeries[0].name);
+          setScrapOtherSlipNo(scrapSeries[0].preview || '');
+        } else if (scrapSubType === 'disposed' && !scrapDispSlipSeries) {
+          setScrapDispSlipSeries(scrapSeries[0].name);
+          setScrapDispSlipNo(scrapSeries[0].preview || '');
+        }
+      }
     }
-  }, [showIssueSlipForm, issueSlipTab, issueSlipSeriesList, selectedIssueSlipSeriesName, jobWorkSubTab, jobWorkSentType, productionType]);
+  }, [showIssueSlipForm, issueSlipTab, issueSlipSeriesList, selectedIssueSlipSeriesName, jobWorkSubTab, jobWorkSentType, productionType, scrapSubType]);
+
+  // Reset series names when switching tabs so that auto-selection can re-trigger
+  useEffect(() => {
+    setSelectedIssueSlipSeriesName('');
+    setScrapProdSlipSeries('');
+    setScrapOtherSlipSeries('');
+    setScrapDispSlipSeries('');
+  }, [issueSlipTab, scrapSubType]);
   const [showDeliveryChallan, setShowDeliveryChallan] = useState(false);
   const [deliveryChallanAddress, setDeliveryChallanAddress] = useState('');
   const [deliveryChallanDate, setDeliveryChallanDate] = useState('');
@@ -700,7 +731,8 @@ const InventoryPage: React.FC = () => {
     try {
       const slips = await apiService.getProductionSlips('inter_process');
       if (Array.isArray(slips)) {
-        setProcessTransferSlipOptions(slips);
+        const uniqueSlips = Array.from(new Map(slips.filter(s => s.issue_slip_no).map(s => [s.issue_slip_no, s])).values());
+        setProcessTransferSlipOptions(uniqueSlips);
       }
     } catch (error) {
       console.error('Error fetching process transfer slips:', error);
@@ -711,7 +743,8 @@ const InventoryPage: React.FC = () => {
     try {
       const slips = await apiService.getProductionSlips('materials_issued');
       if (Array.isArray(slips)) {
-        setMaterialIssueSlipOptions(slips);
+        const uniqueSlips = Array.from(new Map(slips.filter(s => s.issue_slip_no).map(s => [s.issue_slip_no, s])).values());
+        setMaterialIssueSlipOptions(uniqueSlips);
       }
     } catch (error) {
       console.error('Error fetching material issue slips:', error);
@@ -1681,13 +1714,14 @@ const InventoryPage: React.FC = () => {
         const jobWorkPayload = {
           operation_type: jobWorkSentType, // 'outward' or 'receipt'
           issue_slip_series: selectedIssueSlipSeriesName || '',
+          issue_slip_series_id: issueSlipSeriesList.find((s: any) => s.name === selectedIssueSlipSeriesName)?.id,
           transaction_date: issueSlipDate || new Date().toISOString().split('T')[0],
           transaction_time: issueSlipTime || new Date().toTimeString().split(' ')[0],
           location_id: itemLocation || goodsFromLocation || null, // Map correctly
 
           // Outward specific
           job_work_outward_no: jobWorkSentType === 'outward' ? issueSlipNumber : null,
-          po_reference_no: jobWorkSentType === 'outward' ? jobWorkOrderNo : null,
+          po_reference_no: jobWorkSentType === 'outward' ? selectedJobWorkOrderNos.join(', ') : null,
 
           // Receipt specific
           job_work_receipt_no: jobWorkSentType === 'receipt' ? jobWorkReceiptNo : null,
@@ -1840,6 +1874,7 @@ const InventoryPage: React.FC = () => {
         const productionPayload = {
           issue_slip_no: (productionType === 'materials_issued' ? materialIssueSlipNo : (productionType === 'inter_process' ? processTransferSlipNo : fgReceiptSlipNo)) || issueSlipNumber || 'AUTO',
           issue_slip_series: productionType === 'materials_issued' ? selectedIssueSlipSeriesName : '',
+          issue_slip_series_id: productionType === 'materials_issued' ? (issueSlipSeriesList.find((s: any) => s.name === selectedIssueSlipSeriesName)?.id) : null,
           date: issueSlipDate || null,
           time: issueSlipTime || null,
           status: 'Posted',
@@ -2094,10 +2129,17 @@ const InventoryPage: React.FC = () => {
       showSuccess('Operation saved successfully!');
       setShowIssueSlipForm(false);
       fetchStockMovementSummary();
+      fetchIssueSlipSeries();
 
       // Reset Issue Slip Form
       setIssueSlipNumber('');
       setSelectedIssueSlipSeriesName('');
+      setScrapProdSlipSeries('');
+      setScrapProdSlipNo('');
+      setScrapOtherSlipSeries('');
+      setScrapOtherSlipNo('');
+      setScrapDispSlipSeries('');
+      setScrapDispSlipNo('');
       setGoodsFromLocation('');
       setGoodsToLocation('');
       setOutwardVendorName('');
@@ -2127,8 +2169,9 @@ const InventoryPage: React.FC = () => {
     setOutwardBranchOptions([]);
     setOutwardAddress('');
     setOutwardGstin('');
-    setJobWorkOrderNo('');
+    setSelectedJobWorkOrderNos([]);
     setJobWorkOrderNoOptions([]);
+    setIssueSlipItems([]);
 
     if (!trimmedName) return;
 
@@ -2181,6 +2224,63 @@ const InventoryPage: React.FC = () => {
     } else {
       setOutwardAddress('');
       setOutwardGstin('');
+    }
+  };
+
+  const handleJobWorkOrderSelectionChange = async (selectedNos: string[]) => {
+    // Identify added and removed POs
+    const added = selectedNos.filter(no => !selectedJobWorkOrderNos.includes(no));
+    const removed = selectedJobWorkOrderNos.filter(no => !selectedNos.includes(no));
+
+    setSelectedJobWorkOrderNos(selectedNos);
+
+    // Remove items associated with removed POs
+    if (removed.length > 0) {
+      setIssueSlipItems(prev => prev.filter(item => !removed.includes(item.poNo || '')));
+    }
+
+    // Fetch and add items for newly selected POs
+    if (added.length > 0) {
+      for (const poNumber of added) {
+        const selectedPOStub = jobWorkOrderNoOptions.find((po: any) => po.po_number === poNumber);
+        if (selectedPOStub) {
+          try {
+            const response = await apiService.getVendorPurchaseOrderById(selectedPOStub.id);
+            const selectedPO = response?.data;
+            if (selectedPO && Array.isArray(selectedPO.items)) {
+              const mappedItems = selectedPO.items.map((item: any) => {
+                const itemCode = item.item_code || item.itemCode;
+                const itemName = item.item_name || item.itemName || item.name;
+                const inventoryItem = items.find(i => 
+                  (i.item_code && itemCode && i.item_code.toLowerCase() === itemCode.toLowerCase()) ||
+                  (i.name && itemName && i.name.toLowerCase() === itemName.toLowerCase()) ||
+                  (i.item_name && itemName && i.item_name.toLowerCase() === itemName.toLowerCase())
+                );
+
+                return {
+                  poNo: poNumber, // Link item to PO
+                  itemCode: itemCode || inventoryItem?.item_code || '',
+                  itemName: itemName || inventoryItem?.name || inventoryItem?.item_name || '',
+                  uom: item.uom || item.unit || inventoryItem?.uom || inventoryItem?.unit || '',
+                  hsnCode: (inventoryItem as any)?.hsn_code || 
+                           (inventoryItem as any)?.hsn || 
+                           (inventoryItem as any)?.hsn_sac || 
+                           (inventoryItem as any)?.hsn_sac_code || 
+                           item.hsn_code || 
+                           item.hsnCode || 
+                           '',
+                  quantity: item.quantity || 0,
+                  rate: item.final_rate || item.rate || inventoryItem?.standard_rate || inventoryItem?.rate || 0,
+                  value: (item.quantity || 0) * (item.final_rate || item.rate || 0)
+                };
+              });
+              setIssueSlipItems(prev => [...prev, ...mappedItems]);
+            }
+          } catch (error) {
+            console.error(`Error fetching PO ${poNumber} details:`, error);
+          }
+        }
+      }
     }
   };
 
@@ -2297,7 +2397,7 @@ const InventoryPage: React.FC = () => {
       if (inv.party_name) {
         // Set vendor name directly first to avoid the useEffect triggering with empty vendor
         setOutwardVendorName(inv.party_name);
-        
+
         // Then run the full vendor change logic to get branches
         const vendor = vendors.find(v => v.vendor_name === inv.party_name);
         if (vendor) {
@@ -2309,7 +2409,7 @@ const InventoryPage: React.FC = () => {
               branch_address: b.branch_address || b.address
             })) : [];
             setOutwardBranchOptions(mappedBranches);
-            
+
             // If the invoice has a branch, use it. Otherwise use the first available branch.
             const targetBranch = inv.branch || (mappedBranches.length > 0 ? mappedBranches[0].reference_name : '');
             if (targetBranch) {
@@ -2778,25 +2878,25 @@ const InventoryPage: React.FC = () => {
       fetchOutwardData();
     }
   }, [showIssueSlipForm, issueSlipTab, outwardType, outwardCustomerName, outwardVendorName, outwardBranch]);
-  
-   useEffect(() => {
-     if (showIssueSlipForm) {
-       if (issueSlipTab !== 'scrap' && issueSlipItems.length === 0) {
-         if (issueSlipTab === 'job-work' || issueSlipTab === 'location-change' || issueSlipTab === 'consumption' || issueSlipTab === 'outward' || issueSlipTab === 'inter-unit') {
-           handleAddIssueSlipItem();
-         }
-       } else if (issueSlipTab === 'scrap') {
-         if (scrapSubType === 'production' && scrapProdItems.length === 0) {
-           handleAddScrapProdItem();
-         } else if (scrapSubType === 'other') {
-           if (scrapOtherItemsScrapped.length === 0) handleAddScrapOtherScrappedItem();
-           if (scrapOtherResultingItems.length === 0) handleAddScrapOtherResultingItem();
-         } else if (scrapSubType === 'disposed' && scrapDispItems.length === 0) {
-           handleAddScrapDispItem();
-         }
-       }
-     }
-   }, [showIssueSlipForm, issueSlipTab, scrapSubType]);
+
+  useEffect(() => {
+    if (showIssueSlipForm) {
+      if (issueSlipTab !== 'scrap' && issueSlipItems.length === 0) {
+        if (issueSlipTab === 'job-work' || issueSlipTab === 'location-change' || issueSlipTab === 'consumption' || issueSlipTab === 'outward' || issueSlipTab === 'inter-unit') {
+          handleAddIssueSlipItem();
+        }
+      } else if (issueSlipTab === 'scrap') {
+        if (scrapSubType === 'production' && scrapProdItems.length === 0) {
+          handleAddScrapProdItem();
+        } else if (scrapSubType === 'other') {
+          if (scrapOtherItemsScrapped.length === 0) handleAddScrapOtherScrappedItem();
+          if (scrapOtherResultingItems.length === 0) handleAddScrapOtherResultingItem();
+        } else if (scrapSubType === 'disposed' && scrapDispItems.length === 0) {
+          handleAddScrapDispItem();
+        }
+      }
+    }
+  }, [showIssueSlipForm, issueSlipTab, scrapSubType]);
 
   useEffect(() => {
     if (showIssueSlipForm && issueSlipTab === 'scrap') {
@@ -2874,20 +2974,20 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-   const handleAddIssueSlipItem = () => {
-     setIssueSlipItems([...issueSlipItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: 0, value: 0, hsnCode: '', remainingQty: undefined }]);
-   };
- 
-   const handleAddScrapProdItem = () => setScrapProdItems([...scrapProdItems, { itemCode: '', itemName: '', uom: '', quantityGenerated: '' }]);
-   const handleAddScrapOtherScrappedItem = () => setScrapOtherItemsScrapped([...scrapOtherItemsScrapped, { itemCode: '', itemName: '', uom: '', quantity: '' }]);
-   const handleAddScrapOtherResultingItem = () => setScrapOtherResultingItems([...scrapOtherResultingItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0 }]);
-   const handleAddScrapDispItem = () => setScrapDispItems([...scrapDispItems, { itemCode: '', itemName: '', uom: '', quantityDisposed: '', rate: '', value: 0 }]);
- 
-   const handleRemoveIssueSlipItem = (index: number) => {
-     setIssueSlipItems(issueSlipItems.filter((_, i) => i !== index));
-   };
- 
-   const handleIssueSlipItemChange = (index: number, field: string, value: any) => {
+  const handleAddIssueSlipItem = () => {
+    setIssueSlipItems([...issueSlipItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: 0, value: 0, hsnCode: '', remainingQty: undefined }]);
+  };
+
+  const handleAddScrapProdItem = () => setScrapProdItems([...scrapProdItems, { itemCode: '', itemName: '', uom: '', quantityGenerated: '' }]);
+  const handleAddScrapOtherScrappedItem = () => setScrapOtherItemsScrapped([...scrapOtherItemsScrapped, { itemCode: '', itemName: '', uom: '', quantity: '' }]);
+  const handleAddScrapOtherResultingItem = () => setScrapOtherResultingItems([...scrapOtherResultingItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0 }]);
+  const handleAddScrapDispItem = () => setScrapDispItems([...scrapDispItems, { itemCode: '', itemName: '', uom: '', quantityDisposed: '', rate: '', value: 0 }]);
+
+  const handleRemoveIssueSlipItem = (index: number) => {
+    setIssueSlipItems(issueSlipItems.filter((_, i) => i !== index));
+  };
+
+  const handleIssueSlipItemChange = (index: number, field: string, value: any) => {
     const updatedItems = [...issueSlipItems];
     updatedItems[index][field] = value;
 
@@ -2914,9 +3014,9 @@ const InventoryPage: React.FC = () => {
         updatedItems[index].value = qty * updatedItems[index].rate;
       }
     } else if (field === 'hsnCode') {
-      const selectedItem = items.find(i => 
-        (i as any).hsn_code === value || 
-        (i as any).hsn === value || 
+      const selectedItem = items.find(i =>
+        (i as any).hsn_code === value ||
+        (i as any).hsn === value ||
         (i as any).hsn_sac === value ||
         (i as any).hsn_sac_code === value
       );
@@ -3321,7 +3421,13 @@ const InventoryPage: React.FC = () => {
                 </button>
                 {canCreateIssue && (
                   <button
-                    onClick={() => setShowIssueSlipForm(true)}
+                    onClick={() => {
+                      setIssueSlipTab('job-work');
+                      setSelectedIssueSlipSeriesName('');
+                      setIssueSlipNumber('');
+                      setIsTimeEdited(false);
+                      setShowIssueSlipForm(true);
+                    }}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                   >
                     ➕ Add New Issue Slip
@@ -3532,7 +3638,11 @@ const InventoryPage: React.FC = () => {
                     {(['job-work', 'inter-unit', 'location-change', 'production', 'consumption', 'outward', 'scrap'] as const).map((tab) => (
                       <button
                         key={tab}
-                        onClick={() => setIssueSlipTab(tab)}
+                        onClick={() => {
+                          setIssueSlipTab(tab);
+                          setSelectedIssueSlipSeriesName('');
+                          setIssueSlipNumber('');
+                        }}
                         className={`px-6 py-3 font-semibold text-base border-b-3 ${issueSlipTab === tab
                           ? 'border-indigo-600 text-indigo-600'
                           : 'border-transparent text-gray-600 hover:text-gray-800'
@@ -3647,7 +3757,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="time"
                             value={issueSlipTime}
-                            onChange={(e) => setIssueSlipTime(e.target.value)}
+                            onChange={(e) => {
+                              setIssueSlipTime(e.target.value);
+                              setIsTimeEdited(true);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -3725,21 +3838,35 @@ const InventoryPage: React.FC = () => {
                             </div>
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-1">Purchase Order No.</label>
-                              <select
-                                value={jobWorkOrderNo}
-                                onChange={(e) => setJobWorkOrderNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              >
-                                <option value="">Select PO</option>
-                                {jobWorkOrderNoOptions.length === 0 ? (
-                                  <option disabled>No Pending POs</option>
-                                ) : (
-                                  jobWorkOrderNoOptions.map((po: any) => (
-                                    <option key={po.id} value={po.po_number}>{po.po_number}</option>
-                                  ))
-                                )}
-
-                              </select>
+                              <MultiSelectDropdown
+                                options={jobWorkOrderNoOptions.map(po => ({
+                                  value: po.po_number,
+                                  label: po.po_number
+                                }))}
+                                selectedValues={selectedJobWorkOrderNos}
+                                onChange={handleJobWorkOrderSelectionChange}
+                                placeholder="Select POs"
+                              />
+                              {selectedJobWorkOrderNos.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {selectedJobWorkOrderNos.map(poNo => (
+                                    <div
+                                      key={poNo}
+                                      className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs font-bold border border-indigo-100 shadow-sm animate-in fade-in zoom-in duration-200"
+                                    >
+                                      <span>{poNo}</span>
+                                      <button
+                                        onClick={() => handleJobWorkOrderSelectionChange(selectedJobWorkOrderNos.filter(n => n !== poNo))}
+                                        className="hover:bg-indigo-200 rounded-full p-0.5 transition-colors"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -3758,18 +3885,21 @@ const InventoryPage: React.FC = () => {
                         </div>
                         <div className="overflow-x-auto border border-gray-300 rounded text-sm">
                           <table className="min-w-full">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Code</th>
-                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Name</th>
-                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">HSN Code</th>
-                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
-                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Quantity</th>
-                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Rate</th>
-                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Taxable Value</th>
-                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Action</th>
-                              </tr>
-                            </thead>
+                             <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Code</th>
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Name</th>
+                                  {selectedJobWorkOrderNos.length > 0 && (
+                                    <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">PO No.</th>
+                                  )}
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">HSN Code</th>
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Quantity</th>
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Rate</th>
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Taxable Value</th>
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Action</th>
+                                </tr>
+                              </thead>
                             <tbody className="divide-y divide-gray-200">
                               {issueSlipItems.map((slipItem, index) => {
                                 // Find selected item for this row to populate UOM options
@@ -3808,6 +3938,11 @@ const InventoryPage: React.FC = () => {
                                         ))}
                                       </select>
                                     </td>
+                                    {selectedJobWorkOrderNos.length > 0 && (
+                                      <td className="px-3 py-2">
+                                        <input type="text" value={slipItem.poNo || ''} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50" />
+                                      </td>
+                                    )}
                                     <td className="px-3 py-2">
                                       <input type="text" value={slipItem.hsnCode || ''} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50" />
                                     </td>
@@ -4166,7 +4301,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="time"
                             value={issueSlipTime}
-                            onChange={(e) => setIssueSlipTime(e.target.value)}
+                            onChange={(e) => {
+                              setIssueSlipTime(e.target.value);
+                              setIsTimeEdited(true);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -4619,7 +4757,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="time"
                             value={issueSlipTime}
-                            onChange={(e) => setIssueSlipTime(e.target.value)}
+                            onChange={(e) => {
+                              setIssueSlipTime(e.target.value);
+                              setIsTimeEdited(true);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -4914,7 +5055,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="time"
                             value={issueSlipTime}
-                            onChange={(e) => setIssueSlipTime(e.target.value)}
+                            onChange={(e) => {
+                              setIssueSlipTime(e.target.value);
+                              setIsTimeEdited(true);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -5232,7 +5376,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="time"
                             value={issueSlipTime}
-                            onChange={(e) => setIssueSlipTime(e.target.value)}
+                            onChange={(e) => {
+                              setIssueSlipTime(e.target.value);
+                              setIsTimeEdited(true);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -5248,7 +5395,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.filter(loc => loc.location_type === 'company_premises').map(loc => (
+                            {locations.map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -5261,7 +5408,7 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
-                            {locations.filter(loc => loc.location_type === 'company_premises').map(loc => (
+                            {locations.map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
                           </select>
@@ -5560,7 +5707,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="time"
                             value={issueSlipTime}
-                            onChange={(e) => setIssueSlipTime(e.target.value)}
+                            onChange={(e) => {
+                              setIssueSlipTime(e.target.value);
+                              setIsTimeEdited(true);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -5576,15 +5726,31 @@ const InventoryPage: React.FC = () => {
                             const newSelectedSlips = Array.from(e.target.selectedOptions, option => option.value);
                             setSelectedMaterialIssueSlips(newSelectedSlips);
 
+                            // Collect all items from selected slips
+                            let allItems: any[] = [];
+                            newSelectedSlips.forEach(slipNo => {
+                              const found = materialIssueSlipOptions.find(o => o.issue_slip_no === slipNo);
+                              if (found && found.items) {
+                                const mappedItems = found.items.map((item: any) => ({
+                                  itemCode: item.item_code,
+                                  itemName: item.item_name,
+                                  uom: item.uom,
+                                  quantity: item.quantity, // Quantity Available from previous process
+                                  rate: item.rate,
+                                  amount: 0,
+                                  issueQty: '' // Initialize issued quantity to empty string
+                                }));
+                                allItems = [...allItems, ...mappedItems];
+                              }
+                            });
+                            setResultingWIPItems(allItems);
+
                             // Auto-fetch source location from first selected slip
                             if (newSelectedSlips.length > 0) {
-                              const found = materialIssueSlipOptions.find(o => o.issue_slip_no === newSelectedSlips[0]);
-                              if (found) {
+                              const firstFound = materialIssueSlipOptions.find(o => o.issue_slip_no === newSelectedSlips[0]);
+                              if (firstFound) {
                                 // For inter-process, the "From" (goodsToLocation) is actually the "To" of previous slip
-                                setGoodsToLocation(String(found.goods_to_location || found.location_id || ''));
-
-                                // Reset the interProcessToLocation to avoid confusion (or keep as needed)
-                                // setInterProcessToLocation(''); 
+                                setGoodsToLocation(String(firstFound.goods_to_location || firstFound.location_id || ''));
                               }
                             }
                           }}
@@ -5932,7 +6098,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="time"
                             value={issueSlipTime}
-                            onChange={(e) => setIssueSlipTime(e.target.value)}
+                            onChange={(e) => {
+                              setIssueSlipTime(e.target.value);
+                              setIsTimeEdited(true);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -6430,7 +6599,10 @@ const InventoryPage: React.FC = () => {
                             <input
                               type="time"
                               value={issueSlipTime}
-                              onChange={(e) => setIssueSlipTime(e.target.value)}
+                              onChange={(e) => {
+                                setIssueSlipTime(e.target.value);
+                                setIsTimeEdited(true);
+                              }}
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                             />
                           </div>
@@ -6453,24 +6625,24 @@ const InventoryPage: React.FC = () => {
                               const group = (l.group || l.ledger_group_name || '').toLowerCase();
                               const category = (l.category || '').toLowerCase();
                               if (consumptionType === 'fixed_assets') {
-                                return group.includes('fixed asset') || 
-                                       group.includes('property, plant & equipment') || 
-                                       group.includes('tangible asset') ||
-                                       group.includes('intangible asset') ||
-                                       group.includes('capital work-in-progress');
+                                return group.includes('fixed asset') ||
+                                  group.includes('property, plant & equipment') ||
+                                  group.includes('tangible asset') ||
+                                  group.includes('intangible asset') ||
+                                  group.includes('capital work-in-progress');
                               } else {
-                                const isMatch = group.includes('expense') || 
-                                                category.includes('expense') ||
-                                                category.includes('expenditure') ||
-                                                l.name.toLowerCase().includes('expense');
+                                const isMatch = group.includes('expense') ||
+                                  category.includes('expense') ||
+                                  category.includes('expenditure') ||
+                                  l.name.toLowerCase().includes('expense');
                                 return isMatch && !l.name.toLowerCase().includes('purchase');
                               }
-                              })
+                            })
                               .filter((l, index, self) => index === self.findIndex((t) => t.name === l.name))
                               .sort((a, b) => a.name.localeCompare(b.name))
                               .map(l => (
-                              <option key={l.id} value={l.name}>{l.name}</option>
-                            ))}
+                                <option key={l.id} value={l.name}>{l.name}</option>
+                              ))}
                           </select>
                         </div>
                         <div>
@@ -6513,7 +6685,7 @@ const InventoryPage: React.FC = () => {
                                   <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">UOM</th>
                                   <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Qty</th>
                                   <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Rate</th>
-                                  <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Value</th>
+                                  <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Capitalized Value</th>
                                   <th className="px-3 py-3 text-center text-[11px] font-bold text-gray-500">Action</th>
                                 </tr>
                               </thead>
@@ -6679,7 +6851,10 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="time"
                             value={issueSlipTime}
-                            onChange={(e) => setIssueSlipTime(e.target.value)}
+                            onChange={(e) => {
+                              setIssueSlipTime(e.target.value);
+                              setIsTimeEdited(true);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -8810,30 +8985,30 @@ const InventoryPage: React.FC = () => {
                 {inventoryItems
                   .filter(item => (item.itemCode && item.itemCode.trim() !== '') || (item.itemName && item.itemName.trim() !== ''))
                   .map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.itemCode}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{item.itemName}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{item.category}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{item.hsnCode}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{item.gstRate}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{item.uom}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">₹{item.rate}</td>
-                    <td className="px-6 py-4 text-center space-x-2">
-                      <button
-                        onClick={() => handleEditItemOpen(item)}
-                        className="inline-block px-3 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200 font-medium text-sm"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="inline-block px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 font-medium text-sm"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.itemCode}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{item.itemName}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{item.category}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{item.hsnCode}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{item.gstRate}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{item.uom}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900 font-medium">₹{item.rate}</td>
+                      <td className="px-6 py-4 text-center space-x-2">
+                        <button
+                          onClick={() => handleEditItemOpen(item)}
+                          className="inline-block px-3 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200 font-medium text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="inline-block px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 font-medium text-sm"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
