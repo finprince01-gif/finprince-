@@ -4622,7 +4622,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div className="flex gap-4">
                     <button
                       type="button"
-                      disabled={invoiceInForeignCurrency === 'Yes'}
                       onClick={() => {
                         setInvoiceInForeignCurrency('No');
                         setPurchaseInputTypes(prev => {
@@ -4634,7 +4633,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputTypes.includes('Intrastate')
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
-                        } ${invoiceInForeignCurrency === 'Yes' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                        }`}
                     >
                       CGST & SGST
                     </button>
@@ -7412,24 +7411,45 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     INPUT TYPE (GST CATEGORY)
                   </label>
                   <div className="flex flex-wrap gap-4">
-                    {['IGST', 'CGST & SGST', 'Cess'].map(type => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => {
-                          if (cnInForeignCurrency === 'Yes') return;
-                          setCnInputType(prev =>
-                            prev.includes(type) ? prev.filter(p => p !== type) : [...prev, type]
-                          );
-                        }}
-                        className={`px-6 py-2 rounded-[4px] text-[13px] font-medium transition-all ${(cnInputType.includes(type) || (cnInForeignCurrency === 'Yes' && type === 'IGST'))
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'bg-white border border-gray-300 text-gray-600 hover:border-indigo-500 hover:text-indigo-600'
-                          } ${cnInForeignCurrency === 'Yes' && type !== 'IGST' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {type}
-                      </button>
-                    ))}
+                    {['IGST', 'CGST & SGST', 'Cess'].map(type => {
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            if (type === 'CGST & SGST') {
+                              setCnInForeignCurrency('No');
+                              setCnInputType(['CGST & SGST']);
+                            } else if (type === 'IGST') {
+                              setCnInForeignCurrency('Yes');
+                              setCnInputType(['IGST']);
+                              
+                              // Handle foreign currency conversion if switching to 'Yes'
+                              const exRate = parseFloat(String(cnExchangeRate)) || 1;
+                              setCnItems(prev => prev.map(item => {
+                                const fRate = (parseFloat(String(item.rate)) || 0) / exRate;
+                                const q = parseFloat(String(item.qty)) || 0;
+                                return {
+                                  ...item,
+                                  foreignRate: fRate,
+                                  foreignAmount: q * fRate
+                                };
+                              }));
+                            } else {
+                              setCnInputType(prev =>
+                                prev.includes(type) ? prev.filter(p => p !== type) : [...prev, type]
+                              );
+                            }
+                          }}
+                          className={`px-6 py-2 rounded-[4px] text-[13px] font-medium transition-all ${cnInputType.includes(type)
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-white border border-gray-300 text-gray-600 hover:border-indigo-500 hover:text-indigo-600'
+                            }`}
+                        >
+                          {type}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -7457,6 +7477,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                   foreignAmount: q * fRate
                                 };
                               }));
+                            } else {
+                              setCnInputType(['CGST & SGST']);
                             }
                           }}
                           className={`px-8 py-1.5 rounded-[2px] text-[13px] font-medium transition-all ${cnInForeignCurrency === opt
@@ -7469,21 +7491,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       ))}
                     </div>
                   </div>
-                  {cnInForeignCurrency === 'Yes' && (
-                    <div className="flex flex-col items-start w-full">
-                      <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
-                        EXCHANGE RATE (1 FC = INR)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        value={cnExchangeRate}
-                        onChange={(e) => setCnExchangeRate(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 font-bold text-indigo-700 h-[42px]"
-                        placeholder="1.00"
-                      />
-                    </div>
-                  )}
                 </div>
 
                 <div className="flex flex-col items-start gap-4">

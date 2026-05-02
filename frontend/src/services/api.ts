@@ -1207,14 +1207,16 @@ class ApiService {
      */
     async getSalesVouchers(filters?: any) {
         const params = new URLSearchParams();
-        if (filters?.date_from) params.append('date_from', filters.date_from);
-        if (filters?.date_to) params.append('date_to', filters.date_to);
-        if (filters?.customer_id) params.append('customer_id', String(filters.customer_id));
-        if (filters?.customer_name) params.append('customer_name', filters.customer_name);
-        if (filters?.status) params.append('status', filters.status);
+        if (filters) {
+            Object.keys(filters).forEach(key => {
+                if (filters[key] !== undefined && filters[key] !== null) {
+                    params.append(key, String(filters[key]));
+                }
+            });
+        }
 
         const queryString = params.toString();
-        const endpoint = queryString ? `/api/vouchers/sales/?${queryString}` : '/api/vouchers/sales/';
+        const endpoint = queryString ? `/api/voucher-sales-new/?${queryString}` : '/api/voucher-sales-new/';
 
         return httpClient.get<any[]>(endpoint);
     }

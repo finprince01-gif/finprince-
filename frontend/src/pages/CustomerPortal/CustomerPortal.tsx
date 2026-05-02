@@ -86,25 +86,36 @@ const ADDITIONAL_STATES: Record<string, { name: string; isoCode: string }[]> = {
 };
 
 // TDS Rates Master Data
-const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
-    'Section 194C - Individual/HUF': { tdsRate: '1%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF)' },
-    'Section 194C - Others': { tdsRate: '2%', penaltyRate: '20%', description: 'Payment to Contractors other than Individuals & HUF' },
-    'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
-    'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
-    'Section 194-I - Rent- Land, Building, Furniture & fitting': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & Fitting paid to any entity' },
-    'Section 194-I - Rent- Plant & Machinery, Equipment': { tdsRate: '10%', penaltyRate: '20%', description: 'Rent on Plant & Machinery, or Equipment paid to any entity' },
-    'Section 194J - Technical Services': { tdsRate: '2%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films' },
-    'Section 194J - Professional Services': { tdsRate: '10%', penaltyRate: '20%', description: 'Professional Services, Royalty from other than films, Non-Compete Fees, etc.' },
-    "Section 194J - Director's Remuneration": { tdsRate: '10%', penaltyRate: '20%', description: "Director's Remuneration (other than salary)" },
-    'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
-    'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
-    'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
-    'Section 194-IA': { tdsRate: '1%', penaltyRate: '20%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
-    'Section 194-IB': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
-    'Section 194-IC': { tdsRate: '10%', penaltyRate: '20%', description: 'Payment of monetary consideration under a specified Joint Development Agreements' },
-    'Section 194M': { tdsRate: '5%', penaltyRate: '20%', description: 'Payment exceeding Rs 50 Lakhs to contractors or professionals by Individuals & HUFs who are not subject to tax audit' },
-    'Section 194-O': { tdsRate: '1%', penaltyRate: '5%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
-    'Section 195': { tdsRate: 'Specify "Rate" & "Nature"', penaltyRate: '-', description: 'Any payment subject to tax made to a Non-Resident or Foreign Company' }
+const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; description: string } } = {
+    'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,000' },
+    'Section 393(1) - Interest on Securities': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000' },
+    'Section 393(1) - Interest other than Securities': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
+    'Section 393(1) - Dividends (Domestic Company)': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000' },
+    'Section 393(1) - Contractor Payments (Large Payer) - Individual/HUF': { tdsRate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
+    'Section 393(1) - Contractor Payments (Large Payer) - Other than Individual/HUF': { tdsRate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': { tdsRate: '5%', description: 'Threshold limit: ₹ 50,000' },
+    'Section 393(1) - Technical Services / Call Centre / Film Royalty': { tdsRate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
+    'Section 393(1) - Professional Fees / Other Royalty': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) - Insurance Commission': { tdsRate: '2%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) - General Commission or Brokerage': { tdsRate: '2%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) - Rent (Individual/HUF Payer > ₹50,000/mo)': { tdsRate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) - Rent on Plant & Machinery': { tdsRate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
+    'Section 393(1) - Rent on Land & Building': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
+    'Section 393(1) - Transfer of Immovable Property (> ₹50L)': { tdsRate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
+    'Section 393(1) - Purchase of Goods (exceeding ₹50L)': { tdsRate: '0.10%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) - Virtual Digital Assets (VDA/Crypto)': { tdsRate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(3) - Winnings from Lottery / Puzzles': { tdsRate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(3) - Regular Filer (ITR filed in previous years) > 1 cr': { tdsRate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
+    'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 20L': { tdsRate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
+    'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 1Cr': { tdsRate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
+    'Section 393(3) - Co-operative Societies > 3 cr': { tdsRate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
+    'Section 393(3) - Payments to Partners (Salary/Comm. > ₹20k)': { tdsRate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
+    'Section 393(2) - Sportsmen / Sports Association (Non-Resident)': { tdsRate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': { tdsRate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': { tdsRate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Income/LTCG from Offshore Fund Units': { tdsRate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Interest/Dividends/LTCG on Bonds/GDR': { tdsRate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Any other sum payable to Non-Resident': { tdsRate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
 };
 
 // TCS Rates Master Data
@@ -574,23 +585,35 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
 
     // TDS Sections Data
     const tdsSections = [
-        { section: 'Section 194C', name: 'Contracts- Individual/HUF', rate: '1%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF)' },
-        { section: 'Section 194C', name: 'Contracts- Others', rate: '2%', description: 'Payment to Contractors other than Individuals & HUF' },
-        { section: 'Section 194H', name: 'Commission/Brokerage', rate: '2%', description: 'Commission and Brokerage to agents' },
-        { section: 'Section 194-I', name: 'Rent- Land, Building, Furniture & fitting', rate: '2%', description: 'Rent on Land, Building, or Furniture & fitting' },
-        { section: 'Section 194-I', name: 'Rent- Plant & Machinery, Equipment', rate: '10%', description: 'Rent on Plant & Machinery, or Equipment' },
-        { section: 'Section 194J', name: 'Technical Services', rate: '2%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films' },
-        { section: 'Section 194J', name: 'Professional Services', rate: '10%', description: 'Professional Services, Royalty from other than films, Non-Compete Fees, etc.' },
-        { section: 'Section 194J', name: 'Director\'s Remuneration', rate: '10%', description: 'Director\'s Remuneration' },
-        { section: 'Section 194Q', name: 'Purchase of Goods', rate: '0.10%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
-        { section: 'Section 194A', name: 'Interest other than interest on securities', rate: '10%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
-        { section: 'Section 194R', name: 'Benefit or Perquisite', rate: '10%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
-        { section: 'Section 194-IA', name: 'Immovable Property Transfer', rate: '1%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
-        { section: 'Section 194-IB', name: 'Rent by Individual or HUF', rate: '2%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
-        { section: 'Section 194IC', name: 'Joint Development Agreements', rate: '10%', description: 'Payment under Joint Development Agreements' },
-        { section: 'Section 194M', name: 'Contractors & Professionals', rate: '2%', description: 'Payment exceeding Rs 50 lakh to contractors and professionals by Individuals & HUFs who are not subject to tax audit' },
-        { section: 'Section 194O', name: 'E-Commerce', rate: '1%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
-        { section: 'Section 195', name: 'Payment to Non-Residents', rate: 'Variable', description: 'Any payment made to a Non-Resident or Foreign Company' }
+        { section: 'Section 392(7)', name: 'Premature EPF Withdrawal (> ₹50,000)', rate: '10%', description: 'Threshold limit: ₹ 50,000' },
+        { section: 'Section 393(1)', name: 'Interest on Securities', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
+        { section: 'Section 393(1)', name: 'Interest other than Securities', rate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
+        { section: 'Section 393(1)', name: 'Dividends (Domestic Company)', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
+        { section: 'Section 393(1)', name: 'Contractor Payments (Large Payer) - Individual/HUF', rate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
+        { section: 'Section 393(1)', name: 'Contractor Payments (Large Payer) - Other than Individual/HUF', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+        { section: 'Section 393(1)', name: 'Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)', rate: '5%', description: 'Threshold limit: ₹ 50,000' },
+        { section: 'Section 393(1)', name: 'Technical Services / Call Centre / Film Royalty', rate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
+        { section: 'Section 393(1)', name: 'Professional Fees / Other Royalty', rate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
+        { section: 'Section 393(1)', name: 'Insurance Commission', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
+        { section: 'Section 393(1)', name: 'General Commission or Brokerage', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
+        { section: 'Section 393(1)', name: 'Rent (Individual/HUF Payer > ₹50,000/mo)', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+        { section: 'Section 393(1)', name: 'Rent on Plant & Machinery', rate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
+        { section: 'Section 393(1)', name: 'Rent on Land & Building', rate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
+        { section: 'Section 393(1)', name: 'Transfer of Immovable Property (> ₹50L)', rate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
+        { section: 'Section 393(1)', name: 'Purchase of Goods (exceeding ₹50L)', rate: '0.10%', description: 'Threshold limit: ₹ 20,000' },
+        { section: 'Section 393(1)', name: 'Virtual Digital Assets (VDA/Crypto)', rate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(3)', name: 'Winnings from Lottery / Puzzles', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(3)', name: 'Regular Filer (ITR filed in previous years) > 1 cr', rate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
+        { section: 'Section 393(3)', name: 'Non-Filer (ITR not filed for past 3 years) > 20L', rate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
+        { section: 'Section 393(3)', name: 'Non-Filer (ITR not filed for past 3 years) > 1Cr', rate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
+        { section: 'Section 393(3)', name: 'Co-operative Societies > 3 cr', rate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
+        { section: 'Section 393(3)', name: 'Payments to Partners (Salary/Comm. > ₹20k)', rate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
+        { section: 'Section 393(2)', name: 'Sportsmen / Sports Association (Non-Resident)', rate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: 'Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023', rate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: 'Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023', rate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: 'Income/LTCG from Offshore Fund Units', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: 'Interest/Dividends/LTCG on Bonds/GDR', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: 'Any other sum payable to Non-Resident', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
     ];
 
     // State for TDS info modal
@@ -1260,16 +1283,16 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
     };
 
 
-    const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
-    const downloadDropdownRef = React.useRef<HTMLDivElement>(null);
+    const [isExcelDropdownOpen, setIsExcelDropdownOpen] = useState(false);
+    const excelDropdownRef = React.useRef<HTMLDivElement>(null);
 
     const [importSummary, setImportSummary] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(event.target as Node)) {
-                setIsDownloadDropdownOpen(false);
+            if (excelDropdownRef.current && !excelDropdownRef.current.contains(event.target as Node)) {
+                setIsExcelDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -1298,7 +1321,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                     },
                 }
             );
-            
+
             if (response.summary) {
                 // Ensure the summary contains the preview flag from the backend
                 setImportSummary({
@@ -1309,7 +1332,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 showSuccess(response.message || 'Customers imported successfully!');
                 setIsImportModalOpen(false);
             }
-            
+
             if (!isPreview) {
                 fetchCustomers(); // Refresh the list only on actual save
             }
@@ -1322,12 +1345,12 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
 
     const handleCustomerExcelDownload = async (type: 'template' | 'export') => {
         try {
-            const endpoint = type === 'template' 
-                ? '/api/customerportal/excel/template/' 
+            const endpoint = type === 'template'
+                ? '/api/customerportal/excel/template/'
                 : '/api/customerportal/excel/export/';
-            
+
             showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
-            
+
             const response: any = await httpClient.get(endpoint, {}, {
                 responseType: 'blob'
             });
@@ -1371,8 +1394,8 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
     const handleDeleteCustomer = async (customerId: number) => {
         if (!window.confirm('Are you sure you want to delete this customer?')) return;
         try {
-            await httpClient.delete(`/api/customerportal/customers/${customerId}/`);
-            showSuccess('Customer deleted successfully!');
+            const response: any = await httpClient.delete(`/api/customerportal/customers/${customerId}/`);
+            showSuccess(response?.message || 'Customer deleted successfully!');
             fetchCustomers();
         } catch (error) {
             handleApiError(error, 'Delete Customer');
@@ -3255,39 +3278,41 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 <h3 className="text-xl font-bold text-gray-900">Customer Management</h3>
                 <div className="flex gap-3">
 
-                    <div className="relative" ref={downloadDropdownRef}>
-                        <button 
-                            onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
+                    <div className="relative" ref={excelDropdownRef}>
+                        <button
+                            onClick={() => setIsExcelDropdownOpen(!isExcelDropdownOpen)}
                             className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
                         >
-                            <Download className="w-4 h-4" /> Download
+                            <Icon name="file-spreadsheet" className="w-4 h-4" /> EXCEL
                         </button>
-                        {isDownloadDropdownOpen && (
+                        {isExcelDropdownOpen && (
                             <div className="absolute right-0 z-[100] mt-2 w-52 bg-white border border-gray-200 rounded-[4px] shadow-lg py-1">
-                                <button 
-                                    onClick={() => { handleCustomerExcelDownload('template'); setIsDownloadDropdownOpen(false); }}
+                                <button
+                                    onClick={() => { handleCustomerExcelDownload('template'); setIsExcelDropdownOpen(false); }}
                                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                 >
                                     <Icon name="file-spreadsheet" className="w-4 h-4" /> Download Template
                                 </button>
-                                <button 
-                                    onClick={() => { handleCustomerExcelDownload('export'); setIsDownloadDropdownOpen(false); }}
+                                <button
+                                    onClick={() => { handleCustomerExcelDownload('export'); setIsExcelDropdownOpen(false); }}
                                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                 >
                                     <Icon name="download" className="w-4 h-4" /> Export All Data
                                 </button>
+                                <div className="border-t border-gray-100 my-1"></div>
+                                <button
+                                    onClick={() => {
+                                        setImportSummary(null);
+                                        setIsImportModalOpen(true);
+                                        setIsExcelDropdownOpen(false);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                    <Icon name="upload" className="w-4 h-4" /> Upload Excel
+                                </button>
                             </div>
                         )}
                     </div>
-                    <button
-                        onClick={() => {
-                            setImportSummary(null);
-                            setIsImportModalOpen(true);
-                        }}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
-                    >
-                        <Icon name="upload" className="w-4 h-4" /> UPLOAD EXCEL
-                    </button>
                     <button
                         onClick={() => {
                             // Generate a new customer code when creating a new customer
@@ -3443,7 +3468,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
             )}
 
             {/* Import Feedback Modal */}
-            <BulkImportFeedbackModal 
+            <BulkImportFeedbackModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 summary={importSummary}
@@ -6179,7 +6204,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                         const invDate = new Date(t.date);
                         const today = new Date();
                         const diffDays = Math.floor((today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
-                        
+
                         if (diffDays > cp) {
                             finalStatus = isPartiallyPaid || t.due_status === 'Partially Received' ? 'Partially Received' : 'Due';
                         } else {
