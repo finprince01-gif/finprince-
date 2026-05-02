@@ -67,6 +67,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
         city?: string;
         state?: string;
         pincode?: string;
+        email_address?: string;
+        contact_number?: string;
         products_services?: {
             items: {
                 itemCode: string;
@@ -396,6 +398,10 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 showError('Please select SO Series Name');
                 return;
             }
+            if (!soNumber) {
+                showError('Sales Order Number is required');
+                return;
+            }
             if (!customerName) {
                 showError('Please select Customer Name');
                 return;
@@ -506,11 +512,17 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
         setBranch('');
         setGstNo('');
         setAddress('');
+        setEmail('');
+        setContactNumber('');
 
         const customer = customers.find(c => c.customer_name === selectedName);
-        if (customer && customer.gst_details && customer.gst_details.branches) {
-            setAllCustomerBranches(customer.gst_details.branches);
-            setFilteredBranches(customer.gst_details.branches);
+        if (customer) {
+            setEmail(customer.email_address || '');
+            setContactNumber(customer.contact_number || '');
+
+            if (customer.gst_details && customer.gst_details.branches) {
+                setAllCustomerBranches(customer.gst_details.branches);
+                setFilteredBranches(customer.gst_details.branches);
             // If only one branch, auto-select it
             if (customer.gst_details.branches.length === 1) {
                 const singleBranch = customer.gst_details.branches[0];
@@ -534,6 +546,10 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 // Also update contact info if available
                 if (singleBranch.email) setEmail(singleBranch.email);
                 if (singleBranch.contactNumber) setContactNumber(singleBranch.contactNumber);
+            }
+            } else {
+                setAllCustomerBranches([]);
+                setFilteredBranches([]);
             }
         } else {
             setAllCustomerBranches([]);
@@ -641,6 +657,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                                             } catch (error) {
                                                 console.error('Error fetching SO preview:', error);
                                             }
+                                        } else if (!selectedSeries && !editId) {
+                                            setSONumber('');
                                         }
                                     }}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
@@ -650,7 +668,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                                         <option key={s.id} value={s.id}>{s.series_name}</option>
                                     ))}
                                 </select>
-                                <p className="text-xs text-gray-500 mt-1">Data from masters</p>
                             </div>
                             <div className="flex items-end">
                                 <button

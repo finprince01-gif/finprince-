@@ -5,7 +5,7 @@ import AddNewCustomerModal from './AddNewCustomerModal';
 import Icon from './Icon';
 import SearchableDropdown from './SearchableDropdown';
 
-import { SALES_VOUCHER_COLUMNS_BY_TAB, SalesVoucherTab, SALES_VOUCHER_KEY_MAP, SalesVoucherColumn } from '../constants/salesVoucherColumns';
+import { SALES_VOUCHER_COLUMNS_BY_TAB, SalesVoucherTab, SALES_VOUCHER_KEY_MAP, SalesVoucherColumn, SALES_VOUCHER_COLUMNS } from '../constants/salesVoucherColumns';
 import { INDIA_STATE_CODES, GST_INVOICE_TYPES, EXPORT_TYPES } from '../utils/gstConstants';
 
 const TDS_RATE_MAP: Record<string, number> = {
@@ -259,6 +259,38 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
     const updateHeader = (key: string, value: any) => {
         setDraft(prev => {
             let newHeader = { ...prev.header, [key]: value };
+            let newStatus = prev.status;
+            let newFieldErrors = { ...prev.field_errors };
+            let newInvoiceNo = prev.invoice_no;
+
+            // Clear status and field errors if invoice number is changed
+            if (key === 'sales_invoice_no') {
+                newInvoiceNo = value; // Keep top-level invoice_no in sync
+                if (newStatus === 'DUPLICATE_INVOICE') {
+                    newStatus = 'VALIDATION_FAILED';
+                }
+                if (newFieldErrors.sales_invoice_no) {
+                    delete newFieldErrors.sales_invoice_no;
+                }
+            }
+
+            if (key === 'customer_name') {
+                if (newStatus === 'CUSTOMER_MISSING') {
+                    newStatus = 'VALIDATION_FAILED';
+                }
+                if (newFieldErrors.customer_name) {
+                    delete newFieldErrors.customer_name;
+                }
+            }
+
+            if (key === 'gstin') {
+                if (newStatus === 'GSTIN_CONFLICT') {
+                    newStatus = 'VALIDATION_FAILED';
+                }
+                if (newFieldErrors.gstin) {
+                    delete newFieldErrors.gstin;
+                }
+            }
 
             // Series Auto-number logic
             if (key === 'voucher_name') {
@@ -374,7 +406,7 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
                 }
             }
 
-            return { ...prev, header: newHeader, items: prev.items };
+            return { ...prev, header: newHeader, items: prev.items, status: newStatus, field_errors: newFieldErrors, invoice_no: newInvoiceNo };
         });
     };
 
@@ -1481,7 +1513,7 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {SALES_VOUCHER_COLUMNS_BY_TAB[activeTab].map(col => renderField(col))}
+                            {(SALES_VOUCHER_COLUMNS_BY_TAB as any)[activeTab].map((col: SalesVoucherColumn) => renderField(col))}
                         </div>
                     )}
                 </div>

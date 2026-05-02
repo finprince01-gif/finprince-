@@ -293,15 +293,19 @@ const InventoryPage: React.FC = () => {
   const [issueSlipNumber, setIssueSlipNumber] = useState('');
   const [issueSlipDate, setIssueSlipDate] = useState(todayStr);
   const [issueSlipTime, setIssueSlipTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
-  const [isTimeEdited, setIsTimeEdited] = useState(false);
+  const [isIssueSlipTimeEdited, setIsIssueSlipTimeEdited] = useState(false);
+  const [isGrnTimeEdited, setIsGrnTimeEdited] = useState(false);
 
+  // Issue Slip time auto-update — stops when user manually edits
   useEffect(() => {
-    if (isTimeEdited || !showIssueSlipForm) return;
+    if (isIssueSlipTimeEdited || !showIssueSlipForm) return;
     const interval = setInterval(() => {
       setIssueSlipTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     }, 1000);
     return () => clearInterval(interval);
-  }, [isTimeEdited, showIssueSlipForm]);
+  }, [isIssueSlipTimeEdited, showIssueSlipForm]);
+
+
   const [goodsFromLocation, setGoodsFromLocation] = useState('');
   const [goodsToLocation, setGoodsToLocation] = useState('');
   const [interProcessToLocation, setInterProcessToLocation] = useState('');
@@ -345,6 +349,15 @@ const InventoryPage: React.FC = () => {
   const [grnSelectedSeriesName, setGrnSelectedSeriesName] = useState('');
   const [grnDate, setGrnDate] = useState(todayStr);
   const [grnTime, setGrnTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+
+  // GRN time auto-update — stops when user manually edits
+  useEffect(() => {
+    if (isGrnTimeEdited || !showGRNForm) return;
+    const interval = setInterval(() => {
+      setGrnTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isGrnTimeEdited, showGRNForm]);
   const [grnLocation, setGrnLocation] = useState('');
   const [grnVendorName, setGrnVendorName] = useState('');
   const [grnCustomerName, setGrnCustomerName] = useState('');
@@ -827,19 +840,6 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  const recalculateStock = async () => {
-    try {
-      setLoadingStockData(true);
-      await httpClient.post('/api/inventory/reports/stock-movement/recalculate/', {});
-      showSuccess('Stock values recalculated successfully');
-      fetchStockMovementSummary();
-    } catch (error) {
-      console.error('Error recalculating stock:', error);
-      showError('Failed to recalculate stock');
-    } finally {
-      setLoadingStockData(false);
-    }
-  };
 
   // Effects
   useEffect(() => {
@@ -2251,7 +2251,7 @@ const InventoryPage: React.FC = () => {
               const mappedItems = selectedPO.items.map((item: any) => {
                 const itemCode = item.item_code || item.itemCode;
                 const itemName = item.item_name || item.itemName || item.name;
-                const inventoryItem = items.find(i => 
+                const inventoryItem = items.find(i =>
                   (i.item_code && itemCode && i.item_code.toLowerCase() === itemCode.toLowerCase()) ||
                   (i.name && itemName && i.name.toLowerCase() === itemName.toLowerCase()) ||
                   (i.item_name && itemName && i.item_name.toLowerCase() === itemName.toLowerCase())
@@ -2262,13 +2262,13 @@ const InventoryPage: React.FC = () => {
                   itemCode: itemCode || inventoryItem?.item_code || '',
                   itemName: itemName || inventoryItem?.name || inventoryItem?.item_name || '',
                   uom: item.uom || item.unit || inventoryItem?.uom || inventoryItem?.unit || '',
-                  hsnCode: (inventoryItem as any)?.hsn_code || 
-                           (inventoryItem as any)?.hsn || 
-                           (inventoryItem as any)?.hsn_sac || 
-                           (inventoryItem as any)?.hsn_sac_code || 
-                           item.hsn_code || 
-                           item.hsnCode || 
-                           '',
+                  hsnCode: (inventoryItem as any)?.hsn_code ||
+                    (inventoryItem as any)?.hsn ||
+                    (inventoryItem as any)?.hsn_sac ||
+                    (inventoryItem as any)?.hsn_sac_code ||
+                    item.hsn_code ||
+                    item.hsnCode ||
+                    '',
                   quantity: item.quantity || 0,
                   rate: item.final_rate || item.rate || inventoryItem?.standard_rate || inventoryItem?.rate || 0,
                   value: (item.quantity || 0) * (item.final_rate || item.rate || 0)
@@ -2599,6 +2599,9 @@ const InventoryPage: React.FC = () => {
     setGrnGstin('');
     setGrnSelectedPOs([]);
     setGrnSelectedSalesVouchers([]); // Reset selected vouchers
+    setGrnItems([{
+      itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: ''
+    }]);
     setGrnReferenceNoOptions([]);
     setGrnSecondaryRefNo('');
     setGrnSecondaryRefNoOptions([]);
@@ -2625,7 +2628,8 @@ const InventoryPage: React.FC = () => {
         // Fetch Sales Vouchers for the customer
         const salesVouchers = await apiService.getSalesVouchers({
           customer_id: customer.id,
-          customer_name: customer.customer_name
+          customer_name: customer.customer_name,
+          show_all: true
         });
         if (Array.isArray(salesVouchers)) {
           setGrnReferenceNoOptions(salesVouchers);
@@ -2682,7 +2686,7 @@ const InventoryPage: React.FC = () => {
                   acceptedQty: poItem.quantity,
                   rejectedQty: '0',
                   shortExcessQty: '0',
-                  remarks: `From PO: ${poNumber}`,
+                  remarks: '',
                   po_number: poNumber // Track source PO for color coding
                 });
               });
@@ -2696,6 +2700,63 @@ const InventoryPage: React.FC = () => {
       }
     } catch (err) {
       console.error("Error fetching full PO details:", err);
+    }
+  };
+
+  const handleGrnSalesVoucherChange = async (selectedVoucherList: string[]) => {
+    setGrnSelectedSalesVouchers(selectedVoucherList);
+
+    if (selectedVoucherList.length === 0) {
+      setGrnItems([{
+        itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: ''
+      }]);
+      return;
+    }
+
+    try {
+      const allNewItems: any[] = [];
+
+      for (const voucherNo of selectedVoucherList) {
+        // Fetch full Sales Voucher details using the invoice number filter
+        const response = await apiService.getSalesVouchers({
+          sales_invoice_no: voucherNo,
+          show_all: true
+        });
+
+        if (Array.isArray(response) && response.length > 0) {
+          const fullVoucher = response[0];
+          if (fullVoucher.items && fullVoucher.items.length > 0) {
+            fullVoucher.items.forEach((vItem: any) => {
+              allNewItems.push({
+                itemCode: vItem.item_code,
+                itemName: vItem.item_name,
+                uom: vItem.uom,
+                refQty: vItem.quantity,
+                secondaryQty: '', // This corresponds to Debit Note Qty
+                receivedQty: vItem.quantity,
+                acceptedQty: vItem.quantity,
+                rejectedQty: '0',
+                shortExcessQty: '0',
+                remarks: '',
+                rate: vItem.item_rate || vItem.rate || 0,
+                taxable_value: vItem.taxable_value || 0,
+                igst: vItem.igst || 0,
+                cgst: vItem.cgst || 0,
+                sgst: vItem.sgst || 0,
+                cess: vItem.cess || 0,
+                total_value: vItem.invoice_value || vItem.amount || 0,
+                po_number: '' // Not applicable for sales return
+              });
+            });
+          }
+        }
+      }
+
+      if (allNewItems.length > 0) {
+        setGrnItems(allNewItems);
+      }
+    } catch (err) {
+      console.error("Error fetching sales voucher details:", err);
     }
   };
 
@@ -2813,13 +2874,32 @@ const InventoryPage: React.FC = () => {
       updatedItems[index].rejectedQty = (received - accepted).toString();
     }
 
-    // Update po_number if remarks changed manually and it indicates a different PO
-    if (field === 'remarks' && value.includes('From PO: ')) {
-      const parts = value.split('From PO: ');
-      if (parts.length > 1) {
-        updatedItems[index].po_number = parts[1].trim();
+    // Auto-calculate values for Sales Return
+    if (grnType === 'sales_return' && (field === 'rate' || field === 'acceptedQty')) {
+      const rate = parseFloat(updatedItems[index].rate) || 0;
+      const accepted = parseFloat(updatedItems[index].acceptedQty) || 0;
+      const oldTaxable = parseFloat(updatedItems[index].taxable_value) || 0;
+
+      const newTaxable = rate * accepted;
+      updatedItems[index].taxable_value = newTaxable.toFixed(2);
+
+      // Proportionally update taxes if they exist to maintain the same GST rate
+      if (oldTaxable > 0) {
+        const ratio = newTaxable / oldTaxable;
+        updatedItems[index].igst = (parseFloat(updatedItems[index].igst || 0) * ratio).toFixed(2);
+        updatedItems[index].cgst = (parseFloat(updatedItems[index].cgst || 0) * ratio).toFixed(2);
+        updatedItems[index].sgst = (parseFloat(updatedItems[index].sgst || 0) * ratio).toFixed(2);
+        updatedItems[index].cess = (parseFloat(updatedItems[index].cess || 0) * ratio).toFixed(2);
       }
+
+      const totalTax = (parseFloat(updatedItems[index].igst) || 0) +
+        (parseFloat(updatedItems[index].cgst) || 0) +
+        (parseFloat(updatedItems[index].sgst) || 0) +
+        (parseFloat(updatedItems[index].cess) || 0);
+
+      updatedItems[index].total_value = (newTaxable + totalTax).toFixed(2);
     }
+
 
     setGrnItems(updatedItems);
   };
@@ -2942,7 +3022,14 @@ const InventoryPage: React.FC = () => {
             accepted_qty: item.acceptedQty || 0,
             rejected_qty: item.rejectedQty || 0,
             short_excess_qty: item.short_excess_qty || 0,
-            remarks: item.remarks
+            remarks: item.remarks,
+            rate: item.rate || 0,
+            taxable_value: item.taxable_value || 0,
+            igst: item.igst || 0,
+            cgst: item.cgst || 0,
+            sgst: item.sgst || 0,
+            cess: item.cess || 0,
+            total_value: item.total_value || 0
           }))
       };
 
@@ -3411,21 +3498,13 @@ const InventoryPage: React.FC = () => {
 
               {/* Top Action Buttons */}
               <div className="flex gap-4">
-                <button
-                  onClick={recalculateStock}
-                  disabled={loadingStockData}
-                  className="inline-flex items-center px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] text-indigo-600 bg-white hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <i className={`fas fa-sync-alt mr-2 ${loadingStockData ? 'fa-spin' : ''}`}></i>
-                  🔄 Recalculate Stock
-                </button>
                 {canCreateIssue && (
                   <button
                     onClick={() => {
                       setIssueSlipTab('job-work');
                       setSelectedIssueSlipSeriesName('');
                       setIssueSlipNumber('');
-                      setIsTimeEdited(false);
+                      setIsIssueSlipTimeEdited(false);
                       setShowIssueSlipForm(true);
                     }}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
@@ -3435,7 +3514,10 @@ const InventoryPage: React.FC = () => {
                 )}
                 {canCreateGRN && (
                   <button
-                    onClick={() => setShowGRNForm(true)}
+                    onClick={() => {
+                      setIsGrnTimeEdited(false);
+                      setShowGRNForm(true);
+                    }}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                   >
                     ➕ Add New GRN
@@ -3759,7 +3841,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipTime}
                             onChange={(e) => {
                               setIssueSlipTime(e.target.value);
-                              setIsTimeEdited(true);
+                              setIsIssueSlipTimeEdited(true);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
@@ -3885,21 +3967,21 @@ const InventoryPage: React.FC = () => {
                         </div>
                         <div className="overflow-x-auto border border-gray-300 rounded text-sm">
                           <table className="min-w-full">
-                             <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Code</th>
-                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Name</th>
-                                  {selectedJobWorkOrderNos.length > 0 && (
-                                    <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">PO No.</th>
-                                  )}
-                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">HSN Code</th>
-                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
-                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Quantity</th>
-                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Rate</th>
-                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Taxable Value</th>
-                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Action</th>
-                                </tr>
-                              </thead>
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Code</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Name</th>
+                                {selectedJobWorkOrderNos.length > 0 && (
+                                  <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">PO No.</th>
+                                )}
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">HSN Code</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Quantity</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Rate</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Taxable Value</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Action</th>
+                              </tr>
+                            </thead>
                             <tbody className="divide-y divide-gray-200">
                               {issueSlipItems.map((slipItem, index) => {
                                 // Find selected item for this row to populate UOM options
@@ -4303,7 +4385,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipTime}
                             onChange={(e) => {
                               setIssueSlipTime(e.target.value);
-                              setIsTimeEdited(true);
+                              setIsIssueSlipTimeEdited(true);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
@@ -4759,7 +4841,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipTime}
                             onChange={(e) => {
                               setIssueSlipTime(e.target.value);
-                              setIsTimeEdited(true);
+                              setIsIssueSlipTimeEdited(true);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
@@ -5057,7 +5139,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipTime}
                             onChange={(e) => {
                               setIssueSlipTime(e.target.value);
-                              setIsTimeEdited(true);
+                              setIsIssueSlipTimeEdited(true);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
@@ -5378,7 +5460,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipTime}
                             onChange={(e) => {
                               setIssueSlipTime(e.target.value);
-                              setIsTimeEdited(true);
+                              setIsIssueSlipTimeEdited(true);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
@@ -5709,7 +5791,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipTime}
                             onChange={(e) => {
                               setIssueSlipTime(e.target.value);
-                              setIsTimeEdited(true);
+                              setIsIssueSlipTimeEdited(true);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
@@ -6100,7 +6182,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipTime}
                             onChange={(e) => {
                               setIssueSlipTime(e.target.value);
-                              setIsTimeEdited(true);
+                              setIsIssueSlipTimeEdited(true);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
@@ -6601,7 +6683,7 @@ const InventoryPage: React.FC = () => {
                               value={issueSlipTime}
                               onChange={(e) => {
                                 setIssueSlipTime(e.target.value);
-                                setIsTimeEdited(true);
+                                setIsIssueSlipTimeEdited(true);
                               }}
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                             />
@@ -6853,7 +6935,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipTime}
                             onChange={(e) => {
                               setIssueSlipTime(e.target.value);
-                              setIsTimeEdited(true);
+                              setIsIssueSlipTimeEdited(true);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
@@ -7814,7 +7896,10 @@ const InventoryPage: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Time</label>
-                      <input type="time" value={grnTime} onChange={(e) => setGrnTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <input type="time" value={grnTime} onChange={(e) => {
+                        setGrnTime(e.target.value);
+                        setIsGrnTimeEdited(true);
+                      }} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
@@ -8061,11 +8146,11 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Sales Voucher No.</label>
                           <MultiSelectDropdown
                             options={grnReferenceNoOptions.map((sv: any) => ({
-                              value: sv.sales_invoice_number || String(sv.id),
-                              label: sv.sales_invoice_number || `Voucher #${sv.id}`
+                              value: sv.sales_invoice_no || sv.sales_invoice_number || String(sv.id),
+                              label: sv.sales_invoice_no || sv.sales_invoice_number || sv.voucher_no || 'N/A'
                             }))}
                             selectedValues={grnSelectedSalesVouchers}
-                            onChange={setGrnSelectedSalesVouchers}
+                            onChange={handleGrnSalesVoucherChange}
                             placeholder="Select Sales Voucher(s)"
                           />
                         </div>
@@ -8084,6 +8169,9 @@ const InventoryPage: React.FC = () => {
                       <table className="min-w-full">
                         <thead className="bg-gray-50">
                           <tr>
+                            {grnSelectedPOs.length > 0 && (
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">PO No.</th>
+                            )}
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Item Code</th>
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Item Name</th>
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">UOM</th>
@@ -8093,6 +8181,14 @@ const InventoryPage: React.FC = () => {
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Accepted</th>
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Rejected</th>
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Shrt/Excess</th>
+                            {grnType === 'sales_return' && (
+                              <>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Rate</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Taxable</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">GST</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Total</th>
+                              </>
+                            )}
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Remarks</th>
                           </tr>
                         </thead>
@@ -8105,6 +8201,11 @@ const InventoryPage: React.FC = () => {
 
                             return (
                               <tr key={index} style={{ backgroundColor: bgColor }}>
+                                {grnSelectedPOs.length > 0 && (
+                                  <td className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-nowrap">
+                                    {item.po_number || '-'}
+                                  </td>
+                                )}
                                 <td className="px-3 py-2">
                                   <select
                                     value={item.itemCode || ''}
@@ -8203,12 +8304,49 @@ const InventoryPage: React.FC = () => {
                                     className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
                                   />
                                 </td>
+                                {grnType === 'sales_return' && (
+                                  <>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="number"
+                                        value={item.rate || ''}
+                                        onChange={(e) => handleGrnItemChange(index, 'rate', e.target.value)}
+                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="number"
+                                        value={item.taxable_value || ''}
+                                        readOnly
+                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="number"
+                                        value={(parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0) || ''}
+                                        readOnly
+                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="number"
+                                        value={item.total_value || ''}
+                                        readOnly
+                                        className="w-24 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 font-medium"
+                                      />
+                                    </td>
+                                  </>
+                                )}
                                 <td className="px-3 py-2">
                                   <input
                                     type="text"
                                     value={item.remarks || ''}
                                     onChange={(e) => handleGrnItemChange(index, 'remarks', e.target.value)}
                                     className="w-32 px-2 py-1 border border-gray-300 rounded text-xs"
+                                    placeholder="Remarks"
                                   />
                                 </td>
                                 <td className="px-3 py-2 text-center">

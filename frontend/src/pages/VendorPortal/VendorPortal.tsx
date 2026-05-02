@@ -51,28 +51,39 @@ const VENDOR_DEFAULT_GROUPS = [
 ];
 
 // TDS Rates Master Data
-const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
-    'Section 194C - Individual/HUF': { tdsRate: '1%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF)' },
-    'Section 194C - Others': { tdsRate: '2%', penaltyRate: '20%', description: 'Payment to Contractors other than Individuals & HUF' },
-    'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
-    'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
-    'Section 194-I - Rent- Land, Building, Furniture & fitting': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & Fitting paid to any entity' },
-    'Section 194-I - Rent- Plant & Machinery, Equipment': { tdsRate: '10%', penaltyRate: '20%', description: 'Rent on Plant & Machinery, or Equipment paid to any entity' },
-    'Section 194J - Technical Services': { tdsRate: '2%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films' },
-    'Section 194J - Professional Services': { tdsRate: '10%', penaltyRate: '20%', description: 'Professional Services, Royalty from other than films, Non-Compete Fees, etc.' },
-    "Section 194J - Director's Remuneration": { tdsRate: '10%', penaltyRate: '20%', description: "Director's Remuneration (other than salary)" },
-    'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
-    'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
-    'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
-    'Section 194-IA': { tdsRate: '1%', penaltyRate: '20%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
-    'Section 194-IB': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
-    'Section 194-IC': { tdsRate: '10%', penaltyRate: '20%', description: 'Payment of monetary consideration under a specified Joint Development Agreements' },
-    'Section 194M': { tdsRate: '5%', penaltyRate: '20%', description: 'Payment exceeding Rs 50 Lakhs to contractors or professionals by Individuals & HUFs who are not subject to tax audit' },
-    'Section 194-O': { tdsRate: '1%', penaltyRate: '5%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
-    'Section 195': { tdsRate: 'Specify "Rate" & "Nature"', penaltyRate: '-', description: 'Any payment subject to tax made to a Non-Resident or Foreign Company' }
+const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; description: string } } = {
+    'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,000' },
+    'Section 393(1) - Interest on Securities': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000' },
+    'Section 393(1) - Interest other than Securities': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
+    'Section 393(1) - Dividends (Domestic Company)': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000' },
+    'Section 393(1) - Contractor Payments (Large Payer) - Individual/HUF': { tdsRate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
+    'Section 393(1) - Contractor Payments (Large Payer) - Other than Individual/HUF': { tdsRate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': { tdsRate: '5%', description: 'Threshold limit: ₹ 50,000' },
+    'Section 393(1) - Technical Services / Call Centre / Film Royalty': { tdsRate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
+    'Section 393(1) - Professional Fees / Other Royalty': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) - Insurance Commission': { tdsRate: '2%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) - General Commission or Brokerage': { tdsRate: '2%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) - Rent (Individual/HUF Payer > ₹50,000/mo)': { tdsRate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) - Rent on Plant & Machinery': { tdsRate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
+    'Section 393(1) - Rent on Land & Building': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
+    'Section 393(1) - Transfer of Immovable Property (> ₹50L)': { tdsRate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
+    'Section 393(1) - Purchase of Goods (exceeding ₹50L)': { tdsRate: '0.10%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) - Virtual Digital Assets (VDA/Crypto)': { tdsRate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(3) - Winnings from Lottery / Puzzles': { tdsRate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(3) - Regular Filer (ITR filed in previous years) > 1 cr': { tdsRate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
+    'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 20L': { tdsRate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
+    'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 1Cr': { tdsRate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
+    'Section 393(3) - Co-operative Societies > 3 cr': { tdsRate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
+    'Section 393(3) - Payments to Partners (Salary/Comm. > ₹20k)': { tdsRate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
+    'Section 393(2) - Sportsmen / Sports Association (Non-Resident)': { tdsRate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': { tdsRate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': { tdsRate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Income/LTCG from Offshore Fund Units': { tdsRate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Interest/Dividends/LTCG on Bonds/GDR': { tdsRate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) - Any other sum payable to Non-Resident': { tdsRate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
 };
 
-const getTDSRateInfo = (section: string) => TDS_RATES_MASTER[section] || { tdsRate: '-', penaltyRate: '-', description: 'No info available' };
+const getTDSRateInfo = (section: string) => TDS_RATES_MASTER[section] || { tdsRate: '-', description: 'No info available' };
 
 // TCS Rates Master Data
 const TCS_RATES_MASTER: { [key: string]: { tcsRate: string; penaltyRate: string; description: string } } = {
@@ -905,51 +916,51 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 });
 
             // Combine all sources in the group for one span
-                const totalSourceAmt = sources.reduce((sum, s) => sum + parseFloat((s.debit !== '-' ? s.debit : s.credit !== '-' ? s.credit : '0').toString().replace(/,/g, '')), 0);
-                const firstSource = sources[0];
+            const totalSourceAmt = sources.reduce((sum, s) => sum + parseFloat((s.debit !== '-' ? s.debit : s.credit !== '-' ? s.credit : '0').toString().replace(/,/g, '')), 0);
+            const firstSource = sources[0];
 
-                if (applications.length === 0) {
+            if (applications.length === 0) {
+                rows.push({
+                    date: firstSource.date,
+                    postedFrom: firstSource.transferFrom,
+                    refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : firstSource.voucherNo,
+                    netAmount: totalSourceAmt,
+                    appliedDate: '-',
+                    appliedRefNo: '-',
+                    appliedAmount: '-',
+                    pendingBalance: totalSourceAmt,
+                    status: firstSource.status,
+                    rowSpan: 1,
+                    isFirstInSource: true
+                });
+            } else {
+                let lastPending = totalSourceAmt;
+                const totalAppAmt = applications.reduce((sum, a) => sum + parseFloat((a.debit !== '-' ? a.debit : a.credit !== '-' ? a.credit : '0').toString().replace(/,/g, '')), 0);
+                const totalSourceAmtRounded = Math.round(totalSourceAmt * 100);
+                const totalAppAmtRounded = Math.round(totalAppAmt * 100);
+                const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
+                    ? 'Paid'
+                    : (firstSource.status === 'Not Due' ? 'Not Due' : (totalAppAmtRounded > 0 ? 'Partially Paid' : 'Due'));
+
+                applications.forEach((app, appIdx) => {
+                    const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
+                    const currentPending = Math.max(0, lastPending - appAmt);
                     rows.push({
                         date: firstSource.date,
                         postedFrom: firstSource.transferFrom,
                         refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : firstSource.voucherNo,
                         netAmount: totalSourceAmt,
-                        appliedDate: '-',
-                        appliedRefNo: '-',
-                        appliedAmount: '-',
-                        pendingBalance: totalSourceAmt,
-                        status: firstSource.status,
-                        rowSpan: 1,
-                        isFirstInSource: true
+                        appliedDate: app.date,
+                        appliedRefNo: app.voucherNo,
+                        appliedAmount: appAmt,
+                        pendingBalance: currentPending,
+                        status: calculatedStatus,
+                        rowSpan: applications.length,
+                        isFirstInSource: appIdx === 0
                     });
-                } else {
-                    let lastPending = totalSourceAmt;
-                    const totalAppAmt = applications.reduce((sum, a) => sum + parseFloat((a.debit !== '-' ? a.debit : a.credit !== '-' ? a.credit : '0').toString().replace(/,/g, '')), 0);
-                    const totalSourceAmtRounded = Math.round(totalSourceAmt * 100);
-                    const totalAppAmtRounded = Math.round(totalAppAmt * 100);
-                    const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
-                        ? 'Paid'
-                        : (firstSource.status === 'Not Due' ? 'Not Due' : (totalAppAmtRounded > 0 ? 'Partially Paid' : 'Due'));
-
-                    applications.forEach((app, appIdx) => {
-                        const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
-                        const currentPending = Math.max(0, lastPending - appAmt);
-                        rows.push({
-                            date: firstSource.date,
-                            postedFrom: firstSource.transferFrom,
-                            refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : firstSource.voucherNo,
-                            netAmount: totalSourceAmt,
-                            appliedDate: app.date,
-                            appliedRefNo: app.voucherNo,
-                            appliedAmount: appAmt,
-                            pendingBalance: currentPending,
-                            status: calculatedStatus,
-                            rowSpan: applications.length,
-                            isFirstInSource: appIdx === 0
-                        });
-                        lastPending = currentPending;
-                    });
-                }
+                    lastPending = currentPending;
+                });
+            }
         });
 
         return rows;
@@ -1190,16 +1201,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     };
 
 
-    const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
-    const downloadDropdownRef = React.useRef<HTMLDivElement>(null);
+    const [isExcelDropdownOpen, setIsExcelDropdownOpen] = useState(false);
+    const excelDropdownRef = React.useRef<HTMLDivElement>(null);
 
     const [importSummary, setImportSummary] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(event.target as Node)) {
-                setIsDownloadDropdownOpen(false);
+            if (excelDropdownRef.current && !excelDropdownRef.current.contains(event.target as Node)) {
+                setIsExcelDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -1221,7 +1232,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             const response: any = await httpClient.post(`/api/vendors/excel/upload/?dry_run=${dryRun}`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            
+
             if (response.summary) {
                 // Ensure the summary contains the preview flag from the backend
                 setImportSummary({
@@ -1232,7 +1243,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 showSuccess(response.message || 'Vendors imported successfully!');
                 setIsImportModalOpen(false);
             }
-            
+
             if (!dryRun) {
                 fetchVendors(); // Refresh the list only on actual save
             }
@@ -1245,12 +1256,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
     const handleVendorExcelDownload = async (type: 'template' | 'export') => {
         try {
-            const endpoint = type === 'template' 
-                ? '/api/vendors/excel/template/' 
+            const endpoint = type === 'template'
+                ? '/api/vendors/excel/template/'
                 : '/api/vendors/excel/export/';
-            
+
             showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
-            
+
             const response: any = await httpClient.get(endpoint, {}, {
                 responseType: 'blob'
             });
@@ -1465,8 +1476,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const handleDeleteVendor = async (vendorId: number) => {
         if (!await confirm('Are you sure you want to delete this vendor?')) return;
         try {
-            await httpClient.delete(`/api/vendors/basic-details/${vendorId}/`);
-            showSuccess('Vendor deleted successfully!');
+            const response: any = await httpClient.delete(`/api/vendors/basic-details/${vendorId}/`);
+            showSuccess(response?.message || 'Vendor deleted successfully!');
             fetchVendors();
         } catch (error) {
             handleApiError(error, 'Delete Vendor');
@@ -2891,6 +2902,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     }
 
     const [inventoryItems, setInventoryItems] = useState<SimplifiedInventoryItem[]>([]);
+    const [locations, setLocations] = useState<any[]>([]);
     const [units, setUnits] = useState<any[]>([]);
     const [items, setItems] = useState<ProductServiceItem[]>([
         { id: 1, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
@@ -2908,6 +2920,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             }
         };
 
+        const fetchLocations = async () => {
+            try {
+                const response = await httpClient.get<any[]>('/api/inventory/locations/');
+                setLocations(Array.isArray(response) ? response : []);
+            } catch (error) {
+                handleApiError(error, 'Fetch Locations');
+            }
+        };
+
         const fetchUnits = async () => {
             try {
                 const response = await httpClient.get<any[]>('/api/inventory/units/');
@@ -2916,8 +2937,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 handleApiError(error, 'Fetch Units');
             }
         };
+
         fetchItems();
         fetchUnits();
+        fetchLocations();
 
         const fetchLedgers = async () => {
             try {
@@ -3480,39 +3503,41 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             <h3 className="text-xl font-bold text-gray-900">Vendor Management</h3>
                                             <div className="flex gap-3">
 
-                                                <div className="relative" ref={downloadDropdownRef}>
-                                                    <button 
-                                                        onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
+                                                <div className="relative" ref={excelDropdownRef}>
+                                                    <button
+                                                        onClick={() => setIsExcelDropdownOpen(!isExcelDropdownOpen)}
                                                         className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
                                                     >
-                                                        <Download className="w-4 h-4" /> Download
+                                                        <Icon name="file-spreadsheet" className="w-4 h-4" /> EXCEL
                                                     </button>
-                                                    {isDownloadDropdownOpen && (
+                                                    {isExcelDropdownOpen && (
                                                         <div className="absolute right-0 z-[100] mt-2 w-52 bg-white border border-gray-200 rounded-[4px] shadow-lg py-1">
-                                                            <button 
-                                                                onClick={() => { handleVendorExcelDownload('template'); setIsDownloadDropdownOpen(false); }}
+                                                            <button
+                                                                onClick={() => { handleVendorExcelDownload('template'); setIsExcelDropdownOpen(false); }}
                                                                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                                             >
                                                                 <Icon name="file-spreadsheet" className="w-4 h-4" /> Download Template
                                                             </button>
-                                                            <button 
-                                                                onClick={() => { handleVendorExcelDownload('export'); setIsDownloadDropdownOpen(false); }}
+                                                            <button
+                                                                onClick={() => { handleVendorExcelDownload('export'); setIsExcelDropdownOpen(false); }}
                                                                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                                             >
                                                                 <Icon name="download" className="w-4 h-4" /> Export All Data
                                                             </button>
+                                                            <div className="border-t border-gray-100 my-1"></div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setImportSummary(null);
+                                                                    setIsImportModalOpen(true);
+                                                                    setIsExcelDropdownOpen(false);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                            >
+                                                                <Icon name="upload" className="w-4 h-4" /> Upload Excel
+                                                            </button>
                                                         </div>
                                                     )}
                                                 </div>
-                                                <button
-                                                    onClick={() => {
-                                                        setImportSummary(null);
-                                                        setIsImportModalOpen(true);
-                                                    }}
-                                                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2"
-                                                >
-                                                    <Icon name="upload" className="w-4 h-4" /> UPLOAD EXCEL
-                                                </button>
                                                 <button
                                                     onClick={handleCreateNewVendor}
                                                     className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
@@ -4543,23 +4568,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                         className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                                     >
                                                         <option value="">Select TDS Section</option>
-                                                        <option value="Section 194C - Individual/HUF">Section 194C - Contracts - Individual/HUF</option>
-                                                        <option value="Section 194C - Others">Section 194C - Contracts - Others</option>
-                                                        <option value="Section 194H">Section 194H - Commission/Brokerage</option>
-                                                        <option value="Section 194-I - Rent- Land, Building, Furniture &amp; fitting">Section 194-I - Rent- Land, Building, Furniture &amp; fitting</option>
-                                                        <option value="Section 194-I - Rent- Plant &amp; Machinery, Equipment">Section 194-I - Rent- Plant &amp; Machinery, Equipment</option>
-                                                        <option value="Section 194J - Technical Services">Section 194J - Technical Services</option>
-                                                        <option value="Section 194J - Professional Services">Section 194J - Professional Services</option>
-                                                        <option value="Section 194J - Director's Remuneration">Section 194J - Director's Remuneration</option>
-                                                        <option value="Section 194Q">Section 194Q - Purchase of Goods</option>
-                                                        <option value="Section 194A">Section 194A - Interest other than interest on securities</option>
-                                                        <option value="Section 194R">Section 194R - Benefit or Perquisite</option>
-                                                        <option value="Section 194-IA">Section 194-IA - Immovable Property Transfer</option>
-                                                        <option value="Section 194-IB">Section 194-IB - Rent by Individual or HUF</option>
-                                                        <option value="Section 194-IC">Section 194-IC - Joint Development Agreements</option>
-                                                        <option value="Section 194M">Section 194M - Contractors &amp; Professionals</option>
-                                                        <option value="Section 194-O">Section 194-O - E-Commerce</option>
-                                                        <option value="Section 195">Section 195 - Payment to Non-Residents</option>
+                                                        {Object.keys(TDS_RATES_MASTER).map((sectionKey) => (
+                                                            <option key={sectionKey} value={sectionKey}>
+                                                                {sectionKey} @ {TDS_RATES_MASTER[sectionKey].tdsRate}
+                                                            </option>
+                                                        ))}
                                                     </select>
                                                     {tdsSectionApplicable && (() => {
                                                         const rateInfo = getTDSRateInfo(tdsSectionApplicable);
@@ -4573,7 +4586,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         <h4 className="section-title mb-1">TDS Rate Information</h4>
                                                                         <div className="space-y-1 text-sm text-slate-700">
                                                                             <p><span className="font-medium">TDS Rate:</span> {rateInfo.tdsRate}</p>
-                                                                            <p><span className="font-medium">Penalty Rate:</span> {rateInfo.penaltyRate}</p>
                                                                             <p className="mt-1 text-xs text-indigo-600 italic">{rateInfo.description}</p>
                                                                         </div>
                                                                     </div>
@@ -5248,7 +5260,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                 className={`px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white focus:outline-none ${isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
                                                     }`}
                                             >
-                                                {isSubmitting ? 'Saving...' : 'Finish (Save)'}
+                                                {isSubmitting ? 'Saving...' : (createdVendorId ? 'Update Vendor' : 'Finish (Save)')}
                                             </button>
                                         </div>
                                     </form>
@@ -6709,10 +6721,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{formatDate(row.date)}</td>
                                                                                 <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
                                                                                     <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.postedFrom === 'Purchase' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                                                                                            row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                                                                row.postedFrom === 'Debit Note' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
-                                                                                                    row.postedFrom === 'Credit Note' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
-                                                                                                        'bg-slate-50 text-slate-600 border border-slate-100'
+                                                                                        row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                            row.postedFrom === 'Debit Note' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                                                                                                row.postedFrom === 'Credit Note' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                                                                                                    'bg-slate-50 text-slate-600 border border-slate-100'
                                                                                         }`}>
                                                                                         {row.postedFrom}
                                                                                     </span>
@@ -6734,9 +6746,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         {row.isFirstInSource && (
                                                                             <td rowSpan={row.rowSpan} className="px-6 py-4 text-center border-r border-slate-100 align-top">
                                                                                 <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'paid' || row.status?.toLowerCase() === 'utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                                                        row.status?.toLowerCase() === 'partially paid' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                                                                            row.status?.toLowerCase() === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                                                                                                'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                                                    row.status?.toLowerCase() === 'partially paid' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                                                        row.status?.toLowerCase() === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                                                            'bg-indigo-50 text-indigo-600 border border-indigo-100'
                                                                                     }`}>
                                                                                     {row.status}
                                                                                 </span>
@@ -7792,9 +7804,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                                         >
                                                             <option value="">Select Location</option>
-                                                            <option value="warehouse1">Warehouse 1</option>
-                                                            <option value="warehouse2">Warehouse 2</option>
-                                                            <option value="main_office">Main Office</option>
+                                                            {locations.map(loc => (
+                                                                <option key={loc.id} value={loc.name}>{loc.name}</option>
+                                                            ))}
                                                         </select>
                                                     </div>
                                                 </div>
@@ -7894,9 +7906,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                                         >
                                                             <option value="">Select Location</option>
-                                                            <option value="warehouse1">Warehouse 1</option>
-                                                            <option value="warehouse2">Warehouse 2</option>
-                                                            <option value="store1">Store 1</option>
+                                                            {locations.map(loc => (
+                                                                <option key={loc.id} value={loc.name}>{loc.name}</option>
+                                                            ))}
                                                         </select>
 
                                                     </div>
@@ -7962,13 +7974,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                     <div>
                                                         <label className="label-text">Receive At</label>
                                                         {isEditingPO ? (
-                                                            <input
-                                                                type="text"
+                                                            <select
                                                                 value={selectedPO.receiveAt || ''}
                                                                 onChange={(e) => setSelectedPO({ ...selectedPO, receiveAt: e.target.value })}
                                                                 className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                                placeholder="Enter location"
-                                                            />
+                                                            >
+                                                                <option value="">Select Location</option>
+                                                                {locations.map(loc => (
+                                                                    <option key={loc.id} value={loc.name}>{loc.name}</option>
+                                                                ))}
+                                                            </select>
                                                         ) : (
                                                             <p className="text-gray-900">{selectedPO.receiveAt || '-'}</p>
                                                         )}
@@ -8247,7 +8262,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             )}
 
             {/* Import Feedback Modal */}
-            <BulkImportFeedbackModal 
+            <BulkImportFeedbackModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 summary={importSummary}
