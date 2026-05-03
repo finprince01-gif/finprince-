@@ -92,10 +92,14 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
         logger.info(f"Branch: {tenant_id}, Vendor ID: {vendor_id}")
         
         if not str(vendor_id).isdigit():
-            # If vendor_id is a portal ID string (e.g. 'portal-vend-11'), 
-            # we might need to look it up or just return empty if it's not a direct ID
-            logger.warning(f"Invalid non-numeric vendor_id: {vendor_id}")
-            return Response([])
+            # Support portal ID strings (e.g. 'portal-vend-11') by extracting the numeric part
+            match = re.search(r'(\d+)', str(vendor_id))
+            if match:
+                vendor_id = match.group(1)
+                logger.info(f"Extracted numeric vendor_id {vendor_id} from {request.query_params.get('vendor_id')}")
+            else:
+                logger.warning(f"Invalid non-numeric vendor_id: {vendor_id}")
+                return Response([])
             
         transactions = self.get_queryset().filter(vendor_id=vendor_id)
         count_vendor = transactions.count()
@@ -152,8 +156,18 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                 ref_no = item.get('reference_number')
                 total_amt = Decimal(str(item.get('total_amount') or 0))
                 paid_sum = Decimal('0')
+                total_purchase_amt = total_amt
                 
                 if ref_no:
+                    other_purchases = VendorTransaction.objects.filter(
+                        tenant_id=tenant_id,
+                        vendor_id=vendor_id,
+                        reference_number=ref_no,
+                        transaction_type__iexact='purchase'
+                    ).exclude(id=item.get('id'))
+                    for op in other_purchases:
+                        total_purchase_amt += Decimal(str(op.total_amount or op.amount or 0))
+
                     # Find all payments pointing to this purchase
                     linking_txs = VendorTransaction.objects.filter(
                         tenant_id=tenant_id,
@@ -164,16 +178,16 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                     for ltx in linking_txs:
                         ltype = ltx.transaction_type.lower()
                         if ltype in ['payment', 'debit_note']:
-                            paid_sum += Decimal(str(ltx.total_amount or 0))
+                            paid_sum += Decimal(str(ltx.total_amount or ltx.amount or 0))
                         elif ltype == 'receipt': # shouldn't happen for vendor but safe
-                            paid_sum -= Decimal(str(ltx.total_amount or 0))
+                            paid_sum -= Decimal(str(ltx.total_amount or ltx.amount or 0))
 
                 item['paid_amount'] = float(paid_sum)
                 item['payment_balance'] = float(total_amt - paid_sum)
 
                 # Determine payment status
-                is_fully_paid = (tx_status == 'paid' or tx_status == 'received' or (total_amt > 0 and paid_sum >= total_amt))
-                is_partially_paid = (tx_status == 'partially paid' or tx_status == 'partially received' or (paid_sum > 0 and paid_sum < total_amt))
+                is_fully_paid = (total_purchase_amt > 0 and paid_sum >= total_purchase_amt)
+                is_partially_paid = (paid_sum > 0 and paid_sum < total_purchase_amt)
                 
                 # Default status calculation
                 due_status = 'Not Due'
@@ -185,18 +199,15 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
                     except (ValueError, TypeError):
                         pass
 
-                # Apply priority logic: Paid > Not Due (Grace Period) > Partially Paid/Due
+                # Apply priority logic
                 if is_fully_paid:
                     item['due_status'] = 'Paid'
+                elif is_partially_paid:
+                    item['due_status'] = 'Partially Paid'
                 elif due_status == 'Not Due':
-                    # Within credit period - always show Not Due unless fully paid
                     item['due_status'] = 'Not Due'
                 else:
-                    # Credit period expired - show actual payment status
-                    if is_partially_paid:
-                        item['due_status'] = 'Partially Paid'
-                    else:
-                        item['due_status'] = 'Due'
+                    item['due_status'] = 'Due'
                 
                 item['due_date'] = due_date_str
                 item['credit_period_days'] = credit_period_days

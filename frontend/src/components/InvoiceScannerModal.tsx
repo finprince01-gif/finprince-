@@ -311,9 +311,17 @@ const TALLY_ITEM_HEADERS = [
 const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'ai_native', scanType = 'single', onExtractionSuccess }) => {
     // ── Columns definitions based on extractionMode & voucherType ──
     const schema = getVoucherSchema(voucherType) as VoucherSchema;
+    // ── Zoho Specific Columns ──
+    const ZOHO_COLUMNS = [
+        'Date', 'Invoice No', 'Name', 'GSTIN', 'Branch', 'Place of Supply', 'Bill Address From', 'Bill Address To', 
+        'Total Taxable Value', 'Total Invoice Value', 'Total IGST', 'Total CGST', 'Total SGST/UTGST', 
+        'Item Name', 'HSN/SAC', 'Qty', 'UOM', 'Item Rate', 'Taxable Value', 
+        'IGST', 'CGST', 'SGST/UTGST', 'Invoice Value', 'IRN', 'Ack. No.', 'Ack. Date'
+    ];
+
     const ALL_COLUMNS = extractionMode === 'tally'
         ? [...OFFICIAL_TALLY_VOUCHER_HEADERS]          // ✔ Official Tally Voucher headers only
-        : getVoucherFlatHeaders(voucherType);
+        : (extractionMode === 'zoho' ? ZOHO_COLUMNS : getVoucherFlatHeaders(voucherType));
 
     const LINE_ITEM_FIELDS = (schema.sections.items as SchemaField[] | undefined)?.map(f => f.label) || [];
     const HEADER_FIELDS = Object.entries(schema.sections)
@@ -328,8 +336,25 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const resolveZohoValue = (header: any, item: any, col: string): string => {
         const isItem = isItemField(col);
         
-        // Rule: Invoice Value -> Header Total (for non-tally modes)
-        if (col === "Invoice Value" && extractionMode !== "tally") {
+        // Rule: Address resolution (Ensure From/To distinction)
+        if (col === "Bill Address From" || col === "Bill From Address" || col === "Bill From") {
+            console.log("bill_from:", header.bill_from);
+            return header.bill_from || header.vendor_address || header.bill_address_from || header['Bill Address From'] || "";
+        }
+
+
+        if (col === "Bill Address To") {
+            const val = getCellValue(header, "Bill Address To") || 
+                        getCellValue(header, "billing_address") || 
+                        getCellValue(header, "bill_to_address") ||
+                        getCellValue(item, "billing_address") ||
+                        getCellValue(item, "bill_to_address") ||
+                        '';
+            return val;
+        }
+
+        // Rule: Invoice Value -> Header Total (ONLY for ai_native mode table display)
+        if (col === "Invoice Value" && extractionMode === "ai_native") {
             return getCellValue(header, "Total Invoice Value");
         }
         
@@ -451,11 +476,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         // 3. Robust aliasing
         const ALIASES: Record<string, string[]> = {
             'invoice_date': ['Date', 'Voucher Date', 'Inv Date', 'Bill Date', 'Reference Date'],
-            'invoice_no': ['Supplier Invoice No.', 'Supplier Invoice No', 'Voucher Number', 'Inv No', 'Bill No', 'Reference No.'],
+            'invoice_no': ['Invoice No', 'Supplier Invoice No.', 'Supplier Invoice No', 'Voucher Number', 'Inv No', 'Bill No', 'Reference No.', 'Sales Invoice No'],
             'reference_no': ['Reference No.', 'Reference', 'Ref No', 'Supplier Invoice No.'],
-            'vendor_name': ['Vendor Name', 'Supplier Name', 'Party Name', 'Party', 'Customer Name', 'Buyer/Supplier - Mailing Name'],
-            'vendor_address': ['Vendor Address', 'Address', 'Supplier Address', 'Bill From', 'Buyer/Supplier - Address', 'Buyer/Supplier - Bill to/from', 'Bill From Address', 'Ship From Address', 'Consignee Address'],
-            'bill_from': ['Bill From Address', 'Bill From', 'Office Address', 'Dispatch from Name'],
+            'vendor_name': ['Name', 'Vendor Name', 'Supplier Name', 'Party Name', 'Party', 'Customer Name', 'Buyer/Supplier - Mailing Name'],
+            'bill_from': ['Bill Address From', 'Bill From', 'Bill From Address', 'Ship From Address', 'Dispatch From Address', 'vendor_address', 'Address', 'Supplier Address', 'Consignee Address'],
+            'bill_to_address': ['Bill Address To', 'Billing Address', 'Customer Address', 'Buyer Address', 'bill_to', 'billing_address'],
+            'billing_address': ['Bill Address To', 'Billing Address', 'Customer Address', 'Buyer Address', 'Ship To Address', 'Consignee Address', 'bill_to_address'],
             'ship_from': ['Ship From Address', 'Ship From', 'Dispatch From Address'],
             'address_type': ['Address Type', 'Buyer/Supplier - Address Type'],
             'vendor_state': ['Vendor State', 'State', 'Supplier State', 'Buyer/Supplier - State'],
@@ -470,6 +496,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             'voucher_series': ['Voucher Number Series Name', 'Voucher Series'],
             'narration': ['Voucher Narration', 'Narration', 'Remarks', 'Notes'],
             'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type', 'Buyer/Supplier - State', 'Buyer/Supplier - Place of Supply'],
+            'sales_order_no': ['Sales Order No', 'Purchase Order No', 'PO No', 'Order No'],
 
             // Items / Ledgers
             'item_name': ['Item Name', 'Description', 'Particulars', 'Item Description', 'Ledger Name'],
@@ -490,6 +517,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             'igst_rate': ['IGST RATE', 'IGST %', 'Integrated Tax %'],
             'cess_amount': ['Cess', 'CESS', 'Cess Amount'],
             'cess_rate': ['Cess Rate', 'CESS RATE', 'Cess %'],
+            'irn': ['IRN', 'Invoice Reference Number', 'irn'],
+            'ack_no': ['Ack. No.', 'Ack No', 'Ack No.', 'Acknowledgement No', 'ack_no', 'ack_no_'],
+            'ack_date': ['Ack. Date', 'Ack Date', 'Ack Date.', 'Acknowledgement Date', 'ack_date', 'ack_date_'],
         };
 
         for (const [key, altList] of Object.entries(ALIASES)) {
@@ -554,10 +584,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             console.warn("Failed to fetch average time, using fallback:", e);
         }
 
-        // Backend uses parallel workers. Purchase scan uses 10 as divisor for "correct" estimate.
-        const batchCount = Math.ceil(estimatedTasks / 10);
-        const zohoBuffer = extractionMode === 'zoho' ? 5 : 0;
-        const initialEstimate = Math.round(batchCount * avgTime) + 2 + zohoBuffer;
+        // Backend uses parallel workers. Current worker pool limit is 2 per instance.
+        const batchCount = Math.ceil(estimatedTasks / 2);
+        const zohoBuffer = extractionMode === 'zoho' ? 15 : 0;
+        const initialEstimate = Math.round(batchCount * avgTime) + 5 + zohoBuffer;
         
         setEstimatedExtractionTime(initialEstimate);
         setCountdownSeconds(initialEstimate);
@@ -603,9 +633,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 startTimeRef.current = Date.now();
                 
                 // Refine estimate based on actual total and analysis
-                const jobBatchCount = Math.ceil(response.total_files / 10); 
-                const jobZohoBuffer = extractionMode === 'zoho' ? 5 : 0;
-                const jobEstimate = Math.round(jobBatchCount * avgTime) + 3 + jobZohoBuffer;
+                const jobBatchCount = Math.ceil(response.total_files / 2); 
+                const jobZohoBuffer = extractionMode === 'zoho' ? 15 : 0;
+                const jobEstimate = Math.round(jobBatchCount * avgTime) + 5 + jobZohoBuffer;
                 
                 setEstimatedExtractionTime(jobEstimate);
                 setCountdownSeconds(prev => Math.max(prev || 0, jobEstimate)); 
@@ -625,15 +655,46 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             const extData = item.data || {};
             const resData = extData;
 
-            const flattenedHeader = {
+            const flattenedHeader: any = {
                 ...(resData.sections?.supplier_details || {}),
                 ...(resData.sections?.supply_details || {}),
                 ...(resData.data || resData)
             };
 
+            // ── DEFINITIVE ADDRESS INJECTION ─────────────────────────────
+            const _vendorAddr: string = (
+                resData['bill_from'] ||
+                resData['Bill From'] ||
+                resData['vendor_address'] ||
+                resData['bill_address_from'] ||
+                resData['Bill Address From'] ||
+                resData.sections?.supplier_details?.bill_from ||
+                resData.sections?.supplier_details?.vendor_address ||
+                ''
+            );
+            flattenedHeader['bill_from'] = _vendorAddr;
+            flattenedHeader['Bill Address From'] = _vendorAddr;
+            flattenedHeader['bill_address_from'] = _vendorAddr;
+            flattenedHeader['Bill From'] = _vendorAddr;
+
+            // ── IRN, ACK NO, ACK DATE INJECTION ───────────────────────────
+            const _irn: string = resData['irn'] || resData['IRN'] || resData.sections?.irn || '';
+            flattenedHeader['irn'] = _irn;
+            flattenedHeader['IRN'] = _irn;
+
+            const _ackNo: string = resData['ack_no'] || resData['Ack. No.'] || resData['Ack No'] || resData.sections?.ack_no || '';
+            flattenedHeader['ack_no'] = _ackNo;
+            flattenedHeader['Ack. No.'] = _ackNo;
+            flattenedHeader['Ack No.'] = _ackNo;
+
+            const _ackDate: string = resData['ack_date'] || resData['Ack. Date'] || resData['Ack Date'] || resData.sections?.ack_date || '';
+            flattenedHeader['ack_date'] = _ackDate;
+            flattenedHeader['Ack. Date'] = _ackDate;
+            flattenedHeader['Ack Date.'] = _ackDate;
+
             const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
             const normalizedHeader: Record<string, string> = {};
-            const colsToMap = extractionMode === 'tally' ? ALL_COLUMNS : HEADER_FIELDS;
+            const colsToMap = ALL_COLUMNS;
 
             colsToMap.forEach(field => {
                 normalizedHeader[field] = getCellValue(flattenedHeader, field);
@@ -645,7 +706,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             const normalizedItems = rawItems.map((ritem: any) => {
                 const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
                 const ni: any = {};
-                const itemColsToMap = extractionMode === 'tally' ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
+                const itemColsToMap = (extractionMode === 'tally' || extractionMode === 'zoho') ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
                 itemColsToMap.forEach(f => {
                     ni[f] = getCellValue(flatItem, f);
                 });
@@ -683,19 +744,29 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                         invoice_number: r.supplier_invoice_no || r.extracted_data?.supplier_invoice_no || r.extracted_data?.invoice_no,
                         invoice_date: r.extracted_data?.invoice_date,
                         vendor_name: r.extracted_data?.vendor_name || r.extracted_data?.sections?.supplier_details?.vendor_name,
+                        vendor_address: r.extracted_data?.bill_from || r.extracted_data?.vendor_address || r.extracted_data?.sections?.supplier_details?.vendor_address,
+                        bill_from: r.extracted_data?.bill_from || r.extracted_data?.sections?.supplier_details?.bill_from,
                         gstin: r.gstin,
                         total_taxable_value: r.extracted_data?.total_taxable_value || r.extracted_data?.sections?.supply_details?.total_taxable_value,
                         total_invoice_value: r.extracted_data?.total_invoice_value || r.extracted_data?.sections?.supply_details?.total_invoice_value,
                         items: r.extracted_data?.sections?.items || r.extracted_data?.line_items || r.extracted_data?.items || []
                     }));
 
+                    console.log("[TRACE L1] invoicesForAdapter[0].bill_from:", invoicesForAdapter[0]?.bill_from);
+
                     const adapterRes = await apiService.reconstructZohoInvoices({ invoices: invoicesForAdapter });
+                    console.log("bill_from:", adapterRes?.invoices?.[0]?.bill_from);
+                    
                     if (adapterRes?.invoices) {
+                        if (!adapterRes.invoices[0]?.bill_from) {
+                            console.error("FRONTEND ERROR: bill_from missing in data");
+                        }
+
                         // Map reconstructed results back to staged format for the UI mapper below
                         stagedResults = stagedResults.map((original: any, idx: number) => {
                             const reconstructed = adapterRes.invoices[idx];
                             if (!reconstructed) return original;
-                            return {
+                            const merged = {
                                 ...original,
                                 extracted_data: {
                                     ...original.extracted_data,
@@ -711,6 +782,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                     ...reconstructed
                                 }
                             };
+                            console.log("[TRACE L3] merged.extracted_data['bill_from']:", merged.extracted_data?.['bill_from']);
+                            return merged;
                         });
                     }
                 } catch (adapterErr) {
@@ -727,20 +800,105 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 const resData = extData;
 
                 // FLATTEN nested sections for the mapping engine (supplier_details, supply_details)
-                const flattenedHeader = {
+                const flattenedHeader: Record<string, any> = {
                     ...(resData.sections?.supplier_details || {}),
                     ...(resData.sections?.supply_details || {}),
-                    ...(resData.data || resData)
+                    ...resData  // NOTE: spread resData directly, NOT resData.data
                 };
+
+                // ── DEFINITIVE ADDRESS INJECTION ─────────────────────────────
+                const _vendorAddr: string = (
+                    resData['bill_from'] ||
+                    resData['Bill From'] ||
+                    resData['vendor_address'] ||
+                    resData['bill_address_from'] ||
+                    resData['Bill Address From'] ||
+                    resData.sections?.supplier_details?.bill_from ||
+                    resData.sections?.supplier_details?.vendor_address ||
+                    ''
+                );
+                flattenedHeader['bill_from'] = _vendorAddr;
+                flattenedHeader['Bill Address From'] = _vendorAddr;
+                flattenedHeader['bill_address_from'] = _vendorAddr;
+                flattenedHeader['Bill From'] = _vendorAddr;
+
+                // ── IRN, ACK NO, ACK DATE INJECTION ───────────────────────────
+                const _irn: string = resData['irn'] || resData['IRN'] || resData.sections?.irn || '';
+                flattenedHeader['irn'] = _irn;
+                flattenedHeader['IRN'] = _irn;
+
+                const _ackNo: string = resData['ack_no'] || resData['Ack. No.'] || resData['Ack No'] || resData.sections?.ack_no || '';
+                flattenedHeader['ack_no'] = _ackNo;
+                flattenedHeader['Ack. No.'] = _ackNo;
+                flattenedHeader['Ack No.'] = _ackNo;
+
+                const _ackDate: string = resData['ack_date'] || resData['Ack. Date'] || resData['Ack Date'] || resData.sections?.ack_date || '';
+                flattenedHeader['ack_date'] = _ackDate;
+                flattenedHeader['Ack. Date'] = _ackDate;
+                flattenedHeader['Ack Date.'] = _ackDate;
+
+
+                const _billingAddr: string = (
+                    resData['Bill Address To'] ||
+                    resData['billing_address'] ||
+                    resData['bill_to_address'] ||
+                    resData.sections?.supplier_details?.billing_address ||
+                    item.extracted_data?.billing_address ||
+                    ''
+                );
+                flattenedHeader['Bill Address To'] = _billingAddr;
+                flattenedHeader['billing_address'] = _billingAddr;
+                // ─────────────────────────────────────────────────────────────
+
+                // ── PLACE OF SUPPLY INJECTION ──────────────────────────────────
+                // Derive Place of Supply deterministically from GSTIN state code first.
+                // Fall back to adapter or DB value only if GSTIN is not available.
+                const _gstin = (resData.gstin || resData.vendor_gstin || resData.sections?.supplier_details?.gstin || item.gstin || '').trim().toUpperCase();
+                const _stateCode = _gstin.substring(0, 2);
+                const GST_STATE_CODES: Record<string, string> = {
+                    "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab",
+                    "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana",
+                    "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+                    "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh",
+                    "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
+                    "16": "Tripura", "17": "Meghalaya", "18": "Assam",
+                    "19": "West Bengal", "20": "Jharkhand", "21": "Odisha",
+                    "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+                    "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra",
+                    "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
+                    "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
+                    "34": "Puducherry", "35": "Andaman and Nicobar Islands",
+                    "36": "Telangana", "37": "Andhra Pradesh (New)"
+                };
+                const _pos: string = GST_STATE_CODES[_stateCode] ||
+                    resData['Place of Supply'] ||
+                    resData['place_of_supply'] ||
+                    resData.sections?.supplier_details?.place_of_supply ||
+                    resData.sections?.supplier_details?.vendor_state ||
+                    '';
+                flattenedHeader['Place of Supply'] = _pos;
+                flattenedHeader['place_of_supply'] = _pos;
+                // ────────────────────────────────────────────────────────────────
 
                 const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
 
                 const normalizedHeader: Record<string, string> = {};
-                const colsToMap = extractionMode === 'tally' ? ALL_COLUMNS : HEADER_FIELDS;
+                // Fix: ALL_COLUMNS already handles the extractionMode logic correctly (tally, zoho, or default)
+                const colsToMap = ALL_COLUMNS;
 
                 colsToMap.forEach(field => {
                     normalizedHeader[field] = getCellValue(flattenedHeader, field);
                 });
+
+                if (!normalizedHeader['Bill Address To']) {
+                    normalizedHeader['Bill Address To'] = 
+                        flattenedHeader['Bill Address To'] ||
+                        flattenedHeader['billing_address'] ||
+                        flattenedHeader['bill_to_address'] ||
+                        '';
+                }
+                console.log("PHASE2 normalizedHeader[Bill Address From]:", normalizedHeader['Bill Address From']);
+
                 // Map the source filename to the "Voucher Type Name" column as requested
                 const fileName = item.file_path?.split(/[\\/]/).pop() || 'Invoice.pdf';
                 normalizedHeader['Voucher Type Name'] = fileName;
@@ -750,7 +908,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     // Items are usually already flat, but check if there's an 'item' wrapper
                     const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
                     const ni: any = {};
-                    const itemColsToMap = extractionMode === 'tally' ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
+                    // Fix: Use ALL_COLUMNS for Zoho mode as well
+                    const itemColsToMap = (extractionMode === 'tally' || extractionMode === 'zoho') ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
 
                     itemColsToMap.forEach(f => {
                         ni[f] = getCellValue(flatItem, f);
@@ -786,7 +945,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     const startPolling = (jobId: number) => {
         if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-        let currentInterval = 2000;
+        let currentInterval = 5000;
 
         const poll = async () => {
             try {
@@ -1176,6 +1335,22 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         const items = res.items.length > 0 ? res.items : [({} as LineItem)];
         items.forEach((item, itemIdx) => {
             globalSerial += 1;
+
+            // Make absolutely sure res.invoice contains address keys for direct rendering
+            if (res.invoice) {
+                res.invoice['bill_from'] = res.invoice['bill_from'] || res.invoice['vendor_address'] || res.invoice['bill_address_from'] || res.invoice['Bill Address From'] || '';
+                res.invoice['bill_address_from'] = res.invoice['bill_from'];
+                if (!res.invoice['bill_from']) {
+                    console.error("FRONTEND ERROR: bill_from missing in row!", res.invoice);
+                }
+                if (!res.invoice['Bill Address To']) {
+                    res.invoice['Bill Address To'] = res.invoice['billing_address'] || res.invoice['bill_to_address'] || item['billing_address'] || '';
+                }
+            }
+
+
+
+
             displayRows.push({
                 key: `${invoiceIdx}-${itemIdx}`,
                 invoiceIdx,
@@ -1423,30 +1598,42 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                                     : 'border-t border-gray-100'
                                                     } hover:bg-gray-50`}
                                             >
-
-
                                                 {visibleColumns.map((col) => {
                                                     const cellValue = resolveZohoValue(row.header, row.item, col);
-
+                                                    
+                                                    // TRACE: Log rendering value for address
+                                                    if (col === 'Bill Address From' && row.isFirstOfInvoice && row.itemIdx === 0) {
+                                                        console.log("TRACE_UI_RENDER - row.header:", row.header);
+                                                        console.log("TRACE_UI_RENDER - cellValue for Bill Address From:", cellValue);
+                                                    }
+                                                    
                                                     // Check if field was mapped confidently
                                                     const currentRes = invoiceResults[row.invoiceIdx];
                                                     const isFieldItem = isItemField(col);
-                                                    const isMapped = isFieldItem
-                                                        ? (col === 'S.No' || !!currentRes?.itemMapping?.[col])
-                                                        : !!currentRes?.headerMapping?.[col];
-
+                                                    
+                                                    const isAddressCol = col.toLowerCase().includes('address') || col.toLowerCase().includes('from') || col.toLowerCase().includes('to');
+                                                    
                                                     return (
                                                         <td
                                                             key={col}
-                                                            className="px-4 py-2 text-sm text-gray-900 border-r border-gray-100 last:border-r-0 truncate max-w-[300px]"
+                                                            className={`px-4 py-2 text-sm text-gray-900 border-r border-gray-100 last:border-r-0 max-w-[300px] ${isAddressCol ? 'whitespace-pre-wrap' : 'truncate'}`}
                                                             title={String(cellValue ?? '')}
                                                         >
-                                                            <input
-                                                                type="text"
-                                                                value={String(cellValue ?? '')}
-                                                                onChange={(e) => handleCellChange(row.invoiceIdx, row.itemIdx, col, e.target.value)}
-                                                                className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm overflow-hidden text-ellipsis"
-                                                            />
+                                                            {isAddressCol ? (
+                                                                <textarea
+                                                                    value={String(cellValue ?? '')}
+                                                                    onChange={(e) => handleCellChange(row.invoiceIdx, row.itemIdx, col, e.target.value)}
+                                                                    rows={2}
+                                                                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm resize-none"
+                                                                />
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={String(cellValue ?? '')}
+                                                                    onChange={(e) => handleCellChange(row.invoiceIdx, row.itemIdx, col, e.target.value)}
+                                                                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm overflow-hidden text-ellipsis"
+                                                                />
+                                                            )}
                                                         </td>
                                                     );
                                                 })}

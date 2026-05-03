@@ -82,7 +82,26 @@ class ZohoAdapter:
         # Use robust lookup for gstin
         gstin = str(invoice.get("gstin") or invoice.get("vendor_gstin") or "").strip().upper()
         gst_treatment = "business_registered_regular" if gstin else "business_unregistered"
-        pos_code = gstin[:2] if len(gstin) >= 2 else "" # State code from GSTIN
+        state_code = gstin[:2] if len(gstin) >= 2 else ""
+        
+        # Derive full state name from GSTIN state code (deterministic — eliminates OCR inconsistency)
+        GST_STATE_CODES = {
+            "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab",
+            "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana",
+            "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+            "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh",
+            "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
+            "16": "Tripura", "17": "Meghalaya", "18": "Assam",
+            "19": "West Bengal", "20": "Jharkhand", "21": "Odisha",
+            "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+            "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra",
+            "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
+            "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
+            "34": "Puducherry", "35": "Andaman and Nicobar Islands",
+            "36": "Telangana", "37": "Andhra Pradesh (New)"
+        }
+        pos_code = GST_STATE_CODES.get(state_code) or invoice.get("place_of_supply") or state_code
+
 
         # 2. Tax Name Derivation (e.g. GST18, IGST12)
         # Calculate combined rate
@@ -102,21 +121,58 @@ class ZohoAdapter:
         # 3. Robust Invoice Number Lookup (Root Cause Fix)
         inv_no = invoice.get("invoice_number") or invoice.get("supplier_invoice_no") or invoice.get("invoice_no") or "—"
 
+        # 4. Extract more fields for the new schema
+        sections = invoice.get("sections", {})
+        supplier = sections.get("supplier_details", {})
+        supply = sections.get("supply_details", {})
+        
+        bill_from = invoice.get("bill_from") or ""
+        bill_to = supplier.get("billing_address") or invoice.get("billing_address") or ""
+        
+        branch = supplier.get("branch") or invoice.get("branch") or ""
+        
+        total_taxable = supply.get("total_taxable_value") or invoice.get("total_taxable_value") or invoice.get("taxable_value")
+        total_invoice = supply.get("total_invoice_value") or invoice.get("total_invoice_value") or invoice.get("total_amount")
+        
+        total_igst = supply.get("total_igst") or invoice.get("total_igst")
+        total_cgst = supply.get("total_cgst") or invoice.get("total_cgst")
+        total_sgst = supply.get("total_sgst") or invoice.get("total_sgst")
+        
+        sales_order_no = invoice.get("sales_order_no") or invoice.get("purchase_order_no") or ""
+        
+        irn = invoice.get("irn") or ""
+        ack_no = supply.get("ack_no") or invoice.get("ack_no") or ""
+        ack_date = supply.get("ack_date") or invoice.get("ack_date") or ""
+
         return {
-            "Vendor Name": invoice.get("vendor_name") or invoice.get("supplier_name"),
-            "Bill#": inv_no,
-            "Bill Date": invoice.get("invoice_date") or invoice.get("bill_date"),
-            "GST Treatment": gst_treatment,
+            "Date": invoice.get("invoice_date") or invoice.get("bill_date"),
+            "Invoice No": inv_no,
+            "Name": invoice.get("vendor_name") or invoice.get("supplier_name"),
             "GSTIN": gstin,
+            "Branch": branch,
             "Place of Supply": pos_code,
+            "Bill From": bill_from,
+            "Bill Address To": bill_to,
+            "Billing Address": bill_to, # Standard Zoho 'Billing Address' is for Customer
+            "Total Taxable Value": total_taxable,
+            "Total Invoice Value": total_invoice,
+            "Total IGST": total_igst,
+            "Total CGST": total_cgst,
+            "Total SGST/UTGST": total_sgst,
+            "Sales Order No": sales_order_no,
             "Item Name": item.get("description"),
-            "HSN/SAC": item.get("hsn"),
-            "Quantity": item.get("qty"),
-            "Rate": item.get("rate"),
+            "HSN/SAC": item.get("hsn_sac") or item.get("hsn"),
+            "Qty": item.get("quantity") or item.get("qty"),
+            "UOM": item.get("uom") or "",
+            "Item Rate": item.get("rate"),
             "Taxable Value": item.get("taxable_value"),
-            "Tax Name": tax_name,
-            "Purchase Account": "Cost of Goods Sold", # Default required for Zoho
-            "Invoice Value": invoice.get("total_invoice_value") or invoice.get("total_amount")
+            "IGST": item.get("igst_amount") or item.get("igst"),
+            "CGST": item.get("cgst_amount") or item.get("cgst"),
+            "SGST/UTGST": item.get("sgst_amount") or item.get("sgst"),
+            "Invoice Value": item.get("amount") or item.get("taxable_value"),
+            "IRN": irn,
+            "Ack. No.": ack_no,
+            "Ack. Date": ack_date
         }
 
     def reconstruct_invoices(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -151,13 +207,74 @@ class ZohoAdapter:
             logger.info(f"AUDIT: NORMALIZED ITEMS COUNT = {len(normalized)}")
             
             # Step 3: Validate Invoice
-            validated_inv = self.validate_invoice(inv.copy(), normalized)
+            # Step 3: Validate Invoice
+            validated_inv = self.validate_invoice(inv, normalized)
             
+            # 🚀 FORCE canonical mapping directly on internal payload
+            vendor_address = inv.get("vendor_address") or inv.get("bill_from")
+            validated_inv["bill_from"] = vendor_address
+            
+            # After mapping, delete vendor_address and any other alias to eliminate duplication
+            if "vendor_address" in validated_inv:
+                del validated_inv["vendor_address"]
+            if "bill_address_from" in validated_inv:
+                del validated_inv["bill_address_from"]
+
+            # Assertion if missing
+            if vendor_address and not validated_inv.get("bill_from"):
+                logger.error(f"[MAPPING ERROR] bill_from is missing after mapping for invoice {inv.get('invoice_number')}")
+                raise Exception("CRITICAL: Address lost in adapter mapping")
+
+            print("AFTER VALIDATION:", validated_inv.get("bill_from"))
+            print("ADAPTER OUTPUT:", validated_inv)
+            print("FINAL API PAYLOAD:", validated_inv)
+            print(f"INFO BILL_FROM_FINAL: {validated_inv.get('bill_from')}")
+
+
+
+
+
+
+
+            validated_inv["Bill Address To"] = str(
+                inv.get("billing_address") or 
+                inv.get("bill_to_address") or 
+                inv.get("sections", {}).get("invoice_details", {}).get("bill_to_address") or 
+                ""
+            ).strip()
+
+            # Derive Place of Supply from GSTIN state code (deterministic)
+            gstin = str(inv.get("gstin") or inv.get("vendor_gstin") or "").strip().upper()
+            state_code = gstin[:2] if len(gstin) >= 2 else ""
+            GST_STATE_CODES = {
+                "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab",
+                "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana",
+                "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+                "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh",
+                "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
+                "16": "Tripura", "17": "Meghalaya", "18": "Assam",
+                "19": "West Bengal", "20": "Jharkhand", "21": "Odisha",
+                "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+                "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra",
+                "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
+                "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
+                "34": "Puducherry", "35": "Andaman and Nicobar Islands",
+                "36": "Telangana", "37": "Andhra Pradesh (New)"
+            }
+            pos_code = GST_STATE_CODES.get(state_code) or inv.get("place_of_supply") or state_code
+            validated_inv["Place of Supply"] = pos_code
+            validated_inv["place_of_supply"] = pos_code
+            
+            logger.info(f"AUDIT EXPLICIT PAYLOAD: bill_from = '{validated_inv.get('bill_from', '')[:20]}...'")
+
             # Attach processed items - AUDIT: Define field used
             validated_inv["items"] = normalized
             logger.info(f"AUDIT: FIELD USED FOR EXPORT = invoice['items']")
             
+            print("FINAL OBJECT BEFORE APPEND:", validated_inv)
             processed_invoices.append(validated_inv)
+
+
             
         return processed_invoices
 

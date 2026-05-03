@@ -159,7 +159,7 @@ class MasterLedger(BaseModel):
     # Opening balance fields — these columns exist in the MySQL schema
     # They must be declared here so Django includes them in INSERT statements
     opening_balance = models.DecimalField(
-        max_digits=20,
+        max_digits=25,
         decimal_places=2,
         default=0.00,
         help_text="Opening balance amount for this ledger"
@@ -296,22 +296,22 @@ class Voucher(BaseModel):
     date = models.DateField(default=timezone.now)
     party = models.CharField(max_length=255, null=True, blank=True)
     account = models.CharField(max_length=255, null=True, blank=True, help_text="Payment/Receipt account (Cash/Bank)")
-    amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    total = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
+    amount = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True)
+    total = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
     source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, ocr)")
     
     # Sales/Purchase specific
     invoice_no = models.CharField(max_length=50, null=True, blank=True)
     is_inter_state = models.BooleanField(default=False, null=True, blank=True)
-    total_taxable_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
-    total_cgst = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
-    total_sgst = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
-    total_igst = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
+    total_taxable_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
+    total_cgst = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
+    total_sgst = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
+    total_igst = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
     
     # Journal/Unified fields
-    total_debit = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
-    total_credit = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
+    total_debit = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
+    total_credit = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
     
     # Contra specific
     from_account = models.CharField(max_length=255, null=True, blank=True)
@@ -320,11 +320,11 @@ class Voucher(BaseModel):
     reference_id = models.BigIntegerField(null=True, blank=True, help_text="ID of the source document (Invoice/Order)")
     dummy_force = models.IntegerField(null=True, blank=True)
 
-    # Bank Reconciliation
-    bank_reconciled = models.BooleanField(default=False)
-    bank_reconcile_date = models.DateField(null=True, blank=True)
-    bank_statement_id = models.BigIntegerField(null=True, blank=True)
-    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
+    # Bank Reconciliation (Commented out as columns missing in DB)
+    # bank_reconciled = models.BooleanField(default=False)
+    # bank_reconcile_date = models.DateField(null=True, blank=True)
+    # bank_statement_id = models.BigIntegerField(null=True, blank=True)
+    # bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
     # Party IDs for explicit tracking
     ledger_id_val     = models.BigIntegerField(null=True, blank=True)
@@ -405,7 +405,7 @@ class VoucherAdvanceAdjustment(BaseModel):
     target_voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='adjustments_in')
     
     ref_no = models.CharField(max_length=150, db_index=True)
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    amount = models.DecimalField(max_digits=25, decimal_places=2)
     adjustment_date = models.DateField()
     
     # Metadata for reporting
@@ -437,8 +437,8 @@ class JournalEntry(BaseModel):
         blank=True
     )
     ledger_name = models.CharField(max_length=255, null=True, blank=True)
-    debit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    debit = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    credit = models.DecimalField(max_digits=25, decimal_places=2, default=0)
     
     # Direct mappings
     customer = models.ForeignKey(
@@ -550,13 +550,13 @@ class AmountTransaction(BaseModel):
     
     # Debit and Credit Columns
     debit = models.DecimalField(
-        max_digits=15, 
+        max_digits=25, 
         decimal_places=2,
         default=0,
         help_text="Debit amount (money coming in)"
     )
     credit = models.DecimalField(
-        max_digits=15, 
+        max_digits=25, 
         decimal_places=2,
         default=0,
         help_text="Credit amount (money going out)"
@@ -574,7 +574,7 @@ class AmountTransaction(BaseModel):
     
     # Balance Tracking
     balance = models.DecimalField(
-        max_digits=15,
+        max_digits=25,
         decimal_places=2,
         default=0,
         help_text="Running balance after this transaction"
@@ -935,9 +935,13 @@ class Transaction(BaseModel):
     voucher_number = models.CharField(max_length=100, db_index=True)
     transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPE_CHOICES, db_index=True)
     date = models.DateField(db_index=True)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    vouch_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text="Amount entered in the voucher header")
     narration = models.TextField(null=True, blank=True)
+    posting_note = models.TextField(null=True, blank=True, help_text="Header-level posting note from the voucher form")
+    ref_no = models.CharField(max_length=150, null=True, blank=True, help_text="Reference Number (Cheque, NEFT, etc)")
+
     
     # Bank Reconciliation
     bank_reconciled = models.BooleanField(default=False)
@@ -961,8 +965,8 @@ class Transaction(BaseModel):
     
     
     # NEW: Accounting alignment
-    debit  = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    debit  = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    credit = models.DecimalField(max_digits=25, decimal_places=2, default=0)
     
     # Party IDs for compatibility
     ledger_id_val     = models.BigIntegerField(null=True, blank=True)
@@ -1031,6 +1035,7 @@ class AllocationBase(BaseModel):
 
     reference_id = models.CharField(max_length=150, null=True, blank=True, db_index=True)
     reference_number = models.CharField(max_length=150, null=True, blank=True, db_index=True)
+    ref_no = models.CharField(max_length=150, null=True, blank=True, help_text="Reference Number (Cheque, NEFT, etc)")
     reference_type = models.CharField(
         max_length=20, 
         choices=ALLOCATION_TYPE_CHOICES, 
@@ -1048,18 +1053,20 @@ class AllocationBase(BaseModel):
         related_name='%(class)s_from',
         null=True, blank=True
     )
-    allocated_amount = models.DecimalField(max_digits=15, decimal_places=2)
-    amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    allocated_amount = models.DecimalField(max_digits=25, decimal_places=2, db_column='amount')
+    amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, db_column='advance')
+    vouch_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text="Amount entered in the voucher header")
+
     
     # Concrete metadata columns from frontend
     due_date = models.DateField(null=True, blank=True)
     due_status = models.CharField(max_length=50, null=True, blank=True)
-    original_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    original_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
     
     # Metadata
     invoice_date = models.DateField(null=True, blank=True)
-    pending_before = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    balance_after = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    pending_before = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    balance_after = models.DecimalField(max_digits=25, decimal_places=2, default=0)
 
     # Party IDs for compatibility/reporting
     ledger_id_val     = models.BigIntegerField(null=True, blank=True)
@@ -1086,6 +1093,7 @@ class AllocationBase(BaseModel):
     # Real data fields
     is_advance = models.BooleanField(default=False)
     advance_ref_no = models.CharField(max_length=150, null=True, blank=True)
+    posting_note = models.TextField(null=True, blank=True, help_text="Per-row posting note entered in the allocation table")
 
     @property
     def amount_applied(self): return self.allocated_amount

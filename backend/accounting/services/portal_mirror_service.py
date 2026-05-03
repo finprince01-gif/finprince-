@@ -194,7 +194,7 @@ def mirror_transaction_to_portal(txn):
         
         for it in items:
             # Resolve Party
-            p_l_id = it.pay_to_ledger_id or it.customer_id
+            p_l_id = getattr(it, 'pay_to_ledger_id', None) or getattr(it, 'ledger_id_val', None)
             if t_type == 'PAYMENT':
                 vendor = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=p_l_id).first()
                 if vendor:

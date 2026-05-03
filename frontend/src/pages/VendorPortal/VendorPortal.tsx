@@ -643,13 +643,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                         // ── PURCHASE: use backend credit-period due status ──────────
                         // ── PURCHASE: use backend credit-period due status ──────────
                         if (txType === 'purchase') {
-                            // Trust the backend-calculated status which considers credit period grace
                             if (t.due_status) return t.due_status;
 
-                            // Fallback logic
-                            const isFullyPaid = paidAmount >= amount && amount > 0;
+                            const isFullyPaid = Math.abs(paidAmount - amount) < 0.01 || paidAmount >= amount;
+                            const isPartiallyPaid = paidAmount > 0 && paidAmount < amount;
+
                             if (isFullyPaid) return 'Paid';
-                            if (paidAmount > 0) return 'Partially Paid';
+                            if (isPartiallyPaid) return 'Partially Paid';
                             return 'Not Due';
                         }
 

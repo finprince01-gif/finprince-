@@ -157,10 +157,10 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                 if sale and hasattr(sale, 'payment_details') and sale.payment_details:
                     pending_amt = sale.payment_details.payment_balance if sale.payment_details.payment_balance is not None else v_amt
             elif 'purchase' in v_type_lower:
-                from .models_voucher_purchase import VoucherPurchaseDetails
-                purch = VoucherPurchaseDetails.objects.filter(tenant_id=tenant_id, purchase_invoice_no=v.voucher_number).select_related('payment_details').first()
-                if purch and hasattr(purch, 'payment_details') and purch.payment_details:
-                    pending_amt = purch.payment_details.payment_balance if purch.payment_details.payment_balance is not None else v_amt
+                from .models_voucher_purchase import VoucherPurchaseSupplierDetails
+                purch = VoucherPurchaseSupplierDetails.objects.filter(tenant_id=tenant_id, purchase_voucher_no=v.voucher_number).select_related('due_details').first()
+                if purch and hasattr(purch, 'due_details') and purch.due_details:
+                    pending_amt = purch.due_details.to_pay if purch.due_details.to_pay is not None else v_amt
             else:
                  from .models import PendingTransaction
                  from django.db.models import Sum

@@ -988,7 +988,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     // ── STEP 1 — SCAN ────────────────────────────────────────────────────────
 
     const MAX_RETRIES = 30; // 90 seconds (3000ms poll) for complex AI extraction
-    const POLL_INTERVAL_MS = 3000;
+    const POLL_INTERVAL_MS = 5000;
 
     /**
      * Stop the active polling interval.
@@ -1325,17 +1325,17 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 }
             });
 
-            // Backend uses 10 parallel threads for the chunks in CleanOCRStagingView
-            const batchCount = Math.ceil(estimatedTasks / 10);
-            setEstimatedExtractionTime(avgTime * batchCount);
+            // Backend uses parallel workers. Limit is 2 per instance.
+            const batchCount = Math.ceil(estimatedTasks / 2);
+            setEstimatedExtractionTime(Math.round(avgTime * batchCount) + 5);
         } catch (error) {
             let estimatedTasks = 0;
             selectedFiles.forEach(f => {
                 const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
                 estimatedTasks += isPdf ? Math.max(1, Math.ceil(f.size / 100000)) : 1;
             });
-            const batchCount = Math.ceil(estimatedTasks / 10);
-            setEstimatedExtractionTime(3.85 * batchCount);
+            const batchCount = Math.ceil(estimatedTasks / 2);
+            setEstimatedExtractionTime(Math.round(3.85 * batchCount) + 5);
         }
 
         try {

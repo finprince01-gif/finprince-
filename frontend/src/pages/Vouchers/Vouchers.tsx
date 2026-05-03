@@ -18,6 +18,7 @@ import PaymentVoucherSingle from './PaymentVoucherSingle';
 import PaymentVoucherBulk from './PaymentVoucherBulk';
 import ReceiptVoucher from './ReceiptVoucher';
 import CreateGRNModal from '../../components/CreateGRNModal';
+import BankUpload from './BankUpload';
 import SearchableSelect from '../../components/SearchableSelect';
 import CreateNewVendorFullModal from '../../components/CreateNewVendorFullModal';
 import { ChevronDown } from 'lucide-react';
@@ -48,8 +49,8 @@ const getTodayDate = () => new Date().toISOString().split('T')[0];
 const UPLOAD_OPTIONS_CONFIG: Record<string, string[]> = {
   purchase: ["purchase_scan", "others"],
   sales: ["sales_excel_upload", "others"],
-  payment: ["others"],
-  receipt: ["others"],
+  payment: ["bank_upload", "others"],
+  receipt: ["bank_upload", "others"],
   contra: ["others"],
   journal: ["others"],
   expenses: ["others"],
@@ -266,6 +267,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const { subscriptionUsage, isLimitReached, refetch } = useSubscriptionUsage();
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isSalesExcelWorkflowOpen, setIsSalesExcelWorkflowOpen] = useState(false);
+  const [isBankUploadModalOpen, setIsBankUploadModalOpen] = useState(false);
   const [isCreatingVoucher, setIsCreatingVoucher] = useState(false);
 
   const handleScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4912,7 +4914,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           <td className="px-3 py-2 border-r border-gray-200">
                             <div className="flex flex-col items-center gap-0.5">
                               <input
-                                type="number"
+                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                 min="0"
                                 value={row.qty}
                                 onChange={(e) => handlePurchaseItemChange(index, 'qty', e.target.value)}
@@ -4949,7 +4951,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-3 py-2 border-r border-gray-200">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               min="0"
                               value={row.foreignRate || ''}
                               onChange={(e) => handlePurchaseItemChange(index, 'foreignRate', e.target.value)}
@@ -5195,7 +5197,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <td className="px-2 py-2 border-r border-gray-200">
                               <div className="flex flex-col items-center gap-0.5">
                                 <input
-                                  type="number"
+                                  type="number" onWheel={(e) => e.currentTarget.blur()}
                                   min="0"
                                   value={row.qty}
                                   onChange={(e) => handlePurchaseItemChange(index, 'qty', e.target.value)}
@@ -5233,7 +5235,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <td className="px-2 py-2 border-r border-gray-200">
                               <div className="flex flex-col items-end gap-0.5">
                                 <input
-                                  type="number"
+                                  type="number" onWheel={(e) => e.currentTarget.blur()}
                                   min="0"
                                   value={row.rate}
                                   onChange={(e) => handlePurchaseItemChange(index, 'rate', e.target.value)}
@@ -5416,7 +5418,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div>
                       <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Invoice Value</label>
                       <input
-                        type="number"
+                        type="number" onWheel={(e) => e.currentTarget.blur()}
                         readOnly
                         value={(purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)).toFixed(2)}
                         className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold text-sm"
@@ -5523,7 +5525,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                   <div className="relative w-full">
                                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">₹</span>
                                     <input
-                                      type="number"
+                                      type="number" onWheel={(e) => e.currentTarget.blur()}
                                       step="0.01"
                                       value={(ref as any).appliedNow === "0" || !(ref as any).appliedNow ? "" : (ref as any).appliedNow}
                                       placeholder="0.00"
@@ -6159,15 +6161,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             <tbody className="bg-white divide-y divide-gray-200">
               {items.map((item, index) => (<tr key={index}>
                 <td><input type="text" list="stock-items-datalist" value={item.name} onChange={e => handleItemChange(index, 'name', e.target.value)} className="table-input" /></td>
-                <td><input type="number" value={item.qty} onChange={e => handleItemChange(index, 'qty', e.target.value)} className="table-input text-right" /></td>
-                <td><input type="number" value={item.rate} onChange={e => handleItemChange(index, 'rate', e.target.value)} className="table-input text-right" /></td>
-                <td><input type="number" value={item.taxableAmount.toFixed(2)} readOnly className="table-input text-right" /></td>
+                <td><input type="number" onWheel={(e) => e.currentTarget.blur()} value={item.qty} onChange={e => handleItemChange(index, 'qty', e.target.value)} className="table-input text-right" /></td>
+                <td><input type="number" onWheel={(e) => e.currentTarget.blur()} value={item.rate} onChange={e => handleItemChange(index, 'rate', e.target.value)} className="table-input text-right" /></td>
+                <td><input type="number" onWheel={(e) => e.currentTarget.blur()} value={item.taxableAmount.toFixed(2)} readOnly className="table-input text-right" /></td>
                 {!isInterState && <>
-                  <td><input type="number" value={item.cgstAmount.toFixed(2)} readOnly className="table-input text-right" /></td>
-                  <td><input type="number" value={item.sgstAmount.toFixed(2)} readOnly className="table-input text-right" /></td>
+                  <td><input type="number" onWheel={(e) => e.currentTarget.blur()} value={item.cgstAmount.toFixed(2)} readOnly className="table-input text-right" /></td>
+                  <td><input type="number" onWheel={(e) => e.currentTarget.blur()} value={item.sgstAmount.toFixed(2)} readOnly className="table-input text-right" /></td>
                 </>}
-                {isInterState && <td><input type="number" value={item.igstAmount.toFixed(2)} readOnly className="table-input text-right" /></td>}
-                <td><input type="number" value={item.totalAmount.toFixed(2)} readOnly className="table-input text-right font-semibold" /></td>
+                {isInterState && <td><input type="number" onWheel={(e) => e.currentTarget.blur()} value={item.igstAmount.toFixed(2)} readOnly className="table-input text-right" /></td>}
+                <td><input type="number" onWheel={(e) => e.currentTarget.blur()} value={item.totalAmount.toFixed(2)} readOnly className="table-input text-right font-semibold" /></td>
                 <td><button onClick={() => handleRemoveItemRow(index)} className="text-red-500 hover:text-red-700 p-1"><Icon name="trash" className="w-4 h-4" /></button></td>
               </tr>))}
             </tbody>
@@ -6336,8 +6338,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={advanceAmount}
+                     
                       onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
@@ -6378,8 +6381,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-4 py-3 text-right">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={transaction.receipt || ''}
+                             
                               onChange={e => handleReceiptChange(transaction.id, parseFloat(e.target.value) || 0)}
                               placeholder="0"
                               className="w-24 px-2 py-1 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
@@ -6396,9 +6400,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-gray-700">Total Receipt</span>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={totalReceipt}
                       readOnly
+                     
                       className="w-32 px-3 py-2 text-right border border-gray-300 rounded-[4px] bg-gray-50 text-gray-700 font-semibold"
                     />
                   </div>
@@ -6471,9 +6476,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
                   <input
-                    type="number"
+                    type="number" onWheel={(e) => e.currentTarget.blur()}
                     value={runningBalance}
                     readOnly
+                   
                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                   />
                 </div>
@@ -6516,8 +6522,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     {bulkRows.map((row) => (
                       <input
                         key={`amount-${row.id}`}
-                        type="number"
+                        type="number" onWheel={(e) => e.currentTarget.blur()}
                         value={row.amount || ''}
+                       
                         onChange={e => {
                           const newRows = bulkRows.map(r => r.id === row.id ? { ...r, amount: parseFloat(e.target.value) || 0 } : r);
                           setBulkRows(newRows);
@@ -6599,8 +6606,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <td className="py-3 px-2 text-right">{transaction.amount}</td>
                             <td className="py-3 px-2">
                               <input
-                                type="number"
+                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                 value={transaction.receipt || ''}
+                               
                                 onChange={e => handleReceiptChange(transaction.id, parseFloat(e.target.value) || 0)}
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-center"
                               />
@@ -6635,8 +6643,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <div className="flex-1">
                         <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                         <input
-                          type="number"
+                          type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={advanceAmount || ''}
+                         
                           onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
                           className="w-full px-3 py-2 border border-gray-300 rounded"
                         />
@@ -7491,6 +7500,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       ))}
                     </div>
                   </div>
+                  {cnInForeignCurrency === 'Yes' && (
+                    <div className="flex flex-col items-start w-full">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 font-bold tracking-wide uppercase text-indigo-600 whitespace-nowrap">
+                        EXCHANGE RATE (1 FC = INR)
+                      </label>
+                      <input
+                        type="number" onWheel={(e) => e.currentTarget.blur()}
+                        step="0.0001"
+                        value={cnExchangeRate}
+                        onChange={(e) => setCnExchangeRate(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 font-bold text-indigo-700 h-[42px]"
+                        placeholder="1.00"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col items-start gap-4">
@@ -7625,7 +7649,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={row.qty}
                               onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
                               disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
@@ -7644,7 +7668,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={row.rate}
                               onChange={(e) => handleCreditNoteItemChange(index, 'rate', e.target.value)}
                               disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
@@ -7659,7 +7683,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <>
                               <td className="px-2 py-2 border-r border-gray-200">
                                 <input
-                                  type="number"
+                                  type="number" onWheel={(e) => e.currentTarget.blur()}
                                   value={row.cgst}
                                   onChange={(e) => handleCreditNoteItemChange(index, 'cgst', e.target.value)}
                                   readOnly={cnReverseGstTcs === 'No'}
@@ -7669,7 +7693,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               </td>
                               <td className="px-2 py-2 border-r border-gray-200">
                                 <input
-                                  type="number"
+                                  type="number" onWheel={(e) => e.currentTarget.blur()}
                                   value={row.sgst}
                                   onChange={(e) => handleCreditNoteItemChange(index, 'sgst', e.target.value)}
                                   readOnly={cnReverseGstTcs === 'No'}
@@ -7681,7 +7705,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           ) : (
                             <td className="px-2 py-2 border-r border-gray-200">
                               <input
-                                type="number"
+                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                 value={row.igst}
                                 onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
                                 readOnly={cnReverseGstTcs === 'No'}
@@ -7692,7 +7716,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           )}
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={row.cess}
                               onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
                               readOnly={cnReverseGstTcs === 'No'}
@@ -7741,7 +7765,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 <div className="flex items-center gap-2 ml-4">
                                   <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
                                   <input
-                                    type="number"
+                                    type="number" onWheel={(e) => e.currentTarget.blur()}
                                     value={row.financialAmount || row.taxableValue || 0}
                                     onChange={(e) => handleCreditNoteItemChange(index, 'financialAmount', e.target.value)}
                                     placeholder="0.00"
@@ -7917,7 +7941,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={row.qty}
                               onChange={(e) => handleCreditNoteItemChange(index, 'qty', e.target.value)}
                               disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
@@ -7936,7 +7960,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={row.foreignRate}
                               onChange={(e) => handleCreditNoteItemChange(index, 'foreignRate', e.target.value)}
                               disabled={String(cnIsFinancial).toLowerCase() === 'yes'}
@@ -8051,7 +8075,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200 pr-1">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={row.igst}
                               onChange={(e) => handleCreditNoteItemChange(index, 'igst', e.target.value)}
                               readOnly={cnReverseGstTcs === 'No'}
@@ -8061,7 +8085,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200 pr-1">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={row.cess}
                               onChange={(e) => handleCreditNoteItemChange(index, 'cess', e.target.value)}
                               readOnly={cnReverseGstTcs === 'No'}
@@ -8079,7 +8103,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               <div className="flex justify-end items-center gap-3 pr-2">
                                 <label className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider whitespace-nowrap">Amount (INR):</label>
                                 <input
-                                  type="number"
+                                  type="number" onWheel={(e) => e.currentTarget.blur()}
                                   value={row.financialAmount || row.taxableValue || 0}
                                   onChange={(e) => handleCreditNoteItemChange(index, 'financialAmount', e.target.value)}
                                   placeholder="0.00"
@@ -8181,7 +8205,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">GST TDS/TCS Adjustment</label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={cnGstTdsTcsAmount}
                       onChange={(e) => setCnGstTdsTcsAmount(e.target.value)}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] bg-white text-right font-bold text-indigo-600 font-mono text-sm focus:ring-1 focus:ring-indigo-500 transition-all"
@@ -8191,7 +8215,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">TDS/TCS under Income Tax</label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={cnIncomeTaxTdsTcsAmount}
                       onChange={(e) => setCnIncomeTaxTdsTcsAmount(e.target.value)}
                       readOnly={cnReverseIncomeTaxTcs === 'No' && cnReverseIncomeTaxTds === 'No'}
@@ -8302,7 +8326,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 <div className="relative w-full">
                                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-300 font-bold">₹</span>
                                   <input
-                                    type="number"
+                                    type="number" onWheel={(e) => e.currentTarget.blur()}
                                     step="0.01"
                                     value={appliedItem.appliedAmount === '0.00' ? '' : appliedItem.appliedAmount}
                                     placeholder="0.00"
@@ -8991,7 +9015,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Balance</label>
                   <input
-                    type="number"
+                    type="number" onWheel={(e) => e.currentTarget.blur()}
                     value={balance}
                     readOnly
                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
@@ -9092,7 +9116,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                       <input
-                        type="number"
+                        type="number" onWheel={(e) => e.currentTarget.blur()}
                         value={advanceAmount}
                         onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -9115,7 +9139,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
                       <input
-                        type="number"
+                        type="number" onWheel={(e) => e.currentTarget.blur()}
                         value={runningBalance}
                         readOnly
                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
@@ -9157,7 +9181,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
                         <input
-                          type="number"
+                          type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={simpleAmount}
                           onChange={e => setSimpleAmount(parseFloat(e.target.value) || 0)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -9191,7 +9215,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
                         <input
-                          type="number"
+                          type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={runningBalance}
                           readOnly
                           className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
@@ -9228,7 +9252,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Balance</label>
                   <input
-                    type="number"
+                    type="number" onWheel={(e) => e.currentTarget.blur()}
                     value={balance}
                     readOnly
                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
@@ -9309,7 +9333,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </td>
                           <td className="px-4 py-3">
                             <input
-                              type="number"
+                              type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={advanceAmount}
                               onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
@@ -9351,7 +9375,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label>
                       <input
-                        type="number"
+                        type="number" onWheel={(e) => e.currentTarget.blur()}
                         value={simpleAmount}
                         readOnly
                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
@@ -9360,7 +9384,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
                       <input
-                        type="number"
+                        type="number" onWheel={(e) => e.currentTarget.blur()}
                         value={runningBalance}
                         readOnly
                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
@@ -9444,14 +9468,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Total Amount</label>
                         <input
-                          type="number"
+                          type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={simpleAmount}
                           readOnly
                           className="w-full px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 text-xs"
                         />
                         <label className="block text-xs font-medium text-gray-700 mb-1 mt-2">Running Balance</label>
                         <input
-                          type="number"
+                          type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={runningBalance}
                           readOnly
                           className="w-full px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 text-xs"
@@ -9502,7 +9526,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             </td>
                             <td className="px-2 py-2">
                               <input
-                                type="number"
+                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                 defaultValue={0}
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               />
@@ -9659,7 +9683,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     1 {foreignCurrencyLabel} =
                   </span>
                   <input
-                    type="number"
+                    type="number" onWheel={(e) => e.currentTarget.blur()}
                     value={contraConversionRate}
                     onChange={e => setContraConversionRate(parseFloat(e.target.value) || '')}
                     placeholder="Rate"
@@ -9702,7 +9726,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       {/* ── PAYMENT: Amount in FC ── */}
                       <td className="px-2 py-2 border-r border-gray-200">
                         {/* Case 1 (FC→INR): manual | Case 2 (INR→FC): = Receipt FC | Case 3 (FC→FC): manual */}
-                        <input type="number"
+                        <input type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={contraPaymentAmtForeign}
                           readOnly={contraCase === 2}
                           placeholder="0.00"
@@ -9739,7 +9763,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       {/* ── PAYMENT: Amount in INR ── */}
                       <td className="px-2 py-2 border-r border-gray-300">
                         {/* Case 2 (INR→FC): manual. Others: auto. */}
-                        <input type="number"
+                        <input type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={contraPaymentAmtINR}
                           readOnly={contraCase !== 2}
                           placeholder="0.00"
@@ -9762,7 +9786,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       {/* ── RECEIPT: Amount in FC ── */}
                       <td className="px-2 py-2 border-r border-gray-200">
                         {/* Case 1 (FC→INR): = Payment FC (readonly). Case 2 (INR→FC): manual. Case 3: manual. */}
-                        <input type="number"
+                        <input type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={contraCase === 1 ? contraPaymentAmtForeign : contraReceiptAmtForeign}
                           readOnly={contraCase === 1}
                           placeholder="0.00"
@@ -9806,7 +9830,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       {/* ── RECEIPT: Amount in INR ── */}
                       <td className="px-2 py-2 border-r border-gray-300">
                         {/* Case 1 (FC→INR): manual. Case 2 (INR→FC): = Payment INR (readonly). Case 3: auto. */}
-                        <input type="number"
+                        <input type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={contraCase === 2 ? contraPaymentAmtINR : contraReceiptAmtINR}
                           readOnly={contraCase === 2 || contraCase === 3}
                           placeholder="0.00"
@@ -9847,7 +9871,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             <div className="grid grid-cols-[160px_1fr] gap-4 items-center">
               <label className="text-sm font-medium text-gray-700">Amount (INR)</label>
               <input
-                type="number"
+                type="number" onWheel={(e) => e.currentTarget.blur()}
                 value={simpleAmount}
                 onChange={e => {
                   const v = parseFloat(e.target.value) || 0;
@@ -9884,7 +9908,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <label className="text-sm font-medium text-gray-700">Conversion Charges</label>
                 <div className="flex items-center gap-2">
                   <input
-                    type="number"
+                    type="number" onWheel={(e) => e.currentTarget.blur()}
                     value={contraConversionCharges}
                     onChange={e => setContraConversionCharges(parseFloat(e.target.value) || '')}
                     placeholder="0.00"
@@ -9943,7 +9967,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <div><label className="form-label">To Account</label><SearchableSelect value={toAccount} onChange={setToAccount} options={accountLedgers.map(l => l.name)} placeholder="Select To Account" /></div>
         </>}
         {type !== 'Contra' && <div><label className="form-label">Party</label><SearchableSelect value={party} onChange={setParty} options={partyLedgers.map(l => l.name)} placeholder="Select Party" /></div>}
-        <div><label className="form-label">Amount</label><input type="number" value={simpleAmount} onChange={e => setSimpleAmount(parseFloat(e.target.value))} className="form-input" /></div>
+        <div><label className="form-label">Amount</label><input type="number" onWheel={(e) => e.currentTarget.blur()} value={simpleAmount} onChange={e => setSimpleAmount(parseFloat(e.target.value))} className="form-input" /></div>
         <div className="relative"><label className="form-label">Narration</label><textarea value={narration} onChange={e => setNarration(e.target.value)} className="form-input w-full pr-10" rows={3}></textarea><button onClick={handleGenerateNarration} disabled={isNarrationLoading} className="absolute top-7 right-2 text-indigo-500 hover:text-slate-700 disabled:text-gray-300" title="Generate Narration with AI">{isNarrationLoading ? <Icon name="spinner" className="w-5 h-5 animate-spin" /> : <Icon name="wand-sparkles" className="w-5 h-5" />}</button></div>
       </div>
     );
@@ -10271,8 +10295,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   Total Amount <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="number"
+                  type="number" onWheel={(e) => e.currentTarget.blur()}
                   value={row.totalAmount || ''}
+                 
                   onChange={e => handleExpenseRowChange(row.id, 'totalAmount', parseFloat(e.target.value) || 0)}
                   className={`erp-input ${row.totalAmount <= 0 ? 'border-red-300' : ''}`}
                   placeholder="0.00"
@@ -10324,8 +10349,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       Taxable <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.taxableValue || ''}
+                     
                       onChange={e => handleExpenseRowChange(row.id, 'taxableValue', parseFloat(e.target.value) || 0)}
                       className="erp-input"
                       placeholder="0.00"
@@ -10334,8 +10360,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div>
                     <label className="erp-label">IGST</label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.igst || ''}
+                     
                       onChange={e => handleExpenseRowChange(row.id, 'igst', parseFloat(e.target.value) || 0)}
                       className="erp-input bg-gray-50"
                       placeholder="0.00"
@@ -10344,8 +10371,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div>
                     <label className="erp-label">CGST</label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.cgst || ''}
+                     
                       onChange={e => handleExpenseRowChange(row.id, 'cgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
                       className={`erp-input ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
@@ -10355,8 +10383,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div>
                     <label className="erp-label">SGST</label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.sgst || ''}
+                     
                       onChange={e => handleExpenseRowChange(row.id, 'sgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
                       className={`erp-input ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
@@ -10366,8 +10395,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div>
                     <label className="erp-label">CESS</label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.cess || ''}
+                     
                       onChange={e => handleExpenseRowChange(row.id, 'cess', parseFloat(e.target.value) || 0)}
                       className="erp-input"
                       placeholder="0.00"
@@ -10535,8 +10565,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </td>
                   <td className="px-4 py-3">
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={entry.debit || ''}
+                     
                       onChange={e => handleEntryChange(index, 'debit', parseFloat(e.target.value) || 0)}
                       className="erp-input h-9 text-right font-mono"
                       placeholder="0.00"
@@ -10544,8 +10575,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </td>
                   <td className="px-4 py-3">
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={entry.credit || ''}
+                     
                       onChange={e => handleEntryChange(index, 'credit', parseFloat(e.target.value) || 0)}
                       className="erp-input h-9 text-right font-mono"
                       placeholder="0.00"
@@ -10614,7 +10646,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
       </div>
 
-      {isSalesExcelWorkflowOpen ? (
+      {isBankUploadModalOpen ? (
+        <div className="erp-container relative">
+          <div className="mb-6 pb-4 border-b">
+            <h3 className="erp-section-title border-none mb-0 pb-0">Bank Statement Upload</h3>
+            <p className="helper-text mb-0">Upload a bank statement to extract and post transactions</p>
+          </div>
+          <BankUpload
+            ledgers={freshLedgers.length > 0 ? freshLedgers : ledgers}
+            defaultType={(voucherType.toLowerCase() === 'receipt' ? 'receipt' : 'payment') as 'payment' | 'receipt'}
+            onClose={() => setIsBankUploadModalOpen(false)}
+          />
+        </div>
+      ) : isSalesExcelWorkflowOpen ? (
         <div className="erp-container relative">
           <SalesExcelUploadWorkflow onClose={() => setIsSalesExcelWorkflowOpen(false)} />
         </div>
@@ -10670,6 +10714,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               onClick: () => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); },
                               className: `flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`,
                               extraLabel: isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>
+                            },
+                            bank_upload: {
+                              id: 'bank_upload',
+                              label: "Bank Statement Upload",
+                              icon: <Icon name="bank" className="w-4 h-4 mr-3 text-indigo-500" />,
+                              onClick: () => { setIsBankUploadModalOpen(true); setIsScannerMenuOpen(false); },
+                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             },
                             sales_excel_upload: {
                               id: 'sales_excel_upload',
@@ -11782,5 +11833,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 };
 
 export default VouchersPage;
+
 
 

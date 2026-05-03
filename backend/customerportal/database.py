@@ -48,10 +48,10 @@ class CustomerMaster(models.Model):
     )
     
     # Financial Information
-    credit_limit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    credit_limit = models.DecimalField(max_digits=25, decimal_places=2, default=0)
     credit_days = models.IntegerField(default=0)
-    opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    current_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    opening_balance = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    current_balance = models.DecimalField(max_digits=25, decimal_places=2, default=0)
     
     # Status and Metadata
     is_active = models.BooleanField(default=True)
@@ -496,9 +496,9 @@ class CustomerTransaction(models.Model):
     transaction_date = models.DateField()
     
     # Financial Details
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
-    tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    amount = models.DecimalField(max_digits=25, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=25, decimal_places=2)
     
     # Payment Information
     payment_status = models.CharField(max_length=20, default='pending')
@@ -545,10 +545,10 @@ class CustomerTransaction(models.Model):
 #     valid_until = models.DateField()
 #     
 #     # Financial Details
-#     subtotal = models.DecimalField(max_digits=15, decimal_places=2)
-#     tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-#     discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-#     total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+#     subtotal = models.DecimalField(max_digits=25, decimal_places=2)
+#     tax_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+#     discount_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+#     total_amount = models.DecimalField(max_digits=25, decimal_places=2)
 #     
 #     # Status and Notes
 #     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
@@ -596,11 +596,11 @@ class CustomerTransaction(models.Model):
 #     po_number = models.CharField(max_length=50, null=True, blank=True)
 #     
 #     # Financial Details
-#     subtotal = models.DecimalField(max_digits=15, decimal_places=2)
-#     tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-#     discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-#     shipping_charges = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-#     total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+#     subtotal = models.DecimalField(max_digits=25, decimal_places=2)
+#     tax_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+#     discount_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+#     shipping_charges = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+#     total_amount = models.DecimalField(max_digits=25, decimal_places=2)
 #     
 #     # Status and Notes
 #     status = models.CharField(max_length=20, choices=ORDER_STATUS, default='pending')
@@ -710,12 +710,12 @@ class CustomerMasterLongTermContractProductService(models.Model):
     uom = models.CharField(max_length=50, null=True, blank=True, help_text='Unit of Measure')
     
     # Quantity Range
-    qty_min = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text='Minimum quantity')
-    qty_max = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text='Maximum quantity')
+    qty_min = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True, help_text='Minimum quantity')
+    qty_max = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True, help_text='Maximum quantity')
     
     # Price Range
-    price_min = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text='Minimum price')
-    price_max = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text='Maximum price')
+    price_min = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True, help_text='Minimum price')
+    price_max = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True, help_text='Maximum price')
     
     # Price Deviation
     acceptable_price_deviation = models.CharField(max_length=50, null=True, blank=True, help_text='e.g., ±5%')
@@ -817,7 +817,7 @@ class CustomerTransactionSalesQuotationGeneralItem(models.Model):
     item_code = models.CharField(max_length=50)
     item_name = models.CharField(max_length=200)
     uom = models.CharField(max_length=50)
-    effective_rate = models.DecimalField(max_digits=15, decimal_places=2, help_text='Rate specified in quotation')
+    effective_rate = models.DecimalField(max_digits=25, decimal_places=2, help_text='Rate specified in quotation')
     
     tenant_id = models.CharField(max_length=36, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -872,13 +872,13 @@ class CustomerTransactionSalesQuotationSpecificItem(models.Model):
     item_code = models.CharField(max_length=50)
     item_name = models.CharField(max_length=200)
     hsn_sac = models.CharField(max_length=20, null=True, blank=True)
-    quantity = models.DecimalField(max_digits=15, decimal_places=2)
+    quantity = models.DecimalField(max_digits=25, decimal_places=2)
     uom = models.CharField(max_length=50)
-    rate = models.DecimalField(max_digits=15, decimal_places=2)
-    taxable_value = models.DecimalField(max_digits=15, decimal_places=2)
+    rate = models.DecimalField(max_digits=25, decimal_places=2)
+    taxable_value = models.DecimalField(max_digits=25, decimal_places=2)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    gst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_value = models.DecimalField(max_digits=15, decimal_places=2)
+    gst_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    total_value = models.DecimalField(max_digits=25, decimal_places=2)
     
     tenant_id = models.CharField(max_length=36, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -951,12 +951,12 @@ class CustomerTransactionSalesOrderItemDetails(models.Model):
     # Item Details
     item_code = models.CharField(max_length=50, null=True, blank=True, help_text='Item Code')
     item_name = models.CharField(max_length=255, null=True, blank=True, help_text='Item Name')
-    quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='Quantity')
-    price = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='Price per unit')
-    taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='Taxable Value (Qty * Price)')
-    gst = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='GST Amount')
+    quantity = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text='Quantity')
+    price = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text='Price per unit')
+    taxable_value = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text='Taxable Value (Qty * Price)')
+    gst = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text='GST Amount')
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='GST Rate (%)')
-    net_value = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='Net Value (Taxable + GST)')
+    net_value = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text='Net Value (Taxable + GST)')
     uom = models.CharField(max_length=50, null=True, blank=True, help_text='Unit of Measure')
     packing_notes = models.TextField(null=True, blank=True, help_text='Packing notes for this item')
     

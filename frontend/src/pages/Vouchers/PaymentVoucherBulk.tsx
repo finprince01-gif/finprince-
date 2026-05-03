@@ -361,9 +361,10 @@ const PaymentVoucherBulk: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
               <input
-                type="number"
+                type="number" onWheel={(e) => e.currentTarget.blur()}
                 value={runningBalance}
                 readOnly
+               
                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
               />
             </div>
@@ -407,9 +408,10 @@ const PaymentVoucherBulk: React.FC = () => {
                 {paymentRows.map((row) => (
                   <input
                     key={`amount-${row.id}`}
-                    type="number"
+                    type="number" onWheel={(e) => e.currentTarget.blur()}
                     value={row.amount || ''}
                     onChange={e => handlePaymentRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
+                   
                     placeholder="Pay now/Advance total"
                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                   />
@@ -498,9 +500,10 @@ const PaymentVoucherBulk: React.FC = () => {
                         <td className="py-3 px-2 text-right">{transaction.amount}</td>
                         <td className="py-3 px-2">
                           <input
-                            type="number"
+                            type="number" onWheel={(e) => e.currentTarget.blur()}
                             value={transaction.payNow || ''}
                             onChange={e => handlePayNowChange(transaction.id, parseFloat(e.target.value) || 0)}
+                           
                             className="w-full px-2 py-1 border border-gray-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </td>
@@ -538,9 +541,10 @@ const PaymentVoucherBulk: React.FC = () => {
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                     <input
-                      type="number"
+                      type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={advanceAmount || ''}
                       onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
+                     
                       className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
@@ -569,5 +573,6 @@ const PaymentVoucherBulk: React.FC = () => {
 };
 
 export default PaymentVoucherBulk;
+
 
 

@@ -1465,7 +1465,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 font-bold text-xs ring-1 ring-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">1 {foreignCurrency} =</span>
                                             <input
-                                                type="number"
+                                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                                 step="0.0001"
                                                 value={exchangeRate}
                                                 onChange={(e) => setExchangeRate(e.target.value)}
@@ -1659,7 +1659,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     </td>
                                                     <td className="px-3 py-2 border-r border-gray-200">
                                                         <input
-                                                            type="number"
+                                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                                             value={row.qty}
                                                             onChange={(e) => updateItemRow(index, { qty: e.target.value })}
                                                             className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
@@ -1677,7 +1677,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     </td>
                                                     <td className="px-3 py-2 border-r border-gray-200">
                                                         <input
-                                                            type="number"
+                                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                                             value={row.fcRate}
                                                             onChange={(e) => updateItemRow(index, { fcRate: e.target.value })}
                                                             className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
@@ -1728,7 +1728,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                                 <div className="flex items-center gap-2 ml-4">
                                                                     <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
                                                                     <input
-                                                                        type="number"
+                                                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                         value={row.taxableValue || 0}
                                                                         onChange={(e) => updateItemRow(index, { taxableValue: e.target.value })}
                                                                         placeholder="0.00"
@@ -1844,7 +1844,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input disabled={isFinancial === 'Yes'} type="number" value={row.qty} onChange={(e) => updateItemRow(index, { qty: e.target.value })} className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} placeholder="0" />
+                                                        <input disabled={isFinancial === 'Yes'} type="number" onWheel={(e) => e.currentTarget.blur()} value={row.qty} onChange={(e) => updateItemRow(index, { qty: e.target.value })} className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} placeholder="0" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
                                                         <input disabled={isFinancial === 'Yes'} type="text" value={row.uom} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="UOM" />
@@ -1853,12 +1853,12 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         <input disabled={isFinancial === 'Yes'} type="text" value={row.alternateUnit} readOnly className="w-full px-2 py-1.5 border-0 bg-gray-50 rounded text-sm text-center text-gray-500" placeholder="Alt Unit" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
-                                                        <input disabled={isFinancial === 'Yes'} type="number" value={row.itemRate} onChange={(e) => updateItemRow(index, { itemRate: e.target.value })} className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} placeholder="0.00" />
+                                                        <input disabled={isFinancial === 'Yes'} type="number" onWheel={(e) => e.currentTarget.blur()} value={row.itemRate} onChange={(e) => updateItemRow(index, { itemRate: e.target.value })} className={`w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right bg-transparent ${isFinancial === 'Yes' ? 'opacity-50 cursor-not-allowed bg-gray-50/50' : ''}`} placeholder="0.00" />
                                                     </td>
                                                     <td className="px-2 py-2 border-r border-gray-200">
                                                         {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
                                                             <input
-                                                                type="number"
+                                                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                 value={row.taxableValue}
                                                                 onChange={(e) => updateItemRow(index, { taxableValue: e.target.value })}
                                                                 className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right"
@@ -1873,14 +1873,14 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                         <>
                                                             <td className="px-2 py-2 border-r border-gray-200">
                                                                 {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
-                                                                    <input type="number" value={row.cgst} onChange={(e) => updateItemRow(index, { cgst: e.target.value })} className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
+                                                                    <input type="number" onWheel={(e) => e.currentTarget.blur()} value={row.cgst} onChange={(e) => updateItemRow(index, { cgst: e.target.value })} className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
                                                                 ) : (
                                                                     <input type="text" value={row.cgst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
                                                                 )}
                                                             </td>
                                                             <td className="px-2 py-2 border-r border-gray-200">
                                                                 {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
-                                                                    <input type="number" value={row.sgst} onChange={(e) => updateItemRow(index, { sgst: e.target.value })} className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 focus:ring-1 focus:ring-green-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
+                                                                    <input type="number" onWheel={(e) => e.currentTarget.blur()} value={row.sgst} onChange={(e) => updateItemRow(index, { sgst: e.target.value })} className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 focus:ring-1 focus:ring-green-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
                                                                 ) : (
                                                                     <input type="text" value={row.sgst} readOnly className="w-full px-2 py-1.5 bg-[#F0FDF4] text-green-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
                                                                 )}
@@ -1889,7 +1889,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     ) : (
                                                         <td className="px-2 py-2 border-r border-gray-200">
                                                             {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
-                                                                <input type="number" value={row.igst} onChange={(e) => updateItemRow(index, { igst: e.target.value })} className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
+                                                                <input type="number" onWheel={(e) => e.currentTarget.blur()} value={row.igst} onChange={(e) => updateItemRow(index, { igst: e.target.value })} className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
                                                             ) : (
                                                                 <input type="text" value={row.igst} readOnly className="w-full px-2 py-1.5 bg-[#EBF5FF] text-blue-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
                                                             )}
@@ -1897,7 +1897,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                     )}
                                                     <td className="px-2 py-2 border-r border-gray-200">
                                                         {(isFinancial === 'Yes' || reverseGstTcs === 'Yes') ? (
-                                                            <input type="number" value={row.cess} onChange={(e) => updateItemRow(index, { cess: e.target.value })} className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 focus:ring-1 focus:ring-purple-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
+                                                            <input type="number" onWheel={(e) => e.currentTarget.blur()} value={row.cess} onChange={(e) => updateItemRow(index, { cess: e.target.value })} className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 focus:ring-1 focus:ring-purple-500 rounded text-sm text-right" placeholder="0.00" step="0.01" />
                                                         ) : (
                                                             <input type="text" value={row.cess} readOnly className="w-full px-2 py-1.5 bg-[#F5F3FF] text-purple-700 font-bold border-0 rounded text-sm text-right" placeholder="0.00" />
                                                         )}
@@ -1940,7 +1940,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                                                 <div className="flex items-center gap-2 ml-4">
                                                                     <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider whitespace-nowrap">Amount:</label>
                                                                     <input
-                                                                        type="number"
+                                                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                         value={row.taxableValue || 0}
                                                                         onChange={(e) => updateItemRow(index, { taxableValue: e.target.value })}
                                                                         placeholder="0.00"
@@ -2022,7 +2022,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     <div>
                                         <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Invoice Value</label>
                                         <input
-                                            type="number"
+                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                             readOnly
                                             value={totalInvoiceValue.toFixed(2)}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
@@ -2031,7 +2031,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     <div>
                                         <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reverse TCS on the Debit Note</label>
                                         <input
-                                            type="number"
+                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                             step="0.01"
                                             value={reverseTcs}
                                             onChange={(e) => setReverseTcs(e.target.value)}
@@ -2042,7 +2042,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     <div>
                                         <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reverse TDS on the Debit Note</label>
                                         <input
-                                            type="number"
+                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                             step="0.01"
                                             value={reverseTds}
                                             onChange={(e) => setReverseTds(e.target.value)}
@@ -2053,7 +2053,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     <div>
                                         <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">TDS/TCS under Income Tax</label>
                                         <input
-                                            type="number"
+                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                             step="0.01"
                                             value={tdsIt}
                                             onChange={(e) => setTdsIt(e.target.value)}
@@ -2104,7 +2104,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     <div className="pt-4">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Invoice Amount Applied</label>
                                         <input
-                                            type="number"
+                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                             step="0.01"
                                             value={purchaseInvoiceAmountApplied}
                                             onChange={(e) => setPurchaseInvoiceAmountApplied(e.target.value)}
@@ -2701,3 +2701,4 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 };
 
 export default DebitNoteVoucher;
+

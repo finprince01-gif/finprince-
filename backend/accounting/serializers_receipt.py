@@ -34,15 +34,18 @@ class ReceiptVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSe
     pending_transaction = serializers.JSONField(write_only=True, required=False)
 
     # Legacy field mappings
-    received_amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, required=False)
-    amount = serializers.DecimalField(source='amount_applied', max_digits=20, decimal_places=2, required=False)
-    amount_applied = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
+    received_amount = serializers.DecimalField(source='amount_applied', max_digits=25, decimal_places=2, required=False)
+    amount = serializers.DecimalField(source='amount_applied', max_digits=25, decimal_places=2, required=False)
+    amount_applied = serializers.DecimalField(max_digits=25, decimal_places=2, required=False)
     advance_ref_no = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     def to_internal_value(self, data):
-        # Normalize reference_type to lowercase for choice validation (INVOICE -> invoice)
+        # Normalize reference_type to uppercase for choice validation (INVOICE -> INVOICE)
         if 'reference_type' in data and isinstance(data['reference_type'], str):
-            data['reference_type'] = data['reference_type'].upper()
+            val = data['reference_type'].upper()
+            if val == 'OTHERS':
+                val = 'ON_ACCOUNT'
+            data['reference_type'] = val
         return super().to_internal_value(data)
 
     class Meta:
@@ -50,11 +53,11 @@ class ReceiptVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSe
         fields = [
             'id', 'customer', 'customer_name', 'reference_id', 'reference_type', 
             'pending_transaction', 'amount', 'amount_applied', 'pending_before', 'received_amount', 
-            'balance_after', 'is_advance', 'advance_ref_no', 'invoice_date',
+            'balance_after', 'is_advance', 'advance_ref_no', 'ref_no', 'invoice_date',
             'allocations'
         ]
         extra_kwargs = {
-            'balance_after': {'max_digits': 20, 'decimal_places': 2},
+            'balance_after': {'max_digits': 25, 'decimal_places': 2},
         }
 
     def validate_customer(self, value):
@@ -138,8 +141,9 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
     type = serializers.CharField(required=False, default='receipt', allow_null=True)
     voucher_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     narration = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
-    total_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
+    ref_no = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    amount = serializers.DecimalField(max_digits=25, decimal_places=2, required=False)
+    total_amount = serializers.DecimalField(max_digits=25, decimal_places=2, required=False)
     total_receipt = serializers.SerializerMethodField()
 
     def get_total_receipt(self, obj):
@@ -149,8 +153,8 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         model = Voucher
         fields = '__all__'
         extra_kwargs = {
-            'total_amount': {'max_digits': 20, 'decimal_places': 2, 'required': False},
-            'amount': {'max_digits': 20, 'decimal_places': 2, 'required': False},
+            'total_amount': {'max_digits': 15, 'decimal_places': 2, 'required': False},
+            'amount': {'max_digits': 15, 'decimal_places': 2, 'required': False},
             'type': {'required': False},
             'voucher_number': {'required': False},
         }
@@ -180,6 +184,8 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         v_num_provided = validated_data.pop('voucher_number', None)
         v_date_provided = validated_data.pop('date', timezone.now().date())
         v_narr_provided = validated_data.pop('narration', '')
+        v_ref_no_provided = validated_data.pop('ref_no', '')
+        v_posting_note = validated_data.pop('notes', '') or validated_data.pop('posting_note', '')
         
         with db_transaction.atomic():
             # 2. Resolve Relationships
@@ -201,8 +207,11 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             v_num_to_use = v_num_provided
             if series:
                 expected_next = series.get_next_number()
-                if not v_num_provided or v_num_provided == expected_next:
-                    v_num_to_use = expected_next
+                # If no number provided, or it matches expected, or it's ALREADY TAKEN, auto-generate/increment
+                if not v_num_to_use or v_num_to_use == expected_next or _is_taken(v_num_to_use):
+                    if not v_num_to_use:
+                        v_num_to_use = expected_next
+                        
                     while _is_taken(v_num_to_use):
                         series.increment_number()
                         v_num_to_use = series.get_next_number()
@@ -231,7 +240,10 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 date=v_date_provided,
                 total_amount=final_total,
                 amount=final_total, # Physical column
+                vouch_amount=final_total,
                 narration=v_narr_provided,
+                ref_no=v_ref_no_provided,
+                posting_note=v_posting_note,
                 pay_to_ledger=receive_in_ledger,
                 pay_from_ledger=customer_ledger,
                 
@@ -253,8 +265,17 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             # 7. Create Items and Allocations
             mode = 'receipt_bulk' if len(items_data) > 1 else 'receipt_single'
             
-            # If no items provided but total is positive, treat as a single advance item
-            if not items_data and final_total > 0:
+            # Calculate sum of allocated items
+            sum_items = sum(_safe_decimal(i.get('received_amount', i.get('amount', 0))) for i in items_data)
+            
+            # If total_amount > sum of items, allocate the remainder as an advance
+            remainder_adv = Decimal('0.00')
+            if not items_data:
+                remainder_adv = final_total
+            else:
+                remainder_adv = max(Decimal('0.00'), final_total - sum_items)
+
+            if remainder_adv > 0:
                 AdvanceAllocation.objects.create(
                     tenant_id=tenant_id,
                     transaction=receipt,
@@ -264,11 +285,14 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     reference_type='ADVANCE',
                     pay_from_ledger=customer_ledger,
                     pay_to_ledger=receipt.pay_to_ledger,
-                    allocated_amount=final_total,
-                    amount=final_total, # Physical column
-                    original_amount=final_total,
+                    allocated_amount=remainder_adv,
+                    amount=remainder_adv, # Physical column
+                    original_amount=remainder_adv,
                     is_advance=True,
                     advance_ref_no=receipt.voucher_number,
+                    ref_no=v_ref_no_provided,
+                    posting_note=v_posting_note,
+                    vouch_amount=receipt.vouch_amount,
                     
                     # Core IDs
                     ledger_id_val=rf_l_id,
@@ -317,6 +341,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 # Determine Target Detail Model
                 target_model = AdvanceAllocation if it_type == 'ADVANCE' else PendingTransaction
                 
+                # 7.1 Create the allocation record (PendingTransaction or AdvanceAllocation)
                 target_model.objects.create(
                     tenant_id=tenant_id,
                     transaction=receipt,
@@ -330,6 +355,15 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     amount=it_amt, # Physical column
                     is_advance=(it_type == 'ADVANCE'),
                     advance_ref_no=det_ref if it_type == 'ADVANCE' else None,
+                    ref_no=item_data.get('ref_no', v_ref_no_provided),
+                    posting_note=(
+                        item_data.get('posting_note') or 
+                        item_data.get('postingNote') or 
+                        item_data.get('narration') or 
+                        item_data.get('notes') or 
+                        v_posting_note
+                    ),
+                    vouch_amount=receipt.vouch_amount,
                     
                     # Concrete columns from frontend
                     due_date=it_pending_raw.get('due_date'),
@@ -386,21 +420,31 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         
         if items_data is not None:
             instance.delete_items()
+            total = Decimal("0")
             for item_data in items_data:
                 customer_data = item_data.pop('customer', None)
                 customer_ledger = customer_data if isinstance(customer_data, MasterLedger) else None
                 
                 i_l_id, i_c_id, i_v_id = self._get_party_ids(customer_ledger)
-                
-                ReceiptVoucherItem.objects.create(
+                amt = _safe_decimal(item_data.get('received_amount', item_data.get('amount', 0)))
+                total += amt
+
+                # Use PendingTransaction for consistency with create()
+                PendingTransaction.objects.create(
                     voucher=instance,
                     tenant_id=instance.tenant_id,
                     ledger_id_val=i_l_id,
                     party_customer_id=i_c_id,
                     party_vendor_id=i_v_id,
-                    customer=customer_ledger,
+                    pay_from_ledger=customer_ledger,
+                    pay_to_ledger=instance.pay_to_ledger,
+                    vouch_amount=instance.vouch_amount,
                     **item_data
                 )
+            instance.total_amount = total
+            instance.amount = total
+            instance.vouch_amount = total
+            instance.save(update_fields=['total_amount', 'amount', 'vouch_amount', 'updated_at'])
         
         self._mirror_to_generic_voucher(instance)
         self._mirror_to_customer_portal(instance)
@@ -463,10 +507,29 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
     def _mirror_to_vendor_portal(self, receipt):
         """Mirror Vendor specific receipts to the Vendor Portal ledger"""
         from vendors.models import VendorMasterBasicDetail, VendorTransaction
+        from .models import TransactionAllocation
         try:
-            items_qs = receipt.get_items()
-            for item in items_qs:
+            # First, clean up any existing mirrored transactions for this receipt to prevent duplicates
+            VendorTransaction.objects.filter(
+                tenant_id=receipt.tenant_id,
+                transaction_number__startswith=f"{receipt.voucher_number}-",
+                transaction_type__in=['payment', 'receipt']
+            ).delete()
+
+            seen_refs = set()
+            items = list(receipt.get_items())
+            has_new_items = any(type(i).__name__ not in ('TransactionAllocation', 'VoucherAllocation', 'PaymentVoucherItem') for i in items)
+            if has_new_items:
+                items = [i for i in items if type(i).__name__ not in ('TransactionAllocation', 'VoucherAllocation', 'PaymentVoucherItem')]
+
+            for item in items:
                 # Use pay_from_ledger (customer/vendor) for party name resolution
+                ref_no = item.reference_number or item.advance_ref_no
+                dedup_key = f"{ref_no}_{item.amount}"
+                if dedup_key in seen_refs:
+                    continue
+                seen_refs.add(dedup_key)
+
                 party = getattr(item, 'pay_from_ledger', None) or receipt.pay_from_ledger
                 if not party:
                     continue
@@ -508,10 +571,31 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
 
     def _mirror_to_customer_portal(self, receipt):
         """Cross-database sync to Customer Portal table (customer_transaction)"""
+        from .models import TransactionAllocation
+        from customerportal.models import CustomerTransaction as CustomerTxnPortal
         try:
+            CustomerTxnPortal.objects.filter(
+                tenant_id=receipt.tenant_id,
+                transaction_number__startswith=f"{receipt.voucher_number}-",
+                transaction_type__in=['payment', 'receipt']
+            ).delete()
+
             from customerportal.models import CustomerTransaction, CustomerMasterCustomer
             
-            for item in receipt.get_items():
+            seen_refs = set()
+            items = list(receipt.get_items())
+            has_new_items = any(type(i).__name__ not in ('TransactionAllocation', 'VoucherAllocation', 'PaymentVoucherItem') for i in items)
+            if has_new_items:
+                items = [i for i in items if type(i).__name__ not in ('TransactionAllocation', 'VoucherAllocation', 'PaymentVoucherItem')]
+
+            for item in items:
+                # Deduplicate
+                ref_no = item.reference_number or item.advance_ref_no
+                dedup_key = f"{ref_no}_{item.amount}"
+                if dedup_key in seen_refs:
+                    continue
+                seen_refs.add(dedup_key)
+
                 metadata = item.pending_transaction if hasattr(item, 'pending_transaction') and isinstance(item.pending_transaction, dict) else {}
                 metadata_name = metadata.get('customer_name')
                 
