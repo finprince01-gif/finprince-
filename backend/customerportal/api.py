@@ -315,11 +315,24 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
         return Response({'status': 'customer deactivated'})
 
     def destroy(self, request, *args, **kwargs):
-        """Override delete to perform soft delete"""
+        """Perform hard delete if safe, otherwise soft delete"""
         customer = self.get_object()
-        customer.is_deleted = True
-        customer.save()
-        return Response({'status': 'customer deleted successfully'}, status=status.HTTP_200_OK)
+        
+        from .flow import CustomerFlow
+        can_delete, reason = CustomerFlow.can_delete_customer(customer)
+        
+        if not can_delete:
+            # Fallback to soft delete if hard delete is blocked
+            customer.is_deleted = True
+            customer.save()
+            return Response(
+                {'message': 'Customer has transactions and was deactivated/hidden instead of deleted.'},
+                status=status.HTTP_200_OK
+            )
+            
+        # Perform hard delete
+        customer.delete()
+        return Response({'message': 'Customer deleted successfully from database.'}, status=status.HTTP_200_OK)
 
 
 class CustomerTransactionViewSet(viewsets.ModelViewSet):

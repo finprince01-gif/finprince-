@@ -322,7 +322,8 @@ class InventoryOperationJobWorkViewSet(viewsets.ModelViewSet):
             
             # Increment the preview number in the master series
             series_name = self.request.data.get('issue_slip_series')
-            increment_issue_slip_series(tenant_id, series_name)
+            series_id = self.request.data.get('issue_slip_series_id')
+            increment_issue_slip_series(tenant_id, series_name, series_id)
             
             # Record Movement
             operation_type = self.request.data.get('operation_type', 'outward')
@@ -366,7 +367,8 @@ class InventoryOperationInterUnitViewSet(viewsets.ModelViewSet):
         
         # Increment the preview number in the master series
         series_name = self.request.data.get('issue_slip_series')
-        increment_issue_slip_series(tenant_id, series_name)
+        series_id = self.request.data.get('issue_slip_series_id')
+        increment_issue_slip_series(tenant_id, series_name, series_id)
 
         # Record Movement
         items_data = self.request.data.get('items', [])
@@ -403,7 +405,8 @@ class InventoryOperationLocationChangeViewSet(viewsets.ModelViewSet):
         
         # Increment the preview number in the master series
         series_name = self.request.data.get('issue_slip_series')
-        increment_issue_slip_series(tenant_id, series_name)
+        series_id = self.request.data.get('issue_slip_series_id')
+        increment_issue_slip_series(tenant_id, series_name, series_id)
 
         # Record Movement
         items_data = self.request.data.get('items', [])
@@ -448,7 +451,8 @@ class InventoryOperationProductionViewSet(viewsets.ModelViewSet):
             
             # Increment
             series_name = self.request.data.get('issue_slip_series')
-            increment_issue_slip_series(tenant_id, series_name)
+            series_id = self.request.data.get('issue_slip_series_id')
+            increment_issue_slip_series(tenant_id, series_name, series_id)
 
             # Record Movement
             items_data = self.request.data.get('items', [])
@@ -494,7 +498,8 @@ class InventoryOperationConsumptionViewSet(viewsets.ModelViewSet):
             
             # Increment
             series_name = self.request.data.get('issue_slip_series')
-            increment_issue_slip_series(tenant_id, series_name)
+            series_id = self.request.data.get('issue_slip_series_id')
+            increment_issue_slip_series(tenant_id, series_name, series_id)
 
             # Record Movement
             items_data = self.request.data.get('items', [])
@@ -535,7 +540,8 @@ class InventoryOperationScrapViewSet(viewsets.ModelViewSet):
             
             # Increment
             series_name = self.request.data.get('issue_slip_series')
-            increment_issue_slip_series(tenant_id, series_name)
+            series_id = self.request.data.get('issue_slip_series_id')
+            increment_issue_slip_series(tenant_id, series_name, series_id)
 
             # Record Movement
             items_data = self.request.data.get('items', [])

@@ -4624,7 +4624,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div className="flex gap-4">
                     <button
                       type="button"
-                      disabled={invoiceInForeignCurrency === 'Yes'}
                       onClick={() => {
                         setInvoiceInForeignCurrency('No');
                         setPurchaseInputTypes(prev => {
@@ -4636,7 +4635,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputTypes.includes('Intrastate')
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
-                        } ${invoiceInForeignCurrency === 'Yes' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                        }`}
                     >
                       CGST & SGST
                     </button>
@@ -4859,6 +4858,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <thead className="bg-indigo-600 text-white">
                     <tr>
                       <th className="px-3 py-3 text-center w-12 border-r border-indigo-500"></th>
+                      {selectedPurchasePOs.length > 0 && (
+                        <th className="px-3 py-3 text-sm font-semibold text-center border-r border-indigo-500">Purchase Order No.</th>
+                      )}
                       <th className="px-3 py-3 text-sm font-semibold text-center border-r border-indigo-500">Description</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">Inv Qty</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">UQC</th>
@@ -4895,6 +4897,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                             />
                           </td>
+                          {selectedPurchasePOs.length > 0 && (
+                            <td className="px-3 py-2 border-r border-gray-200 text-sm text-center text-gray-600">
+                              {row.sourcePoNo || '-'}
+                            </td>
+                          )}
                           <td className="px-3 py-2 border-r border-gray-200">
                             <SearchableSelect
                               value={row.itemName}
@@ -5105,6 +5112,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <thead className="bg-indigo-600 text-white">
                       <tr>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">S. No.</th>
+                        {selectedPurchasePOs.length > 0 && (
+                          <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Purchase Order No.</th>
+                        )}
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Code</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Name</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">HSN/SAC</th>
@@ -5152,6 +5162,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 {index + 1}
                               </div>
                             </td>
+                            {selectedPurchasePOs.length > 0 && (
+                              <td className="px-2 py-2 border-r border-gray-200 text-sm text-center text-gray-600">
+                                {row.sourcePoNo || '-'}
+                              </td>
+                            )}
                             <td className="px-2 py-2 border-r border-gray-200">
                               <SearchableSelect
                                 value={row.itemCode}
@@ -7405,24 +7420,45 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     INPUT TYPE (GST CATEGORY)
                   </label>
                   <div className="flex flex-wrap gap-4">
-                    {['IGST', 'CGST & SGST', 'Cess'].map(type => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => {
-                          if (cnInForeignCurrency === 'Yes') return;
-                          setCnInputType(prev =>
-                            prev.includes(type) ? prev.filter(p => p !== type) : [...prev, type]
-                          );
-                        }}
-                        className={`px-6 py-2 rounded-[4px] text-[13px] font-medium transition-all ${(cnInputType.includes(type) || (cnInForeignCurrency === 'Yes' && type === 'IGST'))
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'bg-white border border-gray-300 text-gray-600 hover:border-indigo-500 hover:text-indigo-600'
-                          } ${cnInForeignCurrency === 'Yes' && type !== 'IGST' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {type}
-                      </button>
-                    ))}
+                    {['IGST', 'CGST & SGST', 'Cess'].map(type => {
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            if (type === 'CGST & SGST') {
+                              setCnInForeignCurrency('No');
+                              setCnInputType(['CGST & SGST']);
+                            } else if (type === 'IGST') {
+                              setCnInForeignCurrency('Yes');
+                              setCnInputType(['IGST']);
+                              
+                              // Handle foreign currency conversion if switching to 'Yes'
+                              const exRate = parseFloat(String(cnExchangeRate)) || 1;
+                              setCnItems(prev => prev.map(item => {
+                                const fRate = (parseFloat(String(item.rate)) || 0) / exRate;
+                                const q = parseFloat(String(item.qty)) || 0;
+                                return {
+                                  ...item,
+                                  foreignRate: fRate,
+                                  foreignAmount: q * fRate
+                                };
+                              }));
+                            } else {
+                              setCnInputType(prev =>
+                                prev.includes(type) ? prev.filter(p => p !== type) : [...prev, type]
+                              );
+                            }
+                          }}
+                          className={`px-6 py-2 rounded-[4px] text-[13px] font-medium transition-all ${cnInputType.includes(type)
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-white border border-gray-300 text-gray-600 hover:border-indigo-500 hover:text-indigo-600'
+                            }`}
+                        >
+                          {type}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -7450,6 +7486,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                   foreignAmount: q * fRate
                                 };
                               }));
+                            } else {
+                              setCnInputType(['CGST & SGST']);
                             }
                           }}
                           className={`px-8 py-1.5 rounded-[2px] text-[13px] font-medium transition-all ${cnInForeignCurrency === opt

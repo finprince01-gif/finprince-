@@ -83,6 +83,86 @@ class CustomerFlow:
         
         return customer
 
+    @staticmethod
+    def can_delete_customer(instance):
+        """
+        Check if a customer can be deleted based on business rules.
+        A customer cannot be deleted if it has:
+        1. Associated transactions (Sales Orders, Sales Quotations, Transactions)
+        2. Non-zero opening or current balance in accounting system
+        """
+        try:
+            tenant_id = instance.tenant_id
+            customer_id = instance.id
+            
+            # 1. Check for associated transactions in Customer Portal
+            from .database import CustomerTransaction, CustomerTransactionSalesOrderBasicDetails
+            
+            if CustomerTransaction.objects.filter(tenant_id=tenant_id, customer_id=customer_id).exists():
+                return False, "Unable to delete customer as this customer has transactions"
+                
+            if CustomerTransactionSalesOrderBasicDetails.objects.filter(tenant_id=tenant_id, customer_name=instance.customer_name).exists():
+                return False, "Unable to delete customer as this customer has sales orders"
+
+            # 2. Check for balance in TransactionFile (Accounting records)
+            try:
+                from accounting.models_transaction import TransactionFile
+                
+                customer_code = instance.customer_code
+                
+                if customer_code:
+                    ledger = TransactionFile.objects.filter(
+                        tenant_id=tenant_id,
+                        ledger_code=customer_code
+                    ).first()
+                    
+                    if ledger:
+                        if (ledger.opening_balance and float(ledger.opening_balance) != 0) or \
+                           (ledger.current_balance and float(ledger.current_balance) != 0):
+                            return False, "Unable to delete customer as this customer is currently live"
+                
+                # Check by name for safety
+                ledger_by_name = TransactionFile.objects.filter(
+                    tenant_id=tenant_id,
+                    ledger_name=instance.customer_name
+                ).first()
+                
+                if ledger_by_name:
+                    if (ledger_by_name.opening_balance and float(ledger_by_name.opening_balance) != 0) or \
+                       (ledger_by_name.current_balance and float(ledger_by_name.current_balance) != 0):
+                        return False, "Unable to delete customer as this customer is currently live"
+            except (ImportError, Exception):
+                pass # Accounting module might be separate or have different structure
+
+            # 3. Check for Accounting Ledgers and Journal Entries
+            try:
+                from accounting.models import MasterLedger, JournalEntry, AmountTransaction
+                
+                ledger = getattr(instance, 'ledger', None)
+                if not ledger:
+                    ledger = MasterLedger.objects.filter(
+                        tenant_id=tenant_id,
+                        name=instance.customer_name
+                    ).first()
+                
+                if ledger:
+                    if JournalEntry.objects.filter(tenant_id=tenant_id, ledger=ledger).exists() or \
+                       JournalEntry.objects.filter(tenant_id=tenant_id, ledger_name=ledger.name).exists():
+                        return False, "Unable to delete customer as this customer has journal entries"
+                        
+                    if AmountTransaction.objects.filter(tenant_id=tenant_id, ledger=ledger).exists():
+                        return False, "Unable to delete customer as this customer has bank/cash transactions"
+            except (ImportError, Exception):
+                pass
+
+            return True, ""
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error checking customer deletion eligibility: {e}")
+            return False, "Unable to delete customer as this customer is currently live"
+
 
 class QuotationFlow:
     """

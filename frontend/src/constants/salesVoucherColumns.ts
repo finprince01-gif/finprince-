@@ -41,6 +41,8 @@ export interface SalesVoucherColumn {
     required?: boolean;
     /** Data type hint for client-side casting during upload */
     type?: 'string' | 'number' | 'date';
+    /** Optional predefined options for the field */
+    options?: string[];
 }
 
 /**

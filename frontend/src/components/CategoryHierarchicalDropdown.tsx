@@ -82,10 +82,24 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
                 const data = await httpClient.get<Category[]>(apiEndpoint);
 
                 // 1. Process API data
-                let processed = data.map(c => ({
-                    ...c,
-                    full_path: [c.category, c.group, c.subgroup].filter(Boolean).join(' > ')
-                }));
+                let processed = data.map(c => {
+                    // Start with provided full_path or construct it
+                    let rawPath = c.full_path || [c.category, c.group, c.subgroup].filter(Boolean).join(' > ');
+                    return {
+                        ...c,
+                        // Normalize the path: replace any spaces around '>' with exactly one space on each side
+                        full_path: rawPath.replace(/\s*>\s*/g, ' > ').trim()
+                    };
+                });
+
+                // Deduplicate by normalized, case-insensitive full_path
+                const uniquePaths = new Set();
+                processed = processed.filter(c => {
+                    const lowerPath = c.full_path.toLowerCase();
+                    if (uniquePaths.has(lowerPath)) return false;
+                    uniquePaths.add(lowerPath);
+                    return true;
+                });
 
                 // 2. Merge with System Categories (Virtual Categories) if requested
                 if (mergeSystem) {
@@ -171,7 +185,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
                 onClick={() => setIsOpen(!isOpen)}
                 className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] cursor-pointer bg-white flex items-center justify-between ${themeClasses.hoverBorder} focus:outline-none focus:ring-2 ${themeClasses.focusRing} transition-colors`}
             >
-                <span className={value ? 'text-gray-700' : 'text-gray-400'}>
+                <span className={`text-left ${value ? 'text-gray-700' : 'text-gray-400'}`}>
                     {value || placeholder}
                 </span>
                 <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -202,7 +216,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
                                 <li
                                     key={cat.id}
                                     onClick={() => handleSelect(cat)}
-                                    className={`px-4 py-2 text-sm cursor-pointer ${themeClasses.hoverBg} ${value === cat.full_path ? `${themeClasses.activeBg} ${themeClasses.activeText}` : 'text-gray-700'
+                                    className={`px-4 py-2.5 text-sm text-left cursor-pointer ${themeClasses.hoverBg} ${value === cat.full_path ? `${themeClasses.activeBg} ${themeClasses.activeText}` : 'text-gray-700'
                                         }`}
                                 >
                                     {cat.full_path}

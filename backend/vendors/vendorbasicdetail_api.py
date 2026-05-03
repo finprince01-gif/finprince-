@@ -242,12 +242,13 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_200_OK
             )
             
-        success = VendorBasicDetailDatabase.delete_vendor_basic_detail(instance.id, soft_delete=True) # Default to soft delete for safety
+        # Perform hard delete if it's safe (not live)
+        success = VendorBasicDetailDatabase.delete_vendor_basic_detail(instance.id, soft_delete=False)
         
         if success:
             return Response(
-                {'message': 'Vendor deleted successfully'},
-                status=status.HTTP_204_NO_CONTENT
+                {'message': 'Vendor deleted successfully from database.'},
+                status=status.HTTP_200_OK
             )
         else:
             return Response(

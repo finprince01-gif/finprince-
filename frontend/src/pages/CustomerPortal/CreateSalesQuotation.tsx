@@ -657,7 +657,6 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                                         key={cust.id}
                                                         onClick={() => {
                                                             setCustomerName(cust.customer_name);
-                                                            setAddress(cust.address || (cust.gst_details?.branches?.[0]?.address) || '');
                                                             setEmail(cust.email_address || '');
                                                             setContactNo(cust.contact_number || '');
                                                             setShowCustomerSuggestions(false);
@@ -665,14 +664,21 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                                             const branches = cust.gst_details?.branches || [];
                                                             setCustomerBranches(branches);
 
+                                                            let addrToSet = cust.address || '';
+
                                                             if (branches.length > 0) {
                                                                 const mainBranch = branches.find((b: any) =>
                                                                     (b.referenceName || b.defaultRef)?.toLowerCase().includes('main')
                                                                 ) || branches[0];
                                                                 setBranch(mainBranch.referenceName || mainBranch.defaultRef || '');
+                                                                const branchAddr = [mainBranch.addressLine1, mainBranch.addressLine2, mainBranch.addressLine3, mainBranch.city, mainBranch.state, mainBranch.pincode].filter(Boolean).join(', ');
+                                                                if (branchAddr) addrToSet = branchAddr;
+                                                                else if (mainBranch.address) addrToSet = mainBranch.address;
                                                             } else {
                                                                 setBranch('');
                                                             }
+                                                            
+                                                            setAddress(addrToSet);
                                                         }}
                                                         className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-none transition-colors"
                                                     >
@@ -698,8 +704,9 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                                 const val = e.target.value;
                                                 setBranch(val);
                                                 const selectedBranch = customerBranches.find(b => (b.referenceName || b.defaultRef) === val);
-                                                if (selectedBranch && selectedBranch.address) {
-                                                    setAddress(selectedBranch.address);
+                                                if (selectedBranch) {
+                                                    const branchAddr = [selectedBranch.addressLine1, selectedBranch.addressLine2, selectedBranch.addressLine3, selectedBranch.city, selectedBranch.state, selectedBranch.pincode].filter(Boolean).join(', ') || selectedBranch.address || '';
+                                                    if (branchAddr) setAddress(branchAddr);
                                                 }
                                             }}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
