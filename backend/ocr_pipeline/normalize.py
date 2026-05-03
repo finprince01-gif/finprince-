@@ -235,6 +235,73 @@ def resolve_key(data: Dict[str, Any], canonical_key: str) -> Any:
 
     return None
 
+def resolve_address(data: Dict[str, Any], prefix: str = "vendor") -> Optional[str]:
+    """
+    Aggregates fragmented address fields if a single canonical string is missing.
+    """
+    # 1. Try canonical resolution first
+    canonical = resolve_key(data, f"{prefix}_address")
+    if canonical and str(canonical).strip() not in ("", "None", "—"):
+        return str(canonical).strip()
+        
+    # 2. Look for fragments (address_line1, city, etc.)
+    fragments = []
+    # Try both snake_case and Title Case
+    keys = ["address_line1", "address_line2", "address_line3", "city", "state", "pincode", "zip_code", "country"]
+    
+    # Also handle some variations without 'address_' prefix
+    short_keys = ["line1", "line2", "city", "state", "pincode"]
+    
+    header = data.get("header", {})
+    if not isinstance(header, dict): header = {}
+    
+    # Search order: header then top-level
+    sources = [header, data]
+    
+    search_keys = []
+    for k in keys:
+        search_keys.extend([f"{prefix}_{k}", k, f"{prefix} {k}".replace("_", " ").title(), k.title()])
+    for k in short_keys:
+        search_keys.extend([f"{prefix}_{k}", k])
+
+    seen_vals = set()
+    for k in search_keys:
+        for src in sources:
+            val = src.get(k)
+            if val and str(val).strip() and str(val).strip().lower() not in seen_vals:
+                v_str = str(val).strip()
+                fragments.append(v_str)
+                seen_vals.add(v_str.lower())
+                break # Move to next base key
+                
+    if fragments:
+        res = ", ".join(fragments)
+        logger.info(f"ADDRESS_AGGREGATOR ({prefix}): Built from {len(fragments)} fragments: {res[:50]}...")
+        return res
+        
+    return None
+
+def gst_state_lookup(gstin: str) -> str:
+    if not gstin or len(gstin) < 2:
+        return ""
+    state_code = str(gstin)[:2]
+    gst_state_codes = {
+        "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab",
+        "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana",
+        "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+        "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh",
+        "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
+        "16": "Tripura", "17": "Meghalaya", "18": "Assam",
+        "19": "West Bengal", "20": "Jharkhand", "21": "Odisha",
+        "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+        "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra",
+        "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
+        "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
+        "34": "Puducherry", "35": "Andaman and Nicobar Islands",
+        "36": "Telangana", "37": "Andhra Pradesh (New)"
+    }
+    return gst_state_codes.get(state_code, "")
+
 def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
     """
     Step 2: Correct Hierarchical Normalization (Lossless Adapter).
@@ -372,8 +439,16 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
         
         item["amount"] = round(item["taxable_value"] + item["igst_amount"] + item["cgst_amount"] + item["sgst_amount"] + item["cess_amount"], 2)
 
-    vendor_address = str(resolve_key(data, "vendor_address") or "").strip()
-    billing_address = str(resolve_key(data, "billing_address") or "").strip()
+    vendor_address = resolve_address(data, "vendor") or ""
+    billing_address = resolve_address(data, "billing") or ""
+    
+    if not vendor_address:
+        logger.warning("ADDRESS_RESOLUTION: vendor_address is EMPTY after aggregation attempts.")
+    else:
+        print(f"INFO VENDOR_ADDRESS_RAW: {vendor_address}")
+        print(f"INFO VENDOR_ADDRESS_NORMALIZED: {vendor_address}")
+
+
 
     # ── Branch Derivation ──────────────────────────────────────
     vendor_city = str(data.get("vendor_city") or "").strip()
@@ -426,15 +501,21 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
     inv_date = normalize_date(resolve_key(data, "invoice_date"))
     total_amt = normalize_amount(resolve_key(data, "total_amount"))
     tax_amt = normalize_amount(resolve_key(data, "taxable_value"))
-    state = str(resolve_key(data, "vendor_state") or "").strip()
-    pos = str(resolve_key(data, "place_of_supply") or state or "").strip()
+    state_name = str(resolve_key(data, "vendor_state") or "").strip()
+    if state_name:
+        pos = state_name
+    elif gstin:
+        pos = gst_state_lookup(gstin)
+    else:
+        pos = ""
+
+    state = state_name
 
     # ── Hierarchical structure for UI sections ──────────────────
     result = {
         "sections": {
             "supplier_details": {
                 "vendor_name": name,
-                "vendor_address": vendor_address,
                 "billing_address": billing_address,
                 "bill_from": vendor_address,
                 "ship_from": vendor_address,
@@ -473,7 +554,7 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
         },
         # Top-level aliases for table display (Consistency with UI)
         "vendor_name": name,
-        "vendor_address": vendor_address,
+        "bill_from": vendor_address,
         "billing_address": billing_address,
         "gstin": gstin,
         "invoice_number": inv_no, 

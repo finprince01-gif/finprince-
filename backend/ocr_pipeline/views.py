@@ -190,6 +190,11 @@ class CleanOCRStagingView(views.APIView):
                 "has_source": os.path.exists(os.path.join(settings.MEDIA_ROOT, 'ocr_temp', r.file_hash)) if r.file_hash else False,
                 "extracted_data": {
                     "sections": sections,
+                    "bill_from": norm.get("bill_from") or supplier.get("bill_from") or supplier.get("vendor_address") or norm.get("vendor_address") or "",
+                    "billing_address": supplier.get("billing_address") or norm.get("billing_address") or supplier.get("bill_to") or norm.get("bill_to") or "",
+                    "Bill Address To": supplier.get("billing_address") or norm.get("billing_address") or supplier.get("bill_to") or norm.get("bill_to") or "",
+                    "Place of Supply": norm.get("place_of_supply") or supplier.get("place_of_supply") or "",
+                    "place_of_supply": norm.get("place_of_supply") or supplier.get("place_of_supply") or "",
                     **norm
                 }, 
                 "created_at": r.created_at,
@@ -524,10 +529,29 @@ class ZohoReconstructView(views.APIView):
         if "invoices" not in data and isinstance(data, list):
             data = {"invoices": data}
 
+        # TRACE: Log incoming payload safely
+        invoices_in = data.get("invoices", [])
+        if invoices_in and isinstance(invoices_in, list) and isinstance(invoices_in[0], dict):
+            logger.info(f"TRACE_API_IN: First invoice incoming vendor_address: {invoices_in[0].get('vendor_address')}")
+            logger.info(f"TRACE_API_IN: First invoice incoming bill_from: {invoices_in[0].get('bill_from')}")
+
         try:
             adapter = get_zoho_adapter()
             processed_invoices = adapter.reconstruct_invoices(data)
+            
+            # TRACE: Log outgoing payload safely
+            if processed_invoices and isinstance(processed_invoices, list) and isinstance(processed_invoices[0], dict):
+                logger.info(f"TRACE_API_OUT: First invoice outgoing bill_from: {processed_invoices[0].get('bill_from')}")
+
+            print("FINAL API RESPONSE:", processed_invoices)
+            for inv in processed_invoices:
+                if not inv.get("bill_from"):
+                    print("BROKEN RECORD:", inv)
+                    raise Exception("CRITICAL: bill_from empty or missing")
+
             return Response({"invoices": processed_invoices})
+
+
         except Exception as e:
             logger.error(f"Zoho Reconstruct Failure: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

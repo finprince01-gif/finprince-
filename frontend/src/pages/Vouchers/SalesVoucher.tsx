@@ -3446,7 +3446,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                         </td>
                                                         <td className="px-3 py-2 border-r border-gray-200">
                                                             <input
-                                                                type="number"
+                                                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                 value={row.qty}
                                                                 onChange={(e) => handleForeignItemRowChange(row.id, 'qty', e.target.value)}
                                                                 className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
@@ -3463,7 +3463,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                         </td>
                                                         <td className="px-3 py-2 border-r border-gray-200">
                                                             <input
-                                                                type="number"
+                                                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                 value={row.itemRate}
                                                                 onChange={(e) => handleForeignItemRowChange(row.id, 'itemRate', e.target.value)}
                                                                 className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
@@ -3749,7 +3749,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                         </td>
                                                         <td className="px-2 py-2 border-r border-gray-200">
                                                             <input
-                                                                type="number"
+                                                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                 value={row.qty}
                                                                 min="0"
                                                                 onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
@@ -3776,7 +3776,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                         </td>
                                                         <td className="px-2 py-2 border-r border-gray-200">
                                                             <input
-                                                                type="number"
+                                                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                 value={row.itemRate}
                                                                 min="0"
                                                                 readOnly={activeTab === 'item_tax_inr'}
@@ -3802,7 +3802,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 <>
                                                                     <td className="px-2 py-2 border-r border-gray-200">
                                                                         <input
-                                                                            type="number"
+                                                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                             value={row.cgst}
                                                                             min="0"
                                                                             onChange={(e) => handleItemRowChange(row.id, 'cgst', e.target.value)}
@@ -3812,7 +3812,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                     </td>
                                                                     <td className="px-2 py-2 border-r border-gray-200">
                                                                         <input
-                                                                            type="number"
+                                                                            type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                             value={row.sgst}
                                                                             min="0"
                                                                             onChange={(e) => handleItemRowChange(row.id, 'sgst', e.target.value)}
@@ -3824,7 +3824,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                             ) : (
                                                                 <td className="px-2 py-2 border-r border-gray-200">
                                                                     <input
-                                                                        type="number"
+                                                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                         value={row.igst}
                                                                         readOnly
                                                                         className="w-20 px-2 py-1 border-0 rounded text-sm bg-gray-50 bg-opacity-50 text-gray-700 cursor-not-allowed"
@@ -3836,7 +3836,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                         {!isCessHidden && (
                                                             <td className="px-2 py-2 border-r border-gray-200">
                                                                 <input
-                                                                    type="number"
+                                                                    type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                     value={row.cess}
                                                                     min="0"
                                                                     onChange={(e) => handleItemRowChange(row.id, 'cess', e.target.value)}
@@ -4246,7 +4246,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                 <div className="relative w-full">
                                                                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">₹</span>
                                                                     <input
-                                                                        type="number"
+                                                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                         step="0.01"
                                                                         value={!ref.appliedNow ? "" : ref.amount}
                                                                         placeholder="0.00"
@@ -5884,3 +5884,4 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 };
 
 export default SalesVoucher;
+

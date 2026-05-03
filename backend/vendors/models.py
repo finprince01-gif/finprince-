@@ -142,7 +142,7 @@ class Vendor(models.Model):
         default='net_30',
         help_text="Payment terms"
     )
-    credit_limit = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, help_text="Credit limit")
+    credit_limit = models.DecimalField(max_digits=25, decimal_places=2, blank=True, null=True, help_text="Credit limit")
     credit_days = models.IntegerField(blank=True, null=True, help_text="Credit days")
     
     # Banking Information
@@ -163,8 +163,8 @@ class Vendor(models.Model):
     
     # Additional Information
     notes = models.TextField(blank=True, null=True, help_text="Additional notes")
-    opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Opening balance")
-    current_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Current balance")
+    opening_balance = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Opening balance")
+    current_balance = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Current balance")
     
     # Status and Metadata
     is_active = models.BooleanField(default=True, help_text="Is vendor active")
@@ -602,7 +602,7 @@ class VendorMasterTerms(models.Model):
     )
     
     # Terms and Conditions Fields
-    credit_limit = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, help_text="Credit limit amount")
+    credit_limit = models.DecimalField(max_digits=25, decimal_places=2, blank=True, null=True, help_text="Credit limit amount")
     credit_period = models.CharField(max_length=100, blank=True, null=True, help_text="Credit period (e.g., 30 days, 60 days)")
     credit_terms = models.TextField(blank=True, null=True, help_text="Credit terms and conditions")
     penalty_terms = models.TextField(blank=True, null=True, help_text="Penalty terms for late payments or breaches")
@@ -690,9 +690,9 @@ class VendorTransactionPO(models.Model):
     delivery_terms = models.TextField(blank=True, null=True, help_text="Delivery terms and conditions")
     
     # Financial Summary
-    total_taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Total taxable value")
-    total_tax = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Total tax amount")
-    total_value = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Total PO value")
+    total_taxable_value = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Total taxable value")
+    total_tax = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Total tax amount")
+    total_value = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Total PO value")
     
     # Status and Metadata
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Draft', help_text="PO Status")
@@ -742,14 +742,14 @@ class VendorTransactionPOItem(models.Model):
     # Quantity and Rates
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Quantity")
     uom = models.CharField(max_length=20, blank=True, null=True, help_text="Unit of Measurement")
-    negotiated_rate = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Negotiated rate")
-    final_rate = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Final rate")
+    negotiated_rate = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Negotiated rate")
+    final_rate = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Final rate")
     
     # Tax and Values
-    taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Taxable value")
+    taxable_value = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Taxable value")
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="GST rate percentage")
-    gst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="GST amount")
-    invoice_value = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, help_text="Total invoice value")
+    gst_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="GST amount")
+    invoice_value = models.DecimalField(max_digits=25, decimal_places=2, default=0.00, help_text="Total invoice value")
     
     # Metadata
     is_active = models.BooleanField(default=True)
@@ -792,9 +792,9 @@ class VendorTransaction(models.Model):
     transaction_date = models.DateField()
     
     # Financial Details
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
-    tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    amount = models.DecimalField(max_digits=25, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=25, decimal_places=2)
     
     # Status and Mode
     status = models.CharField(max_length=20, default='pending')

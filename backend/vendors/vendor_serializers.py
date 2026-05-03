@@ -309,7 +309,7 @@ class VendorBalanceSerializer(serializers.Serializer):
     """
     Serializer for vendor balance operations.
     """
-    amount = serializers.DecimalField(max_digits=15, decimal_places=2)
+    amount = serializers.DecimalField(max_digits=25, decimal_places=2)
     operation = serializers.ChoiceField(choices=['add', 'subtract'])
     
     def validate_amount(self, value):
@@ -326,5 +326,5 @@ class VendorStatisticsSerializer(serializers.Serializer):
     total_vendors = serializers.IntegerField()
     active_vendors = serializers.IntegerField()
     verified_vendors = serializers.IntegerField()
-    total_outstanding = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_outstanding = serializers.DecimalField(max_digits=25, decimal_places=2)
     vendors_by_type = serializers.DictField()

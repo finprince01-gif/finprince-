@@ -23,6 +23,15 @@ class ForensicMerger:
         }
         self.traces = []
 
+    def _to_float(self, val: Any) -> float:
+        if val is None or str(val).strip() == "":
+            return 0.0
+        try:
+            cleaned = re.sub(r'[^\d.-]', '', str(val))
+            return float(cleaned) if cleaned else 0.0
+        except:
+            return 0.0
+
     def log_trace(self, prev, curr, decision, reason):
         prev_total = self._to_float(prev.get("total_invoice_value") or prev.get("total_amount"))
         curr_total = self._to_float(curr.get("total_invoice_value") or curr.get("total_amount"))
@@ -123,10 +132,11 @@ class ForensicMerger:
             essential_fields = [
                 "invoice_number", "invoice_date", "vendor_name", 
                 "gstin", "total_taxable_value", "total_invoice_value",
-                "place_of_supply", "billing_address"
+                "place_of_supply", "billing_address", "vendor_address"
             ]
             for field in essential_fields:
-                if inv.get(field):
+                val = inv.get(field)
+                if val and str(val).strip() not in ("", "None", "—"):
                     score += 100
                     
             # Rule 3: Best OCR quality (proxy: item count and numeric validity)
@@ -228,8 +238,19 @@ class ForensicMerger:
         for inv in group:
             inv["_copy_type"] = self.detect_copy_type(inv)
 
-        # Step 4: Select header
+        # Step 4: Select best base header
         merged_invoice = self.select_best_header(group)
+
+        # 🛡️ STEP 4.5: Header Backfill (NO DATA LOSS RULE)
+        # If the 'best' header is missing fields that exist in other copies, fill them.
+        for other in group:
+            if other is merged_invoice: continue
+            for k, v in other.items():
+                if k == "items": continue # Items merged separately
+                if not merged_invoice.get(k) or str(merged_invoice.get(k)).strip() in ("", "None", "—"):
+                    if v and str(v).strip() not in ("", "None", "—"):
+                        merged_invoice[k] = v
+                        logger.info(f"FORENSIC: Backfilled header field '{k}' from other group member")
 
         # Step 3: Combine ALL items from ALL pages
         all_raw_items = []

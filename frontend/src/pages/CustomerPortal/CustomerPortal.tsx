@@ -6173,15 +6173,16 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
 
                     if (isFullyPaid || t.due_status === 'Paid') {
                         finalStatus = 'Received';
+                    } else if (isPartiallyPaid || t.due_status === 'Partially Received') {
+                        finalStatus = 'Partially Received';
                     } else {
-                        // Check credit period even if partially paid
                         const cp = parseInt(customer.credit_period || '0', 10);
                         const invDate = new Date(t.date);
                         const today = new Date();
                         const diffDays = Math.floor((today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
                         
                         if (diffDays > cp) {
-                            finalStatus = isPartiallyPaid || t.due_status === 'Partially Received' ? 'Partially Received' : 'Due';
+                            finalStatus = 'Due';
                         } else {
                             finalStatus = 'Not Due';
                         }
@@ -6347,9 +6348,11 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
 
                     if (paidRounded >= totalRounded && totalRounded > 0) {
                         updatedStatus = 'Received';
+                    } else if (paidRounded > 0) {
+                        updatedStatus = 'Partially Received';
                     } else if (diffDays > cp) {
                         // After credit period
-                        updatedStatus = (paidRounded > 0) ? 'Partially Received' : 'Due';
+                        updatedStatus = 'Due';
                     } else {
                         // Within credit period
                         updatedStatus = 'Not Due';

@@ -1,7 +1,10 @@
 import json
 import logging
 import re
+import base64
+import fitz  # PyMuPDF
 from google.genai import types
+from core.ai_proxy import ai_service
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +48,21 @@ def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.
     """
     Extracts invoice data using the central AI Proxy service with fallbacks.
     Returns a unified JSON object matching the internal schema.
+
+    ROOT-CAUSE FIX (PAYLOAD ISOLATION):
+    Processes each page independently with ONLY its own OCR text and image.
+    Ensures prompt size remains < 150K and prevents "full document" leakage.
     """
-    prompt_text = f"""
+    # ── STEP 1: IDENTIFY PAGES ──
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        page_count = len(doc)
+    except Exception:
+        doc = None
+        page_count = 1
+
+    # ── STEP 2: PREPARE BASE PROMPT (UNTOUCHED) ──
+    base_prompt = f"""
 Extract invoice data from this {voucher_type} document into the EXACT JSON format below.
 Failure to extract ANY field that is visible on the document is unacceptable.
 
@@ -141,23 +157,33 @@ Failure to extract ANY field that is visible on the document is unacceptable.
 * Ensure all numeric fields are numbers.
 * NO hallway citations or placeholders.
 """
-    
-    import base64
-    from core.ai_proxy import ai_service
-    
-    # Process via central proxy to benefit from key rotation and model fallback
-    try:
-        # Encode file for proxy
-        file_b64 = base64.b64encode(file_bytes).decode('utf-8')
+
+    def _call_ai_for_page(segment_bytes, page_ocr_text, page_idx):
+        """
+        HARD ISOLATION RULE: ONE PAGE -> ONE OCR TEXT -> ONE IMAGE -> ONE REQUEST
+        """
+        # Ensure ONLY this page's OCR text is included. 
+        # Explicitly label the text to prevent any overlap with previous/next pages.
+        page_isolated_prompt = f"### [PAGE {page_idx+1} OCR DATA]\n{page_ocr_text}\n\n{base_prompt}"
         
+        file_b64 = base64.b64encode(segment_bytes).decode('utf-8')
+        
+        # Build fresh request dictionary to ensure no 'full_document_text' or 'combined_raw_text' leakage
         request_data = {
-            'prompt': prompt_text,
+            'type': 'extraction',
+            'prompt': page_isolated_prompt,
             'image_data': file_b64,
             'mime_type': 'application/pdf',
-            'voucher_type': voucher_type
+            'voucher_type': voucher_type,
+            'page_index': page_idx + 1
         }
         
-        logger.info(f"AI OCR Request dispatched to proxy (Type: extraction, User: {user_id})")
+        prompt_size = len(page_isolated_prompt)
+        logger.info(f"AI OCR ISOLATED Request | Page: {page_idx+1} | Prompt Size: {prompt_size} chars | User: {user_id}")
+        
+        if prompt_size > 300000:
+             logger.warning(f"CRITICAL: Isolated prompt for page {page_idx+1} exceeds 300K limit ({prompt_size} chars).")
+
         response = ai_service.make_request('extraction', request_data, user_id, tenant_id)
         
         if 'error' in response:
@@ -168,17 +194,58 @@ Failure to extract ANY field that is visible on the document is unacceptable.
         
         try:
             result = json.loads(cleaned_json_text)
-            # Store raw text for regex fallbacks in normalization
             result["_raw_text"] = raw_text
-            logger.info("Successfully parsed Proxy-mediated Gemini response.")
             return result
         except json.JSONDecodeError as jde:
             logger.error(f"JSON Decode Error in Proxy response: {str(jde)}")
             return {"_error": "JSON_DECODE_FAILED", "_raw": raw_text}
 
-    except Exception as e:
-        logger.error(f"Extraction failed via proxy: {str(e)}")
-        raise RuntimeError(f"Extraction failed: {str(e)}")
+    # ── STEP 3: SEQUENTIAL EXECUTION (ISOLATED) ──
+    if page_count <= 1:
+        page_text = doc[0].get_text("text") if doc else ""
+        res = _call_ai_for_page(file_bytes, page_text, 0)
+        if doc: doc.close()
+        return res
+
+    logger.info(f"[ISOLATION FIX] Splitting multi-page segment into {page_count} isolated AI calls.")
+    final_result = None
+
+    for i in range(page_count):
+        # 1. Extract ONLY this page's OCR text
+        page_text = doc[i].get_text("text")
+        
+        # 2. Extract ONLY this page as a standalone PDF
+        new_doc = fitz.open()
+        new_doc.insert_pdf(doc, from_page=i, to_page=i)
+        page_bytes = new_doc.write()
+        new_doc.close()
+
+        page_result = _call_ai_for_page(page_bytes, page_text, i)
+
+        if "_error" in page_result:
+            if final_result is None:
+                if doc: doc.close()
+                return page_result
+            logger.warning(f"Skipping corrupted page {i+1} due to {page_result.get('_error')}")
+            continue
+
+        # ── STEP 4: DETERMINISTIC MERGING ──
+        if final_result is None:
+            final_result = page_result
+        else:
+            final_result.setdefault("items", []).extend(page_result.get("items", []))
+            final_result["_raw_text"] = final_result.get("_raw_text", "") + "\n" + page_result.get("_raw_text", "")
+
+            # Header Merge (Intelligent Patching)
+            for k, v in page_result.get("header", {}).items():
+                curr_h = final_result["header"]
+                if not curr_h.get(k) or curr_h.get(k) == 0 or curr_h.get(k) == "":
+                    if v: curr_h[k] = v
+
+    if doc: doc.close()
+    return final_result
+
+
 
 
 

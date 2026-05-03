@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'vouchers',
     'ocr_pipeline',
     'gst_reconciliation',
+    'bank_upload',           # Bank Statement Upload & Staging Module
 ]
 
 MIDDLEWARE = [

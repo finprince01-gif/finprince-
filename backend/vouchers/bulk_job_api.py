@@ -17,6 +17,7 @@ from rest_framework.permissions import AllowAny
 from .models import BulkInvoiceJob, InvoiceProcessingItem
 from .pipeline import storage
 from .pipeline.health import SystemHealth, IdempotencyLock, MAX_PAGES_PER_JOB
+from core.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -221,19 +222,55 @@ class BulkUploadAPIView(APIView):
             results = list(executor.map(upload_worker, files))
             paths = [r for r in results if r]
 
-        # ── PUSH TO PROCESSOR ─────────────────────────────────────
-        # Note: No Kafka. Direct in-process worker thread.
-        import threading
-        from .pipeline.direct_processor import process_bulk_job
+        # ── PUSH TO REDIS PRIORITY QUEUE (with LOCAL FALLBACK) ────────────
+        if not redis_client.available:
+            logger.warning("[REDIS DOWN] Falling back to local thread processing for Job %s", job.id)
+            import threading
+            from .pipeline.direct_processor import process_bulk_job
+            thread = threading.Thread(target=process_bulk_job, args=(job.id, voucher_type))
+            thread.daemon = True
+            thread.start()
+            return Response({'status': 'processing', 'job_id': job.id, 'mode': 'local_fallback'})
+
+        # Admission Control: Reject if total queue size exceeds threshold
+        TOTAL_LIMIT = 20000
+        priority_queues = ['bulk_jobs_high', 'bulk_jobs_normal', 'bulk_jobs_low']
+        q_len = redis_client.get_queue_length(priority_queues)
         
-        # Determine voucher type from request
-        voucher_type = request.data.get('voucher_type', 'Purchase')
+        if q_len > TOTAL_LIMIT:
+             logger.critical(f"[ADMISSION CONTROL] Rejecting Job {job.id}. Total queue length {q_len}")
+             return Response({'error': 'System is busy (Admission Control). Please try again later.'}, status=503)
+
+        # ── PRIORITY ROUTING ──
+        # High: 1-3 pages, Normal: 4-15 pages, Low: 16+ pages
+        file_count = len(files)
+        if file_count <= 3:
+            p_queue = 'bulk_jobs_high'
+        elif file_count <= 15:
+            p_queue = 'bulk_jobs_normal'
+        else:
+            p_queue = 'bulk_jobs_low'
+
+        task = {
+            'job_id': job.id,
+            'voucher_type': voucher_type,
+            'tenant_id': tenant_id,
+            'file_count': file_count,
+            'enqueued_at': time.time()
+        }
         
-        print(f"DEBUG: Starting background thread for Job {job.id} (Voucher: {voucher_type})")
-        thread = threading.Thread(target=process_bulk_job, args=(job.id, voucher_type))
-        thread.daemon = True
-        thread.start()
-        print(f"DEBUG: Thread started for Job {job.id}")
+        pushed = redis_client.push_to_queue(p_queue, task)
+        if not pushed:
+            logger.warning("[REDIS DOWN] Push failed. Falling back to local thread processing.")
+            import threading
+            from .pipeline.direct_processor import process_bulk_job
+            thread = threading.Thread(target=process_bulk_job, args=(job.id, voucher_type))
+            thread.daemon = True
+            thread.start()
+            return Response({'status': 'processing', 'job_id': job.id, 'mode': 'local_fallback'})
+
+        redis_client.record_metric('bulk_queue_length', q_len + 1)
+        logger.info(f"[UPLOAD] Enqueued Bulk Job {job.id} to {p_queue} | files={file_count}")
 
         return Response({
             'status':   'processing',
@@ -255,6 +292,27 @@ class BulkUploadAPIView(APIView):
         return resp
 
 
+class HealthCheckAPIView(APIView):
+    """Monitor system health (Redis, Workers, etc.)"""
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        redis_status = "connected" if redis_client.is_healthy() else "down"
+        metrics = {}
+        if redis_status == "connected":
+            try:
+                metrics = redis_client.get_client().hgetall("metrics")
+            except:
+                pass
+
+        return Response({
+            "status": "healthy" if redis_status == "connected" else "degraded",
+            "redis": redis_status,
+            "timestamp": time.time(),
+            "metrics": metrics
+        })
+
 class BulkStatusAPIView(APIView):
     permission_classes = [AllowAny]
     def get(self, request, job_id, *args, **kwargs):
@@ -269,12 +327,14 @@ class BulkStatusAPIView(APIView):
             if job.status == 'completed' and job.file_hash:
                 IdempotencyLock(job.file_hash).mark_done(job.id)
 
+            # Optimization: Calculate progress
+            progress = 0
+            if total > 0:
+                progress = int((success + failed) / total * 100)
+
             return Response({
-                'total':     total,
-                'processed': success,
-                'failed':    failed,
-                'pending':   pending,
                 'status':    job.status,
+                'progress':  progress
             })
         except BulkInvoiceJob.DoesNotExist:
             return Response({'error': 'Job not found'}, status=404)

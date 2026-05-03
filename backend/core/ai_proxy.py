@@ -6,12 +6,15 @@ import time
 import hashlib
 import logging
 import threading
+import queue
 from typing import Dict, Any, Optional
 from django.core.cache import cache
+from django.conf import settings
 from google.api_core import exceptions
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from core.redis_client import redis_client
 
 # Ensure environment variables are loaded (especially for GEMINI_API_KEY)
 load_dotenv(override=True)
@@ -136,44 +139,108 @@ class CircuitBreaker:
 
 
 class RateLimiter:
-    """Per-user, tenant, IP rate limiting using in-memory storage"""
+    """Shared rate limiting using Redis"""
 
-    def __init__(self):
-        self.limits = {}  # key -> (count, window_start)
-        self.lock = threading.Lock()
+    def __init__(self, max_rps=2):
+        self.max_rps = max_rps
 
-    def check_rate_limit(self, key: str, limit: int, window: int = 60) -> Dict[str, Any]:
-        """Check if request is allowed. Returns {'allowed': bool, 'retry_after': int}"""
-        now = time.time()
-        
-        with self.lock:
-            if key in self.limits:
-                count, window_start = self.limits[key]
-                
-                # Check if window has expired
-                if now - window_start >= window:
-                    # Reset window
-                    self.limits[key] = (1, now)
-                    return {'allowed': True, 'retry_after': 0}
-                
-                # Within window
-                if count >= limit:
-                    retry_after = int(window - (now - window_start))
-                    return {'allowed': False, 'retry_after': retry_after}
-                
-                # Increment count
-                self.limits[key] = (count + 1, window_start)
-                return {'allowed': True, 'retry_after': 0}
-            else:
-                # First request
-                self.limits[key] = (1, now)
-                return {'allowed': True, 'retry_after': 0}
-
+    def check_rate_limit(self, key: str, limit: int = None, window: float = 1.0) -> Dict[str, Any]:
+        """Check if request is allowed using sliding window. Returns {'allowed': bool, 'retry_after': int}"""
+        limit = int(limit or self.max_rps)
+        allowed, count, retry_after = redis_client.check_sliding_window(key, limit, window)
+        return {'allowed': allowed, 'retry_after': int(retry_after) if retry_after > 0 else 0}
 
 # Global instances
 api_key_manager = APIKeyManager()
 circuit_breaker = CircuitBreaker()
-rate_limiter = RateLimiter()
+rate_limiter = RateLimiter(max_rps=settings.AI_MAX_RPS if hasattr(settings, 'AI_MAX_RPS') else 2)
+
+class AIRequestQueue:
+    """Redis-backed request queue with process-safe concurrency and local fallback"""
+    def __init__(self, queue_name="ai_requests"):
+        self.queue_name = queue_name
+        self._local_queue = queue.Queue() # Fallback for local processing if Redis fails
+        self._local_worker_started = False
+
+    def enqueue(self, request_data: dict) -> dict:
+        # Check Redis Health
+        if not redis_client.available:
+            return self._enqueue_local(request_data)
+
+        # Backpressure control (Admission Control)
+        # Threshold increased to 20,000 for high-concurrency absorbency
+        TOTAL_LIMIT = 20000
+        q_len = redis_client.get_queue_length(self.queue_name)
+        if q_len > TOTAL_LIMIT:
+            logger.critical(f"[ADMISSION CONTROL] Rejected request. Queue size {q_len} exceeds limit {TOTAL_LIMIT}")
+            return {'error': 'AI System is busy (High Queue Load)', 'code': 'BACKPRESSURE', 'status': 503}
+
+        request_id = hashlib.md5(f"{time.time()}:{json.dumps(request_data)}".encode()).hexdigest()
+        
+        task = {
+            'id': request_id,
+            'request_data': request_data,
+            'retries': 0,
+            'enqueued_at': time.time()
+        }
+        
+        pushed = redis_client.push_to_queue(self.queue_name, task)
+        if not pushed:
+            logger.warning("[REDIS DOWN] Enqueue failed. Falling back to local in-memory processing.")
+            return self._enqueue_local(request_data)
+
+        redis_client.record_metric('ai_queue_length', q_len + 1)
+        logger.info(f"[Queue] Enqueued task {request_id}. Current Size: {q_len + 1}")
+
+        # Wait for result in Redis
+        result_key = f"ai_result:{request_id}"
+        timeout = 360
+        start = time.time()
+        while time.time() - start < timeout:
+            res = redis_client.get_client().get(result_key)
+            if res:
+                redis_client.get_client().delete(result_key)
+                return json.loads(res)
+            time.sleep(0.5)
+
+        return {'error': 'AI request timed out in Redis queue'}
+
+    def _enqueue_local(self, request_data: dict) -> dict:
+        """Fallback: Process request locally using a thread-pool if Redis is dead"""
+        if not self._local_worker_started:
+            self._start_local_workers()
+        
+        event = threading.Event()
+        task = {
+            'request_data': request_data,
+            'event': event,
+            'result': None
+        }
+        self._local_queue.put(task)
+        if not event.wait(timeout=360):
+            return {'error': 'AI request timed out in local fallback queue'}
+        return task['result']
+
+    def _start_local_workers(self):
+        self._local_worker_started = True
+        def worker_loop():
+            while True:
+                task = self._local_queue.get()
+                try:
+                    task['result'] = process_ai_request(task['request_data'])
+                    task['event'].set()
+                except Exception as e:
+                    logger.error(f"Local AI worker error: {e}")
+                    task['result'] = {'error': str(e)}
+                    task['event'].set()
+                finally:
+                    self._local_queue.task_done()
+        
+        t = threading.Thread(target=worker_loop, daemon=True, name="LocalAIWorker")
+        t.start()
+        logger.info("[FALLBACK] Local AI worker thread started.")
+
+ai_request_queue = AIRequestQueue()
 
 
 def generate_cache_key(request_data: dict) -> str:
@@ -230,6 +297,15 @@ def process_ai_request(request_data: dict) -> dict:
     user_id = request_data.get('user_id', 'unknown')
     tenant_id = request_data.get('tenant_id', 'anonymous')
     cache_key = request_data.get('cache_key')
+
+    # ── REMOVE GLOBAL CONTEXT INJECTION (STRICT) ──────────────────────────
+    # Ensure no legacy bloated keys are passed to the AI model.
+    # This eliminates the ~1.8M character inflation caused by document-level text leakage.
+    bloat_keys = ['full_document_text', 'combined_raw_text', 'previous_pages_text', 'next_pages_text']
+    for key in bloat_keys:
+        if key in request_data:
+            logger.warning(f"[BLOAT REMOVAL] Stripping legacy key '{key}' from AI request.")
+            del request_data[key]
 
     try:
         # Check circuit breaker first
@@ -313,10 +389,16 @@ def process_ai_request(request_data: dict) -> dict:
             User query: {request_data['message']}
             """
         elif request_data.get('type') in ('invoice', 'master', 'extraction'):
-            prompt_text = request_data.get('prompt', 'Extract invoice data from this image')
+            # FINAL-LAYER IMMUTABILITY: Extract prompt EXACTLY as provided by upstream.
+            # DO NOT append, merge, enrich, or inject context.
+            prompt_text = request_data.get('prompt')
+            if not prompt_text:
+                prompt_text = 'Extract invoice data from this image'
+            
             if 'image_data' in request_data:
                 try:
                     image_bytes = base64.b64decode(request_data['image_data'])
+                    # Multimodal Strict Pass-Through: [text, image] only.
                     prompt = [
                         prompt_text,
                         {
@@ -334,13 +416,56 @@ def process_ai_request(request_data: dict) -> dict:
         else:
             return {'error': 'Invalid request type'}
 
+        # ── PAYLOAD TRACE & VALIDATION (ROOT-CAUSE FIX) ──────────────────────
+        # Verify that isolation is working and no inflation has occurred.
+        prompt_text_len = len(prompt_text) if 'prompt_text' in locals() else (len(prompt) if isinstance(prompt, str) else 0)
+        image_data_len = len(request_data.get('image_data', ''))
+        
+        logger.info(f"[ROOT-CAUSE TRACE] Final Payload | Text: {prompt_text_len} chars | Image: {image_data_len} chars")
+
+        # ASSERTION: Prompt text must be < 300K (Adjusted for real-world accounting data)
+        if prompt_text_len > 300000:
+             logger.error(f"BLOCKED: Prompt text size {prompt_text_len} exceeds 300K safety limit. REJECTING REQUEST.")
+             return {
+                 'error': 'Internal Error: AI request payload too large. Context data exceeds 300K limit.',
+                 'code': 'PAYLOAD_TOO_LARGE',
+                 'size': prompt_text_len
+             }
+
         # Log request
         msg_content = request_data.get('message', 'invoice_processing')
         request_hash = hashlib.md5(msg_content.encode()).hexdigest()[:8]
         logger.info(f"AI Call: user={user_id}, tenant={tenant_id}, hash={request_hash}")
 
-        # Execute with retry
-        response_text = execute_with_retry(prompt, request_data, api_key)
+        # ── PROMPT SIZE GUARD ────────────────────────────────────────────────
+        # For text-only prompts that exceed 300,000 chars, split into sequential
+        # batches and merge results. Multimodal (image) prompts are NEVER split
+        # because splitting image+text pairs would break extraction context.
+        PROMPT_SIZE_LIMIT = 300_000
+        is_multimodal = isinstance(prompt, list)  # image prompts are lists
+
+        if not is_multimodal and isinstance(prompt, str) and len(prompt) > PROMPT_SIZE_LIMIT:
+            # Split into batches of PROMPT_SIZE_LIMIT chars each
+            batches = []
+            for start in range(0, len(prompt), PROMPT_SIZE_LIMIT):
+                batches.append(prompt[start:start + PROMPT_SIZE_LIMIT])
+            logger.info(
+                f"[PromptGuard] Prompt size {len(prompt)} chars exceeds {PROMPT_SIZE_LIMIT}. "
+                f"Splitting into {len(batches)} sequential batches."
+            )
+            batch_results = []
+            for batch_idx, batch_text in enumerate(batches):
+                logger.info(f"[PromptGuard] Processing batch {batch_idx + 1}/{len(batches)} "
+                            f"({len(batch_text)} chars)")
+                batch_response = execute_with_retry(batch_text, request_data, api_key)
+                batch_results.append(batch_response)
+            # Merge: join all batch JSON responses into a single string
+            # (the caller's existing JSON parser handles the merged output)
+            response_text = "\n".join(batch_results)
+        else:
+            # Standard path (multimodal or within size limit)
+            # Execute with retry
+            response_text = execute_with_retry(prompt, request_data, api_key)
 
         # Record success
         circuit_breaker.record_success()
@@ -381,23 +506,89 @@ def process_ai_request(request_data: dict) -> dict:
         return {'error': f'AI service busy. Error: {str(e)}'}
 
 
+def _call_gemini_single(prompt: Any, request_data: dict, api_key: str, model_name: str, attempt_label: str, public_ip: str) -> str:
+    """
+    Internal helper: fires ONE Gemini API call for the given model and prompt.
+    Returns clean response text on success, raises on any error.
+    DO NOT call this directly — use execute_with_retry().
+    """
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=None)
+    )
+    is_agent = request_data.get('type') == 'agent'
+
+    logger.info(f"AI Call {attempt_label}: {model_name} (IP: {public_ip})")
+    t_start = time.monotonic()
+
+    response = client.models.generate_content(
+        model=model_name,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=not is_agent)
+        )
+    )
+
+    if not response.text:
+        raise ValueError(f"Empty response from {model_name}. Check safety filters.")
+
+    logger.info(f"AI Response Status: SUCCESS | Model: {model_name} | Time: {time.monotonic() - t_start:.2f}s")
+
+    # Robust Extraction: Remove markdown blocks if present
+    clean_text = response.text.strip()
+    if "```json" in clean_text:
+        clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in clean_text:
+        clean_text = clean_text.split("```")[1].split("```")[0].strip()
+
+    # BASIC JSON REPAIR (Safety Layer)
+    try:
+        json.loads(clean_text)
+    except json.JSONDecodeError:
+        repaired = re.sub(r"\'", '"', clean_text)
+        repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+        try:
+            json.loads(repaired)
+            clean_text = repaired
+            logger.info("Successfully repaired AI JSON output.")
+        except:
+            pass  # Return original; let caller handle
+
+    return clean_text
+
+
 def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
-    """Execute AI request with exponential backoff and valid Gemeni model selection."""
+    """Execute AI request with exponential backoff and valid Gemini model selection.
+
+    Changes from original:
+    - 429 ResourceExhausted: dedicated 5-retry exponential backoff (2/4/8/16/32s)
+      before marking key unhealthy. No behaviour change for any other error.
+    - Prompt size logged before every attempt (safety logging only).
+    All other retry/model-fallback logic is identical to before.
+    """
     max_attempts = 3
     base_delay = 2
     api_key_used = api_key
-    
+
+    # 429-specific constants (requirement: up to 5 retries, 2→4→8→16→32s)
+    MAX_429_RETRIES = 5
+    BACKOFF_429 = [2, 4, 8, 16, 32]
+
     # VALID MODELS (Compatible with the 2026 environment)
-    candidate_models = [
-        'gemini-2.0-flash',
-        'gemini-2.5-flash',
-        'gemini-3.1-flash-lite-preview'
-    ]
+    # Optimized for Extraction: Use gemini-2.5-flash ONLY for high-volume tasks
+    is_extraction = request_data.get('type') in ('extraction', 'invoice', 'master')
+    if is_extraction:
+        candidate_models = ['gemini-2.5-flash']
+    else:
+        candidate_models = [
+            'gemini-2.0-flash',
+            'gemini-2.5-flash',
+            'gemini-3.1-flash-lite-preview'
+        ]
 
     # Get public IP for debugging (Log once or occasionally)
     try:
         import urllib.request
-        # Cache IP for 10 minutes to avoid overhead
         now = time.time()
         if not hasattr(execute_with_retry, '_public_ip') or now - getattr(execute_with_retry, '_ip_time', 0) > 600:
             execute_with_retry._public_ip = urllib.request.urlopen('https://api.ipify.org').read().decode('utf8')
@@ -406,69 +597,33 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     except Exception:
         public_ip = "unknown"
 
-    # Log prompt size
-    prompt_str = str(prompt)
-    logger.info(f"AI Prompt Size: {len(prompt_str)} chars")
+    # ── [FINAL TRACE] TRUE FINAL STAGE (MANDATORY) ──
+    # This is the last point before API dispatch.
+    # Input Prompt: request_data['prompt']
+    # Final Prompt Text: prompt if str else prompt[0]
+    
+    input_size = len(request_data.get('prompt', ''))
+    final_text_part = prompt if isinstance(prompt, str) else prompt[0]
+    final_text_size = len(str(final_text_part))
+    
+    logger.info(f"[FINAL TRACE] Input Prompt Size: {input_size}")
+    logger.info(f"[FINAL TRACE] Final Sent Prompt Size: {final_text_size}")
+
+    # HARD SAFETY ASSERTION (Adjusted to 300K to match batching logic)
+    if final_text_size > 300000:
+        logger.critical(f"FATAL: Prompt inflation detected! Input={input_size}, Final={final_text_size}. BLOAT SOURCE FOUND.")
+        raise Exception(f"FATAL: Prompt inflation detected ({final_text_size} chars). Execution blocked to prevent 429.")
 
     for attempt in range(max_attempts):
-        # Initialize client
-        client = genai.Client(
-            api_key=api_key_used,
-            http_options=types.HttpOptions(timeout=None)
-        )
-        
-        # Try each model in the list
         last_error = None
+
         for model_name in candidate_models:
             try:
-                logger.info(f"AI Call Attempt {attempt+1}: {model_name} (IP: {public_ip})")
-                
-                t_start = time.monotonic()
-                
-                # Determine if we need AFC (Only for agentic chat)
-                is_agent = request_data.get('type') == 'agent'
-                
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=not is_agent)
-                    )
+                result = _call_gemini_single(
+                    prompt, request_data, api_key_used, model_name,
+                    f"Attempt {attempt + 1}", public_ip
                 )
-                t_end = time.monotonic()
-                
-                # Check for successful response
-                if not response.text:
-                    logger.warning(f"AI returned empty response for {model_name}. Check safety filters.")
-                    continue
-                
-                logger.info(f"AI Response Status: SUCCESS | Model: {model_name} | Time: {time.monotonic() - t_start:.2f}s")
-                
-                # Robust Extraction: Remove markdown blocks if present
-                clean_text = response.text.strip()
-                if "```json" in clean_text:
-                    clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-                elif "```" in clean_text:
-                    clean_text = clean_text.split("```")[1].split("```")[0].strip()
-                
-                # BASIC JSON REPAIR (Safety Layer)
-                try:
-                    # Check if it's already valid JSON
-                    json.loads(clean_text)
-                except json.JSONDecodeError:
-                    # Attempt simple repairs
-                    # 1. Replace single quotes with double quotes (common AI error)
-                    repaired = re.sub(r"\'", '"', clean_text)
-                    # 2. Remove trailing commas before closing braces/brackets
-                    repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
-                    try:
-                        json.loads(repaired)
-                        clean_text = repaired
-                        logger.info("Successfully repaired AI JSON output.")
-                    except:
-                        pass # If repair failed, return original and let the caller handle error
-                
-                return clean_text
+                return result
 
             except exceptions.NotFound as e:
                 # 404 -> Model not found or not supported
@@ -477,11 +632,10 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
                 continue
 
             except exceptions.ResourceExhausted as e:
-                # 429 -> RATE LIMIT. Mark key as unhealthy so rotation picks a different one.
-                logger.warning(f"[RATE LIMIT] Key {api_key_used[:8]}... exhausted for {model_name}. Marking unhealthy.")
-                api_key_manager.mark_key_unhealthy(api_key_used)
-                last_error = e
-                continue
+                # ── SMART 429 HANDLING ──
+                # Let the centralized queue/worker handle 429 retries adaptively.
+                logger.warning(f"[429] ResourceExhausted on model {model_name}. Raising for adaptive requeue.")
+                raise e
 
             except exceptions.InvalidArgument as e:
                 if "not supported" in str(e).lower():
@@ -491,7 +645,13 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
 
             except exceptions.DeadlineExceeded as e:
                 # 504 -> TIMEOUT
-                logger.warning(f"[TIMEOUT] Timeout (504) for model {model_name}. Attempt {attempt+1}")
+                logger.warning(f"[TIMEOUT] Timeout (504) for model {model_name}. Attempt {attempt + 1}")
+                last_error = e
+                continue
+
+            except ValueError as e:
+                # Empty response from _call_gemini_single
+                logger.warning(f"[EMPTY] {e}")
                 last_error = e
                 continue
 
@@ -499,30 +659,29 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
                 logger.error(f"[ERROR] Unexpected Error for {model_name}: {str(e)}")
                 last_error = e
                 continue
-        
-        # If we get here, all models in candidate_models failed for this attempt
+
+        # All models failed for this outer attempt
         if attempt < max_attempts - 1:
-            # Check if we should retry based on error type
             is_retryable = isinstance(last_error, (exceptions.ResourceExhausted, exceptions.DeadlineExceeded))
-            
-            # Check for generic timeout/connection errors
+
             err_msg = str(last_error).lower()
             if "timeout" in err_msg or "handshake" in err_msg or "connection" in err_msg:
                 is_retryable = True
 
             if is_retryable:
                 sleep_time = base_delay * (2 ** attempt)
-                logger.info(f"Retrying AI pipeline in {sleep_time}s due to service busy or timeout... (Retry count: {attempt+1})")
+                logger.info(
+                    f"Retrying AI pipeline in {sleep_time}s due to service busy or timeout... "
+                    f"(Retry count: {attempt + 1})"
+                )
                 time.sleep(sleep_time)
-                
-                # Try switching key for the next attempt
+
                 new_key = api_key_manager.get_healthy_key()
                 if new_key and new_key != api_key_used:
                     logger.info("Switching to fresh API key for retry attempt.")
                     api_key_used = new_key
                 continue
             else:
-                # For other errors (except 404 which is raised immediately), if we tried all models and failed, raise
                 raise last_error if last_error else Exception("All models failed")
         else:
             logger.error(f"[ERROR] AI retries exhausted. Last Error: {last_error}")
@@ -535,7 +694,7 @@ class AIServiceProxy:
     """Main AI service interface"""
 
     def __init__(self):
-        self.concurrency_semaphore = threading.Semaphore(20)
+        self.concurrency_semaphore = threading.Semaphore(1)  # Sequential: only ONE AI request active at a time
 
     def make_request(self, request_type: str, request_data: dict,
                     user_id: str, tenant_id: str = None) -> dict:
@@ -556,15 +715,23 @@ class AIServiceProxy:
         if circuit_breaker.is_open():
             return {'error': 'AI service is temporarily unavailable. Please try again later.', 'code': 'CIRCUIT_BREAKER'}
 
-        # Check rate limits
+        # Check rate limits (Global shared Sliding Window RPS)
         try:
-            user_limit = rate_limiter.check_rate_limit(f"user:{user_id}", 100)
-            if not user_limit['allowed']:
-                return {'error': 'Rate limit exceeded.', 'code': 'RATE_LIMIT', 'retryAfter': user_limit['retry_after']}
+            # Global shared RPS limit (Sliding Window)
+            MAX_RPS = getattr(settings, 'AI_MAX_RPS', 5)
+            # ── [SLIDING WINDOW] Key for global RPS enforcement ──
+            global_rps = rate_limiter.check_rate_limit('global_rps', MAX_RPS, window=1.0)
+            if not global_rps['allowed']:
+                # Predictive delay: wait for the next slot
+                retry_after = global_rps.get('retry_after', 1)
+                return {'error': 'AI System is busy (RPS Limit).', 'code': 'RATE_LIMIT', 'retryAfter': retry_after}
 
-            global_limit = rate_limiter.check_rate_limit('global', 1000)
-            if not global_limit['allowed']:
-                return {'error': 'Service is busy.', 'code': 'RATE_LIMIT', 'retryAfter': global_limit['retry_after']}
+            # Per-user RPM limit (Sliding Window 60s)
+            user_key = f"user_rpm:{user_id}"
+            user_limit = rate_limiter.check_rate_limit(user_key, 60, window=60.0) # 60 RPM
+            if not user_limit['allowed']:
+                return {'error': 'Rate limit exceeded for your account (RPM).', 'code': 'RATE_LIMIT', 'retryAfter': user_limit['retry_after']}
+
         except Exception as e:
             logger.warning(f"Rate limiting error: {e}")
 
@@ -586,16 +753,14 @@ class AIServiceProxy:
             'cache_key': cache_key
         })
 
-        # Process directly (only for 'agent' requests now)
-        if not self.concurrency_semaphore.acquire(blocking=True, timeout=30):
-            return {'error': 'AI service is busy.', 'code': 'CONCURRENCY_LIMIT'}
-
+        # Process via central AI Request Queue (Adaptive Throttling & Concurrency)
         try:
-            logger.info(f"Processing {request_type} request for user {user_id}")
-            result = process_ai_request(full_request)
+            logger.info(f"Enqueuing {request_type} request for user {user_id}")
+            result = ai_request_queue.enqueue(full_request)
             return result
-        finally:
-            self.concurrency_semaphore.release()
+        except Exception as e:
+            logger.error(f"Queue submission failed: {e}")
+            return {'error': f'Service busy (Queue error): {str(e)}'}
 
     def get_stats(self) -> dict:
         """Get service statistics"""

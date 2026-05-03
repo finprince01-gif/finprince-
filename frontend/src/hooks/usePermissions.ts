@@ -94,6 +94,9 @@ export const usePermissions = (): UsePermissionsReturn => {
         // Superusers have access to everything
         if (isSuperuser) return true;
 
+        // Core pages that are always accessible (no RBAC restriction needed)
+        const alwaysAccessible = ['Dashboard', 'Settings'];
+        if (alwaysAccessible.includes(pageName)) return true;
 
         // Check if page exists in permissions and has view access
         return permissions[pageName]?.view === true;

@@ -1058,15 +1058,16 @@ const App: React.FC = () => {
         modelMessage = { role: 'model', text: response.text, sources: response.sources };
       } else {
         const contextData = JSON.stringify({
-          vouchers,
+          // Truncate large lists to stay within token/char limits (300K char limit on backend)
+          vouchers: vouchers.slice(0, 100),
           ledgers,
-          stockItems,
+          stockItems: stockItems.slice(0, 100),
           ledgerGroups,
           companyDetails,
-          currentDate: new Date().toISOString().split('T')[0], // Give AI "Today"
-          // Inject Rich Data
-          vendors: richVendors,
-          customers: richCustomers,
+          currentDate: new Date().toISOString().split('T')[0],
+          // Inject Rich Data (Spliced)
+          vendors: richVendors.slice(0, 100),
+          customers: richCustomers.slice(0, 100),
           // Inject Schema
           tables: userTables
         });

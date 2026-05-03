@@ -16,6 +16,7 @@ interface PendingTransaction {
     status: string;
     dueDate?: string;
     daysToDue?: number;
+    postingNote?: string;
 }
 
 interface ReceiptRow {
@@ -39,6 +40,7 @@ interface BulkTransaction {
     status: string;
     dueDate?: string;
     daysToDue?: number;
+    postingNote?: string;
 }
 
 
@@ -72,6 +74,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     const [date, setDate] = useState(getCurrentDate());
     const [voucherType, setVoucherType] = useState('');
     const [voucherNumber, setVoucherNumber] = useState('');
+    const [refNo, setRefNo] = useState('');
     const [bankTransactionId, setBankTransactionId] = useState<number | null>(null);
 
     // "Receive In" (Debit Account - Bank/Cash) matches PayFrom (Credit Account) visually in the single form
@@ -82,6 +85,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     const [receiveFrom, setReceiveFrom] = useState('');
 
     const [totalReceipt, setTotalReceipt] = useState(0);
+    const [topAmount, setTopAmount] = useState<number>(0);
 
     // Ledgers state
     const [allLedgers, setAllLedgers] = useState<Ledger[]>([]);
@@ -298,29 +302,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 }
             }
             if ((prefilledData as any).account) setReceiveIn(findLedgerName((prefilledData as any).account));
-            if (prefilledData.totalAmount) {
-                setTotalReceipt(prefilledData.totalAmount);
-                // We'll also invoke handleTotalAmountChange equivalent manually if needed:
-                // But typically handleTotalAmountChange triggers pending transaction fetching and allocation.
-                // Since this is specifically for an advance, we might just set the advance amount directly.
-                setSingleAdvanceAmount(prefilledData.totalAmount);
-                setShowSingleAdvanceSection(true);
-
-                // Set the Advance Reference Number
-                if (prefilledData.invoiceNumber) {
-                    setSingleAdvanceRefNo(prefilledData.invoiceNumber);
-                } else if ((prefilledData as any).reference_number) {
-                    setSingleAdvanceRefNo((prefilledData as any).reference_number);
-                }
-
-                // If user meant the TOP voucher number, set it here (overrides auto/manual briefly)
-                if ((prefilledData as any).receiptVoucherNumber) {
-                    setVoucherNumber((prefilledData as any).receiptVoucherNumber);
-                } else if (prefilledData.invoiceNumber) {
-                    // Since they circled the top voucher number, let's also prefill it with the invoice ref for now, 
-                    // or let it auto-gen. The auto-gen will overwrite it if a config is selected. 
-                    // Let's rely on Advance Receipt section's Reference No.
-                }
+            // Removed auto-filling of the top amount / advance section to prevent auto-population as requested by the user.
+            if (prefilledData.invoiceNumber) {
+                setSingleAdvanceRefNo(prefilledData.invoiceNumber);
+            } else if ((prefilledData as any).reference_number) {
+                setSingleAdvanceRefNo((prefilledData as any).reference_number);
             }
             if ((prefilledData as any).narration) {
                 setPostingNote((prefilledData as any).narration);
@@ -398,32 +384,31 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         calculateTotalReceipt(updatedTransactions);
     };
 
+    const handleTxnNoteChange = (index: number, note: string) => {
+        const updatedTransactions = [...pendingTransactions];
+        updatedTransactions[index].postingNote = note;
+        setPendingTransactions(updatedTransactions);
+    };
+
+    const handleBulkTxnNoteChange = (transactionId: string, note: string) => {
+        setBulkTransactions(prev => prev.map(t =>
+            t.id === transactionId ? { ...t, postingNote: note } : t
+        ));
+    };
+
     const calculateTotalReceipt = (transactions: PendingTransaction[], advance: number = singleAdvanceAmount) => {
-        const total = transactions.reduce((sum, txn) => sum + txn.receipt, 0);
+        const total = transactions.reduce((sum, txn) => sum + (txn.receipt || 0), 0);
         setTotalReceipt(total + advance);
     };
 
     const handleTotalAmountChange = (val: number) => {
-        // When a total amount is entered manually, we don't auto-allocate to invoices.
-        // Instead, we update the total and assign any difference relative to current allocations to Advance.
-        const currentAllocated = pendingTransactions.reduce((sum, txn) => sum + (txn.receipt || 0), 0);
-
-        const advanceNeeded = val - currentAllocated;
-        if (advanceNeeded > 0) {
-            setSingleAdvanceAmount(Number(advanceNeeded.toFixed(2)));
-        } else {
-            setSingleAdvanceAmount(0);
-        }
-
-        setTotalReceipt(val);
+        setTopAmount(val);
     };
 
-    // Update total when advance amount or transactions change
     useEffect(() => {
         calculateTotalReceipt(pendingTransactions, singleAdvanceAmount);
     }, [singleAdvanceAmount, pendingTransactions]);
 
-    // Bulk Mode: Auto-calculate Amount based on Receive Now + Advance for selected customer
     useEffect(() => {
         if (!selectedCustomer) return;
 
@@ -517,7 +502,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
         try {
             // Fetch transactions (Sales Invoices) from the rich system
+            console.log(`[DEBUG] ReceiptVoucher: Fetching rich sales for ${customerName}`);
             const response = await apiService.getRichCustomerSalesInvoices(customerName);
+            console.log(`[DEBUG] ReceiptVoucher: Response data:`, response);
 
             // Find the customer to get their credit period from the portal master
             const normalizedName = customerName.trim().toLowerCase();
@@ -576,11 +563,12 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 });
 
                 // Filter: Only Due, Partially Received, Due Today. 
-                // CRITICAL: Filter out items with 0 or negative balance, and those with 'Received' status.
+                // CRITICAL: Filter out items with 0 or negative balance, those with 'Received' status, and 'Not Due' status.
                 const validTransactions = mappedTransactions.filter(t =>
                     t.amount > 0 &&
                     t.status.trim().toLowerCase() !== 'received' &&
-                    (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today' || t.status === 'Not Due')
+                    t.status !== 'Not Due' &&
+                    (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today')
                 );
 
                 setBulkTransactions(validTransactions);
@@ -599,11 +587,31 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 setBulkTransactions([]);
                 setPendingTransactions([]);
             }
+
+            // Also load advances here for consistency with Single mode
+            const findLedgerId = (name: string) => {
+                const normalized = name.trim().toLowerCase();
+                const ledger = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
+                if (ledger) return ledger.id;
+                const portalCust = portalCustomers.find(c => (c.customer_name || c.name || '').trim().toLowerCase() === normalized);
+                if (portalCust) return portalCust.ledger_id;
+                return null;
+            };
+            const lId = findLedgerId(customerName);
+            if (lId) {
+                const advEndpoint = `/api/vouchers/advances/?ledger_id=${lId}`;
+                console.log(`[DEBUG] ReceiptVoucher: Fetching advances from ${advEndpoint}`);
+                const advances = await apiService.getAdvances(lId, 'customer');
+                console.log(`[DEBUG] ReceiptVoucher: Advances data:`, advances);
+                // setAvailableAdvances(advances || []); // Need to define setAvailableAdvances if not exist
+            }
+
         } catch (error) {
             console.error('Error fetching customer transactions:', error);
             setBulkTransactions([]);
             setPendingTransactions([]);
         }
+
     };
 
     const handleAddReceiptRow = () => {
@@ -677,6 +685,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     const handleCancel = () => {
         setDate(getCurrentDate());
         setVoucherNumber('');
+        setRefNo('');
+        setTopAmount(0);
         setReceiveIn('');
         setReceiveInBalance('₹0 Dr');
         setRunningBalance(0);
@@ -736,50 +746,70 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     return;
                 }
 
-                if (totalReceipt <= 0) {
+                const finalAmount = topAmount > 0 ? topAmount : totalReceipt;
+
+                if (finalAmount <= 0) {
                     showError("Total receipt amount must be greater than zero.");
                     return;
+                }
+
+                let items = [
+                    ...pendingTransactions
+                        .filter(t => t.receipt > 0)
+                        .map(t => ({
+                            customer: receiveFromId,
+                            reference_id: t.referenceNumber,
+                            reference_type: 'invoice',
+                            pending_transaction: { ...t, customer_name: receiveFrom },
+                            amount: Number(Number(t.amount).toFixed(2)),
+                            pending_before: Number(Number(t.amount).toFixed(2)),
+                            received_amount: Number(Number(t.receipt).toFixed(2)),
+                            balance_after: Number(Math.max(0, t.amount - t.receipt).toFixed(2)),
+                            invoice_date: t.date,
+                            posting_note: t.postingNote
+                        })),
+                    // Advance item if applicable
+                    ...(singleAdvanceAmount > 0 ? [{
+                        customer: receiveFromId,
+                        reference_id: singleAdvanceRefNo || 'ADVANCE',
+                        reference_type: 'advance',
+                        pending_transaction: { customer_name: receiveFrom },
+                        amount: Number(Number(singleAdvanceAmount).toFixed(2)),
+                        received_amount: Number(Number(singleAdvanceAmount).toFixed(2)),
+                        is_advance: true,
+                        advance_ref_no: singleAdvanceRefNo
+                    }] : [])
+                ];
+
+                // 3. Fallback: If amount entered but not fully allocated, treat remainder as 'Advance'
+                if (items.length === 0 && finalAmount > 0) {
+                    items.push({
+                        customer: receiveFromId,
+                        reference_id: singleAdvanceRefNo || 'ADVANCE',
+                        reference_type: 'advance',
+                        pending_transaction: { customer_name: receiveFrom },
+                        amount: Number(Number(finalAmount).toFixed(2)),
+                        received_amount: Number(Number(finalAmount).toFixed(2)),
+                        is_advance: true,
+                        advance_ref_no: singleAdvanceRefNo || 'ADVANCE'
+                    });
                 }
 
                 const payload = {
                     date: date,
                     voucher_type: selectedReceiptConfig || voucherType,
                     voucher_number: voucherNumber,
+                    ref_no: refNo,
                     receive_in: receiveInId,
-                    customer: receiveFromId, // RESTORED to Master
-                    total_amount: Number(Number(totalReceipt).toFixed(2)),
-                    amount: Number(Number(totalReceipt).toFixed(2)),
+                    customer: receiveFromId,
+                    total_amount: Number(Number(finalAmount).toFixed(2)),
+                    amount: Number(Number(finalAmount).toFixed(2)),
                     bank_transaction_id: bankTransactionId,
-                    items: [
-                        // Main allocation items
-                        ...pendingTransactions
-                            .filter(t => t.receipt > 0)
-                            .map(t => ({
-                                customer: receiveFromId,
-                                reference_id: t.referenceNumber,
-                                reference_type: 'invoice',
-                                pending_transaction: { ...t, customer_name: receiveFrom },
-                                amount: Number(Number(t.amount).toFixed(2)),
-                                pending_before: Number(Number(t.amount).toFixed(2)),
-                                received_amount: Number(Number(t.receipt).toFixed(2)),
-                                balance_after: Number(Math.max(0, t.amount - t.receipt).toFixed(2)),
-                                invoice_date: t.date
-                            })),
-                        // Advance item if applicable
-                        ...(singleAdvanceAmount > 0 ? [{
-                            customer: receiveFromId,
-                            reference_id: singleAdvanceRefNo || 'ADVANCE',
-                            reference_type: 'advance',
-                            pending_transaction: { customer_name: receiveFrom },
-                            amount: Number(Number(singleAdvanceAmount).toFixed(2)),
-                            received_amount: Number(Number(singleAdvanceAmount).toFixed(2)),
-                            is_advance: true,
-                            advance_ref_no: singleAdvanceRefNo
-                        }] : [])
-                    ]
+                    notes: postingNote,
+                    items: items
                 };
 
-                if (singleAdvanceRefNo.trim()) {
+                if (singleAdvanceRefNo.trim() && singleAdvanceRefNo.trim() !== 'ADVANCE') {
                     const check = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/receipts/check-uniqueness/?ref_no=${encodeURIComponent(singleAdvanceRefNo)}`);
                     if (!check.is_unique) {
                         showError(`Reference Number '${singleAdvanceRefNo}' already exists.`);
@@ -855,7 +885,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 pending_before: Number(Number(t.amount).toFixed(2)),
                                 received_amount: Number(Number(t.receiveNow).toFixed(2)),
                                 balance_after: Number(Math.max(0, t.amount - t.receiveNow).toFixed(2)),
-                                invoice_date: t.date
+                                invoice_date: t.date,
+                                posting_note: t.postingNote
                             }));
 
                         allItems.push(...allocatedItems);
@@ -888,7 +919,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 amount: t.amount,
                                 pending_before: t.amount,
                                 received_amount: t.receiveNow,
-                                balance_after: Math.max(0, t.amount - t.receiveNow)
+                                balance_after: Math.max(0, t.amount - t.receiveNow),
+                                posting_note: t.postingNote
                             }));
 
                         allItems.push(...allocatedItems);
@@ -931,6 +963,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     amount: Number(Number(bulkTotalReceipt).toFixed(2)),
                     voucher_number: voucherNumber,
                     voucher_type: selectedReceiptConfig || voucherType,
+                    ref_no: refNo,
                     items: allItems,
                     notes: postingNote
                 };
@@ -996,7 +1029,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             {activeTab === 'single' && (
                 <>
                     {/* Top Row */}
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-4 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                             <input
@@ -1029,6 +1062,16 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 value={voucherNumber}
                                 readOnly
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Ref No / Cheque No</label>
+                            <input
+                                type="text"
+                                value={refNo}
+                                onChange={(e) => setRefNo(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                placeholder="Enter Ref No..."
                             />
                         </div>
                     </div>
@@ -1085,9 +1128,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         <div className="w-[200px]">
                             <label className="block text-sm font-medium text-gray-700 mb-1 text-right">Amount</label>
                             <input
-                                type="number"
-                                value={totalReceipt || ''}
-                                onChange={(e) => handleTotalAmountChange(parseFloat(e.target.value) || 0)}
+                                type="number" onWheel={(e) => e.currentTarget.blur()}
+                                value={topAmount || ''}
+                                onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setTopAmount(val);
+                                    handleTotalAmountChange(val);
+                                }}
+                               
                                 className="w-full px-3 py-2 border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-right h-10 shadow-sm"
                                 placeholder="0.00"
                             />
@@ -1116,9 +1164,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 <div className="flex-1">
                                     <label className="block text-xs font-medium text-indigo-700 mb-1">Amount</label>
                                     <input
-                                        type="number"
+                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                         value={singleAdvanceAmount || ''}
                                         onChange={(e) => setSingleAdvanceAmount(parseFloat(e.target.value) || 0)}
+                                       
                                         className="w-full px-3 py-2 border border-indigo-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                                         placeholder="0.00"
                                     />
@@ -1140,15 +1189,15 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         {receiveFrom ? (
                             <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
                                 <table className="w-full">
-                                    <thead className="bg-gray-50 border-b-2 border-gray-200">
+                                    <thead className="bg-indigo-600 border-b-2 border-indigo-700 text-white">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">STATUS</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
-                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">RECEIPT</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">DATE</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">REFERENCE NUMBER</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">STATUS</th>
+                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">AMOUNT</th>
+                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PENDING</th>
+                                            <th className="px-6 py-3 text-center text-xs font-semibold uppercase">ACTION</th>
+                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">RECEIPT</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -1193,7 +1242,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                                                 <td className="px-6 py-4 text-right">
                                                     <input
-                                                        type="number"
+                                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                                         value={txn.receipt || ''}
                                                         onChange={(e) => handleReceiptChange(index, parseFloat(e.target.value) || 0)}
                                                         placeholder="0"
@@ -1216,6 +1265,18 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 <p className="text-sm">Please select a "Receive From" account to view pending transactions.</p>
                             </div>
                         )}
+                    </div>
+
+                    {/* Posting Note */}
+                    <div className="bg-indigo-50/50 border-2 border-slate-200 rounded-[4px] p-4 mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note</label>
+                        <textarea
+                            value={postingNote}
+                            onChange={e => setPostingNote(e.target.value)}
+                            placeholder="Enter posting note..."
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
+                        />
                     </div>
 
                     {/* Action Buttons */}
@@ -1244,7 +1305,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         {/* Left Panel */}
                         <div className="space-y-6">
                             {/* Top Fields */}
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                                     <input
@@ -1283,6 +1344,16 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                                     />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Ref No / Cheque No</label>
+                                    <input
+                                        type="text"
+                                        value={refNo}
+                                        onChange={(e) => setRefNo(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="Enter Ref No..."
+                                    />
+                                </div>
                             </div>
 
                             {/* Receive In and Running Balance */}
@@ -1300,9 +1371,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
                                     <input
-                                        type="number"
+                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                         value={runningBalance}
                                         readOnly
+                                       
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                                     />
                                 </div>
@@ -1342,9 +1414,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         {receiptRows.map((row) => (
                                             <input
                                                 key={`amount-${row.id}`}
-                                                type="number"
+                                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                                 value={row.amount || ''}
                                                 onChange={e => handleReceiptRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
+                                               
                                                 placeholder="Receive now/Advance total"
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm h-[40px]"
                                             />
@@ -1411,6 +1484,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
                                                         <th className="px-2 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">RECEIPT</th>
+                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">POSTING NOTE</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -1463,10 +1537,19 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                                                             <td className="py-3 px-2 text-right">
                                                                 <input
-                                                                    type="number"
+                                                                    type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                     value={transaction.receiveNow || ''}
                                                                     onChange={e => handleReceiveNowChange(transaction.id, parseFloat(e.target.value) || 0)}
                                                                     className="w-24 px-3 py-1.5 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                                                />
+                                                            </td>
+                                                            <td className="py-3 px-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={transaction.postingNote || ''}
+                                                                    onChange={e => handleBulkTxnNoteChange(transaction.id, e.target.value)}
+                                                                    placeholder="Note..."
+                                                                    className="w-28 px-2 py-1.5 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                                                                 />
                                                             </td>
                                                         </tr>
@@ -1510,9 +1593,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                             <div className="flex-1">
                                                 <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                                                 <input
-                                                    type="number"
+                                                    type="number" onWheel={(e) => e.currentTarget.blur()}
                                                     value={advanceAmount || ''}
                                                     onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
+                                                   
                                                     className="w-full px-3 py-2 border border-gray-300 rounded"
                                                 />
                                             </div>
@@ -1541,5 +1625,6 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 };
 
 export default ReceiptVoucher;
+
 
 

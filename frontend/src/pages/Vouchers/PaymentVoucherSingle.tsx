@@ -17,6 +17,7 @@ interface PendingTransaction {
     dueStatus?: string;
     daysToDue?: number;
     dueDate?: string;
+    postingNote?: string;
 }
 
 interface PaymentRow {
@@ -39,6 +40,7 @@ interface BulkTransaction {
     status?: string;
     dueDate?: string;
     daysToDue?: number;
+    postingNote?: string;
 }
 
 
@@ -72,12 +74,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     const [date, setDate] = useState(getCurrentDate());
     const [voucherType, setVoucherType] = useState('Payment');
     const [voucherNumber, setVoucherNumber] = useState('');
+    const [refNo, setRefNo] = useState('');
     const [bankTransactionId, setBankTransactionId] = useState<number | null>(null);
     const [payFrom, setPayFrom] = useState('');
     const [payFromBalance, setPayFromBalance] = useState('₹0 Cr');
     const [payTo, setPayTo] = useState('');
 
     const [totalPayment, setTotalPayment] = useState(0);
+    const [topAmount, setTopAmount] = useState<number>(0);
 
     // Payment Voucher Configuration state
     const [paymentVoucherConfigs, setPaymentVoucherConfigs] = useState<any[]>([]);
@@ -191,7 +195,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         group: 'Sundry Creditors',
                         isPortal: true,
                         type: 'vendor',
-                        ledger_id: v.ledger_id || v.id, // Fallback if rich vendor has no ledger_id property but is a ledger itself
+                        ledger_id: v.ledger_id, // Strictly use ledger_id, do not fall back to vendor id
                         portal_id: v.id
                     })),
                     ...customersData.map((c: any) => ({
@@ -200,7 +204,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         group: 'Sundry Debtors',
                         isPortal: true,
                         type: 'customer',
-                        ledger_id: c.ledger_id || c.id,
+                        ledger_id: c.ledger_id,
                         portal_id: c.id
                     }))
                 ];
@@ -261,7 +265,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
                     if (selectedOpt.type === 'vendor') {
                         // Use the UNIFIED Vendor Transactions API (Procurement source)
-                        const res: any = await httpClient.get(`/api/vendors/transactions/by_vendor/?vendor_id=${selectedOpt.id}`);
+                        const res: any = await httpClient.get(`/api/vendors/transactions/by_vendor/?vendor_id=${selectedOpt.portal_id || selectedOpt.id}`);
                         const transactions = Array.isArray(res) ? res : (res.results || []);
 
                         console.log("!!! Vendor Pending Transactions (Procurement):", transactions);
@@ -273,7 +277,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 return type === 'purchase' && (s === 'due' || s === 'due today' || s === 'partially paid' || s === 'partially received');
                             })
                             .map((t: any) => {
-                                const isMatch = prefilledData?.invoiceNumber === t.reference_number;
+                                const isMatch = !!prefilledData?.invoiceNumber && !!t.reference_number && prefilledData.invoiceNumber === t.reference_number;
                                 const pAmt = isMatch ? (prefilledData?.totalAmount || 0) : 0;
 
                                 // Show remaining balance if available, else original total
@@ -405,7 +409,12 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         selected: false,
                         due_status: item.due_status
                     }));
-                    setBulkTransactions(mapped.filter(item => item.due_status === 'Due' || item.due_status === 'Due Today'));
+                    setBulkTransactions(mapped.filter(item => 
+                        item.due_status === 'Due' || 
+                        item.due_status === 'Due Today' || 
+                        item.due_status === 'Partially Paid' || 
+                        item.due_status === 'Partially Received'
+                    ));
                 } catch (error) {
                     console.error('Error fetching bulk pending invoices:', error);
                 }
@@ -450,16 +459,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if (prefilledData.sellerName) setPayTo(findLedgerName(prefilledData.sellerName));
             if ((prefilledData as any).account) setPayFrom(findLedgerName((prefilledData as any).account));
 
-            if (prefilledData.totalAmount && !prefilledData.invoiceNumber) {
-                setSingleAdvanceAmount(prefilledData.totalAmount);
-                setShowSingleAdvanceSection(true);
-                if ((prefilledData as any).reference_number) {
-                    setSingleAdvanceRefNo((prefilledData as any).reference_number);
-                }
-            } else if (prefilledData.invoiceNumber) {
-                // Just clear any high-level advance show if it's an against-bill payment
-                setShowSingleAdvanceSection(false);
-                setSingleAdvanceAmount(0);
+            // Removed auto-filling of the top amount / advance section to prevent auto-population as requested by the user.
+            if ((prefilledData as any).reference_number) {
+                setSingleAdvanceRefNo((prefilledData as any).reference_number);
             }
             if ((prefilledData as any).narration) setPostingNote((prefilledData as any).narration);
             if ((prefilledData as any).bank_transaction_id) setBankTransactionId((prefilledData as any).bank_transaction_id);
@@ -534,20 +536,23 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         calculateTotalPayment(updatedTransactions);
     };
 
+    const handleTxnNoteChange = (index: number, note: string) => {
+        const updatedTransactions = [...pendingTransactions];
+        updatedTransactions[index].postingNote = note;
+        setPendingTransactions(updatedTransactions);
+    };
+
     const calculateTotalPayment = (transactions: PendingTransaction[], advance: number = singleAdvanceAmount) => {
-        const total = transactions.reduce((sum, txn) => sum + txn.payment, 0);
+        const total = transactions.reduce((sum, txn) => sum + (txn.payment || 0), 0);
         setTotalPayment(total + advance);
     };
 
-    // Update total when advance amount changes
     useEffect(() => {
         calculateTotalPayment(pendingTransactions, singleAdvanceAmount);
     }, [singleAdvanceAmount, pendingTransactions]);
 
     const handleTotalAmountChange = (val: number) => {
-        // Only update the top-level amount field — do NOT auto-allocate to pending transactions
-        setTotalPayment(val);
-
+        setTopAmount(val);
     };
 
     // Uniqueness Check Logic
@@ -797,8 +802,17 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         ));
     };
 
+    const handleBulkTxnNoteChange = (transactionId: string, note: string) => {
+        setBulkTransactions(prev => prev.map(t =>
+            t.id === transactionId ? { ...t, postingNote: note } : t
+        ));
+    };
+
     const handleCancel = () => {
         setDate(getCurrentDate());
+        setVoucherNumber('');
+        setRefNo('');
+        setTopAmount(0);
         setPayFrom('');
         setPayFromBalance('₹0 Cr');
         setRunningBalance(0);
@@ -861,6 +875,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             pending_amount: t.amount,
                             balance_after: Math.max(0, t.amount - t.payment),
                             invoice_date: t.date,
+                            posting_note: t.postingNote,
                             transaction_details: {
                                 ...t,
                                 pending: Math.max(0, t.amount - t.payment)
@@ -881,12 +896,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     });
                 }
 
+                const finalAmount = topAmount > 0 ? topAmount : totalPayment;
                 // 3. Fallback: General Payment if no invoices/advances specified but total > 0
-                if (items.length === 0 && totalPayment > 0) {
+                if (items.length === 0 && finalAmount > 0) {
                     const ledgerIdToUse = selectedOpt.ledger_id || (typeof selectedOpt.id === 'number' ? selectedOpt.id : null);
                     items.push({
                         pay_to_ledger: ledgerIdToUse,
-                        amount: totalPayment,
+                        amount: finalAmount,
                         reference_type: 'ADVANCE',
                         advance_ref_no: 'ADVANCE'
                     });
@@ -919,6 +935,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 pending_amount: t.amount,
                                 balance_after: Math.max(0, t.amount - t.payNow),
                                 invoice_date: t.date,
+                                posting_note: t.postingNote,
                                 transaction_details: {
                                     ...t,
                                     pending: Math.max(0, t.amount - t.payNow)
@@ -968,7 +985,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 }
             }
 
-            const advances = items.filter(i => i.reference_type === 'ADVANCE' && i.advance_ref_no);
+            const advances = items.filter(i => i.reference_type === 'ADVANCE' && i.advance_ref_no && i.advance_ref_no !== 'ADVANCE');
             for (const adv of advances) {
                 const check = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/payment/check-uniqueness/?ref_no=${encodeURIComponent(adv.advance_ref_no)}`);
                 if (!check.is_unique) {
@@ -981,7 +998,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 date: date,
                 voucher_type: selectedPaymentConfig || voucherType,
                 voucher_number: voucherNumber,
+                ref_no: refNo,
                 pay_from: payFromId,
+                total_amount: Number((topAmount > 0 ? topAmount : totalPayment).toFixed(2)),
+                amount: Number((topAmount > 0 ? topAmount : totalPayment).toFixed(2)),
                 items: items,
                 narration: postingNote,
                 ...(bankTransactionId ? { bank_transaction_id: bankTransactionId } : {})
@@ -1046,8 +1066,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             {/* Single Tab Content */}
             {activeTab === 'single' && (
                 <>
-                    {/* Top Row: Date, Voucher Type, Voucher Number */}
-                    <div className="grid grid-cols-3 gap-4">
+                    {/* Top Row: Date, Voucher Type, Voucher Number, Ref No */}
+                    <div className="grid grid-cols-4 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                             <input
@@ -1085,6 +1105,16 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 }
                                 placeholder={voucherNumber === 'Manual Input' ? 'Enter Voucher No' : ''}
                                 className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] ${voucherNumber === 'Manual Input' ? 'bg-white' : 'bg-gray-50 text-gray-500'}`}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Ref No / Cheque No</label>
+                            <input
+                                type="text"
+                                value={refNo}
+                                onChange={(e) => setRefNo(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                placeholder="Enter Ref No..."
                             />
                         </div>
                     </div>
@@ -1138,9 +1168,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         <div className="w-[200px]">
                             <label className="block text-sm font-medium text-gray-700 mb-1 text-right">Amount</label>
                             <input
-                                type="number"
-                                value={totalPayment || ''}
-                                onChange={(e) => handleTotalAmountChange(parseFloat(e.target.value) || 0)}
+                                type="number" onWheel={(e) => e.currentTarget.blur()}
+                                value={topAmount || ''}
+                                onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setTopAmount(val);
+                                    handleTotalAmountChange(val);
+                                }}
+                               
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-right"
                                 placeholder="0.00"
                             />
@@ -1190,9 +1225,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 <div className="flex-1">
                                     <label className="block text-xs font-medium text-indigo-700 mb-1">Amount</label>
                                     <input
-                                        type="number"
+                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                         value={singleAdvanceAmount || ''}
                                         onChange={(e) => setSingleAdvanceAmount(parseFloat(e.target.value) || 0)}
+                                       
                                         className="w-full px-3 py-2 border border-indigo-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                                         placeholder="0.00"
                                     />
@@ -1214,15 +1250,15 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         {payTo ? (
                             <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
                                 <table className="w-full">
-                                    <thead className="bg-gray-50 border-b-2 border-gray-200">
+                                    <thead className="bg-indigo-600 border-b-2 border-indigo-700 text-white">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
-                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">STATUS</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
-                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">PAYMENT</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">DATE</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">REFERENCE NUMBER</th>
+                                            <th className="px-6 py-3 text-center text-xs font-semibold uppercase">STATUS</th>
+                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">AMOUNT</th>
+                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PENDING</th>
+                                            <th className="px-6 py-3 text-center text-xs font-semibold uppercase">ACTION</th>
+                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PAYMENT</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -1266,7 +1302,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <input
-                                                        type="number"
+                                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                                         value={txn.payment || ''}
                                                         onChange={(e) => handlePaymentChange(index, parseFloat(e.target.value) || 0)}
                                                         placeholder="0"
@@ -1289,6 +1325,17 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 <p className="text-sm">Please select a "Pay To" account to view pending transactions.</p>
                             </div>
                         )}
+                    </div>
+                    {/* Posting Note */}
+                    <div className="bg-indigo-50/50 border-2 border-slate-200 rounded-[4px] p-4 mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note</label>
+                        <textarea
+                            value={postingNote}
+                            onChange={e => setPostingNote(e.target.value)}
+                            placeholder="Enter posting note..."
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
+                        />
                     </div>
 
                     {/* Action Buttons */}
@@ -1317,7 +1364,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         {/* Left Panel */}
                         <div className="space-y-6">
                             {/* Top Fields */}
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                                     <input
@@ -1361,6 +1408,16 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                         className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] ${voucherNumber === 'Manual Input' ? 'bg-white' : 'bg-gray-50 text-gray-500'}`}
                                     />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Ref No / Cheque No</label>
+                                    <input
+                                        type="text"
+                                        value={refNo}
+                                        onChange={(e) => setRefNo(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="Enter Ref No..."
+                                    />
+                                </div>
                             </div>
 
                             {/* Pay From and Running Balance */}
@@ -1378,9 +1435,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
                                     <input
-                                        type="number"
+                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                         value={runningBalance}
                                         readOnly
+                                       
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                                     />
                                 </div>
@@ -1425,9 +1483,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                         {paymentRows.map((row) => (
                                             <input
                                                 key={`amount-${row.id}`}
-                                                type="number"
+                                                type="number" onWheel={(e) => e.currentTarget.blur()}
                                                 value={row.amount || ''}
                                                 onChange={e => handlePaymentRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
+                                               
                                                 placeholder="Pay now/Advance total"
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm h-[40px]"
                                             />
@@ -1500,6 +1559,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
                                                         <th className="px-2 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">PAYMENT</th>
+                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">POSTING NOTE</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1554,11 +1614,20 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                                 </td>
                                                                 <td className="py-3 px-2 text-right">
                                                                     <input
-                                                                        type="number"
+                                                                        type="number" onWheel={(e) => e.currentTarget.blur()}
                                                                         value={transaction.payNow || ''}
                                                                         onChange={e => handlePayNowChange(transaction.id, parseFloat(e.target.value) || 0)}
                                                                         placeholder="0"
                                                                         className="w-20 px-2 py-1.5 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                                                    />
+                                                                </td>
+                                                                <td className="py-3 px-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={transaction.postingNote || ''}
+                                                                        onChange={e => handleBulkTxnNoteChange(transaction.id, e.target.value)}
+                                                                        placeholder="Note..."
+                                                                        className="w-28 px-2 py-1.5 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                                                                     />
                                                                 </td>
                                                             </tr>
@@ -1618,9 +1687,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                             <div className="flex-1">
                                                 <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                                                 <input
-                                                    type="number"
+                                                    type="number" onWheel={(e) => e.currentTarget.blur()}
                                                     value={advanceAmount || ''}
                                                     onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
+                                                   
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                                                 />
                                             </div>
@@ -1650,6 +1720,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 };
 
 export default PaymentVoucherSingle;
+
 
 
 
