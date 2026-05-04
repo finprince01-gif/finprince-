@@ -246,6 +246,16 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'ACCOUNTING_VOUCHERS'
 
+    def get_queryset(self):
+        """Exclude supplementary GST and TDS detail rows from the default list.
+        These are only surfaced in the report action for ledger drill-downs."""
+        qs = super().get_queryset()
+        # Exclude detail rows from summary/list endpoints
+        return qs.exclude(voucher_type__in=[
+            'PURCHASE_GST_DETAIL', 'SALES_GST_DETAIL',
+            'PURCHASE_TDS_DETAIL', 'SALES_TCS_DETAIL'
+        ])
+
     @action(detail=False, methods=['get'])
     def report(self, request):
         """
@@ -255,6 +265,9 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
           - particulars = the OPPOSITE (counterpart) ledger name on the same voucher
           - debit / credit as recorded in the entry
           - running balance (Dr positive, Cr negative convention)
+        
+        For GST ledgers (Input Tax Credit Ledger / Output Tax Liability Ledger),
+        also merges supplementary GST detail rows showing IGST/CGST/SGST/Cess breakdown.
         """
         ledger_id = request.query_params.get('ledger_id')
         ledger_name = request.query_params.get('ledger_name')
@@ -269,7 +282,22 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
 
         tenant_id = getattr(request.user, 'tenant_id', None)
 
-        # Base queryset with branch isolation handled by mixin
+        # Determine if this is a special ledger that uses supplementary detail rows (GST or TDS)
+        is_gst_ledger = False
+        is_tds_ledger = False
+        if ledger_name:
+            if 'Input Tax Credit Ledger' in ledger_name or 'Output Tax Liability Ledger' in ledger_name:
+                is_gst_ledger = True
+            elif 'TDS Payable' in ledger_name or 'TCS Payable' in ledger_name:
+                is_tds_ledger = True
+
+        resolved_ledger = None
+        if ledger_id:
+            resolved_ledger = MasterLedger.objects.filter(id=ledger_id, tenant_id=tenant_id).first()
+        elif is_gst_ledger or is_tds_ledger:
+            resolved_ledger = MasterLedger.objects.filter(name=ledger_name, tenant_id=tenant_id).first()
+
+        # Base queryset — GST/TDS detail rows are excluded by get_queryset()
         queryset = self.get_queryset().select_related('ledger').order_by('transaction_date', 'id')
 
         if ledger_id:
@@ -290,7 +318,6 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 pass
 
         # Pre-fetch all entries for each voucher to resolve counterpart ledger names
-        # Group voucher_ids so we can look up the opposite side
         from django.db.models import Q as DQ
         voucher_ids = list(queryset.values_list('voucher_id', flat=True).distinct())
 
@@ -300,6 +327,8 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             all_entries_for_vouchers = JournalEntry.objects.filter(
                 tenant_id=tenant_id,
                 voucher_id__in=voucher_ids
+            ).exclude(
+                voucher_type__in=['PURCHASE_GST_DETAIL', 'SALES_GST_DETAIL', 'PURCHASE_TDS_DETAIL', 'SALES_TCS_DETAIL']
             ).select_related('ledger').values('voucher_id', 'ledger_id', 'ledger__name', 'ledger_name')
 
             for ae in all_entries_for_vouchers:
@@ -307,6 +336,34 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 lid = ae['ledger_id']
                 lname = ae['ledger__name'] or ae['ledger_name'] or 'N/A'
                 counterpart_map.setdefault(vid, []).append((lid, lname))
+
+        # For GST/TDS ledgers, build a map of detail rows per voucher
+        supplementary_detail_map = {}
+        if (is_gst_ledger or is_tds_ledger) and resolved_ledger and voucher_ids:
+            detail_types = []
+            if is_gst_ledger:
+                detail_types = ['PURCHASE_GST_DETAIL', 'SALES_GST_DETAIL']
+            elif is_tds_ledger:
+                detail_types = ['PURCHASE_TDS_DETAIL', 'SALES_TCS_DETAIL']
+                
+            detail_qs = JournalEntry.objects.filter(
+                tenant_id=tenant_id,
+                voucher_type__in=detail_types,
+                ledger_id=resolved_ledger.id,
+                voucher_id__in=voucher_ids
+            ).order_by('id')
+            
+            for drow in detail_qs:
+                vid = drow.voucher_id
+                # Extract component name from ledger_name e.g. "Input Tax Credit Ledger (IGST)" -> "IGST"
+                comp = drow.ledger_name
+                if '(' in comp and comp.endswith(')'):
+                    comp = comp[comp.index('(')+1:-1]
+                supplementary_detail_map.setdefault(vid, []).append({
+                    'component': comp,
+                    'debit': float(drow.debit),
+                    'credit': float(drow.credit),
+                })
 
         # Build response with running balance
         data = []
@@ -347,7 +404,7 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             else:
                 balance_type = ''
 
-            data.append({
+            row = {
                 'id': e.id,
                 'transaction_date': e.transaction_date,
                 'particulars': particulars,
@@ -356,11 +413,30 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 'debit': dr,
                 'credit': cr,
                 'balance': abs(running_balance),
-                'balance_type': balance_type,  # 'Dr' or 'Cr'
-                'voucher_id': e.voucher_id
-            })
+                'balance_type': balance_type,
+                'voucher_id': e.voucher_id,
+            }
+
+            # For GST/TDS ledgers, embed the component breakdown
+            if is_gst_ledger or is_tds_ledger:
+                components = supplementary_detail_map.get(vid, [])
+                if components:
+                    if is_gst_ledger:
+                        row['gst_components'] = components
+                    elif is_tds_ledger:
+                        row['tds_components'] = components
+                        
+                    # Build a readable particulars string showing breakdown
+                    comp_str = ', '.join(
+                        f"{c['component']}: ₹{c['debit'] or c['credit']:.2f}"
+                        for c in components
+                    )
+                    row['particulars'] = f"{particulars} | {comp_str}"
+
+            data.append(row)
 
         return Response(data)
+
 
 
 class PayFromLedgerView(APIView):

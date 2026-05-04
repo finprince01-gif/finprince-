@@ -292,11 +292,13 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         return invoice
 
     def _post_journal_entries(self, invoice):
-        """Internal helper to post double-entry bookkeeping for the invoice"""
+        """Internal helper to post double-entry bookkeeping for the invoice with individual GST detail rows"""
         try:
             from accounting.services.ledger_service import post_transaction
             from accounting.utils_ledger import get_standard_ledger
-            
+            from accounting.models import JournalEntry
+            from decimal import Decimal as D
+
             tenant_id = self.context.get('request').user.tenant_id
             payment_obj = getattr(invoice, 'payment_details', None)
             if not payment_obj:
@@ -315,30 +317,61 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                  return
 
             sales_ledger = get_standard_ledger(tenant_id, 'Sales Account', 'Sales Accounts', 'Income')
-            gst_output_ledger = get_standard_ledger(tenant_id, 'Output GST', 'Duties & Taxes', 'Liability')
+            gst_output_ledger = get_standard_ledger(tenant_id, 'Output Tax Liability Ledger', 'Duties & Taxes', 'Liability')
+
+            # Resolve Customer TCS/TDS Ledger and Amount
+            tcs_amt = float(payment_obj.payment_tds_income_tax or 0)
+            
+            # Customer owes us the full Invoice Total PLUS any TCS collected from them
+            customer_debit_amt = total_amount + tcs_amt
 
             entries = []
             if customer.ledger_id:
-                entries.append({"ledger_id": customer.ledger_id, "debit": total_amount, "credit": 0})
+                entries.append({"ledger_id": customer.ledger_id, "debit": customer_debit_amt, "credit": 0})
             else:
                 print(f"[SalesSerializer] Posting Error: Customer {customer.name} has no ledger mapping.")
                 return
-            
-            # Sales (Credit)
+
+            # TCS/TDS (Credit - we owe govt)
+            tcs_master_ledger = None
+            tcs_section_name = "Unspecified Section"
+            if tcs_amt > 0:
+                tcs_master_ledger = get_standard_ledger(tenant_id, 'TCS Payable', 'Duties & Taxes', 'Liability')
+                entries.append({"ledger_id": tcs_master_ledger.id, "debit": 0, "credit": tcs_amt})
+                
+                # Try to resolve the specific section name for supplementary rows
+                if invoice.customer_id:
+                    try:
+                        from customerportal.database import CustomerMasterCustomerTDS
+                        tds_obj = CustomerMasterCustomerTDS.objects.filter(
+                            customer_basic_detail_id=invoice.customer_id
+                        ).first()
+                        if tds_obj:
+                            if tds_obj.tcs_enabled and tds_obj.tcs_section:
+                                tcs_section_name = tds_obj.tcs_section.strip()
+                            elif tds_obj.tds_enabled and tds_obj.tds_section:
+                                tcs_section_name = tds_obj.tds_section.strip()
+                    except Exception:
+                        pass
+
+            # Sales (Credit - Taxable Value)
             entries.append({"ledger_id": sales_ledger.id, "debit": 0, "credit": float(payment_obj.payment_taxable_value or 0)})
 
-            # Taxes
-            taxes = [
-                payment_obj.payment_igst, payment_obj.payment_cgst, payment_obj.payment_sgst, 
-                payment_obj.payment_cess, payment_obj.payment_state_cess
-            ]
-            for tax_val in taxes:
-                if tax_val and float(tax_val) > 0:
-                    entries.append({"ledger_id": gst_output_ledger.id, "debit": 0, "credit": float(tax_val)})
+            # Collect individual GST amounts
+            igst_amt = float(payment_obj.payment_igst or 0)
+            cgst_amt = float(payment_obj.payment_cgst or 0)
+            sgst_amt = float(payment_obj.payment_sgst or 0)
+            cess_amt = float(payment_obj.payment_cess or 0)
+            state_cess_amt = float(payment_obj.payment_state_cess or 0)
+            total_tax = igst_amt + cgst_amt + sgst_amt + cess_amt + state_cess_amt
+
+            # Taxes — single aggregated credit to Output Tax Liability Ledger
+            if total_tax > 0:
+                entries.append({"ledger_id": gst_output_ledger.id, "debit": 0, "credit": total_tax})
 
             # Resolve Voucher ID
             v_id = getattr(invoice, 'voucher_id', None) or invoice.id
-            
+
             # Post
             post_transaction(
                 voucher_type="SALES",
@@ -348,7 +381,63 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 voucher_number=invoice.sales_invoice_no,
                 entries=entries
             )
-            
+
+            # Write supplementary GST detail rows for the Output Tax Liability Ledger drill-down
+            if total_tax > 0:
+                gst_detail_type = "SALES_GST_DETAIL"
+                JournalEntry.objects.filter(
+                    tenant_id=tenant_id,
+                    voucher_type=gst_detail_type,
+                    voucher_id=v_id
+                ).delete()
+
+                detail_rows = []
+                component_map = [
+                    ("IGST", igst_amt),
+                    ("CGST", cgst_amt),
+                    ("SGST/UTGST", sgst_amt),
+                    ("Cess", cess_amt),
+                    ("State Cess", state_cess_amt),
+                ]
+                for component_name, component_amt in component_map:
+                    if component_amt > 0:
+                        detail_rows.append(JournalEntry(
+                            tenant_id=tenant_id,
+                            voucher_type=gst_detail_type,
+                            voucher_id=v_id,
+                            voucher_number=invoice.sales_invoice_no,
+                            transaction_date=invoice.date,
+                            ledger_id=gst_output_ledger.id,
+                            ledger_name=f"Output Tax Liability Ledger ({component_name})",
+                            ledger_id_val=gst_output_ledger.id,
+                            debit=D('0.00'),
+                            credit=D(str(component_amt)),
+                        ))
+                if detail_rows:
+                    JournalEntry.objects.bulk_create(detail_rows)
+
+            # Write supplementary TCS detail rows for drill-down breakdown
+            if tcs_amt > 0 and tcs_master_ledger:
+                tcs_detail_type = "SALES_TCS_DETAIL"
+                JournalEntry.objects.filter(
+                    tenant_id=tenant_id,
+                    voucher_type=tcs_detail_type,
+                    voucher_id=v_id
+                ).delete()
+                
+                JournalEntry.objects.create(
+                    tenant_id=tenant_id,
+                    voucher_type=tcs_detail_type,
+                    voucher_id=v_id,
+                    voucher_number=invoice.sales_invoice_no,
+                    transaction_date=invoice.date,
+                    ledger_id=tcs_master_ledger.id,
+                    ledger_name=f"TCS Payable ({tcs_section_name})",
+                    ledger_id_val=tcs_master_ledger.id,
+                    debit=D('0.00'),
+                    credit=D(str(tcs_amt)),
+                )
+
             invoice.posting_status = 'POSTED'
             invoice.posting_error = None
             invoice.save()
@@ -361,6 +450,7 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             try:
                 invoice.save()
             except: pass
+
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)

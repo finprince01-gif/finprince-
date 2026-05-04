@@ -348,16 +348,14 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
 
         # Update the unified Voucher object
         voucher_id = getattr(instance, 'voucher_id', None)
+        
+        net_val = Decimal(str(due_data.get('to_pay', 0) if due_data else 0))
+        adv_val = Decimal(str(due_data.get('advance_paid', 0) if due_data else 0))
+        purchase_total_gross = net_val + adv_val
+        
         if voucher_id:
             try:
                 voucher = Voucher.objects.get(id=voucher_id)
-
-                net_val = Decimal(str(due_data.get('to_pay', 0)))
-                adv_val = Decimal(str(due_data.get('advance_paid', 0)))
-                purchase_total_gross = net_val + adv_val
-
-                total_igst = 0.0
-                
                 voucher.date = instance.date
                 voucher.total = purchase_total_gross
                 voucher.save()
@@ -668,43 +666,97 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             print(f"!!! Vendor Portal Sync Failure (Purchase): {str(e)}")
 
     def _post_journal_entries(self, supplier_instance, voucher_id, purchase_total, supply_inr_data, supply_foreign_data, due_data):
-        """Unified double-entry posting for purchase invoice."""
+        """Unified double-entry posting for purchase invoice with individual GST component posting."""
         try:
+            from accounting.utils_ledger import get_standard_ledger
+            from accounting.models import JournalEntry
+            from decimal import Decimal as D
             tenant_id = supplier_instance.tenant_id
             total_amt = float(purchase_total)
-            if total_amt <= 0 or not voucher_id: 
+            if total_amt <= 0 or not voucher_id:
                 return
 
-            entries = []
-            # 1. Credit the Vendor
-            vendor_ledger = supplier_instance.vendor_basic_detail.ledger if supplier_instance.vendor_basic_detail else None
-            if vendor_ledger:
-                entries.append({"ledger_id": vendor_ledger.id, "debit": 0, "credit": total_amt})
+            # Collect individual GST amounts from line items
+            total_igst = 0.0
+            total_cgst = 0.0
+            total_sgst = 0.0
+            total_cess = 0.0
 
-            # 2. Debit the Purchase Ledger
+            for item in supplier_instance.line_items.all():
+                total_igst += float(item.igst_amount or 0)
+                total_cgst += float(item.cgst_amount or 0)
+                total_sgst += float(item.sgst_amount or 0)
+                total_cess += float(item.cess_amount or 0)
+
+            total_tax = total_igst + total_cgst + total_sgst + total_cess
+            taxable_amt = total_amt - total_tax
+
+            entries = []
+
+            # Determine TDS amount
+            tds_amt = 0.0
+            if due_data and 'tds_it' in due_data:
+                tds_amt = float(due_data.get('tds_it') or 0)
+
+            # 1. Credit the Vendor (Invoice Total minus TDS)
+            # In a purchase, the vendor owes us the TDS amount which we will pay to govt
+            vendor_credit_amt = total_amt - tds_amt
+            vendor_ledger = supplier_instance.vendor_basic_detail.ledger if supplier_instance.vendor_basic_detail else None
+            if vendor_ledger and vendor_credit_amt > 0:
+                entries.append({"ledger_id": vendor_ledger.id, "debit": 0, "credit": vendor_credit_amt})
+
+            # 2. Credit the TDS/TCS Ledger (TDS/TCS Amount)
+            tax_master_ledger = None
+            tax_section_name = "Unspecified Section"
+            is_tcs = False
+            
+            if tds_amt > 0:
+                # Try to resolve the specific section name for supplementary rows and ledger selection
+                if supplier_instance.vendor_basic_detail:
+                    try:
+                        from vendors.models import VendorMasterTDS
+                        tds_obj = VendorMasterTDS.objects.filter(
+                            vendor_basic_detail_id=supplier_instance.vendor_basic_detail.id
+                        ).last()
+                        if tds_obj:
+                            # In VendorMasterTDS, TCS fields are tcs_enabled and tcs_section_applicable
+                            if getattr(tds_obj, 'tcs_enabled', False) and getattr(tds_obj, 'tcs_section_applicable', ''):
+                                tax_section_name = tds_obj.tcs_section_applicable.strip()
+                                is_tcs = True
+                            elif getattr(tds_obj, 'tcs_section_applicable', '') and not getattr(tds_obj, 'tds_section_applicable', ''):
+                                # Fallback if tcs_enabled doesn't exist but tcs_section_applicable does
+                                tax_section_name = tds_obj.tcs_section_applicable.strip()
+                                is_tcs = True
+                            elif getattr(tds_obj, 'tds_section_applicable', ''):
+                                tax_section_name = tds_obj.tds_section_applicable.strip()
+                    except Exception:
+                        pass
+                
+                if is_tcs:
+                    tax_master_ledger = get_standard_ledger(tenant_id, 'TCS Payable', 'Duties & Taxes', 'Liability')
+                else:
+                    tax_master_ledger = get_standard_ledger(tenant_id, 'TDS Payable', 'Duties & Taxes', 'Liability')
+
+                entries.append({"ledger_id": tax_master_ledger.id, "debit": 0, "credit": tds_amt})
+
+            # 3. Debit the Purchase Ledger (Taxable Value only)
             p_ledger_name = None
             if supply_inr_data: p_ledger_name = supply_inr_data.get('purchase_ledger')
             elif supply_foreign_data: p_ledger_name = supply_foreign_data.get('purchase_ledger')
 
             p_ledger_obj = _resolve_ledger(p_ledger_name or 'Purchase', tenant_id)
             if not p_ledger_obj:
-                # Fallback creation
-                from accounting.models import MasterLedgerGroup
-                p_group = MasterLedgerGroup.objects.filter(name__icontains='Purchase', tenant_id=tenant_id).first()
-                if not p_group:
-                    p_group = MasterLedgerGroup.objects.create(name='Purchase Accounts', tenant_id=tenant_id)
-                p_ledger_obj = MasterLedger.objects.create(
-                    name=p_ledger_name or 'Purchase Account',
-                    group=p_group.name,
-                    group_id=p_group,
-                    tenant_id=tenant_id,
-                    category='Expense'
-                )
+                p_ledger_obj = get_standard_ledger(tenant_id, 'Purchase Account', 'Purchase Accounts', 'Expense')
 
-            if p_ledger_obj:
-                entries.append({"ledger_id": p_ledger_obj.id, "debit": total_amt, "credit": 0})
+            if p_ledger_obj and taxable_amt > 0:
+                entries.append({"ledger_id": p_ledger_obj.id, "debit": taxable_amt, "credit": 0})
 
-            if len(entries) == 2:
+            # 4. Debit Input Tax Credit Ledger (Total Tax — single aggregated entry for balance)
+            if total_tax > 0:
+                itc_ledger = get_standard_ledger(tenant_id, 'Input Tax Credit Ledger', 'Duties & Taxes', 'Liability')
+                entries.append({"ledger_id": itc_ledger.id, "debit": total_tax, "credit": 0})
+
+            if len(entries) >= 2:
                 post_transaction(
                     voucher_type="PURCHASE",
                     voucher_id=voucher_id,
@@ -713,7 +765,71 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                     transaction_date=supplier_instance.date,
                     voucher_number=supplier_instance.purchase_voucher_no or supplier_instance.supplier_invoice_no
                 )
-                
+
+                # 4. Write supplementary GST detail rows so the drill-down shows breakdown
+                # These are informational entries on the ITC ledger; they do NOT
+                # affect the running balance (they are not double-entry balanced lines).
+                # We store them with voucher_type = "PURCHASE_GST_DETAIL" to distinguish.
+                if total_tax > 0:
+                    detail_rows = []
+                    gst_detail_type = "PURCHASE_GST_DETAIL"
+                    voucher_no = supplier_instance.purchase_voucher_no or supplier_instance.supplier_invoice_no
+
+                    # Delete any existing detail rows first (idempotent)
+                    JournalEntry.objects.filter(
+                        tenant_id=tenant_id,
+                        voucher_type=gst_detail_type,
+                        voucher_id=voucher_id
+                    ).delete()
+
+                    component_map = [
+                        ("IGST", total_igst),
+                        ("CGST", total_cgst),
+                        ("SGST/UTGST", total_sgst),
+                        ("Cess", total_cess),
+                    ]
+                    for component_name, component_amt in component_map:
+                        if component_amt > 0:
+                            detail_rows.append(JournalEntry(
+                                tenant_id=tenant_id,
+                                voucher_type=gst_detail_type,
+                                voucher_id=voucher_id,
+                                voucher_number=voucher_no,
+                                transaction_date=supplier_instance.date,
+                                ledger_id=itc_ledger.id,
+                                ledger_name=f"Input Tax Credit Ledger ({component_name})",
+                                ledger_id_val=itc_ledger.id,
+                                debit=D(str(component_amt)),
+                                credit=D('0.00'),
+                            ))
+                    if detail_rows:
+                        JournalEntry.objects.bulk_create(detail_rows)
+
+                # 5. Write supplementary TDS/TCS detail rows for drill-down breakdown
+                if tds_amt > 0 and tax_master_ledger:
+                    tax_detail_type = "PURCHASE_TCS_DETAIL" if is_tcs else "PURCHASE_TDS_DETAIL"
+                    voucher_no = supplier_instance.purchase_voucher_no or supplier_instance.supplier_invoice_no
+                    
+                    # Delete any existing detail rows (both types just in case they switched)
+                    JournalEntry.objects.filter(
+                        tenant_id=tenant_id,
+                        voucher_type__in=["PURCHASE_TDS_DETAIL", "PURCHASE_TCS_DETAIL"],
+                        voucher_id=voucher_id
+                    ).delete()
+                    
+                    JournalEntry.objects.create(
+                        tenant_id=tenant_id,
+                        voucher_type=tax_detail_type,
+                        voucher_id=voucher_id,
+                        voucher_number=voucher_no,
+                        transaction_date=supplier_instance.date,
+                        ledger_id=tax_master_ledger.id,
+                        ledger_name=f"{'TCS Payable' if is_tcs else 'TDS Payable'} ({tax_section_name})",
+                        ledger_id_val=tax_master_ledger.id,
+                        debit=D('0.00'),
+                        credit=D(str(tds_amt)),
+                    )
+
                 # Advance Allocations
                 from accounting.services.advance_service import write_allocations
                 adv_refs = due_data.get('advance_references', []) if due_data else []
