@@ -2693,7 +2693,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 tdsFormData.append('tds_section_applicable', mappedTdsSection);
                 tdsFormData.append('tds_section', mappedTdsSection); // Also send as tds_section
                 tdsFormData.append('tds_rate', rateInfo.tdsRate);
-                tdsFormData.append('penalty_rate', rateInfo.penaltyRate);
                 tdsFormData.append('pan_number', panNo || '');
                 // TCS
                 const tcsMappedSection = tcsSectionApplicable || '';

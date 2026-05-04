@@ -1578,6 +1578,9 @@ const SalesExcelUploadWorkflow: React.FC<SalesExcelUploadWorkflowProps> = ({ onC
     const [finalizing, setFinalizing] = useState(false);
     const [editModal, setEditModal] = useState<{ invoice: SalesInvoiceGroup; index: number } | null>(null);
     const [createCustomerFor, setCreateCustomerFor] = useState<SalesInvoiceGroup | null>(null);
+    // Remembers which edit modal was open when "Add New Customer" was triggered,
+    // so we can restore it when the customer modal is dismissed.
+    const [pendingEditModal, setPendingEditModal] = useState<{ invoice: SalesInvoiceGroup; index: number } | null>(null);
     const [summary, setSummary] = useState<any>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1617,7 +1620,7 @@ const SalesExcelUploadWorkflow: React.FC<SalesExcelUploadWorkflowProps> = ({ onC
         }
     };
 
-    const revalidateAll = async () => {
+    const revalidateAll = async (): Promise<SalesInvoiceGroup[] | undefined> => {
         if (!sessionId) return;
         try {
             const res = await apiService.updateSalesWorkflowInvoice({
@@ -1625,6 +1628,7 @@ const SalesExcelUploadWorkflow: React.FC<SalesExcelUploadWorkflowProps> = ({ onC
                 revalidate_all: true
             });
             setInvoices(res.invoices);
+            return res.invoices as SalesInvoiceGroup[];
         } catch (error) {
             showError('Revalidation failed');
         }
@@ -1914,10 +1918,11 @@ const SalesExcelUploadWorkflow: React.FC<SalesExcelUploadWorkflowProps> = ({ onC
                                                     <Icon name="edit-3" className="w-4 h-4" />
                                                 </button>
 
-                                                {inv.status === 'CUSTOMER_MISSING' && (
+                                                {(inv.status === 'CUSTOMER_MISSING' || !inv.header.customer_name) && (
                                                     <button
                                                         onClick={() => setCreateCustomerFor(inv)}
                                                         className="px-3 py-1.5 bg-orange-50 text-orange-600 hover:bg-orange-100 text-[10px] font-bold rounded-lg border border-orange-200 transition-all flex items-center gap-1.5"
+                                                        title="Customer not found — click to create"
                                                     >
                                                         <Icon name="user-plus" className="w-3.5 h-3.5" />
                                                         Create Customer
@@ -1949,6 +1954,8 @@ const SalesExcelUploadWorkflow: React.FC<SalesExcelUploadWorkflowProps> = ({ onC
                     onClose={() => setEditModal(null)}
                     onSave={handleUpdate}
                     onCreateCustomer={(inv) => {
+                        // Save the current edit modal so we can restore it if the user dismisses "Add New Customer"
+                        setPendingEditModal(editModal);
                         setEditModal(null);
                         setCreateCustomerFor(inv);
                     }}
@@ -1958,10 +1965,24 @@ const SalesExcelUploadWorkflow: React.FC<SalesExcelUploadWorkflowProps> = ({ onC
             {createCustomerFor && (
                 <AddNewCustomerModal
                     isOpen={!!createCustomerFor}
-                    onClose={() => setCreateCustomerFor(null)}
+                    onClose={() => {
+                        setCreateCustomerFor(null);
+                        // Restore the Edit Sales Invoice modal when customer modal is dismissed
+                        if (pendingEditModal) {
+                            setEditModal(pendingEditModal);
+                            setPendingEditModal(null);
+                        }
+                    }}
                     onCustomerCreated={async () => {
                         setCreateCustomerFor(null);
-                        await revalidateAll();
+                        const freshInvoices = await revalidateAll();
+                        // Re-open the Edit Sales Invoice modal with the freshly revalidated invoice
+                        if (pendingEditModal) {
+                            const idx = pendingEditModal.index;
+                            const freshInvoice = freshInvoices?.[idx] ?? pendingEditModal.invoice;
+                            setEditModal({ invoice: freshInvoice, index: idx });
+                            setPendingEditModal(null);
+                        }
                     }}
                     initialData={{
                         customer_name: createCustomerFor.header.customer_name,

@@ -6,14 +6,22 @@ from .models_voucher_sales import VoucherSalesInvoiceDetails
 def validate_sales_customer_and_invoice(tenant_id, customer_name, gstin, branch='', sales_invoice_no=''):
     """
     Validates sales customer and invoice uniqueness.
-    
-    Rule 1: customer_name, gstin, branch match AND sales_invoice_number exists -> DUPLICATE_INVOICE (Block)
-    Rule 2: customer_name, gstin, branch match AND sales_invoice_number is new -> READY (Allow)
-    Rule 3: customer_name matches, gstin is different -> CUSTOMER_MISSING (Allow creation of new customer)
-    Rule 4: customer_name, gstin match, branch is different -> CUSTOMER_MISSING (Allow creation of new branch)
-    Rule 5: gstin matches, customer_name is different -> GSTIN_CONFLICT (Warning)
     """
     if customer_name: customer_name = customer_name.strip()
+    
+    # 0. Global Invoice Uniqueness Check (Tenant-wide)
+    if sales_invoice_no:
+        existing_invoice = VoucherSalesInvoiceDetails.objects.filter(
+            tenant_id=tenant_id,
+            sales_invoice_no__iexact=sales_invoice_no.strip()
+        ).first()
+        
+        if existing_invoice:
+            return {
+                "status": "DUPLICATE_INVOICE",
+                "message": f"Duplicate Invoice: '{sales_invoice_no}' already exists in the database for customer '{existing_invoice.customer_name}'.",
+                "customer_id": existing_invoice.customer_id
+            }
     # Deep clean GSTIN
     if gstin: gstin = "".join(re.findall(r'[A-Z0-9]', gstin.upper()))
     if branch: branch = branch.strip()
@@ -93,19 +101,6 @@ def validate_sales_customer_and_invoice(tenant_id, customer_name, gstin, branch=
 
     # 3. Final Step: Invoice Uniqueness and Return Success
     if customer_match:
-        if sales_invoice_no:
-            exists = VoucherSalesInvoiceDetails.objects.filter(
-                tenant_id=tenant_id,
-                customer_id=customer_match.id,
-                sales_invoice_no__iexact=sales_invoice_no.strip()
-            ).exists()
-            
-            if exists:
-                return {
-                    "status": "DUPLICATE_INVOICE",
-                    "message": f"Duplicate Invoice: '{sales_invoice_no}' already exists for customer '{customer_match.customer_name}'.",
-                    "customer_id": customer_match.id
-                }
         
         return {
             "status": "READY",
