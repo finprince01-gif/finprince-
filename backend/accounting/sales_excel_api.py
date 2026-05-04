@@ -822,17 +822,24 @@ def process_sales_invoice_group(group_rows, tenant_id, session_id, row_index):
         sales_invoice_no=invoice_no
     )
 
-    # Required Fields Check
-    missing_fields = []
-    if not invoice_no: missing_fields.append("Invoice No")
-    if not header.get("customer_name"): missing_fields.append("Customer Name")
-    if not header.get("gstin"): missing_fields.append("GSTIN")
-    if not header.get("customer_branch"): missing_fields.append("Branch")
+    # Required Fields Check — separate customer name from other required fields
+    missing_core = []  # non-customer fields
+    missing_customer_name = not header.get("customer_name")
+
+    if not invoice_no: missing_core.append("Invoice No")
+    if not header.get("gstin"): missing_core.append("GSTIN")
+    if not header.get("customer_branch"): missing_core.append("Branch")
 
     status_val = val_res["status"]
-    if missing_fields:
+    if missing_core:
+        # Other critical fields missing → hard validation failure
+        all_missing = (["Customer Name"] if missing_customer_name else []) + missing_core
         status_val = "VALIDATION_FAILED"
-        val_res["message"] = f"Missing required fields: {', '.join(missing_fields)}"
+        val_res["message"] = f"Missing required fields: {', '.join(all_missing)}"
+    elif missing_customer_name:
+        # Only customer name is missing → treat as CUSTOMER_MISSING so user can create one
+        status_val = "CUSTOMER_MISSING"
+        val_res["message"] = "Customer name is missing. Please create a new customer."
 
     return {
         "invoice_no": invoice_no,

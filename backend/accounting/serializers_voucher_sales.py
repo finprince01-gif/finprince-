@@ -84,6 +84,32 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         ]
         read_only_fields = ('id', 'tenant_id', 'created_at', 'updated_at', 'posting_status', 'posting_error')
     
+    def validate_sales_invoice_no(self, value):
+        """
+        Ensures the invoice number is unique within the tenant.
+        """
+        request = self.context.get('request')
+        tenant_id = self.context.get('tenant_id')
+        if not tenant_id and request:
+            tenant_id = getattr(request.user, 'tenant_id', 1)
+        
+        if not tenant_id:
+            return value
+
+        if value:
+            qs = VoucherSalesInvoiceDetails.objects.filter(
+                tenant_id=tenant_id,
+                sales_invoice_no__iexact=value.strip()
+            )
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            
+            if qs.exists():
+                existing = qs.first()
+                raise serializers.ValidationError(f"Invoice number '{value}' already exists for customer '{existing.customer_name}'.")
+        
+        return value
+    
     def _sync_numbering_series(self, tenant_id, voucher_name, sales_invoice_no):
         """
         Ensures that the Master numbering series is ahead of any manually provided invoice number.
