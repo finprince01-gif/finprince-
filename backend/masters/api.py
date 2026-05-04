@@ -187,11 +187,27 @@ class MasterLedgerViewSet(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         """Delegate to flow layer."""
-        instance = self.get_object()
-        # Inject request for tenant resolution
-        request.user._request = request
-        flow.delete_ledger(request.user, instance.id)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        try:
+            import logging
+            logger = logging.getLogger('masters.api')
+            # Get tenant via the same flow helper used elsewhere
+            request.user._request = request
+            from . import flow as _flow
+            tenant_id = _flow.get_tenant_id(request.user)
+            ledger_id = kwargs.get('pk')
+            logger.info(f"🗑️ DELETE ledger {ledger_id} for tenant {tenant_id}")
+
+            from accounting.models import MasterLedger  # type: ignore
+            ledger = MasterLedger.objects.get(id=ledger_id, tenant_id=tenant_id)
+            ledger.delete()
+            logger.info(f"✅ Ledger {ledger_id} deleted successfully")
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            import logging, traceback
+            logger = logging.getLogger('masters.api')
+            logger.error(f"❌ Error deleting ledger: {type(e).__name__}: {str(e)}\n{traceback.format_exc()}")
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     
     @action(detail=False, methods=['get'], url_path='cash-bank')
     def cash_bank(self, request):

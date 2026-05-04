@@ -48,6 +48,88 @@ interface TreeNode {
     };
 }
 
+// --- GLOBAL HIERARCHY ORDERING SYSTEM (RANK-BASED) ---
+const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+
+// Absolute ranks for specific item names to ensure they stay pinned regardless of parent
+const ITEM_RANKS: Record<string, number> = {
+    // Root level
+    'asset': 1,
+    'expenditure': 2,
+    'income': 3,
+    'liability': 4,
+    'ownersfunds': 5,
+    'npofunds': 6,
+
+    // Owners' Funds
+    'sharecapital': 10,
+    'reservesandsurplus': 11,
+    'moneyreceivedagainstsharewarrants': 12,
+
+    // Reserves and Surplus
+    'generalreserves': 20,
+    'revaluationreserves': 21,
+    'surplus': 22,
+    'othercapitalreserves': 23,
+    'otherrevenuereserves': 24,
+
+    // Investments (Both Current and Non-Current)
+    'investmentsinotherentities': 30,
+    'investmentsinpreferenceshares': 31,
+    'investmentsinequityinstruments': 32,
+    'investmentsingovernmentortrustsecurities': 33,
+    'investmentsindebenturesorbonds': 34,
+    'investmentsinmutualfunds': 35,
+    'investmentsproperty': 36,
+    'others': 37,
+    'othernoncurrentinvestment': 38,
+
+    // Liabilities
+    'longtermborrowings': 40,
+    'otherlongtermliabilities': 41,
+    'deferredtaxliabilitiesnet': 42,
+    'longtermprovisions': 43,
+    'shorttermborrowings': 44,
+    'othercurrentliabilities': 45,
+    'othercurrentassets': 46,
+    'shorttermprovisions': 47,
+
+    // Loans
+    'longtermloansfrombankssecured': 50,
+    'longtermloansfromrelatedpartiessecured': 51,
+    'longtermloansfromotherpartiessecured': 52,
+    'longtermloansfrombanksunsecured': 53,
+    'longtermloansfromrelatedpartiesunsecured': 54,
+    'longtermloansfromotherpartiesunsecured': 55,
+
+    // Other Current Liab
+    'interestaccrued': 60,
+    'bankodccaccounts': 61,
+    'gstpayable': 62,
+    'tdspayable': 63,
+    'dutiestaxesliability': 64,
+    'dividendpayable': 65,
+
+    // Income
+    'revenuefromoperations': 70,
+    'otherincome': 71,
+};
+
+const sortHierarchyNodes = (nodes: TreeNode[]) => {
+    nodes.sort((a, b) => {
+        const ar = ITEM_RANKS[clean(a.name)] ?? 9999;
+        const br = ITEM_RANKS[clean(b.name)] ?? 9999;
+        
+        if (ar !== br) return ar - br;
+        return a.name.localeCompare(b.name);
+    });
+    nodes.forEach(node => {
+        if (node.children && node.children.length > 0) {
+            sortHierarchyNodes(node.children);
+        }
+    });
+};
+
 interface LedgerCreationWizardProps {
     onCreateLedger: (data: {
         customName: string;
@@ -223,225 +305,9 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
                 // Build tree structure
                 const tree = buildTreeStructure(mergedHierarchy, ledgers);
+                sortHierarchyNodes(tree);
 
-                // Apply custom child ordering for specific groups that must match
-                // the reference document order (not alphabetical / DB insertion order).
-                const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
-
-                const RAW_CUSTOM_ORDER: Record<string, string[]> = {
-                    'current investments': [
-                        'Investments in Other Entities',
-                        'Investments in preference shares',
-                        'Investments in equity instruments',
-                        'Investments in government or trust securities',
-                        'Investments in debentures or bonds',
-                        'Investments in mutual funds',
-                        'Investments property',
-                        'Others',
-                    ],
-                    'non-current investments': [
-                        'Investments in Other Entities',
-                        'Investments in preference shares',
-                        'Investments in equity instruments',
-                        'Investments in government or trust securities',
-                        'Investments in debentures or bonds',
-                        'Investments in mutual funds',
-                        'Investments property',
-                        'Other Non current investment',
-                    ],
-                    'property, plant & equipment': [
-                        'Tangible assets',
-                        'Intangible Assets',
-                        'Capital work-in-progress',
-                        'Intangible assets under development',
-                    ],
-                    'employee benefits expenses': [
-                        'Salary',
-                        'Bonus',
-                        'Wages',
-                        'Staff welfare expenses',
-                        'Incentives',
-                        'Others',
-                    ],
-                    'finance costs': [
-                        'Impairment on financial instruments',
-                        'Interest on bank loan',
-                        'Other borrowing costs',
-                        'Interest on other loans',
-                    ],
-                    'other expenses': [
-                        'Fees and commission expense',
-                        'Net loss on fair value changes',
-                        'Net loss on derecognition of financial instruments under amortised cost category',
-                        'Repairs & Maintenance',
-                    ],
-                    'other income': [
-                        'Interest Income',
-                        'Dividend Income',
-                        'Net gain on fair value changes',
-                        'Net gain on derecognition of financial instruments under amortised cost category',
-                        'Others',
-                    ],
-                    'revenue from operations': [
-                        'Donations and Grants',
-                        'Sale of Services',
-                        'Sale of Goods',
-                        'Sale of Service',
-                    ],
-                    'gst sales - services': [
-                        'Local Sales - Services',
-                        'Inter-state Sales - Services',
-                    ],
-                    'local sales - services': [
-                        'Local Sale of Services - Nil rated',
-                        'Local Sale of Services - Exempted',
-                        'Local Sale of Services - Taxable',
-                    ],
-                    'inter-state sales - services': [
-                        'Inter-state Sale of Services - Nil rated',
-                        'Inter-state Sale of Services - Exempted',
-                        'Inter-state Sale of Services - Taxable',
-                    ],
-                    'gst sales - goods': [
-                        'Local Sales - Goods',
-                        'Inter-state Sales - Goods',
-                        'Export of Goods',
-                    ],
-                    'non-gst sales - goods': [
-                        'Local Sales - Goods',
-                        'Inter-state Sales - Goods',
-                        'Export of Goods',
-                    ],
-                    'local sales - goods': [
-                        'Local Sale of Goods - Nil rated',
-                        'Local Sale of Goods - Exempted',
-                        'Local Sale of Goods - Taxable',
-                    ],
-                    'inter-state sales - goods': [
-                        'Inter-state Sale of Goods - Exempted',
-                        'Inter-state Sale of Goods - Nil rated',
-                        'Inter-state Sale of Goods - Taxable',
-                    ],
-                    'export of goods': [
-                        'Export of goods - Nil rated',
-                        'Export of goods - Exempted',
-                        'Export of goods - with payment of Tax',
-                        'Export of goods - Without payment of tax',
-                    ],
-                    'export of service': [
-                        'Export of Service - Nil rated',
-                        'Export of Service - Exempted',
-                        'Export of Service - with payment of Tax',
-                        'Export of Service - Without payment of tax',
-                    ],
-                    'income': [
-                        'Revenue from operations',
-                        'Other Income',
-                    ],
-                    'liability': [
-                        'Long-term borrowings',
-                        'Other Long-term liabilities',
-                        'Deferred tax liabilities (Net)',
-                        'Long-term provisions',
-                        'Short-term borrowings',
-                        'Other current liabilities',
-                        'Other current assets',
-                        'Short-term provisions',
-                    ],
-                    'secured loans': [
-                        'Long Term loans From Banks (Secured)',
-                        'Longterm Loans from Related Parties (Secured)',
-                        'Long Term Loans from other parties (Secured)',
-                        'Long term loans from other parties (Secured)',
-                    ],
-                    'unsecured loans': [
-                        'Long Term loans From Banks (unsecured)',
-                        'Longterm Loans from Related Parties (unsecured)',
-                        'Long Term Loans from other parties (unsecured)',
-                    ],
-                    'secured loans (short term)': [
-                        'short Term loans From Banks (secured)',
-                        'shortterm Loans from Related Parties (secured)',
-                        'short Term Loans from other parties (secured)',
-                    ],
-                    'unsecured loans (short term)': [
-                        'short Term loans From Banks (unsecured)',
-                        'shortterm Loans from Related Parties (unsecured)',
-                        'short Term Loans from other parties (unsecured)',
-                    ],
-                    'other current liabilities': [
-                        'Interest accrued',
-                        'Bank OD/CC Accounts',
-                        'GST Payable',
-                        'TDS Payable',
-                        'Duties & Taxes (Liability)',
-                        'Dividend Payable',
-                        'others',
-                    ],
-                    'npo funds': [
-                        'Unrestricted Funds',
-                        'Restricted Funds',
-                    ],
-                    "owners' funds": [
-                        'Share capital',
-                        'Reserves and surplus',
-                        'Money received against share warrants',
-                    ],
-                    'reserves and surplus': [
-                        'General Reserves',
-                        'Revaluation Reserves',
-                        'Surplus',
-                        'Other Capital reserves',
-                        'Other Revenue Reserves',
-                    ],
-                    '__root__': [
-                        'ASSET',
-                        'EXPENDITURE',
-                        'INCOME',
-                        'LIABILITY',
-                        'OWNERS\' FUNDS',
-                        'NPO FUNDS',
-                    ]
-                };
-
-                // Create a normalized version of the map
-                const CUSTOM_ORDER: Record<string, string[]> = {};
-                Object.entries(RAW_CUSTOM_ORDER).forEach(([k, v]) => {
-                    CUSTOM_ORDER[normalize(k)] = v;
-                });
-
-                const applyCustomOrder = (nodes: TreeNode[]): TreeNode[] => {
-                    return nodes.map(node => {
-                        const key = normalize(node.name || '');
-                        const customOrder = CUSTOM_ORDER[key];
-                        let children = node.children ? applyCustomOrder(node.children) : [];
-                        
-                        if (customOrder && children.length > 0) {
-                            const orderMap = new Map(customOrder.map((name, idx) => [normalize(name), idx]));
-                            children = [...children].sort((a, b) => {
-                                const ai = orderMap.get(normalize(a.name || '')) ?? 9999;
-                                const bi = orderMap.get(normalize(b.name || '')) ?? 9999;
-                                return ai - bi;
-                            });
-                        }
-                        return { ...node, children };
-                    });
-                };
-
-                let processedTree = applyCustomOrder(tree);
-
-                // Sort the root level itself
-                const rootOrder = CUSTOM_ORDER[normalize('__root__')];
-                if (rootOrder) {
-                    const orderMap = new Map(rootOrder.map((name, idx) => [normalize(name), idx]));
-                    processedTree = [...processedTree].sort((a, b) => {
-                        const ai = orderMap.get(normalize(a.name || '')) ?? 9999;
-                        const bi = orderMap.get(normalize(b.name || '')) ?? 9999;
-                        return ai - bi;
-                    });
-                }
-
-                setTreeData(processedTree);
+                setTreeData([...tree]);
 
                 setLoading(false);
             } catch (error) {
@@ -923,7 +789,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
                 setHierarchyData(mergedHierarchy);
                 const tree = buildTreeStructure(mergedHierarchy, ledgers);
-                setTreeData(tree);
+                sortHierarchyNodes(tree); // ← Apply pinned order after every re-fetch
+                setTreeData([...tree]);
                 return tree;
             }
         } catch (error) {
@@ -974,9 +841,9 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     if (loading) return <div className="text-gray-500 text-sm">Loading hierarchy...</div>;
 
     // Helper to determine if input should be disabled (value comes from parent hierarchy)
-    const isSubGroup2Fixed = !!selectedNode?.fullPath.sub_group_2;
-    const isSubGroup3Fixed = !!selectedNode?.fullPath.sub_group_3;
-    const isLedgerTypeFixed = !!selectedNode?.fullPath.ledger_type;
+    const isSubGroup2Fixed = !!selectedNode && (selectedNode.level >= 3 || !!selectedNode.fullPath.sub_group_2);
+    const isSubGroup3Fixed = !!selectedNode && (selectedNode.level >= 4 || !!selectedNode.fullPath.sub_group_3);
+    const isLedgerTypeFixed = !!selectedNode && (selectedNode.level >= 5 || !!selectedNode.fullPath.ledger_type);
 
     const canEditSelectedLedger = !!selectedNode?.ledgerId;
 
@@ -1024,6 +891,26 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         setEditSubGroup3('');
     };
 
+    const deleteSelectedLedger = async () => {
+        if (!selectedNode?.ledgerId) return;
+
+        const itemName = selectedNode.name || 'this item';
+        const confirmed = window.confirm(`Are you sure you want to delete "${itemName}"? This action cannot be undone.`);
+        if (!confirmed) return;
+
+        try {
+            const res = await httpClient.delete(`/api/masters/ledgers/${selectedNode.ledgerId}/`);
+            showSuccess(`"${itemName}" deleted successfully.`);
+            setSelectedNode(null);
+            setIsEditingExistingLedger(false);
+            setTimeout(refetchHierarchy, 300);
+        } catch (err: any) {
+            console.error('Delete error:', err);
+            const errMsg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Unknown error';
+            showError(`Failed to delete: ${errMsg}`);
+        }
+    };
+
     const saveEditedLedger = async () => {
         if (!selectedNode?.ledgerId) return;
 
@@ -1052,9 +939,12 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             if (lvl === 3) {
                 patchPayload.sub_group_2 = sg2 || null;
             }
-            // For sub_group_3 edit: always send the new sg3 value
+            // For sub_group_3 edit: send the new sg3, and also allow updating its parent sg2
             if (lvl === 4) {
                 patchPayload.sub_group_3 = sg3 || null;
+                if (sg2 !== (selectedNode.fullPath.sub_group_2 || '')) {
+                    patchPayload.sub_group_2 = sg2 || null;
+                }
             }
             // For leaf ledger: send changed sub_groups + name
             if (!isSubGroupEdit) {
@@ -1167,7 +1057,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                     value={
                                         isEditingExistingLedger
                                             ? editSubGroup2
-                                            : (isSubGroup2Fixed ? selectedNode?.fullPath.sub_group_2! : subGroup2Input)
+                                            : (isSubGroup2Fixed ? (selectedNode?.fullPath.sub_group_2 || '') : subGroup2Input)
                                     }
                                     onChange={(e) => {
                                         if (isEditingExistingLedger) { setEditSubGroup2(e.target.value); return; }
@@ -1192,7 +1082,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                     value={
                                         isEditingExistingLedger
                                             ? editSubGroup3
-                                            : (isSubGroup3Fixed ? selectedNode?.fullPath.sub_group_3! : subGroup3Input)
+                                            : (isSubGroup3Fixed ? (selectedNode?.fullPath.sub_group_3 || '') : subGroup3Input)
                                     }
                                     onChange={(e) => {
                                         if (isEditingExistingLedger) { setEditSubGroup3(e.target.value); return; }
@@ -1216,7 +1106,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                     type="text"
                                     value={isEditingExistingLedger
                                         ? editLedgerName
-                                        : (isLedgerTypeFixed ? selectedNode?.fullPath.ledger_type! : ledgerTypeInput)
+                                        : (isLedgerTypeFixed ? (selectedNode?.fullPath.ledger_type || '') : ledgerTypeInput)
                                     }
                                     onChange={(e) => {
                                         if (isEditingExistingLedger) {
