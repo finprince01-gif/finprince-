@@ -80,6 +80,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     // Edit existing (tenant) ledgers directly in the preview panel
     const [isEditingExistingLedger, setIsEditingExistingLedger] = useState(false);
     const [editLedgerName, setEditLedgerName] = useState('');
+    const [editSubGroup2, setEditSubGroup2] = useState('');
+    const [editSubGroup3, setEditSubGroup3] = useState('');
 
     // Opening balance step state
     const [showOpeningBalanceStep, setShowOpeningBalanceStep] = useState(false);
@@ -195,13 +197,251 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 // Convert tenant ledgers to hierarchy format
                 const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
 
-                // Merge global hierarchy with custom ledgers
-                const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
+                // Merge global hierarchy with custom ledgers,
+                // then strip out groups that should never appear in the ledger type list.
+                const HIDDEN_GROUPS = ['sundry debtors', 'sundry creditors'];
+                const isHiddenRow = (row: HierarchyRow) => {
+                    const vals = [
+                        row.major_group_1,
+                        row.group_1,
+                        row.sub_group_1_1,
+                        row.sub_group_2_1,
+                    ].map(v => (v || '').toLowerCase().trim());
+                    return vals.some(v => HIDDEN_GROUPS.includes(v));
+                };
+
+                const mergedHierarchy = [...globalHierarchy, ...customHierarchy]
+                    .filter(row => !isHiddenRow(row))
+                    .map(row => {
+                        // Merge duplicate "Finance costs" groups into a single "Finance Costs" entry
+                        if (row.group_1?.toLowerCase().trim() === 'finance costs') {
+                            return { ...row, group_1: 'Finance Costs' };
+                        }
+                        return row;
+                    });
                 setHierarchyData(mergedHierarchy);
 
                 // Build tree structure
                 const tree = buildTreeStructure(mergedHierarchy, ledgers);
-                setTreeData(tree);
+
+                // Apply custom child ordering for specific groups that must match
+                // the reference document order (not alphabetical / DB insertion order).
+                const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+
+                const RAW_CUSTOM_ORDER: Record<string, string[]> = {
+                    'current investments': [
+                        'Investments in Other Entities',
+                        'Investments in preference shares',
+                        'Investments in equity instruments',
+                        'Investments in government or trust securities',
+                        'Investments in debentures or bonds',
+                        'Investments in mutual funds',
+                        'Investments property',
+                        'Others',
+                    ],
+                    'non-current investments': [
+                        'Investments in Other Entities',
+                        'Investments in preference shares',
+                        'Investments in equity instruments',
+                        'Investments in government or trust securities',
+                        'Investments in debentures or bonds',
+                        'Investments in mutual funds',
+                        'Investments property',
+                        'Other Non current investment',
+                    ],
+                    'property, plant & equipment': [
+                        'Tangible assets',
+                        'Intangible Assets',
+                        'Capital work-in-progress',
+                        'Intangible assets under development',
+                    ],
+                    'employee benefits expenses': [
+                        'Salary',
+                        'Bonus',
+                        'Wages',
+                        'Staff welfare expenses',
+                        'Incentives',
+                        'Others',
+                    ],
+                    'finance costs': [
+                        'Impairment on financial instruments',
+                        'Interest on bank loan',
+                        'Other borrowing costs',
+                        'Interest on other loans',
+                    ],
+                    'other expenses': [
+                        'Fees and commission expense',
+                        'Net loss on fair value changes',
+                        'Net loss on derecognition of financial instruments under amortised cost category',
+                        'Repairs & Maintenance',
+                    ],
+                    'other income': [
+                        'Interest Income',
+                        'Dividend Income',
+                        'Net gain on fair value changes',
+                        'Net gain on derecognition of financial instruments under amortised cost category',
+                        'Others',
+                    ],
+                    'revenue from operations': [
+                        'Donations and Grants',
+                        'Sale of Services',
+                        'Sale of Goods',
+                        'Sale of Service',
+                    ],
+                    'gst sales - services': [
+                        'Local Sales - Services',
+                        'Inter-state Sales - Services',
+                    ],
+                    'local sales - services': [
+                        'Local Sale of Services - Nil rated',
+                        'Local Sale of Services - Exempted',
+                        'Local Sale of Services - Taxable',
+                    ],
+                    'inter-state sales - services': [
+                        'Inter-state Sale of Services - Nil rated',
+                        'Inter-state Sale of Services - Exempted',
+                        'Inter-state Sale of Services - Taxable',
+                    ],
+                    'gst sales - goods': [
+                        'Local Sales - Goods',
+                        'Inter-state Sales - Goods',
+                        'Export of Goods',
+                    ],
+                    'non-gst sales - goods': [
+                        'Local Sales - Goods',
+                        'Inter-state Sales - Goods',
+                        'Export of Goods',
+                    ],
+                    'local sales - goods': [
+                        'Local Sale of Goods - Nil rated',
+                        'Local Sale of Goods - Exempted',
+                        'Local Sale of Goods - Taxable',
+                    ],
+                    'inter-state sales - goods': [
+                        'Inter-state Sale of Goods - Exempted',
+                        'Inter-state Sale of Goods - Nil rated',
+                        'Inter-state Sale of Goods - Taxable',
+                    ],
+                    'export of goods': [
+                        'Export of goods - Nil rated',
+                        'Export of goods - Exempted',
+                        'Export of goods - with payment of Tax',
+                        'Export of goods - Without payment of tax',
+                    ],
+                    'export of service': [
+                        'Export of Service - Nil rated',
+                        'Export of Service - Exempted',
+                        'Export of Service - with payment of Tax',
+                        'Export of Service - Without payment of tax',
+                    ],
+                    'income': [
+                        'Revenue from operations',
+                        'Other Income',
+                    ],
+                    'liability': [
+                        'Long-term borrowings',
+                        'Other Long-term liabilities',
+                        'Deferred tax liabilities (Net)',
+                        'Long-term provisions',
+                        'Short-term borrowings',
+                        'Other current liabilities',
+                        'Other current assets',
+                        'Short-term provisions',
+                    ],
+                    'secured loans': [
+                        'Long Term loans From Banks (Secured)',
+                        'Longterm Loans from Related Parties (Secured)',
+                        'Long Term Loans from other parties (Secured)',
+                        'Long term loans from other parties (Secured)',
+                    ],
+                    'unsecured loans': [
+                        'Long Term loans From Banks (unsecured)',
+                        'Longterm Loans from Related Parties (unsecured)',
+                        'Long Term Loans from other parties (unsecured)',
+                    ],
+                    'secured loans (short term)': [
+                        'short Term loans From Banks (secured)',
+                        'shortterm Loans from Related Parties (secured)',
+                        'short Term Loans from other parties (secured)',
+                    ],
+                    'unsecured loans (short term)': [
+                        'short Term loans From Banks (unsecured)',
+                        'shortterm Loans from Related Parties (unsecured)',
+                        'short Term Loans from other parties (unsecured)',
+                    ],
+                    'other current liabilities': [
+                        'Interest accrued',
+                        'Bank OD/CC Accounts',
+                        'GST Payable',
+                        'TDS Payable',
+                        'Duties & Taxes (Liability)',
+                        'Dividend Payable',
+                        'others',
+                    ],
+                    'npo funds': [
+                        'Unrestricted Funds',
+                        'Restricted Funds',
+                    ],
+                    "owners' funds": [
+                        'Share capital',
+                        'Reserves and surplus',
+                        'Money received against share warrants',
+                    ],
+                    'reserves and surplus': [
+                        'General Reserves',
+                        'Revaluation Reserves',
+                        'Surplus',
+                        'Other Capital reserves',
+                        'Other Revenue Reserves',
+                    ],
+                    '__root__': [
+                        'ASSET',
+                        'EXPENDITURE',
+                        'INCOME',
+                        'LIABILITY',
+                        'OWNERS\' FUNDS',
+                        'NPO FUNDS',
+                    ]
+                };
+
+                // Create a normalized version of the map
+                const CUSTOM_ORDER: Record<string, string[]> = {};
+                Object.entries(RAW_CUSTOM_ORDER).forEach(([k, v]) => {
+                    CUSTOM_ORDER[normalize(k)] = v;
+                });
+
+                const applyCustomOrder = (nodes: TreeNode[]): TreeNode[] => {
+                    return nodes.map(node => {
+                        const key = normalize(node.name || '');
+                        const customOrder = CUSTOM_ORDER[key];
+                        let children = node.children ? applyCustomOrder(node.children) : [];
+                        
+                        if (customOrder && children.length > 0) {
+                            const orderMap = new Map(customOrder.map((name, idx) => [normalize(name), idx]));
+                            children = [...children].sort((a, b) => {
+                                const ai = orderMap.get(normalize(a.name || '')) ?? 9999;
+                                const bi = orderMap.get(normalize(b.name || '')) ?? 9999;
+                                return ai - bi;
+                            });
+                        }
+                        return { ...node, children };
+                    });
+                };
+
+                let processedTree = applyCustomOrder(tree);
+
+                // Sort the root level itself
+                const rootOrder = CUSTOM_ORDER[normalize('__root__')];
+                if (rootOrder) {
+                    const orderMap = new Map(rootOrder.map((name, idx) => [normalize(name), idx]));
+                    processedTree = [...processedTree].sort((a, b) => {
+                        const ai = orderMap.get(normalize(a.name || '')) ?? 9999;
+                        const bi = orderMap.get(normalize(b.name || '')) ?? 9999;
+                        return ai - bi;
+                    });
+                }
+
+                setTreeData(processedTree);
 
                 setLoading(false);
             } catch (error) {
@@ -261,20 +501,22 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 currentPath = currentPath ? `${currentPath}>${level.value}` : level.value;
 
                 if (!tree.has(currentPath)) {
-                    // Check if this node is the custom ledger itself
-                    // It must be at the deepest level of the row, and the row must be custom
-                    // Only colour as "custom" (red) if at ledger level (≥5).
-                    // Sub_group path nodes created from custom ledgers are structural
-                    // and should display as normal black, not red.
-                    const isCustomLedger = row.isCustom && level.level === maxLevel && level.level >= 5;
-                    const ledgerId = isCustomLedger ? row.id : undefined;
+                    // For custom rows, ALL intermediate nodes (sub_group_2, sub_group_3)
+                    // AND the leaf node get isCustom=true and the row's ledger ID,
+                    // so the Edit button appears when any of them is selected.
+                    // We only colour red (italic) at leaf level (maxLevel);
+                    // sub_group nodes are black but still editable.
+                    const isLeafNode = row.isCustom && level.level === maxLevel;
+                    // Sub-groups (level 3 or 4) from a custom row are also editable
+                    const isCustomNode = !!row.isCustom && level.level >= 3;
+                    const ledgerId = isCustomNode ? row.id : undefined;
 
                     const node: TreeNode = {
                         name: level.value,
                         children: [],
                         level: level.level,
-                        isCustom: isCustomLedger,
-                        ledgerId: ledgerId,
+                        isCustom: isLeafNode, // red colour only for leaf
+                        ledgerId: ledgerId,   // ID assigned for all custom sub-groups
                         fullPath: {
                             category: row.major_group_1,
                             group: row.group_1,
@@ -287,7 +529,6 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
                     tree.set(currentPath, node);
 
-                    // Track ledger ID to path mapping for custom ledgers
                     if (ledgerId) {
                         ledgerIdToPath.set(ledgerId, currentPath);
                     }
@@ -296,6 +537,21 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                         const parent = tree.get(parentPath)!;
                         if (!parent.children.find(c => c.name === node.name)) {
                             parent.children.push(node);
+                        }
+                    }
+                } else {
+                    // Node already exists in tree (created by a previous row).
+                    // If the current row is custom and this level >= 3 (sub_group_2+),
+                    // update the node with the ledger ID so Edit becomes available.
+                    if (row.isCustom && level.level >= 3) {
+                        const existingNode = tree.get(currentPath)!;
+                        // Only assign if not already set (first custom row wins)
+                        if (!existingNode.ledgerId) {
+                            existingNode.ledgerId = row.id;
+                        }
+                        if (level.level === maxLevel) {
+                            existingNode.isCustom = true;
+                            ledgerIdToPath.set(row.id, currentPath);
                         }
                     }
                 }
@@ -310,9 +566,9 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             if (ledgerIdToPath.has(ledger.id)) return;
 
             const nSg3 = isBlankValue(ledger.sub_group_3) ? null : ledger.sub_group_3;
-            const nLt  = isBlankValue(ledger.ledger_type)  ? null : ledger.ledger_type;
-            const nSg1 = isBlankValue(ledger.sub_group_1)  ? null : ledger.sub_group_1;
-            const nSg2 = isBlankValue(ledger.sub_group_2)  ? null : ledger.sub_group_2;
+            const nLt = isBlankValue(ledger.ledger_type) ? null : ledger.ledger_type;
+            const nSg1 = isBlankValue(ledger.sub_group_1) ? null : ledger.sub_group_1;
+            const nSg2 = isBlankValue(ledger.sub_group_2) ? null : ledger.sub_group_2;
 
             const parentPath = ledgerIdToPath.get(ledger.parent_ledger_id);
             if (!parentPath || !tree.has(parentPath)) return;
@@ -365,11 +621,22 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                         }
                     }
                 } else {
-                    // sg3 node already exists → add parent ledger as child if not already there
+                    // sg3 node already exists → update it to be a parent if needed
                     const sg3Node = tree.get(sg3NodePath)!;
                     const parentNode = tree.get(parentPath)!;
+
+                    // The parent ledger ("testing") becomes a child of this sg3 node
                     if (!sg3Node.children.find(c => c.name === parentNode.name)) {
                         sg3Node.children.push(parentNode);
+                    }
+
+                    // Re-parent: remove "testing" from its current grandparent's children
+                    if (grandparentPath && tree.has(grandparentPath)) {
+                        const grandparent = tree.get(grandparentPath)!;
+                        grandparent.children = grandparent.children.filter(c => c !== parentNode);
+                        if (!grandparent.children.find(c => c.name === sg3Node.name)) {
+                            grandparent.children.push(sg3Node);
+                        }
                     }
                     ledgerIdToPath.set(ledger.id, sg3NodePath);
                 }
@@ -390,13 +657,14 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     ? 6
                     : (nSg3 ? 4 : (nSg2 ? 3 : 6));
 
-            const childNode: TreeNode = {
-                name: childDisplayName,
-                children: [],
-                level: inferredLevel,
-                isCustom: true,
-                ledgerId: ledger.id,
-                fullPath: {
+            const childPath = `${parentPath}>${childDisplayName}`;
+
+            if (tree.has(childPath)) {
+                // Update existing node instead of replacing it (to preserve references in parent's children array)
+                const existingNode = tree.get(childPath)!;
+                existingNode.isCustom = true;
+                existingNode.ledgerId = ledger.id;
+                existingNode.fullPath = {
                     category: ledger.category,
                     group: ledger.group,
                     sub_group_1: nSg1,
@@ -404,15 +672,27 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     sub_group_3: nSg3,
                     ledger_type: nLt,
                     parent_ledger_id: ledger.parent_ledger_id
-                }
-            };
-
-            if (!parentNode.children.find(c => c.name === childNode.name && c.ledgerId === childNode.ledgerId)) {
+                };
+            } else {
+                const childNode: TreeNode = {
+                    name: childDisplayName,
+                    children: [],
+                    level: inferredLevel,
+                    isCustom: true,
+                    ledgerId: ledger.id,
+                    fullPath: {
+                        category: ledger.category,
+                        group: ledger.group,
+                        sub_group_1: nSg1,
+                        sub_group_2: nSg2,
+                        sub_group_3: nSg3,
+                        ledger_type: nLt,
+                        parent_ledger_id: ledger.parent_ledger_id
+                    }
+                };
                 parentNode.children.push(childNode);
+                tree.set(childPath, childNode);
             }
-
-            const childPath = `${parentPath}>${childDisplayName}`;
-            tree.set(childPath, childNode);
             ledgerIdToPath.set(ledger.id, childPath);
         });
 
@@ -479,6 +759,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         setQuestionAnswers({});
         setIsEditingExistingLedger(false);
         setEditLedgerName('');
+        setEditSubGroup2('');
+        setEditSubGroup3('');
     };
 
     const renderTree = (nodes: TreeNode[], parentPath = '', level = 0): React.ReactElement[] => {
@@ -684,6 +966,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         setQuestionAnswers({});
         setIsEditingExistingLedger(false);
         setEditLedgerName('');
+        setEditSubGroup2('');
+        setEditSubGroup3('');
         setTimeout(refetchHierarchy, 500);
     };
 
@@ -694,7 +978,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     const isSubGroup3Fixed = !!selectedNode?.fullPath.sub_group_3;
     const isLedgerTypeFixed = !!selectedNode?.fullPath.ledger_type;
 
-    const canEditSelectedLedger = !!selectedNode?.isCustom && !!selectedNode?.ledgerId && selectedNode.level >= 5;
+    const canEditSelectedLedger = !!selectedNode?.ledgerId;
 
     const findNodeByLedgerId = (nodes: TreeNode[], ledgerId: number): TreeNode | null => {
         for (const n of nodes) {
@@ -712,30 +996,82 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         setIsEditingExistingLedger(true);
         setShowOpeningBalanceStep(false);
         setPendingLedgerData(null);
-        setEditLedgerName(selectedNode.name || selectedNode.fullPath.ledger_type || '');
+
+        const lvl = selectedNode.level;
+
+        if (lvl === 3) {
+            // Editing Sub Group 2: only pre-fill sub_group_2; clear sub_group_3 & ledger name
+            setEditSubGroup2(selectedNode.name || '');
+            setEditSubGroup3('');
+            setEditLedgerName('');
+        } else if (lvl === 4) {
+            // Editing Sub Group 3: pre-fill sub_group_2 (fixed) and sub_group_3
+            setEditSubGroup2(selectedNode.fullPath.sub_group_2 || '');
+            setEditSubGroup3(selectedNode.name || '');
+            setEditLedgerName('');
+        } else {
+            // Editing a leaf Ledger: pre-fill all fields
+            setEditSubGroup2(selectedNode.fullPath.sub_group_2 || '');
+            setEditSubGroup3(selectedNode.fullPath.sub_group_3 || '');
+            setEditLedgerName(selectedNode.name || selectedNode.fullPath.ledger_type || '');
+        }
     };
 
     const cancelEditSelectedLedger = () => {
         setIsEditingExistingLedger(false);
         setEditLedgerName('');
+        setEditSubGroup2('');
+        setEditSubGroup3('');
     };
 
     const saveEditedLedger = async () => {
         if (!selectedNode?.ledgerId) return;
 
+        const lvl = selectedNode.level;
+        const isSubGroupEdit = lvl === 3 || lvl === 4; // editing a sub_group node, not a leaf ledger
+
         const nextName = editLedgerName.trim();
-        if (!nextName) {
+        // Ledger name is only required when editing a leaf ledger node
+        if (!isSubGroupEdit && !nextName) {
             showWarning('Ledger name cannot be empty.');
             return;
         }
 
         try {
             const ledgerId = selectedNode.ledgerId;
-            await httpClient.patch(`/api/masters/ledgers/${ledgerId}/`, { name: nextName });
+            const patchPayload: Record<string, string | null> = {};
+
+            if (!isSubGroupEdit && nextName) {
+                patchPayload.name = nextName;
+            }
+
+            const sg2 = editSubGroup2.trim();
+            const sg3 = editSubGroup3.trim();
+
+            // For sub_group_2 edit: always send the new sg2 value
+            if (lvl === 3) {
+                patchPayload.sub_group_2 = sg2 || null;
+            }
+            // For sub_group_3 edit: always send the new sg3 value
+            if (lvl === 4) {
+                patchPayload.sub_group_3 = sg3 || null;
+            }
+            // For leaf ledger: send changed sub_groups + name
+            if (!isSubGroupEdit) {
+                if (sg2 !== (selectedNode.fullPath.sub_group_2 || '')) {
+                    patchPayload.sub_group_2 = sg2 || null;
+                }
+                if (sg3 !== (selectedNode.fullPath.sub_group_3 || '')) {
+                    patchPayload.sub_group_3 = sg3 || null;
+                }
+            }
+            await httpClient.patch(`/api/masters/ledgers/${ledgerId}/`, patchPayload);
             showSuccess('Ledger updated successfully.');
 
             setIsEditingExistingLedger(false);
             setEditLedgerName('');
+            setEditSubGroup2('');
+            setEditSubGroup3('');
 
             const tree = await refetchHierarchy();
             if (tree) {
@@ -769,7 +1105,10 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     </label>
                     <div className="border border-gray-300 rounded-[4px] p-3 max-h-[32rem] overflow-y-auto bg-gray-50">
                         {treeData.length > 0 ? (
-                            renderTree(treeData)
+                            renderTree(treeData.filter(node => {
+                                const HIDDEN = ['sundry debtors', 'sundry creditors'];
+                                return !HIDDEN.includes((node.name || '').toLowerCase().trim());
+                            }))
                         ) : (
                             <div className="text-gray-500 text-sm">No hierarchy data available</div>
                         )}
@@ -825,14 +1164,21 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                 </label>
                                 <input
                                     type="text"
-                                    value={isSubGroup2Fixed ? selectedNode?.fullPath.sub_group_2! : subGroup2Input}
-                                    onChange={(e) => !isSubGroup2Fixed && setSubGroup2Input(e.target.value)}
-                                    disabled={!selectedNode || isSubGroup2Fixed}
-                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || isSubGroup2Fixed
+                                    value={
+                                        isEditingExistingLedger
+                                            ? editSubGroup2
+                                            : (isSubGroup2Fixed ? selectedNode?.fullPath.sub_group_2! : subGroup2Input)
+                                    }
+                                    onChange={(e) => {
+                                        if (isEditingExistingLedger) { setEditSubGroup2(e.target.value); return; }
+                                        if (!isSubGroup2Fixed) setSubGroup2Input(e.target.value);
+                                    }}
+                                    disabled={!selectedNode || (!isEditingExistingLedger && isSubGroup2Fixed)}
+                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || (!isEditingExistingLedger && isSubGroup2Fixed)
                                         ? 'bg-gray-100 text-gray-600 border-gray-200'
                                         : 'bg-white border-gray-300'
                                         }`}
-                                    placeholder={!selectedNode ? '-' : (isSubGroup2Fixed ? '' : 'Enter Name')}
+                                    placeholder={!selectedNode ? '-' : ((!isEditingExistingLedger && isSubGroup2Fixed) ? '' : 'Enter Name')}
                                 />
                             </div>
 
@@ -843,14 +1189,21 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                 </label>
                                 <input
                                     type="text"
-                                    value={isSubGroup3Fixed ? selectedNode?.fullPath.sub_group_3! : subGroup3Input}
-                                    onChange={(e) => !isSubGroup3Fixed && setSubGroup3Input(e.target.value)}
-                                    disabled={!selectedNode || isSubGroup3Fixed}
-                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || isSubGroup3Fixed
+                                    value={
+                                        isEditingExistingLedger
+                                            ? editSubGroup3
+                                            : (isSubGroup3Fixed ? selectedNode?.fullPath.sub_group_3! : subGroup3Input)
+                                    }
+                                    onChange={(e) => {
+                                        if (isEditingExistingLedger) { setEditSubGroup3(e.target.value); return; }
+                                        if (!isSubGroup3Fixed) setSubGroup3Input(e.target.value);
+                                    }}
+                                    disabled={!selectedNode || (!isEditingExistingLedger && isSubGroup3Fixed)}
+                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || (!isEditingExistingLedger && isSubGroup3Fixed)
                                         ? 'bg-gray-100 text-gray-600 border-gray-200'
                                         : 'bg-white border-gray-300'
                                         }`}
-                                    placeholder={!selectedNode ? '-' : (isSubGroup3Fixed ? '' : 'Enter Name')}
+                                    placeholder={!selectedNode ? '-' : ((!isEditingExistingLedger && isSubGroup3Fixed) ? '' : 'Enter Name')}
                                 />
                             </div>
 
@@ -889,38 +1242,42 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                 onAnswersChange={setQuestionAnswers}
                             />
                         )}
-
-                        {/* Edit Existing (Tenant) Ledger In Preview */}
-                        {canEditSelectedLedger && !showOpeningBalanceStep && (
-                            <div className="flex items-center justify-end gap-2 mb-2">
-                                {!isEditingExistingLedger ? (
-                                    <button
-                                        type="button"
-                                        onClick={beginEditSelectedLedger}
-                                        className="px-4 py-2 rounded-[4px] text-sm font-medium text-indigo-700 bg-white border border-indigo-300 hover:bg-indigo-50 transition-colors"
-                                    >
-                                        Edit Ledger
-                                    </button>
-                                ) : (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={cancelEditSelectedLedger}
-                                            className="px-4 py-2 rounded-[4px] text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={saveEditedLedger}
-                                            className="px-4 py-2 rounded-[4px] text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-                                        >
-                                            Save Changes
-                                        </button>
-                                    </>
-                                )}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                            {/* Debug info - temporary */}
+                            <div className="text-[10px] text-gray-400">
+                                L-ID: {selectedNode?.ledgerId || 'N/A'} | Level: {selectedNode?.level}
                             </div>
-                        )}
+                            {canEditSelectedLedger && !showOpeningBalanceStep && (
+                                <div className="flex items-center gap-2">
+                                    {!isEditingExistingLedger ? (
+                                        <button
+                                            type="button"
+                                            onClick={beginEditSelectedLedger}
+                                            className="px-4 py-2 rounded-[4px] text-sm font-medium text-indigo-700 bg-white border border-indigo-300 hover:bg-indigo-50 transition-colors"
+                                        >
+                                            Edit Ledger
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={cancelEditSelectedLedger}
+                                                className="px-4 py-2 rounded-[4px] text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={saveEditedLedger}
+                                                className="px-4 py-2 rounded-[4px] text-sm font-medium text-white bg-indigo-600 border border-transparent hover:bg-indigo-700 transition-colors shadow-sm"
+                                            >
+                                                Save Changes
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
                         {/* Create Ledger Button OR Opening Balance Step */}
                         {isEditingExistingLedger ? null : showOpeningBalanceStep ? (
@@ -955,22 +1312,20 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                         <button
                                             type="button"
                                             onClick={() => setOpeningBalanceType('debit')}
-                                            className={`px-4 py-2 transition-colors ${
-                                                openingBalanceType === 'debit'
-                                                    ? 'bg-indigo-600 text-white'
-                                                    : 'bg-white text-indigo-700 hover:bg-indigo-50'
-                                            }`}
+                                            className={`px-4 py-2 transition-colors ${openingBalanceType === 'debit'
+                                                ? 'bg-indigo-600 text-white'
+                                                : 'bg-white text-indigo-700 hover:bg-indigo-50'
+                                                }`}
                                         >
                                             Dr
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setOpeningBalanceType('credit')}
-                                            className={`px-4 py-2 transition-colors border-l border-indigo-300 ${
-                                                openingBalanceType === 'credit'
-                                                    ? 'bg-indigo-600 text-white'
-                                                    : 'bg-white text-indigo-700 hover:bg-indigo-50'
-                                            }`}
+                                            className={`px-4 py-2 transition-colors border-l border-indigo-300 ${openingBalanceType === 'credit'
+                                                ? 'bg-indigo-600 text-white'
+                                                : 'bg-white text-indigo-700 hover:bg-indigo-50'
+                                                }`}
                                         >
                                             Cr
                                         </button>
