@@ -547,7 +547,22 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
             value: name || code || 'Unknown'
         };
     }).filter(o => o.label && o.label !== 'No Name'), [stockItems]);
-    const ledgerOptions = useMemo(() => Array.from(new Set(ledgers.map(l => l.name).filter(Boolean))), [ledgers]);
+    const ledgerOptions = useMemo(() => {
+        // Exclude customer/vendor groups — they are parties, not accounting ledgers
+        const EXCLUDED_GROUPS = ['sundry debtors', 'sundry creditors'];
+        // Exclude dummy seed data
+        const EXCLUDED_NAMES = ['purchase account', 'sales account'];
+        // Only pull from Masters > Ledgers (user-created + default red-text ledgers)
+        return Array.from(new Set(
+            ledgers
+                .filter(l => {
+                    const group = (l.group || '').toLowerCase().trim();
+                    const name = (l.name || '').toLowerCase().trim();
+                    return l.name && !EXCLUDED_GROUPS.includes(group) && !EXCLUDED_NAMES.includes(name);
+                })
+                .map(l => l.name)
+        )).filter(Boolean) as string[];
+    }, [ledgers]);
 
     const renderField = (col: SalesVoucherColumn, overrideLabel?: string) => {
         const isValueEmpty = !draft.header[col.key] || String(draft.header[col.key]).trim() === '';
