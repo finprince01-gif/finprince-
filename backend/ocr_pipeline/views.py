@@ -9,9 +9,10 @@ import json
 import hashlib
 import os
 
+from .models import InvoiceTempOCR, OCRJob, OCRTask
+from .tasks import process_invoice_task
 from .service import process_invoice_upload
 from .normalize import normalize
-from .repository import InvoiceTempOCR
 from .pipeline import validate_and_process as finalize_record
 from .grouping import run_grouping_logic
 from .zoho_adapter import get_zoho_adapter
@@ -29,9 +30,17 @@ class CleanOCRStagingView(views.APIView):
 
     def post(self, request):
         """
-        Handle invoice upload and trigger the new hardened pipeline.
+        PRODUCTION-HARDENED: 
+        1. Deduplicate by hash
+        2. Backpressure check
+        3. Upload to S3
+        4. Push to SQS
         """
+        from core.storage import StorageService
+        from core.sqs import QueueService
+        
         files = request.FILES.getlist('files')
+        file_paths = request.data.getlist('file_paths')
         voucher_type = request.data.get('voucher_type', 'PURCHASE')
         upload_session_id = request.data.get('upload_session_id') or request.query_params.get('upload_session_id')
         tenant_id = request.user.branch_id
@@ -39,57 +48,93 @@ class CleanOCRStagingView(views.APIView):
         if not files:
             return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
-        import concurrent.futures
-        from django.db import connection
+        # ── BACKPRESSURE CHECK ──
+        # If the queue is too deep, signal the user
+        pending_count = OCRTask.objects.filter(status='PENDING').count()
+        estimated_delay = 0
+        if pending_count > 1000:
+            # Estimate: (pending / workers) * 10s
+            # Assuming 50 workers
+            estimated_delay = (pending_count / 50) * 10
+            logger.warning(f"Backpressure active: {pending_count} tasks pending.")
 
-        def process_file_item(uploaded_file):
+        storage = StorageService()
+        queue = QueueService()
+
+        # ── Step 1: Create Job Record ──
+        job = OCRJob.objects.create(
+            tenant_id=tenant_id,
+            total_files=len(files),
+            status='PENDING'
+        )
+
+        queued_count = 0
+        duplicate_count = 0
+
+        # ── Step 2: Process Files ──
+        for i, uploaded_file in enumerate(files):
             try:
-                # Need to reset connection for each thread in Django if using DB
-                # Actually for small tasks it might be okay, but safer to wrap
-                # process_invoice_upload handles its own DB transactions usually.
+                # Determine display name (Preserve folder structure if provided)
+                original_display_name = file_paths[i] if i < len(file_paths) else uploaded_file.name
+                
                 file_bytes = uploaded_file.read()
                 file_hash = hashlib.sha256(file_bytes).hexdigest()
                 
-                temp_dir = os.path.join(settings.MEDIA_ROOT, 'ocr_temp')
-                if not os.path.exists(temp_dir):
-                    os.makedirs(temp_dir)
+                # ── DEDUPLICATION ──
+                # If we already have a successful result for this hash, reuse it
+                existing = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=tenant_id).first()
+                if existing and existing.processed:
+                    duplicate_count += 1
+                    # Link existing result to this job via a special completed task
+                    OCRTask.objects.create(
+                        job=job,
+                        file_name=original_display_name,
+                        file_hash=file_hash,
+                        status='COMPLETED',
+                        result_id=existing.id
+                    )
+                    job.processed_files += 1
+                    continue
+
+                # Upload to S3
+                s3_key = f"ocr/{tenant_id}/{job.id}/{file_hash}_{original_display_name.replace('/', '_')}"
+                file_url = storage.upload_file(file_bytes, s3_key, uploaded_file.content_type)
                 
-                temp_file_path = os.path.join(temp_dir, file_hash)
-                if not os.path.exists(temp_file_path):
-                    with open(temp_file_path, 'wb') as f:
-                        f.write(file_bytes)
-                
-                return process_invoice_upload(
-                    file_bytes=file_bytes,
-                    voucher_type=voucher_type,
-                    file_name=uploaded_file.name,
-                    upload_session_id=upload_session_id,
-                    tenant_id=tenant_id
+                # Create Task
+                task = OCRTask.objects.create(
+                    job=job,
+                    file_name=original_display_name,
+                    file_url=file_url,
+                    file_hash=file_hash,
+                    status='PENDING'
                 )
+                
+                # Push to SQS
+                queue.push({
+                    "task_id": str(task.id),
+                    "job_id": str(job.id),
+                    "file_url": file_url,
+                    "voucher_type": voucher_type,
+                    "tenant_id": tenant_id,
+                    "upload_session_id": upload_session_id,
+                    "attempt": 1
+                })
+                queued_count += 1
+                
             except Exception as e:
-                logger.error(f"Threaded API Processing failure: {str(e)}")
-                return {"file_name": uploaded_file.name, "status": "FAILED", "error": str(e)}
-            finally:
-                connection.close()
-
-        print(f"DEBUG: Processing upload for {len(files)} files in PARALLEL. Branch: {tenant_id}")
-        results = []
-        # Support up to 6 concurrent extractions to maximize throughput without hitting AI rate limits too hard
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-            results = list(executor.map(process_file_item, files))
-
-        # STEP 5: Run Grouping Preprocessor (Multi-page Merge)
-        try:
-            run_grouping_logic(tenant_id, upload_session_id)
-        except Exception as ge:
-            logger.error(f"Grouping preprocessor failed: {str(ge)}")
+                logger.error(f"Failed to process file {uploaded_file.name}: {str(e)}")
+                job.total_files -= 1
+        
+        job.save()
 
         return Response({
             "success": True,
-            "status": "SUCCESS",
-            "results": results,
-            "duplicate_count": sum(1 for r in results if r.get('is_duplicate'))
-        })
+            "job_id": str(job.id),
+            "status": "PROCESSING",
+            "message": f"Queued {queued_count} files. {duplicate_count} skipped (deduplicated).",
+            "total_files": job.total_files,
+            "estimated_delay_seconds": round(estimated_delay, 1) if estimated_delay > 0 else 0
+        }, status=status.HTTP_202_ACCEPTED)
 
     def get(self, request, file_hash=None):
         """
@@ -173,7 +218,10 @@ class CleanOCRStagingView(views.APIView):
                 "file_hash": r.file_hash,
                 "file_path": r.file_path,
                 "tenant_id": r.tenant_id,
-                "invoice_number": r.supplier_invoice_no or norm.get("supplier_invoice_no") or supplier.get("supplier_invoice_no") or norm.get("invoice_no") or "—",
+                # invoice_number is None when strict validation found nothing valid.
+                # Display '—' in UI rather than null/garbage.
+                "invoice_number": r.supplier_invoice_no or norm.get("invoice_number") or norm.get("supplier_invoice_no") or supplier.get("supplier_invoice_no") or "—",
+                "invoice_status": norm.get("invoice_status") or ("MISSING" if not (r.supplier_invoice_no or norm.get("invoice_number")) else "FOUND"),
                 "sales_invoice_no": r.supplier_invoice_no or norm.get("sales_invoice_no") or norm.get("supplier_invoice_no") or "—",
                 "invoice_date": norm.get("invoice_date") or supplier.get("invoice_date") or "—",
                 "total_amount": norm.get("total_invoice_value") or norm.get("total_amount") or "0.00",
@@ -203,9 +251,41 @@ class CleanOCRStagingView(views.APIView):
             data.append(row_data)
 
         return Response({
-            "status": "SUCCESS" if all(getattr(r, 'status', '') in ["EXTRACTED", "FAILED", "VOUCHER_CREATED"] for r in records) else "processing",
+            "status": "SUCCESS" if all(getattr(r, 'status', None) in ["EXTRACTED", "FAILED", "VOUCHER_CREATED"] for r in records) else "processing",
             "data": data
         })
+
+class OCRJobStatusView(views.APIView):
+    """
+    NEW: Pollable endpoint for background job status.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, job_id):
+        tenant_id = request.user.branch_id
+        try:
+            job = OCRJob.objects.get(id=job_id, tenant_id=tenant_id)
+            
+            # Calculate progress
+            total = job.total_files
+            processed = job.processed_files
+            failed = job.failed_files
+            
+            progress = (processed + failed) / total * 100 if total > 0 else 100
+            
+            return Response({
+                "job_id": job.id,
+                "status": job.status,
+                "progress_percent": round(progress, 2),
+                "processed_count": processed,
+                "failed_count": failed,
+                "total_files": total,
+                "is_completed": job.status in ['COMPLETED', 'FAILED', 'PARTIAL'],
+                "created_at": job.created_at,
+                "updated_at": job.updated_at
+            })
+        except OCRJob.DoesNotExist:
+            return Response({"error": "Job not found"}, status=status.HTTP_404_NOT_FOUND)
 
     def patch(self, request, file_hash=None):
         """

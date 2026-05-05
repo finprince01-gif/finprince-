@@ -7,15 +7,40 @@ from django.conf import settings
 
 logger = logging.getLogger("RedisClient")
 
+
+def _safe_int(val, key: str = "", client=None, default: int = 0) -> int:
+    """
+    Safe Redis integer parser.
+    - Never raises on bad values ("OK", "K", None, non-numeric strings)
+    - Logs unexpected values with the key name for traceability
+    - Optionally resets the corrupted Redis key to 0 so subsequent reads are clean
+    """
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        logger.error(
+            f"[REDIS ERROR] key={key!r}, raw_value={val!r} — "
+            f"invalid literal for int(). Resetting to {default}."
+        )
+        if client and key:
+            try:
+                client.set(key, default)
+            except Exception:
+                pass
+        return default
+
 class RedisClient:
     _instance = None
 
     def __new__(cls):
         if cls._instance is None:
+            import threading
             cls._instance = super(RedisClient, cls).__new__(cls)
             cls._instance._initialized = False
             cls._instance.client = None
             cls._instance.available = False
+            # LOCAL SANITY BOUND: hard cap per worker in degraded/partition mode
+            cls._instance.local_sem = threading.BoundedSemaphore(5)
             cls._instance._init_connection()
         return cls._instance
 
@@ -197,5 +222,329 @@ class RedisClient:
             self.client.ltrim(f"metrics:history:{name}", 0, 99)
         except:
             self.available = False
+
+    # ═══════════════════════════════════════════════════════════════
+    # GLOBAL COORDINATION LAYER v3 — Self-Consistent, Partition-Tolerant
+    # ═══════════════════════════════════════════════════════════════
+
+    # ── SYSTEM MODE ─────────────────────────────────────────────────
+    # NORMAL     → full concurrency, full intake
+    # DEGRADED   → 60% concurrency, slow intake
+    # PROTECTIVE → 30% concurrency, reject new jobs
+    MODES = {
+        'NORMAL':     {'concurrency_pct': 1.0,  'intake': True,  'reject': False},
+        'DEGRADED':   {'concurrency_pct': 0.6,  'intake': True,  'reject': False},
+        'PROTECTIVE': {'concurrency_pct': 0.3,  'intake': False, 'reject': True},
+    }
+
+    def get_system_mode(self) -> str:
+        """
+        Returns current cluster mode. Workers treat this as advisory,
+        always applying a local sanity bound regardless.
+        """
+        if not self.available:
+            return 'DEGRADED'
+        try:
+            mode = self.client.get("sys:mode") or 'NORMAL'
+            return mode if mode in self.MODES else 'NORMAL'
+        except:
+            return 'DEGRADED'
+
+    def set_system_mode(self, mode: str):
+        if not self.available or mode not in self.MODES: return
+        try:
+            self.client.set("sys:mode", mode, ex=300)  # 5 min TTL — auto-heals
+            logger.warning(f"[SYSTEM MODE] → {mode}")
+        except: pass
+
+    def get_effective_limit(self, base_limit: int) -> int:
+        """
+        Returns the concurrency limit adjusted by current system mode.
+        Always clamps between 1 and base_limit (sanity bound).
+        """
+        mode = self.get_system_mode()
+        pct  = self.MODES.get(mode, self.MODES['DEGRADED'])['concurrency_pct']
+        return max(1, int(base_limit * pct))
+
+    # ── ANTI-OSCILLATING CIRCUIT BREAKER ────────────────────────────
+    # Breaker requires SUCCESSES_TO_CLOSE sequential successes in HALF_OPEN
+    # before fully closing. Prevents rapid OPEN↔CLOSED flapping.
+    CB_OPEN_THRESHOLD   = 10   # failures to open
+    CB_COOLDOWN_SECS    = 90   # min time before HALF_OPEN
+    SUCCESSES_TO_CLOSE  = 5    # successes needed in HALF_OPEN to close
+    HALF_OPEN_TRAFFIC   = 0.15 # only 15% of workers probe in HALF_OPEN
+
+    def get_circuit_breaker_state(self, name: str):
+        """
+        Returns (state, failures, is_blocking).
+        is_blocking: whether this worker should skip processing entirely.
+        Reads state twice (read-verify) to guard against stale Redis.
+        """
+        if not self.available:
+            # Partition mode: treat breaker as CLOSED but apply local limits
+            return 'CLOSED', 0, False
+
+        try:
+            key = f"cb:{name}"
+            # READ-TWICE VERIFICATION: discard if inconsistent
+            stats1 = self.client.hgetall(key)
+            time.sleep(0.001)  # 1ms — force clock tick
+            stats2 = self.client.hgetall(key)
+
+            state1 = stats1.get('state', 'CLOSED')
+            state2 = stats2.get('state', 'CLOSED')
+            # If both reads disagree → conservative: trust the worse state
+            state = state1 if state1 in ('OPEN', 'PROTECTIVE') else state2
+
+            failures     = _safe_int(stats2.get('failures', 0),  key=f"cb:{name}:failures")
+            successes    = _safe_int(stats2.get('successes', 0),  key=f"cb:{name}:successes")
+            last_fail_ts = float(stats2.get('last_fail', 0) or 0)
+            now          = time.time()
+
+            # GRADUATED RECOVERY: OPEN → HALF_OPEN after cooldown
+            if state == 'OPEN' and (now - last_fail_ts) > self.CB_COOLDOWN_SECS:
+                self.client.hset(key, 'state', 'HALF_OPEN')
+                state = 'HALF_OPEN'
+
+            # HALF_OPEN: only a fraction of workers are allowed to probe
+            if state == 'HALF_OPEN':
+                import random
+                # Stochastic gate: only HALF_OPEN_TRAFFIC fraction of calls proceed
+                is_blocking = (random.random() > self.HALF_OPEN_TRAFFIC)
+                return state, failures, is_blocking
+
+            is_blocking = (state == 'OPEN')
+            return state, failures, is_blocking
+
+        except Exception as e:
+            logger.warning(f"[CB] Read failed: {e} — defaulting CLOSED")
+            return 'CLOSED', 0, False
+
+    def record_cb_failure(self, name: str):
+        """Atomic failure record. Opens breaker if threshold crossed."""
+        if not self.available: return
+        try:
+            key = f"cb:{name}"
+            lua = """
+            local key   = KEYS[1]
+            local thresh = tonumber(ARGV[1])
+            local now    = tonumber(ARGV[2])
+            local f = redis.call('hincrby', key, 'failures', 1)
+            redis.call('hset', key, 'last_fail', now)
+            redis.call('hset', key, 'successes', 0)
+            if f >= thresh then
+                redis.call('hset', key, 'state', 'OPEN')
+            end
+            return f
+            """
+            self.client.register_script(lua)(
+                keys=[key], args=[self.CB_OPEN_THRESHOLD, time.time()])
+            # Escalate system mode
+            self._maybe_escalate_mode(name)
+        except: pass
+
+    def record_cb_success(self, name: str):
+        """
+        In HALF_OPEN: accumulate successes.
+        After SUCCESSES_TO_CLOSE, close the breaker.
+        """
+        if not self.available: return
+        try:
+            key = f"cb:{name}"
+            lua = """
+            local key   = KEYS[1]
+            local need  = tonumber(ARGV[1])
+            local state = redis.call('hget', key, 'state') or 'CLOSED'
+            if state == 'HALF_OPEN' then
+                local s = redis.call('hincrby', key, 'successes', 1)
+                if s >= need then
+                    redis.call('hmset', key, 'state', 'CLOSED', 'failures', 0, 'successes', 0)
+                    return 'CLOSED'
+                end
+                return 'HALF_OPEN'
+            elseif state == 'CLOSED' then
+                redis.call('hset', key, 'failures', 0)
+                return 'CLOSED'
+            end
+            return state
+            """
+            self.client.register_script(lua)(keys=[key], args=[self.SUCCESSES_TO_CLOSE])
+        except: pass
+
+    def _maybe_escalate_mode(self, cb_name: str):
+        """Escalate system mode based on failure accumulation."""
+        if not self.available: return
+        try:
+            failures = _safe_int(
+                self.client.hget(f"cb:{cb_name}", 'failures'),
+                key=f"cb:{cb_name}:failures",
+                client=self.client,
+            )
+            if failures >= self.CB_OPEN_THRESHOLD * 2:
+                self.set_system_mode('PROTECTIVE')
+            elif failures >= self.CB_OPEN_THRESHOLD:
+                self.set_system_mode('DEGRADED')
+        except: pass
+
+    def reset_cb(self, name: str):
+        """Hard reset — called by operators or reconciliation jobs."""
+        if not self.available: return
+        try:
+            self.client.hmset(f"cb:{name}", {
+                'state': 'CLOSED', 'failures': 0, 'successes': 0})
+            self.set_system_mode('NORMAL')
+        except: pass
+
+    # ── PARTITION-TOLERANT SEMAPHORE ─────────────────────────────────
+    def acquire_semaphore(self, name: str, base_limit: int, ttl: int = 90):
+        """
+        Partition-tolerant rate limiter.
+        - Reads effective_limit from mode-aware calculation
+        - Applies LOCAL sanity bound: never exceeds local_sem even if Redis says OK
+        - Both gates must pass (dual-check)
+        """
+        effective_limit = self.get_effective_limit(base_limit)
+
+        if not self.available:
+            # Conservative local fallback — no Redis coordination
+            return self.local_sem.acquire(blocking=False)
+
+        # DUAL-CHECK: local gate first (fast, no network)
+        local_ok = self.local_sem.acquire(blocking=False)
+        if not local_ok:
+            return False  # Local sanity bound already saturated
+
+        try:
+            key = f"sem:{name}"
+            lua = """
+            local key   = KEYS[1]
+            local limit = tonumber(ARGV[1])
+            local ttl   = tonumber(ARGV[2])
+            local cur   = tonumber(redis.call('get', key) or "0")
+            if cur < limit then
+                local nv = redis.call('incr', key)
+                if nv == 1 then redis.call('expire', key, ttl) end
+                return nv
+            end
+            return 0
+            """
+            res = self.client.register_script(lua)(keys=[key], args=[effective_limit, ttl])
+            if not res:
+                # Global limit reached — release local gate too
+                try: self.local_sem.release()
+                except: pass
+                return False
+            # Track global concurrency
+            self.client.incrby("global:concurrency", 1)
+            return True
+        except Exception as e:
+            logger.error(f"[SEM] acquire failed: {e}")
+            self.available = False
+            # Keep local gate held — worker may still proceed (degraded)
+            return True
+
+    def release_semaphore(self, name: str):
+        """Release both local and global semaphore slots."""
+        # Always release local first
+        try: self.local_sem.release()
+        except: pass
+
+        if not self.available: return
+        try:
+            key = f"sem:{name}"
+            lua = """
+            local key = KEYS[1]
+            local v   = redis.call('get', key)
+            if v and tonumber(v) > 0 then
+                redis.call('decr', key)
+                return 1
+            end
+            return 0
+            """
+            self.client.register_script(lua)(keys=[key])
+            self.client.decrby("global:concurrency", 1)
+        except Exception as e:
+            logger.error(f"[SEM] release failed: {e}")
+            self.available = False
+
+    # ── GLOBAL STATE & COUNTER RECONCILIATION ────────────────────────
+    def get_global_state(self) -> dict:
+        """Advisory global state. Workers apply local sanity bounds regardless."""
+        if not self.available:
+            return {'degraded': True, 'concurrency': 0, 'mode': 'DEGRADED'}
+        try:
+            pipe = self.client.pipeline()
+            pipe.get("global:concurrency")
+            pipe.get("sys:mode")
+            results = pipe.execute()
+            return {
+                'degraded':    False,
+                'concurrency': _safe_int(results[0], key='global:concurrency', client=self.client),
+                'mode':        results[1] or 'NORMAL',
+            }
+        except:
+            return {'degraded': True, 'concurrency': 0, 'mode': 'DEGRADED'}
+
+    def reconcile_concurrency(self, name: str, actual_count: int):
+        """
+        COUNTER RECONCILIATION: periodically called by a watchdog.
+        Corrects drift between Redis counter and actual running tasks.
+        """
+        if not self.available: return
+        try:
+            key = f"sem:{name}"
+            redis_val = _safe_int(
+                self.client.get(key),
+                key=key,
+                client=self.client,
+            )
+            drift = redis_val - actual_count
+            if abs(drift) > 2:
+                logger.warning(f"[RECONCILE] Counter drift={drift}. Correcting {key}: {redis_val}→{actual_count}")
+                self.client.set(key, max(0, actual_count), keepttl=True)
+                self.client.set("global:concurrency", max(0, actual_count))
+        except Exception as e:
+            logger.error(f"[RECONCILE] Failed: {e}")
+
+    # ── ADMISSION CONTROL (Token Bucket at API layer) ─────────────────
+    def check_admission(self, tenant_id: str, burst: int = 20, rate: float = 2.0) -> bool:
+        """
+        Token-bucket admission control per tenant.
+        burst: max tokens (peak), rate: tokens/sec replenishment.
+        Returns True if admitted, False if rejected.
+        """
+        if not self.available:
+            return True  # Fail-open for admission when Redis down
+        try:
+            now = time.time()
+            key = f"admit:{tenant_id}"
+            lua = """
+            local key   = KEYS[1]
+            local burst = tonumber(ARGV[1])
+            local rate  = tonumber(ARGV[2])
+            local now   = tonumber(ARGV[3])
+            local d     = redis.call('hgetall', key)
+            local tokens = burst
+            local last   = now
+            if #d > 0 then
+                local m = {}
+                for i=1,#d,2 do m[d[i]] = d[i+1] end
+                tokens = tonumber(m['tokens'] or burst)
+                last   = tonumber(m['last']   or now)
+            end
+            local refill = (now - last) * rate
+            tokens = math.min(burst, tokens + refill)
+            if tokens >= 1 then
+                redis.call('hmset', key, 'tokens', tokens - 1, 'last', now)
+                redis.call('expire', key, 3600)
+                return 1
+            end
+            return 0
+            """
+            res = self.client.register_script(lua)(keys=[key], args=[burst, rate, now])
+            return bool(res)
+        except Exception as e:
+            logger.error(f"[ADMIT] check failed: {e}")
+            return True  # Fail-open
 
 redis_client = RedisClient()

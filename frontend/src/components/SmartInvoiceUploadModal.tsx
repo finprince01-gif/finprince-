@@ -1249,40 +1249,39 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         setIsLoading(true);
 
         // ── Initial fetch ──
-        const shouldStop = await doFetch(sid, vFilter);
-        if (shouldStop || !isMounted.current) return;
+        const initialStop = await doFetch(sid, vFilter);
+        if (initialStop || !isMounted.current) return;
 
-        // ── Start polling interval ──
-        pollingIntervalRef2.current = setInterval(async () => {
-            if (!isMounted.current) {
-                clearInterval(pollingIntervalRef2.current!);
-                pollingIntervalRef2.current = null;
-                return;
-            }
+        // ── Start Exponential Polling ──
+        // Logic: 1s -> 2s -> 4s -> 8s -> 16s -> 30s (cap)
+        const startPoll = (delay: number) => {
+            const timeoutId = setTimeout(async () => {
+                if (!isMounted.current) return;
 
-            retryCountRef.current += 1;
-            setRetryCount(retryCountRef.current);
+                retryCountRef.current += 1;
+                setRetryCount(retryCountRef.current);
 
-            if (retryCountRef.current > MAX_RETRIES) {
-                // Hard stop — mark remaining PENDING as NEEDS_ATTENTION
-                console.warn(`Polling stopped after ${MAX_RETRIES} retries.`);
-                clearInterval(pollingIntervalRef2.current!);
-                pollingIntervalRef2.current = null;
-                setScanResults(prev => prev.map(r =>
-                    (r.validationStatus === 'PENDING' || r.validationStatus === 'processing')
-                        ? { ...r, validationStatus: 'NEEDS_ATTENTION', conflictMessage: 'Extraction timeout – please review manually.' }
-                        : r
-                ));
-                return;
-            }
+                if (retryCountRef.current > MAX_RETRIES) {
+                    console.warn(`Polling stopped after ${MAX_RETRIES} retries.`);
+                    setScanResults(prev => prev.map(r =>
+                        (r.validationStatus === 'PENDING' || r.validationStatus === 'processing')
+                            ? { ...r, validationStatus: 'NEEDS_ATTENTION', conflictMessage: 'Extraction timeout – please review manually.' }
+                            : r
+                    ));
+                    return;
+                }
 
-            const done = await doFetch(sid, vFilterRef.current);
-            if (done) {
-                console.log('Polling complete — clearing interval.');
-                clearInterval(pollingIntervalRef2.current!);
-                pollingIntervalRef2.current = null;
-            }
-        }, POLL_INTERVAL_MS);
+                const done = await doFetch(sid, vFilterRef.current);
+                if (!done && isMounted.current) {
+                    const nextDelay = Math.min(delay * 2, 30000); // Exponential backoff
+                    startPoll(nextDelay);
+                }
+            }, delay);
+            pollingIntervalRef2.current = timeoutId as any;
+        };
+
+        // Start first poll after 2 seconds
+        startPoll(2000);
 
     }, [uploadSessionId, doFetch, stopPolling]);
 
