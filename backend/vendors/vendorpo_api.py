@@ -139,6 +139,47 @@ class VendorPOViewSet(viewsets.ModelViewSet):
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    def update(self, request, pk=None):
+        """
+        Update an existing purchase order
+        """
+        try:
+            tenant_id = self.get_tenant_id(request)
+            data = request.data
+            
+            serializer = VendorPOCreateSerializer(data=data)
+            if not serializer.is_valid():
+                return Response({'success': False, 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                
+            validated_data = serializer.validated_data
+            items_data = validated_data.pop('items', [])
+            
+            try:
+                db.update_purchase_order(
+                    po_id=pk,
+                    tenant_id=tenant_id,
+                    po_data=validated_data,
+                    items_data=items_data,
+                    updated_by=request.user.username if hasattr(request.user, 'username') else None
+                )
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise
+                
+            updated_po = db.get_purchase_order_by_id(pk)
+            
+            return Response({
+                'success': True,
+                'message': 'Purchase Order updated successfully',
+                'data': updated_po
+            }, status=status.HTTP_200_OK)
+            
+        except PermissionDenied as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def retrieve(self, request, pk=None):
         """
         Get specific purchase order by ID

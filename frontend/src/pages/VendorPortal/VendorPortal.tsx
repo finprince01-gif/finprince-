@@ -1043,6 +1043,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
     // Create PO Modal State
     const [showCreatePOModal, setShowCreatePOModal] = useState(false);
+    const [isCreatePOViewMode, setIsCreatePOViewMode] = useState(false);
+    const [editingPOId, setEditingPOId] = useState<number | null>(null);
     const [createPOForm, setCreatePOForm] = useState({
         poSeriesName: '',
         poNumber: 'New PO',
@@ -1139,11 +1141,22 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     poDate: po.po_date || (po.created_at ? po.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
                     vendorName: po.vendor_name,
                     branch: po.branch,
-                    address: po.address_line1 || '',
+                    address: po.address_line1 || '', // legacy field
+                    addressLine1: po.address_line1 || '',
+                    addressLine2: po.address_line2 || '',
+                    addressLine3: po.address_line3 || '',
+                    city: po.city || '',
+                    state: po.state || '',
+                    country: po.country || '',
+                    pincode: po.pincode || '',
+                    emailAddress: po.email_address || '',
+                    contractNo: po.contract_no || '',
                     status: po.status || 'Pending Approval',
+                    poSeriesId: po.po_series_id,
                     receiveBy: po.receive_by,
                     receiveAt: po.receive_at,
                     deliveryTerms: po.delivery_terms,
+                    supplyType: po.supply_type || 'intrastate',
                     category: po.category_name || po.category || po.po_category || '',
                     amount: po.total_value ? po.total_value.toString() : '0.00'
                 }));
@@ -1705,7 +1718,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         poDate: string;
         vendorName: string;
         address: string;
-        status: 'Draft' | 'Pending Approval' | 'Approved' | 'Mailed' | 'Closed';
+        status: 'Draft' | 'Pending Approval' | 'Approved' | 'Mailed' | 'Closed' | 'Cancelled';
         receiveBy?: string;
         receiveAt?: string;
         deliveryTerms?: string;
@@ -1715,14 +1728,47 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         amount?: string;
     }
 
-    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([
-        { id: 1, poNumber: 'PO-2023-001', poDate: '2023-10-26', vendorName: 'Tech Solutions Inc.', address: '123 Innovation Dr, Tech City', status: 'Pending Approval', category: 'Raw Material', branch: 'Main Branch', deliveryDate: '2023-11-10', amount: '12500.00' },
-        { id: 2, poNumber: 'PO-2023-002', poDate: '2023-10-27', vendorName: 'Global Supplies Ltd.', address: '456 Logistics Way, Port Town', status: 'Pending Approval', category: 'Stock-in Trade', branch: 'West Wing', deliveryDate: '2023-11-15', amount: '8750.50' },
-        { id: 3, poNumber: 'PO-2023-003', poDate: '2023-10-28', vendorName: 'Quality Materials Co.', address: '789 Industrial Park, Mfg Zone', status: 'Approved', category: 'Consumables', branch: 'East Warehouse', deliveryDate: '2023-11-20', amount: '3400.00' },
-        { id: 4, poNumber: 'PO-2023-004', poDate: '2023-10-29', vendorName: 'Office Depot', address: '101 Corporate Blvd, Biz Dist', status: 'Mailed', category: 'Stores & Spares', branch: 'HQ', deliveryDate: '2023-11-05', amount: '1200.00' },
-        { id: 5, poNumber: 'PO-2023-005', poDate: '2023-10-30', vendorName: 'Fast Track Logistics', address: '222 Speedy Ln, Transit Hub', status: 'Approved', category: 'Services', branch: 'Main Branch', deliveryDate: '2023-11-25', amount: '5600.00' },
-        { id: 6, poNumber: 'PO-2023-006', poDate: '2023-10-15', vendorName: 'Old World Imports', address: '88 Antiques Rd, Old Town', status: 'Closed', category: 'Raw Material', branch: 'West Wing', deliveryDate: '2023-10-30', amount: '9800.00' },
-    ]);
+    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+
+    const handleUpdatePOStatus = async (poId: number, newStatus: PurchaseOrder['status']) => {
+        try {
+            showInfo(`Updating PO status to ${newStatus}...`);
+            await httpClient.post(`/api/vendors/purchase-orders/${poId}/update_status/`, {
+                status: newStatus
+            });
+
+            setPurchaseOrders(prevOrders => prevOrders.map(p => {
+                if (p.id === poId) {
+                    return { ...p, status: newStatus };
+                }
+                return p;
+            }));
+
+            // If viewing in details modal, update that too
+            if (selectedPO && selectedPO.id === poId) {
+                setSelectedPO({ ...selectedPO, status: newStatus } as any);
+            }
+
+            showSuccess(`PO status updated successfully to ${newStatus}.`);
+            return true;
+        } catch (error) {
+            handleApiError(error, 'Update PO Status');
+            return false;
+        }
+    };
+
+    const handleDeletePurchaseOrder = async (poId: number) => {
+        if (!await confirm('Are you sure you want to delete this purchase order? This action cannot be undone.')) return;
+        try {
+            showInfo('Deleting Purchase Order...');
+            await httpClient.delete(`/api/vendors/purchase-orders/${poId}/`);
+            setPurchaseOrders(prev => prev.filter(p => p.id !== poId));
+            showSuccess('Purchase Order deleted successfully.');
+            setShowCreatePOModal(false);
+        } catch (error) {
+            handleApiError(error, 'Delete PO');
+        }
+    };
 
     const handleApproveAndMail = async (poId: number) => {
         try {
@@ -1759,7 +1805,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             itemCode: '',
             itemName: '',
             supplierItemCode: '',
-            quantity: '',
+            quantity: '1',
             negotiatedRate: '',
             finalRate: '',
             taxableValue: '',
@@ -1787,12 +1833,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             if (item.id === id) {
                 const updatedItem = { ...item, [field]: value };
 
-                const quantity = parseFloat(field === 'quantity' ? value : item.quantity) || 0;
-                const finalRate = parseFloat(field === 'finalRate' ? value : item.finalRate) || 0;
-                const gstRateVal = parseFloat(item.gstRate) || 0;
-                const cessRateVal = parseFloat(item.cessRate) || 0;
+                const quantity = parseFloat(updatedItem.quantity) || 0;
+                const finalRate = parseFloat(updatedItem.finalRate) || 0;
+                const gstRateVal = parseFloat(updatedItem.gstRate) || 0;
+                const cessRateVal = parseFloat(updatedItem.cessRate) || 0;
 
-                // Taxable Value = Quantity × Final Rate
+                // Taxable Value = Quantity x Final Rate
                 const taxableVal = quantity * finalRate;
                 updatedItem.taxableValue = taxableVal.toFixed(2);
 
@@ -1848,15 +1894,40 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 }
             }
 
+            if (field === 'poSeriesName') {
+                const series = poSeriesList.find(s => s.id.toString() === value);
+                if (series) {
+                    // Generate preview using the next number (current_number + 1)
+                    const nextNum = (series.current_number || 0) + 1;
+                    const currentNumStr = nextNum.toString().padStart(series.digits || 4, '0');
+                    const preview = (series.prefix || '') + currentNumStr + (series.suffix || '');
+                    updated.poNumber = preview;
+                } else {
+                    updated.poNumber = 'New PO';
+                }
+            }
+
             return updated;
         });
     };
 
     const handleSubmitPO = async () => {
         try {
-
-
-
+            // Validation
+            if (!createPOForm.poSeriesName || createPOForm.poSeriesName === 'Select') {
+                showError('Please select a PO Series Name');
+                return;
+            }
+            if (!createPOForm.vendorName || createPOForm.vendorName === 'Select Vendor') {
+                showError('Please select a Vendor Name');
+                return;
+            }
+            // Check if there's at least one item and it's not just an empty row
+            const validItems = poItems.filter(item => item.itemName || item.itemCode);
+            if (validItems.length === 0) {
+                showError('Please add at least one item to the purchase order');
+                return;
+            }
 
             // Prepare items data
             const items = poItems.map(item => ({
@@ -1883,7 +1954,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
             // Prepare PO payload
             const payload = {
-                po_series_id: createPOForm.poSeriesName ? parseInt(createPOForm.poSeriesName) : null,
+                po_series_id: (createPOForm.poSeriesName && !isNaN(parseInt(createPOForm.poSeriesName))) ? parseInt(createPOForm.poSeriesName) : null,
                 po_date: createPOForm.poDate,
                 vendor_id: vendorId,
                 vendor_name: vendorName,
@@ -1907,21 +1978,25 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
 
 
             // Send to API
-            const response = await httpClient.post('/api/vendors/purchase-orders/', payload);
-
-
-
-            const poNumber = (response as any)?.data?.data?.po_number || (response as any)?.data?.po_number || 'Generated';
-            showSuccess(`Purchase Order created successfully! PO Number: ${poNumber}`);
+            let response;
+            let poNumber = createPOForm.poNumber;
+            if (editingPOId) {
+                response = await httpClient.put(`/api/vendors/purchase-orders/${editingPOId}/`, payload);
+                showSuccess(`Purchase Order updated successfully!`);
+            } else {
+                response = await httpClient.post('/api/vendors/purchase-orders/', payload);
+                poNumber = (response as any)?.data?.data?.po_number || (response as any)?.data?.po_number || 'Generated';
+                showSuccess(`Purchase Order created successfully! PO Number: ${poNumber}`);
+            }
 
             // Add the new PO to the state list
             const totalAmount = poItems.reduce((acc, item) => acc + (parseFloat(item.netValue) || 0), 0);
             const vendorNameDisplay = vendorList.find(v => v.id.toString() === createPOForm.vendorName)?.vendor_name || createPOForm.vendorName || '';
 
             const newPO: PurchaseOrder = {
-                id: (response as any)?.data?.data?.id || (response as any)?.data?.id || Date.now(),
+                id: (response as any)?.data?.data?.id || (response as any)?.data?.id || editingPOId || Date.now(),
                 poNumber: poNumber,
-                poDate: new Date().toISOString().split('T')[0],
+                poDate: createPOForm.poDate || new Date().toISOString().split('T')[0],
                 vendorName: vendorNameDisplay,
                 address: createPOForm.addressLine1 || '',
                 status: 'Pending Approval',
@@ -1933,7 +2008,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 amount: totalAmount.toFixed(2)
             };
 
-            setPurchaseOrders(prevOrig => [newPO, ...prevOrig]);
+            if (editingPOId) {
+                setPurchaseOrders(prev => prev.map(p => p.id === editingPOId ? { ...p, ...newPO } : p));
+            } else {
+                setPurchaseOrders(prevOrig => [newPO, ...prevOrig]);
+            }
             setActiveCreatePOSubTab('Pending for Approval');
 
             // Reset form
@@ -1978,16 +2057,136 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             }]);
 
             setShowCreatePOModal(false);
-
+            fetchPOSeries();
         } catch (error: any) {
             handleApiError(error, 'Create Purchase Order');
         }
     };
 
-    const handleViewPO = (po: any) => {
-        setSelectedPO(po);
-        setShowViewPOModal(true);
-        setIsEditingPO(false);
+    const handleViewPOInCreateScreen = async (po: any) => {
+        try {
+            showInfo('Fetching purchase order details...');
+            const response: any = await httpClient.get(`/api/vendors/purchase-orders/${po.id}/`);
+            const fullPO = response?.data?.data || response?.data || po;
+
+            let seriesName = '';
+            if (fullPO.po_series_id || fullPO.poSeriesId) {
+                seriesName = (fullPO.po_series_id || fullPO.poSeriesId).toString();
+            } else if (fullPO.po_number && fullPO.po_number.includes('-')) {
+                seriesName = fullPO.po_number.split('-')[0];
+            } else if (fullPO.poNumber && fullPO.poNumber.includes('-')) {
+                seriesName = fullPO.poNumber.split('-')[0];
+            }
+
+            setCreatePOForm({
+                poSeriesName: seriesName,
+                poNumber: fullPO.po_number || fullPO.poNumber || 'New PO',
+                vendorName: fullPO.vendor_name || fullPO.vendorName || '',
+                branch: fullPO.branch || '',
+                addressLine1: fullPO.address_line1 || fullPO.addressLine1 || fullPO.address || '',
+                addressLine2: fullPO.address_line2 || fullPO.addressLine2 || '',
+                addressLine3: fullPO.address_line3 || fullPO.addressLine3 || '',
+                city: fullPO.city || '',
+                state: fullPO.state || '',
+                country: fullPO.country || '',
+                pincode: fullPO.pincode || '',
+                emailAddress: fullPO.email_address || fullPO.emailAddress || '',
+                contractNo: fullPO.contract_no || fullPO.contractNo || '',
+                receiveBy: fullPO.receive_by || fullPO.receiveBy || fullPO.deliveryDate || '',
+                receiveAt: fullPO.receive_at || fullPO.receiveAt || '',
+                deliveryTerms: fullPO.delivery_terms || fullPO.deliveryTerms || '',
+                supplyType: fullPO.supply_type || fullPO.supplyType || 'intrastate',
+                poDate: (fullPO.po_date || fullPO.poDate) ? new Date(fullPO.po_date || fullPO.poDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+            });
+
+            if (fullPO.items && Array.isArray(fullPO.items) && fullPO.items.length > 0) {
+                const mappedItems = fullPO.items.map((item: any) => ({
+                    id: item.id,
+                    itemCode: item.item_code || item.itemCode || '',
+                    itemName: item.item_name || item.itemName || '',
+                    supplierItemCode: item.supplier_item_code || item.supplierItemCode || '',
+                    quantity: (item.quantity || 0).toString(),
+                    uom: item.uom || '',
+                    negotiatedRate: (item.negotiated_rate || item.negotiatedRate || 0).toString(),
+                    finalRate: (item.final_rate || item.finalRate || 0).toString(),
+                    taxableValue: (item.taxable_value || item.taxableValue || 0).toString(),
+                    gstRate: (item.gst_rate || item.gstRate || 0).toString(),
+                    igst: (item.gst_amount || item.igst || 0).toString(),
+                    cgst: (item.cgst || 0).toString(),
+                    sgst: (item.sgst || 0).toString(),
+                    cess: (item.cess || item.cess_amount || 0).toString(),
+                    netValue: (item.invoice_value || item.netValue || 0).toString(),
+                    cessRate: (item.cess_rate || 0).toString()
+                }));
+                setPOItems(mappedItems);
+            } else {
+                setPOItems([{
+                    id: 1,
+                    itemCode: '',
+                    itemName: 'No Items Loaded',
+                    supplierItemCode: '',
+                    quantity: '1',
+                    negotiatedRate: fullPO.total_value || fullPO.amount || '0',
+                    finalRate: fullPO.total_value || fullPO.amount || '0',
+                    taxableValue: fullPO.total_value || fullPO.amount || '0',
+                    igst: '0',
+                    cgst: '0',
+                    sgst: '0',
+                    cess: '0',
+                    netValue: fullPO.total_value || fullPO.amount || '0',
+                    uom: '',
+                    gstRate: '',
+                    cessRate: ''
+                }]);
+            }
+
+            setSelectedPO(fullPO);
+            setEditingPOId(fullPO.id);
+            await fetchPOSeries();
+            setIsCreatePOViewMode(true);
+            setShowCreatePOModal(true);
+        } catch (error) {
+            handleApiError(error, 'Fetch PO Details');
+        }
+    };
+
+    const handleViewPO = async (po: any) => {
+        try {
+            showInfo('Loading PO details...');
+            const response: any = await httpClient.get(`/api/vendors/purchase-orders/${po.id}/`);
+            const fullPO = response?.data?.data || response?.data || po;
+
+            // Map to the structure expected by showViewPOModal
+            const mappedPO = {
+                ...po,
+                poNumber: fullPO.po_number || fullPO.poNumber || po.poNumber,
+                poDate: fullPO.po_date || fullPO.poDate || po.poDate,
+                vendorName: fullPO.vendor_name || fullPO.vendorName || po.vendorName,
+                branch: fullPO.branch || po.branch,
+                addressLine1: fullPO.address_line1 || fullPO.addressLine1 || fullPO.address,
+                addressLine2: fullPO.address_line2 || fullPO.addressLine2 || '',
+                addressLine3: fullPO.address_line3 || fullPO.addressLine3 || '',
+                city: fullPO.city || '',
+                state: fullPO.state || '',
+                country: fullPO.country || '',
+                pincode: fullPO.pincode || '',
+                emailAddress: fullPO.email_address || fullPO.emailAddress || '',
+                contractNo: fullPO.contract_no || fullPO.contractNo || '',
+                receiveBy: fullPO.receive_by || fullPO.receiveBy || fullPO.deliveryDate || '',
+                receiveAt: fullPO.receive_at || fullPO.receiveAt || '',
+                deliveryTerms: fullPO.delivery_terms || fullPO.deliveryTerms || '',
+                supplyType: fullPO.supply_type || fullPO.supplyType || 'intrastate',
+                status: fullPO.status || po.status,
+                amount: fullPO.total_value || fullPO.amount || po.amount,
+                items: fullPO.items || []
+            };
+
+            setSelectedPO(mappedPO);
+            setShowViewPOModal(true);
+            setIsEditingPO(false);
+        } catch (error) {
+            handleApiError(error, 'Fetch PO Details');
+        }
     };
 
     const handleEditPODetails = () => {
@@ -2014,16 +2213,19 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         setIsEditingPO(false);
     };
 
-    const handleApprovePO = () => {
-        const updatedPO = { ...selectedPO, status: 'Approved' };
-        setPurchaseOrders(purchaseOrders.map(po => po.id === selectedPO.id ? updatedPO : po));
-        setSelectedPO(updatedPO);
+    const handleApprovePO = async () => {
+        if (!selectedPO) return;
+        await handleUpdatePOStatus(selectedPO.id, 'Approved');
     };
 
-    const handleMailPO = () => {
-        const updatedPO = { ...selectedPO, status: 'Mailed' };
-        setPurchaseOrders(purchaseOrders.map(po => po.id === selectedPO.id ? updatedPO : po));
-        setSelectedPO(updatedPO);
+    const handleMailPO = async () => {
+        if (!selectedPO) return;
+        await handleUpdatePOStatus(selectedPO.id, 'Mailed');
+    };
+
+    const handleApproveAndMailView = async () => {
+        if (!selectedPO) return;
+        await handleUpdatePOStatus(selectedPO.id, 'Mailed');
         setShowViewPOModal(false);
     };
 
@@ -5307,9 +5509,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                     .filter(tab => isSuperuser || hasTabAccess('Vendor Portal', tab))
                                                     .map((tab) => {
                                                         const count = tab === 'Pending PO'
-                                                            ? purchaseOrders.filter(po => ['Pending Approval', 'Approved', 'Mailed', 'Draft'].includes(po.status)).length
+                                                            ? purchaseOrders.filter(po => po.status === 'Mailed').length
                                                             : tab === 'Executed PO'
-                                                                ? purchaseOrders.filter(po => po.status === 'Closed').length
+                                                                ? purchaseOrders.filter(po => ['Closed', 'Cancelled'].includes(po.status)).length
                                                                 : 0;
 
                                                         return (
@@ -5379,6 +5581,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             <button
                                                                 onClick={() => {
                                                                     fetchPOSeries();
+                                                                    setEditingPOId(null);
+                                                                    setIsCreatePOViewMode(false);
                                                                     setShowCreatePOModal(true);
                                                                 }}
                                                                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
@@ -5443,16 +5647,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                     <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
                                                                                     <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                        <button
-                                                                                            onClick={() => handleApproveAndMail(po.id)}
-                                                                                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                                                                                            title="Approve & Mail"
-                                                                                        >
-                                                                                            <span className="mr-1">Approve & Mail</span>
-                                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                                                                            </svg>
-                                                                                        </button>
+                                                                                        <div className="flex items-center justify-end space-x-3">
+                                                                                            <button
+                                                                                                onClick={() => handleViewPOInCreateScreen(po)}
+                                                                                                className="text-indigo-600 hover:text-indigo-900"
+                                                                                                title="View">
+                                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                                            </button>
+                                                                                        </div>
                                                                                     </td>
                                                                                 </tr>
                                                                             ))
@@ -5501,7 +5703,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                                                                                         </button>
                                                                                         <button
-                                                                                            onClick={() => handleViewPO(po)}
+                                                                                            onClick={() => handleViewPOInCreateScreen(po)}
                                                                                             className="text-indigo-600 hover:text-indigo-900"
                                                                                             title="View">
                                                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -5534,14 +5736,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white divide-y divide-gray-200">
-                                                            {purchaseOrders.filter(po => ['Pending Approval', 'Approved', 'Mailed', 'Draft'].includes(po.status)).length === 0 ? (
+                                                            {purchaseOrders.filter(po => po.status === 'Mailed').length === 0 ? (
                                                                 <tr>
                                                                     <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                                                                         No pending purchase orders found.
                                                                     </td>
                                                                 </tr>
                                                             ) : (
-                                                                purchaseOrders.filter(po => ['Pending Approval', 'Approved', 'Mailed', 'Draft'].includes(po.status)).map((po) => (
+                                                                purchaseOrders.filter(po => po.status === 'Mailed').map((po) => (
                                                                     <tr key={po.id} className="hover:bg-gray-50 transition-colors">
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
@@ -5559,7 +5761,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                                             <button
-                                                                                onClick={() => handleViewPO(po)}
+                                                                                onClick={() => handleViewPOInCreateScreen(po)}
                                                                                 className="text-indigo-600 hover:text-indigo-900"
                                                                                 title="View"
                                                                             >
@@ -5589,14 +5791,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white divide-y divide-gray-200">
-                                                            {purchaseOrders.filter(po => po.status === 'Closed').length === 0 ? (
+                                                            {purchaseOrders.filter(po => ['Closed', 'Cancelled'].includes(po.status)).length === 0 ? (
                                                                 <tr>
                                                                     <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
-                                                                        No executed purchase orders found (Closed).
+                                                                        No executed or cancelled purchase orders found.
                                                                     </td>
                                                                 </tr>
                                                             ) : (
-                                                                purchaseOrders.filter(po => po.status === 'Closed').map((po) => (
+                                                                purchaseOrders.filter(po => ['Closed', 'Cancelled'].includes(po.status)).map((po) => (
                                                                     <tr key={po.id} className="hover:bg-gray-50 transition-colors">
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
@@ -5605,13 +5807,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-green-200">
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] border ${po.status === 'Cancelled'
+                                                                                ? 'bg-red-50 text-red-700 border-red-200'
+                                                                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                                                                                }`}>
                                                                                 {po.status}
                                                                             </span>
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                                             <button
-                                                                                onClick={() => handleViewPO(po)}
+                                                                                onClick={() => handleViewPOInCreateScreen(po)}
                                                                                 className="text-indigo-600 hover:text-indigo-900"
                                                                                 title="View"
                                                                             >
@@ -7304,538 +7509,608 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             </div>
 
                                             <div className="space-y-6">
-                                                {/* Consolidated Form Fields */}
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <div>
-                                                        <label className="label-text">PO Series Name</label>
-                                                        <select
-                                                            value={createPOForm.poSeriesName}
-                                                            onChange={(e) => handleCreatePOFormChange('poSeriesName', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        >
-                                                            <option value="">Select</option>
-                                                            {poSeriesList.map((series) => (
-                                                                <option key={series.id} value={series.id}>
-                                                                    {series.name}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">PO #</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.poNumber}
-                                                            readOnly
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">PO Date</label>
-                                                        <input
-                                                            type="date"
-                                                            value={createPOForm.poDate}
-                                                            max={new Date().toISOString().split('T')[0]} // Restrict future date
-                                                            onChange={(e) => handleCreatePOFormChange('poDate', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">Vendor Name</label>
-                                                        <select
-                                                            value={createPOForm.vendorName}
-                                                            onChange={(e) => handleCreatePOFormChange('vendorName', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        >
-                                                            <option value="">Select Vendor</option>
-                                                            {vendorList.map((vendor) => (
-                                                                <option key={vendor.id} value={vendor.vendor_name}>
-                                                                    {vendor.vendor_name}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">Branch</label>
-                                                        <select
-                                                            value={createPOForm.branch}
-                                                            onChange={(e) => handleCreatePOFormChange('branch', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        >
-                                                            <option value="">Select Branch</option>
-                                                            {availableBranches.map((branch: any) => (
-                                                                <option key={branch.id} value={branch.reference_name || branch.id}>
-                                                                    {branch.reference_name || 'Main Branch'}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="col-span-1 md:col-span-2">
-                                                        <label className="label-text">Address Line 1</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.addressLine1}
-                                                            onChange={(e) => handleCreatePOFormChange('addressLine1', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div className="col-span-1 md:col-span-2">
-                                                        <label className="label-text">Address Line 2</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.addressLine2}
-                                                            onChange={(e) => handleCreatePOFormChange('addressLine2', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div className="col-span-1 md:col-span-2">
-                                                        <label className="label-text">Address Line 3</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.addressLine3}
-                                                            onChange={(e) => handleCreatePOFormChange('addressLine3', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">City</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.city}
-                                                            onChange={(e) => handleCreatePOFormChange('city', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">State</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.state}
-                                                            onChange={(e) => handleCreatePOFormChange('state', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">Country</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.country}
-                                                            onChange={(e) => handleCreatePOFormChange('country', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">Pincode</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.pincode}
-                                                            onChange={(e) => handleCreatePOFormChange('pincode', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">Email Address</label>
-                                                        <input
-                                                            type="email"
-                                                            value={createPOForm.emailAddress}
-                                                            onChange={(e) => handleCreatePOFormChange('emailAddress', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label-text">Contract No</label>
-                                                        <input
-                                                            type="text"
-                                                            value={createPOForm.contractNo}
-                                                            onChange={(e) => handleCreatePOFormChange('contractNo', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Items Section */}
-                                                <div>
-                                                    <div className="flex justify-between items-center mb-4">
-                                                        <div className="flex items-center space-x-6">
-                                                            <h4 className="section-title mb-0">Items</h4>
-                                                            <div className="flex items-center space-x-4 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
-                                                                <span className="text-sm font-medium text-gray-700">Supply Type:</span>
-                                                                <label className="inline-flex items-center cursor-pointer">
-                                                                    <input
-                                                                        type="radio"
-                                                                        className="form-radio text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                                                                        name="supplyType"
-                                                                        value="intrastate"
-                                                                        checked={createPOForm.supplyType === 'intrastate'}
-                                                                        onChange={(e) => handleCreatePOFormChange('supplyType', e.target.value)}
-                                                                    />
-                                                                    <span className="ml-2 text-sm text-gray-700">Intrastate (CGST/SGST)</span>
-                                                                </label>
-                                                                <label className="inline-flex items-center cursor-pointer">
-                                                                    <input
-                                                                        type="radio"
-                                                                        className="form-radio text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                                                                        name="supplyType"
-                                                                        value="interstate"
-                                                                        checked={createPOForm.supplyType === 'interstate'}
-                                                                        onChange={(e) => handleCreatePOFormChange('supplyType', e.target.value)}
-                                                                    />
-                                                                    <span className="ml-2 text-sm text-gray-700">Interstate (IGST)</span>
-                                                                </label>
-                                                            </div>
+                                                <fieldset disabled={isCreatePOViewMode} className="space-y-6">
+                                                    {/* Consolidated Form Fields */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div>
+                                                            <label className="label-text">PO Series Name</label>
+                                                            <select
+                                                                value={createPOForm.poSeriesName}
+                                                                onChange={(e) => handleCreatePOFormChange('poSeriesName', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            >
+                                                                <option value="">Select</option>
+                                                                {poSeriesList.map((series) => (
+                                                                    <option key={series.id} value={series.id}>
+                                                                        {series.name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
                                                         </div>
-                                                        <button
-                                                            onClick={handleAddPOItem}
-                                                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700"
-                                                        >
-                                                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                            </svg>
-                                                            Add Item
-                                                        </button>
+
+                                                        <div>
+                                                            <label className="label-text">PO #</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.poNumber}
+                                                                readOnly
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">PO Date</label>
+                                                            <input
+                                                                type="date"
+                                                                value={createPOForm.poDate}
+                                                                max={new Date().toISOString().split('T')[0]} // Restrict future date
+                                                                onChange={(e) => handleCreatePOFormChange('poDate', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">Vendor Name</label>
+                                                            <select
+                                                                value={createPOForm.vendorName}
+                                                                onChange={(e) => handleCreatePOFormChange('vendorName', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            >
+                                                                <option value="">Select Vendor</option>
+                                                                {vendorList.map((vendor) => (
+                                                                    <option key={vendor.id} value={vendor.vendor_name}>
+                                                                        {vendor.vendor_name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">Branch</label>
+                                                            <select
+                                                                value={createPOForm.branch}
+                                                                onChange={(e) => handleCreatePOFormChange('branch', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            >
+                                                                <option value="">Select Branch</option>
+                                                                {availableBranches.map((branch: any) => (
+                                                                    <option key={branch.id} value={branch.reference_name || branch.id}>
+                                                                        {branch.reference_name || 'Main Branch'}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        <div className="col-span-1 md:col-span-2">
+                                                            <label className="label-text">Address Line 1</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.addressLine1}
+                                                                onChange={(e) => handleCreatePOFormChange('addressLine1', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div className="col-span-1 md:col-span-2">
+                                                            <label className="label-text">Address Line 2</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.addressLine2}
+                                                                onChange={(e) => handleCreatePOFormChange('addressLine2', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div className="col-span-1 md:col-span-2">
+                                                            <label className="label-text">Address Line 3</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.addressLine3}
+                                                                onChange={(e) => handleCreatePOFormChange('addressLine3', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">City</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.city}
+                                                                onChange={(e) => handleCreatePOFormChange('city', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">State</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.state}
+                                                                onChange={(e) => handleCreatePOFormChange('state', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">Country</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.country}
+                                                                onChange={(e) => handleCreatePOFormChange('country', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">Pincode</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.pincode}
+                                                                onChange={(e) => handleCreatePOFormChange('pincode', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">Email Address</label>
+                                                            <input
+                                                                type="email"
+                                                                value={createPOForm.emailAddress}
+                                                                onChange={(e) => handleCreatePOFormChange('emailAddress', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="label-text">Contract No</label>
+                                                            <input
+                                                                type="text"
+                                                                value={createPOForm.contractNo}
+                                                                onChange={(e) => handleCreatePOFormChange('contractNo', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
                                                     </div>
 
-                                                    <div className="overflow-x-auto">
-                                                        <table className="min-w-full divide-y divide-gray-200 border border-slate-200">
-                                                            <thead className="bg-gray-50">
-                                                                <tr>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier Item Code</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UQC</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Price</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Rate</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxable Value</th>
-                                                                    {createPOForm.supplyType === 'interstate' ? (
-                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IGST</th>
-                                                                    ) : (
-                                                                        <>
-                                                                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CGST</th>
-                                                                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SGST/UTGST</th>
-                                                                        </>
-                                                                    )}
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cess</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Value</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="bg-white divide-y divide-gray-200">
-                                                                {poItems.map((item, index) => (
-                                                                    <tr key={item.id}>
-                                                                        <td className="px-3 py-2">
-                                                                            <select
-                                                                                value={item.itemCode}
-                                                                                onChange={(e) => {
-                                                                                    const selectedCode = e.target.value;
-                                                                                    const selectedInvItem = inventoryItems.find(i => i.item_code === selectedCode);
-                                                                                    const supplyType = createPOForm.supplyType || 'intrastate';
-                                                                                    setPOItems(prevItems => prevItems.map(pItem => {
-                                                                                        if (pItem.id === item.id) {
-                                                                                            const gstRateVal = selectedInvItem ? parseFloat(selectedInvItem.gst_rate as string) || 0 : 0;
-                                                                                            const cessRateVal = selectedInvItem ? parseFloat(selectedInvItem.cess_rate as string) || 0 : 0;
-                                                                                            const taxableVal = parseFloat(pItem.taxableValue) || 0;
+                                                    {/* Items Section */}
+                                                    <div>
+                                                        <div className="flex justify-between items-center mb-4">
+                                                            <div className="flex items-center space-x-6">
+                                                                <h4 className="section-title mb-0">Items</h4>
+                                                                <div className="flex items-center space-x-4 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                                                                    <span className="text-sm font-medium text-gray-700">Supply Type:</span>
+                                                                    <label className="inline-flex items-center cursor-pointer">
+                                                                        <input
+                                                                            type="radio"
+                                                                            className="form-radio text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                                                                            name="supplyType"
+                                                                            value="intrastate"
+                                                                            checked={createPOForm.supplyType === 'intrastate'}
+                                                                            onChange={(e) => handleCreatePOFormChange('supplyType', e.target.value)}
+                                                                        />
+                                                                        <span className="ml-2 text-sm text-gray-700">Intrastate (CGST/SGST)</span>
+                                                                    </label>
+                                                                    <label className="inline-flex items-center cursor-pointer">
+                                                                        <input
+                                                                            type="radio"
+                                                                            className="form-radio text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                                                                            name="supplyType"
+                                                                            value="interstate"
+                                                                            checked={createPOForm.supplyType === 'interstate'}
+                                                                            onChange={(e) => handleCreatePOFormChange('supplyType', e.target.value)}
+                                                                        />
+                                                                        <span className="ml-2 text-sm text-gray-700">Interstate (IGST)</span>
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={handleAddPOItem}
+                                                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700"
+                                                            >
+                                                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                                </svg>
+                                                                Add Item
+                                                            </button>
+                                                        </div>
 
-                                                                                            let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
-                                                                                            if (supplyType === 'interstate') {
-                                                                                                igstAmt = (taxableVal * gstRateVal) / 100;
-                                                                                            } else {
-                                                                                                cgstAmt = (taxableVal * gstRateVal) / 2 / 100;
-                                                                                                sgstAmt = (taxableVal * gstRateVal) / 2 / 100;
-                                                                                            }
-                                                                                            const cessAmt = (taxableVal * cessRateVal) / 100;
-
-                                                                                            return {
-                                                                                                ...pItem,
-                                                                                                itemCode: selectedCode,
-                                                                                                itemName: selectedInvItem ? (selectedInvItem.item_name || '') : '',
-                                                                                                uom: selectedInvItem ? (selectedInvItem.uom || selectedInvItem.unit || '') : '',
-                                                                                                gstRate: gstRateVal.toString(),
-                                                                                                cessRate: cessRateVal.toString(),
-                                                                                                igst: igstAmt.toFixed(2),
-                                                                                                cgst: cgstAmt.toFixed(2),
-                                                                                                sgst: sgstAmt.toFixed(2),
-                                                                                                cess: cessAmt.toFixed(2),
-                                                                                                netValue: (taxableVal + igstAmt + cgstAmt + sgstAmt + cessAmt).toFixed(2),
-                                                                                            };
-                                                                                        }
-                                                                                        return pItem;
-                                                                                    }));
-                                                                                }}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                            >
-                                                                                <option value="">Select Item Code</option>
-                                                                                {inventoryItems.map((invItem) => (
-                                                                                    <option key={invItem.id} value={invItem.item_code}>
-                                                                                        {invItem.item_code}
-                                                                                    </option>
-                                                                                ))}
-                                                                            </select>
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <select
-                                                                                value={item.itemName}
-                                                                                onChange={(e) => {
-                                                                                    const selectedName = e.target.value;
-                                                                                    const selectedInvItem = inventoryItems.find(i => i.item_name === selectedName);
-                                                                                    const supplyType = createPOForm.supplyType || 'intrastate';
-                                                                                    setPOItems(prevItems => prevItems.map(pItem => {
-                                                                                        if (pItem.id === item.id) {
-                                                                                            const gstRateVal = selectedInvItem ? parseFloat(selectedInvItem.gst_rate as string) || 0 : 0;
-                                                                                            const cessRateVal = selectedInvItem ? parseFloat(selectedInvItem.cess_rate as string) || 0 : 0;
-                                                                                            const taxableVal = parseFloat(pItem.taxableValue) || 0;
-
-                                                                                            let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
-                                                                                            if (supplyType === 'interstate') {
-                                                                                                igstAmt = (taxableVal * gstRateVal) / 100;
-                                                                                            } else {
-                                                                                                cgstAmt = (taxableVal * gstRateVal) / 2 / 100;
-                                                                                                sgstAmt = (taxableVal * gstRateVal) / 2 / 100;
-                                                                                            }
-                                                                                            const cessAmt = (taxableVal * cessRateVal) / 100;
-
-                                                                                            return {
-                                                                                                ...pItem,
-                                                                                                itemCode: selectedInvItem ? (selectedInvItem.item_code || '') : '',
-                                                                                                itemName: selectedName,
-                                                                                                uom: selectedInvItem ? (selectedInvItem.uom || selectedInvItem.unit || '') : '',
-                                                                                                gstRate: gstRateVal.toString(),
-                                                                                                cessRate: cessRateVal.toString(),
-                                                                                                igst: igstAmt.toFixed(2),
-                                                                                                cgst: cgstAmt.toFixed(2),
-                                                                                                sgst: sgstAmt.toFixed(2),
-                                                                                                cess: cessAmt.toFixed(2),
-                                                                                                netValue: (taxableVal + igstAmt + cgstAmt + sgstAmt + cessAmt).toFixed(2),
-                                                                                            };
-                                                                                        }
-                                                                                        return pItem;
-                                                                                    }));
-                                                                                }}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                            >
-                                                                                <option value="">Select Item Name</option>
-                                                                                {inventoryItems.map((invItem) => (
-                                                                                    <option key={invItem.id} value={invItem.item_name}>
-                                                                                        {invItem.item_name}
-                                                                                    </option>
-                                                                                ))}
-                                                                            </select>
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.supplierItemCode}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'supplierItemCode', e.target.value)}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.quantity}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'quantity', e.target.value)}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            {(() => {
-                                                                                const selectedInvItem = inventoryItems.find(i => i.item_code === item.itemCode);
-                                                                                const units = selectedInvItem
-                                                                                    ? [selectedInvItem.uom, selectedInvItem.alternate_uom].filter((u): u is string => Boolean(u))
-                                                                                    : [];
-
-                                                                                return (
-                                                                                    <select
-                                                                                        value={item.uom}
-                                                                                        onChange={(e) => handlePOItemChange(item.id, 'uom', e.target.value)}
-                                                                                        className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                                    >
-                                                                                        <option value="">Select UQC</option>
-                                                                                        {units.length > 0 ? (
-                                                                                            units.map((u, i) => <option key={i} value={u}>{u}</option>)
-                                                                                        ) : (
-                                                                                            item.uom ? <option value={item.uom}>{item.uom}</option> : null
-                                                                                        )}
-                                                                                    </select>
-                                                                                );
-                                                                            })()}
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.negotiatedRate}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'negotiatedRate', e.target.value)}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.finalRate}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'finalRate', e.target.value)}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.taxableValue}
-                                                                                readOnly
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 focus:outline-none"
-                                                                            />
-                                                                        </td>
+                                                        <div className="overflow-x-auto">
+                                                            <table className="min-w-full divide-y divide-gray-200 border border-slate-200">
+                                                                <thead className="bg-gray-50">
+                                                                    <tr>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier Item Code</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UQC</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Price</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Rate</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxable Value</th>
                                                                         {createPOForm.supplyType === 'interstate' ? (
-                                                                            <td className="px-3 py-2">
-                                                                                <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
-                                                                                    {item.igst || '0.00'}
-                                                                                </div>
-                                                                            </td>
+                                                                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IGST</th>
                                                                         ) : (
                                                                             <>
-                                                                                <td className="px-3 py-2">
-                                                                                    <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
-                                                                                        {item.cgst || '0.00'}
-                                                                                    </div>
-                                                                                </td>
-                                                                                <td className="px-3 py-2">
-                                                                                    <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
-                                                                                        {item.sgst || '0.00'}
-                                                                                    </div>
-                                                                                </td>
+                                                                                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CGST</th>
+                                                                                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SGST/UTGST</th>
                                                                             </>
                                                                         )}
-                                                                        <td className="px-3 py-2">
-                                                                            <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
-                                                                                {item.cess || '0.00'}
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.netValue}
-                                                                                readOnly
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 focus:outline-none"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <button
-                                                                                onClick={() => handleRemovePOItem(item.id)}
-                                                                                className="text-red-600 hover:text-red-900"
-                                                                                disabled={poItems.length === 1}
-                                                                            >
-                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                                </svg>
-                                                                            </button>
-                                                                        </td>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cess</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Value</th>
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                                                     </tr>
+                                                                </thead>
+                                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                                    {poItems.map((item, index) => (
+                                                                        <tr key={item.id}>
+                                                                            <td className="px-3 py-2">
+                                                                                <select
+                                                                                    value={item.itemCode}
+                                                                                    onChange={(e) => {
+                                                                                        const selectedCode = e.target.value;
+                                                                                        const selectedInvItem = inventoryItems.find(i => i.item_code === selectedCode);
+                                                                                        const supplyType = createPOForm.supplyType || 'intrastate';
+                                                                                        setPOItems(prevItems => prevItems.map(pItem => {
+                                                                                            if (pItem.id === item.id) {
+                                                                                                const gstRateVal = selectedInvItem ? parseFloat(selectedInvItem.gst_rate as string) || 0 : 0;
+                                                                                                const cessRateVal = selectedInvItem ? parseFloat(selectedInvItem.cess_rate as string) || 0 : 0;
+                                                                                                const taxableVal = parseFloat(pItem.taxableValue) || 0;
+
+                                                                                                let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
+                                                                                                if (supplyType === 'interstate') {
+                                                                                                    igstAmt = (taxableVal * gstRateVal) / 100;
+                                                                                                } else {
+                                                                                                    cgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                                                                                                    sgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                                                                                                }
+                                                                                                const cessAmt = (taxableVal * cessRateVal) / 100;
+
+                                                                                                return {
+                                                                                                    ...pItem,
+                                                                                                    itemCode: selectedCode,
+                                                                                                    itemName: selectedInvItem ? (selectedInvItem.item_name || '') : '',
+                                                                                                    uom: selectedInvItem ? (selectedInvItem.uom || selectedInvItem.unit || '') : '',
+                                                                                                    gstRate: gstRateVal.toString(),
+                                                                                                    cessRate: cessRateVal.toString(),
+                                                                                                    igst: igstAmt.toFixed(2),
+                                                                                                    cgst: cgstAmt.toFixed(2),
+                                                                                                    sgst: sgstAmt.toFixed(2),
+                                                                                                    cess: cessAmt.toFixed(2),
+                                                                                                    netValue: (taxableVal + igstAmt + cgstAmt + sgstAmt + cessAmt).toFixed(2),
+                                                                                                };
+                                                                                            }
+                                                                                            return pItem;
+                                                                                        }));
+                                                                                    }}
+                                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                                >
+                                                                                    <option value="">Select Item Code</option>
+                                                                                    {inventoryItems.map((invItem) => (
+                                                                                        <option key={invItem.id} value={invItem.item_code}>
+                                                                                            {invItem.item_code}
+                                                                                        </option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                <select
+                                                                                    value={item.itemName}
+                                                                                    onChange={(e) => {
+                                                                                        const selectedName = e.target.value;
+                                                                                        const selectedInvItem = inventoryItems.find(i => i.item_name === selectedName);
+                                                                                        const supplyType = createPOForm.supplyType || 'intrastate';
+                                                                                        setPOItems(prevItems => prevItems.map(pItem => {
+                                                                                            if (pItem.id === item.id) {
+                                                                                                const gstRateVal = selectedInvItem ? parseFloat(selectedInvItem.gst_rate as string) || 0 : 0;
+                                                                                                const cessRateVal = selectedInvItem ? parseFloat(selectedInvItem.cess_rate as string) || 0 : 0;
+                                                                                                const taxableVal = parseFloat(pItem.taxableValue) || 0;
+
+                                                                                                let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
+                                                                                                if (supplyType === 'interstate') {
+                                                                                                    igstAmt = (taxableVal * gstRateVal) / 100;
+                                                                                                } else {
+                                                                                                    cgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                                                                                                    sgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                                                                                                }
+                                                                                                const cessAmt = (taxableVal * cessRateVal) / 100;
+
+                                                                                                return {
+                                                                                                    ...pItem,
+                                                                                                    itemCode: selectedInvItem ? (selectedInvItem.item_code || '') : '',
+                                                                                                    itemName: selectedName,
+                                                                                                    uom: selectedInvItem ? (selectedInvItem.uom || selectedInvItem.unit || '') : '',
+                                                                                                    gstRate: gstRateVal.toString(),
+                                                                                                    cessRate: cessRateVal.toString(),
+                                                                                                    igst: igstAmt.toFixed(2),
+                                                                                                    cgst: cgstAmt.toFixed(2),
+                                                                                                    sgst: sgstAmt.toFixed(2),
+                                                                                                    cess: cessAmt.toFixed(2),
+                                                                                                    netValue: (taxableVal + igstAmt + cgstAmt + sgstAmt + cessAmt).toFixed(2),
+                                                                                                };
+                                                                                            }
+                                                                                            return pItem;
+                                                                                        }));
+                                                                                    }}
+                                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                                >
+                                                                                    <option value="">Select Item Name</option>
+                                                                                    {inventoryItems.map((invItem) => (
+                                                                                        <option key={invItem.id} value={invItem.item_name}>
+                                                                                            {invItem.item_name}
+                                                                                        </option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={item.supplierItemCode}
+                                                                                    onChange={(e) => handlePOItemChange(item.id, 'supplierItemCode', e.target.value)}
+                                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={item.quantity}
+                                                                                    onChange={(e) => handlePOItemChange(item.id, 'quantity', e.target.value)}
+                                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                {(() => {
+                                                                                    const selectedInvItem = inventoryItems.find(i => i.item_code === item.itemCode);
+                                                                                    const units = selectedInvItem
+                                                                                        ? [selectedInvItem.uom, selectedInvItem.alternate_uom].filter((u): u is string => Boolean(u))
+                                                                                        : [];
+
+                                                                                    return (
+                                                                                        <select
+                                                                                            value={item.uom}
+                                                                                            onChange={(e) => handlePOItemChange(item.id, 'uom', e.target.value)}
+                                                                                            className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                                        >
+                                                                                            <option value="">Select UQC</option>
+                                                                                            {units.length > 0 ? (
+                                                                                                units.map((u, i) => <option key={i} value={u}>{u}</option>)
+                                                                                            ) : (
+                                                                                                item.uom ? <option value={item.uom}>{item.uom}</option> : null
+                                                                                            )}
+                                                                                        </select>
+                                                                                    );
+                                                                                })()}
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={item.negotiatedRate}
+                                                                                    onChange={(e) => handlePOItemChange(item.id, 'negotiatedRate', e.target.value)}
+                                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={item.finalRate}
+                                                                                    onChange={(e) => handlePOItemChange(item.id, 'finalRate', e.target.value)}
+                                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={item.taxableValue}
+                                                                                    readOnly
+                                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 focus:outline-none"
+                                                                                />
+                                                                            </td>
+                                                                            {createPOForm.supplyType === 'interstate' ? (
+                                                                                <td className="px-3 py-2">
+                                                                                    <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
+                                                                                        {item.igst || '0.00'}
+                                                                                    </div>
+                                                                                </td>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <td className="px-3 py-2">
+                                                                                        <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
+                                                                                            {item.cgst || '0.00'}
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2">
+                                                                                        <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
+                                                                                            {item.sgst || '0.00'}
+                                                                                        </div>
+                                                                                    </td>
+                                                                                </>
+                                                                            )}
+                                                                            <td className="px-3 py-2">
+                                                                                <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
+                                                                                    {item.cess || '0.00'}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={item.netValue}
+                                                                                    readOnly
+                                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 focus:outline-none"
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-3 py-2">
+                                                                                <button
+                                                                                    onClick={() => handleRemovePOItem(item.id)}
+                                                                                    className="text-red-600 hover:text-red-900"
+                                                                                    disabled={poItems.length === 1}
+                                                                                >
+                                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                                    </svg>
+                                                                                </button>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Summary Section */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                                                        <div>
+                                                            <label className="label-text">Total Taxable Value</label>
+                                                            <input
+                                                                type="text"
+                                                                value={poItems.reduce((sum, item) => sum + (parseFloat(item.taxableValue) || 0), 0).toFixed(2)}
+                                                                readOnly
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label-text">Total Tax</label>
+                                                            <input
+                                                                type="text"
+                                                                value={poItems.reduce((sum, item) => {
+                                                                    const totalTaxAmt = (parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0);
+                                                                    return sum + totalTaxAmt;
+                                                                }, 0).toFixed(2)}
+                                                                readOnly
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label-text">Total Value</label>
+                                                            <input
+                                                                type="text"
+                                                                value={poItems.reduce((sum, item) => sum + (parseFloat(item.netValue) || 0), 0).toFixed(2)}
+                                                                readOnly
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Receive By and Receive At */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                                                        <div>
+                                                            <label className="label-text">Receive By</label>
+                                                            <input
+                                                                type="date"
+                                                                value={createPOForm.receiveBy || ''}
+                                                                onChange={(e) => handleCreatePOFormChange('receiveBy', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                                placeholder="dd-mm-yyyy"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label-text">Receive At</label>
+                                                            <select
+                                                                value={createPOForm.receiveAt || ''}
+                                                                onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            >
+                                                                <option value="">Select Location</option>
+                                                                {locations.map(loc => (
+                                                                    <option key={loc.id} value={loc.name}>{loc.name}</option>
                                                                 ))}
-                                                            </tbody>
-                                                        </table>
+                                                            </select>
+                                                        </div>
                                                     </div>
-                                                </div>
 
-                                                {/* Summary Section */}
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                                                    <div>
-                                                        <label className="label-text">Total Taxable Value</label>
-                                                        <input
-                                                            type="text"
-                                                            value={poItems.reduce((sum, item) => sum + (parseFloat(item.taxableValue) || 0), 0).toFixed(2)}
-                                                            readOnly
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
+                                                    {/* Delivery Terms */}
+                                                    <div className="mt-6">
+                                                        <label className="label-text">Delivery Terms</label>
+                                                        <textarea
+                                                            value={createPOForm.deliveryTerms || ''}
+                                                            onChange={(e) => handleCreatePOFormChange('deliveryTerms', e.target.value)}
+                                                            rows={4}
+                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            placeholder="Enter delivery terms and conditions"
                                                         />
                                                     </div>
-                                                    <div>
-                                                        <label className="label-text">Total Tax</label>
-                                                        <input
-                                                            type="text"
-                                                            value={poItems.reduce((sum, item) => {
-                                                                const taxable = parseFloat(item.taxableValue) || 0;
-                                                                const totalRate = (parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0);
-                                                                return sum + ((taxable * totalRate) / 100);
-                                                            }, 0).toFixed(2)}
-                                                            readOnly
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="label-text">Total Value</label>
-                                                        <input
-                                                            type="text"
-                                                            value={poItems.reduce((sum, item) => sum + (parseFloat(item.netValue) || 0), 0).toFixed(2)}
-                                                            readOnly
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
-                                                        />
-                                                    </div>
-                                                </div>
 
-                                                {/* Receive By and Receive At */}
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                                                </fieldset>
+                                                <div className="flex justify-between items-center pt-6 border-t">
                                                     <div>
-                                                        <label className="label-text">Receive By</label>
-                                                        <input
-                                                            type="date"
-                                                            value={createPOForm.receiveBy || ''}
-                                                            onChange={(e) => handleCreatePOFormChange('receiveBy', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                            placeholder="dd-mm-yyyy"
-                                                        />
+                                                        {isCreatePOViewMode && editingPOId && (
+                                                            <div className="flex items-center gap-3">
+                                                                {(['Draft', 'Pending Approval'] as Array<string>).includes(selectedPO?.status || '') && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            handleUpdatePOStatus(editingPOId!, 'Approved');
+                                                                            setShowCreatePOModal(false);
+                                                                        }}
+                                                                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                                                        title="Approve"
+                                                                    >
+                                                                        <span>APPROVE</span>
+                                                                    </button>
+                                                                )}
+                                                                {(['Draft', 'Pending Approval', 'Approved'] as Array<string>).includes(selectedPO?.status || '') && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            handleUpdatePOStatus(editingPOId!, 'Mailed');
+                                                                            setShowCreatePOModal(false);
+                                                                        }}
+                                                                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                                                        title="Approve & Mail"
+                                                                    >
+                                                                        <span className="mr-2">APPROVE & MAIL</span>
+                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                                        </svg>
+                                                                    </button>
+                                                                )}
+                                                                {(['Draft', 'Pending Approval', 'Approved'] as Array<string>).includes(selectedPO?.status || '') && (
+                                                                    <button
+                                                                        onClick={() => handleDeletePurchaseOrder(editingPOId!)}
+                                                                        className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded shadow-sm text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                                                        title="Delete PO"
+                                                                    >
+                                                                        <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                        </svg>
+                                                                        <span>DELETE</span>
+                                                                    </button>
+                                                                )}
+                                                                {(['Approved', 'Mailed'] as Array<string>).includes(selectedPO?.status || '') && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            handleUpdatePOStatus(editingPOId!, 'Cancelled');
+                                                                            setShowCreatePOModal(false);
+                                                                        }}
+                                                                        className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded shadow-sm text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                                                        title="Cancel PO"
+                                                                    >
+                                                                        <span>CANCEL PO</span>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <div>
-                                                        <label className="label-text">Receive At</label>
-                                                        <select
-                                                            value={createPOForm.receiveAt || ''}
-                                                            onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                    <div className="flex justify-end space-x-4">
+                                                        <button
+                                                            onClick={() => setShowCreatePOModal(false)}
+                                                            className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50"
                                                         >
-                                                            <option value="">Select Location</option>
-                                                            {locations.map(loc => (
-                                                                <option key={loc.id} value={loc.name}>{loc.name}</option>
-                                                            ))}
-                                                        </select>
+                                                            Cancel
+                                                        </button>
+                                                        {isCreatePOViewMode ? (
+                                                            !['Closed', 'Cancelled'].includes(selectedPO?.status || '') && (
+                                                                <button
+                                                                    onClick={() => setIsCreatePOViewMode(false)}
+                                                                    className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium"
+                                                                >
+                                                                    EDIT
+                                                                </button>
+                                                            )
+                                                        ) : (
+                                                            <button
+                                                                onClick={handleSubmitPO}
+                                                                className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
+                                                            >
+                                                                {editingPOId ? 'Update PO' : 'Create PO'}
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                </div>
-
-                                                {/* Delivery Terms */}
-                                                <div className="mt-6">
-                                                    <label className="label-text">Delivery Terms</label>
-                                                    <textarea
-                                                        value={createPOForm.deliveryTerms || ''}
-                                                        onChange={(e) => handleCreatePOFormChange('deliveryTerms', e.target.value)}
-                                                        rows={4}
-                                                        className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        placeholder="Enter delivery terms and conditions"
-                                                    />
-                                                </div>
-
-
-                                                <div className="flex justify-end space-x-4 pt-6 border-t">
-                                                    <button
-                                                        onClick={() => setShowCreatePOModal(false)}
-                                                        className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                    <button
-                                                        onClick={handleSubmitPO}
-                                                        className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
-                                                    >
-                                                        Create PO
-                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -7927,29 +8202,58 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                 </div>
                                             </div>
 
-                                            {/* Items Section - Placeholder */}
+                                            {/* Items Section */}
                                             <div>
                                                 <h4 className="section-title mb-4">Items</h4>
-                                                <div className="bg-gray-50 p-4 rounded-[4px]">
-                                                    <p className="text-gray-600 text-center py-4">
-                                                        Item details will be displayed here when connected to backend
-                                                    </p>
+                                                <div className="overflow-x-auto border border-slate-200 rounded-[4px]">
+                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                        <thead className="bg-slate-50">
+                                                            <tr>
+                                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Code</th>
+                                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Item Name</th>
+                                                                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase">Qty</th>
+                                                                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase">Rate</th>
+                                                                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase">Tax %</th>
+                                                                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase">Amount</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                            {selectedPO.items && selectedPO.items.length > 0 ? (
+                                                                selectedPO.items.map((item: any, idx: number) => (
+                                                                    <tr key={idx}>
+                                                                        <td className="px-4 py-3 text-sm text-gray-900">{item.item_code || item.itemCode}</td>
+                                                                        <td className="px-4 py-3 text-sm text-gray-900">{item.item_name || item.itemName}</td>
+                                                                        <td className="px-4 py-3 text-sm text-gray-900 text-right">{item.quantity} {item.uom}</td>
+                                                                        <td className="px-4 py-3 text-sm text-gray-900 text-right">₹{(item.final_rate || item.finalRate || 0).toLocaleString()}</td>
+                                                                        <td className="px-4 py-3 text-sm text-gray-900 text-right">{item.gst_rate || item.gstRate}%</td>
+                                                                        <td className="px-4 py-3 text-sm font-medium text-indigo-600 text-right">₹{(item.invoice_value || item.netValue || 0).toLocaleString()}</td>
+                                                                    </tr>
+                                                                ))
+                                                            ) : (
+                                                                <tr>
+                                                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500 italic">
+                                                                        No items found in this purchase order.
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
                                                 </div>
                                             </div>
 
-                                            {/* Totals Section - Placeholder */}
-                                            <div className="grid grid-cols-3 gap-6 bg-gray-50 p-4 rounded-[4px] border-t-2 border-gray-300">
+                                            {/* Totals Section */}
+                                            <div className="grid grid-cols-3 gap-6 bg-slate-50 p-6 rounded-[4px] border border-slate-200">
                                                 <div>
-                                                    <label className="label-text">Total Taxable Value</label>
-                                                    <p className="text-lg font-semibold text-gray-900">? 0.00</p>
+                                                    <label className="label-text text-slate-500">Total Taxable Value</label>
+                                                    <p className="text-xl font-bold text-slate-900">₹{(selectedPO.total_taxable_value || selectedPO.totalTaxableValue || 0).toLocaleString()}</p>
                                                 </div>
                                                 <div>
-                                                    <label className="label-text">Total Tax</label>
-                                                    <p className="text-lg font-semibold text-gray-900">? 0.00</p>
+                                                    <label className="label-text text-slate-500">Total Tax</label>
+                                                    <p className="text-xl font-bold text-slate-900">₹{(selectedPO.total_tax || selectedPO.totalTax || 0).toLocaleString()}</p>
                                                 </div>
                                                 <div>
-                                                    <label className="label-text">Total Value</label>
-                                                    <p className="text-lg font-bold text-indigo-900">? 0.00</p>
+                                                    <label className="label-text text-indigo-600">Total PO Value</label>
+                                                    <p className="text-2xl font-black text-indigo-900">₹{(selectedPO.amount || selectedPO.total_value || 0).toLocaleString()}</p>
                                                 </div>
                                             </div>
 
@@ -8059,12 +8363,23 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                         CLOSE
                                                     </button>
                                                     {!isEditingPO && selectedPO.status === 'Pending Approval' && (
-                                                        <button
-                                                            onClick={handleApprovePO}
-                                                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium"
-                                                        >
-                                                            APPROVE PO
-                                                        </button>
+                                                        <div className="flex items-center gap-3">
+                                                            <button
+                                                                onClick={handleApprovePO}
+                                                                className="px-6 py-2 bg-green-600 text-white rounded-[4px] hover:bg-green-700 font-medium"
+                                                            >
+                                                                APPROVE PO
+                                                            </button>
+                                                            <button
+                                                                onClick={handleApproveAndMailView}
+                                                                className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium flex items-center"
+                                                            >
+                                                                <span className="mr-2">APPROVE & MAIL</span>
+                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
                                                     )}
                                                     {!isEditingPO && selectedPO.status === 'Approved' && (
                                                         <button
@@ -8223,12 +8538,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                         </div>
                                     </div>
                                 )}
-
-
                         </div>
                     </div>
                 )
             }
+
 
             {/* Toast notifications handled globally */}
 
@@ -8287,9 +8601,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     'Item Name': inventoryItems.map(i => ({ label: i.item_name || '', value: i.item_name || '', full: i }))
                 }}
             />
-        </div >
-    )
+        </div>
+    );
 };
 
 export default VendorPortalPage;
-

@@ -40,7 +40,7 @@ interface StagingRow {
   voucher_name?: string;
 }
 
-interface Ledger { id: number; name: string; group?: string; category?: string; }
+interface Ledger { id?: number; name: string; group?: string; category?: string; }
 
 type Step = 'upload' | 'map';
 
@@ -224,7 +224,9 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
         handleProcessStaging({
           id: res.staging_id,
           file_name: file.name,
+          account_id: bankLedgerId,
           uploaded_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 15 * 86400000).toISOString(),
           transaction_count: res.count || 0,
           status: 'pending'
         });
@@ -418,7 +420,7 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
             <div className="mt-12 pt-8 border-t border-slate-100">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                  <Icon name="history" className="w-4 h-4 text-indigo-500" />
+                  <Icon name="clock" className="w-4 h-4 text-indigo-500" />
                   Pending Bank Uploads
                   <span className="bg-indigo-100 text-indigo-600 px-2.5 py-0.5 rounded-full text-[10px] ml-1">{stagedFiles.length}</span>
                 </h3>
@@ -452,7 +454,7 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                             {new Date(file.uploaded_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                           </div>
                           <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 rounded text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                            <Icon name="list" className="w-3 h-3" />
+                            <Icon name="file-text" className="w-3 h-3" />
                             {file.transaction_count} Rows
                           </div>
                           <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
@@ -534,7 +536,7 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                 <span className="block text-2xl font-black text-indigo-600 text-center">{mapped}</span>
               </div>
               <button onClick={handlePost} disabled={posting || mapped === 0} className="erp-button-primary h-[56px] px-10 rounded-xl shadow-lg shadow-indigo-100">
-                <Icon name={posting ? 'spinner' : 'check-double'} className={`w-5 h-5 mr-3 ${posting ? 'animate-spin' : ''}`} />
+                <Icon name={posting ? 'spinner' : 'check'} className={`w-5 h-5 mr-3 ${posting ? 'animate-spin' : ''}`} />
                 {posting ? 'Posting...' : 'POST ALL SAVED'}
               </button>
             </div>
