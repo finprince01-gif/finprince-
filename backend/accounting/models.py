@@ -1094,6 +1094,7 @@ class AllocationBase(BaseModel):
     is_advance = models.BooleanField(default=False)
     advance_ref_no = models.CharField(max_length=150, null=True, blank=True)
     posting_note = models.TextField(null=True, blank=True, help_text="Per-row posting note entered in the allocation table")
+    narration = models.TextField(null=True, blank=True, help_text="Original narration from bank upload or source")
 
     @property
     def amount_applied(self): return self.allocated_amount

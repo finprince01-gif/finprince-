@@ -78,6 +78,7 @@ class BankStatementTemp(models.Model):
     # ── Extracted transaction data ────────────────────────────────────────────
     date        = models.DateField(null=True, blank=True)
     narration   = models.TextField(blank=True, default='')
+    posting_note = models.TextField(blank=True, default='')
     debit       = models.DecimalField(max_digits=25, decimal_places=2,
                                       null=True, blank=True)
     credit      = models.DecimalField(max_digits=25, decimal_places=2,

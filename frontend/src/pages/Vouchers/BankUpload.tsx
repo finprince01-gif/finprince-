@@ -38,6 +38,7 @@ interface StagingRow {
   allocation_data?: AllocationState | null;
   voucher_type_id?: number | null;
   voucher_name?: string;
+  posting_note?: string;
 }
 
 interface Ledger { id?: number; name: string; group?: string; category?: string; }
@@ -262,6 +263,7 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
       const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${row.id}/`, {
         ledger_id:   ledgerId,
         ledger_name: partyName,
+        allocation_data: null, // Clear old allocation data when party changes
       });
       setAllRows(prev => prev.map(r => r.id === row.id ? updated : r));
       // Clear any existing allocation for this row since the party has changed
@@ -282,6 +284,25 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
     setPanelRowId(null);
   };
 
+  const handleClearAllocation = async (rowId: number) => {
+    try {
+      const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${rowId}/`, {
+        ledger_id: null,
+        ledger_name: '',
+        allocation_data: null
+      });
+      setAllRows(prev => prev.map(r => r.id === rowId ? updated : r));
+      setRowAllocations(prev => {
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
+      setPanelRowId(null);
+    } catch (err) {
+      console.error('Failed to clear allocation:', err);
+    }
+  };
+
   const handlePost = useCallback(async () => {
     // Exclude duplicates from posting — backend enforces this too but we guard in UI
     const readyToPost = filteredRows.filter(r => {
@@ -299,7 +320,8 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
           allocation: {
             ...(rowAllocations[r.id] || r.allocation_data || {}),
             voucher_type_id: rowVoucherTypeIds[r.id],
-            voucher_number: rowVoucherNumbers[r.id] === 'Auto' ? null : rowVoucherNumbers[r.id]
+            voucher_number: rowVoucherNumbers[r.id] === 'Auto' ? null : rowVoucherNumbers[r.id],
+            posting_note: r.posting_note
           }
         }))
       };
@@ -574,6 +596,7 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                       <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 240 }}>Party / Ledger</th>
                       <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 160 }}>Voucher Type</th>
                       <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 120 }}>Voucher No</th>
+                      <th className="text-left p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ minWidth: 180 }}>Posting Note</th>
                       <th className="text-center p-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Allocated</th>
                     </tr>
                   </thead>
@@ -676,6 +699,19 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                           </td>
+                          <td className="p-4">
+                            <input
+                              type="text"
+                              value={row.posting_note || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setAllRows(prev => prev.map(r => r.id === row.id ? { ...r, posting_note: val } : r));
+                              }}
+                              placeholder="Add note..."
+                              disabled={row.status === 'posted' || row.status === 'duplicate'}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                          </td>
                           <td className="p-4 text-center">
                             {!row.ledger_id ? (
                               <span className="text-slate-300 font-bold">--</span>
@@ -729,20 +765,7 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
                     savedState={rowAllocations[panelRowId] || row.allocation_data}
                     onClose={async (isCancel) => {
                       if (isCancel && panelRowId) {
-                        const r = allRows.find(x => x.id === panelRowId);
-                        const totalAllocated = (rowAllocations[panelRowId]?.totalAllocated || r?.allocation_data?.totalAllocated || 0);
-                        
-                        // If no actual allocation exists (either in local state or from DB), 
-                        // revert the party mapping on cancel.
-                        if (totalAllocated === 0) {
-                          try {
-                            const updated = await httpClient.patch<StagingRow>(`/api/bank-upload/rows/${panelRowId}/`, {
-                              ledger_id: null,
-                              ledger_name: '',
-                            });
-                            setAllRows(prev => prev.map(x => x.id === panelRowId ? updated : x));
-                          } catch (err) { console.error('Revert failed:', err); }
-                        }
+                        await handleClearAllocation(panelRowId);
                       }
                       setPanelRowId(null);
                     }}

@@ -581,7 +581,9 @@ class BankPostView(APIView):
                 row.error_message = None
                 if allocation:
                     row.allocation_data = allocation
-                row.save(update_fields=['status', 'voucher_id', 'error_message', 'allocation_data', 'updated_at'])
+                    if 'posting_note' in allocation:
+                        row.posting_note = allocation['posting_note']
+                row.save(update_fields=['status', 'voucher_id', 'error_message', 'allocation_data', 'posting_note', 'updated_at'])
                 posted += 1
                 results.append({'id': row.id, 'status': 'posted', 'voucher_id': voucher.id})
                 logger.info(f"✅ Posted row {row.id} → voucher {voucher.id}")
@@ -682,7 +684,8 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                         'reference_type': 'INVOICE',
                         'reference_id':   txn.get('id'),
                         'reference_number': txn.get('referenceNumber'),
-                        'posting_note':   narration,
+                        'narration':      row.narration,
+                        'posting_note':   allocation.get('posting_note') or narration,
                         'transaction_details': {
                             'reference_number': txn.get('referenceNumber'),
                             'date': txn.get('date'),
@@ -701,7 +704,8 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                     'amount_applied': str(adv_amt),
                     'reference_type': 'ADVANCE',
                     'advance_ref_no': allocation.get('advanceRefNo'),
-                    'posting_note':   narration,
+                    'narration':      row.narration,
+                    'posting_note':   allocation.get('posting_note') or narration,
                 })
         
         # 3. Fallback: If no specific allocation, treat as a single ledger entry (unallocated)
@@ -713,7 +717,8 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                 'amount':         amount,
                 'amount_applied': amount,
                 'reference_type': 'ON_ACCOUNT',
-                'posting_note':   narration,
+                'narration':      row.narration,
+                'posting_note':   allocation.get('posting_note') or narration,
             }]
 
         payload = {
@@ -723,7 +728,7 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
             'date':           date_str,
             'narration':      narration,
             'ref_no':         row.ref_no,
-            'posting_note':   narration,
+            'posting_note':   allocation.get('posting_note') or narration,
             'pay_from':       str(row.bank_ledger_id) if row.bank_ledger_id else None,
             'amount':         amount,
             'total_amount':   amount,
@@ -748,7 +753,8 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                         'reference_type': 'INVOICE',
                         'reference_id':   txn.get('id'),
                         'reference_no':   txn.get('referenceNumber'),
-                        'posting_note':   narration,
+                        'narration':      row.narration,
+                        'posting_note':   allocation.get('posting_note') or narration,
                         'pending_transaction': {
                             'reference_no': txn.get('referenceNumber'),
                             'date': txn.get('date'),
@@ -764,7 +770,8 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                     'amount_applied': str(adv_amt),
                     'reference_type': 'ADVANCE',
                     'advance_ref_no': allocation.get('advanceRefNo'),
-                    'posting_note':   narration,
+                    'narration':      row.narration,
+                    'posting_note':   allocation.get('posting_note') or narration,
                 })
 
         # Fallback
@@ -774,7 +781,8 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                 'amount':         amount,
                 'amount_applied': amount,
                 'reference_type': 'ON_ACCOUNT',
-                'posting_note':   narration,
+                'narration':      row.narration,
+                'posting_note':   allocation.get('posting_note') or narration,
             }]
 
         payload = {
@@ -784,7 +792,7 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
             'date':           date_str,
             'narration':      narration,
             'ref_no':         row.ref_no,
-            'posting_note':   narration,
+            'posting_note':   allocation.get('posting_note') or narration,
             'receive_in':     str(row.bank_ledger_id) if row.bank_ledger_id else None,
             'customer':       str(resolved_ledger_id),
             'amount':         amount,

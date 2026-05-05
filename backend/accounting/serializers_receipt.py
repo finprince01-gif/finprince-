@@ -54,7 +54,7 @@ class ReceiptVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSe
             'id', 'customer', 'customer_name', 'reference_id', 'reference_type', 
             'pending_transaction', 'amount', 'amount_applied', 'pending_before', 'received_amount', 
             'balance_after', 'is_advance', 'advance_ref_no', 'ref_no', 'invoice_date',
-            'allocations'
+            'allocations', 'narration', 'posting_note'
         ]
         extra_kwargs = {
             'balance_after': {'max_digits': 25, 'decimal_places': 2},
@@ -356,6 +356,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     is_advance=(it_type == 'ADVANCE'),
                     advance_ref_no=det_ref if it_type == 'ADVANCE' else None,
                     ref_no=item_data.get('ref_no', v_ref_no_provided),
+                    narration=item_data.get('narration') or v_narr_provided,
                     posting_note=(
                         item_data.get('posting_note') or 
                         item_data.get('postingNote') or 

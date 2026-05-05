@@ -286,7 +286,7 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
             po.id, po.po_number, po.po_series_id, DATE(po.created_at) as po_date, po.vendor_name, po.branch, 
             po.address_line1, po.address_line2, po.address_line3, po.city, po.state, 
             po.country, po.pincode, po.email_address, po.contract_no,
-            po.receive_by, po.receive_at, po.delivery_terms, po.supply_type,
+            po.receive_by, po.receive_at, po.delivery_terms,
             po.total_value, po.status, po.created_at,
             cat.category as category_name,
             COUNT(items.id) as item_count
@@ -312,7 +312,7 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
         params.append(vendor_name)
     
     # Group by id and po_number to handle non-unique ids
-    query += " GROUP BY po.id, po.po_number, po.po_series_id, po.vendor_name, po.branch, po.address_line1, po.address_line2, po.address_line3, po.city, po.state, po.country, po.pincode, po.email_address, po.contract_no, po.receive_by, po.receive_at, po.delivery_terms, po.supply_type, po.total_value, po.status, po.created_at, cat.category ORDER BY po.created_at DESC"
+    query += " GROUP BY po.id, po.po_number, po.po_series_id, po.vendor_name, po.branch, po.address_line1, po.address_line2, po.address_line3, po.city, po.state, po.country, po.pincode, po.email_address, po.contract_no, po.receive_by, po.receive_at, po.delivery_terms, po.total_value, po.status, po.created_at, cat.category ORDER BY po.created_at DESC"
     
     with connection.cursor() as cursor:
         cursor.execute(query, params)
