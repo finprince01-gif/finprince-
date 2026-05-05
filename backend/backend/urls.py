@@ -4,7 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from vouchers.schema_config import get_voucher_schema_view
 # REMOVED LEGACY OCR IMPORTS
-from ocr_pipeline.views import CleanOCRStagingView, OCRStagingFinalizeView, OCRStagingRescanView, OCRStagingRescanUploadView, ZohoAdapterView, ZohoReconstructView # NEW IMPORT
+from ocr_pipeline.views import CleanOCRStagingView, OCRStagingFinalizeView, OCRStagingRescanView, OCRStagingRescanUploadView, ZohoAdapterView, ZohoReconstructView, OCRJobStatusView # NEW IMPORT
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
 from core.views import AdminSubscriptionsView, AdminPaymentsView
@@ -89,6 +89,7 @@ urlpatterns = [
 
     # OCR Staging Workflow (CONSOLIDATED TO NEW MODULE)
     path('api/ocr-staging/', CleanOCRStagingView.as_view(), name='ocr-staging-list-upload'),
+    path('api/ocr-job-status/<uuid:job_id>/', OCRJobStatusView.as_view(), name='ocr-job-status'),
     path('api/ocr-staging/<str:file_hash>/', CleanOCRStagingView.as_view(), name='ocr-staging-remove'),
     path('api/ocr-staging-finalize/', OCRStagingFinalizeView.as_view(), name='ocr-staging-finalize'),
     path('api/ocr-staging-rescan/', OCRStagingRescanView.as_view(), name='ocr-staging-rescan'),

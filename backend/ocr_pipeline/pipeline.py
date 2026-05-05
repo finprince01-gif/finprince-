@@ -47,6 +47,9 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
         # Phase 2: Hierarchical Normalization
         normalized = normalize(extracted)
         
+        # Inject folder path for UI visibility (especially for folder-based batch uploads)
+        normalized['folder_path'] = record.file_path
+        
         # STEP 2: Save extracted data immediately
         record.extracted_data = normalized
         record.status = 'EXTRACTED'
