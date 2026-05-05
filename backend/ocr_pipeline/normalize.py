@@ -5,105 +5,368 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+_OCR_DIGIT_MAP = str.maketrans({
+    'o': '0', 'O': '0',
+    'l': '1', 'I': '1',
+    'S': '5', 'Z': '2',
+    'G': '6', 'B': '8',
+})
+
+# Month name aliases — handles OCR-garbled month tokens like "J{N" or "JAN"
+_MONTH_MAP = {
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+}
+
+# Item description keywords — patterns found near rent/particulars labels
+_PARTICULARS_PATTERNS = [
+    r'(?:PARTICULARS?|NARRATION|DESCRIPTION)\s*[:\-]?\s*([^\n\r]{5,80})',
+    r'(RENT\s+FOR\s+THE\s+MONTH\s+OF\s+\w+)',
+    r'((?:MONTHLY\s+)?RENT\s+(?:FOR|OF)\s+[^\n\r]{3,60})',
+]
+
+
 def normalize_amount(amount: Any) -> float:
-    """Helper to convert various amount formats to float."""
+    """
+    Convert various amount formats to float with OCR noise correction.
+    Recovery steps (applied in order before the existing strip):
+      1. If already numeric → return directly
+      2. Remove internal spaces: '4 2o0o' → '4 2o0o'
+      3. Apply OCR char substitutions: o→0, l→1, etc.
+      4. Strip all non-digit / non-dot characters
+      5. Parse as float
+    """
     if amount is None or amount == "":
         return 0.0
-    
+
     if isinstance(amount, (int, float)):
         return float(amount)
-        
+
+    raw = str(amount).strip()
+
+    # Step 0: strip leading currency symbols / prefixes (Rs., ₹, $, €, etc.)
+    # Do this BEFORE OCR substitution so 'Rs.' doesn't leave a stray '.'
+    raw = re.sub(r'^(?:Rs\.?|INR|USD|EUR|GBP|₹|\$|€|£)\s*', '', raw, flags=re.IGNORECASE)
+
+    # Step 1: collapse internal whitespace inside numbers ('4 2 0 0 0' → '42000')
+
+    compacted = re.sub(r'(?<=\d)\s+(?=\d)', '', raw)
+    compacted = re.sub(r'(?<=[A-Za-z])\s+(?=\d)', '', compacted)
+    compacted = re.sub(r'(?<=\d)\s+(?=[A-Za-z])', '', compacted)
+
+    # Step 2: apply OCR character substitutions (only inside what looks numeric)
+    ocr_fixed = compacted.translate(_OCR_DIGIT_MAP)
+
+    # Step 3: strip non-numeric chars (commas, currency symbols, etc.)
     try:
-        cleaned = re.sub(r'[^\d.]', '', str(amount))
-        return float(cleaned) if cleaned else 0.0
+        cleaned = re.sub(r'[^\d.]', '', ocr_fixed)
+        result = float(cleaned) if cleaned else 0.0
+        if raw != str(result) and result != 0.0:
+            logger.info(f"[AMOUNT] raw={raw!r} → normalized={result}")
+        return result
     except (ValueError, TypeError):
-        logger.warning(f"Failed to normalize amount: {amount}")
+        logger.warning(f"[AMOUNT] Failed to normalize: {amount!r}")
         return 0.0
 
-def ocr_correct_text(val: str) -> str:
-    """Fixes common OCR misreadings for alphanumeric fields."""
-    if not val: return ""
-    mapping = {
-        'O': '0', 'I': '1', 'l': '1', 'S': '5', 'Z': '2', 'G': '6'
-    }
-    # Only correct if it looks like it should be a digit but is a letter
-    # This is a simple version, can be made more sophisticated
-    return val
 
-def is_valid_invoice_no(val: str) -> bool:
+def ocr_recover_amount(text: str) -> float:
     """
-    FUZZY RULES for Invoice Number:
-    - 3-30 chars
-    - Must have at least one digit (after OCR correction)
-    - Permissive: Alphanumeric, /, -, _, ., space, (, )
+    High-confidence amount extractor from raw OCR text.
+    Searches for the largest number near TOTAL/AMOUNT labels.
+    Applies full OCR substitution before scanning.
     """
-    if not val: return False
-    val = str(val).strip().upper()
-    if len(val) < 3 or len(val) > 30: return False
-    
-    # Check for at least one digit
-    if not any(c.isdigit() for c in val):
-        # Try OCR correction on the first few chars
-        corrected = val.replace('O', '0').replace('I', '1')
-        if not any(c.isdigit() for c in corrected):
-            return False
-    
-    # Permissive Regex: Allow dots, spaces, slashes, dashes
-    if not re.match(r"^[A-Z0-9\/\-\.\_\s\(\)]+$", val):
+    if not text:
+        return 0.0
+
+    upper = text.upper()
+
+    # Look for labelled amounts first (highest confidence)
+    label_patterns = [
+        r'(?:TOTAL|GRAND\s+TOTAL|AMOUNT|NET\s+AMOUNT)[^\d\n]{0,10}([\d,\s\.oOlI]+)',
+    ]
+    candidates = []
+    for pat in label_patterns:
+        for m in re.finditer(pat, upper):
+            raw_num = m.group(1).strip()
+            val = normalize_amount(raw_num)
+            if val > 0:
+                candidates.append(val)
+
+    # Fallback: scan all standalone numbers (pick largest)
+    if not candidates:
+        all_nums = re.findall(r'[\d][\d,\s\.oOlI]{1,12}[\d]', upper)
+        for n in all_nums:
+            val = normalize_amount(n)
+            if val > 0:
+                candidates.append(val)
+
+    return max(candidates) if candidates else 0.0
+
+
+# ── STRICT INVOICE NUMBER VALIDATION ─────────────────────────────────────────
+# Blacklist: words that OCR commonly misidentifies as invoice numbers.
+# Add any domain-specific garbage tokens here.
+_INV_BLACKLIST = {
+    # Generic document labels
+    "INVOICE", "INV", "BILL", "NO", "NUMBER", "NUM", "DATE", "TOTAL",
+    "AMOUNT", "GST", "TAX", "GSTIN", "PAN", "REF", "SI", "DOC",
+    # Common noise tokens seen in OCR output
+    "ING", "INC", "LTD", "PVT", "AUTHORIZED", "SIGNATORY", "BANK",
+    "DETAILS", "ORIGINAL", "DUPLICATE", "TRIPLICATE", "COPY",
+    "RECEIPT", "PURCHASE", "SALES", "DEBIT", "CREDIT", "NOTE",
+    "TAXABLE", "VALUE", "SUPPLY", "PLACE", "STATE", "CODE", "PAGE",
+    "BALANCE", "DUE", "PAYMENT", "TERMS", "SUBTOTAL", "GRAND",
+    "UNIT", "QTY", "QUANTITY", "RATE", "DESCRIPTION", "ITEM",
+}
+
+def is_valid_invoice_no(val: str, _source: str = "") -> bool:
+    """
+    STRICT Invoice Number Validator.
+
+    Rules (ALL must pass):
+      1. Must be a non-empty string.
+      2. Length between 1 and 25 characters. Minimum is 1 because valid short invoice
+         numbers like "7" or "18" exist. Garbage single characters ("A", "I") are
+         blocked by Rule 3 (must contain a real digit) and Rule 5 (pure-alpha reject).
+      3. Must contain at least ONE real digit (0-9). OCR character substitution
+         (I→1, O→0) is intentionally NOT applied here because it was the root
+         cause of "ING" being accepted — 'I' mapped to '1', producing a fake digit.
+      4. Must match the allowed character set: alphanumeric + [-/_. ()]
+      5. Must NOT be a pure-alphabetic string (all letters, no digits).
+      6. Must NOT appear in the blacklist of known noise words.
+
+    Returns True only when every rule passes.
+    """
+    if not val:
         return False
-    
-    labels = {"INVOICE", "DATE", "TOTAL", "AUTHORIZED", "SIGNATORY", "BANK", "DETAILS", "AMOUNT", "TAX"}
-    if val in labels: return False
-    
+
+    cleaned = str(val).strip()
+    upper   = cleaned.upper()
+
+    # Rule 1 – length bounds (min=1 to allow short numerics like "7", "18")
+    if not (1 <= len(cleaned) <= 25):
+        logger.debug(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → length {len(cleaned)} out of [1,25]")
+        return False
+
+    # Rule 2 – must contain at least one REAL digit (no substitution)
+    if not any(c.isdigit() for c in cleaned):
+        logger.info(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → no real digits")
+        return False
+
+    # Rule 3 – allowed character set only
+    if not re.match(r'^[A-Za-z0-9/\-._\s()]+$', cleaned):
+        logger.info(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → illegal characters")
+        return False
+
+    # Rule 4 – blacklist exact match
+    if upper in _INV_BLACKLIST:
+        logger.info(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → blacklisted word")
+        return False
+
+    # Rule 5 – pure-alphabetic strings are never invoice numbers
+    if upper.isalpha():
+        logger.info(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → pure alphabetic, no digits")
+        return False
+
+    logger.debug(f"[INV_VALIDATE] ACCEPT '{cleaned}' ({_source}) — passed digit rule with min_length=1")
     return True
 
 def normalize_date(date_val: Any) -> str:
     """
-    Standardize various date formats to YYYY-MM-DD for UI/HTML5 compatibility.
+    Standardize various date formats to YYYY-MM-DD with OCR noise recovery.
+
+    Recovery pipeline (applied in order):
+      P1. Already a datetime object → format directly
+      P2. Clean standard formats → parse directly
+      P3. OCR character correction → retry standard parse
+      P4. Structural digit extraction → reconstruct DD-MM-YYYY from raw digits
+      P5. Give up → return original string (never return empty on non-empty input)
     """
     if not date_val:
         return ""
-    
-    if isinstance(date_val, (datetime)):
+
+    if isinstance(date_val, datetime):
         return date_val.strftime("%Y-%m-%d")
 
     date_str = str(date_val).strip()
     if not date_str:
         return ""
 
-    formats = [
+    raw_input = date_str  # kept for logging
+
+    # ── P2: Try standard formats on the raw string ──────────────────
+    _FORMATS = [
         "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y",
         "%d-%b-%y", "%d-%b-%Y", "%d %b %Y", "%d %b %y",
-        "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y"
+        "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y",
+        "%d-%m-%y", "%d/%m/%y",
     ]
-
-    for fmt in formats:
+    for fmt in _FORMATS:
         try:
-            return datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
+            result = datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
+            return result
         except ValueError:
             continue
-            
-    try:
-        match = re.search(r'(\d{1,2})[-./\s]([a-zA-Z]{3}|\d{1,2})[-./\s](\d{2,4})', date_str)
-        if match:
-            day, mon, year = match.groups()
-            if mon.isalpha():
-                for fmt in ["%d-%b-%y", "%d-%b-%Y"]:
-                    try:
-                        temp = f"{day}-{mon}-{year}"
-                        return datetime.strptime(temp, fmt).strftime("%Y-%m-%d")
-                    except ValueError: continue
-            else:
-                for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%d-%m-%y"]:
-                    try:
-                        temp = f"{day}-{mon}-{year}"
-                        return datetime.strptime(temp, fmt).strftime("%Y-%m-%d")
-                    except ValueError: continue
-    except Exception:
-        pass
 
-    logger.warning(f"Unrecognized date format: {date_str}")
+    # ── P3: OCR character correction then re-parse ───────────────────
+    # Replace common OCR noise chars with plausible date separators or digits.
+    # Strategy: keep only digits and known separators; replace everything else.
+    def _ocr_clean_date(s: str) -> str:
+        # Normalise separators first
+        s = re.sub(r'[/\\.]', '-', s)
+        # Replace OCR letter → digit substitutions
+        s = s.replace('O', '0').replace('o', '0')\
+             .replace('l', '1').replace('I', '1')\
+             .replace('S', '5').replace('Z', '2')
+        # Remove anything that's not a digit or separator now
+        s = re.sub(r'[^\d\-\s]', '', s)
+        # Collapse multiple separators/spaces to single '-'
+        s = re.sub(r'[\-\s]+', '-', s).strip('-')
+        return s
+
+    cleaned = _ocr_clean_date(date_str)
+    if cleaned and cleaned != date_str:
+        for fmt in _FORMATS:
+            try:
+                result = datetime.strptime(cleaned, fmt).strftime("%Y-%m-%d")
+                logger.info(f"[DATE] raw={raw_input!r} → cleaned={cleaned!r} → normalized={result}")
+                return result
+            except ValueError:
+                continue
+
+        # Also try regex-based group extraction on the cleaned string
+        m = re.match(r'^(\d{1,2})-(\d{1,2})-(\d{2,4})$', cleaned)
+        if m:
+            day, mon, year = m.group(1), m.group(2), m.group(3)
+            for fmt in ["%d-%m-%Y", "%d-%m-%y"]:
+                try:
+                    temp = f"{int(day):02d}-{int(mon):02d}-{year}"
+                    result = datetime.strptime(temp, fmt).strftime("%Y-%m-%d")
+                    logger.info(f"[DATE] raw={raw_input!r} → reconstructed={result}")
+                    return result
+                except ValueError:
+                    continue
+
+    # ── P4: Digit-sequence reconstruction ────────────────────────────
+    # Pull out all digit runs; if we get exactly 3 (DD, MM, YY/YYYY) → reconstruct
+    digit_groups = re.findall(r'\d+', date_str)
+    if len(digit_groups) >= 3:
+        d, m_part, y = digit_groups[0], digit_groups[1], digit_groups[2]
+        # Sanity-check ranges before trusting the reconstruction
+        try:
+            dv, mv, yv = int(d), int(m_part), int(y)
+            if 1 <= dv <= 31 and 1 <= mv <= 12:
+                if yv < 100:  # two-digit year
+                    yv += 2000 if yv <= 50 else 1900
+                result = datetime(
+                    year=yv, month=mv, day=dv
+                ).strftime("%Y-%m-%d")
+                logger.info(
+                    f"[DATE] raw={raw_input!r} → digit-reconstructed={result} "
+                    f"(groups={digit_groups[:3]})"
+                )
+                return result
+        except (ValueError, OverflowError):
+            pass
+
+    # ── P5: Last-resort alpha-month extraction ───────────────────────
+    # Handles garbled strings like "51-)A.J{" where letters hint at month
+    # OCR-correct the string completely, then try alpha-month pattern
+    alpha_attempt = re.sub(r'[^A-Za-z0-9\-/\s]', ' ', date_str)
+    m_obj = re.search(
+        r'(\d{1,2})\s*[-/\s]?\s*([A-Za-z]{3})[A-Za-z]*\s*[-/\s]?\s*(\d{2,4})',
+        alpha_attempt
+    )
+    if m_obj:
+        day_s, mon_s, year_s = m_obj.group(1), m_obj.group(2).lower(), m_obj.group(3)
+        mon_num = _MONTH_MAP.get(mon_s)
+        if mon_num:
+            try:
+                yv = int(year_s)
+                if yv < 100:
+                    yv += 2000 if yv <= 50 else 1900
+                result = datetime(
+                    year=yv, month=mon_num, day=int(day_s)
+                ).strftime("%Y-%m-%d")
+                logger.info(f"[DATE] raw={raw_input!r} → alpha-month-recovered={result}")
+                return result
+            except (ValueError, OverflowError):
+                pass
+
+    logger.warning(f"[DATE] All recovery attempts failed for: {raw_input!r}")
     return date_str
+
+
+def recover_item_description(raw_text: str) -> str:
+    """
+    Extracts item description / narration from raw OCR text.
+
+    Search order (highest → lowest confidence):
+      1. Label-anchored: text under 'PARTICULARS', 'NARRATION', 'DESCRIPTION'
+      2. Rent-pattern: 'RENT FOR THE MONTH OF <month>'
+      3. First non-label, non-numeric line of reasonable length
+
+    OCR correction applied: letter-substitution + casing normalisation.
+    Returns empty string if nothing recoverable is found.
+    """
+    if not raw_text:
+        return ""
+
+    text  = str(raw_text)
+    upper = text.upper()
+
+    # ── Step 1: known label-anchored patterns ────────────────────────
+    for pat in _PARTICULARS_PATTERNS:
+        m = re.search(pat, upper)
+        if m:
+            raw_candidate = m.group(1).strip()
+            corrected = _ocr_fix_description(raw_candidate)
+            if corrected:
+                logger.info(f"[ITEM] Extracted via pattern: {corrected!r}")
+                return corrected
+
+    # ── Step 2: scan lines for a plausible narration ─────────────────
+    skip_labels = {
+        'PARTICULARS', 'NARRATION', 'DESCRIPTION', 'INVOICE', 'BILL',
+        'DATE', 'AMOUNT', 'TOTAL', 'GST', 'TAX', 'NO', 'SL', 'SR',
+        'SGST', 'CGST', 'IGST', 'RATE', 'QTY', 'UNIT', 'HSN',
+    }
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or len(stripped) < 8 or len(stripped) > 120:
+            continue
+        # Skip lines that are mostly numeric (amounts, dates)
+        if sum(c.isdigit() for c in stripped) > len(stripped) * 0.6:
+            continue
+        # Skip known header/label lines
+        if stripped.upper() in skip_labels:
+            continue
+        corrected = _ocr_fix_description(stripped)
+        if corrected and sum(c.isalpha() for c in corrected) > 4:
+            logger.info(f"[ITEM] Extracted via line scan: {corrected!r}")
+            return corrected
+
+    return ""
+
+
+def _ocr_fix_description(text: str) -> str:
+    """
+    OCR correction for description/narration strings.
+    Unlike numeric fields, this preserves alphabetic characters
+    but fixes specific letter-substitution patterns and normalises casing.
+    """
+    if not text:
+        return ""
+    # Replace common OCR garble: [ → L, ] → ], { → G (in word context)
+    s = text.upper()
+    s = s.replace('[', 'L').replace(']', 'I').replace('{', 'G').replace('}', 'D')
+    s = s.replace('|-|', 'H').replace('|\\|', 'N').replace('|V|', 'M')
+    # Collapse multiple spaces
+    s = re.sub(r'\s+', ' ', s).strip()
+    # Title-case for readability
+    # Use Python's str.title() then fix common apostrophe issues
+    result = s.title()
+    return result
 
 # ─────────────────────────────────────────────────────────────
 # Branch/City Derivation
@@ -462,15 +725,33 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
         branch = derive_city_from_address(vendor_address)
 
     # ── Robust Field Resolution (Aliases Applied) ─────────────
-    name = str(resolve_key(data, "vendor_name") or "").strip()
-    gstin = str(resolve_key(data, "gstin") or "").replace(" ", "").upper()
-    
+    name  = str(resolve_key(data, "vendor_name") or "").strip()
+    gstin = str(resolve_key(data, "gstin")       or "").replace(" ", "").upper()
+
+    # ── PRIORITY-BASED INVOICE NUMBER SELECTION ────────────────
+    # Trust Order:
+    #   P1 → AI-extracted field (resolve_key: covers header, top-level, sections)
+    #   P2 → Label-anchored regex (near recognised label tokens)
+    #   P3 → Looser regex (doc-wide scan, validated only)
+    # If all tiers fail → None (MISSING). Never guess.
+    inv_no         = None
+    invoice_status = "MISSING"   # surfaced to UI when invoice number is absent
+
+    # ── P1: AI-extracted field ──
     raw_inv_no = str(resolve_key(data, "invoice_no") or "").strip()
-    inv_no = raw_inv_no if is_valid_invoice_no(raw_inv_no) else ""
-    
+    if raw_inv_no:
+        if is_valid_invoice_no(raw_inv_no, _source="AI_EXTRACTED"):
+            inv_no = raw_inv_no
+            invoice_status = "FOUND"
+        else:
+            logger.info(
+                f"[INV_SELECT] P1 REJECTED AI value '{raw_inv_no}' "
+                f"— does not pass strict validation."
+            )
+
     # ── Fallback Regex (for missing headers in unstructured responses) ─────
     full_text = str(data.get("_raw_text") or data.get("ocr_raw_text") or str(data)).upper()
-    
+
     if not gstin:
         gst_match = re.search(r"\b\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}\b", full_text)
         if gst_match:
@@ -478,25 +759,61 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
             logger.info(f"FALLBACK: Found GSTIN via regex: {gstin}")
 
     if not inv_no:
-        # Look for labels followed by alphanumeric strings
-        # Handles "Invoice No: ABC-123", "Inv #: 123", "Bill No. 456"
-        inv_patterns = [
-            r"(?:TAX\s*)?INVOICE\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
-            r"SI\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
-            r"(?:SALES\s*)?INVOICE\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
-            r"BILL\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
-            r"INV\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
-            r"REF\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})",
-            r"DOC\s*(?:NO|#|NUM)?[\s.:]*([A-Z0-9\-/]{3,})"
+        # ── P2 / P3: Label-anchored regex tiers ──
+        # P2: tightly anchored to a recognised label — highest structural confidence
+        # P3: looser anchor (REF/DOC) — lower structural confidence
+        inv_patterns_p2 = [
+            # Label-anchored (P2) — ordered by label specificity
+            (r"(?:TAX\s*)?INVOICE\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",  "REGEX_P2_TAX_INVOICE"),
+            (r"(?:SALES\s*)?INVOICE\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})", "REGEX_P2_SALES_INVOICE"),
+            (r"BILL\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",                 "REGEX_P2_BILL_NO"),
+            (r"INV\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",                  "REGEX_P2_INV_NO"),
+            (r"SI\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",                   "REGEX_P2_SI_NO"),
         ]
-        for pattern in inv_patterns:
-            match = re.search(pattern, full_text)
-            if match:
-                candidate = match.group(1).strip()
-                if is_valid_invoice_no(candidate):
-                    inv_no = candidate
-                    logger.info(f"FALLBACK: Found VALID Invoice No via regex: {inv_no}")
-                    break
+        inv_patterns_p3 = [
+            # Loose anchors (P3) — only used if P2 fails
+            (r"REF\s*(?:NO|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",  "REGEX_P3_REF"),
+            (r"DOC\s*(?:NO|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",  "REGEX_P3_DOC"),
+        ]
+
+        def _try_patterns(patterns):
+            """Returns the first validated candidate from a pattern list, or None."""
+            for pattern, source_tag in patterns:
+                m = re.search(pattern, full_text)
+                if not m:
+                    continue
+                candidate = m.group(1).strip()
+                if is_valid_invoice_no(candidate, _source=source_tag):
+                    logger.info(
+                        f"[INV_SELECT] {source_tag} ACCEPTED '{candidate}' "
+                        f"— passed strict validation."
+                    )
+                    return candidate, source_tag
+                else:
+                    logger.info(
+                        f"[INV_SELECT] {source_tag} REJECTED candidate '{candidate}' "
+                        f"— failed strict validation. NOT used."
+                    )
+            return None, None
+
+        result_p2, tag_p2 = _try_patterns(inv_patterns_p2)
+        if result_p2:
+            inv_no = result_p2
+            invoice_status = "FOUND_VIA_REGEX"
+        else:
+            result_p3, tag_p3 = _try_patterns(inv_patterns_p3)
+            if result_p3:
+                inv_no = result_p3
+                invoice_status = "FOUND_VIA_FALLBACK"
+
+    # ── SAFE DEFAULT: prefer NULL over a wrong value ──
+    if not inv_no:
+        inv_no = None
+        invoice_status = "MISSING"
+        logger.warning(
+            "[INV_SELECT] All tiers exhausted. No valid invoice number found. "
+            "Setting invoice_number=NULL, invoice_status=MISSING."
+        )
 
     inv_date = normalize_date(resolve_key(data, "invoice_date"))
     total_amt = normalize_amount(resolve_key(data, "total_amount"))
@@ -557,18 +874,24 @@ def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
         "bill_from": vendor_address,
         "billing_address": billing_address,
         "gstin": gstin,
-        "invoice_number": inv_no, 
+        # invoice_number is None when no valid number was found.
+        # Consumers MUST check invoice_status == 'MISSING' before displaying.
+        "invoice_number":     inv_no,
+        "invoice_status":     invoice_status,
         "supplier_invoice_no": inv_no,
-        "sales_invoice_no": inv_no, # ADDED for Sales UI compatibility
-        "bill_no": inv_no,          # ADDED for generic UI compatibility
-        "invoice_date": inv_date,
+        "sales_invoice_no":   inv_no,   # Sales UI compatibility
+        "bill_no":            inv_no,   # Generic UI compatibility
+        "invoice_date":       inv_date,
         "total_invoice_value": total_amt,
-        "place_of_supply": pos,
+        "place_of_supply":    pos,
         "currency": str(data.get("currency") or "INR").upper(),
         # Lossless backup
         "_raw_source": raw_source
     }
-    
-    logger.info(f"NORMALIZATION COMPLETE: Validated GSTIN={gstin[:4]}... INV={inv_no}")
+
+    logger.info(
+        f"NORMALIZATION COMPLETE: GSTIN={gstin[:4] if gstin else 'NONE'}... "
+        f"INV={inv_no!r} STATUS={invoice_status}"
+    )
     return result
 

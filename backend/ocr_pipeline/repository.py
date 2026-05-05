@@ -2,54 +2,7 @@ from django.db import models
 from django.utils import timezone
 import hashlib
 
-class InvoiceTempOCR(models.Model):
-    """
-    Unified staging table for OCR extraction results.
-    Matches the existing 'invoice_ocr_temp' schema.
-    """
-    id = models.BigAutoField(primary_key=True)
-    file_hash = models.CharField(max_length=64)
-    tenant_id = models.CharField(max_length=255)
-    file_path = models.CharField(max_length=512)
-    upload_session_id = models.CharField(max_length=255, null=True, blank=True)
-    voucher_type = models.CharField(max_length=50, null=True, blank=True)
-    
-    ocr_raw_text = models.TextField(null=True, blank=True)
-    extracted_data = models.JSONField(null=True, blank=True) # Source of truth for UI modal
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, default='PROCESSING')
-    processed = models.BooleanField(default=False)
-    
-    validation_status = models.CharField(max_length=50, default='PENDING')
-    vendor_status = models.CharField(max_length=50, default='PENDING')
-    matched_by = models.CharField(max_length=100, null=True, blank=True)
-    conflict_message = models.TextField(null=True, blank=True)
-    
-    vendor_id = models.BigIntegerField(null=True, blank=True)
-    voucher_id = models.BigIntegerField(null=True, blank=True)
-    
-    # Mirror fields
-    supplier_invoice_no = models.CharField(max_length=100, null=True, blank=True)
-    gstin = models.CharField(max_length=50, null=True, blank=True)
-    branch = models.CharField(max_length=255, null=True, blank=True)
-    validation_message = models.TextField(null=True, blank=True)
-    
-    # Extra fields from schema
-    group_id = models.CharField(max_length=64, null=True, blank=True)
-    financial_year = models.CharField(max_length=20, null=True, blank=True)
-    selected_by = models.CharField(max_length=50, default='FALLBACK')
-    duplicate_count = models.IntegerField(default=0)
-    version_rank = models.IntegerField(default=99)
-    is_primary = models.BooleanField(default=False)
-
-    class Meta:
-        managed = False # Tables are created by external migrations or preexisting
-        db_table = 'invoice_ocr_temp'
-
-    def __str__(self):
-        return f"{self.id} - {self.file_path} ({self.status})"
+from .models import InvoiceTempOCR
 
 class StagingRepository:
     """Handles all DB interactions for the ocr_pipeline staging table."""

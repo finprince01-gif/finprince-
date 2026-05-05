@@ -316,7 +316,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         'Date', 'Invoice No', 'Name', 'GSTIN', 'Branch', 'Place of Supply', 'Bill Address From', 'Bill Address To', 
         'Total Taxable Value', 'Total Invoice Value', 'Total IGST', 'Total CGST', 'Total SGST/UTGST', 
         'Item Name', 'HSN/SAC', 'Qty', 'UOM', 'Item Rate', 'Taxable Value', 
-        'IGST', 'CGST', 'SGST/UTGST', 'Invoice Value', 'IRN', 'Ack. No.', 'Ack. Date'
+        'IGST', 'CGST', 'SGST/UTGST', 'Invoice Value', 'IRN', 'Ack. No.', 'Ack. Date', 'Folder Path'
     ];
 
     const ALL_COLUMNS = extractionMode === 'tally'
@@ -354,8 +354,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         }
 
         // Rule: Invoice Value -> Header Total (ONLY for ai_native mode table display)
-        if (col === "Invoice Value" && extractionMode === "ai_native") {
-            return getCellValue(header, "Total Invoice Value");
+        if (col === "Folder Path") {
+            return header.folder_path || header.file_path || "";
         }
         
         return isItem ? getCellValue(item, col) : getCellValue(header, col);
@@ -596,7 +596,14 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             const currentSessionId = String(Date.now());
             uploadSessionIdRef.current = currentSessionId;
             const formData = new FormData();
-            newFiles.forEach(f => formData.append('files', f));
+            newFiles.forEach(f => {
+                formData.append('files', f);
+                // Capture original folder structure if present (e.g. from handleFolderChange)
+                const relPath = (f as any).webkitRelativePath || '';
+                if (relPath) {
+                    formData.append('file_paths', relPath);
+                }
+            });
             formData.append('upload_session_id', currentSessionId);
             formData.append('voucher_type', voucherType);
 
@@ -1424,13 +1431,23 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                         />
                         <div className="flex items-center gap-4">
                             {!isExtracting && invoiceResults.length === 0 && (
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
-                                >
-                                    <Icon name="upload" className="w-5 h-5 mr-2" />
-                                    Select Files
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
+                                    >
+                                        <Icon name="upload" className="w-5 h-5 mr-2" />
+                                        Select Files
+                                    </button>
+                                    <button
+                                        id="bulk-folder-upload-btn"
+                                        onClick={() => folderInputRef.current?.click()}
+                                        className="inline-flex items-center px-6 py-3 border border-slate-200 text-sm font-medium rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 shadow-sm"
+                                    >
+                                        <Icon name="folder" className="w-5 h-5 mr-2 text-amber-500" />
+                                        Select Folder
+                                    </button>
+                                </div>
                             )}
 
                             {isExtracting && (
