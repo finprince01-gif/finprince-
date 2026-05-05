@@ -20,8 +20,6 @@ from core.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 class CleanOCRStagingView(views.APIView):
     """
     Step 3: Fix API Response.
@@ -37,6 +35,10 @@ class CleanOCRStagingView(views.APIView):
         3. Upload to S3
         4. Push to Redis
         """
+        print("\n" + "="*50)
+        print(f"STAGING API: POST REQUEST RECEIVED")
+        print("="*50 + "\n")
+        
         # ── QUEUE BACKEND ENFORCEMENT ──
         queue_backend = os.getenv('QUEUE_BACKEND', 'local')
         if queue_backend != 'redis':
