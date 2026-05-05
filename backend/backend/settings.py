@@ -405,6 +405,16 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'ocr_pipeline': {
+            'handlers': ['console', 'file_debug'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'OCRWorker': {
+            'handlers': ['console', 'file_debug'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
     },
 }
 

@@ -19,8 +19,6 @@ from .zoho_adapter import get_zoho_adapter
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 class CleanOCRStagingView(views.APIView):
     """
     Step 3: Fix API Response.
@@ -36,6 +34,16 @@ class CleanOCRStagingView(views.APIView):
         3. Upload to S3
         4. Push to SQS
         """
+        print("\n" + "="*50)
+        print(f"STAGING API: POST REQUEST RECEIVED")
+        print("="*50 + "\n")
+        
+        # ── QUEUE BACKEND ENFORCEMENT ──
+        queue_backend = os.getenv('QUEUE_BACKEND', 'local')
+        if queue_backend != 'redis':
+            logger.error(f"Invalid QUEUE_BACKEND: {queue_backend}. Redis-only mode enforced.")
+            raise RuntimeError(f"CRITICAL: QUEUE_BACKEND must be 'redis'. Found: {queue_backend}")
+
         from core.storage import StorageService
         from core.sqs import QueueService
         

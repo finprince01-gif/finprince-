@@ -34,10 +34,11 @@ def worker(item_id, job_id, voucher_type, upload_session_id, tenant_id):
             # 1. IDEMPOTENCY CHECK
             # Prevent duplicate processing of the same page/item
             task_lock_key = f"lock:item:{item_id}"
-            if not redis_client.get_client().setnx(task_lock_key, "locked"):
-                logger.warning(f"Item {item_id} already locked. Skipping.")
-                return {'item_id': item_id, 'status': 'skipped'}
-            redis_client.get_client().expire(task_lock_key, 600) # 10 min lock
+            if redis_client.available:
+                if not redis_client.get_client().setnx(task_lock_key, "locked"):
+                    logger.warning(f"Item {item_id} already locked. Skipping.")
+                    return {'item_id': item_id, 'status': 'skipped'}
+                redis_client.get_client().expire(task_lock_key, 600) # 10 min lock
 
             item = InvoiceProcessingItem.objects.get(id=item_id)
             if item.status == 'success':
@@ -126,26 +127,29 @@ def process_bulk_job(job_id: int, voucher_type: str = 'Purchase'):
             ]
             
             for future in concurrent.futures.as_completed(futures):
-                res = future.result()
-                if res['status'] == 'skipped': continue
-                results.append(res)
-                
-                # BATCH DB UPDATE (Every 5 items or end)
-                if len(results) % 5 == 0 or len(results) == len(item_ids):
-                    chunk = results[-5:] if len(results) >= 5 else results
+                try:
+                    res = future.result()
+                    if res['status'] == 'skipped': continue
+                    
+                    results.append(res)
+                    
+                    # IMMEDIATE DB UPDATE (Avoid hangs in UI progress)
                     with transaction.atomic():
-                        for r in chunk:
-                            InvoiceProcessingItem.objects.filter(id=r['item_id']).update(
-                                status=r['status'],
-                                result_json=r.get('result_json', {}),
-                                error_message=r.get('error_message')
-                            )
-                    logger.info(f"Job {job_id}: Progress {len(results)}/{len(item_ids)}")
+                        InvoiceProcessingItem.objects.filter(id=res['item_id']).update(
+                            status=res['status'],
+                            result_json=res.get('result_json', {}),
+                            error_message=res.get('error_message'),
+                            updated_at=time.time()
+                        )
+                    
+                    logger.info(f"Job {job_id}: Item {res['item_id']} {res['status']}. Progress {len(results)}/{len(item_ids)}")
+                except Exception as fe:
+                    logger.error(f"Future error in Job {job_id}: {fe}")
 
         # Final Job Status
         job.status = 'completed'
         job.save()
-        logger.info(f"Bulk Job {job_id} Completed.")
+        logger.info(f"Bulk Job {job_id} Completed. Processed {len(results)} items.")
 
     except BulkInvoiceJob.DoesNotExist:
         logger.error(f"Job {job_id} not found.")
