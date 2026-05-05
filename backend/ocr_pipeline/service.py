@@ -76,7 +76,7 @@ def process_invoice_upload(
             record = repo.create_record(file_hash, seg_file_name, voucher_type, tenant_id, upload_session_id)
 
         try:
-            repo.update_status(record.id, 'EXTRACTING')
+            repo.update_status(record.id, 'PROCESSING')
             
             # PHASE 1: Run the Unified OCR Pipeline
             execution_res = run_ocr_pipeline(segment_bytes, record)

@@ -13,7 +13,7 @@ class StagingRepository:
             voucher_type=voucher_type,
             tenant_id=str(tenant_id),
             upload_session_id=upload_session_id,
-            status='UPLOADED',
+            status='QUEUED',
             created_at=timezone.now(),
             expires_at=timezone.now() + timezone.timedelta(days=7)
         )

@@ -192,6 +192,15 @@ class AIRequestQueue:
         redis_client.record_metric('ai_queue_length', q_len + 1)
         logger.info(f"[Queue] Enqueued task {request_id}. Current Size: {q_len + 1}")
 
+        # OPTIONAL: Synchronous Bypass (Used by background workers to avoid double-queueing)
+        if request_data.get('bypass_queue'):
+            logger.info(f"[Queue] Bypassing AI queue for task {request_id} (Direct Execution)")
+            # Still respect global pacing
+            MAX_RPS = getattr(settings, 'AI_MAX_RPS', 5)
+            while not redis_client.acquire_token("global_ai_pace", MAX_RPS, MAX_RPS):
+                time.sleep(0.1)
+            return process_ai_request(request_data)
+
         # Wait for result in Redis
         result_key = f"ai_result:{request_id}"
         timeout = 360

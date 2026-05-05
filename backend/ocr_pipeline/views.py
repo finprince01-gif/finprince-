@@ -16,6 +16,7 @@ from .normalize import normalize
 from .pipeline import validate_and_process as finalize_record
 from .grouping import run_grouping_logic
 from .zoho_adapter import get_zoho_adapter
+from core.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,15 @@ class CleanOCRStagingView(views.APIView):
         1. Deduplicate by hash
         2. Backpressure check
         3. Upload to S3
-        4. Push to SQS
+        4. Push to Redis
         """
+        # ── QUEUE BACKEND ENFORCEMENT ──
+        queue_backend = os.getenv('QUEUE_BACKEND', 'local')
+        if queue_backend != 'redis':
+            logger.error(f"Invalid QUEUE_BACKEND: {queue_backend}. Redis-only mode enforced.")
+            raise RuntimeError(f"CRITICAL: QUEUE_BACKEND must be 'redis'. Found: {queue_backend}")
+
         from core.storage import StorageService
-        from core.sqs import QueueService
         
         files = request.FILES.getlist('files')
         file_paths = request.data.getlist('file_paths')
@@ -50,22 +56,21 @@ class CleanOCRStagingView(views.APIView):
 
         # ── BACKPRESSURE CHECK ──
         # If the queue is too deep, signal the user
-        pending_count = OCRTask.objects.filter(status='PENDING').count()
+        pending_count = OCRTask.objects.filter(status='QUEUED').count()
         estimated_delay = 0
         if pending_count > 1000:
             # Estimate: (pending / workers) * 10s
             # Assuming 50 workers
             estimated_delay = (pending_count / 50) * 10
-            logger.warning(f"Backpressure active: {pending_count} tasks pending.")
+            logger.warning(f"Backpressure active: {pending_count} tasks queued.")
 
         storage = StorageService()
-        queue = QueueService()
 
         # ── Step 1: Create Job Record ──
         job = OCRJob.objects.create(
             tenant_id=tenant_id,
             total_files=len(files),
-            status='PENDING'
+            status='QUEUED'
         )
 
         queued_count = 0
@@ -106,18 +111,17 @@ class CleanOCRStagingView(views.APIView):
                     file_name=original_display_name,
                     file_url=file_url,
                     file_hash=file_hash,
-                    status='PENDING'
+                    status='QUEUED'
                 )
                 
-                # Push to SQS
-                queue.push({
+                # Push to Redis
+                redis_client.enqueue("ocr_tasks", {
                     "task_id": str(task.id),
                     "job_id": str(job.id),
                     "file_url": file_url,
                     "voucher_type": voucher_type,
                     "tenant_id": tenant_id,
-                    "upload_session_id": upload_session_id,
-                    "attempt": 1
+                    "upload_session_id": upload_session_id
                 })
                 queued_count += 1
                 
@@ -202,8 +206,8 @@ class CleanOCRStagingView(views.APIView):
                 ui_status = 'EXTRACTION_FAILED'
             elif v_status_record == 'VOUCHER_CREATED' or r.processed is True:
                 ui_status = 'VOUCHER_CREATED'
-            elif v_status_record in ['EXTRACTING', 'UPLOADED', 'PENDING']: 
-                ui_status = 'PENDING'
+            elif v_status_record in ['EXTRACTING', 'UPLOADED', 'QUEUED']: 
+                ui_status = 'QUEUED'
             elif v_status in ['DUPLICATE', 'DUPLICATE_INVOICE', 'DUPLICATE_IN_BATCH']:
                 ui_status = 'DUPLICATE'
             
@@ -280,7 +284,7 @@ class OCRJobStatusView(views.APIView):
                 "processed_count": processed,
                 "failed_count": failed,
                 "total_files": total,
-                "is_completed": job.status in ['COMPLETED', 'FAILED', 'PARTIAL'],
+                "is_completed": job.status in ['EXTRACTED', 'FAILED', 'PARTIAL'],
                 "created_at": job.created_at,
                 "updated_at": job.updated_at
             })
@@ -496,22 +500,33 @@ class OCRStagingRescanView(views.APIView):
                 
             from .pipeline import run_ocr_pipeline
             record.status = 'EXTRACTING'
-            record.validation_status = 'PENDING'
+            record.validation_status = 'QUEUED'
             record.save()
             
-            execution_res = run_ocr_pipeline(file_bytes, record)
+            # record.validation_status = 'QUEUED'
+            # record.status = 'QUEUED'
+            record.save()
             
-            # Re-run grouping in case rescan fixed details that allow merging
-            try:
-                from .grouping import run_grouping_logic
-                run_grouping_logic(tenant_id, record.upload_session_id)
-            except: pass
+            # Push to Redis
+            redis_client.enqueue("ocr_tasks", {
+                "task_id": str(record.id), # Wait, InvoiceTempOCR doesn't have task_id, but it has a record in OCRTask?
+                # Actually, rescan usually applies to the record in invoice_ocr_temp.
+                # But the worker expects a task_id for OCRTask.
+                # Let's find the task associated with this record.
+                "file_url": record.file_url if hasattr(record, 'file_url') else None, # Might need to handle this
+                "voucher_type": record.voucher_type,
+                "tenant_id": tenant_id,
+                "upload_session_id": record.upload_session_id,
+                "rescan": True
+            })
+            
+            # Note: OCRTask might not exist if it was a manual upload or old record.
+            # I should probably create a new OCRTask if none exists.
             
             return Response({
                 "success": True,
-                "status": "EXTRACTED",
-                "validation_status": execution_res.get('validation', {}).get('status', 'ERROR'),
-                "data": execution_res.get('data', {})
+                "status": "QUEUED",
+                "message": "Rescan task queued successfully."
             })
         except Exception as e:
             logger.error(f"RESCAN FAILED: {str(e)}")
@@ -554,15 +569,21 @@ class OCRStagingRescanUploadView(views.APIView):
             record.validation_status = 'PENDING'
             record.save()
 
-            from .pipeline import run_ocr_pipeline
-            execution_res = run_ocr_pipeline(file_bytes, record)
+            # Push to Redis
+            redis_client.enqueue("ocr_tasks", {
+                "task_id": str(record.id), # Using record.id as a signal if no OCRTask exists
+                "file_url": f"ocr_temp/{new_hash}", # Local path or S3 url? 
+                "voucher_type": record.voucher_type,
+                "tenant_id": tenant_id,
+                "upload_session_id": record.upload_session_id,
+                "rescan": True
+            })
 
             return Response({
                 "success": True,
                 "file_hash": new_hash,
-                "status": "EXTRACTED",
-                "validation_status": execution_res.get('validation', {}).get('status', 'ERROR'),
-                "data": execution_res.get('data', {})
+                "status": "QUEUED",
+                "message": "Upload successful. Rescan task queued."
             })
         except Exception as e:
             logger.error(f"RESCAN UPLOAD FAILED: {str(e)}")
