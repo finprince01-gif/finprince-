@@ -175,7 +175,8 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             'image_data': file_b64,
             'mime_type': 'application/pdf',
             'voucher_type': voucher_type,
-            'page_index': page_idx + 1
+            'page_index': page_idx + 1,
+            'bypass_queue': True # Execute directly in the current worker process
         }
         
         prompt_size = len(page_isolated_prompt)

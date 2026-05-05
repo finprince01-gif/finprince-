@@ -3,16 +3,16 @@ from django.db import models
 
 class OCRJob(models.Model):
     STATUS_CHOICES = [
-        ('PENDING', 'Pending'),
+        ('QUEUED', 'Queued'),
         ('PROCESSING', 'Processing'),
-        ('COMPLETED', 'Completed'),
+        ('EXTRACTED', 'Extracted'),
         ('FAILED', 'Failed'),
         ('PARTIAL', 'Partial Success'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant_id = models.CharField(max_length=255)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='QUEUED')
     total_files = models.IntegerField(default=0)
     processed_files = models.IntegerField(default=0)
     failed_files = models.IntegerField(default=0)
@@ -30,9 +30,9 @@ class OCRJob(models.Model):
 
 class OCRTask(models.Model):
     STATUS_CHOICES = [
-        ('PENDING', 'Pending'),
+        ('QUEUED', 'Queued'),
         ('PROCESSING', 'Processing'),
-        ('COMPLETED', 'Completed'),
+        ('EXTRACTED', 'Extracted'),
         ('FAILED', 'Failed'),
     ]
     
@@ -41,7 +41,7 @@ class OCRTask(models.Model):
     file_name = models.CharField(max_length=512)
     file_url = models.URLField(max_length=1024, null=True, blank=True) # S3 URL
     file_hash = models.CharField(max_length=64, null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='QUEUED')
     retry_count = models.IntegerField(default=0)
     error_message = models.TextField(null=True, blank=True)
     result_id = models.BigIntegerField(null=True, blank=True) # ID in invoice_ocr_temp
@@ -95,11 +95,11 @@ class InvoiceTempOCR(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, default='PROCESSING')
+    status = models.CharField(max_length=20, default='QUEUED')
     processed = models.BooleanField(default=False)
     
-    validation_status = models.CharField(max_length=50, default='PENDING')
-    vendor_status = models.CharField(max_length=50, default='PENDING')
+    validation_status = models.CharField(max_length=50, default='QUEUED')
+    vendor_status = models.CharField(max_length=50, default='QUEUED')
     matched_by = models.CharField(max_length=100, null=True, blank=True)
     conflict_message = models.TextField(null=True, blank=True)
     

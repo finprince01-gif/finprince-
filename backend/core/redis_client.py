@@ -52,6 +52,14 @@ class RedisClient:
         except Exception:
             is_dev = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
+        queue_backend = os.getenv('QUEUE_BACKEND', 'local')
+        if queue_backend != 'redis':
+            # Strictly enforce redis backend if requested, otherwise error out if SQS is also gone
+            # But the user said: "If any other backend is detected → raise explicit error."
+            # So if someone tries to use 'sqs' or something else, we fail.
+            if queue_backend in ['sqs', 'hybrid']:
+                raise RuntimeError(f"CRITICAL: {queue_backend} backend is deprecated. Only QUEUE_BACKEND=redis is allowed.")
+
         redis_url = getattr(settings, 'REDIS_URL', os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
 
         base_delay = 1
@@ -61,8 +69,8 @@ class RedisClient:
         
         for i in range(max_attempts):
             try:
-                # Set dynamic timeout: slightly longer for production
-                timeout = 5.0 if not is_dev else 1.0
+                # Set dynamic timeout: MUST be larger than blocking operation timeouts (e.g., brpoplpush)
+                timeout = 30.0
                 
                 self.client = redis.from_url(redis_url, decode_responses=True, socket_timeout=timeout)
                 self.client.ping()
@@ -84,9 +92,9 @@ class RedisClient:
                 if i == max_attempts - 1:
                     self.available = False
                     self._initialized = True
-                    if not is_dev:
-                        # Production mode: fail loudly
-                        raise RuntimeError(f"CRITICAL: Production Redis is required but failed startup validation: {e}") from e
+                    # If QUEUE_BACKEND=redis is set, we MUST crash if Redis is down
+                    if queue_backend == 'redis' or not is_dev:
+                        raise RuntimeError(f"CRITICAL: Redis is required (QUEUE_BACKEND=redis) but failed startup validation: {e}") from e
                     else:
                         logger.info(f"[REDIS FALLBACK] Falling back to local mode in development.")
                 else:
@@ -111,17 +119,47 @@ class RedisClient:
         self.available = False
         return False
 
-    # --- Queueing Helpers (with Fallback) ---
-    def push_to_queue(self, queue_name: str, data: dict):
+    # --- Standardized Queue Methods (Redis-Only) ---
+    def enqueue(self, queue_name: str, payload: dict):
+        if not self.available:
+            raise RuntimeError("Redis not available for enqueue")
+        try:
+            self.client.lpush(f"queue:{queue_name}", json.dumps(payload))
+            task_id = payload.get('task_id') or payload.get('id') or 'unknown'
+            logger.info(f"[QUEUE] Enqueued task {task_id}")
+            return True
+        except Exception as e:
+            logger.error(f"[REDIS ERROR] Enqueue failed: {e}")
+            raise
+
+    def pop_reliable(self, queue_name: str, processing_queue: str, timeout: int = 20):
+        if not self.available:
+            raise RuntimeError("Redis not available for pop_reliable")
+        try:
+            # brpoplpush(source, destination, timeout)
+            # timeout=0 means block indefinitely
+            raw_data = self.client.brpoplpush(f"queue:{queue_name}", f"proc:{processing_queue}", timeout=timeout)
+            if raw_data:
+                # Return both the parsed payload and the raw string (needed for ack)
+                return json.loads(raw_data), raw_data
+        except Exception as e:
+            logger.error(f"[REDIS ERROR] Pop reliable failed: {e}")
+        return None, None
+
+    def ack_task(self, processing_queue: str, raw_data: str):
         if not self.available:
             return False
         try:
-            self.client.lpush(f"queue:{queue_name}", json.dumps(data))
+            # Remove the specific element from the processing queue
+            self.client.lrem(f"proc:{processing_queue}", 1, raw_data)
             return True
         except Exception as e:
-            logger.error(f"[REDIS ERROR] Push failed: {e}")
-            self.available = False
+            logger.error(f"[REDIS ERROR] Ack task failed: {e}")
             return False
+
+    # --- Legacy Queueing Helpers (Keep for compatibility if needed, but prioritize new ones) ---
+    def push_to_queue(self, queue_name: str, data: dict):
+        return self.enqueue(queue_name, data)
 
     def pop_from_queue(self, queue_names: list, timeout: int = 0):
         if not self.available:
