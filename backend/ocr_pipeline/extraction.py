@@ -3,6 +3,9 @@ import logging
 import re
 import base64
 import fitz  # PyMuPDF
+import io
+import time
+import concurrent.futures
 from google.genai import types
 from core.ai_proxy import ai_service
 
@@ -168,15 +171,15 @@ Failure to extract ANY field that is visible on the document is unacceptable.
         
         file_b64 = base64.b64encode(segment_bytes).decode('utf-8')
         
-        # Build fresh request dictionary to ensure no 'full_document_text' or 'combined_raw_text' leakage
+        # Build fresh request dictionary
         request_data = {
             'type': 'extraction',
             'prompt': page_isolated_prompt,
             'image_data': file_b64,
-            'mime_type': 'application/pdf',
+            'mime_type': 'image/jpeg',
             'voucher_type': voucher_type,
             'page_index': page_idx + 1,
-            'bypass_queue': True # Execute directly in the current worker process
+            'wait_for_result': True # Enqueue and wait for result from central queue
         }
         
         prompt_size = len(page_isolated_prompt)
@@ -191,59 +194,83 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             raise RuntimeError(response['error'])
 
         raw_text = response.get('reply', '').strip()
+        if not raw_text:
+            logger.warning(f"Empty AI reply for page {page_idx+1}")
+            return {"_error": "EMPTY_REPLY", "_raw": ""}
+
         cleaned_json_text = extract_json_from_text(raw_text)
+        if not cleaned_json_text:
+            return {"_error": "NO_JSON_FOUND", "_raw": raw_text}
         
         try:
             result = json.loads(cleaned_json_text)
+            if not isinstance(result, dict):
+                 return {"_error": "INVALID_JSON_STRUCTURE", "_raw": raw_text}
             result["_raw_text"] = raw_text
             return result
         except json.JSONDecodeError as jde:
             logger.error(f"JSON Decode Error in Proxy response: {str(jde)}")
             return {"_error": "JSON_DECODE_FAILED", "_raw": raw_text}
 
-    # ── STEP 3: SEQUENTIAL EXECUTION (ISOLATED) ──
-    if page_count <= 1:
-        page_text = doc[0].get_text("text") if doc else ""
-        res = _call_ai_for_page(file_bytes, page_text, 0)
-        if doc: doc.close()
-        return res
+    # ── STEP 3: PARALLEL EXECUTION (OPTIMIZED) ──
+    t_start = time.monotonic()
+    
+    def process_single_page(i):
+        p_start = time.monotonic()
+        try:
+            # 1. Extract ONLY this page's OCR text
+            page = doc[i]
+            page_text = page.get_text("text")
+            
+            # 2. IMAGE OPTIMIZATION: Render page to JPEG (Reduced Payload)
+            # 150 DPI is usually enough for high-quality OCR while keeping size small
+            pix = page.get_pixmap(dpi=150)
+            img_bytes = pix.tobytes("jpg", quality=80)
+            
+            logger.info(f"[PERF] Page {i+1} Optimization: {len(img_bytes)} bytes | Time: {time.monotonic() - p_start:.2f}s")
+            
+            # 3. Call Gemini
+            res = _call_ai_for_page(img_bytes, page_text, i)
+            return i, res
+        except Exception as e:
+            logger.error(f"Failed to process page {i+1}: {e}")
+            return i, {"_error": str(e)}
 
-    logger.info(f"[ISOLATION FIX] Splitting multi-page segment into {page_count} isolated AI calls.")
+    logger.info(f"[PERF] Starting Parallel OCR for {page_count} pages...")
+    
+    results_map = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(page_count, 5)) as executor:
+        futures = [executor.submit(process_single_page, i) for i in range(page_count)]
+        for future in concurrent.futures.as_completed(futures):
+            idx, res = future.result()
+            results_map[idx] = res
+
+    if doc: doc.close()
+
+    # ── STEP 4: DETERMINISTIC MERGING (BY PAGE ORDER) ──
     final_result = None
-
     for i in range(page_count):
-        # 1. Extract ONLY this page's OCR text
-        page_text = doc[i].get_text("text")
-        
-        # 2. Extract ONLY this page as a standalone PDF
-        new_doc = fitz.open()
-        new_doc.insert_pdf(doc, from_page=i, to_page=i)
-        page_bytes = new_doc.write()
-        new_doc.close()
-
-        page_result = _call_ai_for_page(page_bytes, page_text, i)
-
-        if "_error" in page_result:
+        page_result = results_map.get(i)
+        if not page_result or "_error" in page_result:
             if final_result is None:
-                if doc: doc.close()
-                return page_result
-            logger.warning(f"Skipping corrupted page {i+1} due to {page_result.get('_error')}")
+                return page_result or {"_error": "UNKNOWN_ERROR"}
+            logger.warning(f"Skipping corrupted page {i+1}")
             continue
 
-        # ── STEP 4: DETERMINISTIC MERGING ──
         if final_result is None:
             final_result = page_result
         else:
+            # Merge items
             final_result.setdefault("items", []).extend(page_result.get("items", []))
+            # Merge raw text
             final_result["_raw_text"] = final_result.get("_raw_text", "") + "\n" + page_result.get("_raw_text", "")
-
             # Header Merge (Intelligent Patching)
             for k, v in page_result.get("header", {}).items():
                 curr_h = final_result["header"]
                 if not curr_h.get(k) or curr_h.get(k) == 0 or curr_h.get(k) == "":
                     if v: curr_h[k] = v
 
-    if doc: doc.close()
+    logger.info(f"[PERF] Total Pipeline Time: {time.monotonic() - t_start:.2f}s for {page_count} pages")
     return final_result
 
 

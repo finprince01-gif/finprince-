@@ -1,6 +1,13 @@
 import os
 import sys
 import time
+
+print("\n" + "!"*80)
+print("CRITICAL: THIS WORKER IS OBSOLETE AND HAS BEEN DECOMMISSIONED.")
+print("USE 'python vouchers/worker.py' INSTEAD.")
+print("!"*80 + "\n")
+sys.exit(1)
+
 import json
 import logging
 import signal

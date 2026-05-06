@@ -5,6 +5,7 @@ Uploads are processed directly via synchronous/thread-pool based workers.
 No Redis or Kafka infrastructure required.
 """
 import os
+import time
 import hashlib
 import logging
 
@@ -39,6 +40,8 @@ class BulkUploadAPIView(APIView):
             return Response({'error': 'No files uploaded'}, status=400)
 
         tenant_id = str(getattr(request.user, 'tenant_id', '88fe4389-58a9-4244-9878-8a4e646898bd'))
+        received_session = request.data.get('upload_session_id')
+        logger.info(f"[UPLOAD API] Received request | files={len(files)} | session={received_session} | tenant={tenant_id}")
 
         # ── GATE 1: System health ────────────────────────────────────────────
         ready, reason = SystemHealth.is_ready()
@@ -85,8 +88,6 @@ class BulkUploadAPIView(APIView):
                 if job:
                    job.upload_session_id = new_session
                    job.save()
-                   for hc in job.items.values_list('file_hash', flat=True):
-                       InvoiceTempOCR.objects.filter(file_hash=hc, tenant_id=tenant_id).update(upload_session_id=new_session)
             return Response({'status': 'already_completed', 'job_id': done_job_id})
 
         existing = BulkInvoiceJob.objects.filter(
@@ -100,19 +101,12 @@ class BulkUploadAPIView(APIView):
             if new_session:
                 existing.upload_session_id = new_session
                 existing.save()
-                from ocr_pipeline.repository import InvoiceTempOCR
-                for hc in existing.items.values_list('file_hash', flat=True):
-                   InvoiceTempOCR.objects.filter(file_hash=hc, tenant_id=tenant_id).update(upload_session_id=new_session)
                    
             if existing.status == 'pending':
-                # Re-trigger attempt if stuck in pending
-                print(f"DEBUG: Found pending job {existing.id} during idempotency check. Re-triggering thread.")
-                voucher_type = request.data.get('voucher_type', 'Purchase')
-                import threading
-                from .pipeline.direct_processor import process_bulk_job
-                thread = threading.Thread(target=process_bulk_job, args=(existing.id, voucher_type))
-                thread.daemon = True
-                thread.start()
+                # Re-trigger enqueuing if stuck in pending
+                logger.info(f"Re-enqueuing pending job {existing.id}")
+                self._enqueue_to_redis(existing, request.data.get('voucher_type', 'Purchase'), tenant_id)
+
             
             return Response({'status': 'already_processing', 'job_id': existing.id,
                              'total_files': existing.total_files})
@@ -123,47 +117,9 @@ class BulkUploadAPIView(APIView):
                              'message': 'Duplicate request received'})
 
         # ── GATE 6: Instant Extraction (No Persistence) ──────────────────
-        no_persist = request.data.get('no_persist') == 'true' or request.query_params.get('no_persist') == 'true'
-        if no_persist:
-            try:
-                results = []
-                voucher_type = request.data.get('voucher_type', 'Purchase')
-                from ocr_pipeline.service import process_invoice_upload
-                
-                for uploaded_file in files:
-                    file_bytes = uploaded_file.read()
-                    res = process_invoice_upload(
-                        file_bytes=file_bytes,
-                        voucher_type=voucher_type,
-                        file_name=uploaded_file.name,
-                        upload_session_id="INSTANT",
-                        tenant_id=tenant_id
-                    )
-                    
-                    from ocr_pipeline.repository import InvoiceTempOCR
-                    # Handle batch extraction (multi-invoice PDF)
-                    if res.get('status') == 'BATCH_EXTRACTED':
-                        batch_items = res.get('results', [])
-                        for item in batch_items:
-                            if item.get('id'):
-                                InvoiceTempOCR.objects.filter(id=item.get('id')).delete()
-                        results.extend(batch_items)
-                    else:
-                        # Single invoice
-                        if res.get('id'):
-                            InvoiceTempOCR.objects.filter(id=res.get('id')).delete()
-                        results.append(res)
-                
-                lock.release()
-                return Response({
-                    'status': 'completed',
-                    'results': results,
-                    'total_files': len(results) # Reflect the actual number of invoices found
-                })
-            except Exception as e:
-                lock.release()
-                logger.error(f"[UPLOAD] Instant extraction failed: {e}")
-                return Response({'error': str(e)}, status=500)
+        # no_persist is deprecated for direct API calls, all must be persistent for async stability.
+        pass
+
 
         try:
             return self._create_and_enqueue(request, tenant_id, files, batch_fingerprint, lock)
@@ -187,7 +143,7 @@ class BulkUploadAPIView(APIView):
             status='pending',
             segmentation_done=False
         )
-        logger.info(f"[UPLOAD] Created Job {job.id} | tenant={tenant_id} | files={len(files)}")
+        logger.info(f"[UPLOAD] Created Job {job.id} | session={job.upload_session_id} | files={len(files)}")
 
         paths = []
         import concurrent.futures
@@ -222,15 +178,14 @@ class BulkUploadAPIView(APIView):
             results = list(executor.map(upload_worker, files))
             paths = [r for r in results if r]
 
-        # ── PUSH TO REDIS PRIORITY QUEUE (with LOCAL FALLBACK) ────────────
+        # ── PUSH TO REDIS PRIORITY QUEUE ────────────
+        voucher_type = request.data.get('voucher_type', 'Purchase')
+        return self._enqueue_to_redis(job, voucher_type, tenant_id, paths)
+
+    def _enqueue_to_redis(self, job, voucher_type, tenant_id, paths=None):
         if not redis_client.available:
-            logger.warning("[REDIS DOWN] Falling back to local thread processing for Job %s", job.id)
-            import threading
-            from .pipeline.direct_processor import process_bulk_job
-            thread = threading.Thread(target=process_bulk_job, args=(job.id, voucher_type))
-            thread.daemon = True
-            thread.start()
-            return Response({'status': 'processing', 'job_id': job.id, 'mode': 'local_fallback'})
+            logger.error("[REDIS DOWN] Cannot process job %s. System requires Redis for async execution.", job.id)
+            return Response({'error': 'Infrastructure Error: Redis is unavailable. Please try again later.'}, status=503)
 
         # Admission Control: Reject if total queue size exceeds threshold
         TOTAL_LIMIT = 20000
@@ -243,7 +198,7 @@ class BulkUploadAPIView(APIView):
 
         # ── PRIORITY ROUTING ──
         # High: 1-3 pages, Normal: 4-15 pages, Low: 16+ pages
-        file_count = len(files)
+        file_count = job.total_files
         if file_count <= 3:
             p_queue = 'bulk_jobs_high'
         elif file_count <= 15:
@@ -252,33 +207,41 @@ class BulkUploadAPIView(APIView):
             p_queue = 'bulk_jobs_low'
 
         task = {
+            'id': f"bulk_{job.id}",
             'job_id': job.id,
             'voucher_type': voucher_type,
             'tenant_id': tenant_id,
             'file_count': file_count,
-            'enqueued_at': time.time()
+            'enqueued_at': time.time(),
+            'upload_session_id': job.upload_session_id
         }
         
+        # ── GATE 7: Consumer Health Verification ─────────────────────────────
+        logger.info(f"[UPLOAD] Checking consumer health for Job {job.id}...")
+        is_active = redis_client.verify_consumer_active(max_age=120)
+        if not is_active:
+            logger.critical(f"[INFRASTRUCTURE FAILURE] No active workers detected for Job {job.id}. Rejecting upload.")
+            return Response({
+                'error': 'OCR Infrastructure is currently offline. Please contact support or try again later.'
+            }, status=503)
+        
+        logger.info(f"[UPLOAD] Consumer health OK for Job {job.id}.")
+
         pushed = redis_client.push_to_queue(p_queue, task)
         if not pushed:
-            logger.warning("[REDIS DOWN] Push failed. Falling back to local thread processing.")
-            import threading
-            from .pipeline.direct_processor import process_bulk_job
-            thread = threading.Thread(target=process_bulk_job, args=(job.id, voucher_type))
-            thread.daemon = True
-            thread.start()
-            return Response({'status': 'processing', 'job_id': job.id, 'mode': 'local_fallback'})
+            logger.error("[REDIS ERROR] Push failed for Job %s", job.id)
+            return Response({'error': 'System Error: Failed to enqueue job. Please try again.'}, status=500)
 
         redis_client.record_metric('bulk_queue_length', q_len + 1)
-        logger.info(f"[UPLOAD] Enqueued Bulk Job {job.id} to {p_queue} | files={file_count}")
+        logger.info(f"[UPLOAD] Enqueued Bulk Job {job.id} to {p_queue} | session={task['upload_session_id']}")
 
         return Response({
             'status':   'processing',
             'job_id':   job.id,
-            'total_files': len(files),
-            'file_path': paths[0] if paths else None,
-            'file_paths': paths
+            'total_files': file_count,
+            'file_paths': paths or []
         })
+
 
     @staticmethod
     def _busy(reason: str, reason_key: str) -> Response:
@@ -334,8 +297,14 @@ class BulkStatusAPIView(APIView):
 
             return Response({
                 'status':    job.status,
-                'progress':  progress
+                'progress':  progress,
+                'total':     total,
+                'processed': success,
+                'failed':    failed,
+                'pending':   pending,
+                'completed': job.status in ['completed', 'failed', 'success']
             })
+
         except BulkInvoiceJob.DoesNotExist:
             return Response({'error': 'Job not found'}, status=404)
         except Exception as e:
