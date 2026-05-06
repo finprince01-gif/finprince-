@@ -685,6 +685,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     })(),
                     debit: isDebit ? amt : 0,
                     credit: !isDebit ? amt : 0,
+                    amount: amt,
                     is_advance: !!(t.is_advance || (t.reference_type || '').toUpperCase() === 'ADVANCE' || (t.status || '').toLowerCase() === 'advance'),
                     rawVoucher: t
                 };
@@ -882,7 +883,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 // USER REQUEST: Only Purchase entries in PROCUREMENT allocation view
                 if (entry.transferFrom !== 'Purchase') return;
 
-                const amt = parseFloat((entry.debit !== '-' ? entry.debit : entry.credit !== '-' ? entry.credit : '0').toString().replace(/,/g, ''));
+                const amt = entry.amount || 0;
                 rows.push({
                     date: entry.date,
                     postedFrom: entry.transferFrom,
@@ -916,7 +917,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 });
 
             // Combine all sources in the group for one span
-            const totalSourceAmt = sources.reduce((sum, s) => sum + parseFloat((s.debit !== '-' ? s.debit : s.credit !== '-' ? s.credit : '0').toString().replace(/,/g, '')), 0);
+            const totalSourceAmt = sources.reduce((sum, s) => sum + (s.amount || 0), 0);
             const firstSource = sources[0];
 
             if (applications.length === 0) {
@@ -935,7 +936,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 });
             } else {
                 let lastPending = totalSourceAmt;
-                const totalAppAmt = applications.reduce((sum, a) => sum + parseFloat((a.debit !== '-' ? a.debit : a.credit !== '-' ? a.credit : '0').toString().replace(/,/g, '')), 0);
+                const totalAppAmt = applications.reduce((sum, a) => sum + (a.amount || 0), 0);
                 const totalSourceAmtRounded = Math.round(totalSourceAmt * 100);
                 const totalAppAmtRounded = Math.round(totalAppAmt * 100);
                 const calculatedStatus = totalSourceAmtRounded <= totalAppAmtRounded
@@ -943,7 +944,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     : (firstSource.status === 'Not Due' ? 'Not Due' : (totalAppAmtRounded > 0 ? 'Partially Paid' : 'Due'));
 
                 applications.forEach((app, appIdx) => {
-                    const appAmt = parseFloat((app.debit !== '-' ? app.debit : app.credit !== '-' ? app.credit : '0').toString().replace(/,/g, ''));
+                    const appAmt = app.amount || 0;
                     const currentPending = Math.max(0, lastPending - appAmt);
                     rows.push({
                         date: firstSource.date,

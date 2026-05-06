@@ -299,6 +299,7 @@ class Voucher(BaseModel):
     amount = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True)
     total = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
+    ref_no = models.CharField(max_length=150, null=True, blank=True, help_text="Reference Number (Cheque, NEFT, etc)")
     source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, ocr)")
     
     # Sales/Purchase specific
@@ -1053,8 +1054,8 @@ class AllocationBase(BaseModel):
         related_name='%(class)s_from',
         null=True, blank=True
     )
-    allocated_amount = models.DecimalField(max_digits=25, decimal_places=2, db_column='amount')
-    amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, db_column='advance')
+    allocated_amount = models.DecimalField(max_digits=25, decimal_places=2)
+    amount = models.DecimalField(max_digits=25, decimal_places=2, default=0)
     vouch_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text="Amount entered in the voucher header")
 
     

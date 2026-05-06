@@ -288,7 +288,8 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         if ledger_name:
             if 'Input Tax Credit Ledger' in ledger_name or 'Output Tax Liability Ledger' in ledger_name:
                 is_gst_ledger = True
-            elif 'TDS Payable' in ledger_name or 'TCS Payable' in ledger_name:
+            elif ('TDS Payable' in ledger_name or 'TCS Payable' in ledger_name
+                  or 'TCS Receivable' in ledger_name or 'TDS Receivable' in ledger_name):
                 is_tds_ledger = True
 
         resolved_ledger = None
@@ -344,7 +345,9 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             if is_gst_ledger:
                 detail_types = ['PURCHASE_GST_DETAIL', 'SALES_GST_DETAIL']
             elif is_tds_ledger:
-                detail_types = ['PURCHASE_TDS_DETAIL', 'SALES_TCS_DETAIL']
+                # TCS Receivable detail rows are stored as SALES_TCS_DETAIL / SALES_TDS_DETAIL
+                # TCS Payable / TDS Payable detail rows use PURCHASE_TDS_DETAIL / PURCHASE_TCS_DETAIL
+                detail_types = ['PURCHASE_TDS_DETAIL', 'SALES_TCS_DETAIL', 'PURCHASE_TCS_DETAIL', 'SALES_TDS_DETAIL']
                 
             detail_qs = JournalEntry.objects.filter(
                 tenant_id=tenant_id,
@@ -415,6 +418,7 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 'balance': abs(running_balance),
                 'balance_type': balance_type,
                 'voucher_id': e.voucher_id,
+                'reference_number': getattr(e, 'reference_number', None),
             }
 
             # For GST/TDS ledgers, embed the component breakdown

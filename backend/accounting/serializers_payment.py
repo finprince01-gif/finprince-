@@ -629,6 +629,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     'amount': total,
                     'total': total,
                     'narration': voucher.narration,
+                    'ref_no': voucher.ref_no,
                     'source': getattr(voucher, 'source', 'manual'),
                     'reference_id': voucher.id,
                     'ledger_id_val': voucher.ledger_id_val,
