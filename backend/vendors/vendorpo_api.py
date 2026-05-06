@@ -207,7 +207,9 @@ class VendorPOViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """
-        Update PO status
+        Update PO status.
+        For cancel actions, automatically resolves 'Cancelled' vs 'Executed Cancelled'
+        based on whether the PO was used in any GRN or Purchase Voucher.
         """
         try:
             new_status = request.data.get('status')
@@ -217,6 +219,10 @@ class VendorPOViewSet(viewsets.ModelViewSet):
                     'success': False,
                     'error': 'Status is required'
                 }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Smart cancellation: check GRN/Voucher usage to decide final status
+            if new_status in ('Cancelled', 'Executed Cancelled'):
+                new_status = db.resolve_cancellation_status(pk)
             
             success = db.update_po_status(
                 po_id=pk,
@@ -240,6 +246,8 @@ class VendorPOViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return Response({
                 'success': False,
                 'error': str(e)

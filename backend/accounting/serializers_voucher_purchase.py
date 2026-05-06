@@ -12,6 +12,8 @@ from .models_voucher_purchase import (  # type: ignore[import]
 )
 from .models import Voucher, MasterLedger  # type: ignore[import]
 from .services.ledger_service import post_transaction, _resolve_ledger  # type: ignore[import]
+from vendors.models import VendorTransactionPO
+from django.db.models import Q
 from accounting.services.inventory_sync import sync_purchase_to_grn
 from decimal import Decimal, ROUND_HALF_UP  # noqa: F401
 from accounting.services.advance_service import write_allocations
@@ -146,6 +148,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             except (json.JSONDecodeError, ValueError):
                 return None
         return val
+    
 
     @staticmethod
     def _as_dict(val):
@@ -303,11 +306,33 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         # 6. Double-Entry Posting
         self._post_journal_entries(supplier_instance, voucher.id, purchase_total_gross, supply_inr_data, supply_foreign_data, due_data)
 
+        # 6.5. PO Auto-Status Update
+        po_no = None
+        if supply_inr_data and supply_inr_data.get('purchase_order_no'):
+            po_no = supply_inr_data.get('purchase_order_no')
+        elif supply_foreign_data and supply_foreign_data.get('purchase_order_no'):
+            po_no = supply_foreign_data.get('purchase_order_no')
+            
+        if po_no:
+            try:
+                from vendors import vendorpo_database as db
+                db.auto_update_po_if_fully_executed(tenant_id, po_no)
+            except Exception:
+                pass
+
         # 7. Mirror to Vendor Portal
         self._mirror_to_vendor_portal(supplier_instance)
 
         # Auto-sync to Inventory > Operations > GRN
         sync_purchase_to_grn(supplier_instance, supply_inr_data, supply_foreign_data)
+
+        # Update PO Status
+        po_no = None
+        if supply_inr_data and supply_inr_data.get('purchase_order_no'):
+            po_no = supply_inr_data.get('purchase_order_no')
+        elif supply_foreign_data and supply_foreign_data.get('purchase_order_no'):
+            po_no = supply_foreign_data.get('purchase_order_no')
+        
 
         return supplier_instance
 
@@ -413,6 +438,15 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         
         # Auto-sync to Inventory > Operations > GRN
         sync_purchase_to_grn(instance, supply_inr_data, supply_foreign_data)
+
+        # Update PO Status
+        po_no = None
+        if supply_inr_data and supply_inr_data.get('purchase_order_no'):
+            po_no = supply_inr_data.get('purchase_order_no')
+        elif supply_foreign_data and supply_foreign_data.get('purchase_order_no'):
+            po_no = supply_foreign_data.get('purchase_order_no')
+        
+
 
         # Refresh double-entry posting
         self._post_journal_entries(instance, voucher_id, purchase_total_gross, supply_inr_data, supply_foreign_data, due_data)

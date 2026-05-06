@@ -7988,7 +7988,7 @@ const InventoryPage: React.FC = () => {
                               <MultiSelectDropdown
                                 options={grnReferenceNoOptions.map((po: any) => ({
                                   value: po.po_number,
-                                  label: po.po_number
+                                  label: `${po.po_number} (${po.status || 'N/A'})`
                                 }))}
                                 selectedValues={grnSelectedPOs}
                                 onChange={handleGrnReferenceNoChange}

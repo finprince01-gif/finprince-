@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> str:
     """
-    Generate next PO number based on series settings
+    Generate next PO number based on series settings.
+    Always checks existing records to avoid duplicate key errors when
+    the series counter falls out of sync.
     
     Returns:
         str: Generated PO number
@@ -31,9 +33,28 @@ def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> st
             
             if row:
                 prefix, current_number, digits, suffix = row
-                next_number = current_number + 1
                 
-                # Update current number
+                # Also check the actual max number already used in the DB for this prefix/suffix
+                # to avoid duplicates when the counter is out of sync
+                max_query = """
+                    SELECT COALESCE(
+                        MAX(CAST(SUBSTRING(po_number, %s, %s) AS UNSIGNED)), 
+                        0
+                    )
+                    FROM vendor_transaction_po
+                    WHERE tenant_id = %s 
+                      AND po_number LIKE %s
+                """
+                prefix_len = len(prefix) + 1   # 1-indexed for SUBSTRING
+                num_len = digits
+                like_pattern = f"{prefix}%{suffix}" if suffix else f"{prefix}%"
+                cursor.execute(max_query, [prefix_len, num_len, tenant_id, like_pattern])
+                max_in_db = cursor.fetchone()[0] or 0
+                
+                # Use whichever is larger — series counter or actual DB max
+                next_number = max(current_number, max_in_db) + 1
+                
+                # Update current number in series to stay in sync
                 update_query = """
                     UPDATE vendor_master_posettings
                     SET current_number = %s, updated_at = NOW()
@@ -45,7 +66,7 @@ def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> st
                 number_str = str(next_number).zfill(digits)
                 return f"{prefix}{number_str}{suffix}"
     
-    # Fallback: generate simple sequential number
+    # Fallback: generate simple sequential number based on actual DB max
     query = """
         SELECT COALESCE(MAX(CAST(SUBSTRING(po_number, 3) AS UNSIGNED)), 0) + 1
         FROM vendor_transaction_po
@@ -286,7 +307,7 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
             po.id, po.po_number, po.po_series_id, DATE(po.created_at) as po_date, po.vendor_name, po.branch, 
             po.address_line1, po.address_line2, po.address_line3, po.city, po.state, 
             po.country, po.pincode, po.email_address, po.contract_no,
-            po.receive_by, po.receive_at, po.delivery_terms, po.supply_type,
+            po.receive_by, po.receive_at, po.delivery_terms,
             po.total_value, po.status, po.created_at,
             cat.category as category_name,
             COUNT(items.id) as item_count
@@ -302,6 +323,8 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
     if status and status != 'All':
         if 'pending' in status.lower():
             query += " AND LOWER(po.status) LIKE '%%pending%%'"
+        elif 'executed' in status.lower():
+             query += " AND LOWER(po.status) LIKE '%%executed%%'"
         else:
             query += " AND po.status = %s"
             params.append(status)
@@ -312,7 +335,7 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
         params.append(vendor_name)
     
     # Group by id and po_number to handle non-unique ids
-    query += " GROUP BY po.id, po.po_number, po.po_series_id, po.vendor_name, po.branch, po.address_line1, po.address_line2, po.address_line3, po.city, po.state, po.country, po.pincode, po.email_address, po.contract_no, po.receive_by, po.receive_at, po.delivery_terms, po.supply_type, po.total_value, po.status, po.created_at, cat.category ORDER BY po.created_at DESC"
+    query += " GROUP BY po.id, po.po_number, po.po_series_id, po.vendor_name, po.branch, po.address_line1, po.address_line2, po.address_line3, po.city, po.state, po.country, po.pincode, po.email_address, po.contract_no, po.receive_by, po.receive_at, po.delivery_terms, po.total_value, po.status, po.created_at, cat.category ORDER BY po.created_at DESC"
     
     with connection.cursor() as cursor:
         cursor.execute(query, params)
@@ -417,6 +440,46 @@ def update_purchase_order(
                     ])
         return True
 
+def resolve_cancellation_status(po_id) -> str:
+    """
+    Determine the correct cancellation status for a PO.
+    - Returns 'Executed Cancelled' if the PO was used in any GRN or Purchase Voucher.
+    - Returns 'Cancelled' otherwise.
+    """
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT po_number FROM vendor_transaction_po WHERE id = %s", [po_id])
+            row = cursor.fetchone()
+            if not row:
+                return 'Cancelled'
+            po_number = row[0]
+
+            cursor.execute(
+                "SELECT COUNT(*) FROM inventory_operation_new_grn WHERE reference_no LIKE %s",
+                [f'%{po_number}%']
+            )
+            if cursor.fetchone()[0] > 0:
+                return 'Executed Cancelled'
+
+            cursor.execute(
+                "SELECT COUNT(*) FROM voucher_purchase_supply_inr_details WHERE purchase_order_no LIKE %s",
+                [f'%{po_number}%']
+            )
+            if cursor.fetchone()[0] > 0:
+                return 'Executed Cancelled'
+
+            cursor.execute(
+                "SELECT COUNT(*) FROM voucher_purchase_supply_foreign_details WHERE purchase_order_no LIKE %s",
+                [f'%{po_number}%']
+            )
+            if cursor.fetchone()[0] > 0:
+                return 'Executed Cancelled'
+
+    except Exception as e:
+        logger.error(f"resolve_cancellation_status error for po_id={po_id}: {e}")
+
+    return 'Cancelled'
+
 def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) -> bool:
     """
     Update PO status
@@ -435,7 +498,7 @@ def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) 
         return cursor.rowcount > 0
 def get_pending_pos_for_vendor(tenant_id: str, vendor_id: Any, vendor_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Get all pending, approved, or mailed purchase orders for a specific vendor.
+    Get all purchase orders for a specific vendor (used for GRN dropdown).
     Matches by vendor_id OR vendor_name (denormalized field).
     """
     v_id = None
@@ -446,17 +509,82 @@ def get_pending_pos_for_vendor(tenant_id: str, vendor_id: Any, vendor_name: Opti
         pass
 
     query = """
-        SELECT id, po_number
+        SELECT id, po_number, status
         FROM vendor_transaction_po
         WHERE tenant_id = %s 
           AND (
             (vendor_basic_detail_id = %s)
             OR (LOWER(TRIM(vendor_name)) = LOWER(TRIM(%s)))
           )
+          AND is_active = 1
+        ORDER BY created_at DESC
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(query, [tenant_id, v_id, vendor_name or ''])
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    return False
+
+def auto_update_po_if_fully_executed(tenant_id: str, po_number: str) -> bool:
+    """
+    If a PO is used in a GRN or Voucher, check its current status.
+    If its status is 'Cancelled', upgrade it to 'Executed Cancelled'.
+    """
+    if not po_number:
+        return False
+        
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE vendor_transaction_po
+                SET status = 'Executed Cancelled', updated_at = NOW()
+                WHERE tenant_id = %s 
+                  AND po_number = %s
+                  AND status = 'Cancelled'
+            """, [tenant_id, po_number])
+            
+            return cursor.rowcount > 0
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error auto-updating PO status: {e}")
+        
+    return False
+
+def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) -> bool:
+    """
+    Update PO status
+    
+    Returns:
+        bool: True if updated successfully
+    """
+    query = """
+        UPDATE vendor_transaction_po
+        SET status = %s, updated_by = %s, updated_at = NOW()
+        WHERE id = %s
+    """
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query, [status, updated_by, po_id])
+        return cursor.rowcount > 0
+def get_pending_pos_for_vendor(tenant_id: str, vendor_id: Any, vendor_name: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Get all purchase orders for a specific vendor (used for GRN dropdown).
+    Matches by vendor_id OR vendor_name (denormalized field).
+    """
+    v_id = None
+    try:
+        if vendor_id and str(vendor_id).isdigit():
+            v_id = int(vendor_id)
+    except (ValueError, TypeError):
+        pass
+
+    query = """
+        SELECT id, po_number, status
+        FROM vendor_transaction_po
+        WHERE tenant_id = %s 
           AND (
-            LOWER(status) NOT LIKE '%%closed%%'
-            AND LOWER(status) NOT LIKE '%%rejected%%'
-            AND LOWER(status) NOT LIKE '%%cancelled%%'
+            (vendor_basic_detail_id = %s)
+            OR (LOWER(TRIM(vendor_name)) = LOWER(TRIM(%s)))
           )
           AND is_active = 1
         ORDER BY created_at DESC

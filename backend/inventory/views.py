@@ -707,6 +707,15 @@ class InventoryOperationNewGRNViewSet(viewsets.ModelViewSet):
                 is_inward=True
             )
 
+        # Update PO Status to 'Executed Cancelled' if used
+        if instance.reference_no:
+            try:
+                from vendors import vendorpo_database as db
+                db.auto_update_po_if_fully_executed(tenant_id, instance.reference_no)
+            except Exception:
+                pass
+
+
     @action(detail=False, methods=['get'], url_path='next-grn-number')
     def next_grn_number(self, request):
         """
