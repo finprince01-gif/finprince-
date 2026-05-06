@@ -283,7 +283,10 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
 
     query = """
         SELECT 
-            po.id, po.po_number, DATE(po.created_at) as po_date, po.vendor_name, po.branch, po.receive_by,
+            po.id, po.po_number, po.po_series_id, DATE(po.created_at) as po_date, po.vendor_name, po.branch, 
+            po.address_line1, po.address_line2, po.address_line3, po.city, po.state, 
+            po.country, po.pincode, po.email_address, po.contract_no,
+            po.receive_by, po.receive_at, po.delivery_terms,
             po.total_value, po.status, po.created_at,
             cat.category as category_name,
             COUNT(items.id) as item_count
@@ -309,7 +312,7 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
         params.append(vendor_name)
     
     # Group by id and po_number to handle non-unique ids
-    query += " GROUP BY po.id, po.po_number, po.vendor_name, po.branch, po.receive_by, po.total_value, po.status, po.created_at, cat.category ORDER BY po.created_at DESC"
+    query += " GROUP BY po.id, po.po_number, po.po_series_id, po.vendor_name, po.branch, po.address_line1, po.address_line2, po.address_line3, po.city, po.state, po.country, po.pincode, po.email_address, po.contract_no, po.receive_by, po.receive_at, po.delivery_terms, po.total_value, po.status, po.created_at, cat.category ORDER BY po.created_at DESC"
     
     with connection.cursor() as cursor:
         cursor.execute(query, params)
@@ -318,6 +321,101 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
         logger.info(f"[db.get_all_purchase_orders] Returning {len(results)} results")
         return results
 
+
+def update_purchase_order(
+    po_id: int,
+    tenant_id: str,
+    po_data: Dict[str, Any],
+    items_data: List[Dict[str, Any]],
+    updated_by: Optional[str] = None
+) -> bool:
+    """
+    Update an existing purchase order with items
+    """
+    with transaction.atomic():
+        total_taxable_value = sum(Decimal(str(item.get('taxable_value', 0))) for item in items_data)
+        total_tax = sum(Decimal(str(item.get('gst_amount', 0))) for item in items_data)
+        total_value = sum(Decimal(str(item.get('invoice_value', 0))) for item in items_data)
+        
+        update_query = """
+            UPDATE vendor_transaction_po SET
+                vendor_basic_detail_id = %s,
+                vendor_name = %s,
+                branch = %s,
+                address_line1 = %s,
+                address_line2 = %s,
+                address_line3 = %s,
+                city = %s,
+                state = %s,
+                country = %s,
+                pincode = %s,
+                email_address = %s,
+                contract_no = %s,
+                receive_by = %s,
+                receive_at = %s,
+                delivery_terms = %s,
+                total_taxable_value = %s,
+                total_tax = %s,
+                total_value = %s,
+                updated_by = %s,
+                updated_at = NOW()
+            WHERE id = %s AND tenant_id = %s
+        """
+        
+        with connection.cursor() as cursor:
+            cursor.execute(update_query, [
+                po_data.get('vendor_id'),
+                po_data.get('vendor_name'),
+                po_data.get('branch'),
+                po_data.get('address_line1'),
+                po_data.get('address_line2'),
+                po_data.get('address_line3'),
+                po_data.get('city'),
+                po_data.get('state'),
+                po_data.get('country'),
+                po_data.get('pincode'),
+                po_data.get('email_address'),
+                po_data.get('contract_no'),
+                po_data.get('receive_by'),
+                po_data.get('receive_at'),
+                po_data.get('delivery_terms'),
+                total_taxable_value,
+                total_tax,
+                total_value,
+                updated_by,
+                po_id,
+                tenant_id
+            ])
+            
+            # Delete old items
+            cursor.execute("DELETE FROM vendor_transaction_po_items WHERE po_id = %s AND tenant_id = %s", [po_id, tenant_id])
+            
+            # Insert new items
+            if items_data:
+                item_query = """
+                    INSERT INTO vendor_transaction_po_items (
+                        tenant_id, po_id, item_code, item_name, supplier_item_code,
+                        quantity, uom, negotiated_rate, final_rate, taxable_value,
+                        gst_rate, gst_amount, invoice_value, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                """
+                for item in items_data:
+                    cursor.execute(item_query, [
+                        tenant_id,
+                        po_id,
+                        item.get('item_code'),
+                        item.get('item_name'),
+                        item.get('supplier_item_code'),
+                        item.get('quantity', 0),
+                        item.get('uom', 'PCS'),
+                        item.get('negotiated_rate', 0),
+                        item.get('final_rate', 0),
+                        item.get('taxable_value', 0),
+                        item.get('gst_rate', 0),
+                        item.get('gst_amount', 0),
+                        item.get('invoice_value', 0)
+                    ])
+        return True
 
 def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) -> bool:
     """

@@ -593,8 +593,14 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         setCountdownSeconds(initialEstimate);
 
         try {
-            const currentSessionId = String(Date.now());
-            uploadSessionIdRef.current = currentSessionId;
+            if (!uploadSessionIdRef.current) {
+                const newId = String(Date.now());
+                uploadSessionIdRef.current = newId;
+                console.log(`[SESSION GENERATED] ${newId}`);
+            }
+            const currentSessionId = uploadSessionIdRef.current;
+            console.log(`[SESSION USED FOR UPLOAD] ${currentSessionId}`);
+
             const formData = new FormData();
             newFiles.forEach(f => {
                 formData.append('files', f);
@@ -613,6 +619,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 formData.append('no_persist', 'true');
             }
 
+            console.log(`[UPLOAD STARTED] Files: ${newFiles.length} | Session: ${currentSessionId}`);
             const response = await httpClient.postFormData<any>('/api/bulk-upload/', formData);
 
             if (isOthersMode && response.results) {
@@ -624,6 +631,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             }
 
             if (response.job_id) {
+                console.log(`[UPLOAD SUCCESS] Job ID: ${response.job_id} | Session: ${currentSessionId}`);
                 // Tracking uploaded file paths to ensure scope parity (Step 3: store currentFile)
                 const newPaths = response.file_paths || [response.file_path].filter(Boolean) || [];
                 setStagedFilePaths(prev => [...prev, ...newPaths]);
@@ -635,7 +643,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     processed: 0,
                     failed: 0,
                     pending: response.total_files,
-                    status: 'processing'
+                    status: 'processing',
+                    completed: false
                 });
                 startTimeRef.current = Date.now();
                 
@@ -712,7 +721,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
             const normalizedItems = rawItems.map((ritem: any) => {
                 const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
-                const ni: any = {};
+                // FIX: Preserve original data to prevent blank cells
+                const ni: any = { ...flatItem };
                 const itemColsToMap = (extractionMode === 'tally' || extractionMode === 'zoho') ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
                 itemColsToMap.forEach(f => {
                     ni[f] = getCellValue(flatItem, f);
@@ -739,9 +749,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             const params: Record<string, string> = {};
             if (uploadSessionIdRef.current) {
                 params.upload_session_id = uploadSessionIdRef.current;
+                console.log(`[SESSION USED FOR STAGING FETCH] ${uploadSessionIdRef.current}`);
             }
 
             const response: any = await httpClient.get('/api/ocr-staging/', params);
+            console.log("[RAW API RESPONSE]", response); // Forensic Log 1
             let stagedResults = Array.isArray(response) ? response : (response?.data || []);
 
             // ── Step 3.6: Apply Zoho Reconstruction (Step 1-3) ──
@@ -888,6 +900,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 // ────────────────────────────────────────────────────────────────
 
                 const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
+                console.log("[RAW INVOICE ITEMS]", rawItems); // Forensic Log 3
 
                 const normalizedHeader: Record<string, string> = {};
                 // Fix: ALL_COLUMNS already handles the extractionMode logic correctly (tally, zoho, or default)
@@ -911,18 +924,20 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 normalizedHeader['Voucher Type Name'] = fileName;
                 normalizedHeader['File Name'] = fileName;
 
-                const normalizedItems = rawItems.map((ritem: any) => {
-                    // Items are usually already flat, but check if there's an 'item' wrapper
-                    const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
-                    const ni: any = {};
-                    // Fix: Use ALL_COLUMNS for Zoho mode as well
-                    const itemColsToMap = (extractionMode === 'tally' || extractionMode === 'zoho') ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
+                    const normalizedItems = rawItems.map((ritem: any) => {
+                        // Items are usually already flat, but check if there's an 'item' wrapper
+                        const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
+                        // FIX: Preserve original data to prevent blank cells (Requirement 1/2)
+                        const ni: any = { ...flatItem }; 
+                        // Fix: Use ALL_COLUMNS for Zoho mode as well
+                        const itemColsToMap = (extractionMode === 'tally' || extractionMode === 'zoho') ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
 
-                    itemColsToMap.forEach(f => {
-                        ni[f] = getCellValue(flatItem, f);
+                        itemColsToMap.forEach(f => {
+                            ni[f] = getCellValue(flatItem, f);
+                        });
+                        return ni;
                     });
-                    return ni;
-                });
+                    console.log("[NORMALIZED ITEMS]", normalizedItems); // Forensic Log 4
 
                 return {
                     invoice: normalizedHeader,
@@ -934,6 +949,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 };
             }).filter((res: any) => res.items.length > 0 || Object.keys(res.invoice).length > 0);
 
+            console.log("[SETTING OCR DATA]", mappedResults); // Forensic Log 2
             setInvoiceResults(mappedResults);
 
             if (mappedResults.length > 0 && onExtractionSuccess) {
@@ -952,19 +968,46 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     const startPolling = (jobId: number) => {
         if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-        let currentInterval = 5000;
+        console.log(`[POLLING STARTED] Monitoring Job: ${jobId}`);
+        
+        let consecutiveNoChange = 0;
+        let lastProcessed = -1;
+        let currentInterval = 2000; // 2s as requested
+        let isPollingActive = true;
 
         const poll = async () => {
+            if (!isPollingActive) return;
+            
             try {
                 const status = await httpClient.get<any>(`/api/bulk-status/${jobId}/`);
+                console.log(`[POLLING RESPONSE] Job: ${jobId} | Progress: ${status.progress}% | Completed: ${status.completed}`);
                 setBulkStatus(status);
-                if (status.processed > 0) await fetchStagingData();
+                
+                const currentProcessed = (status.processed || 0) + (status.failed || 0);
+                
+                // Adaptive Interval Logic
+                if (currentProcessed > lastProcessed) {
+                    consecutiveNoChange = 0;
+                    currentInterval = 2000; 
+                } else {
+                    consecutiveNoChange++;
+                    if (consecutiveNoChange > 5) {
+                        currentInterval = Math.min(currentInterval + 2000, 10000);
+                    }
+                }
+                lastProcessed = currentProcessed;
 
-                if (status.status === 'completed' || status.status === 'failed' || status.status === 'success') {
-                    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                // ── SYNC FIX: ONLY FETCH STAGING WHEN FULLY COMPLETED ──
+                if (status.completed) {
+                    console.log(`[OCR COMPLETED] Job: ${jobId}. Fetching results...`);
+                    isPollingActive = false;
                     setIsExtracting(false);
                     startTimeRef.current = null;
+                    
+                    console.log(`[STAGING FETCH START] Session: ${uploadSessionIdRef.current}`);
                     await fetchStagingData();
+                    console.log(`[STAGING FETCH COMPLETED]`);
+
                     if (status.status !== 'failed') {
                         showSuccess(`✅ Processing completed! ${status.processed} processed, ${status.failed} failed.`);
                     }
@@ -974,42 +1017,35 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 // ── Accurate Time Remaining Calculation ──
                 if (startTimeRef.current && status.total > 0) {
                     const elapsedMs = Date.now() - startTimeRef.current;
-                    const processedCount = status.processed + status.failed;
-                    const remainingCount = status.total - processedCount;
+                    const remainingCount = status.total - currentProcessed;
 
-                    if (processedCount > 0) {
-                        // ── "File Analysis" Polling Update ──
-                        const msPerFile = elapsedMs / processedCount;
-                        // Use the "correct" batch divisor of 10 from the Purchase module
+                    if (currentProcessed > 0) {
+                        const msPerFile = elapsedMs / currentProcessed;
                         const remainingBatches = Math.ceil(remainingCount / 10);
                         const zohoBuffer = extractionMode === 'zoho' ? 5 : 0;
                         const newEstimateSeconds = Math.max(1, Math.round((remainingBatches * msPerFile) / 1000) + zohoBuffer);
                         
                         setCountdownSeconds(prev => {
                             if (prev === null) return newEstimateSeconds;
-                            // Smoothing: If the new estimate is very different, move toward it 
-                            // but avoid huge jumps that feel "random" to the user.
                             if (Math.abs(prev - newEstimateSeconds) > 3) {
-                                // Gradual adjustment toward the new reality
-                                return newEstimateSeconds > prev ? prev + 2 : prev - 2;
+                                return newEstimateSeconds > prev ? prev + 1 : prev - 1;
                             }
                             return prev;
                         });
                     }
                 }
-
-                const progress = (status.processed + status.failed) / status.total;
-                const nextInterval = progress >= 0.5 ? 5000 : 2000;
-                if (nextInterval !== currentInterval) {
-                    currentInterval = nextInterval;
-                    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-                    pollingIntervalRef.current = setInterval(poll, currentInterval);
-                }
             } catch (err) {
-                console.error("Polling error:", err);
+                console.error("[POLLING ERROR]", err);
+                currentInterval = 10000; 
+            }
+
+            if (isPollingActive) {
+                // @ts-ignore
+                pollingIntervalRef.current = setTimeout(poll, currentInterval);
             }
         };
-        pollingIntervalRef.current = setInterval(poll, currentInterval);
+
+        poll();
     };
 
 
@@ -1588,6 +1624,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     {/* Data Table */}
                     {displayRows.length > 0 && (
                         <div className="flex-1 flex flex-col min-h-0 border rounded-[4px] mt-2">
+                            {/* Forensic Trace before Table */}
+                            {(() => { console.log("[TABLE DATA SOURCE]", displayRows); return null; })()}
                             {/* Single wrapper for both horizontal and vertical scrolling */}
                             <div className="overflow-auto max-h-[65vh]">
                                 <table className="min-w-[1500px] w-full divide-y divide-gray-200 border-collapse">
@@ -1607,55 +1645,126 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white">
-                                        {displayRows.map((row) => (
-                                            <tr
-                                                key={row.key}
-                                                className={`${row.isFirstOfInvoice
-                                                    ? 'border-t-2 border-gray-300'
-                                                    : 'border-t border-gray-100'
-                                                    } hover:bg-gray-50`}
-                                            >
-                                                {visibleColumns.map((col) => {
-                                                    const cellValue = resolveZohoValue(row.header, row.item, col);
-                                                    
-                                                    // TRACE: Log rendering value for address
-                                                    if (col === 'Bill Address From' && row.isFirstOfInvoice && row.itemIdx === 0) {
-                                                        console.log("TRACE_UI_RENDER - row.header:", row.header);
-                                                        console.log("TRACE_UI_RENDER - cellValue for Bill Address From:", cellValue);
-                                                    }
-                                                    
-                                                    // Check if field was mapped confidently
-                                                    const currentRes = invoiceResults[row.invoiceIdx];
-                                                    const isFieldItem = isItemField(col);
-                                                    
-                                                    const isAddressCol = col.toLowerCase().includes('address') || col.toLowerCase().includes('from') || col.toLowerCase().includes('to');
-                                                    
-                                                    return (
-                                                        <td
-                                                            key={col}
-                                                            className={`px-4 py-2 text-sm text-gray-900 border-r border-gray-100 last:border-r-0 max-w-[300px] ${isAddressCol ? 'whitespace-pre-wrap' : 'truncate'}`}
-                                                            title={String(cellValue ?? '')}
-                                                        >
-                                                            {isAddressCol ? (
-                                                                <textarea
-                                                                    value={String(cellValue ?? '')}
-                                                                    onChange={(e) => handleCellChange(row.invoiceIdx, row.itemIdx, col, e.target.value)}
-                                                                    rows={2}
-                                                                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm resize-none"
-                                                                />
-                                                            ) : (
-                                                                <input
-                                                                    type="text"
-                                                                    value={String(cellValue ?? '')}
-                                                                    onChange={(e) => handleCellChange(row.invoiceIdx, row.itemIdx, col, e.target.value)}
-                                                                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm overflow-hidden text-ellipsis"
-                                                                />
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        ))}
+                                        {displayRows.map((row) => {
+                                            // ── MANDATORY FORENSIC TRACING (Requirement: Mission) ──
+                                            console.log("[FULL TABLE ROW]", row);
+                                            console.log("[ROW KEYS]", Object.keys(row));
+                                            console.log("[ROW.ITEM]", row.item);
+                                            console.log("[ROW.ORIGINAL]", (row as any).original);
+
+                                            // ── MANDATORY ITEM NORMALIZATION (Requirement 1) ──
+                                            const item = row.item;
+                                            const normalizedItem = {
+                                                description: item.description || item.item_name || item['Item Name'] || item['Description'] || item.item_description || "",
+                                                hsn: item.hsn || item.hsn_sac || item['HSN/SAC'] || item['HSN'] || item['hsn_sac'] || "",
+                                                qty: item.qty || item.quantity || item['Qty'] || item['Quantity'] || item['billed_quantity'] || 0,
+                                                rate: item.rate || item.item_rate || item['Item Rate'] || item['Rate'] || item['item_rate'] || 0,
+                                                taxable_value: item.taxable_value || item['Taxable Value'] || item['taxable_amount'] || 0,
+                                                uom: item.uom || item['UOM'] || item['unit'] || "",
+                                            };
+
+                                            // ── FORENSIC LOGS (Requirement 3 & 6) ──
+                                            console.log("[ROW ITEM IDENTITY TRACE]", item);
+                                            console.log("[NORMALIZED ITEM]", normalizedItem);
+
+                                            return (
+                                                <tr
+                                                    key={row.key}
+                                                    className={`${row.isFirstOfInvoice
+                                                        ? 'border-t-2 border-gray-300'
+                                                        : 'border-t border-gray-100'
+                                                        } hover:bg-gray-50`}
+                                                >
+                                                    {visibleColumns.map((col) => {
+                                                        // ── RAW BACKEND KEY MAPPING (Requirement 1) ──
+                                                        const COLUMN_TO_KEY: Record<string, string> = {
+                                                            'item name': 'description',
+                                                            'item description': 'description',
+                                                            'hsn/sac': 'hsn',
+                                                            'hsn': 'hsn',
+                                                            'qty': 'qty',
+                                                            'quantity': 'qty',
+                                                            'actual quantity': 'qty',
+                                                            'billed quantity': 'qty',
+                                                            'item rate': 'rate',
+                                                            'rate': 'rate',
+                                                            'taxable value': 'taxable_value',
+                                                            'total taxable value': 'total_taxable_value',
+                                                            'invoice value': 'total_invoice_value',
+                                                            'total invoice value': 'total_invoice_value',
+                                                            'voucher number': 'invoice_number',
+                                                            'invoice number': 'invoice_number',
+                                                            'voucher date': 'invoice_date',
+                                                            'invoice date': 'invoice_date',
+                                                            'date': 'invoice_date',
+                                                            'gstin': 'gstin',
+                                                            'vendor gstin': 'gstin',
+                                                            'uom': 'uom',
+                                                            'quantity uom': 'uom'
+                                                        };
+
+                                                        const backendKey = COLUMN_TO_KEY[col.toLowerCase()] || col;
+                                                        const isItem = isItemField(col);
+                                                        
+                                                        let cellValue: any = isItem ? row.item[backendKey] : row.header[backendKey];
+
+                                                        // ── CELL DEBUG LOG (Requirement: Mandatory) ──
+                                                        if (isItem) {
+                                                            console.log("[CELL DEBUG]", {
+                                                                col,
+                                                                backendKey,
+                                                                row,
+                                                                item: row.item,
+                                                                description: (row.item as any)?.description,
+                                                                qty: (row.item as any)?.qty,
+                                                                hsn: (row.item as any)?.hsn,
+                                                                resolvedValue: cellValue
+                                                            });
+                                                        }
+                                                        
+                                                        // Fallback to aliased resolver if direct backend key is missing
+                                                        if (cellValue === undefined || cellValue === null || cellValue === '') {
+                                                            cellValue = resolveZohoValue(row.header, row.item, col);
+                                                        }
+
+                                                        console.log("[CELL ACCESS]", col, "->", backendKey, ":", cellValue);
+
+                                                        // TRACE: Log rendering value for address
+                                                        if (col === 'Bill Address From' && row.isFirstOfInvoice && row.itemIdx === 0) {
+                                                            console.log("TRACE_UI_RENDER - row.header:", row.header);
+                                                            console.log("TRACE_UI_RENDER - cellValue for Bill Address From:", cellValue);
+                                                        }
+                                                        
+                                                        // Check if field was mapped confidently
+                                                        const isAddressCol = col.toLowerCase().includes('address') || col.toLowerCase().includes('from') || col.toLowerCase().includes('to');
+                                                        
+                                                        return (
+                                                            <td
+                                                                key={col}
+                                                                className={`px-4 py-2 text-sm text-gray-900 border-r border-gray-100 last:border-r-0 max-w-[300px] ${isAddressCol ? 'whitespace-pre-wrap' : 'truncate'}`}
+                                                                title={String(cellValue ?? '')}
+                                                            >
+                                                                {isAddressCol ? (
+                                                                    <textarea
+                                                                        value={String(cellValue ?? '')}
+                                                                        onChange={(e) => handleCellChange(row.invoiceIdx, row.itemIdx, col, e.target.value)}
+                                                                        rows={2}
+                                                                        className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm resize-none"
+                                                                    />
+                                                                ) : (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={String(cellValue ?? '')}
+                                                                        onChange={(e) => handleCellChange(row.invoiceIdx, row.itemIdx, col, e.target.value)}
+                                                                        className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm overflow-hidden text-ellipsis"
+                                                                    />
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>

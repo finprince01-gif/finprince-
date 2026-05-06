@@ -49,19 +49,40 @@ def process_invoice_upload(
         # 2. Duplicate Detection / Lifecycle Management
         existing = repo.find_by_hash_and_tenant(file_hash, tenant_id)
         if existing and existing.extracted_data:
+            logger.error(f"[TRACE] service.lookup_hit | record_id={existing.id} | session={existing.upload_session_id} | py_id={id(existing)}")
             logger.info(f"Duplicate detect: Reusing existing record {existing.id}")
-            if existing.upload_session_id != upload_session_id:
-                existing.upload_session_id = upload_session_id
-                existing.save()
             
+            if existing.upload_session_id != upload_session_id:
+                # MANDATORY: DO NOT OVERWRITE. CLONE INSTEAD (Requirement 3)
+                logger.error(f"[TRACE] service.cloning | old_session={existing.upload_session_id} | new_session={upload_session_id}")
+                record = repo.create_record(
+                    file_hash, 
+                    seg_file_name, 
+                    voucher_type, 
+                    tenant_id, 
+                    upload_session_id
+                )
+                record.extracted_data = existing.extracted_data
+                record.ocr_raw_text = existing.ocr_raw_text
+                record.supplier_invoice_no = existing.supplier_invoice_no
+                record.gstin = existing.gstin
+                record.branch = existing.branch
+                record.status = existing.status
+                record.validation_status = existing.validation_status
+                record.vendor_id = existing.vendor_id
+                record.save()
+                logger.error(f"[TRACE] service.clone_success | record_id={record.id} | session={record.upload_session_id}")
+            else:
+                record = existing
+
             results.append({
-                "id": existing.id,
-                "file_hash": existing.file_hash,
-                "status": existing.status,
-                "data": existing.extracted_data,
+                "id": record.id,
+                "file_hash": record.file_hash,
+                "status": record.status,
+                "data": record.extracted_data,
                 "is_duplicate": True,
-                "vendor_id": existing.vendor_id,
-                "validation_status": existing.validation_status
+                "vendor_id": record.vendor_id,
+                "validation_status": record.validation_status
             })
             continue
         

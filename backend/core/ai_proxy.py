@@ -21,6 +21,75 @@ load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
+def safe_extract_json(text: str) -> Optional[str]:
+    """
+    Production-grade JSON extractor.
+    - Handles ```json ... ``` blocks
+    - Handles ``` ... ``` blocks
+    - Handles plain JSON text
+    - Locates boundaries by brace counting
+    - Sanitizes control characters
+    """
+    if not text:
+        return None
+        
+    # Remove potentially dangerous control characters except common whitespace
+    text = "".join(ch for ch in text if ch >= " " or ch in "\n\r\t")
+    
+    clean_text = text.strip()
+    
+    # 1. Standard markdown extract
+    if "```json" in clean_text:
+        try:
+            clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+        except IndexError:
+            pass
+    elif "```" in clean_text:
+        try:
+            clean_text = clean_text.split("```")[1].split("```")[0].strip()
+        except IndexError:
+            pass
+            
+    # 2. Brace-based boundary detection (if it's not already just a JSON string)
+    if not (clean_text.startswith('{') and (clean_text.endswith('}') or clean_text.endswith(']'))):
+        start = clean_text.find('{')
+        if start == -1:
+            start = clean_text.find('[')
+            
+        if start != -1:
+            brace_count = 0
+            bracket_count = 0
+            for i in range(start, len(clean_text)):
+                char = clean_text[i]
+                if char == '{': brace_count += 1
+                elif char == '}': brace_count -= 1
+                elif char == '[': bracket_count += 1
+                elif char == ']': bracket_count -= 1
+                
+                if brace_count == 0 and bracket_count == 0:
+                    return clean_text[start:i+1].strip()
+    
+    return clean_text if (clean_text.startswith('{') or clean_text.startswith('[')) else None
+
+def repair_json(text: str) -> str:
+    """
+    Emergency JSON repair layer for common LLM hallucinations.
+    """
+    if not text: return ""
+    
+    # Replace smart quotes
+    repaired = text.replace('“', '"').replace('”', '"').replace('‘', "'").replace('’', "'")
+    
+    # Fix trailing commas in objects and arrays
+    repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+    
+    # Fix potential single quotes used as double quotes
+    # (Only if we find key patterns like 'key': "value")
+    if re.search(r"'\w+'\s*:", repaired):
+        repaired = re.sub(r"'(\w+)'\s*:", r'"\1":', repaired)
+        
+    return repaired
+
 
 class APIKeyManager:
     """Manages multiple API keys with rate limiting and health tracking"""
@@ -165,10 +234,10 @@ class AIRequestQueue:
     def enqueue(self, request_data: dict) -> dict:
         # Check Redis Health
         if not redis_client.available:
-            return self._enqueue_local(request_data)
+            logger.error("[REDIS DOWN] Cannot enqueue AI task. Redis unavailable.")
+            return {'error': 'AI System Unavailable (Redis Down)', 'code': 'REDIS_DOWN', 'status': 503}
 
         # Backpressure control (Admission Control)
-        # Threshold increased to 20,000 for high-concurrency absorbency
         TOTAL_LIMIT = 20000
         q_len = redis_client.get_queue_length(self.queue_name)
         if q_len > TOTAL_LIMIT:
@@ -196,8 +265,8 @@ class AIRequestQueue:
         
         pushed = redis_client.push_to_queue(self.queue_name, task)
         if not pushed:
-            logger.warning("[REDIS DOWN] Enqueue failed. Falling back to local in-memory processing.")
-            return self._enqueue_local(request_data)
+            logger.error("[REDIS ERROR] Failed to push task to queue.")
+            return {'error': 'AI System Error (Enqueue Failed)', 'code': 'ENQUEUE_FAILED', 'status': 500}
 
         redis_client.record_metric('ai_queue_length', q_len + 1)
         logger.info(f"[Queue] Enqueued task {request_id}. Current Size: {q_len + 1}")
@@ -226,29 +295,7 @@ class AIRequestQueue:
             'event': event,
             'result': None
         }
-        self._local_queue.put(task)
-        if not event.wait(timeout=360):
-            return {'error': 'AI request timed out in local fallback queue'}
-        return task['result']
 
-    def _start_local_workers(self):
-        self._local_worker_started = True
-        def worker_loop():
-            while True:
-                task = self._local_queue.get()
-                try:
-                    task['result'] = process_ai_request(task['request_data'])
-                    task['event'].set()
-                except Exception as e:
-                    logger.error(f"Local AI worker error: {e}")
-                    task['result'] = {'error': str(e)}
-                    task['event'].set()
-                finally:
-                    self._local_queue.task_done()
-        
-        t = threading.Thread(target=worker_loop, daemon=True, name="LocalAIWorker")
-        t.start()
-        logger.info("[FALLBACK] Local AI worker thread started.")
 
 ai_request_queue = AIRequestQueue()
 
@@ -539,32 +586,92 @@ def _call_gemini_single(prompt: Any, request_data: dict, api_key: str, model_nam
         )
     )
 
-    if not response.text:
-        raise ValueError(f"Empty response from {model_name}. Check safety filters.")
+    # ── RAW RESPONSE LOGGING & DEFENSIVE VALIDATION ──
+    try:
+        # 1. Log the full raw response object for deep debugging
+        safe_user = request_data.get('user_id') or 'unknown'
+        logger.info(f"AI Response Received: user={safe_user}, model={model_name}")
+        
+        # 2. Check for existence of candidates
+        if not hasattr(response, 'candidates') or not response.candidates:
+            logger.error(f"[GEMINI FAIL] No candidates found in response object: {repr(response)}")
+            raise ValueError("Gemini returned zero candidates. Possible safety block or internal error.")
+            
+        candidate = response.candidates[0]
+        
+        # 3. Log Finish Reason and Safety
+        finish_reason = getattr(candidate, 'finish_reason', 'UNKNOWN')
+        safety_ratings = getattr(candidate, 'safety_ratings', [])
+        
+        # Defensive: handle potential None from getattr if attribute exists but is null
+        if safety_ratings is None:
+            safety_ratings = []
+            
+        logger.info(f"[GEMINI TRACE] Finish Reason: {finish_reason} | Safety Ratings: {len(safety_ratings)}")
 
-    logger.info(f"AI Response Status: SUCCESS | Model: {model_name} | Time: {time.monotonic() - t_start:.2f}s")
+        if finish_reason == 'SAFETY':
+             logger.error(f"[GEMINI BLOCKED] Content blocked by safety filters. Ratings: {repr(safety_ratings)}")
+             raise ValueError("Content blocked by AI safety filters.")
 
-    # Robust Extraction: Remove markdown blocks if present
-    clean_text = response.text.strip()
-    if "```json" in clean_text:
-        clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-    elif "```" in clean_text:
-        clean_text = clean_text.split("```")[1].split("```")[0].strip()
+        # 4. Safe Traversal of Content -> Parts
+        if not hasattr(candidate, 'content') or candidate.content is None:
+            logger.error(f"[GEMINI FAIL] Candidate has no content: {repr(candidate)}")
+            raise ValueError(f"Gemini candidate content is missing. Reason: {finish_reason}")
 
-    # BASIC JSON REPAIR (Safety Layer)
+        if not hasattr(candidate.content, 'parts') or not candidate.content.parts:
+            logger.error(f"[GEMINI FAIL] Candidate content has no parts: {repr(candidate.content)}")
+            raise ValueError("Gemini returned empty parts list.")
+
+        # 5. Extract Text Safely
+        response_text = response.text
+        if not response_text:
+            logger.error(f"[GEMINI FAIL] response.text is empty despite valid parts structure. Raw: {repr(response)}")
+            raise ValueError("Empty text returned from Gemini SDK.")
+
+    except (AttributeError, IndexError, TypeError) as e:
+        logger.error(f"[SDK CRITICAL] Failed to traverse Gemini response structure: {str(e)}")
+        logger.error(f"RAW OBJECT TRACE: {repr(response)}")
+        raise ValueError(f"Incompatible Gemini SDK response structure: {str(e)}")
+
+    logger.info(f"AI Response Status: SUCCESS | Size: {len(response_text)} chars | Time: {time.monotonic() - t_start:.2f}s")
+
+    # FORENSIC LOGGING: Response Preview
+    preview = (response_text[:500] + "...") if len(response_text) > 500 else response_text
+    logger.info(f"[GEMINI PREVIEW] Raw Output Start: {repr(preview)}")
+
+    clean_text = safe_extract_json(response_text)
+    if not clean_text:
+        logger.warning("[PARSER] No JSON boundaries detected. Returning raw text.")
+        return response_text.strip()
+
+    # ── PRODUCTION-GRADE JSON RECOVERY ──
     try:
         json.loads(clean_text)
-    except json.JSONDecodeError:
-        repaired = re.sub(r"\'", '"', clean_text)
-        repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+        return clean_text
+    except json.JSONDecodeError as e:
+        logger.warning(f"[PARSER] Initial JSON parse failed: {str(e)}. Attempting repair...")
+        
+        # Level 1: Basic repair (regex based)
+        repaired = repair_json(clean_text)
         try:
             json.loads(repaired)
-            clean_text = repaired
-            logger.info("Successfully repaired AI JSON output.")
+            logger.info("[PARSER] Successfully recovered JSON via Level 1 repair.")
+            return repaired
         except:
-            pass  # Return original; let caller handle
-
-    return clean_text
+            pass
+            
+        # Level 2: Strict sanitation (remove all control chars and extra whitespace)
+        # This is a bit more aggressive than the initial filter
+        sanitized = "".join(c for c in repaired if ord(c) >= 32)
+        try:
+            json.loads(sanitized)
+            logger.info("[PARSER] Successfully recovered JSON via Level 2 sanitation.")
+            return sanitized
+        except:
+            pass
+            
+        logger.error(f"[PARSER] ALL recovery attempts failed for response. Size: {len(clean_text)}")
+        return clean_text # Return as is; caller will handle final failure
 
 
 def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
@@ -633,6 +740,23 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
                     prompt, request_data, api_key_used, model_name,
                     f"Attempt {attempt + 1}", public_ip
                 )
+                
+                # Validation of result (especially for extraction)
+                if request_data.get('type') in ('extraction', 'invoice'):
+                    try:
+                        # Attempt final parse. _call_gemini_single already tried to repair it.
+                        json.loads(result)
+                    except Exception as parse_err:
+                        # EMERGENCY: Try one last time with strict repair
+                        try:
+                            recovered = repair_json(result)
+                            json.loads(recovered)
+                            logger.info("[RECOVERY] Final salvage successful in retry loop.")
+                            return recovered
+                        except:
+                            logger.warning(f"Malformed JSON from {model_name}: {str(parse_err)}. Retrying...")
+                            continue # Force retry on malformed JSON
+                
                 return result
 
             except exceptions.NotFound as e:
@@ -672,10 +796,11 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
 
         # All models failed for this outer attempt
         if attempt < max_attempts - 1:
-            is_retryable = isinstance(last_error, (exceptions.ResourceExhausted, exceptions.DeadlineExceeded))
+            # Retry on 429, 504, or Empty/Malformed responses (ValueError)
+            is_retryable = isinstance(last_error, (exceptions.ResourceExhausted, exceptions.DeadlineExceeded, ValueError))
 
             err_msg = str(last_error).lower()
-            if "timeout" in err_msg or "handshake" in err_msg or "connection" in err_msg:
+            if any(term in err_msg for term in ["timeout", "handshake", "connection", "empty", "json"]):
                 is_retryable = True
 
             if is_retryable:
@@ -704,22 +829,21 @@ class AIServiceProxy:
     """Main AI service interface"""
 
     def __init__(self):
-        self.concurrency_semaphore = threading.Semaphore(1)  # Sequential: only ONE AI request active at a time
+        # Global concurrency limit to prevent overwhelming the AI provider
+        # especially during multi-page fanout.
+        max_concurrency = getattr(settings, 'AI_MAX_CONCURRENCY', 2)
+        self.concurrency_semaphore = threading.Semaphore(max_concurrency)
 
     def make_request(self, request_type: str, request_data: dict,
                     user_id: str, tenant_id: str = None) -> dict:
         """Main entry point for AI requests (In-process)"""
+        # Limit global concurrency to prevent overloading the system
+        with self.concurrency_semaphore:
+            return self._execute_request(request_type, request_data, user_id, tenant_id)
 
-        # ── BLOCK DIRECT INVOICE PROCESSING ────────────────────────────────
-        if request_type == 'invoice':
-            # Production MUST use the Kafka pipeline (/api/vouchers/upload).
-            # Note: We allow 'master' type to continue directly as it skips the heavy pipeline.
-            logger.critical(f"SECURITY ERROR: Blocked direct invoice processing for user {user_id}. All OCR must use Kafka.")
-            return {
-                'error': 'Service Unavailable: Direct AI Extraction has been disabled. Please upload invoices via the standard pipeline (Kafka).',
-                'code': 'SERVICE_UNAVAILABLE',
-                'status': 503
-            }
+    def _execute_request(self, request_type: str, request_data: dict,
+                    user_id: str, tenant_id: str = None) -> dict:
+
 
         # Check circuit breaker
         if circuit_breaker.is_open():
@@ -763,14 +887,44 @@ class AIServiceProxy:
             'cache_key': cache_key
         })
 
-        # Process via central AI Request Queue (Adaptive Throttling & Concurrency)
+        # ── CENTRALIZED QUEUEING (NO BYPASS) ──────────────────────────
+        # All requests must flow through the central AI Request Queue to ensure
+        # adaptive throttling, concurrency control, and fair use.
         try:
             logger.info(f"Enqueuing {request_type} request for user {user_id}")
             result = ai_request_queue.enqueue(full_request)
+            
+            # If caller is a worker or needs the result immediately, poll for it.
+            if request_data.get('wait_for_result'):
+                job_id = result.get('job_id')
+                if not job_id:
+                    return result
+                
+                logger.info(f"Worker waiting for AI result: {job_id}")
+                return self._wait_for_completion(job_id)
+
             return result
         except Exception as e:
             logger.error(f"Queue submission failed: {e}")
             return {'error': f'Service busy (Queue error): {str(e)}'}
+
+    def _wait_for_completion(self, job_id: str, timeout: int = 120) -> dict:
+        """Polls Redis for the result of a queued AI job."""
+        start_time = time.time()
+        result_key = f"ai_result:{job_id}"
+        
+        while time.time() - start_time < timeout:
+            try:
+                raw_res = cache.get(result_key)
+                if raw_res:
+                    if isinstance(raw_res, str):
+                        return json.loads(raw_res)
+                    return raw_res
+            except Exception:
+                pass
+            time.sleep(1) # Poll every second
+            
+        return {'error': 'AI processing timed out in queue.'}
 
     def get_stats(self) -> dict:
         """Get service statistics"""

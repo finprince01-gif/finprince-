@@ -68,7 +68,7 @@ class PaymentVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSe
             'reference_number', 'ref_no', 'pending_amount', 'balance_after', 'invoice_date',
             'transaction_details', 'pay_to_ledger', 'pay_to_ledger_name',
             'type', 'id_ref', 'vendor_name', 'customer_name',
-            'advance_ref_no', 'allocations'
+            'advance_ref_no', 'allocations', 'narration', 'posting_note'
 
         ]
         extra_kwargs = {
@@ -525,6 +525,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     is_advance=(it_type == 'ADVANCE'),
                     advance_ref_no=it_adv_ref,
                     ref_no=item_data.get('ref_no', v_ref_no_provided),
+                    narration=item_data.get('narration') or v_narr_provided,
                     posting_note=(
                         item_data.get('posting_note') or 
                         item_data.get('postingNote') or 
