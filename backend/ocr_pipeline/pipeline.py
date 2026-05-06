@@ -25,28 +25,34 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
     """
     print("NEW OCR PIPELINE ACTIVE")
     print("PIPELINE EXECUTED")
+    logger.error(f"[TRACE] run_ocr_pipeline.entry | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
     logger.info(f"NEW OCR PIPELINE ACTIVE - Start processing record {record.id}...")
     
-    # STEP 1: Process Extraction
     try:
-        # Phase 1: High-Precision Extraction (Gemini via central Proxy)
-        # We no longer need to initialize a client here as extract_invoice handles it via the proxy
-        extracted = extract_invoice(
-            client=None, # Client is now handled internally by the proxy
-            file_bytes=file_bytes, 
-            voucher_type=record.voucher_type or 'Purchase',
-            public_ip="0.0.0.0",
-            user_id='system',
-            tenant_id=str(record.tenant_id or 'system')
-        )
-        
-        # Check for extraction-level errors (e.g. JSON decode failure)
-        if "_error" in extracted:
-            raise RuntimeError(f"Extraction Error: {extracted.get('_error')} - {extracted.get('_raw', '')[:100]}...")
+        # STEP 0: DEDUPE BYPASS
+        if record.extracted_data:
+            logger.info(f"[PIPELINE BYPASS] Reusing existing extraction data for record {record.id}")
+            normalized = record.extracted_data
+        else:
+            # STEP 1: Process Extraction
+            # Phase 1: High-Precision Extraction (Gemini via central Proxy)
+            extracted = extract_invoice(
+                client=None, 
+                file_bytes=file_bytes, 
+                voucher_type=record.voucher_type or 'Purchase',
+                public_ip="0.0.0.0",
+                user_id='system',
+                tenant_id=str(record.tenant_id or 'system')
+            )
+            
+            if "_error" in extracted:
+                raise RuntimeError(f"Extraction Error: {extracted.get('_error')} - {extracted.get('_raw', '')[:100]}...")
 
-        # Phase 2: Hierarchical Normalization
-        normalized = normalize(extracted)
-        
+            # Phase 2: Hierarchical Normalization
+            normalized = normalize(extracted)
+            if not normalized:
+                raise RuntimeError("Normalization produced empty result")
+            
         # Inject folder path for UI visibility (especially for folder-based batch uploads)
         normalized['folder_path'] = record.file_path
         
@@ -55,11 +61,20 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
         record.status = 'EXTRACTED'
         
         # Flatten critical headers to top-level model fields for easier querying/UI display
-        record.supplier_invoice_no = normalized.get("supplier_invoice_no")
-        record.gstin = normalized.get("gstin")
-        record.branch = normalized.get("sections", {}).get("supplier_details", {}).get("branch")
+        sections = normalized.get("sections", {})
+        supplier = sections.get("supplier_details", {})
         
-        record.save()
+        record.supplier_invoice_no = normalized.get("supplier_invoice_no") or supplier.get("supplier_invoice_no")
+        record.gstin = normalized.get("gstin") or supplier.get("gstin")
+        record.branch = normalized.get("branch") or supplier.get("branch")
+        
+        logger.error(f"[TRACE] run_ocr_pipeline.before_save | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
+        record.save(update_fields=[
+            'extracted_data', 'status', 'supplier_invoice_no', 
+            'gstin', 'branch'
+        ])
+        logger.error(f"[TRACE] run_ocr_pipeline.after_save | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
+        logger.info(f"[STAGING SAVE SUCCESS] Record {record.id} saved (excluding session_id to prevent race)")
             
         # STEP 3: IMMEDIATELY call validation and processing
         logger.info(f"PIPELINE: Extraction complete for record {record.id}. Starting immediate validation...")
@@ -102,11 +117,17 @@ def finalize_merged_records(records, auto_save: bool = True):
     
     all_items = []
     for r in records:
-        data = r.extracted_data or {}
+        if not r.extracted_data:
+            logger.warning(f"Record {r.id} has no extracted data, skipping in merge.")
+            continue
+        data = r.extracted_data
         sections = data.get("sections", {})
         all_items.extend(sections.get("items", []))
             
     # ── Phase 2: Create a virtual merged state ──
+    if not primary.extracted_data:
+        return {"status": "ERROR", "error": "Primary record has no extracted data"}
+        
     merged_data = primary.extracted_data.copy()
     if "sections" not in merged_data: merged_data["sections"] = {}
     
@@ -116,7 +137,8 @@ def finalize_merged_records(records, auto_save: bool = True):
     merged_data["sections"]["items"] = all_items
     
     # 3. Totals / Taxes / Charges: From LAST record
-    last_sections = (last_record.extracted_data or {}).get("sections", {})
+    last_extracted = last_record.extracted_data or {}
+    last_sections = last_extracted.get("sections", {})
     merged_data["sections"]["supply_details"] = last_sections.get("supply_details", {})
     merged_data["sections"]["due_details"] = last_sections.get("due_details", {})
     merged_data["sections"]["transit_details"] = last_sections.get("transit_details", {})
@@ -158,6 +180,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False):
     CORE VALIDATION FUNCTION: 
     Checks for Vendor, Duplicates, and optionally creates Voucher.
     """
+    logger.error(f"[TRACE] validate_and_process.entry | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
     print("VALIDATION START:", record.id)
     
     try:
@@ -373,7 +396,8 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False):
             record.vendor_id = vendor.id
             record.voucher_id = voucher_main.id
             record.processed = True
-            record.save()
+            logger.info(f"Saving record {record.id}: status={record.status}, validation_status={record.validation_status}, vendor_id={record.vendor_id}, voucher_id={record.voucher_id}, processed={record.processed}")
+            record.save(update_fields=['status', 'validation_status', 'vendor_id', 'voucher_id', 'processed'])
             
             print(f"FINAL STATUS: VOUCHER_CREATED (Voucher={voucher_main.id})")
             return {"status": "VOUCHER_CREATED", "voucher_id": voucher_main.id}

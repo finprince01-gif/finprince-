@@ -86,6 +86,9 @@ class AgentMessageView(views.APIView):
         # Use AI proxy
         result = ai_service.make_request('agent', request_data, user_id, tenant_id)
 
+        if result.get('status') == 'queued':
+             return Response(result)
+
         if 'error' in result:
             raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))
 
@@ -135,6 +138,26 @@ def ai_metrics(request):
     }
 
     return Response(enhanced_stats)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def ai_job_status(request, job_id):
+    """Poll for the result of an asynchronous AI task"""
+    from core.redis_client import redis_client
+    import json
+    
+    result_key = f"ai_result:{job_id}"
+    res = redis_client.get_client().get(result_key)
+    
+    if res:
+        # Task completed
+        data = json.loads(res)
+        # We can delete the key now that it's consumed
+        redis_client.get_client().delete(result_key)
+        return Response(data)
+        
+    return Response({'status': 'processing'}, status=202)
 
 
 @api_view(['GET'])
@@ -318,9 +341,10 @@ class AIProxyView(views.APIView):
                 mime_type=file_obj.content_type,
                 user_id=user_id,
                 tenant_id=tenant_id,
-                extraction_mode=extraction_mode
             )
 
+            if result.get('status') == 'queued':
+                return Response(result)
 
             if 'error' in result:
                 raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))
@@ -470,6 +494,9 @@ class AIProxyView(views.APIView):
             result = ai_service.make_request('agent', request_data, user_id, tenant_id)
         else:
             raise BusinessException('Invalid action.')
+
+        if result.get('status') == 'queued':
+             return Response(result)
 
         if 'error' in result:
             raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))

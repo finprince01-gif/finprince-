@@ -9,279 +9,304 @@ store_lock = threading.Lock()
 def _int_safe(val, key=None):
     """Parse a stored value as int, or reset to 0 if corrupted."""
     try:
+        if val is None: return 0
         return int(val)
     except (TypeError, ValueError):
         if key is not None:
-            store[key] = "0"
+            with store_lock:
+                store[key] = "0"
         return 0
 
+def execute_command_core(cmd, args):
+    """
+    Core command execution logic. Handles its own locking.
+    Returns bytes to be sent to the client.
+    """
+    cmd = cmd.upper()
+    
+    # ── Blocking commands (Special handling to avoid deadlocks) ──
+    if cmd == "BRPOP":
+        timeout = _int_safe(args[-1])
+        keys = args[1:-1]
+        start_time = time.time()
+        while True:
+            with store_lock:
+                val = None
+                found_key = None
+                for k in keys:
+                    lst = store.get(k)
+                    if isinstance(lst, list) and lst:
+                        val = lst.pop()
+                        found_key = k
+                        break
+                if val is not None:
+                    vb, kb = str(val).encode('utf-8'), found_key.encode('utf-8')
+                    return f"*2\r\n${len(kb)}\r\n".encode() + kb + f"\r\n${len(vb)}\r\n".encode() + vb + b"\r\n"
+            
+            if timeout > 0 and time.time() - start_time >= timeout:
+                return b"*-1\r\n"
+            time.sleep(0.1) # Short sleep, no lock held
+
+    elif cmd == "BRPOPLPUSH":
+        source, dest, timeout = args[1], args[2], _int_safe(args[3])
+        start_time = time.time()
+        while True:
+            with store_lock:
+                val = None
+                src_lst = store.get(source)
+                if isinstance(src_lst, list) and src_lst:
+                    val = src_lst.pop()
+                    if not isinstance(store.get(dest), list): store[dest] = []
+                    store[dest].insert(0, val)
+                    vb = str(val).encode('utf-8')
+                    return f"${len(vb)}\r\n".encode() + vb + b"\r\n"
+            
+            if timeout > 0 and time.time() - start_time >= timeout:
+                return b"$-1\r\n"
+            time.sleep(0.1)
+
+    # ── Non-blocking commands ──
+    with store_lock:
+        if cmd == "PING":
+            return b"+PONG\r\n"
+
+        elif cmd == "COMMAND":
+            return b"*0\r\n"
+
+        elif cmd == "SET":
+            store[args[1]] = args[2]
+            return b"+OK\r\n"
+
+        elif cmd == "GET":
+            val = store.get(args[1])
+            if val is None or isinstance(val, (dict, list)):
+                return b"$-1\r\n"
+            else:
+                vb = str(val).encode('utf-8')
+                return f"${len(vb)}\r\n".encode() + vb + b"\r\n"
+
+        elif cmd == "DEL":
+            count = sum(1 for k in args[1:] if store.pop(k, None) is not None)
+            return f":{count}\r\n".encode()
+
+        elif cmd == "EXISTS":
+            count = sum(1 for k in args[1:] if k in store)
+            return f":{count}\r\n".encode()
+
+        elif cmd in ("EXPIRE", "EXPIREAT", "PEXPIRE", "PEXPIREAT", "PERSIST"):
+            return b":1\r\n"
+
+        elif cmd == "INCR":
+            key = args[1]
+            val = _int_safe(store.get(key), key) + 1
+            store[key] = str(val)
+            return f":{val}\r\n".encode()
+
+        elif cmd == "DECR":
+            key = args[1]
+            val = max(0, _int_safe(store.get(key), key) - 1)
+            store[key] = str(val)
+            return f":{val}\r\n".encode()
+
+        elif cmd == "INCRBY":
+            key, delta = args[1], _int_safe(args[2] if len(args) > 2 else 1)
+            val = _int_safe(store.get(key), key) + delta
+            store[key] = str(val)
+            return f":{val}\r\n".encode()
+
+        elif cmd == "HSET":
+            key = args[1]
+            if not isinstance(store.get(key), dict):
+                store[key] = {}
+            pairs = args[2:]
+            added = 0
+            for i in range(0, len(pairs) - 1, 2):
+                field, value = pairs[i], pairs[i + 1]
+                if field not in store[key]:
+                    added += 1
+                store[key][field] = value
+            return f":{added}\r\n".encode()
+
+        elif cmd == "HMSET":
+            key = args[1]
+            if not isinstance(store.get(key), dict):
+                store[key] = {}
+            pairs = args[2:]
+            for i in range(0, len(pairs) - 1, 2):
+                store[key][pairs[i]] = pairs[i + 1]
+            return b"+OK\r\n"
+
+        elif cmd == "HGET":
+            key, field = args[1], args[2]
+            h = store.get(key)
+            if isinstance(h, dict) and field in h:
+                vb = str(h[field]).encode('utf-8')
+                return f"${len(vb)}\r\n".encode() + vb + b"\r\n"
+            else:
+                return b"$-1\r\n"
+
+        elif cmd == "HGETALL":
+            key = args[1]
+            h = store.get(key)
+            if isinstance(h, dict) and h:
+                parts = []
+                for k, v in h.items():
+                    kb = str(k).encode('utf-8')
+                    vb = str(v).encode('utf-8')
+                    parts.append(f"${len(kb)}\r\n".encode() + kb + b"\r\n")
+                    parts.append(f"${len(vb)}\r\n".encode() + vb + b"\r\n")
+                return f"*{len(h) * 2}\r\n".encode() + b"".join(parts)
+            else:
+                return b"*0\r\n"
+
+        elif cmd == "HINCRBY":
+            key, field, delta = args[1], args[2], _int_safe(args[3] if len(args) > 3 else 1)
+            if not isinstance(store.get(key), dict):
+                store[key] = {}
+            cur = _int_safe(store[key].get(field, 0))
+            store[key][field] = str(cur + delta)
+            return f":{cur + delta}\r\n".encode()
+
+        elif cmd == "LPUSH":
+            key = args[1]
+            if not isinstance(store.get(key), list):
+                store[key] = []
+            for v in args[2:]:
+                store[key].insert(0, v)
+            return f":{len(store[key])}\r\n".encode()
+
+        elif cmd == "RPUSH":
+            key = args[1]
+            if not isinstance(store.get(key), list):
+                store[key] = []
+            for v in args[2:]:
+                store[key].append(v)
+            return f":{len(store[key])}\r\n".encode()
+
+        elif cmd == "LPOP":
+            key = args[1]
+            lst = store.get(key)
+            if isinstance(lst, list) and lst:
+                vb = str(lst.pop(0)).encode('utf-8')
+                return f"${len(vb)}\r\n".encode() + vb + b"\r\n"
+            else:
+                return b"$-1\r\n"
+
+        elif cmd == "RPOP":
+            key = args[1]
+            lst = store.get(key)
+            if isinstance(lst, list) and lst:
+                vb = str(lst.pop()).encode('utf-8')
+                return f"${len(vb)}\r\n".encode() + vb + b"\r\n"
+            else:
+                return b"$-1\r\n"
+
+        elif cmd == "LLEN":
+            key = args[1]
+            lst = store.get(key)
+            l = len(lst) if isinstance(lst, list) else 0
+            return f":{l}\r\n".encode()
+
+        elif cmd == "LTRIM":
+            key, start, stop = args[1], _int_safe(args[2]), _int_safe(args[3])
+            lst = store.get(key)
+            if isinstance(lst, list): store[key] = lst[start: stop + 1]
+            return b"+OK\r\n"
+
+        elif cmd == "LREM":
+            key, count, value = args[1], _int_safe(args[2]), args[3]
+            lst = store.get(key); removed = 0
+            if isinstance(lst, list):
+                new_list = []
+                for x in lst:
+                    if x == value and (count == 0 or removed < abs(count)): removed += 1
+                    else: new_list.append(x)
+                store[key] = new_list
+            return f":{removed}\r\n".encode()
+
+        elif cmd in ("ZADD", "ZREM", "ZREMRANGEBYSCORE", "ZCARD"):
+            return b":1\r\n"
+        elif cmd == "ZRANGE":
+            return b"*0\r\n"
+
+        elif cmd == "KEYS":
+            pattern = args[1] if len(args) > 1 else "*"
+            matched = list(store.keys()) if pattern == "*" else [k for k in store if k.startswith(pattern.rstrip("*"))]
+            resp = f"*{len(matched)}\r\n".encode()
+            for k in matched:
+                kb = k.encode('utf-8')
+                resp += f"${len(kb)}\r\n".encode() + kb + b"\r\n"
+            return resp
+
+        elif cmd == "FLUSHALL":
+            store.clear()
+            return b"+OK\r\n"
+
+        elif cmd in ("EVAL", "SCRIPT"):
+            return b"+OK\r\n"
+
+        else:
+            return b"-ERR unknown command '" + cmd.encode('utf-8') + b"'\r\n"
+
 def handle_client(conn, addr):
+    transaction_buffer = None
     try:
         buffer = b""
         while True:
             data = conn.recv(4096)
-            if not data:
-                break
+            if not data: break
             buffer += data
             while b"\r\n" in buffer:
                 if not buffer.startswith(b"*"):
                     buffer = b""
                     break
-
                 lines = buffer.split(b"\r\n")
-                try:
-                    num_args = int(lines[0][1:])
-                except ValueError:
-                    buffer = b""
-                    break
-
-                if len(lines) < 2 * num_args + 1:
-                    break  # wait for more data
-
+                try: num_args = int(lines[0][1:])
+                except ValueError: buffer = b""; break
+                if len(lines) < 2 * num_args + 1: break
+                
                 args = []
+                # RESP parser: *<num_args>\r\n$<len>\r\n<arg>\r\n...
                 for i in range(num_args):
                     args.append(lines[2 + i * 2].decode('utf-8', errors='ignore'))
-
+                
                 consumed = lines[0] + b"\r\n"
                 for i in range(num_args):
                     consumed += lines[1 + i * 2] + b"\r\n" + lines[2 + i * 2] + b"\r\n"
                 buffer = buffer[len(consumed):]
-
+                
                 cmd = args[0].upper()
-
-                with store_lock:
-                    # ── String commands ──────────────────────────────
-                    if cmd == "PING":
-                        conn.sendall(b"+PONG\r\n")
-
-                    elif cmd == "COMMAND":
-                        conn.sendall(b"*0\r\n")
-
-                    elif cmd == "SET":
-                        # SET key value [EX seconds] [KEEPTTL] ...
-                        store[args[1]] = args[2]
-                        conn.sendall(b"+OK\r\n")
-
-                    elif cmd == "GET":
-                        val = store.get(args[1])
-                        if val is None or isinstance(val, (dict, list)):
-                            conn.sendall(b"$-1\r\n")
-                        else:
-                            vb = str(val).encode('utf-8')
-                            conn.sendall(f"${len(vb)}\r\n".encode() + vb + b"\r\n")
-
-                    elif cmd == "DEL":
-                        count = sum(1 for k in args[1:] if store.pop(k, None) is not None)
-                        conn.sendall(f":{count}\r\n".encode())
-
-                    elif cmd == "EXISTS":
-                        count = sum(1 for k in args[1:] if k in store)
-                        conn.sendall(f":{count}\r\n".encode())
-
-                    elif cmd in ("EXPIRE", "EXPIREAT", "PEXPIRE", "PEXPIREAT", "PERSIST"):
-                        # Emulator has no real TTL; just acknowledge
-                        conn.sendall(b":1\r\n")
-
-                    # ── Integer counter commands ─────────────────────
-                    elif cmd == "INCR":
-                        key = args[1]
-                        store[key] = str(_int_safe(store.get(key), key) + 1)
-                        conn.sendall(f":{store[key]}\r\n".encode())
-
-                    elif cmd == "DECR":
-                        key = args[1]
-                        val = max(0, _int_safe(store.get(key), key) - 1)
-                        store[key] = str(val)
-                        conn.sendall(f":{val}\r\n".encode())
-
-                    elif cmd == "INCRBY":
-                        key, delta = args[1], _int_safe(args[2] if len(args) > 2 else 1)
-                        store[key] = str(_int_safe(store.get(key), key) + delta)
-                        conn.sendall(f":{store[key]}\r\n".encode())
-
-                    elif cmd == "DECRBY":
-                        key, delta = args[1], _int_safe(args[2] if len(args) > 2 else 1)
-                        val = max(0, _int_safe(store.get(key), key) - delta)
-                        store[key] = str(val)
-                        conn.sendall(f":{val}\r\n".encode())
-
-                    # ── Hash commands ────────────────────────────────
-                    elif cmd == "HSET":
-                        # HSET key field value [field value ...]
-                        key = args[1]
-                        if not isinstance(store.get(key), dict):
-                            store[key] = {}
-                        pairs = args[2:]
-                        added = 0
-                        for i in range(0, len(pairs) - 1, 2):
-                            field, value = pairs[i], pairs[i + 1]
-                            if field not in store[key]:
-                                added += 1
-                            store[key][field] = value
-                        conn.sendall(f":{added}\r\n".encode())
-
-                    elif cmd == "HMSET":
-                        key = args[1]
-                        if not isinstance(store.get(key), dict):
-                            store[key] = {}
-                        pairs = args[2:]
-                        for i in range(0, len(pairs) - 1, 2):
-                            store[key][pairs[i]] = pairs[i + 1]
-                        conn.sendall(b"+OK\r\n")
-
-                    elif cmd == "HGET":
-                        key, field = args[1], args[2]
-                        h = store.get(key)
-                        if isinstance(h, dict) and field in h:
-                            vb = str(h[field]).encode('utf-8')
-                            conn.sendall(f"${len(vb)}\r\n".encode() + vb + b"\r\n")
-                        else:
-                            conn.sendall(b"$-1\r\n")
-
-                    elif cmd == "HGETALL":
-                        key = args[1]
-                        h = store.get(key)
-                        if isinstance(h, dict) and h:
-                            parts = []
-                            for k, v in h.items():
-                                kb = str(k).encode('utf-8')
-                                vb = str(v).encode('utf-8')
-                                parts.append(f"${len(kb)}\r\n".encode() + kb + b"\r\n")
-                                parts.append(f"${len(vb)}\r\n".encode() + vb + b"\r\n")
-                            conn.sendall(f"*{len(h) * 2}\r\n".encode() + b"".join(parts))
-                        else:
-                            conn.sendall(b"*0\r\n")
-
-                    elif cmd == "HINCRBY":
-                        key, field, delta = args[1], args[2], _int_safe(args[3] if len(args) > 3 else 1)
-                        if not isinstance(store.get(key), dict):
-                            store[key] = {}
-                        cur = _int_safe(store[key].get(field, 0))
-                        store[key][field] = str(cur + delta)
-                        conn.sendall(f":{cur + delta}\r\n".encode())
-
-                    # ── List commands ────────────────────────────────
-                    elif cmd == "LPUSH":
-                        key = args[1]
-                        if not isinstance(store.get(key), list):
-                            store[key] = []
-                        for v in args[2:]:
-                            store[key].insert(0, v)
-                        conn.sendall(f":{len(store[key])}\r\n".encode())
-
-                    elif cmd == "RPUSH":
-                        key = args[1]
-                        if not isinstance(store.get(key), list):
-                            store[key] = []
-                        for v in args[2:]:
-                            store[key].append(v)
-                        conn.sendall(f":{len(store[key])}\r\n".encode())
-
-                    elif cmd == "LPOP":
-                        key = args[1]
-                        lst = store.get(key)
-                        if isinstance(lst, list) and lst:
-                            vb = str(lst.pop(0)).encode('utf-8')
-                            conn.sendall(f"${len(vb)}\r\n".encode() + vb + b"\r\n")
-                        else:
-                            conn.sendall(b"$-1\r\n")
-
-                    elif cmd == "RPOP":
-                        key = args[1]
-                        lst = store.get(key)
-                        if isinstance(lst, list) and lst:
-                            vb = str(lst.pop()).encode('utf-8')
-                            conn.sendall(f"${len(vb)}\r\n".encode() + vb + b"\r\n")
-                        else:
-                            conn.sendall(b"$-1\r\n")
-
-                    elif cmd == "BRPOP":
-                        timeout = _int_safe(args[-1])
-                        keys = args[1:-1]
-                        found = False
-                        for k in keys:
-                            lst = store.get(k)
-                            if isinstance(lst, list) and lst:
-                                vb = str(lst.pop()).encode('utf-8')
-                                kb = k.encode('utf-8')
-                                conn.sendall(
-                                    f"*2\r\n${len(kb)}\r\n".encode() + kb +
-                                    f"\r\n${len(vb)}\r\n".encode() + vb + b"\r\n"
-                                )
-                                found = True
-                                break
-                        if not found:
-                            if timeout > 0:
-                                time.sleep(min(timeout, 1))
-                            conn.sendall(b"*-1\r\n")
-
-                    elif cmd == "LLEN":
-                        key = args[1]
-                        lst = store.get(key)
-                        l = len(lst) if isinstance(lst, list) else 0
-                        conn.sendall(f":{l}\r\n".encode())
-
-                    elif cmd == "LTRIM":
-                        key = args[1]
-                        start, stop = _int_safe(args[2]), _int_safe(args[3])
-                        lst = store.get(key)
-                        if isinstance(lst, list):
-                            store[key] = lst[start: stop + 1]
-                        conn.sendall(b"+OK\r\n")
-
-                    # ── Sorted set stubs (not needed for rate limiting) ──
-                    elif cmd == "ZADD":
-                        conn.sendall(b":1\r\n")
-                    elif cmd == "ZREM":
-                        conn.sendall(b":1\r\n")
-                    elif cmd == "ZREMRANGEBYSCORE":
-                        conn.sendall(b":0\r\n")
-                    elif cmd == "ZCARD":
-                        conn.sendall(b":0\r\n")
-                    elif cmd == "ZRANGE":
-                        conn.sendall(b"*0\r\n")
-
-                    # ── Script / pipeline stubs ──────────────────────
-                    elif cmd in ("EVAL", "SCRIPT", "MULTI", "EXEC", "DISCARD"):
-                        conn.sendall(b"+OK\r\n")
-
-                    elif cmd == "KEYS":
-                        pattern = args[1] if len(args) > 1 else "*"
-                        matched = list(store.keys()) if pattern == "*" else [
-                            k for k in store if k.startswith(pattern.rstrip("*"))
-                        ]
-                        resp = f"*{len(matched)}\r\n".encode()
-                        for k in matched:
-                            kb = k.encode('utf-8')
-                            resp += f"${len(kb)}\r\n".encode() + kb + b"\r\n"
-                        conn.sendall(resp)
-
-                    elif cmd == "FLUSHALL":
-                        store.clear()
-                        conn.sendall(b"+OK\r\n")
-
+                if cmd == "MULTI":
+                    transaction_buffer = []; conn.sendall(b"+OK\r\n")
+                    continue
+                if cmd == "EXEC":
+                    if transaction_buffer is None: conn.sendall(b"-ERR EXEC without MULTI\r\n")
                     else:
-                        conn.sendall(b"+OK\r\n")
-
-    except Exception:
-        pass
-    finally:
-        conn.close()
-
+                        resp = f"*{len(transaction_buffer)}\r\n".encode() + b"".join(transaction_buffer)
+                        conn.sendall(resp); transaction_buffer = None
+                    continue
+                if cmd == "DISCARD":
+                    transaction_buffer = None; conn.sendall(b"+OK\r\n")
+                    continue
+                
+                response = execute_command_core(cmd, args)
+                if transaction_buffer is not None:
+                    transaction_buffer.append(response)
+                    conn.sendall(b"+QUEUED\r\n")
+                else:
+                    conn.sendall(response)
+    except Exception: pass
+    finally: conn.close()
 
 def run_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(('127.0.0.1', 6379))
     server.listen(100)
-    print("Redis emulator running on 127.0.0.1:6379 (full command set)")
+    print("Redis emulator running on 127.0.0.1:6379 (transaction support)")
     while True:
         conn, addr = server.accept()
-        t = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
-        t.start()
-
+        threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
 
 if __name__ == "__main__":
     run_server()
-
-

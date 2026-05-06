@@ -59,6 +59,91 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
             print(traceback.format_exc())
             return Response({"message": "Failed to post voucher. Check logs."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['post'], url_path='save-amount-only')
+    def save_amount_only(self, request):
+        """
+        EXTRA isolated action: Save ONLY the entered amount to the vouchers table.
+        Does NOT create allocations, advances, or use mapping logic.
+        """
+        data = request.data
+        tenant_id = getattr(request.user, 'tenant_id', None) or request.headers.get('X-Branch-Id')
+        
+        entered_amount = data.get('amount')
+        receive_in_id = data.get('receive_in')
+        receive_from_id = data.get('receive_from')
+        date_str = data.get('date') or timezone.now().date().isoformat()
+        
+        if not entered_amount or not receive_in_id or not receive_from_id:
+            return Response({'error': 'Missing required fields: amount, receive_in, receive_from'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with db_transaction.atomic():
+            from .services.ledger_service import _resolve_ledger
+            receive_in_ledger = _resolve_ledger(receive_in_id, tenant_id)
+            receive_from_ledger = _resolve_ledger(receive_from_id, tenant_id)
+            
+            # Resolve Party IDs
+            def get_party_ids(ledger):
+                if not ledger: return None, None, None
+                l_id = ledger.id
+                from vendors.models import VendorMasterBasicDetail
+                from customerportal.database import CustomerMasterCustomerBasicDetails
+                v = VendorMasterBasicDetail.objects.filter(ledger_id=l_id).first()
+                c = CustomerMasterCustomerBasicDetails.objects.filter(ledger_id=l_id).first()
+                return (l_id, c.id if c else None, v.id if v else None)
+
+            pf_l, pf_c, pf_v = get_party_ids(receive_in_ledger)
+            pt_l, pt_c, pt_v = get_party_ids(receive_from_ledger)
+
+            # Generate Voucher Number
+            from masters.models import MasterVoucherReceipts
+            series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            v_num = data.get('voucher_number')
+            if series and (not v_num or v_num == 'Manual Input'):
+                v_num = series.get_next_number()
+                series.increment_number()
+            if not v_num or v_num == 'Manual Input':
+                import uuid
+                v_num = f"RCV-{uuid.uuid4().hex[:6].upper()}"
+
+            # Create Voucher (Transaction)
+            instance = ReceiptVoucher.objects.create(
+                tenant_id=tenant_id,
+                voucher_number=v_num,
+                transaction_type='RECEIPT',
+                date=date_str,
+                amount=entered_amount,
+                total_amount=entered_amount,
+                vouch_amount=entered_amount,
+                narration=data.get('narration', ''),
+                ref_no=data.get('ref_no', ''),
+                posting_note=data.get('posting_note', ''),
+                pay_from_ledger=receive_in_ledger,
+                pay_to_ledger=receive_from_ledger,
+                ledger_id_val=pt_l or pf_l,
+                party_customer_id=pt_c or pf_c,
+                party_vendor_id=pt_v or pf_v,
+                receive_in_ledger_id_val=pf_l,
+                receive_from_ledger_id_val=pt_l
+            )
+            
+            # Create Journal Entries
+            JournalEntry.objects.create(
+                tenant_id=tenant_id, voucher_type='RECEIPT', voucher_id=instance.id,
+                voucher_number=v_num, transaction_date=date_str,
+                ledger=receive_in_ledger, ledger_name=receive_in_ledger.name,
+                debit=entered_amount, credit=0,
+                customer_id=pf_c, vendor_id=pf_v
+            )
+            JournalEntry.objects.create(
+                tenant_id=tenant_id, voucher_type='RECEIPT', voucher_id=instance.id,
+                voucher_number=v_num, transaction_date=date_str,
+                ledger=receive_from_ledger, ledger_name=receive_from_ledger.name,
+                debit=0, credit=entered_amount,
+                customer_id=pt_c, vendor_id=pt_v
+            )
+
+        return Response({'message': 'Amount saved successfully', 'id': instance.id, 'voucher_number': v_num}, status=status.HTTP_201_CREATED)
+
     def perform_create(self, serializer):
         user = self.request.user
         if hasattr(user, 'tenant_id') and user.branch_id:

@@ -215,6 +215,93 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
+    @action(detail=False, methods=['post'], url_path='save-amount-only')
+    def save_amount_only(self, request):
+        """
+        EXTRA isolated action: Save ONLY the entered amount to the vouchers table.
+        Does NOT create allocations, advances, or use mapping logic.
+        """
+        data = request.data
+        tenant_id = getattr(request.user, 'tenant_id', None) or request.headers.get('X-Branch-Id')
+        
+        entered_amount = data.get('amount')
+        pay_from_id = data.get('pay_from')
+        pay_to_id = data.get('pay_to')
+        date_str = data.get('date') or timezone.now().date().isoformat()
+        
+        if not entered_amount or not pay_from_id or not pay_to_id:
+            return Response({'error': 'Missing required fields: amount, pay_from, pay_to'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with db_transaction.atomic():
+            from .services.ledger_service import _resolve_ledger
+            pay_from_ledger = _resolve_ledger(pay_from_id, tenant_id)
+            pay_to_ledger = _resolve_ledger(pay_to_id, tenant_id)
+            
+            # Resolve Party IDs
+            def get_party_ids(ledger):
+                if not ledger: return None, None, None
+                l_id = ledger.id
+                from vendors.models import VendorMasterBasicDetail
+                from customerportal.database import CustomerMasterCustomerBasicDetails
+                v = VendorMasterBasicDetail.objects.filter(ledger_id=l_id).first()
+                c = CustomerMasterCustomerBasicDetails.objects.filter(ledger_id=l_id).first()
+                return (l_id, c.id if c else None, v.id if v else None)
+
+            pf_l, pf_c, pf_v = get_party_ids(pay_from_ledger)
+            pt_l, pt_c, pt_v = get_party_ids(pay_to_ledger)
+
+            # Generate Voucher Number
+            from masters.models import MasterVoucherPayments
+            series = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            v_num = data.get('voucher_number')
+            if series and (not v_num or v_num == 'Manual Input'):
+                v_num = series.get_next_number()
+                series.increment_number()
+            if not v_num or v_num == 'Manual Input':
+                import uuid
+                v_num = f"PAY-{uuid.uuid4().hex[:6].upper()}"
+
+            # Create Voucher (Transaction)
+            # Use the exact logic requested: instance.amount = entered_amount
+            instance = PaymentVoucher.objects.create(
+                tenant_id=tenant_id,
+                voucher_number=v_num,
+                transaction_type='PAYMENT',
+                date=date_str,
+                amount=entered_amount,
+                total_amount=entered_amount,
+                vouch_amount=entered_amount,
+                narration=data.get('narration', ''),
+                ref_no=data.get('ref_no', ''),
+                posting_note=data.get('posting_note', ''),
+                pay_from_ledger=pay_from_ledger,
+                pay_to_ledger=pay_to_ledger,
+                ledger_id_val=pt_l or pf_l,
+                party_customer_id=pt_c or pf_c,
+                party_vendor_id=pt_v or pf_v,
+                pay_from_ledger_id_val=pf_l,
+                pay_to_ledger_id_val=pt_l
+            )
+            
+            # Create Journal Entries so books balance (STRICTLY REQUIRED for accounting integrity)
+            # This is NOT "allocation logic" or "mapping logic", just the double-entry foundation.
+            JournalEntry.objects.create(
+                tenant_id=tenant_id, voucher_type='PAYMENT', voucher_id=instance.id,
+                voucher_number=v_num, transaction_date=date_str,
+                ledger=pay_to_ledger, ledger_name=pay_to_ledger.name,
+                debit=entered_amount, credit=0,
+                customer_id=pt_c, vendor_id=pt_v
+            )
+            JournalEntry.objects.create(
+                tenant_id=tenant_id, voucher_type='PAYMENT', voucher_id=instance.id,
+                voucher_number=v_num, transaction_date=date_str,
+                ledger=pay_from_ledger, ledger_name=pay_from_ledger.name,
+                debit=0, credit=entered_amount,
+                customer_id=pf_c, vendor_id=pf_v
+            )
+
+        return Response({'message': 'Amount saved successfully', 'id': instance.id, 'voucher_number': v_num}, status=status.HTTP_201_CREATED)
+
     def perform_create(self, serializer):
         user = self.request.user
         if hasattr(user, 'tenant_id') and user.branch_id:
