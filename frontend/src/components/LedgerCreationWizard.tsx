@@ -258,23 +258,13 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         const fetchData = async () => {
             try {
                 // Fetch both global hierarchy and tenant ledgers
-                const [hierarchyRes, ledgersRes] = await Promise.all([
-                    fetch('/api/masters/hierarchy/'),
-                    fetch('/api/masters/ledgers/', {
-                        credentials: 'include' // Include cookies for authentication
-                    })
+                const [globalHierarchy, ledgers] = await Promise.all([
+                    httpClient.get<HierarchyRow[]>('/api/masters/hierarchy/'),
+                    httpClient.get<Ledger[]>('/api/masters/ledgers/').catch(() => [])
                 ]);
 
-                if (!hierarchyRes.ok) throw new Error('Failed to fetch hierarchy');
-
-                const globalHierarchy: HierarchyRow[] = await hierarchyRes.json();
-
-                // Fetch tenant ledgers (may fail if not authenticated, that's ok)
-                let ledgers: Ledger[] = [];
-                if (ledgersRes.ok) {
-                    ledgers = await ledgersRes.json();
-                    setTenantLedgers(ledgers);
-                }
+                // Set tenant ledgers state
+                setTenantLedgers(ledgers);
 
                 // Convert tenant ledgers to hierarchy format
                 const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
@@ -777,22 +767,19 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
     const refetchHierarchy = async (): Promise<TreeNode[] | null> => {
         try {
-            const [hierarchyRes, ledgersRes] = await Promise.all([
-                fetch('/api/masters/hierarchy/'),
-                fetch('/api/masters/ledgers/', { credentials: 'include' })
+            const [globalHierarchy, ledgers] = await Promise.all([
+                httpClient.get<HierarchyRow[]>('/api/masters/hierarchy/'),
+                httpClient.get<Ledger[]>('/api/masters/ledgers/').catch(() => [])
             ]);
-            if (hierarchyRes.ok && ledgersRes.ok) {
-                const globalHierarchy: HierarchyRow[] = await hierarchyRes.json();
-                const ledgers: Ledger[] = await ledgersRes.json();
-                setTenantLedgers(ledgers);
-                const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
-                const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
+            
+            setTenantLedgers(ledgers);
+            const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
+            const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
                 setHierarchyData(mergedHierarchy);
                 const tree = buildTreeStructure(mergedHierarchy, ledgers);
                 sortHierarchyNodes(tree); // ← Apply pinned order after every re-fetch
-                setTreeData([...tree]);
-                return tree;
-            }
+            setTreeData([...tree]);
+            return tree;
         } catch (error) {
             console.error('Error refetching data:');
         }
