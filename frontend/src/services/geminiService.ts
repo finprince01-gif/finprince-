@@ -167,6 +167,12 @@ export const getAgentResponse = async (
     });
 
     // Success - return AI's response
+    if (response.status === 'queued') {
+        const jobId = response.job_id;
+        // Start polling for result
+        return await pollAiTaskStatus(jobId);
+    }
+
     return { reply: response.reply || "I couldn't generate a response at this time." };
 
   } catch (error: any) {
@@ -234,4 +240,32 @@ export const getGroundedAgentResponse = async (
       sources: []
     };
   }
+};
+
+/**
+ * Poll for AI task status until completed or timed out
+ */
+const pollAiTaskStatus = async (jobId: string): Promise<{ reply: string }> => {
+    const maxAttempts = 120; // 1 minute at 500ms intervals
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+        try {
+            const response: any = await httpClient.get(`/api/ai/job-status/${jobId}/`);
+            if (response.reply) {
+                return { reply: response.reply };
+            }
+            // If status is 202 (processing), it will fall through to wait
+        } catch (error: any) {
+            // Check if it's still processing (202)
+            if (error.status !== 202) {
+                throw error;
+            }
+        }
+        
+        attempts++;
+        await new Promise(r => setTimeout(r, 500));
+    }
+    
+    throw new Error("AI request timed out. Please try again.");
 };

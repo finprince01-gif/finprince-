@@ -99,23 +99,24 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [inventoryItems, serviceItems]);
 
     const salesLedgerOptions = useMemo(() => {
-        const userLedgers = ledgers.map(l => l.name);
+        // Exclude customer/vendor groups — they are parties, not accounting ledgers
+        const EXCLUDED_GROUPS = ['sundry debtors', 'sundry creditors'];
+        // Exclude dummy seed data
+        const EXCLUDED_NAMES = ['purchase account', 'sales account'];
 
-        // Extract leaf nodes or relevant names from hierarchy
-        const hierarchyLedgers = new Set<string>();
-        hierarchy.forEach(row => {
-            // Collect all unique names from all levels of the hierarchy
-            if (row.ledger_1) hierarchyLedgers.add(row.ledger_1);
-            if (row.sub_group_3_1) hierarchyLedgers.add(row.sub_group_3_1);
-            if (row.sub_group_2_1) hierarchyLedgers.add(row.sub_group_2_1);
-            if (row.sub_group_1_1) hierarchyLedgers.add(row.sub_group_1_1);
-            if (row.group_1) hierarchyLedgers.add(row.group_1);
-            if (row.major_group_1) hierarchyLedgers.add(row.major_group_1);
-        });
-
-        // Combine and remove duplicates
-        return Array.from(new Set([...userLedgers, ...Array.from(hierarchyLedgers)]));
-    }, [ledgers, hierarchy]);
+        // Only pull from Masters > Ledgers — this includes both user-created ledgers
+        // AND the default ledgers (shown in red in the hierarchy tree).
+        // Do NOT use the raw hierarchy table — that adds thousands of groups/sub-groups.
+        return Array.from(new Set(
+            ledgers
+                .filter(l => {
+                    const group = (l.group || '').toLowerCase().trim();
+                    const name = (l.name || '').toLowerCase().trim();
+                    return l.name && !EXCLUDED_GROUPS.includes(group) && !EXCLUDED_NAMES.includes(name);
+                })
+                .map(l => l.name)
+        )).filter(Boolean) as string[];
+    }, [ledgers]);
 
     const uomOptions = useMemo(() => {
         // Use symbol if available, fallback to name

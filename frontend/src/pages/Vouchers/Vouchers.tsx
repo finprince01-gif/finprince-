@@ -2884,7 +2884,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     });
   }, [party, ledgers, companyDetails, invoiceInForeignCurrency]);
 
-  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions } = useMemo(() => {
+  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions } = useMemo(() => {
     // Merge the prop ledgers with freshly-fetched ledgers so we always have the full set
     // The prop is the reliable source; freshLedgers supplements with any newly created ledgers
     const mergedMap = new Map<string, Ledger>();
@@ -2976,7 +2976,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       effectiveLedgers.filter(isRealLedgerLeaf).map(l => l.name)
     )).filter(Boolean);
 
-    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions };
+    // Purchase Ledger dropdown: only Masters > Ledgers entries, excluding customer/vendor party groups
+    const EXCLUDED_PARTY_GROUPS = ['sundry debtors', 'sundry creditors'];
+    const EXCLUDED_NAMES = ['purchase account', 'sales account'];
+    const purchaseLedgerOptions = Array.from(new Set(
+      effectiveLedgers
+        .filter(l => {
+          if (!isRealLedgerLeaf(l)) return false;
+          const group = (l.group || '').toLowerCase().trim();
+          const name = (l.name || '').toLowerCase().trim();
+          return !EXCLUDED_PARTY_GROUPS.includes(group) && !EXCLUDED_NAMES.includes(name);
+        })
+        .map(l => l.name)
+    )).filter(Boolean) as string[];
+
+    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
@@ -3314,6 +3328,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         showError("Please select a valid Vendor from the Master list.");
         return;
       }
+
+      if (!selectedPurchaseConfig) {
+        showError("Please select a Purchase Voucher Series.");
+        return;
+      }
+
       // Construct Payload for Purchase Voucher
       const purchaseData: any = {
         date: date,
@@ -4981,7 +5001,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Purchase Ledger:</label>
                             <div className="flex-1">
                               <SearchableDropdown
-                                options={allLedgerOptions}
+                                options={purchaseLedgerOptions}
                                 value={purchaseLedger}
                                 onChange={(val) => setPurchaseLedger(val)}
                                 placeholder="Select purchase ledger"
@@ -5331,7 +5351,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Purchase Ledger:</label>
                               <div className="flex-1">
                                 <SearchableDropdown
-                                  options={allLedgerOptions}
+                                  options={purchaseLedgerOptions}
                                   value={purchaseLedger}
                                   onChange={(val) => setPurchaseLedger(val)}
                                   placeholder="Select purchase ledger"

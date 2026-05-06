@@ -3,6 +3,7 @@ import os
 import json
 import time
 import logging
+from typing import Any
 from django.conf import settings
 
 logger = logging.getLogger("RedisClient")
@@ -45,61 +46,43 @@ class RedisClient:
         return cls._instance
 
     def _init_connection(self):
-        """Initialize Redis connection with retries, exponential backoff, and loud failures in production"""
-        # Determine dev mode from settings
+        """Initialize Redis connection with ConnectionPool and production-grade hardening"""
         try:
             is_dev = getattr(settings, 'DEBUG', True)
         except Exception:
             is_dev = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
-        queue_backend = os.getenv('QUEUE_BACKEND', 'local')
-        if queue_backend != 'redis':
-            # Strictly enforce redis backend if requested, otherwise error out if SQS is also gone
-            # But the user said: "If any other backend is detected → raise explicit error."
-            # So if someone tries to use 'sqs' or something else, we fail.
-            if queue_backend in ['sqs', 'hybrid']:
-                raise RuntimeError(f"CRITICAL: {queue_backend} backend is deprecated. Only QUEUE_BACKEND=redis is allowed.")
-
         redis_url = getattr(settings, 'REDIS_URL', os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
-
-        base_delay = 1
-        max_attempts = 4 if not is_dev else 2
         
-        logger.info(f"[REDIS CONNECT] Attempting connection via URL={redis_url}, max_attempts={max_attempts}, dev_mode={is_dev}")
-        
-        for i in range(max_attempts):
-            try:
-                # Set dynamic timeout: MUST be larger than blocking operation timeouts (e.g., brpoplpush)
-                timeout = 30.0
-                
-                self.client = redis.from_url(redis_url, decode_responses=True, socket_timeout=timeout)
-                self.client.ping()
-
-                # MANDATORY VALIDATION: SET, GET, DELETE
-                test_key = f"redis_test_startup_{int(time.time())}"
-                self.client.set(test_key, "1", ex=10)
-                val = self.client.get(test_key)
-                if val != "1":
-                    raise ValueError("Redis validation failed: GET test_key returned incorrect value")
-                self.client.delete(test_key)
-
-                self.available = True
-                self._initialized = True
-                logger.info(f"[REDIS SUCCESS] Production-grade Redis connected and validated successfully.")
-                return
-            except Exception as e:
-                logger.warning(f"[REDIS ATTEMPT FAILED] Attempt {i+1}/{max_attempts} failed. Reason: {e}")
-                if i == max_attempts - 1:
-                    self.available = False
-                    self._initialized = True
-                    # If QUEUE_BACKEND=redis is set, we MUST crash if Redis is down
-                    if queue_backend == 'redis' or not is_dev:
-                        raise RuntimeError(f"CRITICAL: Redis is required (QUEUE_BACKEND=redis) but failed startup validation: {e}") from e
-                    else:
-                        logger.info(f"[REDIS FALLBACK] Falling back to local mode in development.")
-                else:
-                    sleep_time = base_delay * (2 ** i)
-                    time.sleep(sleep_time)
+        # Parse URL for ConnectionPool
+        try:
+            # ── REDIS CONNECTION POOL HARDENING ──
+            # max_connections: prevent socket starvation
+            # socket_timeout: prevent infinite waits
+            # retry_on_timeout: handle transient network blips
+            # health_check_interval: periodically probe idle connections
+            pool = redis.ConnectionPool.from_url(
+                redis_url,
+                decode_responses=True,
+                max_connections=100,
+                socket_timeout=30.0,
+                socket_connect_timeout=30.0,
+                retry_on_timeout=True,
+                health_check_interval=30
+            )
+            self.client = redis.Redis(connection_pool=pool)
+            
+            # Initial validation
+            self.client.ping()
+            self.available = True
+            self._initialized = True
+            logger.info(f"[REDIS SUCCESS] Hardened ConnectionPool initialized (max_connections=100)")
+        except Exception as e:
+            logger.error(f"[REDIS CRITICAL] Failed to initialize hardened pool: {e}")
+            self.available = False
+            self._initialized = True
+            if not is_dev:
+                raise RuntimeError(f"CRITICAL: Redis is required in production: {e}")
 
 
     def get_client(self):
@@ -120,31 +103,129 @@ class RedisClient:
         return False
 
     # --- Standardized Queue Methods (Redis-Only) ---
-    def enqueue(self, queue_name: str, payload: dict):
+    def enqueue(self, queue_name: str, payload: dict, max_retries: int = 3):
+        """Production-safe enqueue with retries and exponential backoff"""
         if not self.available:
-            raise RuntimeError("Redis not available for enqueue")
-        try:
-            self.client.lpush(f"queue:{queue_name}", json.dumps(payload))
-            task_id = payload.get('task_id') or payload.get('id') or 'unknown'
-            logger.info(f"[QUEUE] Enqueued task {task_id}")
-            return True
-        except Exception as e:
-            logger.error(f"[REDIS ERROR] Enqueue failed: {e}")
-            raise
+            self._init_connection() # Lazy reconnect attempt
+            if not self.available:
+                raise RuntimeError("Redis not available for enqueue")
 
-    def pop_reliable(self, queue_name: str, processing_queue: str, timeout: int = 20):
-        if not self.available:
-            raise RuntimeError("Redis not available for pop_reliable")
+        last_error = None
+        for i in range(max_retries + 1):
+            try:
+                self.client.lpush(f"queue:{queue_name}", json.dumps(payload))
+                return True
+            except (redis.exceptions.TimeoutError, redis.exceptions.ConnectionError) as e:
+                last_error = e
+                if i < max_retries:
+                    wait = 0.5 * (2 ** i)
+                    logger.warning(f"[REDIS RETRY] Enqueue failed for {queue_name} (Attempt {i+1}). Retrying in {wait}s... Error: {e}")
+                    time.sleep(wait)
+                continue
+            except Exception as e:
+                logger.error(f"[REDIS FATAL] Enqueue failed with non-retryable error: {e}")
+                raise
+
+        logger.error(f"[REDIS CRITICAL] Enqueue permanently failed after {max_retries} retries: {last_error}")
+        return False
+
+    def log_metrics(self):
+        """Log worker health and queue depth metrics"""
+        if not self.available: return
         try:
-            # brpoplpush(source, destination, timeout)
-            # timeout=0 means block indefinitely
-            raw_data = self.client.brpoplpush(f"queue:{queue_name}", f"proc:{processing_queue}", timeout=timeout)
-            if raw_data:
-                # Return both the parsed payload and the raw string (needed for ack)
-                return json.loads(raw_data), raw_data
+            queues = ['ocr_queue', 'ai_requests', 'bulk_jobs_high', 'bulk_jobs_normal', 'bulk_jobs_low']
+            metrics = {}
+            for q in queues:
+                metrics[q] = self.client.llen(f"queue:{q}")
+            logger.info(f"[REDIS METRICS] Queue Depths: {json.dumps(metrics)}")
         except Exception as e:
-            logger.error(f"[REDIS ERROR] Pop reliable failed: {e}")
-        return None, None
+            logger.warning(f"Failed to log metrics: {e}")
+
+    def record_heartbeat(self, worker_name: str):
+        """Record a worker heartbeat for monitoring"""
+        if not self.available: return
+        try:
+            self.client.hset("worker_heartbeats", worker_name, time.time())
+        except Exception:
+            pass
+
+    def verify_consumer_active(self, max_age: int = 60) -> bool:
+        """
+        Verify that at least one worker has heartbeated recently.
+        Returns True if at least one active consumer is found.
+        """
+        if not self.available: return False
+        try:
+            heartbeats = self.client.hgetall("worker_heartbeats")
+            logger.info(f"[REDIS] Checking {len(heartbeats)} heartbeats for consumer health...")
+            if not heartbeats:
+                logger.warning("[REDIS] No worker heartbeats found in 'worker_heartbeats' hash.")
+                return False
+            
+            now = time.time()
+            active_count = 0
+            for worker_id, last_ts in heartbeats.items():
+                age = now - float(last_ts)
+                if age < max_age:
+                    active_count += 1
+                    logger.debug(f"[REDIS] Active worker found: {worker_id} (age: {age:.1f}s)")
+            
+            logger.info(f"[REDIS] Found {active_count} active consumers out of {len(heartbeats)} total registered workers.")
+            return active_count > 0
+        except Exception as e:
+            logger.error(f"Consumer verification failed: {e}")
+            return False
+
+    def pop_reliable(self, queue_names: Any, timeout: int = 5):
+        """
+        Simplified dequeue using raw Redis BRPOP as requested.
+        Supports single queue name (str) or list of queue names.
+        """
+        if not self.available:
+            return None
+
+        try:
+            if isinstance(queue_names, str):
+                queue_names = [queue_names]
+            
+            keys = [f"queue:{name}" for name in queue_names]
+            
+            # RAW BRPOP (blocks for 'timeout' seconds)
+            result = self.client.brpop(keys, timeout=timeout)
+
+            if not result:
+                return None
+
+            # result is (selected_queue, payload)
+            q_name, raw_payload = result
+
+            if isinstance(raw_payload, bytes):
+                raw_payload = raw_payload.decode("utf-8")
+
+            if not raw_payload:
+                return None
+
+            raw_payload = raw_payload.strip()
+
+            # Filter out Redis status leakages
+            if raw_payload == "OK":
+                return None
+
+            # Parse JSON
+            try:
+                payload = json.loads(raw_payload)
+                return payload
+            except json.JSONDecodeError:
+                logger.exception(f"[REDIS JSON ERROR] Failed to parse payload from {q_name}")
+                time.sleep(1)
+                return None
+
+        except Exception as e:
+            # Only log critical errors, ignore expected timeouts
+            if "timeout" not in str(e).lower():
+                logger.exception(f"[REDIS POP ERROR] Failure in {queue_names}")
+                time.sleep(1)
+            return None
 
     def ack_task(self, processing_queue: str, raw_data: str):
         if not self.available:
@@ -169,8 +250,29 @@ class RedisClient:
                 queue_names = [queue_names]
             keys = [f"queue:{name}" for name in queue_names]
             res = self.client.brpop(keys, timeout=timeout)
-            if res:
-                return json.loads(res[1]), res[0].replace("queue:", "")
+            
+            if not res:
+                return None, None
+                
+            q_name = res[0].replace("queue:", "")
+            raw_data = res[1]
+            
+            if isinstance(raw_data, bytes):
+                raw_data = raw_data.decode("utf-8")
+                
+            if not raw_data or not raw_data.strip() or raw_data == "OK":
+                if raw_data == "OK":
+                    logger.warning(f"[REDIS] Received 'OK' status instead of payload from {q_name}.")
+                return None, q_name
+
+            try:
+                payload = json.loads(raw_data)
+                return payload, q_name
+            except json.JSONDecodeError as je:
+                logger.error(f"[REDIS JSON ERROR] Failed to parse payload from {q_name}: {je}")
+                logger.error(f"[REDIS DEBUG] Raw: {raw_data!r}")
+                return None, q_name
+                
         except Exception as e:
             logger.error(f"[REDIS ERROR] Pop failed: {e}")
             self.available = False
@@ -193,7 +295,6 @@ class RedisClient:
     # --- Sliding Window Rate Limiter (with Fallback) ---
     def check_sliding_window(self, key: str, limit: int, window: float = 1.0):
         if not self.available:
-            # Fallback to "always allow" or local logic in proxy
             return True, 0, 0
         try:
             now = time.time()
@@ -202,19 +303,31 @@ class RedisClient:
             pipeline.zremrangebyscore(key, 0, now - window)
             pipeline.zcard(key)
             results = pipeline.execute()
-            count = results[1]
-            if int(count) >= int(limit):
+            
+            # Defensive check for pipeline results
+            if not isinstance(results, (list, tuple)) or len(results) < 2:
+                logger.error(f"[REDIS ERROR] Unexpected pipeline result for {key}: {results}")
+                return True, 0, 0
+                
+            try:
+                count = int(results[1])
+            except (ValueError, TypeError) as e:
+                logger.error(f"[REDIS ERROR] Invalid count in sliding window for {key}: {results[1]} | Error: {e}")
+                return True, 0, 0
+
+            if count >= int(limit):
                 oldest = self.client.zrange(key, 0, 0, withscores=True)
                 retry_after = max(0, oldest[0][1] + window - now) if oldest else window
                 return False, count, retry_after
+            
             import uuid
             member = f"{now}:{uuid.uuid4()}"
             self.client.zadd(key, {member: now})
             self.client.expire(key, int(window) + 2)
             return True, count + 1, 0
         except Exception as e:
-            logger.error(f"[REDIS ERROR] Rate limit check failed: {e}")
-            self.available = False
+            logger.exception(f"[REDIS ERROR] Rate limit check failed for {key}")
+            # Fail-open: allow request if rate limiter is broken
             return True, 0, 0
 
     # --- Global Token Bucket (with Fallback) ---

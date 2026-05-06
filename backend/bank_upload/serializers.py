@@ -64,6 +64,7 @@ class BankStatementTempSerializer(serializers.ModelSerializer):
             'raw_data',
             'raw_text',
             'balance',
+            'posting_note',
             'created_at',
             'updated_at',
         ]
@@ -83,6 +84,7 @@ class BankStatementRowUpdateSerializer(serializers.Serializer):
     bank_ledger_id   = serializers.IntegerField(required=False, allow_null=True)
     bank_ledger_name = serializers.CharField(required=False, allow_blank=True)
     ref_no           = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    posting_note     = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     status           = serializers.ChoiceField(
         choices=['draft', 'mapped', 'posted', 'failed', 'duplicate'],
         required=False

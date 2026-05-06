@@ -255,6 +255,21 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
   const totalAllocated =
     pendingTransactions.reduce((s, t) => s + (t.payment || 0), 0) + (advanceAmount || 0);
 
+  const difference = rowAmount - totalAllocated;
+  const isExactMatch = Math.abs(difference) < 0.01;
+  const isOverAllocated = difference < -0.01;
+  const isUnderAllocated = difference > 0.01;
+
+  const getRowStatus = (payment: number, pending: number) => {
+    if (payment === 0) return { label: 'Not Allocated', color: 'slate', status: 'NOT_ALLOCATED', bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200' };
+    if (payment > pending + 0.01) return { label: `Over by ₹${(payment - pending).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, color: 'red', status: 'OVER', bg: 'bg-red-100', text: 'text-red-600', border: 'border-red-200' };
+    if (payment < pending - 0.01) return { label: `Remaining ₹${(pending - payment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, color: 'orange', status: 'PARTIAL', bg: 'bg-orange-100', text: 'text-orange-600', border: 'border-orange-200' };
+    return { label: 'Full', color: 'green', status: 'FULL', bg: 'bg-green-100', text: 'text-green-600', border: 'border-green-200' };
+  };
+
+  const hasAnyOverAllocation = pendingTransactions.some(t => (t.payment || 0) > t.amount + 0.01);
+  const canSave = isExactMatch && !hasAnyOverAllocation;
+
   const checkRefUniqueness = (refNo: string, isVoucherNum = false) => {
     if (!refNo.trim()) return;
     if (uniquenessTimerRef.current) clearTimeout(uniquenessTimerRef.current);
@@ -276,6 +291,16 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = () => {
+    if (!canSave) {
+      if (isUnderAllocated) {
+        alert(`₹${difference.toLocaleString('en-IN', { minimumFractionDigits: 2 })} still needs to be allocated`);
+      } else if (hasAnyOverAllocation) {
+        alert("One or more rows exceed pending amount.");
+      } else if (isOverAllocated) {
+        alert(`Over allocated by ₹${Math.abs(difference).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`);
+      }
+      return;
+    }
     onSave(row.id, {
       pendingTransactions,
       advanceAmount,
@@ -311,16 +336,29 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
       </div>
 
       {/* Allocation summary strip */}
-      <div className="bg-indigo-50 border-b border-indigo-100 px-6 py-2 flex items-center justify-between shrink-0">
-        <span className="text-xs text-indigo-700 font-medium">Allocated</span>
-        <div className="flex items-center gap-4 text-xs">
-          <span className={`font-bold ${totalAllocated > rowAmount ? 'text-red-600' : 'text-indigo-700'}`}>
-            ₹{totalAllocated.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+      <div className={`border-b px-6 py-3 flex items-center justify-between shrink-0 ${isExactMatch ? 'bg-emerald-50 border-emerald-100' : isOverAllocated ? 'bg-red-50 border-red-100' : 'bg-orange-50 border-orange-100'}`}>
+        <div className="flex flex-col">
+          <span className={`text-[10px] font-bold uppercase tracking-wider ${isExactMatch ? 'text-emerald-700' : isOverAllocated ? 'text-red-700' : 'text-orange-700'}`}>
+            Balance Status
           </span>
-          <span className="text-gray-400">of ₹{rowAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-          {totalAllocated > rowAmount && (
-            <span className="text-red-500 font-semibold">⚠ Over-allocated</span>
-          )}
+          <span className={`text-xs font-black ${isExactMatch ? 'text-emerald-600' : isOverAllocated ? 'text-red-600' : 'text-orange-600'}`}>
+            {isExactMatch ? '₹0.00 (Balanced)' : isUnderAllocated ? `₹${difference.toLocaleString('en-IN', { minimumFractionDigits: 2 })} remaining` : `₹${difference.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (Over allocated)`}
+          </span>
+        </div>
+        <div className="flex items-center gap-6 text-xs">
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] text-gray-400 uppercase font-bold">Total Allocated</span>
+            <span className={`font-bold text-sm ${isOverAllocated ? 'text-red-600' : isUnderAllocated ? 'text-orange-600' : 'text-emerald-600'}`}>
+              ₹{totalAllocated.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="h-8 w-px bg-gray-200"></div>
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] text-gray-400 uppercase font-bold">Entered Amount</span>
+            <span className="font-bold text-sm text-gray-700">
+              ₹{rowAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -358,62 +396,70 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase">DATE</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase">REFERENCE NUMBER</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold uppercase">STATUS</th>
-                        <th className="px-3 py-3 text-right text-xs font-semibold uppercase">AMOUNT</th>
+                        <th className="px-3 py-3 text-center text-xs font-semibold uppercase">BILL STATUS</th>
+                        <th className="px-3 py-3 text-center text-xs font-semibold uppercase">ALLOCATION</th>
                         <th className="px-3 py-3 text-right text-xs font-semibold uppercase">PENDING</th>
                         <th className="px-3 py-3 text-center text-xs font-semibold uppercase">ACTION</th>
                         <th className="px-3 py-3 text-right text-xs font-semibold uppercase">{actionFieldLabel}</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {pendingTransactions.map((txn, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm text-gray-700">{txn.date ? txn.date.split('-').reverse().join('-') : '—'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">
-                            <div className="font-medium">{txn.referenceNumber}</div>
-                            {txn.dueDate && (
-                              <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                              txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
-                                ? 'bg-red-100 text-red-600 border border-red-200'
-                                : (txn.dueStatus === 'Partially Received' || txn.dueStatus === 'Partially Paid')
-                                  ? 'bg-orange-100 text-orange-600 border border-orange-200'
-                                  : 'bg-green-100 text-green-600 border border-green-200'
-                            }`}>
-                              {txn.dueStatus}
-                            </span>
-                            {txn.dueStatus === 'Not Due' && txn.daysToDue !== undefined && (
-                              <div className="text-[10px] text-gray-400 mt-1">{txn.daysToDue} days left</div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-700 text-right">
-                            ₹{txn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-right font-medium text-red-600">
-                            ₹{Math.max(0, txn.amount - txn.payment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() => handlePay(index)}
-                              className="px-4 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase rounded-[4px] transition-colors shadow-sm"
-                            >
-                              {actionLabel}
-                            </button>
-                          </td>
-                          <td className="px-3 py-4 text-right">
-                            <input
-                              type="number" onWheel={(e) => e.currentTarget.blur()}
-                              value={txn.payment || ''}
-                              onChange={e => handlePaymentChange(index, parseFloat(e.target.value) || 0)}
-                              placeholder="0"
-                              className="w-20 px-2 py-1.5 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                            />
-                          </td>
-                        </tr>
-                      ))}
+                      {pendingTransactions.map((txn, index) => {
+                        const status = getRowStatus(txn.payment || 0, txn.amount);
+                        const isProblemRow = (isUnderAllocated && (txn.payment === 0 || txn.payment < txn.amount - 0.01)) || (isOverAllocated && txn.payment > txn.amount + 0.01);
+                        
+                        return (
+                          <tr key={index} className={`transition-colors ${isProblemRow ? 'bg-red-50/30' : 'hover:bg-gray-50'}`}>
+                            <td className="px-6 py-4 text-sm text-gray-700">{txn.date ? txn.date.split('-').reverse().join('-') : '—'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-700">
+                              <div className="font-medium">{txn.referenceNumber}</div>
+                              {txn.dueDate && (
+                                <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-4 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
+                                  ? 'bg-red-100 text-red-600 border border-red-200'
+                                  : (txn.dueStatus === 'Partially Received' || txn.dueStatus === 'Partially Paid')
+                                    ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                    : 'bg-green-100 text-green-600 border border-green-200'
+                              }`}>
+                                {txn.dueStatus}
+                              </span>
+                            </td>
+                            <td className="px-3 py-4 text-center">
+                              <div className={`px-2 py-1 rounded-[4px] border text-[10px] font-black uppercase tracking-tight ${status.bg} ${status.text} ${status.border}`}>
+                                {status.label}
+                              </div>
+                            </td>
+                            <td className="px-3 py-4 text-sm text-right font-medium text-red-600">
+                              ₹{Math.max(0, txn.amount - txn.payment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-3 py-4 text-center">
+                              <button
+                                onClick={() => handlePay(index)}
+                                className="px-4 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase rounded-[4px] transition-colors shadow-sm"
+                              >
+                                {actionLabel}
+                              </button>
+                            </td>
+                            <td className="px-3 py-4 text-right">
+                              <input
+                                type="number" onWheel={(e) => e.currentTarget.blur()}
+                                value={txn.payment || ''}
+                                onChange={e => handlePaymentChange(index, parseFloat(e.target.value) || 0)}
+                                placeholder="0"
+                                className={`w-20 px-2 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${
+                                  status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' : 
+                                  status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' : 
+                                  status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
+                                }`}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   <div className="border-t-2 border-gray-200 bg-white px-6 py-4 flex justify-end items-center gap-4">
@@ -491,9 +537,11 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
         )}
       </div>
 
-      {/* Footer action buttons */}
       <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 flex justify-between items-center gap-3">
-        <button onClick={() => onClose(true)} className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors">
+        <button 
+          onClick={() => onClose(true)} 
+          className="px-6 py-2 text-sm font-bold text-slate-500 bg-white border-2 border-slate-200 rounded-[4px] hover:bg-slate-50 transition-all uppercase tracking-wider"
+        >
           Cancel
         </button>
         <div className="flex items-center gap-2">
@@ -504,9 +552,14 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
           )}
           <button
             onClick={handleSave}
-            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-[4px] transition-colors"
+            disabled={!canSave}
+            className={`px-6 py-2 text-sm font-medium rounded-[4px] transition-all ${
+              canSave 
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md' 
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+            }`}
           >
-            Save Allocation
+            {isExactMatch ? 'Save Allocation' : 'Complete Allocation'}
           </button>
         </div>
       </div>
@@ -515,5 +568,4 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
 };
 
 export default BankAllocationPanel;
-export type { AllocationState };
 

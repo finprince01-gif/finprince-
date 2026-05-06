@@ -12,18 +12,27 @@ class TableReconstructor:
     """
 
     def __init__(self):
-        # Step 6: Non-item patterns
+        # Step 6: Non-item / Footer patterns
         self.non_item_patterns = [
             r"\bTOTAL\b", r"\bSUBTOTAL\b", r"\bCGST\b", r"\bSGST\b", 
             r"\bIGST\b", r"\bROUND\s*OFF\b", r"\bNET\s*AMOUNT\b",
-            r"\bTAX\s*AMOUNT\b", r"\bGRAND\s*TOTAL\b"
+            r"\bTAX\s*AMOUNT\b", r"\bGRAND\s*TOTAL\b",
+            r"HSN\s*SUMMARY", r"BANK\s*DETAILS", r"DECLARATION",
+            r"AMOUNT\s*CHARGEABLE", r"OUTPUT\s*CGST", r"OUTPUT\s*SGST",
+            r"CARRIED\s*OVER", r"BROUGHT\s*FORWARD", r"SUMMARY\s*TABLE",
+            r"TAX\s*SUMMARY"
+        ]
+        self.continuation_patterns = [
+            r"CONTINUED", r"NEXT\s*PAGE", r"P\.T\.O", r"CARRIED\s*OVER"
         ]
 
     def _to_float(self, val: Any) -> float:
         if val is None or val == "": return 0.0
         try:
             if isinstance(val, str):
-                cleaned = "".join(c for c in val if c.isdigit() or c == ".")
+                # Handle formatted numbers like 1,234.56
+                cleaned = val.replace(",", "")
+                cleaned = "".join(c for c in cleaned if c.isdigit() or c == ".")
                 return float(cleaned) if cleaned else 0.0
             return float(val)
         except (ValueError, TypeError):
@@ -31,7 +40,26 @@ class TableReconstructor:
 
     def is_non_item_row(self, text: str) -> bool:
         """Step 6: Filter Non-Item Rows."""
-        return any(re.search(p, text, re.IGNORECASE) for p in self.non_item_patterns)
+        if not text or not text.strip():
+            return True
+        
+        # Explicit starts_with checks for totals
+        upper_text = text.upper().strip()
+        if upper_text.startswith("TOTAL") or upper_text.startswith("CGST") or upper_text.startswith("SGST"):
+            logger.info(f"[FOOTER ROW REJECTED] Starts with total/tax keyword: {text}")
+            return True
+
+        for p in self.non_item_patterns:
+            if re.search(p, text, re.IGNORECASE):
+                logger.info(f"[FOOTER ROW REJECTED] Matched footer pattern '{p}': {text}")
+                return True
+        
+        for cp in self.continuation_patterns:
+            if re.search(cp, text, re.IGNORECASE):
+                logger.info(f"[PAGE CONTINUATION DETECTED] {text}")
+                return True
+
+        return False
 
     def classify_numeric_roles(self, row_numbers: List[float], provided_amount: float = 0) -> Dict[str, float]:
         """
@@ -97,10 +125,17 @@ class TableReconstructor:
             # Step 1 & 2: Classify and Validate
             roles = self.classify_numeric_roles(row_vals, provided_amount)
             
-            has_numeric = (roles["qty"] > 0 or roles["rate"] > 0)
+            # STRICT VALIDATION: Must have description, qty, rate, and amount
+            is_detail_row = (
+                desc and 
+                roles["qty"] > 0 and 
+                roles["rate"] > 0 and 
+                roles["amount"] > 0
+            )
 
-            if has_numeric and (provided_amount > 0 or roles["amount"] > 0):
+            if is_detail_row:
                 full_item_name = (pending_desc + " " + desc).strip()
+                logger.info(f"[DETAIL ROW DETECTED] {desc} | Qty: {roles['qty']} | Rate: {roles['rate']} | Amt: {roles['amount']}")
                 
                 # Step 3, 4, 5: Tax extraction and GST derivation handled in normalize.py
                 reconstructed_items.append({
@@ -108,6 +143,7 @@ class TableReconstructor:
                     "qty": roles["qty"],
                     "rate": roles["rate"],
                     "taxable_value": roles["amount"],
+                    "uom": item.get("uom") or item.get("unit") or item.get("quantity_uom") or "",
                     "hsn": hsn or pending_hsn,
                     "igst": self._to_float(item.get("igst") or item.get("igst_amount")),
                     "cgst": self._to_float(item.get("cgst") or item.get("cgst_amount")),
@@ -117,23 +153,30 @@ class TableReconstructor:
                     "sgst_rate": self._to_float(item.get("sgst_rate")),
                     "confidence": roles["confidence"]
                 })
+                logger.info(f"[LINE ITEM ACCEPTED] {full_item_name}")
                 
                 pending_desc = ""
                 pending_hsn = ""
             else:
                 if desc:
+                    logger.info(f"[LINE ITEM REJECTED] {desc} (Insufficient numeric data or missing fields)")
                     pending_desc = (pending_desc + " " + desc).strip()
                 if hsn:
                     pending_hsn = hsn
 
-        if pending_desc:
+        # Final check for any dangling description that isn't just a footer
+        if pending_desc and not self.is_non_item_row(pending_desc):
+            logger.info(f"[SUMMARY TABLE DETECTED] Processing remaining text: {pending_desc}")
+            # If it has some numeric content but failed strict detail check, add as low confidence
+            # but only if it's not obviously a total
             reconstructed_items.append({
                 "description": pending_desc,
                 "qty": 1.0,
                 "rate": 0.0,
                 "taxable_value": 0.0,
+                "uom": "",
                 "hsn": pending_hsn,
-                "confidence": 0.3
+                "confidence": 0.1
             })
 
         if reconstructed_items:

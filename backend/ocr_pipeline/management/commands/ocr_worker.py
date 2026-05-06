@@ -9,6 +9,13 @@ Implements:
   6. Mode-aware coordinated backpressure
   7. Deterministic degradation modes
 """
+import sys
+print("\n" + "!"*80)
+print("CRITICAL: THIS WORKER IS OBSOLETE AND HAS BEEN DECOMMISSIONED.")
+print("USE 'python vouchers/worker.py' INSTEAD.")
+print("!"*80 + "\n")
+sys.exit(1)
+
 import time
 import json
 import random

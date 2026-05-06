@@ -92,7 +92,7 @@ class InvoiceOCRTemp(models.Model):
 
     class Meta:
         db_table = 'invoice_ocr_temp'
-        unique_together = ('tenant_id', 'file_hash')
+        unique_together = ('tenant_id', 'file_hash', 'upload_session_id')
         verbose_name = 'Invoice OCR Staging Item'
 
     def __str__(self):
