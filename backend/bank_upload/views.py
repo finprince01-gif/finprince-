@@ -616,11 +616,49 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
     If 'allocation' is provided, it maps pending transactions and advances.
     """
     # Ensure tenant_id is on the user object for the serializer to find it
-    # and use the correct database scope.
     if not hasattr(request.user, 'tenant_id') or not request.user.tenant_id:
         request.user.tenant_id = tenant_id
     if not hasattr(request.user, 'branch_id') or not request.user.branch_id:
         request.user.branch_id = tenant_id
+
+        from rest_framework.test import APIRequestFactory, force_authenticate
+        factory = APIRequestFactory()
+        
+        is_payment = row.inferred_type == 'payment'
+        path = '/api/vouchers/payment-single/save-amount-only/' if is_payment else '/api/vouchers/receipt-single/save-amount-only/'
+        
+        payload = {
+            'amount': str(row.amount),
+            'date': row.date.isoformat() if row.date else timezone.now().date().isoformat(),
+            'narration': row.narration or f"Bank Posting: {row.bank_ledger_name}",
+            'ref_no': row.ref_no,
+            'posting_note': (allocation.get('posting_note') if allocation else None) or row.narration,
+            'voucher_number': row.voucher_number,
+        }
+        
+        if is_payment:
+            payload['pay_from'] = str(row.bank_ledger_id)
+            payload['pay_to'] = str(row.ledger_id)
+            from accounting.views_payment import PaymentVoucherViewSet
+            view = PaymentVoucherViewSet.as_view({'post': 'save_amount_only'})
+        else:
+            payload['receive_in'] = str(row.bank_ledger_id)
+            payload['receive_from'] = str(row.ledger_id)
+            from accounting.views_receipt import ReceiptVoucherViewSet
+            view = ReceiptVoucherViewSet.as_view({'post': 'save_amount_only'})
+            
+        mock_request = factory.post(path, payload, format='json')
+        # CRITICAL: Force authenticate the internal request
+        force_authenticate(mock_request, user=request.user)
+        
+        response = view(mock_request)
+        if response.status_code >= 400:
+            raise Exception(f"Amount Only Save Failed: {response.data}")
+            
+        class DummyVoucher: pass
+        v = DummyVoucher()
+        v.id = response.data['id']
+        return v
 
     # 1. Prepare Basic Data
     narration = row.narration or f"Bank Posting: {row.bank_ledger_name}"
@@ -685,7 +723,7 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                         'reference_id':   txn.get('id'),
                         'reference_number': txn.get('referenceNumber'),
                         'narration':      row.narration,
-                        'posting_note':   allocation.get('posting_note') or narration,
+                        'posting_note':   (allocation.get('posting_note') if allocation else None) or narration,
                         'transaction_details': {
                             'reference_number': txn.get('referenceNumber'),
                             'date': txn.get('date'),
@@ -705,7 +743,7 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                     'reference_type': 'ADVANCE',
                     'advance_ref_no': allocation.get('advanceRefNo'),
                     'narration':      row.narration,
-                    'posting_note':   allocation.get('posting_note') or narration,
+                    'posting_note':   (allocation.get('posting_note') if allocation else None) or narration,
                 })
         
         # 3. Fallback: If no specific allocation, treat as a single ledger entry (unallocated)
@@ -718,7 +756,7 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                 'amount_applied': amount,
                 'reference_type': 'ON_ACCOUNT',
                 'narration':      row.narration,
-                'posting_note':   allocation.get('posting_note') or narration,
+                'posting_note':   (allocation.get('posting_note') if allocation else None) or narration,
             }]
 
         payload = {
@@ -728,7 +766,7 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
             'date':           date_str,
             'narration':      narration,
             'ref_no':         row.ref_no,
-            'posting_note':   allocation.get('posting_note') or narration,
+            'posting_note':   (allocation.get('posting_note') if allocation else None) or narration,
             'pay_from':       str(row.bank_ledger_id) if row.bank_ledger_id else None,
             'amount':         amount,
             'total_amount':   amount,
@@ -782,7 +820,7 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
                 'amount_applied': amount,
                 'reference_type': 'ON_ACCOUNT',
                 'narration':      row.narration,
-                'posting_note':   allocation.get('posting_note') or narration,
+                'posting_note':   (allocation.get('posting_note') if allocation else None) or narration,
             }]
 
         payload = {
@@ -792,7 +830,7 @@ def _post_row_to_voucher(row: BankStatementTemp, request, tenant_id: str, alloca
             'date':           date_str,
             'narration':      narration,
             'ref_no':         row.ref_no,
-            'posting_note':   allocation.get('posting_note') or narration,
+            'posting_note':   (allocation.get('posting_note') if allocation else None) or narration,
             'receive_in':     str(row.bank_ledger_id) if row.bank_ledger_id else None,
             'customer':       str(resolved_ledger_id),
             'amount':         amount,

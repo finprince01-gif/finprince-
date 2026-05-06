@@ -159,7 +159,9 @@ class CleanOCRStagingView(views.APIView):
                     tenant_id=tenant_id
                 )
         elif session_id:
+            logger.info(f"[STAGING QUERY] session_id={session_id}, tenant_id={tenant_id}")
             records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
+            logger.info(f"[STAGING QUERY RESULT] Found {records.count()} records")
         elif file_paths:
             paths = file_paths.split(',')
             records = InvoiceTempOCR.objects.filter(file_path__in=paths, tenant_id=tenant_id).order_by('created_at', 'id')

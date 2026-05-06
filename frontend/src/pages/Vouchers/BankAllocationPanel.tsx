@@ -311,6 +311,18 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
     });
   };
 
+  const handleAmountOnly = () => {
+    onSave(row.id, {
+      pendingTransactions: [],
+      advanceAmount: 0,
+      advanceRefNo: '',
+      showAdvance: false,
+      availableAdvances: [],
+      totalAllocated: rowAmount,
+      save_amount_only: true, // Special flag for backend
+    } as any);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-white">
@@ -538,26 +550,30 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
       </div>
 
       <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 flex justify-between items-center gap-3">
-        <button 
-          onClick={() => onClose(true)} 
-          className="px-6 py-2 text-sm font-bold text-slate-500 bg-white border-2 border-slate-200 rounded-[4px] hover:bg-slate-50 transition-all uppercase tracking-wider"
-        >
-          Cancel
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleAmountOnly}
+            className="px-6 py-2 text-sm font-bold text-indigo-600 bg-white border-2 border-indigo-200 rounded-[4px] hover:bg-indigo-50 transition-all uppercase tracking-wider"
+          >
+            {actionLabel} Amount Only
+          </button>
+          <button 
+            onClick={() => onClose(true)} 
+            className="px-6 py-2 text-sm font-bold text-slate-500 bg-white border-2 border-slate-200 rounded-[4px] hover:bg-slate-50 transition-all uppercase tracking-wider"
+          >
+            Cancel
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           {totalAllocated > 0 && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 mr-2">
               ₹{totalAllocated.toLocaleString('en-IN', { minimumFractionDigits: 2 })} allocated
             </span>
           )}
           <button
             onClick={handleSave}
             disabled={!canSave}
-            className={`px-6 py-2 text-sm font-medium rounded-[4px] transition-all ${
-              canSave 
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md' 
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-            }`}
+            className={`px-6 py-2 text-sm font-bold text-emerald-600 bg-white border-2 border-emerald-200 rounded-[4px] hover:bg-emerald-50 transition-all uppercase tracking-wider disabled:opacity-50`}
           >
             {isExactMatch ? 'Save Allocation' : 'Complete Allocation'}
           </button>
