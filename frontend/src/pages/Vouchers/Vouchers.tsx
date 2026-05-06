@@ -1128,7 +1128,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         try {
           // If a party (vendor) is selected, filter by it. Status is filtered to 'Pending Approval'.
           const queryParty = (party && !wasPartyAutoSet) ? party : undefined;
-          const res = await apiService.getVendorPurchaseOrders(queryParty || undefined, 'Pending Approval');
+          const res = await apiService.getVendorPurchaseOrders(queryParty || undefined);
           if (res?.data) {
             setAvailablePOs(res.data);
           } else if (Array.isArray(res)) {
@@ -4802,7 +4802,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       readOnly
                                       className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                     />
-                                    <span>{po.po_number} {po.vendor_name ? `- ${po.vendor_name}` : ''}</span>
+                                    <span>{po.po_number} ({po.status}) {po.vendor_name ? `- ${po.vendor_name}` : ''}</span>
                                   </div>
                                 );
                               })

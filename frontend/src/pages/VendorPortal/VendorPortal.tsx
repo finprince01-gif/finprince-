@@ -1718,7 +1718,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         poDate: string;
         vendorName: string;
         address: string;
-        status: 'Draft' | 'Pending Approval' | 'Approved' | 'Mailed' | 'Closed' | 'Cancelled';
+        status: 'Draft' | 'Pending Approval' | 'Approved' | 'Mailed' | 'Closed' | 'Cancelled' | 'Executed Cancelled';
         receiveBy?: string;
         receiveAt?: string;
         deliveryTerms?: string;
@@ -2234,24 +2234,25 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         setShowCancelPOModal(true);
     };
 
-    const handleConfirmCancelPO = () => {
+    const handleConfirmCancelPO = async () => {
+        if (!selectedPO) return;
+
         // Validate that reason is provided
         if (!cancelReason.trim()) {
             showError('Please provide a reason for cancellation');
             return;
         }
 
+        // Backend will decide: 'Cancelled' if not used in GRN/Voucher, 'Executed Cancelled' if used
+        const success = await handleUpdatePOStatus(selectedPO.id, 'Cancelled');
 
-        // Remove the PO from the list (or update status to 'Cancelled')
-        setPurchaseOrders(purchaseOrders.filter(po => po.id !== selectedPO.id));
-
-
-
-        // Close both modals and reset state
-        setShowCancelPOModal(false);
-        setShowViewPOModal(false);
-        setCancelReason('');
-        setSelectedPO(null);
+        if (success) {
+            // Close both modals and reset state
+            setShowCancelPOModal(false);
+            setShowViewPOModal(false);
+            setCancelReason('');
+            setSelectedPO(null);
+        }
     };
 
     const handleCloseCancelModal = () => {
@@ -5511,7 +5512,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                         const count = tab === 'Pending PO'
                                                             ? purchaseOrders.filter(po => po.status === 'Mailed').length
                                                             : tab === 'Executed PO'
-                                                                ? purchaseOrders.filter(po => ['Closed', 'Cancelled'].includes(po.status)).length
+                                                                ? purchaseOrders.filter(po => ['Closed', 'Cancelled', 'Executed Cancelled'].includes(po.status)).length
                                                                 : 0;
 
                                                         return (
@@ -5791,14 +5792,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white divide-y divide-gray-200">
-                                                            {purchaseOrders.filter(po => ['Closed', 'Cancelled'].includes(po.status)).length === 0 ? (
+                                                            {purchaseOrders.filter(po => ['Closed', 'Cancelled', 'Executed Cancelled'].includes(po.status)).length === 0 ? (
                                                                 <tr>
                                                                     <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                                                                         No executed or cancelled purchase orders found.
                                                                     </td>
                                                                 </tr>
                                                             ) : (
-                                                                purchaseOrders.filter(po => ['Closed', 'Cancelled'].includes(po.status)).map((po) => (
+                                                                purchaseOrders.filter(po => ['Closed', 'Cancelled', 'Executed Cancelled'].includes(po.status)).map((po) => (
                                                                     <tr key={po.id} className="hover:bg-gray-50 transition-colors">
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
@@ -5807,7 +5808,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] border ${po.status === 'Cancelled'
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] border ${po.status.includes('Cancelled')
                                                                                 ? 'bg-red-50 text-red-700 border-red-200'
                                                                                 : 'bg-slate-100 text-slate-700 border-slate-200'
                                                                                 }`}>
@@ -8094,7 +8095,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                             Cancel
                                                         </button>
                                                         {isCreatePOViewMode ? (
-                                                            !['Closed', 'Cancelled'].includes(selectedPO?.status || '') && (
+                                                            !['Closed', 'Cancelled', 'Executed Cancelled'].includes(selectedPO?.status || '') && (
                                                                 <button
                                                                     onClick={() => setIsCreatePOViewMode(false)}
                                                                     className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium"
@@ -8346,7 +8347,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                         </>
                                                     )}
                                                     {/* Show Cancel button only for Approved status when not editing */}
-                                                    {!isEditingPO && selectedPO.status === 'Approved' && (
+                                                    {!isEditingPO && (['Approved', 'Mailed'] as string[]).includes(selectedPO.status) && (
                                                         <button
                                                             onClick={handleCancelPOClick}
                                                             className="px-6 py-2 border border-red-500 text-red-600 rounded-[4px] hover:bg-red-50 font-medium"
