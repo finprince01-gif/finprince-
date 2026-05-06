@@ -8,7 +8,6 @@ import os
 import time
 import hashlib
 import logging
-import time
 
 from django.conf import settings
 from rest_framework.views import APIView
@@ -130,7 +129,6 @@ class BulkUploadAPIView(APIView):
             return Response({'error': 'Internal error. Please retry.'}, status=500)
 
     def _create_and_enqueue(self, request, tenant_id, files, fingerprint, lock):
-        voucher_type = request.data.get('voucher_type', 'Purchase')
         # ── GATE 6: Large job protection ─────────────────────────────────────
         if len(files) > MAX_PAGES_PER_JOB:
             logger.warning(f"[UPLOAD] Large batch ({len(files)} files > {MAX_PAGES_PER_JOB}). "
@@ -209,7 +207,7 @@ class BulkUploadAPIView(APIView):
             p_queue = 'bulk_jobs_low'
 
         task = {
-            'id': job.id,
+            'id': f"bulk_{job.id}",
             'job_id': job.id,
             'voucher_type': voucher_type,
             'tenant_id': tenant_id,
@@ -301,9 +299,10 @@ class BulkStatusAPIView(APIView):
                 'status':    job.status,
                 'progress':  progress,
                 'total':     total,
-                'processed': success + failed,
+                'processed': success,
                 'failed':    failed,
-                'pending':   pending
+                'pending':   pending,
+                'completed': job.status in ['completed', 'failed', 'success']
             })
 
         except BulkInvoiceJob.DoesNotExist:

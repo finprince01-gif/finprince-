@@ -244,16 +244,6 @@ class AIRequestQueue:
             logger.critical(f"[ADMISSION CONTROL] Rejected request. Queue size {q_len} exceeds limit {TOTAL_LIMIT}")
             return {'error': 'AI System is busy (High Queue Load)', 'code': 'BACKPRESSURE', 'status': 503}
 
-        # OPTIONAL: Synchronous Bypass (Used by background workers to avoid double-queueing)
-        if request_data.get('bypass_queue'):
-            request_id = hashlib.md5(f"{time.time()}:{json.dumps(request_data)}".encode()).hexdigest()
-            logger.info(f"[Queue] Bypassing AI queue for task {request_id} (Direct Execution)")
-            # Still respect global pacing
-            MAX_RPS = getattr(settings, 'AI_MAX_RPS', 5)
-            while not redis_client.acquire_token("global_ai_pace", MAX_RPS, MAX_RPS):
-                time.sleep(0.1)
-            return process_ai_request(request_data)
-
         request_id = hashlib.md5(f"{time.time()}:{json.dumps(request_data)}".encode()).hexdigest()
         
         task = {
@@ -271,29 +261,10 @@ class AIRequestQueue:
         redis_client.record_metric('ai_queue_length', q_len + 1)
         logger.info(f"[Queue] Enqueued task {request_id}. Current Size: {q_len + 1}")
 
-        # Wait for result in Redis
-        result_key = f"ai_result:{request_id}"
-        timeout = 360
-        start = time.time()
-        while time.time() - start < timeout:
-            res = redis_client.get_client().get(result_key)
-            if res:
-                redis_client.get_client().delete(result_key)
-                return json.loads(res)
-            time.sleep(0.5)
-
-        return {'error': 'AI request timed out in Redis queue'}
-
-    def _enqueue_local(self, request_data: dict) -> dict:
-        """Fallback: Process request locally using a thread-pool if Redis is dead"""
-        if not self._local_worker_started:
-            self._start_local_workers()
-        
-        event = threading.Event()
-        task = {
-            'request_data': request_data,
-            'event': event,
-            'result': None
+        return {
+            'status': 'queued',
+            'job_id': request_id,
+            'message': 'AI task enqueued successfully'
         }
 
 
