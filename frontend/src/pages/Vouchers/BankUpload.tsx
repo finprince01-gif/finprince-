@@ -120,6 +120,14 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
     fetchPayFrom();
   }, []);
 
+  // Safety: Resolve bankLedgerName if we have bankLedgerId but missing name (e.g. on resume)
+  useEffect(() => {
+    if (bankLedgerId && !bankLedgerName && payFromOptions.length > 0) {
+      const l = payFromOptions.find(x => x.id === bankLedgerId);
+      if (l) setBankLedgerName(l.name);
+    }
+  }, [bankLedgerId, bankLedgerName, payFromOptions]);
+
   // Party options — single combined fetch (shared for payment + receipt)
   const { options: allPartyOptions, loading: partyLoading } = useBankPartyOptions();
 
@@ -167,6 +175,16 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
       setSessionId(res.session_id);
       const rows = res.rows || [];
       setAllRows(rows);
+
+      // Ensure bank ledger name/id are set from the data if not already present
+      if (rows.length > 0) {
+        if (!bankLedgerName && rows[0].bank_ledger_name) {
+          setBankLedgerName(rows[0].bank_ledger_name);
+        }
+        if (!bankLedgerId && rows[0].bank_ledger_id) {
+          setBankLedgerId(rows[0].bank_ledger_id);
+        }
+      }
 
       // Fetch voucher configs
       const [p, r] = await Promise.all([
@@ -571,13 +589,13 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
             <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold mb-0">
               <div className="flex items-center gap-2">
                 <span className="text-amber-500 text-base">⚠️</span>
-                <span>{duplicateRows.length} duplicate transaction{duplicateRows.length > 1 ? 's' : ''} detected — these will not be posted.</span>
+                <span>{duplicateRows.length} transaction{duplicateRows.length > 1 ? 's' : ''} already recorded — these will not be posted.</span>
               </div>
               <button
                 onClick={() => setShowDuplicates(v => !v)}
                 className="ml-4 px-3 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-800 text-[10px] font-bold uppercase tracking-widest transition-all"
               >
-                {showDuplicates ? 'Hide Duplicates' : 'Show Duplicates'}
+                {showDuplicates ? 'Hide Already Recorded' : 'Show Already Recorded'}
               </button>
             </div>
           )}

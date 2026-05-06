@@ -597,6 +597,53 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         }, 500);
     };
 
+    const handlePayAmountOnly = async () => {
+        if (!topAmount || topAmount <= 0) {
+            showError("Please enter an amount first.");
+            return;
+        }
+        if (!payTo) {
+            showError("Please select a 'Pay To' party first.");
+            return;
+        }
+        
+        try {
+            const findLedgerId = (name: string) => {
+                if (!name) return null;
+                const normalized = name.trim().toLowerCase();
+                const found = payToOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
+                if (found) return found.id;
+                return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
+            };
+
+            const payToId = findLedgerId(payTo);
+            const payFromId = findLedgerId(payFrom);
+
+            if (!payToId || !payFromId) {
+                showError("Please select valid 'Pay From' and 'Pay To' accounts.");
+                return;
+            }
+
+            const payload = {
+                date: date,
+                voucher_type: selectedPaymentConfig,
+                voucher_number: voucherNumber,
+                ref_no: refNo,
+                pay_from: payFromId,
+                pay_to: payToId,
+                amount: topAmount,
+                narration: postingNote,
+                is_amount_only: true
+            };
+            
+            await httpClient.post('/api/vouchers/payment-single/save-amount-only/', payload);
+            showSuccess("Payment recorded (Amount Only)");
+            handleCancel();
+        } catch (error) {
+            showError("Failed to record payment. Please try again.");
+        }
+    };
+
     // Bulk Mode: Auto-calculate Amount based on Pay Now + Advance for selected vendor
     useEffect(() => {
         if (!selectedRowId || activeTab !== 'bulk') return;
@@ -1202,6 +1249,12 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 >
                                     Advance
                                 </button>
+                                <button
+                                    onClick={handlePayAmountOnly}
+                                    className="px-4 py-2 border border-indigo-200 rounded-[4px] text-sm font-bold text-indigo-600 bg-white hover:bg-indigo-50 transition-colors whitespace-nowrap"
+                                >
+                                    Pay Amount Only
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1413,16 +1466,16 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     <div className="flex justify-center gap-4">
                         <button
                             onClick={handleCancel}
-                            className="px-8 py-2 bg-white hover:bg-gray-50 border-2 border-gray-300 rounded-[4px] text-gray-700 font-medium text-sm"
+                            className="px-8 py-2 bg-white hover:bg-gray-50 border-2 border-gray-300 rounded-[4px] text-gray-700 font-bold text-sm uppercase tracking-wider"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handlePostPayment}
                             disabled={!canPost}
-                            className={`px-8 py-2 font-medium rounded-[4px] text-sm transition-all ${
+                            className={`px-8 py-2 font-bold rounded-[4px] text-sm transition-all uppercase tracking-wider ${
                                 canPost 
-                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md' 
+                                    ? 'bg-white border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50' 
                                     : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
                             }`}
                         >
