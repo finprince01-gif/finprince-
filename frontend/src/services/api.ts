@@ -605,6 +605,101 @@ class ApiService {
     }
 
     /**
+     * Get a specific voucher by ID
+     * @param id - Voucher ID
+     * @returns Detailed voucher object
+     */
+    async getVoucher(id: number | string, options: AxiosRequestConfig = {}) {
+        const response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+        
+        const typeMap: Record<string, string> = {
+            'sales': 'Sales',
+            'purchase': 'Purchase',
+            'payment': 'Payment',
+            'receipt': 'Receipt',
+            'contra': 'Contra',
+            'journal': 'Journal',
+            'expense': 'Expense',
+        };
+
+        const base = {
+            ...response,
+            type: (typeMap[response.type?.toLowerCase()] || response.type) as any
+        };
+
+        // Fetch detailed data from source-specific endpoint when available
+        const referenceId = response.reference_id;
+        const source = response.source || '';
+
+        if (referenceId) {
+            try {
+                let detailEndpoint = '';
+                if (source === 'purchase_voucher' || base.type === 'Purchase') {
+                    detailEndpoint = `/api/vouchers/purchase/${referenceId}/`;
+                } else if (source === 'sales_voucher' || source === 'sales_invoice' || base.type === 'Sales') {
+                    detailEndpoint = `/api/vouchers/sales/${referenceId}/`;
+                }
+
+                if (detailEndpoint) {
+                    const detail = await httpClient.get<any>(detailEndpoint, undefined, options);
+                    // Merge detail fields: party/vendor info, address, due details, line items
+                    return {
+                        ...base,
+                        // Party/vendor info
+                        party: detail.vendor_name || detail.customer_name || base.party,
+                        gstin: detail.gstin || base.gstin || '',
+                        branch: detail.branch || base.branch || '',
+                        bill_to_address_1: detail.bill_from || detail.bill_to || '',
+                        ship_to_address_1: detail.ship_from || detail.ship_to || '',
+                        // Supplier invoice details
+                        supplier_invoice_no: detail.supplier_invoice_no || base.invoice_no || '',
+                        supplier_invoice_date: detail.supplier_invoice_date || base.date || '',
+                        purchase_voucher_series: detail.purchase_voucher_series || '',
+                        grn_reference: detail.grn_reference || '',
+                        input_type: detail.input_type || '',
+                        invoice_in_foreign_currency: detail.invoice_in_foreign_currency || 'No',
+                        // Due/payment details (nested object with TDS, advance, to_pay)
+                        due_details: detail.due_details || null,
+                        // Supply details
+                        supply_inr_details: detail.supply_inr_details || null,
+                        supply_foreign_details: detail.supply_foreign_details || null,
+                        // Extract ledger info to root for easy binding
+                        purchase_ledger: detail.supply_inr_details?.purchase_ledger || detail.supply_foreign_details?.purchase_ledger || '',
+                        sales_ledger: detail.supply_inr_details?.sales_ledger || detail.supply_foreign_details?.sales_ledger || '',
+                        ledger_narration: detail.supply_inr_details?.description || detail.supply_foreign_details?.description || '',
+                        // Dispatch/transit details
+                        transit_details: detail.transit_details || null,
+                        // Line items with correct field names (from purchase/sales serializer)
+                        items: (detail.line_items || []).map((item: any) => ({
+                            itemCode: item.item_code || item.itemCode || '',
+                            itemName: item.item_name || item.itemName || '',
+                            hsnSac: item.hsn_sac || item.hsnSac || '',
+                            qty: parseFloat(item.quantity || item.qty || '0'),
+                            uom: item.uom || '',
+                            itemRate: parseFloat(item.rate || item.itemRate || '0'),
+                            taxableValue: parseFloat(item.taxable_value || item.taxableValue || '0'),
+                            igst: parseFloat(item.igst_amount || item.igst || '0'),
+                            cgst: parseFloat(item.cgst_amount || item.cgst || '0'),
+                            sgst: parseFloat(item.sgst_amount || item.sgst || '0'),
+                            cess: parseFloat(item.cess_amount || item.cess || '0'),
+                            invoiceValue: parseFloat(item.invoice_value || item.invoiceValue || '0'),
+                            // Keep originals too for read/write
+                            igst_amount: parseFloat(item.igst_amount || item.igst || '0'),
+                            cgst_amount: parseFloat(item.cgst_amount || item.cgst || '0'),
+                            sgst_amount: parseFloat(item.sgst_amount || item.sgst || '0'),
+                        })) || base.items || [],
+                    };
+                }
+            } catch (detailErr) {
+                // Fall back to base if detail fetch fails
+                console.warn('Could not fetch voucher detail:', detailErr);
+            }
+        }
+
+        return base;
+    }
+
+    /**
      * Get all journal entries for the current tenant
      * Returns: Array of journal entry objects
      */

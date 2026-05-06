@@ -495,6 +495,8 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 account=getattr(receipt.receive_in, 'name', None),
                 amount=receipt.amount,
                 total=receipt.total_amount,
+                narration=receipt.narration,
+                ref_no=receipt.ref_no,
                 source=getattr(receipt, 'source', 'manual'),
                 reference_id=receipt.id,
                 items_data=items_data,
