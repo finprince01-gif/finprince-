@@ -16,6 +16,7 @@ import { BILLING_CURRENCIES } from '../../constants/customerPortalConstants';
 import { formatDate } from '../../utils/formatting';
 import VendorViewModal from '../../components/VendorViewModal';
 import NetoffProcessModal from '../../components/NetoffProcessModal';
+import MultiSelectDropdown from '../../components/MultiSelectDropdown';
 
 
 type VendorTab = 'Master' | 'Transaction';
@@ -1400,10 +1401,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     setFssaiLicenseNo(tds.fssai_license_no || '');
                     setImportExportCode(tds.import_export_code || '');
                     setEouStatus(tds.eou_status || '');
-                    setTdsSectionApplicable(tds.tds_section_applicable || '');
-                    setTcsSectionApplicable(tds.tcs_section_applicable || '');
-                    if (tds.tds_section_applicable) setTaxApplicableType('TDS');
-                    else if (tds.tcs_section_applicable) setTaxApplicableType('TCS');
+                    const tdsSections = tds.tds_section_applicable ? tds.tds_section_applicable.split(',') : [];
+                    const tcsSections = tds.tcs_section_applicable ? tds.tcs_section_applicable.split(',') : [];
+                    setTdsSectionsApplicable(tdsSections);
+                    setTcsSectionsApplicable(tcsSections);
+                    if (tdsSections.length > 0) setTaxApplicableType('TDS');
+                    else if (tcsSections.length > 0) setTaxApplicableType('TCS');
                     else setTaxApplicableType('');
                     setEnableAutomaticTdsPosting(tds.enable_automatic_tds_posting || false);
                 }
@@ -2578,8 +2581,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const [fssaiLicenseNo, setFssaiLicenseNo] = useState('');
     const [importExportCode, setImportExportCode] = useState('');
     const [eouStatus, setEouStatus] = useState('');
-    const [tdsSectionApplicable, setTdsSectionApplicable] = useState('');
-    const [tcsSectionApplicable, setTcsSectionApplicable] = useState('');
+    const [tdsSectionsApplicable, setTdsSectionsApplicable] = useState<string[]>([]);
+    const [tcsSectionsApplicable, setTcsSectionsApplicable] = useState<string[]>([]);
     // 'TDS' | 'TCS' | '' — mutually exclusive selection
     const [taxApplicableType, setTaxApplicableType] = useState<'TDS' | 'TCS' | ''>('');
     const [enableAutomaticTdsPosting, setEnableAutomaticTdsPosting] = useState(false);
@@ -2686,8 +2689,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
         setFssaiLicenseNo('');
         setImportExportCode('');
         setEouStatus('');
-        setTdsSectionApplicable('');
-        setTcsSectionApplicable('');
+        setTdsSectionsApplicable([]);
+        setTcsSectionsApplicable([]);
         setTaxApplicableType('');
         setEnableAutomaticTdsPosting(false);
         setUploadedFiles({
@@ -2887,21 +2890,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 tdsFormData.append('vendor_basic_detail', newId.toString());
 
                 // Map TDS section to backend keys - Send exact value as requested
-                const mappedTdsSection = tdsSectionApplicable || '';
-                const rateInfo = getTDSRateInfo(mappedTdsSection);
+                const tdsJoined = tdsSectionsApplicable.join(',');
+                const tcsJoined = tcsSectionsApplicable.join(',');
+                const firstTdsSection = tdsSectionsApplicable[0] || '';
+                const rateInfo = getTDSRateInfo(firstTdsSection);
 
                 tdsFormData.append('msme_udyam_no', msmeUdyamNo || '');
                 tdsFormData.append('fssai_license_no', fssaiLicenseNo || '');
                 tdsFormData.append('import_export_code', importExportCode || '');
                 tdsFormData.append('eou_status', eouStatus || '');
-                tdsFormData.append('tds_section_applicable', mappedTdsSection);
-                tdsFormData.append('tds_section', mappedTdsSection); // Also send as tds_section
+                tdsFormData.append('tds_section_applicable', tdsJoined);
+                tdsFormData.append('tds_section', tdsJoined); // Also send as tds_section
+                tdsFormData.append('tcs_section_applicable', tcsJoined);
                 tdsFormData.append('tds_rate', rateInfo.tdsRate);
                 tdsFormData.append('pan_number', panNo || '');
                 // TCS
-                const tcsMappedSection = tcsSectionApplicable || '';
-                const tcsRateInfo = getTCSRateInfo(tcsMappedSection);
-                tdsFormData.append('tcs_section_applicable', tcsMappedSection);
+                const firstTcsSection = tcsSectionsApplicable[0] || '';
+                const tcsRateInfo = getTCSRateInfo(firstTcsSection);
+                tdsFormData.append('tcs_section_applicable', tcsJoined);
                 tdsFormData.append('tcs_rate', tcsRateInfo ? tcsRateInfo.tcsRate : '');
                 tdsFormData.append('enable_automatic_tds_posting', enableAutomaticTdsPosting ? 'true' : 'false');
 
@@ -3042,8 +3048,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
             setFssaiLicenseNo('');
             setImportExportCode('');
             setEouStatus('');
-            setTdsSectionApplicable('');
-            setTcsSectionApplicable('');
+            setTdsSectionsApplicable([]);
+            setTcsSectionsApplicable([]);
             setTaxApplicableType('');
             setEnableAutomaticTdsPosting(false);
             setUploadedFiles({
@@ -4737,7 +4743,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             <div className="flex gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() => { setTaxApplicableType('TDS'); setTcsSectionApplicable(''); }}
+                                                    onClick={() => { setTaxApplicableType('TDS'); setTcsSectionsApplicable([]); }}
                                                     className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${taxApplicableType === 'TDS'
                                                         ? 'bg-indigo-600 text-white border-indigo-600'
                                                         : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
@@ -4745,7 +4751,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                 >TDS</button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => { setTaxApplicableType('TCS'); setTdsSectionApplicable(''); }}
+                                                    onClick={() => { setTaxApplicableType('TCS'); setTdsSectionsApplicable([]); }}
                                                     className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${taxApplicableType === 'TCS'
                                                         ? 'bg-emerald-600 text-white border-emerald-600'
                                                         : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'
@@ -4753,7 +4759,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                 >TCS</button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => { setTaxApplicableType(''); setTdsSectionApplicable(''); setTcsSectionApplicable(''); }}
+                                                    onClick={() => { setTaxApplicableType(''); setTdsSectionsApplicable([]); setTcsSectionsApplicable([]); }}
                                                     className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${taxApplicableType === ''
                                                         ? 'bg-gray-500 text-white border-gray-500'
                                                         : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
@@ -4765,20 +4771,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             {taxApplicableType === 'TDS' && (
                                                 <div className="space-y-2">
                                                     <label className="label-text">TDS Section Applicable</label>
-                                                    <select
-                                                        value={tdsSectionApplicable}
-                                                        onChange={(e) => setTdsSectionApplicable(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                                    >
-                                                        <option value="">Select TDS Section</option>
-                                                        {Object.keys(TDS_RATES_MASTER).map((sectionKey) => (
-                                                            <option key={sectionKey} value={sectionKey}>
-                                                                {sectionKey} @ {TDS_RATES_MASTER[sectionKey].tdsRate}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {tdsSectionApplicable && (() => {
-                                                        const rateInfo = getTDSRateInfo(tdsSectionApplicable);
+                                                    <MultiSelectDropdown
+                                                        options={Object.keys(TDS_RATES_MASTER).map((sectionKey) => ({
+                                                            value: sectionKey,
+                                                            label: `${sectionKey} @ ${TDS_RATES_MASTER[sectionKey].tdsRate}`
+                                                        }))}
+                                                        selectedValues={tdsSectionsApplicable}
+                                                        onChange={setTdsSectionsApplicable}
+                                                        placeholder="Select TDS Sections"
+                                                    />
+                                                    {tdsSectionsApplicable.length > 0 && (() => {
+                                                        const firstSection = tdsSectionsApplicable[0];
+                                                        const rateInfo = getTDSRateInfo(firstSection);
                                                         return rateInfo ? (
                                                             <div className="p-4 bg-slate-50/50 border-l-4 border-indigo-500 rounded-[4px]">
                                                                 <div className="flex items-start gap-3">
@@ -4803,21 +4807,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                             {taxApplicableType === 'TCS' && (
                                                 <div className="space-y-2">
                                                     <label className="label-text">TCS Section Applicable</label>
-                                                    <select
-                                                        value={tcsSectionApplicable}
-                                                        onChange={(e) => setTcsSectionApplicable(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-emerald-500 focus:border-emerald-500 bg-white"
-                                                    >
-                                                        <option value="">Select TCS Section</option>
-                                                        <option value="Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals">Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals</option>
-                                                        <option value="Section 206C(1) - Sale of Tendu Leaves">Section 206C(1) - Sale of Tendu Leaves</option>
-                                                        <option value="Section 206C(1) - Sale of Forest Produce">Section 206C(1) - Sale of Forest Produce</option>
-                                                        <option value="Section 206C(1) - Sale of Timber">Section 206C(1) - Sale of Timber</option>
-                                                        <option value="Section 206C(1F) - Sale of Motor Vehicles">Section 206C(1F) - Sale of Motor Vehicles</option>
-                                                        <option value="Section 206C(1F) - Sale of Specified Luxury Goods">Section 206C(1F) - Sale of Specified Luxury Goods</option>
-                                                    </select>
-                                                    {tcsSectionApplicable && (() => {
-                                                        const tcsInfo = getTCSRateInfo(tcsSectionApplicable);
+                                                    <MultiSelectDropdown
+                                                        options={Object.keys(TCS_RATES_MASTER).map((sectionKey) => ({
+                                                            value: sectionKey,
+                                                            label: `${sectionKey} @ ${TCS_RATES_MASTER[sectionKey].tcsRate}`
+                                                        }))}
+                                                        selectedValues={tcsSectionsApplicable}
+                                                        onChange={setTcsSectionsApplicable}
+                                                        placeholder="Select TCS Sections"
+                                                    />
+                                                    {tcsSectionsApplicable.length > 0 && (() => {
+                                                        const firstSection = tcsSectionsApplicable[0];
+                                                        const tcsInfo = getTCSRateInfo(firstSection);
                                                         return tcsInfo ? (
                                                             <div className="p-4 bg-emerald-50/60 border-l-4 border-emerald-500 rounded-[4px]">
                                                                 <div className="flex items-start gap-3">

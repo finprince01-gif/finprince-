@@ -494,6 +494,7 @@ class VendorMasterTDS(models.Model):
     cin_number = models.CharField(max_length=21, blank=True, null=True, help_text="CIN Number")
     # TCS Fields
     tcs_section_applicable = models.CharField(max_length=500, blank=True, null=True, help_text="TCS Section Applicable")
+    tcs_section = models.CharField(max_length=500, blank=True, null=True, help_text="TCS Section (alternate)")
     tcs_rate = models.CharField(max_length=50, blank=True, null=True, help_text="TCS Rate")
     
     # File Uploads

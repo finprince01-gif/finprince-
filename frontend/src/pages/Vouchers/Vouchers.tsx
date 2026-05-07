@@ -879,6 +879,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Purchase Due Details State
   const [purchaseTdsIt, setPurchaseTdsIt] = useState('0.00');
   const [purchaseTaxIsTcs, setPurchaseTaxIsTcs] = useState(false); // true = TCS (add to amount due), false = TDS (subtract)
+  const [purchaseAvailableTcsSections, setPurchaseAvailableTcsSections] = useState<string[]>([]);
+  const [purchaseAvailableTdsSections, setPurchaseAvailableTdsSections] = useState<string[]>([]);
+  const [purchaseSelectedStatutorySection, setPurchaseSelectedStatutorySection] = useState<string>('');
+  const [vendorTaxType, setVendorTaxType] = useState<string>('NONE');
   const [purchaseAdvancePaid, setPurchaseAdvancePaid] = useState('0.00');
   const [purchaseToPay, setPurchaseToPay] = useState('0.00');
   const [purchasePostingNote, setPurchasePostingNote] = useState('');
@@ -2617,43 +2621,119 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     if (!vendor) return;
 
-    // Use tds_rate if available, otherwise fallback to tcs_rate
-    const rawTds = vendor.tds_rate;
-    const rawTcs = vendor.tcs_rate;
+    const TDS_RATE_MAP: Record<string, number> = {
+      // Common Sections
+      'Contracts- Individual/HUF': 0.01,
+      'Contracts- Others': 0.02,
+      'Commission/Brokerage': 0.02,
+      'Rent- Land, Building, Furniture & fitting': 0.02,
+      'Rent- Plant & Machinery, Equipment': 0.10,
+      'Technical Services': 0.02,
+      'Professional Services': 0.10,
+      "Director's Remuneration": 0.10,
+      'Purchase of Goods': 0.001,
+      'Interest other than interest on securities': 0.10,
+      'Benefit or Perquisite': 0.10,
+      'Immovable Property Transfer': 0.01,
+      'Rent by Individual or HUF': 0.02,
+      'Joint Development Agreements': 0.10,
+      'Contractors & Professionals': 0.02,
+      'E-Commerce': 0.01,
 
-    let activeRateStr = '';
+      // Sections from Portal (Full Strings)
+      'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': 0.10,
+      'Section 393(1) - Interest on Securities': 0.10,
+      'Section 393(1) - Interest other than Securities': 0.10,
+      'Section 393(1) - Dividends (Domestic Company)': 0.10,
+      'Section 393(1) - Contractor Payments (Large Payer) - Individual/HUF': 0.01,
+      'Section 393(1) - Contractor Payments (Large Payer) - Other than Individual/HUF': 0.02,
+      'Section 393(1) - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': 0.05,
+      'Section 393(1) - Technical Services / Call Centre / Film Royalty': 0.02,
+      'Section 393(1) - Professional Fees / Other Royalty': 0.10,
+      'Section 393(1) - Insurance Commission': 0.02,
+      'Section 393(1) - General Commission or Brokerage': 0.02,
+      'Section 393(1) - Rent (Individual/HUF Payer > ₹50,000/mo)': 0.02,
+      'Section 393(1) - Rent on Plant & Machinery': 0.02,
+      'Section 393(1) - Rent on Land & Building': 0.10,
+      'Section 393(1) - Transfer of Immovable Property (> ₹50L)': 0.01,
+      'Section 393(1) - Purchase of Goods (exceeding ₹50L)': 0.001,
+      'Section 393(1) - Virtual Digital Assets (VDA/Crypto)': 0.01,
+      'Section 393(3) - Winnings from Lottery / Puzzles': 0.30,
+      'Section 393(3) - Regular Filer (ITR filed in previous years) > 1 cr': 0.02,
+      'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 20L': 0.02,
+      'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 1Cr': 0.05,
+      'Section 393(3) - Co-operative Societies > 3 cr': 0.02,
+      'Section 393(3) - Payments to Partners (Salary/Comm. > ₹20k)': 0.10,
+      'Section 393(2) - Sportsmen / Sports Association (Non-Resident)': 0.20,
+      'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': 0.05,
+      'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': 0.09,
+      'Section 393(2) - Income/LTCG from Offshore Fund Units': 0.10,
+      'Section 393(2) - Interest/Dividends/LTCG on Bonds/GDR': 0.10,
+      'Section 393(2) - Any other sum payable to Non-Resident': 0.30,
+    };
+
+    const TCS_RATE_MAP: Record<string, number> = {
+      'Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+      'Sale of Tendu Leaves': 0.05,
+      'Sale of Forest Produce': 0.02,
+      'Sale of Timber': 0.02,
+      'Sale of Motor Vehicles': 0.01,
+      'Sale of Specified Luxury Goods': 0.01,
+      
+      // Full Strings
+      'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+      'Section 206C(1) - Sale of Tendu Leaves': 0.05,
+      'Section 206C(1) - Sale of Forest Produce': 0.02,
+      'Section 206C(1) - Sale of Timber': 0.02,
+      'Section 206C(1F) - Sale of Motor Vehicles': 0.01,
+      'Section 206C(1F) - Sale of Specified Luxury Goods': 0.01,
+    };
+
+    let rateDecimal = 0;
     let isTcs = false;
-    if (rawTds && rawTds !== '-' && rawTds !== '0%') {
-      activeRateStr = rawTds;
+
+    if (vendorTaxType === 'TDS' && purchaseSelectedStatutorySection) {
+      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
+      rateDecimal = TDS_RATE_MAP[name] ?? 0;
       isTcs = false;
-    } else if (rawTcs && rawTcs !== '-' && rawTcs !== '0%') {
-      activeRateStr = rawTcs;
+    } else if (vendorTaxType === 'TCS' && purchaseSelectedStatutorySection) {
+      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
+      rateDecimal = TCS_RATE_MAP[name] ?? 0;
       isTcs = true;
+    } else {
+      // Fallback for legacy data
+      const rawTds = vendor.tds_rate;
+      const rawTcs = vendor.tcs_rate;
+      let activeRateStr = '';
+      if (rawTds && rawTds !== '-' && rawTds !== '0%') {
+        activeRateStr = rawTds;
+        isTcs = false;
+      } else if (rawTcs && rawTcs !== '-' && rawTcs !== '0%') {
+        activeRateStr = rawTcs;
+        isTcs = true;
+      }
+
+      if (activeRateStr) {
+        const numeric = parseFloat(activeRateStr.split('/')[0].replace(/[^\d.]/g, ''));
+        if (!isNaN(numeric) && numeric > 0) {
+          rateDecimal = numeric / 100;
+        }
+      }
     }
 
-    if (!activeRateStr) {
+    if (rateDecimal <= 0) {
       setPurchaseTdsIt('0.00');
       setPurchaseTaxIsTcs(false);
       return;
     }
 
-    // e.g. "5%", "1%", "0.10%" (take first part if slash exists)
-    const numeric = parseFloat(activeRateStr.split('/')[0].replace(/[^\d.]/g, ''));
-    if (isNaN(numeric) || numeric <= 0) {
-      setPurchaseTdsIt('0.00');
-      setPurchaseTaxIsTcs(false);
-      return;
-    }
-
-    const rateDecimal = numeric / 100;
     // TDS/TCS is on Invoice Value (including GST)
     const totalInvoice = purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0);
-
     const taxAmount = (totalInvoice * rateDecimal).toFixed(2);
 
     setPurchaseTdsIt(taxAmount);
     setPurchaseTaxIsTcs(isTcs);
-  }, [party, vendorId, purchaseItems, richVendors, voucherType]);
+  }, [party, vendorId, purchaseItems, richVendors, voucherType, vendorTaxType, purchaseSelectedStatutorySection]);
   // ─────────────────────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3106,6 +3186,35 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
         setPurchaseTerms(parts.join('\n\n'));
         setMasterTermsData(vendor);
+
+        // Parse Multi-select Statutory Sections
+        console.log('Vendor Statutory Raw Data:', {
+          name: vendor.vendor_name,
+          tds_s: vendor.tds_section,
+          tds_sa: vendor.tds_section_applicable,
+          tcs_s: vendor.tcs_section,
+          tcs_sa: vendor.tcs_section_applicable,
+          tax_type: vendor.tax_type
+        });
+
+        const tcsStr = vendor.tcs_section_applicable || vendor.tcs_section || '';
+        const tdsStr = vendor.tds_section_applicable || vendor.tds_section || '';
+        const tcsList = tcsStr.split(',').filter(Boolean);
+        const tdsList = tdsStr.split(',').filter(Boolean);
+        setPurchaseAvailableTcsSections(tcsList);
+        setPurchaseAvailableTdsSections(tdsList);
+
+        const derivedTaxType = vendor.tax_type || (tcsList.length > 0 ? 'TCS' : tdsList.length > 0 ? 'TDS' : 'NONE');
+        setVendorTaxType(derivedTaxType);
+
+        // Default selection
+        if (derivedTaxType === 'TCS' && tcsList.length > 0) {
+          setPurchaseSelectedStatutorySection(tcsList[0]);
+        } else if (derivedTaxType === 'TDS' && tdsList.length > 0) {
+          setPurchaseSelectedStatutorySection(tdsList[0]);
+        } else {
+          setPurchaseSelectedStatutorySection('');
+        }
       }
 
       // 2. Try to match Customer from Rich Data
@@ -4268,6 +4377,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       value={party}
                       onChange={handlePartyChange}
                       options={purchasePartyOptions}
+                      onFocus={fetchRichData}
                       placeholder="Select Vendor"
                       className="w-full"
                       disabled={isVendorDisabled}
@@ -5465,7 +5575,40 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">TDS/TCS under Income Tax</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                        {vendorTaxType === 'TCS' ? 'TCS' : 'TDS'} under Income Tax
+                      </label>
+
+                      {/* Dropdown for sections */}
+                      {vendorTaxType === 'TDS' && purchaseAvailableTdsSections.length > 0 && (
+                        <div className="mb-2">
+                          <select
+                            value={purchaseSelectedStatutorySection}
+                            onChange={(e) => setPurchaseSelectedStatutorySection(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-indigo-200 rounded-[4px] bg-white text-xs focus:ring-indigo-500 focus:border-indigo-500 font-medium text-indigo-700 shadow-sm hover:border-indigo-300 transition-colors"
+                          >
+                            {purchaseAvailableTdsSections.length > 1 && <option value="">Select TDS Section</option>}
+                            {purchaseAvailableTdsSections.map(s => (
+                              <option key={s} value={s}>{s.includes('|') ? s.split('|')[0] + ' - ' + s.split('|')[1] : s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {vendorTaxType === 'TCS' && purchaseAvailableTcsSections.length > 0 && (
+                        <div className="mb-2">
+                          <select
+                            value={purchaseSelectedStatutorySection}
+                            onChange={(e) => setPurchaseSelectedStatutorySection(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-indigo-200 rounded-[4px] bg-white text-xs focus:ring-indigo-500 focus:border-indigo-500 font-medium text-indigo-700 shadow-sm hover:border-indigo-300 transition-colors"
+                          >
+                            {purchaseAvailableTcsSections.length > 1 && <option value="">Select TCS Section</option>}
+                            {purchaseAvailableTcsSections.map(s => (
+                              <option key={s} value={s}>{s.includes('|') ? s.split('|')[0] + ' - ' + s.split('|')[1] : s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       <input
                         type="text"
                         value={purchaseTdsIt}
@@ -10988,7 +11131,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               `
             }} />
 
-            {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
+            {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} onRefreshCustomers={fetchRichData} companyDetails={companyDetails} />}
             {voucherType === 'Payment' && (
               <PaymentVoucherSingle
                 prefilledData={localPrefilledData}

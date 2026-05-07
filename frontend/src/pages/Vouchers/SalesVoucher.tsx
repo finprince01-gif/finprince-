@@ -40,6 +40,7 @@ interface SalesVoucherProps {
     isLimitReached?: boolean;
     onLimitReached?: () => void;
     customers?: any[];
+    onRefreshCustomers?: () => void;
     companyDetails: CompanyDetails;
 }
 
@@ -49,6 +50,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     isLimitReached,
     onLimitReached,
     customers = [],
+    onRefreshCustomers,
     companyDetails
 }) => {
     const [activeTab, setActiveTab] = useState('invoice');
@@ -568,6 +570,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     const [customerBillingCurrency, setCustomerBillingCurrency] = useState('');
     const [customerTcsRate, setCustomerTcsRate] = useState<number>(0); // TCS rate as decimal (e.g. 0.01 for 1%)
     const [customerTdsRate, setCustomerTdsRate] = useState<number>(0); // TDS rate as decimal
+    const [availableTcsSections, setAvailableTcsSections] = useState<string[]>([]);
+    const [availableTdsSections, setAvailableTdsSections] = useState<string[]>([]);
+    const [selectedStatutorySection, setSelectedStatutorySection] = useState<string>('');
+    const [customerTaxType, setCustomerTaxType] = useState<string>('NONE');
     const [customerGstTdsApplicable, setCustomerGstTdsApplicable] = useState(false);
     const [customerTdsEnabled, setCustomerTdsEnabled] = useState(false);
     const [customerTcsEnabled, setCustomerTcsEnabled] = useState(false);
@@ -755,14 +761,20 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             }
 
             // ── TCS Rate from Customer Master ──
-            // Map TCS section name → rate (decimal)
             const TCS_RATE_MAP: Record<string, number> = {
-                'Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,  // 1%
-                'Sale of Tendu Leaves': 0.05,                        // 5%
-                'Sale of Forest Produce': 0.02,                      // 2%
-                'Sale of Timber': 0.02,                              // 2%
-                'Sale of Motor Vehicles': 0.01,                      // 1%
-                'Sale of Specified Luxury Goods': 0.01,              // 1%
+                'Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+                'Sale of Tendu Leaves': 0.05,
+                'Sale of Forest Produce': 0.02,
+                'Sale of Timber': 0.02,
+                'Sale of Motor Vehicles': 0.01,
+                'Sale of Specified Luxury Goods': 0.01,
+                // Full Strings
+                'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+                'Section 206C(1) - Sale of Tendu Leaves': 0.05,
+                'Section 206C(1) - Sale of Forest Produce': 0.02,
+                'Section 206C(1) - Sale of Timber': 0.02,
+                'Section 206C(1F) - Sale of Motor Vehicles': 0.01,
+                'Section 206C(1F) - Sale of Specified Luxury Goods': 0.01,
             };
             const tcsSection = customer.tcs_section || '';
             // tcs_section is stored as "Section 206C(1)|Sale of Tendu Leaves"
@@ -779,8 +791,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 'Rent- Plant & Machinery, Equipment': 0.10,
                 'Technical Services': 0.02,
                 'Professional Services': 0.10,
-                'Director\'s Remuneration': 0.10,
-                'Purchase of Goods': 0.001, // 0.10%
+                "Director's Remuneration": 0.10,
+                'Purchase of Goods': 0.001,
                 'Interest other than interest on securities': 0.10,
                 'Benefit or Perquisite': 0.10,
                 'Immovable Property Transfer': 0.01,
@@ -788,6 +800,36 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 'Joint Development Agreements': 0.10,
                 'Contractors & Professionals': 0.02,
                 'E-Commerce': 0.01,
+                // Full Strings
+                'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': 0.10,
+                'Section 393(1) - Interest on Securities': 0.10,
+                'Section 393(1) - Interest other than Securities': 0.10,
+                'Section 393(1) - Dividends (Domestic Company)': 0.10,
+                'Section 393(1) - Contractor Payments (Large Payer) - Individual/HUF': 0.01,
+                'Section 393(1) - Contractor Payments (Large Payer) - Other than Individual/HUF': 0.02,
+                'Section 393(1) - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': 0.05,
+                'Section 393(1) - Technical Services / Call Centre / Film Royalty': 0.02,
+                'Section 393(1) - Professional Fees / Other Royalty': 0.10,
+                'Section 393(1) - Insurance Commission': 0.02,
+                'Section 393(1) - General Commission or Brokerage': 0.02,
+                'Section 393(1) - Rent (Individual/HUF Payer > ₹50,000/mo)': 0.02,
+                'Section 393(1) - Rent on Plant & Machinery': 0.02,
+                'Section 393(1) - Rent on Land & Building': 0.10,
+                'Section 393(1) - Transfer of Immovable Property (> ₹50L)': 0.01,
+                'Section 393(1) - Purchase of Goods (exceeding ₹50L)': 0.001,
+                'Section 393(1) - Virtual Digital Assets (VDA/Crypto)': 0.01,
+                'Section 393(3) - Winnings from Lottery / Puzzles': 0.30,
+                'Section 393(3) - Regular Filer (ITR filed in previous years) > 1 cr': 0.02,
+                'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 20L': 0.02,
+                'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 1Cr': 0.05,
+                'Section 393(3) - Co-operative Societies > 3 cr': 0.02,
+                'Section 393(3) - Payments to Partners (Salary/Comm. > ₹20k)': 0.10,
+                'Section 393(2) - Sportsmen / Sports Association (Non-Resident)': 0.20,
+                'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': 0.05,
+                'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': 0.09,
+                'Section 393(2) - Income/LTCG from Offshore Fund Units': 0.10,
+                'Section 393(2) - Interest/Dividends/LTCG on Bonds/GDR': 0.10,
+                'Section 393(2) - Any other sum payable to Non-Resident': 0.30,
             };
             const tdsSection = customer.tds_section || '';
             const tdsSectionName = tdsSection.includes('|') ? tdsSection.split('|')[1] : tdsSection;
@@ -795,15 +837,38 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             setCustomerTdsRate(tdsRateVal);
 
             // ── GST TDS Configuration from Customer Master ──
-            console.log('Customer TDS Data:', {
+            console.log('Customer Statutory Data:', {
                 name: val,
                 gst_tds_applicable: customer.gst_tds_applicable,
                 tds_enabled: customer.tds_enabled,
-                tcs_enabled: customer.tcs_enabled
+                tcs_enabled: customer.tcs_enabled,
+                tax_type: customer.tax_type,
+                tcs_section: customer.tcs_section,
+                tds_section: customer.tds_section
             });
             setCustomerGstTdsApplicable(!!customer.gst_tds_applicable);
             setCustomerTdsEnabled(!!customer.tds_enabled);
             setCustomerTcsEnabled(!!customer.tcs_enabled);
+
+            // ── Parse Multi-select Statutory Sections ──
+            const tcsStr = customer.tcs_section || '';
+            const tdsStr = customer.tds_section || '';
+            const tcsList = tcsStr.split(/,(?![^(]*\))/).filter(Boolean);
+            const tdsList = tdsStr.split(/,(?![^(]*\))/).filter(Boolean);
+            setAvailableTcsSections(tcsList);
+            setAvailableTdsSections(tdsList);
+
+            const derivedTaxType = customer.tax_type || (tcsList.length > 0 ? 'TCS' : tdsList.length > 0 ? 'TDS' : 'NONE');
+            setCustomerTaxType(derivedTaxType);
+
+            // Default selection
+            if (derivedTaxType === 'TCS' && tcsList.length > 0) {
+                setSelectedStatutorySection(tcsList[0]);
+            } else if (derivedTaxType === 'TDS' && tdsList.length > 0) {
+                setSelectedStatutorySection(tdsList[0]);
+            } else {
+                setSelectedStatutorySection('');
+            }
 
             // ── Fetch Advance Receipts ──
             const ledgerId = customer.ledger_id || customer.ledger;
@@ -833,12 +898,96 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             setMasterTermsData(null);
             setCustomerTcsRate(0);
             setCustomerTdsRate(0);
+            setAvailableTcsSections([]);
+            setAvailableTdsSections([]);
+            setSelectedStatutorySection('');
+            setCustomerTaxType('NONE');
             setCustomerGstTdsApplicable(false);
             setCustomerTdsEnabled(false);
             setCustomerTcsEnabled(false);
             setAdvanceReferences([]);
         }
     };
+
+    // ── Update Rates based on Selected Statutory Section ──
+    React.useEffect(() => {
+        const TCS_RATE_MAP: Record<string, number> = {
+            'Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+            'Sale of Tendu Leaves': 0.05,
+            'Sale of Forest Produce': 0.02,
+            'Sale of Timber': 0.02,
+            'Sale of Motor Vehicles': 0.01,
+            'Sale of Specified Luxury Goods': 0.01,
+            // Full Strings
+            'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+            'Section 206C(1) - Sale of Tendu Leaves': 0.05,
+            'Section 206C(1) - Sale of Forest Produce': 0.02,
+            'Section 206C(1) - Sale of Timber': 0.02,
+            'Section 206C(1F) - Sale of Motor Vehicles': 0.01,
+            'Section 206C(1F) - Sale of Specified Luxury Goods': 0.01,
+        };
+        const TDS_RATE_MAP: Record<string, number> = {
+            'Contracts- Individual/HUF': 0.01,
+            'Contracts- Others': 0.02,
+            'Commission/Brokerage': 0.02,
+            'Rent- Land, Building, Furniture & fitting': 0.02,
+            'Rent- Plant & Machinery, Equipment': 0.10,
+            'Technical Services': 0.02,
+            'Professional Services': 0.10,
+            "Director's Remuneration": 0.10,
+            'Purchase of Goods': 0.001,
+            'Interest other than interest on securities': 0.10,
+            'Benefit or Perquisite': 0.10,
+            'Immovable Property Transfer': 0.01,
+            'Rent by Individual or HUF': 0.02,
+            'Joint Development Agreements': 0.10,
+            'Contractors & Professionals': 0.02,
+            'E-Commerce': 0.01,
+            // Full Strings
+            'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': 0.10,
+            'Section 393(1) - Interest on Securities': 0.10,
+            'Section 393(1) - Interest other than Securities': 0.10,
+            'Section 393(1) - Dividends (Domestic Company)': 0.10,
+            'Section 393(1) - Contractor Payments (Large Payer) - Individual/HUF': 0.01,
+            'Section 393(1) - Contractor Payments (Large Payer) - Other than Individual/HUF': 0.02,
+            'Section 393(1) - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': 0.05,
+            'Section 393(1) - Technical Services / Call Centre / Film Royalty': 0.02,
+            'Section 393(1) - Professional Fees / Other Royalty': 0.10,
+            'Section 393(1) - Insurance Commission': 0.02,
+            'Section 393(1) - General Commission or Brokerage': 0.02,
+            'Section 393(1) - Rent (Individual/HUF Payer > ₹50,000/mo)': 0.02,
+            'Section 393(1) - Rent on Plant & Machinery': 0.02,
+            'Section 393(1) - Rent on Land & Building': 0.10,
+            'Section 393(1) - Transfer of Immovable Property (> ₹50L)': 0.01,
+            'Section 393(1) - Purchase of Goods (exceeding ₹50L)': 0.001,
+            'Section 393(1) - Virtual Digital Assets (VDA/Crypto)': 0.01,
+            'Section 393(3) - Winnings from Lottery / Puzzles': 0.30,
+            'Section 393(3) - Regular Filer (ITR filed in previous years) > 1 cr': 0.02,
+            'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 20L': 0.02,
+            'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 1Cr': 0.05,
+            'Section 393(3) - Co-operative Societies > 3 cr': 0.02,
+            'Section 393(3) - Payments to Partners (Salary/Comm. > ₹20k)': 0.10,
+            'Section 393(2) - Sportsmen / Sports Association (Non-Resident)': 0.20,
+            'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': 0.05,
+            'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': 0.09,
+            'Section 393(2) - Income/LTCG from Offshore Fund Units': 0.10,
+            'Section 393(2) - Interest/Dividends/LTCG on Bonds/GDR': 0.10,
+            'Section 393(2) - Any other sum payable to Non-Resident': 0.30,
+        };
+
+        if (customerTaxType === 'TCS' && selectedStatutorySection) {
+            const name = selectedStatutorySection.includes('|') ? selectedStatutorySection.split('|')[1] : selectedStatutorySection;
+            setCustomerTcsRate(TCS_RATE_MAP[name] ?? 0);
+            setCustomerTdsRate(0);
+        } else if (customerTaxType === 'TDS' && selectedStatutorySection) {
+            const name = selectedStatutorySection.includes('|') ? selectedStatutorySection.split('|')[1] : selectedStatutorySection;
+            setCustomerTdsRate(TDS_RATE_MAP[name] ?? 0);
+            setCustomerTcsRate(0);
+        } else {
+            setCustomerTcsRate(0);
+            setCustomerTdsRate(0);
+        }
+    }, [selectedStatutorySection, customerTaxType]);
 
     const handleAdvanceCheckedChange = (id: number | string, checked: boolean) => {
         setAdvanceReferences(prev => prev.map(ref =>
@@ -2847,6 +2996,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         value={customerName}
                                         onChange={handleCustomerChange}
                                         options={customerOptions}
+                                        onFocus={onRefreshCustomers}
                                         placeholder="Search or select customer"
                                         required
                                     />
@@ -4139,17 +4289,48 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         <div>
                                             <div className="flex items-center justify-between mb-1.5">
                                                 <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                                                    TDS/TCS Under Income Tax
+                                                    {customerTaxType === 'TCS' ? 'TCS' : 'TDS'} Under Income Tax
                                                 </label>
                                                 <div className="flex gap-1">
                                                     {(customerTcsRate > 0 || customerTdsRate > 0) && (
                                                         <span className="text-[10px] items-center font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5" title="Rates applied">
                                                             {customerTcsRate > 0 && `TCS:${(customerTcsRate * 100).toFixed(0)}% `}
-                                                            {customerTdsRate > 0 && `TDS:${(customerTdsRate * 100).toFixed(0)}%`}
+                                                            {customerTdsRate > 0 && `TDS:${(customerTdsRate * 100).toFixed(1)}%`}
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
+                                            
+                                            {/* Dropdown for sections */}
+                                            {customerTaxType === 'TDS' && availableTdsSections.length > 0 && (
+                                                <div className="mb-2">
+                                                    <select
+                                                        value={selectedStatutorySection}
+                                                        onChange={(e) => setSelectedStatutorySection(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-indigo-200 rounded-[4px] bg-white text-sm focus:ring-indigo-500 focus:border-indigo-500 font-medium text-indigo-700 shadow-sm hover:border-indigo-300 transition-colors"
+                                                    >
+                                                        {availableTdsSections.length > 1 && <option value="">Select TDS Section</option>}
+                                                        {availableTdsSections.map(s => (
+                                                            <option key={s} value={s}>{s.includes('|') ? s.split('|')[0] + ' - ' + s.split('|')[1] : s}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                            {customerTaxType === 'TCS' && availableTcsSections.length > 0 && (
+                                                <div className="mb-2">
+                                                    <select
+                                                        value={selectedStatutorySection}
+                                                        onChange={(e) => setSelectedStatutorySection(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-indigo-200 rounded-[4px] bg-white text-sm focus:ring-indigo-500 focus:border-indigo-500 font-medium text-indigo-700 shadow-sm hover:border-indigo-300 transition-colors"
+                                                    >
+                                                        {availableTcsSections.length > 1 && <option value="">Select TCS Section</option>}
+                                                        {availableTcsSections.map(s => (
+                                                            <option key={s} value={s}>{s.includes('|') ? s.split('|')[0] + ' - ' + s.split('|')[1] : s}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+
                                             <input
                                                 type="text"
                                                 value={paymentTdsIncomeTax}

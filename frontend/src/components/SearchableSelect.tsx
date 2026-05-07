@@ -14,9 +14,18 @@ interface SearchableSelectProps {
     placeholder?: string;
     className?: string;
     disabled?: boolean;
+    onFocus?: () => void;
 }
 
-const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, options, placeholder = "Select...", className = "", disabled = false }) => {
+const SearchableSelect: React.FC<SearchableSelectProps> = ({ 
+    value, 
+    onChange, 
+    options, 
+    placeholder = "Select...", 
+    className = "", 
+    disabled = false,
+    onFocus 
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const portalRef = useRef<HTMLDivElement>(null);
@@ -113,6 +122,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
                         if (!disabled) {
                             setIsOpen(true);
                             setIsTyping(false);
+                            if (onFocus) onFocus();
                         }
                     }}
                     placeholder={placeholder}

@@ -11,7 +11,8 @@ import { httpClient } from '../services/httpClient';
 import { showSuccess, showError } from '../utils/toast';
 import { Country, State, City } from 'country-state-city';
 import { BILLING_CURRENCIES } from '../constants/customerPortalConstants';
-import { X, ChevronLeft, ChevronRight, ChevronDown, Info } from 'lucide-react';
+import { ChevronDown, X, Info, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import MultiSelectDropdown from './MultiSelectDropdown';
 
 const TDS_SECTIONS = [
     { section: 'Section 392(7)', name: 'Premature EPF Withdrawal (> ₹50,000)', rate: '10%', description: 'Threshold limit: ₹ 50,000' },
@@ -137,10 +138,20 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
     ]);
 
     // TDS & Statutory
-    const [statutory, setStatutory] = useState({
+    const [statutory, setStatutory] = useState<{
+        msme_no: string;
+        fssai_no: string;
+        iec_code: string;
+        eou_status: string;
+        taxType: 'NONE' | 'TDS' | 'TCS';
+        tcs_sections: string[];
+        tcs_enabled: boolean;
+        tds_sections: string[];
+        tds_enabled: boolean;
+    }>({
         msme_no: '', fssai_no: '', iec_code: '', eou_status: '',
-        taxType: 'NONE' as 'TDS' | 'TCS' | 'NONE',
-        tcs_section: '', tcs_enabled: false, tds_section: '', tds_enabled: false,
+        taxType: 'NONE',
+        tcs_sections: [], tcs_enabled: false, tds_sections: [], tds_enabled: false,
     });
 
 
@@ -230,7 +241,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
         setStatutory({
             msme_no: '', fssai_no: '', iec_code: '', eou_status: '',
             taxType: 'NONE',
-            tcs_section: '', tcs_enabled: false, tds_section: '', tds_enabled: false
+            tcs_sections: [] as string[], tcs_enabled: false, tds_sections: [] as string[], tds_enabled: false
         });
 
         setBankAccounts([]);
@@ -293,6 +304,10 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                 },
                 products_services: { items: productRows.filter(r => r.itemCode || r.itemName) },
                 ...statutory,
+                tds_section: statutory.tds_sections.join(','),
+                tcs_section: statutory.tcs_sections.join(','),
+                tds_sections: undefined,
+                tcs_sections: undefined,
                 taxType: undefined, // Omit from payload if not needed by backend
                 banking_info: bankAccounts.length > 0 ? { accounts: bankAccounts } : null,
                 ...terms,
@@ -1043,9 +1058,9 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                                 onClick={() => setStatutory({
                                                     ...statutory,
                                                     taxType: type,
-                                                    tcs_section: type !== 'TCS' ? '' : statutory.tcs_section,
+                                                    tcs_sections: type !== 'TCS' ? [] : statutory.tcs_sections,
                                                     tcs_enabled: type !== 'TCS' ? false : statutory.tcs_enabled,
-                                                    tds_section: type !== 'TDS' ? '' : statutory.tds_section,
+                                                    tds_sections: type !== 'TDS' ? [] : statutory.tds_sections,
                                                     tds_enabled: type !== 'TDS' ? false : statutory.tds_enabled,
                                                 })}
                                                 className={`px-6 py-2 text-sm font-semibold transition-colors border-r border-gray-300 last:border-r-0 ${statutory.taxType === type
@@ -1067,21 +1082,15 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                             <Info className="w-4 h-4 text-gray-400" />
                                         </div>
                                         <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
-                                                <select
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                    value={statutory.tcs_section}
-                                                    onChange={(e) => setStatutory({ ...statutory, tcs_section: e.target.value })}
-                                                >
-                                                    <option value="">Select TCS Section</option>
-                                                    {TCS_SECTIONS.map((tcs, index) => (
-                                                        <option key={index} value={`${tcs.section}|${tcs.name}`}>
-                                                            {tcs.section} - {tcs.name} @ {tcs.rate}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                            <MultiSelectDropdown
+                                                options={TCS_SECTIONS.map((tcs) => ({
+                                                    value: `${tcs.section}|${tcs.name}`,
+                                                    label: `${tcs.section} - ${tcs.name} @ ${tcs.rate}`
+                                                }))}
+                                                selectedValues={statutory.tcs_sections}
+                                                onChange={(values) => setStatutory({ ...statutory, tcs_sections: values })}
+                                                placeholder="Select TCS Sections"
+                                            />
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -1103,21 +1112,15 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                             <Info className="w-4 h-4 text-gray-400" />
                                         </div>
                                         <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
-                                                <select
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                    value={statutory.tds_section}
-                                                    onChange={(e) => setStatutory({ ...statutory, tds_section: e.target.value })}
-                                                >
-                                                    <option value="">Select TDS Section</option>
-                                                    {TDS_SECTIONS.map((tds, index) => (
-                                                        <option key={index} value={`${tds.section}|${tds.name}`}>
-                                                            {tds.section} - {tds.name} @ {tds.rate}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                            <MultiSelectDropdown
+                                                options={TDS_SECTIONS.map((tds) => ({
+                                                    value: `${tds.section}|${tds.name}`,
+                                                    label: `${tds.section} - ${tds.name} @ ${tds.rate}`
+                                                }))}
+                                                selectedValues={statutory.tds_sections}
+                                                onChange={(values) => setStatutory({ ...statutory, tds_sections: values })}
+                                                placeholder="Select TDS Sections"
+                                            />
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"

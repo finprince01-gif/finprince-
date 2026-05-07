@@ -124,7 +124,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'customer_name', 'customer_code', 'customer_category',
             'pan_number', 'contact_person', 'email_address', 'contact_number', 'billing_currency',
-            'is_also_vendor', 'gst_tds_applicable',
+            'is_also_vendor', 'gst_tds_applicable', 'tax_type',
             # These are not in the model but accepted in serializer
             'gst_details', 'products_services', 'banking_info',
             'msme_no', 'fssai_no', 'iec_code', 'eou_status',
@@ -314,6 +314,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             'tcs_enabled': getattr(instance.tds_details, 'tcs_enabled', False) if hasattr(instance, 'tds_details') else False,
             'tds_section': getattr(instance.tds_details, 'tds_section', None) if hasattr(instance, 'tds_details') else None,
             'tds_enabled': getattr(instance.tds_details, 'tds_enabled', False) if hasattr(instance, 'tds_details') else False,
+            'tax_type': 'TCS' if getattr(instance.tds_details, 'tcs_section', None) else ('TDS' if getattr(instance.tds_details, 'tds_section', None) else 'NONE'),
             
             # Flattened Terms & Conditions
             'credit_period': getattr(instance.terms_conditions, 'credit_period', None) if hasattr(instance, 'terms_conditions') else None,
