@@ -745,8 +745,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   }, [cnReverseIncomeTaxTcs, cnReverseIncomeTaxTds, cnSelectedSalesInvoices, cnSalesInvoicesList, cnItems]);
 
   const salesLedgerOptions = useMemo(() => {
-    return Array.from(new Set(ledgers.map(l => l.name))).filter(Boolean);
-  }, [ledgers]);
+    // Include both user-created ledgers and default hierarchy ledgers
+    const userLedgerNames = ledgers.map(l => l.name);
+    const defaultLedgerNames = hierarchy
+      .map(r => r.ledger_1)
+      .filter(name => {
+        if (!name) return false;
+        const n = name.toLowerCase().trim();
+        return !['purchase account', 'sales account'].includes(n);
+      });
+
+    return Array.from(new Set([...userLedgerNames, ...defaultLedgerNames])).filter(Boolean) as string[];
+  }, [ledgers, hierarchy]);
 
   const calculateCreditNoteTotals = () => {
     return cnItems.reduce((acc, item) => ({
@@ -2972,23 +2982,33 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     ])].filter(Boolean);
 
     // Ledger lists used in voucher account dropdowns must only contain true ledgers.
-    const allLedgerOptions = Array.from(new Set(
-      effectiveLedgers.filter(isRealLedgerLeaf).map(l => l.name)
-    )).filter(Boolean);
+    const defaultLedgerNames = hierarchy
+      .map(r => r.ledger_1)
+      .filter(name => {
+        if (!name) return false;
+        const n = name.toLowerCase().trim();
+        return !['purchase account', 'sales account'].includes(n);
+      });
+
+    const allLedgerOptions = Array.from(new Set([
+      ...effectiveLedgers.filter(isRealLedgerLeaf).map(l => l.name),
+      ...defaultLedgerNames
+    ])).filter(Boolean) as string[];
 
     // Purchase Ledger dropdown: only Masters > Ledgers entries, excluding customer/vendor party groups
     const EXCLUDED_PARTY_GROUPS = ['sundry debtors', 'sundry creditors'];
     const EXCLUDED_NAMES = ['purchase account', 'sales account'];
-    const purchaseLedgerOptions = Array.from(new Set(
-      effectiveLedgers
+    const purchaseLedgerOptions = Array.from(new Set([
+      ...effectiveLedgers
         .filter(l => {
           if (!isRealLedgerLeaf(l)) return false;
           const group = (l.group || '').toLowerCase().trim();
           const name = (l.name || '').toLowerCase().trim();
           return !EXCLUDED_PARTY_GROUPS.includes(group) && !EXCLUDED_NAMES.includes(name);
         })
-        .map(l => l.name)
-    )).filter(Boolean) as string[];
+        .map(l => l.name),
+      ...defaultLedgerNames.filter(n => !EXCLUDED_NAMES.includes(n.toLowerCase().trim()))
+    ])).filter(Boolean) as string[];
 
     return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);

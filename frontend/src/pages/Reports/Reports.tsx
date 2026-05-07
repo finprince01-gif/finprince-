@@ -71,7 +71,7 @@ const formatToDMY = (dateVal: any) => {
         return `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
       }
     }
-  } catch (e) {}
+  } catch (e) { }
   return str;
 };
 
@@ -143,16 +143,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     let accountVal = '';
     let partyVal = '';
     let amt = 0;
-    
+
     if (selectedTransaction) {
       const isPayment = selectedTransaction?.voucherType?.toLowerCase() === 'payment';
       const isReceipt = selectedTransaction?.voucherType?.toLowerCase() === 'receipt';
       const isContra = selectedTransaction?.voucherType?.toLowerCase() === 'contra';
       const isExpense = selectedTransaction?.voucherType?.toLowerCase() === 'expense' || selectedTransaction?.voucherType?.toLowerCase() === 'expenses';
-      
+
       const ledgerNameClean = (selectedTransaction?.ledgerName || drillDownLedger || '').replace('ledger:', '').replace('group:', '');
       const otherParty = selectedTransaction?.particulars || '';
-      
+
       if (isPayment) {
         if ((selectedTransaction?.debit || 0) > 0) {
           partyVal = ledgerNameClean;
@@ -1606,7 +1606,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             const sessionStr = `${sessionStartYear}-${sessionStartYear + 1}`;
             if (sessionStr !== selectedSession) sessionMatch = false;
           }
-        } catch (err) {}
+        } catch (err) { }
       }
 
       let sectionFilterMatch = true;
@@ -1647,7 +1647,15 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     const groups: Record<string, any[]> = {};
     drillDownEntries.forEach(entry => {
       if (entry.voucherType === 'Opening') return;
-      const ref = entry.referenceNo?.trim() || '-';
+      const vt = (entry.voucherType || '').toLowerCase();
+      const isSource = ['sales', 'purchase', 'journal'].includes(vt);
+      let ref = entry.referenceNo?.trim() || '-';
+      
+      // For source vouchers, if referenceNo is empty, treat voucherNo as the reference
+      if (isSource && ref === '-') {
+        ref = entry.voucherNo?.trim() || '-';
+      }
+
       if (ref === '-') {
         const uniqueId = `standalone-${Math.random()}`;
         groups[uniqueId] = [entry];
@@ -2330,8 +2338,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       }
                     }}
                     className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAllocationAdvance && !isAllocating
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
                       }`}
                   >
                     {isAllocating ? 'Processing...' : 'Proceed Allocation'}
@@ -2392,25 +2400,24 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
               <div className="flex border-b border-gray-200 bg-gray-50 flex-shrink-0 overflow-x-auto">
                 {(['payment', 'receipt', 'contra', 'expense'].includes(selectedTransaction?.voucherType?.toLowerCase() || '')
                   ? [
-                      { id: 'voucher', label: (selectedTransaction?.voucherType || 'VOUCHER').toUpperCase() + ' DETAILS' },
-                      { id: 'allocations', label: 'ALLOCATED INVOICES' }
-                    ]
+                    { id: 'voucher', label: (selectedTransaction?.voucherType || 'VOUCHER').toUpperCase() + ' DETAILS' },
+                    { id: 'allocations', label: 'ALLOCATED INVOICES' }
+                  ]
                   : [
-                      { id: 'invoice', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'SUPPLIER DETAILS' : 'INVOICE DETAILS' },
-                      { id: 'item', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'SUPPLY DETAILS' : 'ITEM & TAX DETAILS' },
-                      { id: 'payment', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'DUE DETAILS' : 'PAYMENT DETAILS' },
-                      { id: 'dispatch', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'TRANSIT DETAILS' : 'DISPATCH DETAILS' },
-                      ...(selectedTransaction?.voucherType?.toLowerCase() !== 'purchase' ? [{ id: 'einvoice', label: 'E-INVOICE & E-WAY BILL DETAILS' }] : [])
-                    ]
+                    { id: 'invoice', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'SUPPLIER DETAILS' : 'INVOICE DETAILS' },
+                    { id: 'item', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'SUPPLY DETAILS' : 'ITEM & TAX DETAILS' },
+                    { id: 'payment', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'DUE DETAILS' : 'PAYMENT DETAILS' },
+                    { id: 'dispatch', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'TRANSIT DETAILS' : 'DISPATCH DETAILS' },
+                    ...(selectedTransaction?.voucherType?.toLowerCase() !== 'purchase' ? [{ id: 'einvoice', label: 'E-INVOICE & E-WAY BILL DETAILS' }] : [])
+                  ]
                 ).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setPanelActiveTab(tab.id)}
-                    className={`px-5 py-3 text-xs font-bold transition-colors border-b-2 whitespace-nowrap ${
-                      panelActiveTab === tab.id
+                    className={`px-5 py-3 text-xs font-bold transition-colors border-b-2 whitespace-nowrap ${panelActiveTab === tab.id
                         ? 'border-indigo-600 text-indigo-600 bg-white border-b-indigo-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -2985,16 +2992,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                                   className="erp-input"
                                 />
                               </div>
-                                <div>
-                                  <label className="label-text">LEDGER NARRATION</label>
-                                  <input
-                                    type="text"
-                                    value={editedVoucher?.ledger_narration || ''}
-                                    disabled={!isEditingVoucher}
-                                    onChange={(e) => handleFieldChange('ledger_narration', e.target.value)}
-                                    className="erp-input"
-                                  />
-                                </div>
+                              <div>
+                                <label className="label-text">LEDGER NARRATION</label>
+                                <input
+                                  type="text"
+                                  value={editedVoucher?.ledger_narration || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('ledger_narration', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
                             </div>
                           </div>
                         )}
@@ -3014,202 +3021,202 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           const totalCess = (editedVoucher?.items || []).reduce((s: number, it: any) => s + parseFloat(it.cess ?? 0), 0);
                           const grossDue = invoiceVal - tdsIt;
                           return (
-                          <div className="space-y-6" style={{ animation: 'fadeIn 0.15s ease' }}>
-                            {/* Tax Summary Table — mirrors the top summary in Due Details */}
-                            <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
-                              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                <thead className="bg-gray-50">
-                                  <tr>
-                                    <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">Taxable Value</th>
-                                    <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">IGST</th>
-                                    <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">CGST</th>
-                                    <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">SGST/UTGST</th>
-                                    <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">Cess</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="bg-white">
-                                  <tr>
-                                    <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{taxableAmt.toFixed(2)}</td>
-                                    <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalIgst.toFixed(2)}</td>
-                                    <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalCgst.toFixed(2)}</td>
-                                    <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalSgst.toFixed(2)}</td>
-                                    <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalCess.toFixed(2)}</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
+                            <div className="space-y-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                              {/* Tax Summary Table — mirrors the top summary in Due Details */}
+                              <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
+                                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">Taxable Value</th>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">IGST</th>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">CGST</th>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">SGST/UTGST</th>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">Cess</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white">
+                                    <tr>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{taxableAmt.toFixed(2)}</td>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalIgst.toFixed(2)}</td>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalCgst.toFixed(2)}</td>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalSgst.toFixed(2)}</td>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalCess.toFixed(2)}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
 
-                            {/* Due Details fields */}
-                            <div className="grid grid-cols-2 gap-6">
-                              <div>
-                                <label className="label-text">INVOICE VALUE</label>
-                                <input
-                                  type="number"
-                                  value={invoiceVal}
-                                  disabled={!isEditingVoucher}
-                                  onChange={(e) => handleFieldChange('total', parseFloat(e.target.value) || 0)}
-                                  className="erp-input font-mono"
-                                />
-                              </div>
-                              <div>
-                                <label className="label-text">TDS/TCS UNDER INCOME TAX</label>
-                                <input
-                                  type="number"
-                                  value={tdsIt}
-                                  disabled={!isEditingVoucher}
-                                  onChange={(e) => handleFieldChange('due_details.tds_it', parseFloat(e.target.value) || 0)}
-                                  className="erp-input font-mono"
-                                />
-                              </div>
-                              <div>
-                                <label className="label-text">ADVANCE PAID</label>
-                                <input
-                                  type="number"
-                                  value={advance}
-                                  disabled={!isEditingVoucher}
-                                  onChange={(e) => handleFieldChange('due_details.advance_paid', parseFloat(e.target.value) || 0)}
-                                  className="erp-input font-mono"
-                                />
-                              </div>
-                              <div>
-                                <label className="label-text">GROSS AMOUNT DUE</label>
-                                <input
-                                  type="number"
-                                  value={grossDue.toFixed(2)}
-                                  disabled={true}
-                                  className="erp-input font-mono bg-gray-50 text-gray-600"
-                                />
-                              </div>
-                              <div className="col-span-2">
-                                <label className="label-text font-bold" style={{ color: '#4f46e5' }}>NET AMOUNT DUE</label>
-                                <input
-                                  type="number"
-                                  value={netAmountDue}
-                                  disabled={!isEditingVoucher}
-                                  onChange={(e) => handleFieldChange('due_details.to_pay', parseFloat(e.target.value) || 0)}
-                                  className="erp-input font-bold text-indigo-700 text-lg"
-                                />
-                              </div>
-                              <div className="col-span-2">
-                                <label className="label-text">POSTING NOTE</label>
-                                <textarea
-                                  value={postingNote}
-                                  disabled={!isEditingVoucher}
-                                  placeholder="Enter posting notes..."
-                                  onChange={(e) => {
-                                    handleFieldChange('due_details.posting_note', e.target.value);
-                                    handleFieldChange('narration', e.target.value);
-                                  }}
-                                  className="erp-input h-20 resize-none py-2"
-                                />
+                              {/* Due Details fields */}
+                              <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                  <label className="label-text">INVOICE VALUE</label>
+                                  <input
+                                    type="number"
+                                    value={invoiceVal}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('total', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">TDS/TCS UNDER INCOME TAX</label>
+                                  <input
+                                    type="number"
+                                    value={tdsIt}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('due_details.tds_it', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">ADVANCE PAID</label>
+                                  <input
+                                    type="number"
+                                    value={advance}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('due_details.advance_paid', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">GROSS AMOUNT DUE</label>
+                                  <input
+                                    type="number"
+                                    value={grossDue.toFixed(2)}
+                                    disabled={true}
+                                    className="erp-input font-mono bg-gray-50 text-gray-600"
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <label className="label-text font-bold" style={{ color: '#4f46e5' }}>NET AMOUNT DUE</label>
+                                  <input
+                                    type="number"
+                                    value={netAmountDue}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('due_details.to_pay', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-bold text-indigo-700 text-lg"
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <label className="label-text">POSTING NOTE</label>
+                                  <textarea
+                                    value={postingNote}
+                                    disabled={!isEditingVoucher}
+                                    placeholder="Enter posting notes..."
+                                    onChange={(e) => {
+                                      handleFieldChange('due_details.posting_note', e.target.value);
+                                      handleFieldChange('narration', e.target.value);
+                                    }}
+                                    className="erp-input h-20 resize-none py-2"
+                                  />
+                                </div>
                               </div>
                             </div>
-                          </div>
                           );
                         })()}
 
                         {panelActiveTab === 'dispatch' && (() => {
                           const td = editedVoucher?.transit_details || editedVoucher?.dispatch_details;
                           return (
-                          <div className="grid grid-cols-2 gap-6" style={{ animation: 'fadeIn 0.15s ease' }}>
-                            <div>
-                              <label className="label-text">
-                                {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIVED IN' : 'DISPATCH FROM'}
-                              </label>
-                              <input
-                                type="text"
-                                value={td?.received_in || td?.dispatch_from || ''}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.received_in', e.target.value)}
-                                className="erp-input"
-                              />
+                            <div className="grid grid-cols-2 gap-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                              <div>
+                                <label className="label-text">
+                                  {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIVED IN' : 'DISPATCH FROM'}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={td?.received_in || td?.dispatch_from || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.received_in', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">DELIVERY TYPE</label>
+                                <input
+                                  type="text"
+                                  value={td?.delivery_type || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.delivery_type', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">MODE OF TRANSPORT</label>
+                                <input
+                                  type="text"
+                                  value={td?.mode || td?.mode_of_transport || 'Road'}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.mode', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">TRANSPORTER ID/GSTIN</label>
+                                <input
+                                  type="text"
+                                  value={td?.transporter_id || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.transporter_id', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">
+                                  {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIPT DATE' : 'DISPATCH DATE'}
+                                </label>
+                                <input
+                                  type="date"
+                                  value={td?.receipt_date || td?.dispatch_date || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.receipt_date', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">TRANSPORTER NAME</label>
+                                <input
+                                  type="text"
+                                  value={td?.transporter_name || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.transporter_name', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">
+                                  {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIPT TIME' : 'DISPATCH TIME'}
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="HH:MM:SS"
+                                  value={td?.receipt_time || td?.dispatch_time || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.receipt_time', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">VEHICLE NO.</label>
+                                <input
+                                  type="text"
+                                  value={td?.vehicle_no || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.vehicle_no', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="label-text">LR/GR/CONSIGNMENT NO</label>
+                                <input
+                                  type="text"
+                                  value={td?.lr_gr_consignment || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.lr_gr_consignment', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
                             </div>
-                            <div>
-                              <label className="label-text">DELIVERY TYPE</label>
-                              <input
-                                type="text"
-                                value={td?.delivery_type || ''}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.delivery_type', e.target.value)}
-                                className="erp-input"
-                              />
-                            </div>
-                            <div>
-                              <label className="label-text">MODE OF TRANSPORT</label>
-                              <input
-                                type="text"
-                                value={td?.mode || td?.mode_of_transport || 'Road'}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.mode', e.target.value)}
-                                className="erp-input"
-                              />
-                            </div>
-                            <div>
-                              <label className="label-text">TRANSPORTER ID/GSTIN</label>
-                              <input
-                                type="text"
-                                value={td?.transporter_id || ''}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.transporter_id', e.target.value)}
-                                className="erp-input"
-                              />
-                            </div>
-                            <div>
-                              <label className="label-text">
-                                {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIPT DATE' : 'DISPATCH DATE'}
-                              </label>
-                              <input
-                                type="date"
-                                value={td?.receipt_date || td?.dispatch_date || ''}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.receipt_date', e.target.value)}
-                                className="erp-input"
-                              />
-                            </div>
-                            <div>
-                              <label className="label-text">TRANSPORTER NAME</label>
-                              <input
-                                type="text"
-                                value={td?.transporter_name || ''}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.transporter_name', e.target.value)}
-                                className="erp-input"
-                              />
-                            </div>
-                            <div>
-                              <label className="label-text">
-                                {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIPT TIME' : 'DISPATCH TIME'}
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="HH:MM:SS"
-                                value={td?.receipt_time || td?.dispatch_time || ''}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.receipt_time', e.target.value)}
-                                className="erp-input"
-                              />
-                            </div>
-                            <div>
-                              <label className="label-text">VEHICLE NO.</label>
-                              <input
-                                type="text"
-                                value={td?.vehicle_no || ''}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.vehicle_no', e.target.value)}
-                                className="erp-input"
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <label className="label-text">LR/GR/CONSIGNMENT NO</label>
-                              <input
-                                type="text"
-                                value={td?.lr_gr_consignment || ''}
-                                disabled={!isEditingVoucher}
-                                onChange={(e) => handleFieldChange('transit_details.lr_gr_consignment', e.target.value)}
-                                className="erp-input"
-                              />
-                            </div>
-                          </div>
                           );
                         })()}
 
@@ -3301,7 +3308,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                             const name = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
                             apiService.getJournalEntriesReport(name, startDate, endDate)
                               .then(res => setDrillDownData(Array.isArray(res) ? res : []))
-                              .catch(() => {});
+                              .catch(() => { });
                           }
                         } catch (err: any) {
                           showError(err?.message || 'Failed to save changes.');
@@ -4149,5 +4156,3 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 };
 
 export default ReportsPage;
-
-

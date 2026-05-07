@@ -104,19 +104,28 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         // Exclude dummy seed data
         const EXCLUDED_NAMES = ['purchase account', 'sales account'];
 
-        // Only pull from Masters > Ledgers — this includes both user-created ledgers
-        // AND the default ledgers (shown in red in the hierarchy tree).
-        // Do NOT use the raw hierarchy table — that adds thousands of groups/sub-groups.
-        return Array.from(new Set(
-            ledgers
-                .filter(l => {
-                    const group = (l.group || '').toLowerCase().trim();
-                    const name = (l.name || '').toLowerCase().trim();
-                    return l.name && !EXCLUDED_GROUPS.includes(group) && !EXCLUDED_NAMES.includes(name);
-                })
-                .map(l => l.name)
-        )).filter(Boolean) as string[];
-    }, [ledgers]);
+        // 1. Get user-created ledgers
+        const userLedgers = ledgers
+            .filter(l => {
+                const group = (l.group || '').toLowerCase().trim();
+                const name = (l.name || '').toLowerCase().trim();
+                return l.name && !EXCLUDED_GROUPS.includes(group) && !EXCLUDED_NAMES.includes(name);
+            })
+            .map(l => l.name);
+
+        // 2. Get default ledgers from hierarchy (leaf nodes)
+        // In the hierarchy table, ledger_1 contains the actual ledger names (shown in red/italic in tree)
+        const defaultLedgers = hierarchy
+            .map(r => r.ledger_1)
+            .filter(name => {
+                if (!name) return false;
+                const n = name.toLowerCase().trim();
+                return !EXCLUDED_NAMES.includes(n);
+            });
+
+        // Merge and deduplicate
+        return Array.from(new Set([...userLedgers, ...defaultLedgers])).filter(Boolean) as string[];
+    }, [ledgers, hierarchy]);
 
     const uomOptions = useMemo(() => {
         // Use symbol if available, fallback to name
