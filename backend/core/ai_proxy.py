@@ -238,11 +238,17 @@ class AIRequestQueue:
             return {'error': 'AI System Unavailable (Redis Down)', 'code': 'REDIS_DOWN', 'status': 503}
 
         # Backpressure control (Admission Control)
-        TOTAL_LIMIT = 20000
+        # We use a lower threshold for new tasks to keep the system responsive
+        MAX_AI_QUEUE_DEPTH = 500 
         q_len = redis_client.get_queue_length(self.queue_name)
-        if q_len > TOTAL_LIMIT:
-            logger.critical(f"[ADMISSION CONTROL] Rejected request. Queue size {q_len} exceeds limit {TOTAL_LIMIT}")
-            return {'error': 'AI System is busy (High Queue Load)', 'code': 'BACKPRESSURE', 'status': 503}
+        
+        if q_len > MAX_AI_QUEUE_DEPTH:
+            logger.critical(f"[BACKPRESSURE] AI Queue depth {q_len} exceeds safety limit {MAX_AI_QUEUE_DEPTH}. Rejecting task.")
+            return {
+                'error': 'AI System Overloaded. Please try again in a few minutes.', 
+                'code': 'BACKPRESSURE_REJECT', 
+                'status': 503
+            }
 
         request_id = hashlib.md5(f"{time.time()}:{json.dumps(request_data)}".encode()).hexdigest()
         
@@ -806,14 +812,14 @@ class AIServiceProxy:
         self.concurrency_semaphore = threading.Semaphore(max_concurrency)
 
     def make_request(self, request_type: str, request_data: dict,
-                    user_id: str, tenant_id: str = None) -> dict:
+                    user_id: str, tenant_id: str = None, metadata: dict = None) -> dict:
         """Main entry point for AI requests (In-process)"""
         # Limit global concurrency to prevent overloading the system
         with self.concurrency_semaphore:
-            return self._execute_request(request_type, request_data, user_id, tenant_id)
+            return self._execute_request(request_type, request_data, user_id, tenant_id, metadata)
 
     def _execute_request(self, request_type: str, request_data: dict,
-                    user_id: str, tenant_id: str = None) -> dict:
+                    user_id: str, tenant_id: str = None, metadata: dict = None) -> dict:
 
 
         # Check circuit breaker
@@ -855,7 +861,8 @@ class AIServiceProxy:
             'type': request_type,
             'user_id': user_id,
             'tenant_id': tenant_id or 'anonymous',
-            'cache_key': cache_key
+            'cache_key': cache_key,
+            'metadata': metadata or {}
         })
 
         # ── CENTRALIZED QUEUEING (NO BYPASS) ──────────────────────────

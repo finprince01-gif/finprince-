@@ -90,10 +90,16 @@ class ZohoIntegrityEnforcer:
 
         # 6. SAFE FALLBACK RULE: If invoice number is missing, REQUIRE both total and tax match
         if is_missing_no:
+            # If BOTH are missing invoice numbers, they might be continuation pages.
+            # But they MUST have similar financial identity to merge.
             if not prev_total or not curr_total:
                 return False, "missing total with missing invoice number"
-            # We already checked total and tax above, so if we're here, they match
-            return True, "safe merge (financial match)"
+            
+            # Additional check: If they have different dates, they are DIFFERENT invoices
+            if prev_date and curr_date and prev_date != curr_date:
+                return False, "date mismatch (possible split invoice)"
+
+            return True, "safe merge (financial/identity match)"
 
         return True, "safe merge"
 

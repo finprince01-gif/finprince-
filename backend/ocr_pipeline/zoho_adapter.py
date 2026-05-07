@@ -181,7 +181,45 @@ class ZohoAdapter:
         Returns a list of invoices with reconstructed items.
         """
         raw_invoices = data.get("invoices", [])
-        logger.info(f"AUDIT: RAW OCR INVOICES COUNT = {len(raw_invoices)}")
+        
+        # ── EXPLODE PAGES (Support for multi-invoice PDFs) ──
+        # If any invoice has a '_pages' map, we explode it back into individual pages
+        # so the ForensicMerger can group them correctly by invoice_number.
+        exploded_invoices = []
+        for inv in raw_invoices:
+            # Handle both dicts (from API) and Model instances (from DB)
+            if hasattr(inv, 'extracted_data'):
+                ext_data = inv.extracted_data or {}
+                inv_id = inv.id
+                file_path = inv.file_path
+            else:
+                ext_data = inv.get("extracted_data") or inv
+                inv_id = inv.get("id")
+                file_path = inv.get("file_path")
+
+            if "_pages" in ext_data and isinstance(ext_data["_pages"], dict):
+                logger.info(f"ADAPTER: Exploding {len(ext_data['_pages'])} pages from record {inv_id}")
+                for p_idx, p_data in sorted(ext_data["_pages"].items(), key=lambda x: int(x[0])):
+                    virtual_inv = p_data.copy()
+                    virtual_inv["id"] = f"{inv_id}_p{p_idx}"
+                    virtual_inv["file_path"] = file_path
+                    if "sections" in virtual_inv and "items" in virtual_inv["sections"]:
+                        virtual_inv["items"] = virtual_inv["sections"]["items"]
+                    exploded_invoices.append(virtual_inv)
+            else:
+                # Standard single-invoice record
+                # Ensure items are available at the top level for merger
+                final_inv = ext_data.copy() if isinstance(ext_data, dict) else {}
+                if not final_inv and hasattr(inv, 'extracted_data'):
+                     # Fallback for when ext_data wasn't a dict
+                     final_inv = {"id": inv_id, "file_path": file_path}
+                
+                if "sections" in final_inv and "items" in final_inv["sections"]:
+                    final_inv["items"] = final_inv["sections"]["items"]
+                exploded_invoices.append(final_inv)
+
+        logger.info(f"AUDIT: RAW OCR INVOICES COUNT = {len(exploded_invoices)}")
+        data["invoices"] = exploded_invoices
         
         # Step 0: Forensic Merge
         forensic = get_forensic_merger()
@@ -211,7 +249,7 @@ class ZohoAdapter:
             validated_inv = self.validate_invoice(inv, normalized)
             
             # 🚀 FORCE canonical mapping directly on internal payload
-            vendor_address = inv.get("vendor_address") or inv.get("bill_from")
+            vendor_address = inv.get("vendor_address") or inv.get("bill_from") or ""
             validated_inv["bill_from"] = vendor_address
             
             # After mapping, delete vendor_address and any other alias to eliminate duplication
@@ -265,7 +303,7 @@ class ZohoAdapter:
             validated_inv["Place of Supply"] = pos_code
             validated_inv["place_of_supply"] = pos_code
             
-            logger.info(f"AUDIT EXPLICIT PAYLOAD: bill_from = '{validated_inv.get('bill_from', '')[:20]}...'")
+            logger.info(f"AUDIT EXPLICIT PAYLOAD: bill_from = '{(validated_inv.get('bill_from') or '')[:20]}...'")
 
             # Attach processed items - AUDIT: Define field used
             validated_inv["items"] = normalized
