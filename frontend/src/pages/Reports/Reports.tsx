@@ -4,6 +4,7 @@ import type { Ledger, Voucher, StockItem, SalesPurchaseVoucher, LedgerGroupMaste
 import { showError, showSuccess } from '../../utils/toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 import { apiService } from '../../services/api';
+import { httpClient } from '../../services/httpClient';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -278,7 +279,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   const [isMonthFilterOpen, setIsMonthFilterOpen] = useState(false);
   // Allocation modal state
   const [allocationModalRow, setAllocationModalRow] = useState<any | null>(null);
-  const [selectedAllocationAdvance, setSelectedAllocationAdvance] = useState<any | null>(null);
+  const [selectedAllocationAdvances, setSelectedAllocationAdvances] = useState<any[]>([]);
   const [isAllocating, setIsAllocating] = useState(false);
 
   const monthNameToNumber: Record<string, string> = {
@@ -1526,6 +1527,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     const push = (date: string, particulars: string, voucherType: string, voucherNo: string, dr: number, cr: number, refNo: string = '', raw: any = null) => {
       running += dr - cr;
       rows.push({
+        id: raw?.id,
         date, particulars, voucherType, voucherNo, referenceNo: refNo, debit: dr, credit: cr,
         balance: Math.abs(running), balanceType: running > 0 ? 'Dr' : running < 0 ? 'Cr' : '', rawVoucher: raw
       });
@@ -1534,15 +1536,17 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     // PRIMARY: Use data fetched from the API for this specific ledger
     if (drillDownData && drillDownData.length > 0) {
       drillDownData.forEach(e => {
+        const refNo = e.reference_number || e.referenceNo || e.ref_no || '-';
+        const allocStatus = e.allocation_status || e.allocationStatus || 'Unutilized';
         push(
           e.transaction_date || e.date || '',
           e.particulars || 'N/A',
           e.voucher_type || e.type || '',
-          e.voucher_number || '',
+          e.voucher_number || e.voucherNo || '',
           Number(e.debit) || 0,
           Number(e.credit) || 0,
-          e.reference_number || e.referenceNo || '-',
-          e
+          refNo,
+          { ...e, allocation_status: allocStatus, reference_number: refNo }
         );
       });
       return rows;
@@ -1551,7 +1555,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     if (entries && entries.length > 0) {
       const rel = entries.filter(e => (e.ledger_name || e.ledger || '') === name);
       if (rel.length > 0) {
-        rel.forEach(e => push(e.transaction_date || e.date || '', e.particulars || e.ledger || 'N/A', e.voucher_type || e.type || '', e.voucher_number || '', Number(e.debit) || 0, Number(e.credit) || 0, e.reference_number || '-'));
+        rel.forEach(e => push(
+          e.transaction_date || e.date || '', 
+          e.particulars || e.ledger || 'N/A', 
+          e.voucher_type || e.type || '', 
+          e.voucher_number || e.voucherNo || '', 
+          Number(e.debit) || 0, 
+          Number(e.credit) || 0, 
+          e.reference_number || e.referenceNo || '-',
+          e
+        ));
         return rows;
       }
     }
@@ -1648,12 +1661,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     drillDownEntries.forEach(entry => {
       if (entry.voucherType === 'Opening') return;
       const vt = (entry.voucherType || '').toLowerCase();
-      const isSource = ['sales', 'purchase', 'journal'].includes(vt);
-      let ref = entry.referenceNo?.trim() || '-';
+      const isSource = vt.includes('sales') || vt.includes('purchase') || vt.includes('journal') || vt.includes('opening');
+      const isApplication = vt.includes('receipt') || vt.includes('payment') || vt.includes('contra');
+      
+      let ref = entry.referenceNo?.trim() || entry.rawVoucher?.reference_number?.trim() || '-';
       
       // For source vouchers, if referenceNo is empty, treat voucherNo as the reference
-      if (isSource && ref === '-') {
-        ref = entry.voucherNo?.trim() || '-';
+      if (isSource && (ref === '-' || !ref)) {
+        ref = entry.voucherNo?.trim() || entry.rawVoucher?.voucher_number?.trim() || '-';
       }
 
       if (ref === '-') {
@@ -1681,8 +1696,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       // If it's a standalone group
       if (ref.startsWith('standalone-')) {
         const entry = entries[0];
+        const vt = (entry.voucherType || '').toLowerCase();
         // Only show sources in Allocation View
-        if (!['Sales', 'Purchase', 'Journal', 'Opening'].includes(entry.voucherType) && entry.debit === 0 && entry.credit === 0) return;
+        if (!['sales', 'purchase', 'journal', 'opening'].includes(vt) && entry.debit === 0 && entry.credit === 0) return;
 
         const isDr = (entry.debit || 0) > 0;
         const amt = isDr ? (entry.debit || 0) : (entry.credit || 0);
@@ -1704,8 +1720,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       }
 
       // For linked groups
-      const sources = entries.filter(e => !['Receipt', 'Payment', 'Contra'].includes(e.voucherType));
-      const applications = entries.filter(e => ['Receipt', 'Payment', 'Contra'].includes(e.voucherType));
+      const sources = entries.filter(e => !['receipt', 'payment', 'contra'].includes((e.voucherType || '').toLowerCase()));
+      const applications = entries.filter(e => ['receipt', 'payment', 'contra'].includes((e.voucherType || '').toLowerCase()));
 
       if (sources.length === 0) return;
 
@@ -1716,6 +1732,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       const totalSourceAmt = sources.reduce((sum, s) => sum + (isDr ? (s.debit || 0) : (s.credit || 0)), 0);
 
       if (applications.length === 0) {
+        const sourceAllocStatus = firstSource.rawVoucher?.allocation_status;
+        const displayStatus = sourceAllocStatus === 'Utilized' ? 'Paid' : (totalSourceAmt === 0 ? 'Paid' : 'Due');
         rows.push({
           date: firstSource.date,
           postedFrom: firstSource.voucherType,
@@ -1725,14 +1743,25 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           appliedRefNo: '-',
           appliedAmount: '-',
           pendingBalance: totalSourceAmt,
-          status: totalSourceAmt === 0 ? 'Paid' : 'Due',
+          status: displayStatus,
           rowSpan: 1,
           isFirstInSource: true
         });
       } else {
         let lastPending = totalSourceAmt;
         const totalAppAmt = applications.reduce((sum, a) => sum + (isDr ? (a.credit || 0) : (a.debit || 0)), 0);
-        const calcStatus = Math.round(totalSourceAmt * 100) <= Math.round(totalAppAmt * 100) ? 'Paid' : (totalAppAmt > 0 ? 'Partially Paid' : 'Due');
+        
+        let calcStatus = 'Due';
+        if (Math.round(totalSourceAmt * 100) <= Math.round(totalAppAmt * 100)) {
+            calcStatus = 'Paid';
+        } else if (totalAppAmt > 0) {
+            calcStatus = 'Partially Paid';
+        }
+        
+        // If any application is explicitly utilized, we can also consider it partially paid at least
+        if (calcStatus === 'Due' && applications.some(a => a.rawVoucher?.allocation_status === 'Utilized')) {
+            calcStatus = 'Partially Paid';
+        }
 
         applications.forEach((app, appIdx) => {
           const appAmt = isDr ? (app.credit || 0) : (app.debit || 0);
@@ -2206,9 +2235,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           </div>
         )}
 
-        {/* ── ADVANCE ALLOCATION DETAILS MODAL ── */}
         {allocationModalRow && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvance(null); }}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvances([]); }}>
             <div className="bg-white w-[800px] max-w-[92vw] rounded-lg shadow-2xl overflow-hidden border border-gray-200" onClick={e => e.stopPropagation()}>
               {/* Modal Header */}
               <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center">
@@ -2216,7 +2244,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   <svg className="w-5 h-5 text-indigo-100" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   <h3 className="text-white font-bold text-lg">Advance Allocation Details</h3>
                 </div>
-                <button onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvance(null); }} className="text-white hover:text-gray-200 transition-colors">
+                <button onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvances([]); }} className="text-white hover:text-gray-200 transition-colors">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -2245,7 +2273,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 {/* Available Payment Vouchers */}
                 {(() => {
                   const advances = filteredDrillData.filter(e =>
-                    e.voucherType && ['Receipt', 'Payment', 'receipt', 'payment'].some(t => (e.voucherType || '').toLowerCase().includes(t.toLowerCase()))
+                    e.voucherType && ['Receipt', 'Payment', 'receipt', 'payment'].some(t => (e.voucherType || '').toLowerCase().includes(t.toLowerCase())) &&
+                    (e.referenceNo === '-' || !e.referenceNo || e.referenceNo.trim() === '')
                   );
                   return advances.length > 0 ? (
                     <div className="space-y-3">
@@ -2265,21 +2294,35 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 bg-white">
-                            {advances.map((adv: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedAllocationAdvance(adv)}>
-                                <td className="px-4 py-3">
-                                  <input type="radio" checked={selectedAllocationAdvance?.voucherNo === adv.voucherNo} readOnly name="alloc-advance-selection" className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer" />
-                                </td>
-                                <td className="px-4 py-3 font-medium text-gray-900">{adv.voucherNo || '-'}</td>
-                                <td className="px-4 py-3 text-gray-500">{adv.date ? new Date(adv.date).toLocaleDateString('en-IN') : '-'}</td>
-                                <td className="px-4 py-3 text-right text-gray-900 font-bold">
-                                  {adv.credit > 0 ? `₹${adv.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : adv.debit > 0 ? `₹${adv.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-right font-bold text-rose-600">
-                                  ₹{Number(adv.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </td>
-                              </tr>
-                            ))}
+                            {advances.map((adv: any, idx: number) => {
+                              const isSelected = selectedAllocationAdvances.some(a => a.voucherNo === adv.voucherNo);
+                              return (
+                                <tr key={idx} className={`hover:bg-gray-50 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedAllocationAdvances(prev => prev.filter(a => a.voucherNo !== adv.voucherNo));
+                                  } else {
+                                    setSelectedAllocationAdvances(prev => [...prev, adv]);
+                                  }
+                                }}>
+                                  <td className="px-4 py-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => { }} // Managed by row onClick
+                                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 font-medium text-gray-900">{adv.voucherNo || '-'}</td>
+                                  <td className="px-4 py-3 text-gray-500">{adv.date ? new Date(adv.date).toLocaleDateString('en-IN') : '-'}</td>
+                                  <td className="px-4 py-3 text-right text-gray-900 font-bold">
+                                    {adv.credit > 0 ? `₹${adv.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : adv.debit > 0 ? `₹${adv.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-bold text-rose-600">
+                                    ₹{Number(adv.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -2295,32 +2338,30 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 {/* Footer Buttons */}
                 <div className="mt-6 flex gap-3">
                   <button
-                    onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvance(null); }}
+                    onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvances([]); }}
                     className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors uppercase tracking-widest text-[10px]"
                   >
                     Close Window
                   </button>
                   <button
-                    disabled={!selectedAllocationAdvance || isAllocating}
+                    disabled={selectedAllocationAdvances.length === 0 || isAllocating}
                     onClick={async () => {
-                      if (!selectedAllocationAdvance) {
-                        showError('Please select a payment voucher to proceed.');
+                      if (selectedAllocationAdvances.length === 0) {
+                        showError('Please select at least one payment voucher to proceed.');
                         return;
                       }
                       setIsAllocating(true);
                       try {
-                        const entryId = selectedAllocationAdvance.id;
-                        if (entryId) {
-                          await fetch(`${API_BASE_URL}/api/journal-entries/${entryId}/`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({
+                        await Promise.all(selectedAllocationAdvances.map(async (adv) => {
+                          const entryId = adv.id || adv.rawVoucher?.id;
+                          if (entryId) {
+                            await httpClient.patch(`/api/journal-entries/${entryId}/`, {
                               reference_number: allocationModalRow.refNo,
                               allocation_status: 'Utilized'
-                            })
-                          });
-                        }
+                            });
+                          }
+                        }));
+
                         // Refresh drill-down data to reflect changes
                         if (drillDownLedger) {
                           const ledgerName = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
@@ -2328,16 +2369,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                             .then(data => setDrillDownData(Array.isArray(data) ? data : []))
                             .catch(() => { });
                         }
-                        showSuccess(`Successfully allocated ${selectedAllocationAdvance.voucherNo || 'voucher'} to ${allocationModalRow.refNo}`);
+                        showSuccess(`Successfully allocated ${selectedAllocationAdvances.length} voucher(s) to ${allocationModalRow.refNo}`);
                         setAllocationModalRow(null);
-                        setSelectedAllocationAdvance(null);
+                        setSelectedAllocationAdvances([]);
                       } catch (err: any) {
                         showError(err?.message || 'Failed to proceed with allocation.');
                       } finally {
                         setIsAllocating(false);
                       }
                     }}
-                    className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAllocationAdvance && !isAllocating
+                    className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAllocationAdvances.length > 0 && !isAllocating
                       ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
                       }`}

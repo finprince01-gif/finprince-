@@ -256,6 +256,19 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             'PURCHASE_TDS_DETAIL', 'SALES_TCS_DETAIL'
         ])
 
+    def perform_update(self, serializer):
+        import logging
+        logger = logging.getLogger('accounting.views')
+        
+        # Automatically set status to Utilized if reference_number is being set
+        data = self.request.data
+        if 'reference_number' in data and data['reference_number'] and 'allocation_status' not in data:
+            serializer.validated_data['allocation_status'] = 'Utilized'
+            
+        logger.info(f"📝 Updating JournalEntry {self.get_object().id} - Data: {data}")
+        instance = serializer.save()
+        logger.info(f"✅ Updated JournalEntry {instance.id} - Ref: {instance.reference_number}, Status: {instance.allocation_status}")
+
     @action(detail=False, methods=['get'])
     def report(self, request):
         """
@@ -410,15 +423,21 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             row = {
                 'id': e.id,
                 'transaction_date': e.transaction_date,
+                'date': e.transaction_date,
                 'particulars': particulars,
                 'voucher_type': e.voucher_type,
+                'voucherType': e.voucher_type,
                 'voucher_number': e.voucher_number,
+                'voucherNo': e.voucher_number,
                 'debit': dr,
                 'credit': cr,
                 'balance': abs(running_balance),
                 'balance_type': balance_type,
                 'voucher_id': e.voucher_id,
                 'reference_number': getattr(e, 'reference_number', None),
+                'referenceNo': getattr(e, 'reference_number', None),
+                'allocation_status': getattr(e, 'allocation_status', 'Unutilized'),
+                'allocationStatus': getattr(e, 'allocation_status', 'Unutilized'),
             }
 
             # For GST/TDS ledgers, embed the component breakdown
