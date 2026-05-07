@@ -54,12 +54,12 @@ const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').t
 // Absolute ranks for specific item names to ensure they stay pinned regardless of parent
 const ITEM_RANKS: Record<string, number> = {
     // Root level
-    'asset': 1,
-    'expenditure': 2,
-    'income': 3,
-    'liability': 4,
-    'ownersfunds': 5,
-    'npofunds': 6,
+    'npofunds': 0,
+    'ownersfunds': 1,
+    'liability': 2,
+    'asset': 3,
+    'income': 4,
+    'expenditure': 5,
 
     // Owners' Funds
     'sharecapital': 10,
@@ -81,8 +81,11 @@ const ITEM_RANKS: Record<string, number> = {
     'investmentsindebenturesorbonds': 34,
     'investmentsinmutualfunds': 35,
     'investmentsproperty': 36,
-    'others': 37,
     'othernoncurrentinvestment': 38,
+
+
+    'unrestrictedfunds': 0.1,
+    'restrictedfunds': 0.2,
 
     // Liabilities
     'longtermborrowings': 40,
@@ -91,7 +94,6 @@ const ITEM_RANKS: Record<string, number> = {
     'longtermprovisions': 43,
     'shorttermborrowings': 44,
     'othercurrentliabilities': 45,
-    'othercurrentassets': 46,
     'shorttermprovisions': 47,
 
     // Loans
@@ -113,13 +115,160 @@ const ITEM_RANKS: Record<string, number> = {
     // Income
     'revenuefromoperations': 70,
     'otherincome': 71,
+
+    // Assets
+    'propertyplantequipment': 80,
+    'noncurrentinvestments': 81,
+    'deferredtaxassetsnet': 82,
+    'longtermloansandadvances': 83,
+    'othernoncurrentassets': 84,
+    'currentinvestments': 85,
+    'cashandcashequivalents': 86,
+    'shorttermloansandadvances': 87,
+    'othercurrentassets': 88,
+
+    // Property, Plant & Equipment Sub-groups
+    'tangibleassets': 90,
+    'intangibleassets': 91,
+    'capitalworkinprogress': 92,
+    'intangibleassetsunderdevelopment': 93,
+
+    // Cash and cash equivalents Sub-groups
+    'cash': 100,
+    'inbankaccounts': 101,
+    'others': 999,
+
+    // Revenue from operations Sub-groups
+    'saleofservices': 110,
+    'saleofgoods': 111,
+    'saleofservice': 112,
+
+    // GST Sales Sub-groups
+    'localsalesservices': 120,
+    'interstatesalesservices': 121,
+
+    // Local Sales Sub-groups
+    'localsaleofservicesnilrated': 130,
+    'localsaleofservicesexempted': 131,
+    'localsaleofservicestaxable': 132,
+
+    // Inter-state Sales Sub-groups
+    'interstatesaleofservicesnilrated': 140,
+    'interstatesaleofservicesexempted': 141,
+    'interstatesaleofservicestaxable': 142,
+
+    // GST Sales Goods Sub-groups
+    'localsalesgoods': 150,
+    'interstatesalesgoods': 151,
+    'exportofgoods': 152,
+
+    // Local Sales Goods Sub-groups
+    'localsaleofgoodsnilrated': 160,
+    'localsaleofgoodsexempted': 161,
+    'localsaleofgoodstaxable': 162,
+
+    // Export of Goods Sub-groups
+    'exportofgoodsnilrated': 170,
+    'exportofgoodsexempted': 171,
+    'exportofgoodswithpaymentoftax': 172,
+    'exportofgoodswithoutpaymentoftax': 173,
+
+    // Export of Service Sub-groups
+    'exportofservicenilrated': 180,
+    'exportofserviceexempted': 181,
+    'exportofservicewithpaymentoftax': 182,
+    'exportofservicewithoutpaymentoftax': 183,
+
+    // Other Income Sub-groups
+    'interestincome': 190,
+    'dividendincome': 191,
+    'netgainonfairvaluechanges': 192,
+    'netgainonderecognitionoffinancialinstrumentsunderamortisedcostcategory': 193,
+
+    // Expenditure Sub-groups
+    'costofmaterialsconsumed': 200,
+    'changesininventoriesoffinishedgoodsstockintradeandworkinprogress': 201,
+    'employeebenefitsexpenses': 202,
+    'financecosts': 203,
+    'depreciationamortizationandimpairment': 204,
+    'otherexpenses': 205,
+
+    // Employee Benefits Sub-groups
+    'salary': 210,
+    'bonus': 211,
+    'wages': 212,
+    'staffwelfareexpenses': 213,
+    'incentives': 214,
+
+    // Finance Costs Sub-groups
+    'interestonbankloan': 220,
+    'interestonotherloans': 221,
+    'otherborrowingcosts': 222,
+    'impairmentonfinancialinstruments': 223,
+
+    // Depreciation Sub-groups
+    'depreciationexpense': 230,
+    'amortizationexpense': 231,
+
+    // Other Expenses Sub-groups & Ledgers
+    'feesandcommissionexpense': 250,
+    'netlossonfairvaluechanges': 251,
+    'netlossonderecognitionoffinancialinstrumentsunderamortisedcostcategory': 252,
+    'rent': 253,
+    'electricity': 254,
+    'repairsmaintenance': 255,
+    'insurance': 256,
+    'processinglabourcharges': 257,
+    'travellingconveyanceboarding': 258,
+    'auditorsremuneration': 259,
+    'printingstationery': 260,
+    'advertisementexpense': 261,
+    'commission': 262,
+    'legalandprofessionalcharges': 263,
+    'miscellaneousexpenses': 264,
+    'fuelexpenses': 265,
+    'communicationexpenses': 266,
+    'freightclearingandforwarding': 267,
+    'commissionandbrokerage': 268,
+    'rocfees': 269,
+    'gstandvatpayments': 270,
+    'donations': 271,
+    'baddebtswrittenoff': 272,
+    'itinternetservermaintenanceexpenses': 273,
+    'businesssalespromotionexpenses': 274,
+    'exchangegain': 275,
+    'exchangeloss': 276,
+    'officemaintenance': 277,
+    'roundoff': 278,
+    'rebatesanddiscounts': 279,
+    'consumptionofstoresandspareparts': 280,
+    'licencesandtaxesexcludingtaxesonincome': 281,
+    'lossonsaleofassets': 282,
+    'statutoryfeeinterestpenalty': 283,
+    'directorsremuneration': 284,
+    'msmeinterestexpense': 285,
+    'dividendtoshareholders': 286,
+
+    // Long term loans Sub-groups
+    'termloans': 300,
+    'otherloansfacilities': 301,
+
+    // Short term loans Sub-groups
+    'shorttermloansfrombankssecured': 310,
+    'shorttermloansfromrelatedpartiessecured': 311,
+    'shorttermloansfromotherpartiessecured': 312,
+
+    // Unsecured Short term loans Sub-groups
+    'shorttermloansfrombanksunsecured': 320,
+    'shorttermloansfromrelatedpartiesunsecured': 321,
+    'shorttermloansfromotherpartiesunsecured': 322,
 };
 
 const sortHierarchyNodes = (nodes: TreeNode[]) => {
     nodes.sort((a, b) => {
         const ar = ITEM_RANKS[clean(a.name)] ?? 9999;
         const br = ITEM_RANKS[clean(b.name)] ?? 9999;
-        
+
         if (ar !== br) return ar - br;
         return a.name.localeCompare(b.name);
     });
@@ -354,7 +503,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 if (!level.value) return;
 
                 parentPath = currentPath;
-                currentPath = currentPath ? `${currentPath}>${level.value}` : level.value;
+                const normalizedValue = (level.value || '').toLowerCase().trim();
+                currentPath = currentPath ? `${currentPath}>${normalizedValue}` : normalizedValue;
 
                 if (!tree.has(currentPath)) {
                     // For custom rows, ALL intermediate nodes (sub_group_2, sub_group_3)
@@ -440,7 +590,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     ? parentPath.substring(0, parentPath.lastIndexOf('>'))
                     : '';
 
-                const sg3NodePath = grandparentPath ? `${grandparentPath}>${nSg3}` : nSg3;
+                const normalizedSg3 = (nSg3 || '').toLowerCase().trim();
+                const sg3NodePath = grandparentPath ? `${grandparentPath}>${normalizedSg3}` : normalizedSg3;
 
                 // Only do this once — check if sg3 node already exists
                 if (!tree.has(sg3NodePath)) {
@@ -513,7 +664,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     ? 6
                     : (nSg3 ? 4 : (nSg2 ? 3 : 6));
 
-            const childPath = `${parentPath}>${childDisplayName}`;
+            const childPath = `${parentPath}>${childDisplayName.toLowerCase().trim()}`;
 
             if (tree.has(childPath)) {
                 // Update existing node instead of replacing it (to preserve references in parent's children array)
@@ -620,7 +771,10 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     };
 
     const renderTree = (nodes: TreeNode[], parentPath = '', level = 0): React.ReactElement[] => {
-        return nodes.map((node, index) => {
+        const HIDDEN = ['sundry debtors', 'sundry creditors', 'duties & taxes', 'sales accounts', 'purchase accounts', 'purchase account'];
+        return nodes
+            .filter(node => !HIDDEN.includes((node.name || '').toLowerCase().trim()))
+            .map((node, index) => {
             const nodePath = parentPath ? `${parentPath}>${node.name}` : node.name;
             const isExpanded = expandedNodes.has(nodePath);
             const hasChildren = node.children.length > 0;
@@ -771,13 +925,13 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 httpClient.get<HierarchyRow[]>('/api/masters/hierarchy/'),
                 httpClient.get<Ledger[]>('/api/masters/ledgers/').catch(() => [])
             ]);
-            
+
             setTenantLedgers(ledgers);
             const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
             const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
-                setHierarchyData(mergedHierarchy);
-                const tree = buildTreeStructure(mergedHierarchy, ledgers);
-                sortHierarchyNodes(tree); // ← Apply pinned order after every re-fetch
+            setHierarchyData(mergedHierarchy);
+            const tree = buildTreeStructure(mergedHierarchy, ledgers);
+            sortHierarchyNodes(tree); // ← Apply pinned order after every re-fetch
             setTreeData([...tree]);
             return tree;
         } catch (error) {
@@ -982,10 +1136,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     </label>
                     <div className="border border-gray-300 rounded-[4px] p-3 max-h-[32rem] overflow-y-auto bg-gray-50">
                         {treeData.length > 0 ? (
-                            renderTree(treeData.filter(node => {
-                                const HIDDEN = ['sundry debtors', 'sundry creditors'];
-                                return !HIDDEN.includes((node.name || '').toLowerCase().trim());
-                            }))
+                            renderTree(treeData)
                         ) : (
                             <div className="text-gray-500 text-sm">No hierarchy data available</div>
                         )}
