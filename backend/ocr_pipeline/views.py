@@ -501,27 +501,32 @@ class OCRStagingRescanView(views.APIView):
             }, status=404)
             
         try:
-            with open(temp_file_path, 'rb') as f:
-                file_bytes = f.read()
-                
-            from .pipeline import run_ocr_pipeline
-            record.status = 'EXTRACTING'
-            record.validation_status = 'PENDING'
+            # ── NON-BLOCKING RESCAN ──
+            # Instead of running the pipeline here, we push to the OCR queue.
+            # The worker will pick it up and process it asynchronously.
+            from core.redis_client import redis_client
+            
+            ocr_task = {
+                'item_id': None, # This is a direct rescan on a staging record
+                'record_id': record.id,
+                'job_id': 'RESCAN',
+                'tenant_id': tenant_id,
+                'voucher_type': record.voucher_type,
+                'upload_session_id': record.upload_session_id,
+                'id': f"rescan_{record.id}_{int(time.time())}"
+            }
+            
+            pushed = redis_client.enqueue("ocr_queue", ocr_task)
+            if not pushed:
+                return Response({'error': 'Failed to enqueue rescan task'}, status=500)
+
+            record.status = 'OCR_QUEUED'
             record.save()
-            
-            execution_res = run_ocr_pipeline(file_bytes, record)
-            
-            # Re-run grouping in case rescan fixed details that allow merging
-            try:
-                from .grouping import run_grouping_logic
-                run_grouping_logic(tenant_id, record.upload_session_id)
-            except: pass
             
             return Response({
                 "success": True,
-                "status": "EXTRACTED",
-                "validation_status": execution_res.get('validation', {}).get('status', 'ERROR'),
-                "data": execution_res.get('data', {})
+                "status": "QUEUED",
+                "message": "Rescan task enqueued successfully."
             })
         except Exception as e:
             logger.error(f"RESCAN FAILED: {str(e)}")
@@ -546,33 +551,46 @@ class OCRStagingRescanUploadView(views.APIView):
             return Response({'error': 'Staging record not found'}, status=404)
 
         try:
-            file_bytes = uploaded_file.read()
-            new_hash = hashlib.sha256(file_bytes).hexdigest()
-
-            # Save to ocr_temp
+            # ── NON-BLOCKING RESCAN ──
+            from core.redis_client import redis_client
+            
+            # Use chunks for saving to avoid memory spike
             temp_dir = os.path.join(settings.MEDIA_ROOT, 'ocr_temp')
-            if not os.path.exists(temp_dir):
-                os.makedirs(temp_dir)
-
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            # Calculate hash streaming
+            sha256 = hashlib.sha256()
+            for chunk in uploaded_file.chunks():
+                sha256.update(chunk)
+            new_hash = sha256.hexdigest()
+            
             temp_file_path = os.path.join(temp_dir, new_hash)
             with open(temp_file_path, 'wb') as f:
-                f.write(file_bytes)
+                for chunk in uploaded_file.chunks():
+                    f.write(chunk)
 
             # Update identity and status
             record.file_hash = new_hash
-            record.status = 'EXTRACTING'
-            record.validation_status = 'PENDING'
+            record.status = 'OCR_QUEUED'
             record.save()
 
-            from .pipeline import run_ocr_pipeline
-            execution_res = run_ocr_pipeline(file_bytes, record)
+            ocr_task = {
+                'item_id': None,
+                'record_id': record.id,
+                'job_id': 'RESCAN_UPLOAD',
+                'tenant_id': tenant_id,
+                'voucher_type': record.voucher_type,
+                'upload_session_id': record.upload_session_id,
+                'id': f"rescan_up_{record.id}_{int(time.time())}"
+            }
+            
+            redis_client.enqueue("ocr_queue", ocr_task)
 
             return Response({
                 "success": True,
                 "file_hash": new_hash,
-                "status": "EXTRACTED",
-                "validation_status": execution_res.get('validation', {}).get('status', 'ERROR'),
-                "data": execution_res.get('data', {})
+                "status": "QUEUED",
+                "message": "File uploaded and rescan task enqueued."
             })
         except Exception as e:
             logger.error(f"RESCAN UPLOAD FAILED: {str(e)}")
@@ -621,7 +639,7 @@ class ZohoReconstructView(views.APIView):
 
         # TRACE: Log incoming payload safely
         invoices_in = data.get("invoices", [])
-        if invoices_in and isinstance(invoices_in, list) and isinstance(invoices_in[0], dict):
+        if invoices_in and isinstance(invoices_in, list) and len(invoices_in) > 0 and invoices_in[0] and isinstance(invoices_in[0], dict):
             logger.info(f"TRACE_API_IN: First invoice incoming vendor_address: {invoices_in[0].get('vendor_address')}")
             logger.info(f"TRACE_API_IN: First invoice incoming bill_from: {invoices_in[0].get('bill_from')}")
 
@@ -635,7 +653,7 @@ class ZohoReconstructView(views.APIView):
 
             print("FINAL API RESPONSE:", processed_invoices)
             for inv in processed_invoices:
-                if not inv.get("bill_from"):
+                if inv and not inv.get("bill_from"):
                     print("BROKEN RECORD:", inv)
                     raise Exception("CRITICAL: bill_from empty or missing")
 

@@ -19,14 +19,12 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
+def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR, wait_for_ai: bool = True, item_id: int = None) -> dict:
     """
     SINGLE ENTRY POINT for OCR extraction and immediate validation.
     """
-    print("NEW OCR PIPELINE ACTIVE")
-    print("PIPELINE EXECUTED")
-    logger.error(f"[TRACE] run_ocr_pipeline.entry | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
-    logger.info(f"NEW OCR PIPELINE ACTIVE - Start processing record {record.id}...")
+    print("NEW OCR PIPELINE ACTIVE (ASYNC SUPPORT)")
+    logger.info(f"Processing record {record.id} | item={item_id} | wait_for_ai={wait_for_ai}")
     
     try:
         # STEP 0: DEDUPE BYPASS
@@ -42,9 +40,16 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR) -> dict:
                 voucher_type=record.voucher_type or 'Purchase',
                 public_ip="0.0.0.0",
                 user_id='system',
-                tenant_id=str(record.tenant_id or 'system')
+                tenant_id=str(record.tenant_id or 'system'),
+                wait_for_result=wait_for_ai,
+                record_id=record.id,
+                item_id=item_id
             )
             
+            if not wait_for_ai:
+                logger.info(f"[PIPELINE ASYNC] Extraction enqueued for record {record.id}. Returning early.")
+                return {"status": "ENQUEUED"}
+
             if "_error" in extracted:
                 raise RuntimeError(f"Extraction Error: {extracted.get('_error')} - {extracted.get('_raw', '')[:100]}...")
 
@@ -175,7 +180,7 @@ def finalize_merged_records(records, auto_save: bool = True):
             
     return res
 
-def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False):
+def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwargs):
     """
     CORE VALIDATION FUNCTION: 
     Checks for Vendor, Duplicates, and optionally creates Voucher.
@@ -185,6 +190,54 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False):
     
     try:
         data = record.extracted_data or {}
+        
+        # ── MULTI-INVOICE SPLITTING ──
+        # If record contains preserved pages, we use the ZohoAdapter grouping 
+        # logic to determine if we should split this into multiple vouchers.
+        if "_pages" in data and not kwargs.get('_is_child'):
+            from .zoho_adapter import get_zoho_adapter
+            adapter = get_zoho_adapter()
+            split_invoices = adapter.reconstruct_invoices({"invoices": [record]})
+            
+            if len(split_invoices) > 1:
+                logger.info(f"[PIPELINE SPLIT] Record {record.id} contains {len(split_invoices)} invoices. Creating separate vouchers.")
+                results = []
+                for i, inv_data in enumerate(split_invoices):
+                    # For each split invoice, we must update the top-level DB columns 
+                    # (gstin, invoice_no, etc.) so the staging UI reflects the correct data.
+                    sections = inv_data.get('sections', {})
+                    supplier = sections.get('supplier_details', {})
+                    
+                    if i == 0:
+                        # Update the original record as the first invoice
+                        record.extracted_data = inv_data
+                        record.supplier_invoice_no = supplier.get('supplier_invoice_no')
+                        record.gstin = supplier.get('gstin')
+                        record.branch = supplier.get('branch')
+                        record.save()
+                        results.append(validate_and_process(record, auto_save=auto_save, _is_child=True))
+                    else:
+                        # Create a new sibling record for subsequent invoices
+                        import hashlib
+                        # Generate a unique hash for the child to avoid DB unique constraints
+                        # while keeping the original hash as a reference if needed.
+                        child_hash = hashlib.sha256(f"{record.file_hash}_split_{i}_{record.upload_session_id}".encode()).hexdigest()
+                        
+                        child = InvoiceTempOCR.objects.create(
+                            tenant_id=record.tenant_id,
+                            upload_session_id=record.upload_session_id,
+                            file_path=record.file_path,
+                            file_hash=child_hash, # MUST BE UNIQUE for DB constraint
+                            voucher_type=record.voucher_type,
+                            extracted_data=inv_data,
+                            supplier_invoice_no=supplier.get('supplier_invoice_no'),
+                            gstin=supplier.get('gstin'),
+                            branch=supplier.get('branch'),
+                            status='EXTRACTED'
+                        )
+                        results.append(validate_and_process(child, auto_save=auto_save, _is_child=True))
+                return results[0]
+
         sections = data.get("sections", {})
         supplier = sections.get("supplier_details", {})
         supply = sections.get("supply_details", {})

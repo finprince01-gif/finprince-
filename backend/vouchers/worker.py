@@ -45,6 +45,7 @@ from django.conf import settings
 from django.db import connection, transaction, close_old_connections
 from core.redis_client import redis_client
 from vouchers.models import BulkInvoiceJob, InvoiceProcessingItem, InvoiceOCRTemp
+from ocr_pipeline.models import InvoiceTempOCR
 from ocr_pipeline.pipeline import run_ocr_pipeline
 from core.ai_proxy import process_ai_request
 from vouchers.pipeline import storage
@@ -52,19 +53,15 @@ logger.info("Project components imported.")
 
 class BaseWorker:
     def __init__(self, queue_name: Any):
-        # queue_name can be a string or a list of strings (for priorities)
         self.queue_names = [queue_name] if isinstance(queue_name, str) else queue_name
         self.running = True
-        
         self.last_metrics_log = 0
         self.worker_id = f"{self.__class__.__name__}-{threading.get_ident()}"
         
-        # Signal handling for graceful shutdown
         try:
             signal.signal(signal.SIGINT, self.stop)
             signal.signal(signal.SIGTERM, self.stop)
         except ValueError:
-            # Signal only works in main thread
             pass
 
     def stop(self, *args):
@@ -80,9 +77,6 @@ class BaseWorker:
 
         while self.running:
             try:
-                # Use RAW multi-queue BRPOP (blocks for 'timeout' seconds)
-                # This replaces the manual loop to prevent CPU spin and log spam.
-                # ── HEARTBEAT & METRICS ──
                 redis_client.record_heartbeat(self.worker_id)
                 if time.time() - self.last_metrics_log > 30:
                     redis_client.log_metrics()
@@ -92,26 +86,125 @@ class BaseWorker:
                 
                 if task:
                     task_id = task.get('id', 'unknown')
-                    logger.info(f"[*] Picked up task {task_id}")
+                    logger.info(f"[*] [{self.__class__.__name__}] Picked up task {task_id}")
                     
-                    # ── DB SAFETY ──
-                    close_old_connections()
+                    # ── HEARTBEAT THREAD ──
+                    # Start a thread to keep the heartbeat alive during processing
+                    stop_heartbeat = threading.Event()
+                    def heartbeat_loop():
+                        while not stop_heartbeat.is_set():
+                            redis_client.update_task_heartbeat(task_id)
+                            time.sleep(15)
+                    
+                    hb_thread = threading.Thread(target=heartbeat_loop, daemon=True)
+                    hb_thread.start()
 
-                    self.process_task(task)
-                    
-                    logger.info(f"[*] Task {task_id} processing complete.")
+                    try:
+                        close_old_connections()
+                        self.process_task(task)
+                        redis_client.complete_task(task)
+                        logger.info(f"[*] [{self.__class__.__name__}] Task {task_id} done.")
+                    except Exception as e:
+                        # ── FATAL ESCAPE HATCH ──
+                        # If an exception escapes process_task (bug in worker), we MUST log it
+                        # and potentially ACK it to prevent infinite loops if retries are exhausted.
+                        logger.error(f"[*] [{self.__class__.__name__}] FATAL ERROR in task {task_id}: {e}")
+                        traceback.print_exc()
+                        
+                        # Increment retries even on fatal crash
+                        retries = redis_client.increment_retry_count(task)
+                        if retries > 5:
+                            logger.critical(f"[*] [{self.__class__.__name__}] Task {task_id} reached MAX FATAL RETRIES. Dropping.")
+                            redis_client.complete_task(task)
+                        else:
+                            # Let it stay in processing for RecoveryThread or manually retry
+                            pass
+                    finally:
+                        stop_heartbeat.set()
+                        hb_thread.join(timeout=1)
                 else:
-                    # BRPOP timed out silently (normal idle state)
                     time.sleep(0.1)
-                    
             except Exception:
                 logger.exception(f"CRITICAL: Worker loop failure in {self.queue_names}")
-                time.sleep(5) # Backoff on unexpected error
+                time.sleep(5)
 
     def process_task(self, task: Dict[str, Any]):
         raise NotImplementedError()
 
+class IngestionWorker(BaseWorker):
+    """STAGE 1: Reads local temp files, hashes, and uploads to permanent storage"""
+    def __init__(self):
+        super().__init__("ingestion_queue")
+
+    def process_task(self, task: Dict[str, Any]):
+        job_id = task.get('job_id')
+        file_info = task.get('file_info', [])
+        tenant_id = task.get('tenant_id')
+        
+        logger.info(f"[INGESTION START] Job {job_id} | {len(file_info)} files")
+        
+        try:
+            job = BulkInvoiceJob.objects.get(id=job_id)
+            job.status = 'processing'
+            job.save()
+
+            for info in file_info:
+                item_id = info['id']
+                temp_path = info['temp_path']
+                
+                try:
+                    # 1. Read and Hash (Streaming)
+                    sha256 = hashlib.sha256()
+                    with open(temp_path, 'rb') as f:
+                        for chunk in iter(lambda: f.read(65536), b""):
+                            sha256.update(chunk)
+                    file_hash = sha256.hexdigest()
+                    
+                    # 2. Upload to Storage
+                    key = storage.make_key(job_id, os.path.basename(temp_path))
+                    with open(temp_path, 'rb') as f:
+                        storage.upload_bytes(f.read(), key) 
+                    
+                    # 3. Update DB
+                    item = InvoiceProcessingItem.objects.get(id=item_id)
+                    item.file_path = key
+                    item.file_hash = file_hash
+                    item.status = 'pending'
+                    item.save()
+                    
+                    # 4. Enqueue OCR
+                    ocr_task = {
+                        'item_id': item.id,
+                        'job_id': job.id,
+                        'tenant_id': tenant_id,
+                        'voucher_type': task.get('voucher_type'),
+                        'upload_session_id': task.get('upload_session_id'),
+                        'id': f"ocr_{item.id}",
+                        'retries': 0
+                    }
+                    redis_client.enqueue("ocr_queue", ocr_task)
+                    logger.info(f"[INGESTION] Item {item_id} enqueued to OCR")
+                except Exception as e:
+                    logger.error(f"[INGESTION ERROR] Item {item_id}: {e}")
+                    InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed', error_message=str(e))
+                finally:
+                    # ALWAYS cleanup temp file
+                    if os.path.exists(temp_path):
+                        try: os.remove(temp_path)
+                        except: pass
+
+            # Cleanup temp directory if empty
+            if file_info:
+                temp_dir = os.path.dirname(file_info[0]['temp_path'])
+                if temp_dir and os.path.exists(temp_dir) and not os.listdir(temp_dir):
+                    try: os.rmdir(temp_dir)
+                    except: pass
+
+        except Exception as e:
+            logger.error(f"[INGESTION FATAL] Job {job_id}: {e}")
+
 class OCRWorker(BaseWorker):
+    """STAGE 2: Downloads, splits, optimizes, and enqueues AI extraction tasks (Fire-and-Forget)"""
     def __init__(self):
         super().__init__("ocr_queue")
 
@@ -121,266 +214,272 @@ class OCRWorker(BaseWorker):
         tenant_id = task.get('tenant_id')
         session_id = task.get('upload_session_id')
         
-        logger.info(f"[TRACE] OCR_START | job_id={job_id} | item_id={item_id} | session_id={session_id}")
-        logger.info(f"[OCR START] Item {item_id} | Job {job_id} | Tenant {tenant_id}")
-        
         try:
             item = InvoiceProcessingItem.objects.get(id=item_id)
             item.status = 'processing'
             item.save()
 
-            # 1. Download
-            logger.info(f"[OCR] Downloading {item.file_path}")
             file_bytes = storage.download_bytes(item.file_path)
             
-            # 2. Run Pipeline (OCR + Initial Validation)
             from ocr_pipeline.repository import StagingRepository
             repo = StagingRepository()
             
-            file_hash = item.file_hash
-            current_session = task.get('upload_session_id')
-            
-            existing_record = repo.find_by_hash_and_tenant(file_hash, tenant_id)
-            record = None
-
-            if existing_record:
-                logger.error(f"[TRACE] worker.lookup_hit | record_id={existing_record.id} | session={existing_record.upload_session_id} | py_id={id(existing_record)}")
-                if existing_record.upload_session_id == current_session:
-                    # SAME SESSION: Direct reuse
-                    record = existing_record
-                    logger.info(f"[STAGING REUSE] Using existing record {record.id} for current session")
-                else:
-                    # DIFFERENT SESSION: CLONE (Requirement 3 - Option A)
-                    logger.info(f"[DEDUPE HIT] Found existing OCR data in Record {existing_record.id} (Session: {existing_record.upload_session_id})")
-                    logger.info(f"[CLONING RECORD] Creating fresh staging row for New Session: {current_session}")
-                    
-                    record = repo.create_record(
-                        file_hash, 
-                        os.path.basename(item.file_path), 
-                        task.get('voucher_type', 'Purchase'), 
-                        tenant_id, 
-                        current_session
-                    )
-                    # Copy extracted data (Optimization)
-                    record.extracted_data = existing_record.extracted_data
-                    record.ocr_raw_text = existing_record.ocr_raw_text
-                    record.supplier_invoice_no = existing_record.supplier_invoice_no
-                    record.gstin = existing_record.gstin
-                    record.branch = existing_record.branch
-                    record.save()
-                    logger.error(f"[TRACE] worker.clone_created | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
-                    logger.info(f"[CLONE SUCCESS] New Record {record.id} created with reused OCR data | Session: {record.upload_session_id}")
-            
-            if not record:
-                # NO RECORD AT ALL: Create fresh
+            # Create or reuse staging record
+            record = repo.find_by_hash_and_tenant(item.file_hash, tenant_id)
+            if not record or record.upload_session_id != session_id:
                 record = repo.create_record(
-                    file_hash, 
+                    item.file_hash, 
                     os.path.basename(item.file_path), 
                     task.get('voucher_type', 'Purchase'), 
                     tenant_id, 
-                    current_session
+                    session_id
                 )
-                logger.info(f"[STAGING RECORD CREATED] ID: {record.id} | Session: {record.upload_session_id}")
-
-            # ── HARD VALIDATION: SESSION OWNERSHIP ──
-            if str(record.upload_session_id) != str(current_session):
-                logger.critical(f"[SESSION CORRUPTION] Record {record.id} session ({record.upload_session_id}) DOES NOT MATCH task session ({current_session})")
-                raise ValueError(f"Session ownership mismatch: {record.upload_session_id} != {current_session}")
-            
-            logger.info(f"[SESSION VERIFIED] Record {record.id} | Session: {record.upload_session_id}")
 
             record.status = 'OCR_PROCESSING'
-            record.save(update_fields=['status'])
-            logger.error(f"[TRACE] worker.before_pipeline | task_session={current_session} | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
-            
-            logger.info(f"[OCR] Calling Gemini for Item {item_id}")
-            res = run_ocr_pipeline(file_bytes, record)
-            logger.info(f"[TRACE] OCR_PIPELINE_COMPLETE | job_id={job_id} | item_id={item_id} | session_id={session_id} | record_id={record.id}")
-            logger.info(f"[OCR DONE] Gemini returned result for Item {item_id}")
-            
-            # ── PHASE 1: EXTRACTION SUCCESS ──
-            extraction_successful = False
-            if isinstance(res, dict) and res.get('data'):
-                extraction_successful = True
-                logger.info(f"[EXTRACTION SUCCESS] Item {item_id} | Record {record.id}")
-            else:
-                logger.warning(f"[EXTRACTION FAILED] Item {item_id} | No data returned")
+            record.save()
 
-            # ── PHASE 2: VALIDATION / WORKFLOW RESULT ──
-            val_res = res.get('validation', {})
-            val_status = val_res.get('status', 'UNKNOWN')
-            logger.info(f"[VALIDATION PHASE] Item {item_id} | Result: {val_status}")
-
-            # ── FINAL STATUS ASSIGNMENT ──
-            # Separation Requirement: extraction success != business success
-            # If we extracted data, the OCR phase is a success.
-            item.status = 'success' if extraction_successful else 'failed'
-            item.result_json = res.get('data')
+            # ── NON-BLOCKING PIPELINE ──
+            # We call run_ocr_pipeline with a flag to NOT wait for AI
+            from ocr_pipeline.pipeline import run_ocr_pipeline
+            res = run_ocr_pipeline(file_bytes, record, wait_for_ai=False, item_id=item_id)
             
-            if extraction_successful:
-                item.error_message = None # Clear any previous error
-            else:
-                item.error_message = res.get('validation', {}).get('error') or "Extraction failed"
-
+            # If wait_for_ai=False, run_ocr_pipeline enqueues to ai_requests and returns
+            # We mark the item as 'processing' (waiting for AI)
+            item.status = 'processing'
             item.save()
-
-            logger.info(f"[TRACE] OCR_ITEM_FINISHED | job_id={job_id} | item_id={item_id} | status={item.status} | record_id={record.id}")
-            logger.info(f"[OCR FINISHED] Item {item_id} | status={item.status} | val={val_status}")
-            self._update_job_progress(job_id)
+            
+            logger.info(f"[OCR STAGE DONE] Item {item_id} | AI tasks enqueued for {record.id}. Worker free.")
 
         except Exception as e:
-            logger.error(f"[OCR FATAL ERROR] Item {item_id}: {e}")
-            logger.error(traceback.format_exc())
-            
-            # ── EMERGENCY DB RECOVERY ──
-            # Ensure we can save the failure status even if the connection was lost
-            try:
-                close_old_connections()
-                InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed', error_message=str(e))
-                self._update_job_progress(job_id)
-            except Exception as inner_db_err:
-                logger.error(f"Failed to record OCR failure to DB: {inner_db_err}")
-
-    def _update_job_progress(self, job_id):
-        try:
-            close_old_connections()
-            with transaction.atomic():
-                job = BulkInvoiceJob.objects.select_for_update().get(id=job_id)
-                items = job.items.filter(parent_item_id=None)
-                total = job.total_files # Use ground truth from job creation
-                processed = items.filter(status__in=['success', 'failed']).count()
-                
-                logger.info(f"[TRACE] JOB_PROGRESS | job_id={job_id} | processed={processed} | total={total}")
-                logger.info(f"[JOB PROGRESS] Job {job_id}: {processed}/{total} items done")
-                
-                if processed >= total and total > 0:
-                    job.status = 'completed'
-                    job.save()
-                    logger.error(f"[TRACE] JOB_COMPLETE | job_id={job_id} | status=completed")
-                    logger.info(f"[JOB COMPLETE] Job {job_id} marked as finished")
-        except Exception as e:
-            logger.error(f"Failed to update job progress for {job_id}: {e}")
-
-class BulkJobWorker(BaseWorker):
-    """Consumes the bulk_jobs queues (High, Normal, Low) and enqueues individual items for OCR"""
-    def __init__(self):
-        # Priority-aware queue list
-        queues = ["bulk_jobs_high", "bulk_jobs_normal", "bulk_jobs_low"]
-        super().__init__(queues)
-
-    def process_task(self, task: Dict[str, Any]):
-        job_id = task.get('job_id')
-        session_id = task.get('upload_session_id')
-        logger.info(f"[TRACE] BULK_EXPAND_START | job_id={job_id} | session_id={session_id}")
-        logger.info(f"[BULK START] Expanding Job {job_id}")
-        
-        try:
-            job = BulkInvoiceJob.objects.get(id=job_id)
-            job.status = 'processing'
-            job.save()
-            
-            items = job.items.filter(parent_item_id=None)
-            logger.info(f"[BULK] Job {job_id} has {items.count()} items to process")
-            
-            for item in items:
-                ocr_task = {
-                    'item_id': item.id,
-                    'job_id': job.id,
-                    'tenant_id': task.get('tenant_id'),
-                    'voucher_type': task.get('voucher_type'),
-                    'upload_session_id': task.get('upload_session_id'),
-                    'id': f"ocr_{item.id}"
-                }
-                redis_client.enqueue("ocr_queue", ocr_task)
-                logger.info(f"[BULK EXPAND] Enqueued item {item.id} for Job {job_id} | Session: {ocr_task['upload_session_id']}")
-                
-            logger.info(f"[BULK FINISHED] Job {job_id} expansion complete.")
-                
-        except Exception as e:
-            logger.error(f"[BULK ERROR] Job {job_id}: {e}")
-            logger.error(traceback.format_exc())
-            try:
-                close_old_connections()
-                BulkInvoiceJob.objects.filter(id=job_id).update(status='failed')
-            except:
-                pass
+            logger.error(f"[OCR ERROR] Item {item_id}: {e}")
+            InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed', error_message=str(e))
 
 class AIWorker(BaseWorker):
-    """Handles generic AI requests (Agent, Single Extraction) enqueued via AIProxy"""
+    """STAGE 3: Consumes AI tasks, calls Gemini, and enqueues for Finalization"""
     def __init__(self):
-        # Mismatch fix: AIProxy enqueues to 'ai_requests', worker was listening to 'ai_queue'
         super().__init__("ai_requests")
 
     def process_task(self, task: Dict[str, Any]):
-        task_id = task.get('id')
+        task_id = task.get('id') # This is the ai_request UUID
         request_data = task.get('request_data')
+        tenant_id = task.get('tenant_id')
         
-        logger.info(f"[AI START] Generic task {task_id}")
+        logger.info(f"[AI START] Task {task_id}")
         
         try:
-            # Execute the actual AI request (Gemini)
             result = process_ai_request(request_data)
             
-            # ── DB RECONNECT ──
-            close_old_connections()
-            
-            # Store result in Redis for polling
+            # Result stored in Redis for any pollers (legacy support)
             result_key = f"ai_result:{task_id}"
-            redis_client.get_client().setex(result_key, 3600, json.dumps(result)) # 1 hour TTL
-            logger.info(f"[AI FINISHED] Task {task_id} stored in Redis")
+            redis_client.get_client().setex(result_key, 3600, json.dumps(result))
             
+            # ── TRIGGER FINALIZATION ──
+            # The metadata MUST be propagated for finalization to find the DB records
+            finalize_task = {
+                'ai_task_id': task_id,
+                'result': result,
+                'metadata': request_data.get('metadata', {}), # FIX: Metadata is inside request_data
+                'tenant_id': tenant_id or request_data.get('tenant_id'),
+                'id': f"fin_{task_id}"
+            }
+            redis_client.enqueue("finalization_queue", finalize_task)
+            logger.info(f"[AI STAGE DONE] Task {task_id} completed. Finalization enqueued.")
+
         except Exception as e:
             logger.error(f"[AI ERROR] Task {task_id}: {e}")
-            logger.error(traceback.format_exc())
+
+class FinalizationWorker(BaseWorker):
+    """STAGE 4: Normalizes AI result, validates, and creates Voucher records"""
+    def __init__(self):
+        super().__init__("finalization_queue")
+
+    def process_task(self, task: Dict[str, Any]):
+        metadata = task.get('metadata', {})
+        record_id = metadata.get('record_id')
+        item_id = metadata.get('item_id')
+        page_idx = metadata.get('page_index', 1)
+        total_pages = metadata.get('total_pages', 1)
+        ai_result = task.get('result', {})
+        
+        if not record_id:
+            logger.error(f"[FINALIZATION ERROR] No record_id in metadata. Task: {task.get('id')}")
+            return
+
+        try:
+            # 1. Parse Extracted Data
+            reply = ai_result.get('reply')
+            if reply and isinstance(reply, str):
+                try:
+                    extracted = json.loads(reply)
+                except:
+                    from core.ai_proxy import safe_extract_json
+                    cleaned = safe_extract_json(reply)
+                    extracted = json.loads(cleaned) if cleaned else ai_result
+            else:
+                extracted = ai_result.get('reply_json') or ai_result.get('data') or ai_result
+
+            # 2. Atomic Update of Record
+            from ocr_pipeline.pipeline import normalize, validate_and_process
+            
+            # ── DISTRIBUTED LOCK (Idempotency) ──
+            # Prevent race conditions between retries or recovery false positives
+            lock_key = f"lock:finalization:{record_id}"
+            if not redis_client.get_client().set(lock_key, "1", nx=True, ex=300):
+                logger.warning(f"[IDEMPOTENCY] Finalization for {record_id} already in progress. Skipping.")
+                return
+
             try:
-                close_old_connections()
-                error_res = {'error': str(e), 'status': 500}
-                redis_client.get_client().setex(f"ai_result:{task_id}", 3600, json.dumps(error_res))
-            except:
-                pass
+                with transaction.atomic():
+                    record = InvoiceTempOCR.objects.select_for_update().get(id=record_id)
+                    
+                    if record.status == 'VOUCHER_CREATED':
+                        logger.info(f"Record {record_id} already finalized. Skipping.")
+                        return
+
+                    # Normalize this page's result
+                    normalized_page = normalize(extracted)
+                
+                # ── MERGE LOGIC ──
+                    # ── PRESERVE PAGES (Safe Merging) ──
+                    # Instead of blindly extending items, we store pages separately
+                    # to allow the reconstruction layer to detect split invoices.
+                    existing_data = record.extracted_data or {}
+                    if '_pages' not in existing_data:
+                        # Migrate legacy data if exists
+                        existing_data['_pages'] = {}
+                        if 'sections' in existing_data and 'items' in existing_data.get('sections', {}):
+                             # Keep as page 1
+                             existing_data['_pages']['1'] = existing_data.copy()
+
+                    existing_data['_pages'][str(page_idx)] = normalized_page
+                    
+                    # Also maintain a 'summary' view for the UI (Page 1 + Aggregated Items)
+                    if page_idx == 1 or not record.supplier_invoice_no:
+                        for k, v in normalized_page.items():
+                            if k != 'sections' and k != '_pages':
+                                existing_data[k] = v
+                                # ── SYNC TO TOP-LEVEL COLUMNS ──
+                                if hasattr(record, k):
+                                    setattr(record, k, v)
+                        
+                        # Explicitly sync supplier_details to columns if missing
+                        supp = normalized_page.get('sections', {}).get('supplier_details', {})
+                        if not record.gstin: record.gstin = supp.get('gstin')
+                        if not record.supplier_invoice_no: record.supplier_invoice_no = supp.get('supplier_invoice_no')
+                    
+                    # Merge items for the 'preview' but the source of truth is now _pages
+                    if 'sections' not in existing_data: existing_data['sections'] = {}
+                    if 'items' not in existing_data['sections']: existing_data['sections']['items'] = []
+                    
+                    new_items = normalized_page.get('sections', {}).get('items', [])
+                    existing_data['sections']['items'].extend(new_items)
+                    
+                    record.extracted_data = existing_data
+
+                    record.status = 'EXTRACTED'
+                    record.save()
+                    
+                    # ── COMPLETION TRACKING ──
+                # Use Redis to track how many pages of this record are processed
+                counter_key = f"pages_done:{record_id}"
+                done_count = redis_client.get_client().incr(counter_key)
+                redis_client.get_client().expire(counter_key, 3600) # 1 hour TTL
+                
+                if done_count >= total_pages:
+                    logger.info(f"[FINALIZING] All {total_pages} pages received for Record {record_id}. Creating voucher.")
+                    # Final step: Business Logic + DB Voucher Creation
+                    res = validate_and_process(record, auto_save=True)
+                    
+                    # 3. Update parent Bulk Job progress
+                    if not item_id:
+                        item = InvoiceProcessingItem.objects.filter(
+                            job__upload_session_id=record.upload_session_id, 
+                            file_hash=record.file_hash
+                        ).first()
+                        item_id = item.id if item else None
+                    
+                    if item_id:
+                        InvoiceProcessingItem.objects.filter(id=item_id).update(status='success')
+                        item = InvoiceProcessingItem.objects.get(id=item_id)
+                        self._update_job_progress(item.job_id)
+
+                    redis_client.get_client().delete(counter_key)
+            finally:
+                # Always release lock
+                redis_client.get_client().delete(lock_key)
+
+            logger.info(f"[PIPELINE COMPLETE] Page {page_idx}/{total_pages} of Record {record_id} processed.")
+
+        except Exception as e:
+            logger.error(f"[FINALIZATION ERROR] Record {record_id} Page {page_idx}: {e}")
+            # If we fail, we should check if we should retry or mark as FAILED
+            retries = redis_client.increment_retry_count(task)
+            if retries > 3:
+                logger.critical(f"[FINALIZATION FATAL] Giving up on Record {record_id} after {retries} retries.")
+                InvoiceTempOCR.objects.filter(id=record_id).update(status='FAILED', validation_status='ERROR', validation_message=f"Finalization failed after retries: {e}")
+                if item_id:
+                     InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed', error_message=str(e))
+                # Cleanup counter so it doesn't stay stuck
+                redis_client.get_client().delete(f"pages_done:{record_id}")
+            else:
+                # Re-enqueue for retry with backoff
+                time.sleep(min(30, 2 ** retries))
+                redis_client.enqueue("finalization_queue", task)
+
+    def _update_job_progress(self, job_id):
+        # Same logic as before to update BulkInvoiceJob status
+        try:
+            with transaction.atomic():
+                job = BulkInvoiceJob.objects.select_for_update().get(id=job_id)
+                items = job.items.filter(parent_item_id=None)
+                total = job.total_files
+                processed = items.filter(status__in=['success', 'failed']).count()
+                if processed >= total and total > 0:
+                    job.status = 'completed'
+                    job.save()
+        except: pass
 
 def start_workers():
-    logger.info("Initializing worker threads...")
-    
+    logger.info("Initializing worker threads (Production Hardened Pipeline)...")
     threads = []
     
-    # 1. Generic AI workers (Agent, single file)
-    for i in range(2):
-        t = threading.Thread(target=AIWorker().run, daemon=True, name=f"AIWorker-{i}")
-        threads.append(t)
-        
-    # 2. OCR workers (Heavier processing)
-    for i in range(3):
-        t = threading.Thread(target=OCRWorker().run, daemon=True, name=f"OCRWorker-{i}")
-        threads.append(t)
-        
-    # 3. Bulk Job expander (Metadata only)
-    t = threading.Thread(target=BulkJobWorker().run, daemon=True, name="BulkJobWorker")
-    threads.append(t)
-    
-    for t in threads:
-        t.start()
-        logger.info(f"Started thread: {t.name}")
+    # ── STAGE 0: RECOVERY THREAD (Operational Safety) ──
+    def recovery_loop():
+        logger.info("Recovery thread active (Heartbeat-aware monitoring)...")
+        queues = ['ingestion_queue', 'ocr_queue', 'ai_requests', 'finalization_queue']
+        while True:
+            try:
+                # Recover tasks stuck in processing: queues ONLY if heartbeats are dead
+                # Faster interval (30s) because heartbeats make it safe
+                redis_client.recover_stale_tasks(queues)
+                time.sleep(30) 
+            except: time.sleep(10)
 
-    logger.info("--------------------------------------------------")
-    logger.info("[WORKER ONLINE]")
-    logger.info("Queue consumer active")
-    logger.info("Active Queues:")
-    logger.info("  * bulk_jobs_high / normal / low")
-    logger.info("  * ocr_queue")
-    logger.info("  * ai_requests")
-    logger.info("--------------------------------------------------")
-    logger.info("All worker threads are active. Monitoring queues...")
+    rt = threading.Thread(target=recovery_loop, daemon=True, name="RecoveryThread")
+    threads.append(rt)
+    rt.start()
+
+    # Distribution of threads based on stage weight
+    worker_configs = [
+        (IngestionWorker, 1),
+        (OCRWorker, 2),
+        (AIWorker, 4),
+        (FinalizationWorker, 2)
+    ]
     
+    for worker_class, count in worker_configs:
+        for i in range(count):
+            t = threading.Thread(target=worker_class().run, daemon=True, name=f"{worker_class.__name__}-{i}")
+            threads.append(t)
+            t.start()
+            logger.info(f"Started thread: {t.name}")
+
     try:
         while True:
-            # Check thread health
-            alive_count = sum(1 for t in threads if t.is_alive())
-            if alive_count < len(threads):
-                logger.warning(f"Thread health check: {alive_count}/{len(threads)} threads alive.")
             time.sleep(10)
     except KeyboardInterrupt:
-        logger.info("Worker process stopped by user.")
+        logger.info("Worker process stopped.")
 
 if __name__ == "__main__":
+    import hashlib
     start_workers()

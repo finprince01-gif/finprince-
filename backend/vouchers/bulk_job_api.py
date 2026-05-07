@@ -60,13 +60,14 @@ class BulkUploadAPIView(APIView):
             logger.warning(f"[UPLOAD] TENANT LIMIT for {tenant_id}: {active} active")
             return self._busy(msg, 'tenant_limit')
 
-        # ── GATE 4: Batch idempotency (Content-based SHA256) ──────────────────
+        # ── GATE 4: Batch idempotency (Streaming SHA256) ──────────────────
         all_file_hashes = []
         for f in files:
-            content = f.read()
-            f.seek(0)
-            fh = hashlib.sha256(content).hexdigest()
-            print(f"DEBUG: FILE SIZE: {len(content)}, FILE HASH: {fh}")
+            sha256 = hashlib.sha256()
+            for chunk in f.chunks():
+                sha256.update(chunk)
+            fh = sha256.hexdigest()
+            logger.info(f"FILE HASH: {fh} | {f.name}")
             all_file_hashes.append(fh)
         
         # Sort hashes to ensure order-independence for the batch fingerprint
@@ -145,42 +146,53 @@ class BulkUploadAPIView(APIView):
         )
         logger.info(f"[UPLOAD] Created Job {job.id} | session={job.upload_session_id} | files={len(files)}")
 
-        paths = []
-        import concurrent.futures
-        from django.db import connection
+        # ── STAGE 1: SAVE TO TEMP (STREAMING) ──
+        # This is fast and doesn't load files into RAM
+        import os
+        temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp_ingestion', str(job.id))
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        file_info = []
+        for f in files:
+            t_path = os.path.join(temp_dir, f.name)
+            # Use chunks() to avoid loading full file into memory
+            with open(t_path, 'wb+') as destination:
+                for chunk in f.chunks():
+                    destination.write(chunk)
+            
+            # Pre-register item as 'pending_ingestion'
+            item = InvoiceProcessingItem.objects.create(
+                job=job,
+                tenant_id=tenant_id,
+                file_path=t_path, # Temporary local path
+                status='pending',
+                page_count=1
+            )
+            file_info.append({'id': item.id, 'temp_path': t_path, 'original_name': f.name})
 
-        def upload_worker(uploaded_file):
-            try:
-                uploaded_file.seek(0)
-                file_bytes = uploaded_file.read()
-                file_hash  = storage.hash_bytes(file_bytes)
-                key        = storage.make_key(job.id, uploaded_file.name)
-                
-                storage.upload_bytes(file_bytes, key)
-
-                # Need separate connection for thread
-                master = InvoiceProcessingItem.objects.create(
-                    job=job,
-                    file_path=key,
-                    file_hash=file_hash,
-                    status='pending',
-                    page_count=1,
-                )
-                logger.info(f"Registered item {master.id} for Job {job.id}")
-                return key
-            except Exception as e:
-                logger.error(f"Upload worker failed for {uploaded_file.name}: {e}")
-                return None
-            finally:
-                connection.close()
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            results = list(executor.map(upload_worker, files))
-            paths = [r for r in results if r]
-
-        # ── PUSH TO REDIS PRIORITY QUEUE ────────────
+        # ── PUSH TO INGESTION QUEUE ──
         voucher_type = request.data.get('voucher_type', 'Purchase')
-        return self._enqueue_to_redis(job, voucher_type, tenant_id, paths)
+        task = {
+            'id': f"ingest_{job.id}",
+            'job_id': job.id,
+            'tenant_id': tenant_id,
+            'voucher_type': voucher_type,
+            'file_info': file_info,
+            'upload_session_id': job.upload_session_id,
+            'enqueued_at': time.time()
+        }
+        
+        pushed = redis_client.push_to_queue('ingestion_queue', task)
+        if not pushed:
+            logger.error("[REDIS ERROR] Ingestion push failed for Job %s", job.id)
+            return Response({'error': 'System Error: Failed to start ingestion.'}, status=500)
+
+        return Response({
+            'status':   'processing',
+            'job_id':   job.id,
+            'total_files': len(files),
+            'message': 'Upload successful. Processing started.'
+        })
 
     def _enqueue_to_redis(self, job, voucher_type, tenant_id, paths=None):
         if not redis_client.available:
