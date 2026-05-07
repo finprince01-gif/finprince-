@@ -250,7 +250,11 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = JournalEntry
-        fields = ['id', 'ledger', 'ledger_name', 'debit', 'credit', 'voucher_type', 'voucher_number', 'transaction_date', 'voucher_id']
+        fields = [
+            'id', 'ledger', 'ledger_name', 'debit', 'credit', 
+            'voucher_type', 'voucher_number', 'transaction_date', 
+            'voucher_id', 'reference_number', 'allocation_status'
+        ]
         read_only_fields = ['id']
 
 

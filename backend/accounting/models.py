@@ -428,6 +428,8 @@ class JournalEntry(BaseModel):
     voucher_number = models.CharField(max_length=50, null=True, blank=True)
     transaction_date = models.DateField(null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
+    reference_number = models.CharField(max_length=100, null=True, blank=True)
+    allocation_status = models.CharField(max_length=20, default='Unutilized')
     
     ledger = models.ForeignKey(
         MasterLedger, 
