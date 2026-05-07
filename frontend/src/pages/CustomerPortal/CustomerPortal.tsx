@@ -16,7 +16,8 @@ import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import SalesOrderList from './SalesOrderList';
 import SalesOrderViewModal from './SalesOrderViewModal';
-import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt, Check, Download } from 'lucide-react';
+import { Search, Plus, Filter, Download, ChevronLeft, ChevronRight, Edit, Trash2, X, Info, Check, ChevronDown, Eye, Mail, Calendar, Pencil, FileText, ArrowLeft, Receipt } from 'lucide-react';
+import MultiSelectDropdown from '../../components/MultiSelectDropdown';
 import CustomerViewModal from './CustomerViewModal';
 import SalesGSTViewModal from './SalesGSTViewModal';
 import { formatDate } from '../../utils/formatting';
@@ -577,9 +578,9 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         iecCode: '',
         eouStatus: 'Export Oriented Unit (EOU)', // Default
         taxType: 'NONE' as 'TCS' | 'TDS' | 'NONE', // NEW: mutual-exclusive selector
-        tcsSection: '',
+        tcsSections: [] as string[],
         tcsEnabled: false,
-        tdsSection: '',
+        tdsSections: [] as string[],
         tdsEnabled: false
     });
 
@@ -775,9 +776,9 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 fssai_no: statutoryDetails.fssaiNo || null,
                 iec_code: statutoryDetails.iecCode || null,
                 eou_status: statutoryDetails.eouStatus || null,
-                tcs_section: statutoryDetails.tcsSection || null,
+                tcs_section: statutoryDetails.tcsSections.join(','),
                 tcs_enabled: statutoryDetails.tcsEnabled,
-                tds_section: statutoryDetails.tdsSection || null,
+                tds_section: statutoryDetails.tdsSections.join(','),
                 tds_enabled: statutoryDetails.tdsEnabled,
                 // Banking Info
                 banking_info: bankAccounts.length > 0 ? { accounts: bankAccounts } : null,
@@ -1225,9 +1226,9 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
             iecCode: customer.iec_code || '',
             eouStatus: customer.eou_status || 'Export Oriented Unit (EOU)',
             taxType: customer.tcs_section ? 'TCS' : customer.tds_section ? 'TDS' : 'NONE',
-            tcsSection: customer.tcs_section || '',
+            tcsSections: customer.tcs_section ? customer.tcs_section.split(',') : [],
             tcsEnabled: customer.tcs_enabled || false,
-            tdsSection: customer.tds_section || '',
+            tdsSections: customer.tds_section ? customer.tds_section.split(',') : [],
             tdsEnabled: customer.tds_enabled || false
         });
 
@@ -2699,9 +2700,9 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                                     ...statutoryDetails,
                                                     taxType: type,
                                                     // reset fields when switching
-                                                    tcsSection: type !== 'TCS' ? '' : statutoryDetails.tcsSection,
+                                                    tcsSections: type !== 'TCS' ? [] : statutoryDetails.tcsSections,
                                                     tcsEnabled: type !== 'TCS' ? false : statutoryDetails.tcsEnabled,
-                                                    tdsSection: type !== 'TDS' ? '' : statutoryDetails.tdsSection,
+                                                    tdsSections: type !== 'TDS' ? [] : statutoryDetails.tdsSections,
                                                     tdsEnabled: type !== 'TDS' ? false : statutoryDetails.tdsEnabled,
                                                 })}
                                                 className={`px-6 py-2 text-sm font-semibold transition-colors border-r border-gray-300 last:border-r-0 ${statutoryDetails.taxType === type
@@ -2727,61 +2728,25 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
-                                                <div className="flex items-center gap-2">
-                                                    <select
-                                                        className="flex-1 px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                        value={statutoryDetails.tcsSection}
-                                                        onChange={(e) => {
-                                                            setStatutoryDetails({ ...statutoryDetails, tcsSection: e.target.value });
-                                                            if (e.target.value) {
-                                                                const [section, name] = e.target.value.split('|');
-                                                                const tcsInfo = tcsSections.find(t => t.section === section && t.name === name);
-                                                                if (tcsInfo) { setSelectedTcsInfo(tcsInfo); setShowTcsInfo(true); }
-                                                            } else { setShowTcsInfo(false); setSelectedTcsInfo(null); }
-                                                        }}
-                                                    >
-                                                        <option value="">Select TCS Section</option>
-                                                        {tcsSections.map((tcs, index) => (
-                                                            <option key={index} value={`${tcs.section}|${tcs.name}`}>
-                                                                {tcs.section} - {tcs.name} @ {tcs.rate}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {statutoryDetails.tcsSection && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowTcsInfo(!showTcsInfo)}
-                                                            className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-[4px] transition-colors"
-                                                            title={showTcsInfo ? "Hide Description" : "Show Description"}
-                                                        >
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle>
-                                                                <line x1="12" y1="16" x2="12" y2="12"></line>
-                                                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                {showTcsInfo && selectedTcsInfo && (
-                                                    <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-[4px]">
-                                                        <div className="flex items-start gap-2">
-                                                            <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                            </svg>
-                                                            <div className="flex-1">
-                                                                <div className="flex items-center justify-between mb-1">
-                                                                    <p className="text-xs font-medium text-indigo-900">Description</p>
-                                                                    {selectedTcsInfo.rate && (
-                                                                        <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 border border-indigo-300 rounded px-2 py-0.5">
-                                                                            TCS Rate: {selectedTcsInfo.rate}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <p className="text-sm text-indigo-800 leading-relaxed">{selectedTcsInfo.description}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                <MultiSelectDropdown
+                                                    options={tcsSections.map((tcs) => ({
+                                                        value: `${tcs.section}|${tcs.name}`,
+                                                        label: `${tcs.section} - ${tcs.name} @ ${tcs.rate}`
+                                                    }))}
+                                                    selectedValues={statutoryDetails.tcsSections}
+                                                    onChange={(values) => {
+                                                        setStatutoryDetails({ ...statutoryDetails, tcsSections: values });
+                                                        if (values.length > 0) {
+                                                            const [section, name] = values[0].split('|');
+                                                            const tcsInfo = tcsSections.find(t => t.section === section && t.name === name);
+                                                            if (tcsInfo) { setSelectedTcsInfo(tcsInfo); setShowTcsInfo(true); }
+                                                        } else {
+                                                            setShowTcsInfo(false);
+                                                            setSelectedTcsInfo(null);
+                                                        }
+                                                    }}
+                                                    placeholder="Select TCS Sections"
+                                                />
                                             </div>
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
@@ -2808,59 +2773,25 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
-                                                <div className="flex items-center gap-2">
-                                                    <select
-                                                        className="flex-1 px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                        value={statutoryDetails.tdsSection}
-                                                        onChange={(e) => {
-                                                            setStatutoryDetails({ ...statutoryDetails, tdsSection: e.target.value });
-                                                            if (e.target.value) {
-                                                                const [section, name] = e.target.value.split('|');
-                                                                const tdsInfo = tdsSections.find(t => t.section === section && t.name === name);
-                                                                if (tdsInfo) { setSelectedTdsInfo(tdsInfo); setShowTdsInfo(true); }
-                                                            } else { setShowTdsInfo(false); setSelectedTdsInfo(null); }
-                                                        }}
-                                                    >
-                                                        <option value="">Select TDS Section</option>
-                                                        {tdsSections.map((tds, index) => (
-                                                            <option key={index} value={`${tds.section}|${tds.name}`}>
-                                                                {tds.section} - {tds.name} @ {tds.rate}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {statutoryDetails.tdsSection && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowTdsInfo(!showTdsInfo)}
-                                                            className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-[4px] transition-colors"
-                                                            title={showTdsInfo ? "Hide Description" : "Show Description"}
-                                                        >
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle>
-                                                                <line x1="12" y1="16" x2="12" y2="12"></line>
-                                                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                {showTdsInfo && selectedTdsInfo && (
-                                                    <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-[4px]">
-                                                        <div className="flex items-start gap-2">
-                                                            <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                            </svg>
-                                                            <div className="flex-1">
-                                                                <div className="flex items-center justify-between mb-2">
-                                                                    <p className="text-xs font-medium text-indigo-900">Description</p>
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                                                        TDS Rate: {selectedTdsInfo.rate}
-                                                                    </span>
-                                                                </div>
-                                                                <p className="text-sm text-indigo-800 leading-relaxed">{selectedTdsInfo.description}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                <MultiSelectDropdown
+                                                    options={tdsSections.map((tds) => ({
+                                                        value: `${tds.section}|${tds.name}`,
+                                                        label: `${tds.section} - ${tds.name} @ ${tds.rate}`
+                                                    }))}
+                                                    selectedValues={statutoryDetails.tdsSections}
+                                                    onChange={(values) => {
+                                                        setStatutoryDetails({ ...statutoryDetails, tdsSections: values });
+                                                        if (values.length > 0) {
+                                                            const [section, name] = values[0].split('|');
+                                                            const tdsInfo = tdsSections.find(t => t.section === section && t.name === name);
+                                                            if (tdsInfo) { setSelectedTdsInfo(tdsInfo); setShowTdsInfo(true); }
+                                                        } else {
+                                                            setShowTdsInfo(false);
+                                                            setSelectedTdsInfo(null);
+                                                        }
+                                                    }}
+                                                    placeholder="Select TDS Sections"
+                                                />
                                             </div>
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
