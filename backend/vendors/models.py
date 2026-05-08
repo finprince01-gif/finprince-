@@ -49,7 +49,7 @@ class VendorMasterCategory(models.Model):
             parts.append(self.group)
         if self.subgroup:
             parts.append(self.subgroup)
-        return " > ".join(parts)
+        return " > ".join([str(p) for p in parts if p])
     
     @property
     def full_path(self) -> str:
@@ -200,7 +200,7 @@ class Vendor(models.Model):
             self.billing_country,
             self.billing_pincode
         ]
-        return ', '.join([p for p in parts if p])
+        return ', '.join([str(p) for p in parts if p])
     
     def get_full_shipping_address(self):
         """Return formatted shipping address"""
@@ -212,7 +212,7 @@ class Vendor(models.Model):
             self.shipping_country,
             self.shipping_pincode
         ]
-        return ', '.join([p for p in parts if p])
+        return ', '.join([str(p) for p in parts if p])
 
 
 class VendorMasterPOSettings(models.Model):
@@ -255,7 +255,7 @@ class VendorMasterPOSettings(models.Model):
     
     def generate_po_number(self):
         """Generate the next PO number based on settings"""
-        number_str = str(self.current_number).zfill(self.digits)
+        number_str = str(self.current_number).zfill(int(self.digits))  # type: ignore
         prefix = self.prefix or ''
         suffix = self.suffix or ''
         
@@ -273,6 +273,7 @@ class VendorMasterBasicDetail(models.Model):
     This table stores the basic vendor information from the Vendor Creation form.
     """
     tenant_id = models.CharField(max_length=36, help_text="Branch ID for multi-tenancy")
+    objects = models.Manager()
     vendor_code = models.CharField(max_length=50, blank=True, null=True, help_text="Vendor code (auto-generated or manual)")
     vendor_name = models.CharField(max_length=200, help_text="Vendor name")
     pan_no = models.CharField(max_length=10, blank=True, null=True, help_text="PAN number")
@@ -345,7 +346,7 @@ class VendorMasterBasicDetail(models.Model):
             else:
                 new_number = 1
             
-            self.vendor_code = f"VEN{new_number:04d}"
+            self.vendor_code = f"VEN{new_number:04d}"  # type: ignore
         
         return self.vendor_code
 
@@ -429,14 +430,14 @@ class VendorMasterGSTDetails(models.Model):
     
     def extract_pan_from_gstin(self):
         """Extract PAN from GSTIN (characters 3-12)"""
-        if self.gstin and len(self.gstin) == 15:
-            return self.gstin[2:12]
+        if self.gstin and len(str(self.gstin)) == 15:
+            return str(self.gstin)[2:12]
         return None
     
     def extract_state_code_from_gstin(self):
         """Extract state code from GSTIN (first 2 characters)"""
-        if self.gstin and len(self.gstin) >= 2:
-            return self.gstin[:2]
+        if self.gstin and len(str(self.gstin)) >= 2:
+            return str(self.gstin)[:2]
         return None
 
 
