@@ -21,14 +21,14 @@ from .serializers import ( # pyre-fixme
 # ============================================================================
 
 class MasterLedgerGroupViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
-    queryset = MasterLedgerGroup.objects.all()
+    queryset = MasterLedgerGroup.objects.all() # pyre-ignore
     serializer_class = MasterLedgerGroupSerializer
     permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'MASTERS_LEDGER_GROUPS'
 
 
 class MasterLedgerViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
-    queryset = MasterLedger.objects.all()
+    queryset = MasterLedger.objects.all() # pyre-ignore
     serializer_class = MasterLedgerSerializer
     permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'MASTERS_LEDGERS'
@@ -41,9 +41,9 @@ class MasterLedgerViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         category = self.request.query_params.get('category')
         
         if group:
-            queryset = queryset.filter(group__icontains=group)
+            queryset = queryset.filter(group__icontains=group) # pyre-ignore
         if category:
-            queryset = queryset.filter(category__icontains=category)
+            queryset = queryset.filter(category__icontains=category) # pyre-ignore
             
         return queryset
 
@@ -159,7 +159,7 @@ class MasterLedgerViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='cash-bank')
     def cash_bank(self, request):
         """Get only Cash and Bank ledgers for dropdowns"""
-        queryset = self.get_queryset().filter(
+        queryset = self.get_queryset().filter( # pyre-ignore
             category__icontains='Asset',
             group__icontains='Cash and Bank Balances'
         )
@@ -172,7 +172,7 @@ class MasterLedgerViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
 
 class MasterHierarchyRawViewSet(viewsets.ReadOnlyModelViewSet):
     """Global hierarchy data - restricted to authenticated staff/master users"""
-    queryset = MasterHierarchyRaw.objects.all()
+    queryset = MasterHierarchyRaw.objects.all() # pyre-ignore
     serializer_class = MasterHierarchyRawSerializer
     permission_classes = [IsAuthenticated]
     
@@ -189,7 +189,7 @@ class MasterHierarchyRawViewSet(viewsets.ReadOnlyModelViewSet):
 
 class VoucherViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     """Unified viewset for all voucher types"""
-    queryset = Voucher.objects.all()
+    queryset = Voucher.objects.all() # pyre-ignore
     serializer_class = VoucherSerializer
     permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'ACCOUNTING_VOUCHERS'
@@ -199,7 +199,7 @@ class VoucherViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         queryset = super().get_queryset()
         voucher_type = self.request.query_params.get('type')
         if voucher_type:
-            queryset = queryset.filter(type=voucher_type)
+            queryset = queryset.filter(type=voucher_type) # pyre-ignore
         return queryset
     
     def perform_create(self, serializer):
@@ -241,7 +241,7 @@ class VoucherViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
 
 
 class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
-    queryset = JournalEntry.objects.all()
+    queryset = JournalEntry.objects.all() # pyre-ignore
     serializer_class = JournalEntrySerializer
     permission_classes = [IsAuthenticated, IsBranchMember]
     required_permission = 'ACCOUNTING_VOUCHERS'
@@ -307,27 +307,27 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
 
         resolved_ledger = None
         if ledger_id:
-            resolved_ledger = MasterLedger.objects.filter(id=ledger_id, tenant_id=tenant_id).first()
+            resolved_ledger = MasterLedger.objects.filter(id=ledger_id, tenant_id=tenant_id).first() # pyre-ignore
         elif is_gst_ledger or is_tds_ledger:
-            resolved_ledger = MasterLedger.objects.filter(name=ledger_name, tenant_id=tenant_id).first()
+            resolved_ledger = MasterLedger.objects.filter(name=ledger_name, tenant_id=tenant_id).first() # pyre-ignore
 
         # Base queryset — GST/TDS detail rows are excluded by get_queryset()
-        queryset = self.get_queryset().select_related('ledger').order_by('transaction_date', 'id')
+        queryset = self.get_queryset().select_related('ledger').order_by('transaction_date', 'id') # pyre-ignore
 
         if ledger_id:
-            queryset = queryset.filter(ledger_id=ledger_id)
+            queryset = queryset.filter(ledger_id=ledger_id) # pyre-ignore
         elif ledger_name:
-            queryset = queryset.filter(ledger_name=ledger_name)
+            queryset = queryset.filter(ledger_name=ledger_name) # pyre-ignore
 
         if start_date:
             try:
-                queryset = queryset.filter(transaction_date__gte=start_date)
+                queryset = queryset.filter(transaction_date__gte=start_date) # pyre-ignore
             except (ValueError, TypeError):
                 pass
 
         if end_date:
             try:
-                queryset = queryset.filter(transaction_date__lte=end_date)
+                queryset = queryset.filter(transaction_date__lte=end_date) # pyre-ignore
             except (ValueError, TypeError):
                 pass
 
@@ -338,17 +338,17 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         # Build a map: voucher_id -> list of (ledger_id, ledger_name)
         counterpart_map = {}
         if voucher_ids:
-            all_entries_for_vouchers = JournalEntry.objects.filter(
+            all_entries_for_vouchers = JournalEntry.objects.filter( # pyre-ignore
                 tenant_id=tenant_id,
                 voucher_id__in=voucher_ids
             ).exclude(
                 voucher_type__in=['PURCHASE_GST_DETAIL', 'SALES_GST_DETAIL', 'PURCHASE_TDS_DETAIL', 'SALES_TCS_DETAIL']
-            ).select_related('ledger').values('voucher_id', 'ledger_id', 'ledger__name', 'ledger_name')
+            ).select_related('ledger').values('voucher_id', 'ledger_id', 'ledger__name', 'ledger_name') # pyre-ignore
 
             for ae in all_entries_for_vouchers:
                 vid = ae['voucher_id']
                 lid = ae['ledger_id']
-                lname = ae['ledger__name'] or ae['ledger_name'] or 'N/A'
+                lname = ae['ledger_name'] or ae['ledger__name'] or 'N/A'
                 counterpart_map.setdefault(vid, []).append((lid, lname))
 
         # For GST/TDS ledgers, build a map of detail rows per voucher
@@ -362,7 +362,7 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 # TCS Payable / TDS Payable detail rows use PURCHASE_TDS_DETAIL / PURCHASE_TCS_DETAIL
                 detail_types = ['PURCHASE_TDS_DETAIL', 'SALES_TCS_DETAIL', 'PURCHASE_TCS_DETAIL', 'SALES_TDS_DETAIL']
                 
-            detail_qs = JournalEntry.objects.filter(
+            detail_qs = JournalEntry.objects.filter( # pyre-ignore
                 tenant_id=tenant_id,
                 voucher_type__in=detail_types,
                 ledger_id=resolved_ledger.id,
@@ -380,6 +380,39 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                     'debit': float(drow.debit),
                     'credit': float(drow.credit),
                 })
+
+        # Build a map of FULL entries for each voucher to power accurate double-entry rendering in UI
+        full_legs_map = {}
+        if voucher_ids:
+            all_entries_with_tax = JournalEntry.objects.filter( # pyre-ignore
+                tenant_id=tenant_id,
+                voucher_id__in=voucher_ids
+            ).select_related('ledger').values('voucher_id', 'ledger_id', 'ledger__name', 'ledger_name', 'debit', 'credit', 'voucher_type') # pyre-ignore
+            
+            for ae in all_entries_with_tax:
+                vid = ae['voucher_id']
+                lid = ae['ledger_id']
+                lname = ae['ledger_name'] or ae['ledger__name'] or 'N/A'
+                vtype = ae['voucher_type']
+                
+                # Only add if debit or credit is > 0
+                if float(ae['debit']) > 0 or float(ae['credit']) > 0:
+                    full_legs_map.setdefault(vid, []).append({
+                        'ledger_id': lid,
+                        'ledger_name': lname,
+                        'debit': float(ae['debit']),
+                        'credit': float(ae['credit']),
+                        'type': vtype
+                    })
+
+        # Clean up full_legs_map to prevent double counting
+        for vid, legs in full_legs_map.items():
+            detail_lids = {leg['ledger_id'] for leg in legs if leg['type'].endswith('_DETAIL')}
+            if detail_lids:
+                full_legs_map[vid] = [
+                    leg for leg in legs
+                    if not (leg['ledger_id'] in detail_lids and leg['type'] in ['sales', 'purchase', 'SALES', 'PURCHASE', 'PAYMENT', 'payment', 'RECEIPT', 'receipt'])
+                ]
 
         # Build response with running balance
         data = []
@@ -440,6 +473,9 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 'allocationStatus': getattr(e, 'allocation_status', 'Unutilized'),
             }
 
+            # Attach full legs to power the journal breakdown UI
+            row['full_legs'] = full_legs_map.get(vid, [])
+
             # For GST/TDS ledgers, embed the component breakdown
             if is_gst_ledger or is_tds_ledger:
                 components = supplementary_detail_map.get(vid, [])
@@ -484,9 +520,9 @@ class PayFromLedgerView(APIView):
             # Query directly from MasterLedger filtering by group and category
             # Assets -> Cash, Bank, OD, CC
             # Liabilities -> Borrowing, Loan
-            ledgers = MasterLedger.objects.filter(
+            ledgers = MasterLedger.objects.filter( # pyre-ignore
                 tenant_id=tenant_id
-            ).filter(
+            ).filter( # pyre-ignore
                 Q(category__icontains='Asset') & Q(group__icontains='Cash') |
                 Q(category__icontains='Asset') & Q(group__icontains='Bank') |
                 Q(category__icontains='Asset') & Q(group__icontains='OD') |
@@ -498,7 +534,7 @@ class PayFromLedgerView(APIView):
                 Q(group__icontains='Bank') |
                 Q(group__icontains='Borrowing') |
                 Q(group__icontains='Loan')
-            ).distinct().values('id', 'name')
+            ).distinct().values('id', 'name') # pyre-ignore
             
             return Response(list(ledgers))
         except Exception as e:
@@ -526,10 +562,10 @@ class PayToLedgerView(APIView):
         results_map = {}
 
         # 1. Fetch Vendors with associated ledgers
-        vendors = Vendor.objects.filter(
+        vendors = Vendor.objects.filter( # pyre-ignore
             tenant_id=tenant_id, 
             ledger_id__isnull=False
-        ).values('id', 'vendor_name', 'ledger_id', 'vendor_category')
+        ).values('id', 'vendor_name', 'ledger_id', 'vendor_category') # pyre-ignore
         
         for v in vendors:
             lid = v['ledger_id']
@@ -542,10 +578,10 @@ class PayToLedgerView(APIView):
             }
 
         # 2. Fetch Customers with associated ledgers
-        customers = Customer.objects.filter(
+        customers = Customer.objects.filter( # pyre-ignore
             tenant_id=tenant_id, 
             ledger_id__isnull=False
-        ).select_related('customer_category').values(
+        ).select_related('customer_category').values( # pyre-ignore
             'id', 'customer_name', 'ledger_id', 'customer_category__category'
         )
         
@@ -567,7 +603,7 @@ class PayToLedgerView(APIView):
         # 3. Fetch all other Ledgers
         # Exclude structural "subgroup nodes" that were accidentally saved as ledgers
         # (e.g., name == sub_group_2). These should never appear in Pay To / Receive From dropdowns.
-        ledgers = MasterLedger.objects.filter(tenant_id=tenant_id).values(
+        ledgers = MasterLedger.objects.filter(tenant_id=tenant_id).values( # pyre-ignore
             'id', 'name', 'category', 'group', 'sub_group_1', 'sub_group_2', 'sub_group_3'
         )
         for l in ledgers:
@@ -592,7 +628,7 @@ class PayToLedgerView(APIView):
                 }
 
         # Convert map to list and return
-        return Response(list(results_map.values()))
+        return Response(list(results_map.values())) # pyre-ignore
 
 class QuestionsBySubgroupView(APIView):
     """
