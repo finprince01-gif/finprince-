@@ -109,6 +109,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
     tcs_enabled = serializers.BooleanField(required=False, default=False)
     tds_section = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     tds_enabled = serializers.BooleanField(required=False, default=False)
+    tax_type = serializers.CharField(required=False, read_only=True)
     
     # Terms & Conditions fields (will be saved to separate table)
     credit_period = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -183,6 +184,10 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         # Process branches
         processed_branches = []
         dropdown_branches = []
+        
+        # Pre-fetch related objects safely
+        tds_details = getattr(instance, 'tds_details', None) if hasattr(instance, 'tds_details') else None
+        terms_conditions = getattr(instance, 'terms_conditions', None) if hasattr(instance, 'terms_conditions') else None
         
         for gst in instance.gst_details.all():
             # Check for new columns first, fallback to legacy JSON
@@ -306,24 +311,24 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             },
             
             # Flattened Statutory Details
-            'msme_no': getattr(instance.tds_details, 'msme_no', None) if hasattr(instance, 'tds_details') else None,
-            'fssai_no': getattr(instance.tds_details, 'fssai_no', None) if hasattr(instance, 'tds_details') else None,
-            'iec_code': getattr(instance.tds_details, 'iec_code', None) if hasattr(instance, 'tds_details') else None,
-            'eou_status': getattr(instance.tds_details, 'eou_status', None) if hasattr(instance, 'tds_details') else None,
-            'tcs_section': getattr(instance.tds_details, 'tcs_section', None) if hasattr(instance, 'tds_details') else None,
-            'tcs_enabled': getattr(instance.tds_details, 'tcs_enabled', False) if hasattr(instance, 'tds_details') else False,
-            'tds_section': getattr(instance.tds_details, 'tds_section', None) if hasattr(instance, 'tds_details') else None,
-            'tds_enabled': getattr(instance.tds_details, 'tds_enabled', False) if hasattr(instance, 'tds_details') else False,
-            'tax_type': 'TCS' if getattr(instance.tds_details, 'tcs_section', None) else ('TDS' if getattr(instance.tds_details, 'tds_section', None) else 'NONE'),
+            'msme_no': getattr(tds_details, 'msme_no', None) if tds_details else None,
+            'fssai_no': getattr(tds_details, 'fssai_no', None) if tds_details else None,
+            'iec_code': getattr(tds_details, 'iec_code', None) if tds_details else None,
+            'eou_status': getattr(tds_details, 'eou_status', None) if tds_details else None,
+            'tcs_section': getattr(tds_details, 'tcs_section', None) if tds_details else None,
+            'tcs_enabled': getattr(tds_details, 'tcs_enabled', False) if tds_details else False,
+            'tds_section': getattr(tds_details, 'tds_section', None) if tds_details else None,
+            'tds_enabled': getattr(tds_details, 'tds_enabled', False) if tds_details else False,
+            'tax_type': 'TCS' if tds_details and getattr(tds_details, 'tcs_section', None) else ('TDS' if tds_details and getattr(tds_details, 'tds_section', None) else 'NONE'),
             
             # Flattened Terms & Conditions
-            'credit_period': getattr(instance.terms_conditions, 'credit_period', None) if hasattr(instance, 'terms_conditions') else None,
-            'credit_terms': getattr(instance.terms_conditions, 'credit_terms', None) if hasattr(instance, 'terms_conditions') else None,
-            'penalty_terms': getattr(instance.terms_conditions, 'penalty_terms', None) if hasattr(instance, 'terms_conditions') else None,
-            'delivery_terms': getattr(instance.terms_conditions, 'delivery_terms', None) if hasattr(instance, 'terms_conditions') else None,
-            'warranty_details': getattr(instance.terms_conditions, 'warranty_details', None) if hasattr(instance, 'terms_conditions') else None,
-            'force_majeure': getattr(instance.terms_conditions, 'force_majeure', None) if hasattr(instance, 'terms_conditions') else None,
-            'dispute_terms': getattr(instance.terms_conditions, 'dispute_terms', None) if hasattr(instance, 'terms_conditions') else None,
+            'credit_period': getattr(terms_conditions, 'credit_period', None) if terms_conditions else None,
+            'credit_terms': getattr(terms_conditions, 'credit_terms', None) if terms_conditions else None,
+            'penalty_terms': getattr(terms_conditions, 'penalty_terms', None) if terms_conditions else None,
+            'delivery_terms': getattr(terms_conditions, 'delivery_terms', None) if terms_conditions else None,
+            'warranty_details': getattr(terms_conditions, 'warranty_details', None) if terms_conditions else None,
+            'force_majeure': getattr(terms_conditions, 'force_majeure', None) if terms_conditions else None,
+            'dispute_terms': getattr(terms_conditions, 'dispute_terms', None) if terms_conditions else None,
         }
 
 
