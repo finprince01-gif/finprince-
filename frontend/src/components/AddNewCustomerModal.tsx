@@ -15,35 +15,35 @@ import { ChevronDown, X, Info, Check, ChevronLeft, ChevronRight } from 'lucide-r
 import MultiSelectDropdown from './MultiSelectDropdown';
 
 const TDS_SECTIONS = [
-    { section: 'Section 392(7)', name: 'Premature EPF Withdrawal (> ₹50,000)', rate: '10%', description: 'Threshold limit: ₹ 50,000' },
-    { section: 'Section 393(1)', name: 'Interest on Securities', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
-    { section: 'Section 393(1)', name: 'Interest other than Securities', rate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
-    { section: 'Section 393(1)', name: 'Dividends (Domestic Company)', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
-    { section: 'Section 393(1)', name: 'Contractor Payments (Large Payer) - Individual/HUF', rate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
-    { section: 'Section 393(1)', name: 'Contractor Payments (Large Payer) - Other than Individual/HUF', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
-    { section: 'Section 393(1)', name: 'Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)', rate: '5%', description: 'Threshold limit: ₹ 50,000' },
-    { section: 'Section 393(1)', name: 'Technical Services / Call Centre / Film Royalty', rate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
-    { section: 'Section 393(1)', name: 'Professional Fees / Other Royalty', rate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
-    { section: 'Section 393(1)', name: 'Insurance Commission', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
-    { section: 'Section 393(1)', name: 'General Commission or Brokerage', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
-    { section: 'Section 393(1)', name: 'Rent (Individual/HUF Payer > ₹50,000/mo)', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
-    { section: 'Section 393(1)', name: 'Rent on Plant & Machinery', rate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
-    { section: 'Section 393(1)', name: 'Rent on Land & Building', rate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
-    { section: 'Section 393(1)', name: 'Transfer of Immovable Property (> ₹50L)', rate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
-    { section: 'Section 393(1)', name: 'Purchase of Goods (exceeding ₹50L)', rate: '0.10%', description: 'Threshold limit: ₹ 20,000' },
-    { section: 'Section 393(1)', name: 'Virtual Digital Assets (VDA/Crypto)', rate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    { section: 'Section 393(3)', name: 'Winnings from Lottery / Puzzles', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    { section: 'Section 393(3)', name: 'Regular Filer (ITR filed in previous years) > 1 cr', rate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
-    { section: 'Section 393(3)', name: 'Non-Filer (ITR not filed for past 3 years) > 20L', rate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
-    { section: 'Section 393(3)', name: 'Non-Filer (ITR not filed for past 3 years) > 1Cr', rate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
-    { section: 'Section 393(3)', name: 'Co-operative Societies > 3 cr', rate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
-    { section: 'Section 393(3)', name: 'Payments to Partners (Salary/Comm. > ₹20k)', rate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
-    { section: 'Section 393(2)', name: 'Sportsmen / Sports Association (Non-Resident)', rate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    { section: 'Section 393(2)', name: 'Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023', rate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    { section: 'Section 393(2)', name: 'Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023', rate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    { section: 'Section 393(2)', name: 'Income/LTCG from Offshore Fund Units', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    { section: 'Section 393(2)', name: 'Interest/Dividends/LTCG on Bonds/GDR', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    { section: 'Section 393(2)', name: 'Any other sum payable to Non-Resident', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
+    { section: 'Section 392(7)', name: '- Premature EPF Withdrawal (> ₹50,000)', rate: '10%', description: 'Threshold limit: ₹ 50,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 5(i)] - Interest on Securities', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 5(ii/iii)] - Interest other than Securities', rate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
+    { section: 'Section 393(1)', name: '[Sl. No. 7] - Dividends (Domestic Company)', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 6(i)] - Contractor Payments (Large Payer) - Individual/HUF', rate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
+    { section: 'Section 393(1)', name: '[Sl. No. 6(i)] - Contractor Payments (Large Payer) - Other than Individual/HUF', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 6(ii)] - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)', rate: '5%', description: 'Threshold limit: ₹ 50,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 6(iii).D(a)] - Technical Services / Call Centre / Film Royalty', rate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
+    { section: 'Section 393(1)', name: '[Sl. No. 6(iii).D(b)] - Professional Fees / Other Royalty', rate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 1(i)] - Insurance Commission', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 1(ii)] - General Commission or Brokerage', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 2(i)] - Rent (Individual/HUF Payer > ₹50,000/mo)', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 2(ii).D(a)] - Rent on Plant & Machinery', rate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
+    { section: 'Section 393(1)', name: '[Sl. No. 2(ii).D(b)] - Rent on Land & Building', rate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
+    { section: 'Section 393(1)', name: '[Sl. No. 3(i)] - Transfer of Immovable Property (> ₹50L)', rate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
+    { section: 'Section 393(1)', name: '[Sl. No. 8(ii)] - Purchase of Goods (exceeding ₹50L)', rate: '0.10%', description: 'Threshold limit: ₹ 50,00,000' },
+    { section: 'Section 393(1)', name: '[Sl. No. 8(vi)] - Virtual Digital Assets (VDA/Crypto)', rate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    { section: 'Section 393(3)', name: '[Sl. No. 1] - Winnings from Lottery / Puzzles', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    { section: 'Section 393(3)', name: '[Sl. No. 5] - Regular Filer (ITR filed in previous years) > 1 cr', rate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
+    { section: 'Section 393(3)', name: '[Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 20L', rate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
+    { section: 'Section 393(3)', name: '[Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 1Cr', rate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
+    { section: 'Section 393(3)', name: '[Sl. No. 5] - Co-operative Societies > 3 cr', rate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
+    { section: 'Section 393(3)', name: '[Sl. No. 7] - Payments to Partners (Salary/Comm. > ₹20k)', rate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
+    { section: 'Section 393(2)', name: '[Sl. No. 1] - Sportsmen / Sports Association (Non-Resident)', rate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    { section: 'Section 393(2)', name: '[Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023', rate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    { section: 'Section 393(2)', name: '[Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023', rate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    { section: 'Section 393(2)', name: '[Sl. No. 11/12] - Income/LTCG from Offshore Fund Units', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    { section: 'Section 393(2)', name: '[Sl. No. 13/14] - Interest/Dividends/LTCG on Bonds/GDR', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    { section: 'Section 393(2)', name: '[Sl. No. 17] - Any other sum payable to Non-Resident', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
 ];
 
 const TCS_SECTIONS = [
@@ -304,8 +304,8 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                 },
                 products_services: { items: productRows.filter(r => r.itemCode || r.itemName) },
                 ...statutory,
-                tds_section: statutory.tds_sections.join(','),
-                tcs_section: statutory.tcs_sections.join(','),
+                tds_section: statutory.tds_sections.join('|'),
+                tcs_section: statutory.tcs_sections.join('|'),
                 tds_sections: undefined,
                 tcs_sections: undefined,
                 taxType: undefined, // Omit from payload if not needed by backend
@@ -1084,7 +1084,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                         <div className="space-y-4">
                                             <MultiSelectDropdown
                                                 options={TCS_SECTIONS.map((tcs) => ({
-                                                    value: `${tcs.section}|${tcs.name}`,
+                                                    value: `${tcs.section} - ${tcs.name}`,
                                                     label: `${tcs.section} - ${tcs.name} @ ${tcs.rate}`
                                                 }))}
                                                 selectedValues={statutory.tcs_sections}
@@ -1098,7 +1098,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                                     checked={statutory.tcs_enabled}
                                                     onChange={(e) => setStatutory({ ...statutory, tcs_enabled: e.target.checked })}
                                                 />
-                                                <span className="text-sm text-gray-700">Enable automatic TCS posting</span>
+                                                <span className="text-sm text-gray-700">Enable automatic TCS Posting</span>
                                             </label>
                                         </div>
                                     </div>
@@ -1114,7 +1114,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                         <div className="space-y-4">
                                             <MultiSelectDropdown
                                                 options={TDS_SECTIONS.map((tds) => ({
-                                                    value: `${tds.section}|${tds.name}`,
+                                                    value: `${tds.section} - ${tds.name}`,
                                                     label: `${tds.section} - ${tds.name} @ ${tds.rate}`
                                                 }))}
                                                 selectedValues={statutory.tds_sections}
@@ -1128,7 +1128,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                                     checked={statutory.tds_enabled}
                                                     onChange={(e) => setStatutory({ ...statutory, tds_enabled: e.target.checked })}
                                                 />
-                                                <span className="text-sm text-gray-700">Enable automatic TDS posting</span>
+                                                <span className="text-sm text-gray-700">Enable automatic TDS Posting</span>
                                             </label>
                                         </div>
                                     </div>

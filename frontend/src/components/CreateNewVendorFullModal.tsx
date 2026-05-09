@@ -980,7 +980,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                 <div className="flex items-center gap-3 pt-5">
                     <input type="checkbox" id="autoTds" checked={enableAutoTds} onChange={e => setEnableAutoTds(e.target.checked)}
                         className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500" />
-                    <label htmlFor="autoTds" className="text-sm text-gray-700 font-medium cursor-pointer">Enable Automatic TDS Posting</label>
+                    <label htmlFor="autoTds" className="text-sm text-gray-700 font-medium cursor-pointer">Enable Automatic {tcsApplicable ? 'TCS' : 'TDS'} Posting</label>
                 </div>
             </div>
         </div>

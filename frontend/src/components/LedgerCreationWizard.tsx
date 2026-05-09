@@ -94,6 +94,7 @@ const ITEM_RANKS: Record<string, number> = {
     'longtermprovisions': 43,
     'shorttermborrowings': 44,
     'othercurrentliabilities': 45,
+    'othercurrentassets': 46,
     'shorttermprovisions': 47,
 
     // Loans
@@ -125,7 +126,6 @@ const ITEM_RANKS: Record<string, number> = {
     'currentinvestments': 85,
     'cashandcashequivalents': 86,
     'shorttermloansandadvances': 87,
-    'othercurrentassets': 88,
 
     // Property, Plant & Equipment Sub-groups
     'tangibleassets': 90,
@@ -280,6 +280,7 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'longtermprovisions': 13,
                 'shorttermborrowings': 14,
                 'othercurrentliabilities': 15,
+                'othercurrentassets': 16,
                 'shorttermprovisions': 17,
                 'propertyplantequipment': 20,
                 'noncurrentinvestments': 21,
@@ -289,7 +290,6 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'currentinvestments': 25,
                 'cashandcashequivalents': 26,
                 'shorttermloansandadvances': 27,
-                'othercurrentassets': 28,
             };
             if (otherRanks[clean(a.name)]) ar = otherRanks[clean(a.name)];
             if (otherRanks[clean(b.name)]) br = otherRanks[clean(b.name)];
@@ -304,6 +304,7 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'longtermprovisions': 13,
                 'shorttermborrowings': 14,
                 'othercurrentliabilities': 15,
+                'othercurrentassets': 16,
                 'shorttermprovisions': 17,
                 'propertyplantequipment': 20,
                 'noncurrentinvestments': 21,
@@ -313,7 +314,6 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'currentinvestments': 25,
                 'cashandcashequivalents': 26,
                 'shorttermloansandadvances': 27,
-                'othercurrentassets': 28,
             };
             if (companyRanks[clean(a.name)]) ar = companyRanks[clean(a.name)];
             if (companyRanks[clean(b.name)]) br = companyRanks[clean(b.name)];
@@ -329,6 +329,7 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'longtermprovisions': 13,
                 'shorttermborrowings': 14,
                 'othercurrentliabilities': 15,
+                'othercurrentassets': 16,
                 'shorttermprovisions': 17,
                 'propertyplantequipment': 20,
                 'noncurrentinvestments': 21,
@@ -338,7 +339,6 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'currentinvestments': 25,
                 'cashandcashequivalents': 26,
                 'shorttermloansandadvances': 27,
-                'othercurrentassets': 28,
                 'feesandcommissionexpense': 100,
                 'netlossonfairvaluechanges': 101,
                 'netlossonderecognitionoffinancialinstrumentsunderamortisedcostcategory': 102,
