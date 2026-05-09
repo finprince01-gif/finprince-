@@ -47,7 +47,7 @@ def extract_json_from_text(text):
     
     return text.strip()
 
-def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.0.0", user_id='system', tenant_id='system'):
+def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.0.0", user_id='system', tenant_id='system', wait_for_result=True, record_id=None, item_id=None):
     """
     Extracts invoice data using the central AI Proxy service with fallbacks.
     Returns a unified JSON object matching the internal schema.
@@ -161,7 +161,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
 * NO hallway citations or placeholders.
 """
 
-    def _call_ai_for_page(segment_bytes, page_ocr_text, page_idx):
+    def _call_ai_for_page(segment_bytes, page_ocr_text, page_idx, total_pages, item_id):
         """
         HARD ISOLATION RULE: ONE PAGE -> ONE OCR TEXT -> ONE IMAGE -> ONE REQUEST
         """
@@ -179,7 +179,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             'mime_type': 'image/jpeg',
             'voucher_type': voucher_type,
             'page_index': page_idx + 1,
-            'wait_for_result': True # Enqueue and wait for result from central queue
+            'wait_for_result': wait_for_result # Use the passed parameter
         }
         
         prompt_size = len(page_isolated_prompt)
@@ -188,8 +188,18 @@ Failure to extract ANY field that is visible on the document is unacceptable.
         if prompt_size > 300000:
              logger.warning(f"CRITICAL: Isolated prompt for page {page_idx+1} exceeds 300K limit ({prompt_size} chars).")
 
-        response = ai_service.make_request('extraction', request_data, user_id, tenant_id)
+        # Pass metadata for callbacks
+        metadata = {
+            'record_id': record_id,
+            'item_id': item_id,
+            'page_index': page_idx + 1,
+            'total_pages': total_pages
+        }
+        response = ai_service.make_request('extraction', request_data, user_id, tenant_id, metadata=metadata)
         
+        if not wait_for_result:
+            return response # Return the enqueued job info immediately
+
         if 'error' in response:
             raise RuntimeError(response['error'])
 
@@ -222,15 +232,25 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             page = doc[i]
             page_text = page.get_text("text")
             
-            # 2. IMAGE OPTIMIZATION: Render page to JPEG (Reduced Payload)
-            # 150 DPI is usually enough for high-quality OCR while keeping size small
+            # 2. IMAGE OPTIMIZATION: Resize and Compress
+            # High-res OCR often produces 4K images. We scale down to 2000px max height/width 
+            # to stay within Gemini's sweet spot and reduce payload size.
             pix = page.get_pixmap(dpi=150)
-            img_bytes = pix.tobytes("jpg", quality=80)
             
-            logger.info(f"[PERF] Page {i+1} Optimization: {len(img_bytes)} bytes | Time: {time.monotonic() - p_start:.2f}s")
+            # Convert to PIL for easy resizing (if available) or use fitz methods
+            # Here we use fitz's inherent scaling if needed, but 150dpi is already good.
+            # We add an extra layer of safety to ensure payload is < 1MB
+            img_bytes = pix.tobytes("jpg", jpg_quality=80)
+            
+            # If still too large (> 1.5MB), scale down further
+            if len(img_bytes) > 1500000:
+                pix = page.get_pixmap(dpi=100)
+                img_bytes = pix.tobytes("jpg", jpg_quality=75)
+            
+            logger.info(f"[PERF] Page {i+1} Optimized: {len(img_bytes)} bytes | Time: {time.monotonic() - p_start:.2f}s")
             
             # 3. Call Gemini
-            res = _call_ai_for_page(img_bytes, page_text, i)
+            res = _call_ai_for_page(img_bytes, page_text, i, page_count, item_id)
             return i, res
         except Exception as e:
             logger.error(f"Failed to process page {i+1}: {e}")
@@ -251,10 +271,12 @@ Failure to extract ANY field that is visible on the document is unacceptable.
     final_result = None
     for i in range(page_count):
         page_result = results_map.get(i)
-        if not page_result or "_error" in page_result:
+        # Check for both internal _error and AI Proxy error
+        if not page_result or "_error" in page_result or "error" in page_result:
+            err_msg = page_result.get("error") or page_result.get("_error") if page_result else "UNKNOWN_ERROR"
             if final_result is None:
-                return page_result or {"_error": "UNKNOWN_ERROR"}
-            logger.warning(f"Skipping corrupted page {i+1}")
+                return {"error": err_msg, "_error": err_msg}
+            logger.warning(f"Skipping corrupted page {i+1}: {err_msg}")
             continue
 
         if final_result is None:

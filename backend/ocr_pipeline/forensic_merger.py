@@ -170,8 +170,8 @@ class ForensicMerger:
             if re.search(pattern, raw_text, re.IGNORECASE):
                 return type_name
                 
-        # Fallback: if no copy keywords but has items, it's a 'continuation' or 'general'
-        return "continuation"
+        # Fallback: if no copy keywords but has items, it's a 'page_result'
+        return "page_result"
 
     def deduplicate_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

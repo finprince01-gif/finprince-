@@ -21,6 +21,7 @@ interface SearchableDropdownProps {
     allowCustomValue?: boolean;
     className?: string;
     error?: boolean;
+    onFocus?: () => void;
 }
 
 const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
@@ -35,7 +36,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     isMulti = false,
     allowCustomValue = false,
     className = '',
-    error = false
+    error = false,
+    onFocus
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -130,6 +132,9 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                 type="button"
                 onClick={toggleDropdown}
                 disabled={disabled}
+                onFocus={() => {
+                    if (onFocus) onFocus();
+                }}
                 className={`min-h-[42px] w-full px-3 py-2 text-left border rounded-[4px] flex justify-between items-center bg-white transition-all
                     ${disabled ? 'bg-gray-100 cursor-not-allowed border-gray-300 text-gray-500' : 
                       error ? 'border-red-500 bg-red-50 ring-1 ring-red-500' :

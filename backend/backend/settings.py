@@ -17,6 +17,14 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
 # Production: Specify exact domains (no wildcards)
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,.finpixe.com,testserver,16.171.255.74,13.63.35.153,13.235.91.238,13.203.204.171,13.203.204.1').split(',')
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    # Ensure localhost/127.0.0.1 are always included in ALLOWED_HOSTS if not explicitly provided
+    if 'localhost' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('localhost')
+    if '127.0.0.1' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('127.0.0.1')
 
 INSTALLED_APPS = [
     'django.contrib.admin',

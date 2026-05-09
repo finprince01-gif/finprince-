@@ -879,6 +879,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Purchase Due Details State
   const [purchaseTdsIt, setPurchaseTdsIt] = useState('0.00');
   const [purchaseTaxIsTcs, setPurchaseTaxIsTcs] = useState(false); // true = TCS (add to amount due), false = TDS (subtract)
+  const [purchaseAvailableTcsSections, setPurchaseAvailableTcsSections] = useState<string[]>([]);
+  const [purchaseAvailableTdsSections, setPurchaseAvailableTdsSections] = useState<string[]>([]);
+  const [purchaseSelectedStatutorySection, setPurchaseSelectedStatutorySection] = useState<string>('');
+  const [purchaseAutoTdsEnabled, setPurchaseAutoTdsEnabled] = useState(false);
+  const [vendorTaxType, setVendorTaxType] = useState<string>('NONE');
   const [purchaseAdvancePaid, setPurchaseAdvancePaid] = useState('0.00');
   const [purchaseToPay, setPurchaseToPay] = useState('0.00');
   const [purchasePostingNote, setPurchasePostingNote] = useState('');
@@ -2615,45 +2620,134 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       (v.vendor_name || '').trim().toLowerCase() === lowerParty
     );
 
-    if (!vendor) return;
+    if (!vendor) {
+      setPurchaseAutoTdsEnabled(false);
+      setPurchaseTdsIt('0.00');
+      return;
+    }
 
-    // Use tds_rate if available, otherwise fallback to tcs_rate
-    const rawTds = vendor.tds_rate;
-    const rawTcs = vendor.tcs_rate;
+    const isAuto = (vendor.enable_automatic_tds_posting === true || vendor.enable_automatic_tds_posting === 'true' || vendor.enable_automatic_tds_posting === 1);
+    setPurchaseAutoTdsEnabled(isAuto);
 
-    let activeRateStr = '';
+    // Only calculate if "Enable automatic TDS Posting" is checked for this vendor
+    if (!isAuto) {
+      setPurchaseTdsIt('0.00');
+      return;
+    }
+
+    const TDS_RATE_MAP: Record<string, number> = {
+      // Common Sections
+      'Contracts- Individual/HUF': 0.01,
+      'Contracts- Others': 0.02,
+      'Commission/Brokerage': 0.02,
+      'Rent- Land, Building, Furniture & fitting': 0.02,
+      'Rent- Plant & Machinery, Equipment': 0.10,
+      'Technical Services': 0.02,
+      'Professional Services': 0.10,
+      "Director's Remuneration": 0.10,
+      'Purchase of Goods': 0.001,
+      'Interest other than interest on securities': 0.10,
+      'Benefit or Perquisite': 0.10,
+      'Immovable Property Transfer': 0.01,
+      'Rent by Individual or HUF': 0.02,
+      'Joint Development Agreements': 0.10,
+      'Contractors & Professionals': 0.02,
+      'E-Commerce': 0.01,
+
+      // Sections from Portal (Full Strings)
+      'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': 0.10,
+      'Section 393(1) [Sl. No. 5(i)] - Interest on Securities': 0.10,
+      'Section 393(1) [Sl. No. 5(ii/iii)] - Interest other than Securities': 0.10,
+      'Section 393(1) [Sl. No. 7] - Dividends (Domestic Company)': 0.10,
+      'Section 393(1) [Sl. No. 6(i)] - Contractor Payments (Large Payer) - Individual/HUF': 0.01,
+      'Section 393(1) [Sl. No. 6(i)] - Contractor Payments (Large Payer) - Other than Individual/HUF': 0.02,
+      'Section 393(1) [Sl. No. 6(ii)] - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': 0.05,
+      'Section 393(1) [Sl. No. 6(iii).D(a)] - Technical Services / Call Centre / Film Royalty': 0.02,
+      'Section 393(1) [Sl. No. 6(iii).D(b)] - Professional Fees / Other Royalty': 0.10,
+      'Section 393(1) [Sl. No. 1(i)] - Insurance Commission': 0.02,
+      'Section 393(1) [Sl. No. 1(ii)] - General Commission or Brokerage': 0.02,
+      'Section 393(1) [Sl. No. 2(i)] - Rent (Individual/HUF Payer > ₹50,000/mo)': 0.02,
+      'Section 393(1) [Sl. No. 2(ii).D(a)] - Rent on Plant & Machinery': 0.02,
+      'Section 393(1) [Sl. No. 2(ii).D(b)] - Rent on Land & Building': 0.10,
+      'Section 393(1) [Sl. No. 3(i)] - Transfer of Immovable Property (> ₹50L)': 0.01,
+      'Section 393(1) [Sl. No. 8(ii)] - Purchase of Goods (exceeding ₹50L)': 0.001,
+      'Section 393(1) [Sl. No. 8(vi)] - Virtual Digital Assets (VDA/Crypto)': 0.01,
+      'Section 393(3) [Sl. No. 1] - Winnings from Lottery / Puzzles': 0.30,
+      'Section 393(3) [Sl. No. 5] - Regular Filer (ITR filed in previous years) > 1 cr': 0.02,
+      'Section 393(3) [Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 20L': 0.02,
+      'Section 393(3) [Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 1Cr': 0.05,
+      'Section 393(3) [Sl. No. 5] - Co-operative Societies > 3 cr': 0.02,
+      'Section 393(3) [Sl. No. 7] - Payments to Partners (Salary/Comm. > ₹20k)': 0.10,
+      'Section 393(2) [Sl. No. 1] - Sportsmen / Sports Association (Non-Resident)': 0.20,
+      'Section 393(2) [Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': 0.05,
+      'Section 393(2) [Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': 0.09,
+      'Section 393(2) [Sl. No. 11/12] - Income/LTCG from Offshore Fund Units': 0.10,
+      'Section 393(2) [Sl. No. 13/14] - Interest/Dividends/LTCG on Bonds/GDR': 0.10,
+      'Section 393(2) [Sl. No. 17] - Any other sum payable to Non-Resident': 0.30,
+    };
+
+    const TCS_RATE_MAP: Record<string, number> = {
+      'Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+      'Sale of Tendu Leaves': 0.05,
+      'Sale of Forest Produce': 0.02,
+      'Sale of Timber': 0.02,
+      'Sale of Motor Vehicles': 0.01,
+      'Sale of Specified Luxury Goods': 0.01,
+
+      // Full Strings
+      'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+      'Section 206C(1) - Sale of Tendu Leaves': 0.05,
+      'Section 206C(1) - Sale of Forest Produce': 0.02,
+      'Section 206C(1) - Sale of Timber': 0.02,
+      'Section 206C(1F) - Sale of Motor Vehicles': 0.01,
+      'Section 206C(1F) - Sale of Specified Luxury Goods': 0.01,
+    };
+
+    let rateDecimal = 0;
     let isTcs = false;
-    if (rawTds && rawTds !== '-' && rawTds !== '0%') {
-      activeRateStr = rawTds;
+
+    if (vendorTaxType === 'TDS' && purchaseSelectedStatutorySection) {
+      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
+      rateDecimal = TDS_RATE_MAP[name] ?? 0;
       isTcs = false;
-    } else if (rawTcs && rawTcs !== '-' && rawTcs !== '0%') {
-      activeRateStr = rawTcs;
+    } else if (vendorTaxType === 'TCS' && purchaseSelectedStatutorySection) {
+      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
+      rateDecimal = TCS_RATE_MAP[name] ?? 0;
       isTcs = true;
+    } else {
+      // Fallback for legacy data
+      const rawTds = vendor.tds_rate;
+      const rawTcs = vendor.tcs_rate;
+      let activeRateStr = '';
+      if (rawTds && rawTds !== '-' && rawTds !== '0%') {
+        activeRateStr = rawTds;
+        isTcs = false;
+      } else if (rawTcs && rawTcs !== '-' && rawTcs !== '0%') {
+        activeRateStr = rawTcs;
+        isTcs = true;
+      }
+
+      if (activeRateStr) {
+        const numeric = parseFloat(activeRateStr.split('/')[0].replace(/[^\d.]/g, ''));
+        if (!isNaN(numeric) && numeric > 0) {
+          rateDecimal = numeric / 100;
+        }
+      }
     }
 
-    if (!activeRateStr) {
+    if (rateDecimal <= 0) {
       setPurchaseTdsIt('0.00');
       setPurchaseTaxIsTcs(false);
       return;
     }
 
-    // e.g. "5%", "1%", "0.10%" (take first part if slash exists)
-    const numeric = parseFloat(activeRateStr.split('/')[0].replace(/[^\d.]/g, ''));
-    if (isNaN(numeric) || numeric <= 0) {
-      setPurchaseTdsIt('0.00');
-      setPurchaseTaxIsTcs(false);
-      return;
-    }
-
-    const rateDecimal = numeric / 100;
     // TDS/TCS is on Invoice Value (including GST)
     const totalInvoice = purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0);
-
     const taxAmount = (totalInvoice * rateDecimal).toFixed(2);
 
     setPurchaseTdsIt(taxAmount);
     setPurchaseTaxIsTcs(isTcs);
-  }, [party, vendorId, purchaseItems, richVendors, voucherType]);
+  }, [party, vendorId, purchaseItems, richVendors, voucherType, vendorTaxType, purchaseSelectedStatutorySection]);
   // ─────────────────────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3106,6 +3200,49 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
         setPurchaseTerms(parts.join('\n\n'));
         setMasterTermsData(vendor);
+
+        // Parse Multi-select Statutory Sections
+        console.log('Vendor Statutory Raw Data:', {
+          name: vendor.vendor_name,
+          tds_s: vendor.tds_section,
+          tds_sa: vendor.tds_section_applicable,
+          tcs_s: vendor.tcs_section,
+          tcs_sa: vendor.tcs_section_applicable,
+          tax_type: vendor.tax_type
+        });
+
+        const tcsStr = vendor.tcs_section_applicable || vendor.tcs_section || '';
+        const tdsStr = vendor.tds_section_applicable || vendor.tds_section || '';
+        
+        // Split logic: prefer pipe delimiter, fallback to comma (ignoring commas inside parentheses)
+        const splitPattern = /,(?![^(]*\))/;
+        const tcsList = tcsStr.includes('|') ? tcsStr.split('|') : tcsStr.split(splitPattern);
+        const tdsList = tdsStr.includes('|') ? tdsStr.split('|') : tdsStr.split(splitPattern);
+        
+        const filteredTcs = tcsList.filter(Boolean).map(s => s.trim());
+        const filteredTds = tdsList.filter(Boolean).map(s => s.trim());
+        
+        setPurchaseAvailableTcsSections(filteredTcs);
+        setPurchaseAvailableTdsSections(filteredTds);
+
+        const derivedTaxType = vendor.tax_type || (tcsList.length > 0 ? 'TCS' : tdsList.length > 0 ? 'TDS' : 'NONE');
+        setVendorTaxType(derivedTaxType);
+
+        const isAuto = (vendor.enable_automatic_tds_posting === true || vendor.enable_automatic_tds_posting === 'true' || vendor.enable_automatic_tds_posting === 1);
+        setPurchaseAutoTdsEnabled(isAuto);
+
+        // Default selection - only if automatic posting is enabled for this vendor
+        if (isAuto) {
+          if (derivedTaxType === 'TCS' && tcsList.length > 0) {
+            setPurchaseSelectedStatutorySection(tcsList[0]);
+          } else if (derivedTaxType === 'TDS' && tdsList.length > 0) {
+            setPurchaseSelectedStatutorySection(tdsList[0]);
+          } else {
+            setPurchaseSelectedStatutorySection('');
+          }
+        } else {
+          setPurchaseSelectedStatutorySection('');
+        }
       }
 
       // 2. Try to match Customer from Rich Data
@@ -4268,6 +4405,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       value={party}
                       onChange={handlePartyChange}
                       options={purchasePartyOptions}
+                      onFocus={fetchRichData}
                       placeholder="Select Vendor"
                       className="w-full"
                       disabled={isVendorDisabled}
@@ -5465,7 +5603,40 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">TDS/TCS under Income Tax</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                        {vendorTaxType === 'TCS' ? 'TCS' : 'TDS'} under Income Tax
+                      </label>
+
+                      {/* Dropdown for sections - Only show if Auto TDS is enabled */}
+                      {purchaseAutoTdsEnabled && vendorTaxType === 'TDS' && purchaseAvailableTdsSections.length > 0 && (
+                        <div className="mb-2">
+                          <select
+                            value={purchaseSelectedStatutorySection}
+                            onChange={(e) => setPurchaseSelectedStatutorySection(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-indigo-200 rounded-[4px] bg-white text-xs focus:ring-indigo-500 focus:border-indigo-500 font-medium text-indigo-700 shadow-sm hover:border-indigo-300 transition-colors"
+                          >
+                            {purchaseAvailableTdsSections.length > 1 && <option value="">Select TDS Section</option>}
+                            {purchaseAvailableTdsSections.map(s => (
+                              <option key={s} value={s}>{s.includes('|') ? s.split('|')[0] + ' - ' + s.split('|')[1] : s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {purchaseAutoTdsEnabled && vendorTaxType === 'TCS' && purchaseAvailableTcsSections.length > 0 && (
+                        <div className="mb-2">
+                          <select
+                            value={purchaseSelectedStatutorySection}
+                            onChange={(e) => setPurchaseSelectedStatutorySection(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-indigo-200 rounded-[4px] bg-white text-xs focus:ring-indigo-500 focus:border-indigo-500 font-medium text-indigo-700 shadow-sm hover:border-indigo-300 transition-colors"
+                          >
+                            {purchaseAvailableTcsSections.length > 1 && <option value="">Select TCS Section</option>}
+                            {purchaseAvailableTcsSections.map(s => (
+                              <option key={s} value={s}>{s.includes('|') ? s.split('|')[0] + ' - ' + s.split('|')[1] : s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       <input
                         type="text"
                         value={purchaseTdsIt}
@@ -6380,7 +6551,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={advanceAmount}
-                     
+
                       onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
@@ -6423,7 +6594,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <input
                               type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={transaction.receipt || ''}
-                             
+
                               onChange={e => handleReceiptChange(transaction.id, parseFloat(e.target.value) || 0)}
                               placeholder="0"
                               className="w-24 px-2 py-1 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
@@ -6443,7 +6614,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={totalReceipt}
                       readOnly
-                     
+
                       className="w-32 px-3 py-2 text-right border border-gray-300 rounded-[4px] bg-gray-50 text-gray-700 font-semibold"
                     />
                   </div>
@@ -6519,7 +6690,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="number" onWheel={(e) => e.currentTarget.blur()}
                     value={runningBalance}
                     readOnly
-                   
+
                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                   />
                 </div>
@@ -6564,7 +6735,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         key={`amount-${row.id}`}
                         type="number" onWheel={(e) => e.currentTarget.blur()}
                         value={row.amount || ''}
-                       
+
                         onChange={e => {
                           const newRows = bulkRows.map(r => r.id === row.id ? { ...r, amount: parseFloat(e.target.value) || 0 } : r);
                           setBulkRows(newRows);
@@ -6648,7 +6819,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               <input
                                 type="number" onWheel={(e) => e.currentTarget.blur()}
                                 value={transaction.receipt || ''}
-                               
+
                                 onChange={e => handleReceiptChange(transaction.id, parseFloat(e.target.value) || 0)}
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-center"
                               />
@@ -6685,7 +6856,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <input
                           type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={advanceAmount || ''}
-                         
+
                           onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
                           className="w-full px-3 py-2 border border-gray-300 rounded"
                         />
@@ -7472,7 +7643,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             } else if (type === 'IGST') {
                               setCnInForeignCurrency('Yes');
                               setCnInputType(['IGST']);
-                              
+
                               // Handle foreign currency conversion if switching to 'Yes'
                               const exRate = parseFloat(String(cnExchangeRate)) || 1;
                               setCnItems(prev => prev.map(item => {
@@ -10337,7 +10508,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <input
                   type="number" onWheel={(e) => e.currentTarget.blur()}
                   value={row.totalAmount || ''}
-                 
+
                   onChange={e => handleExpenseRowChange(row.id, 'totalAmount', parseFloat(e.target.value) || 0)}
                   className={`erp-input ${row.totalAmount <= 0 ? 'border-red-300' : ''}`}
                   placeholder="0.00"
@@ -10391,7 +10562,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.taxableValue || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'taxableValue', parseFloat(e.target.value) || 0)}
                       className="erp-input"
                       placeholder="0.00"
@@ -10402,7 +10573,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.igst || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'igst', parseFloat(e.target.value) || 0)}
                       className="erp-input bg-gray-50"
                       placeholder="0.00"
@@ -10413,7 +10584,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.cgst || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'cgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
                       className={`erp-input ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
@@ -10425,7 +10596,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.sgst || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'sgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
                       className={`erp-input ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
@@ -10437,7 +10608,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.cess || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'cess', parseFloat(e.target.value) || 0)}
                       className="erp-input"
                       placeholder="0.00"
@@ -10607,7 +10778,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={entry.debit || ''}
-                     
+
                       onChange={e => handleEntryChange(index, 'debit', parseFloat(e.target.value) || 0)}
                       className="erp-input h-9 text-right font-mono"
                       placeholder="0.00"
@@ -10617,7 +10788,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={entry.credit || ''}
-                     
+
                       onChange={e => handleEntryChange(index, 'credit', parseFloat(e.target.value) || 0)}
                       className="erp-input h-9 text-right font-mono"
                       placeholder="0.00"
@@ -10835,13 +11006,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       </div>
                                     )}
                                     <button
-                                      onClick={() => { 
-                                        setExtractionMode('zoho'); 
-                                        setScanType('bulk'); 
-                                        setScannerFiles(null); 
-                                        setIsInvoiceScannerOpen(true); 
-                                        setIsScannerMenuOpen(false); 
-                                        setIsOthersSubmenuOpen(false); 
+                                      onClick={() => {
+                                        setExtractionMode('zoho');
+                                        setScanType('bulk');
+                                        setScannerFiles(null);
+                                        setIsInvoiceScannerOpen(true);
+                                        setIsScannerMenuOpen(false);
+                                        setIsOthersSubmenuOpen(false);
                                       }}
                                       className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                                       role="menuitem"
@@ -10850,13 +11021,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       Zoho
                                     </button>
                                     <button
-                                      onClick={() => { 
-                                        setExtractionMode('sap'); 
-                                        setScanType('bulk'); 
-                                        setScannerFiles(null); 
-                                        setIsInvoiceScannerOpen(true); 
-                                        setIsScannerMenuOpen(false); 
-                                        setIsOthersSubmenuOpen(false); 
+                                      onClick={() => {
+                                        setExtractionMode('sap');
+                                        setScanType('bulk');
+                                        setScannerFiles(null);
+                                        setIsInvoiceScannerOpen(true);
+                                        setIsScannerMenuOpen(false);
+                                        setIsOthersSubmenuOpen(false);
                                       }}
                                       className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                                       role="menuitem"
@@ -10988,7 +11159,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               `
             }} />
 
-            {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
+            {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} onRefreshCustomers={fetchRichData} companyDetails={companyDetails} />}
             {voucherType === 'Payment' && (
               <PaymentVoucherSingle
                 prefilledData={localPrefilledData}

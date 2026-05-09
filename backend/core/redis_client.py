@@ -3,7 +3,7 @@ import os
 import json
 import time
 import logging
-from typing import Any
+from typing import Any, List, Dict, Optional
 from django.conf import settings
 
 logger = logging.getLogger("RedisClient")
@@ -133,11 +133,12 @@ class RedisClient:
         """Log worker health and queue depth metrics"""
         if not self.available: return
         try:
-            queues = ['ocr_queue', 'ai_requests', 'bulk_jobs_high', 'bulk_jobs_normal', 'bulk_jobs_low']
+            queues = ['ingestion_queue', 'ocr_queue', 'ai_requests', 'finalization_queue', 'bulk_jobs_high', 'bulk_jobs_normal', 'bulk_jobs_low']
             metrics = {}
             for q in queues:
-                metrics[q] = self.client.llen(f"queue:{q}")
-            logger.info(f"[REDIS METRICS] Queue Depths: {json.dumps(metrics)}")
+                metrics[f"q:{q}"] = self.client.llen(f"queue:{q}")
+                metrics[f"p:{q}"] = self.client.llen(f"processing:{q}")
+            logger.info(f"[REDIS METRICS] Queues: {json.dumps(metrics)}")
         except Exception as e:
             logger.warning(f"Failed to log metrics: {e}")
 
@@ -176,56 +177,126 @@ class RedisClient:
             logger.error(f"Consumer verification failed: {e}")
             return False
 
-    def pop_reliable(self, queue_names: Any, timeout: int = 5):
+    def pop_reliable(self, queue_names: List[str], timeout: int = 5) -> Optional[Dict[str, Any]]:
         """
-        Simplified dequeue using raw Redis BRPOP as requested.
-        Supports single queue name (str) or list of queue names.
+        Pops a task from one of the queues and atomically moves it to a processing queue.
+        This prevents task loss if the worker crashes.
         """
-        if not self.available:
-            return None
-
         try:
-            if isinstance(queue_names, str):
-                queue_names = [queue_names]
+            if not self.client:
+                return None
             
-            keys = [f"queue:{name}" for name in queue_names]
+            # Since rpoplpush is not blocking, we iterate and then sleep if none found
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                for name in queue_names:
+                    src = f"queue:{name}"
+                    dest = f"processing:{name}"
+                    
+                    raw_payload = self.client.rpoplpush(src, dest)
+                    if not raw_payload:
+                        continue
+
+                    if isinstance(raw_payload, bytes):
+                        raw_payload = raw_payload.decode("utf-8")
+
+                    raw_payload = raw_payload.strip()
+                    if not raw_payload or raw_payload == "OK":
+                        continue
+
+                    try:
+                        payload = json.loads(raw_payload)
+                        # Add metadata about where it came from for completion
+                        payload['_source_queue'] = name
+                        payload['_raw_payload'] = raw_payload
+                        
+                        # Record initial task heartbeat
+                        task_id = payload.get('id', 'unknown')
+                        self.update_task_heartbeat(task_id)
+                        
+                        return payload
+                    except json.JSONDecodeError:
+                        logger.error(f"[REDIS JSON ERROR] Failed to parse payload from {src}")
+                        continue
+                
+                time.sleep(0.5)
             
-            # RAW BRPOP (blocks for 'timeout' seconds)
-            result = self.client.brpop(keys, timeout=timeout)
-
-            if not result:
-                return None
-
-            # result is (selected_queue, payload)
-            q_name, raw_payload = result
-
-            if isinstance(raw_payload, bytes):
-                raw_payload = raw_payload.decode("utf-8")
-
-            if not raw_payload:
-                return None
-
-            raw_payload = raw_payload.strip()
-
-            # Filter out Redis status leakages
-            if raw_payload == "OK":
-                return None
-
-            # Parse JSON
-            try:
-                payload = json.loads(raw_payload)
-                return payload
-            except json.JSONDecodeError:
-                logger.exception(f"[REDIS JSON ERROR] Failed to parse payload from {q_name}")
-                time.sleep(1)
-                return None
+            return None
 
         except Exception as e:
-            # Only log critical errors, ignore expected timeouts
             if "timeout" not in str(e).lower():
-                logger.exception(f"[REDIS POP ERROR] Failure in {queue_names}")
-                time.sleep(1)
+                logger.error(f"Redis pop error: {e}")
             return None
+
+    def complete_task(self, task: Dict[str, Any]):
+        """
+        Acknowledges a task by removing it from the processing queue.
+        """
+        try:
+            q_name = task.get('_source_queue')
+            raw_payload = task.get('_raw_payload')
+            task_id = task.get('id', 'unknown')
+            
+            if q_name and raw_payload:
+                dest = f"processing:{q_name}"
+                self.client.lrem(dest, 1, raw_payload)
+                self.remove_task_heartbeat(task_id)
+        except Exception as e:
+            logger.error(f"Failed to complete task: {e}")
+
+    def update_task_heartbeat(self, task_id: str):
+        """Updates the heartbeat for a specific task to prove it's still alive"""
+        if not self.available: return
+        try:
+            self.client.set(f"task:hb:{task_id}", time.time(), ex=120)
+        except: pass
+
+    def remove_task_heartbeat(self, task_id: str):
+        """Removes the heartbeat for a task that finished correctly"""
+        if not self.available: return
+        try:
+            self.client.delete(f"task:hb:{task_id}")
+        except: pass
+
+    def increment_retry_count(self, task: Dict[str, Any]) -> int:
+        """Helper to increment retry counter in task payload"""
+        retries = task.get('retries', 0) + 1
+        task['retries'] = retries
+        # Update raw payload for consistency if re-enqueuing
+        if '_raw_payload' in task:
+            del task['_raw_payload'] # Force re-serialization
+        return retries
+
+    def recover_stale_tasks(self, queue_names: List[str], max_age_secs: int = 120):
+        """
+        Scans processing queues and moves tasks back to main queue ONLY IF they
+        have no fresh heartbeat. This prevents interrupting active long-running jobs.
+        """
+        if not self.available: return
+        
+        for name in queue_names:
+            proc_q = f"processing:{name}"
+            main_q = f"queue:{name}"
+            
+            raw_tasks = self.client.lrange(proc_q, 0, -1)
+            for raw in raw_tasks:
+                try:
+                    payload = json.loads(raw)
+                    task_id = payload.get('id')
+                    
+                    # Check Heartbeat
+                    hb = self.client.get(f"task:hb:{task_id}")
+                    if hb:
+                        # Task is still active, skip
+                        continue
+                        
+                    # No heartbeat found - task likely crashed. Move it back.
+                    logger.warning(f"[RECOVERY] Task {task_id} has no heartbeat in {proc_q}. Rescuing...")
+                    self.client.lrem(proc_q, 1, raw)
+                    self.client.lpush(main_q, raw)
+                    
+                except Exception as e:
+                    logger.error(f"[RECOVERY ERROR] Failed to inspect task in {proc_q}: {e}")
 
     def ack_task(self, processing_queue: str, raw_data: str):
         if not self.available:
