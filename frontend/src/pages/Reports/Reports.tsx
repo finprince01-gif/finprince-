@@ -2021,10 +2021,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Type</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">VCH No.</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Status</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[150px] border-r border-gray-50">Running Bal</th>
                       <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px] border-r border-gray-50">Debit (₹)</th>
                       <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px] border-r border-gray-50">Credit (₹)</th>
-                      <th className="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-[80px]">Action</th>
+                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[150px]">RUNNING BALANCE</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white">
@@ -2032,74 +2031,135 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       const st = allocationRows.find(r => r.refNo === e.voucherNo && r.isFirstInSource)?.status || '-';
                       return (
                         <React.Fragment key={`dd-j-${idx}`}>
-                          <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                            <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top border-r border-gray-50">{fmtDate(e.date)}</td>
-                            <td className="px-6 py-4 text-sm font-bold text-gray-800 border-r border-gray-50">{e.particulars || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-50">{e.voucherType || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-500 border-r border-gray-50">{e.voucherNo || '-'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
+                          {/* ── Main transaction row ── */}
+                          <tr className="border-b border-gray-100 hover:bg-indigo-50/30 transition-colors cursor-pointer"
+                            onClick={() => e.voucherType !== 'Opening' && setSelectedTransaction({ ...e, ledgerName: drillDownLedger })}>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top border-r border-gray-100">{fmtDate(e.date)}</td>
+                            <td className="px-6 py-4 text-sm font-bold text-gray-800 border-r border-gray-100">{e.voucherType !== 'Opening' ? '(as per details)' : e.particulars || 'Opening Balance'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-100">{e.voucherType || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-500 border-r border-gray-100">{e.voucherNo || '-'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100">
                               {st !== '-' && e.voucherType !== 'Opening' ? (
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${st === 'Paid' || st === 'Utilized' ? 'bg-green-100 text-green-800' : st === 'Due' ? 'bg-red-100 text-red-800' : st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{st}</span>
                               ) : '-'}
                             </td>
-                            <td className="px-6 py-4 text-sm text-right font-bold text-gray-900 border-r border-gray-50">
+                            <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right border-r border-gray-100">{e.debit > 0 ? `₹${e.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right border-r border-gray-100">{e.credit > 0 ? `₹${e.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">
                               {e.balance > 0 ? <>{`₹${e.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} `}<span className={`text-[10px] font-normal uppercase ${e.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>{e.balanceType}</span></> : '-'}
                             </td>
-                            <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right border-r border-gray-50">{e.debit > 0 ? `₹${e.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
-                            <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right border-r border-gray-50">{e.credit > 0 ? `₹${e.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
-                            <td className="px-6 py-4 text-center">
-                              {e.voucherType !== 'Opening' && (
-                                <button onClick={() => setSelectedTransaction({ ...e, ledgerName: drillDownLedger })} className="text-indigo-600 hover:text-indigo-900 mx-auto inline-block" title="View Transaction">
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                </button>
-                              )}
-                            </td>
                           </tr>
-                          {/* Sub-rows for journal view */}
-                          {e.debit > 0 && e.voucherType !== 'Opening' && (
-                            <tr className="bg-white border-b border-gray-50/30">
-                              <td className="border-r border-gray-50"></td>
-                              <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
-                                <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
-                                  <span>{drillDownLedger} A/c</span>
-                                  <div className="flex items-center gap-1">
-                                    <span className="font-bold">₹{e.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                    <span className="text-gray-400 text-[10px]">Dr</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td colSpan={7}></td>
-                            </tr>
-                          )}
-                          {e.credit > 0 && e.voucherType !== 'Opening' && (
-                            <tr className="bg-white border-b border-gray-50/30">
-                              <td className="border-r border-gray-50"></td>
-                              <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
-                                <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
-                                  <span>{drillDownLedger} A/c</span>
-                                  <div className="flex items-center gap-1">
-                                    <span className="font-bold">₹{e.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                    <span className="text-gray-400 text-[10px]">Cr</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td colSpan={7}></td>
-                            </tr>
-                          )}
+                          {/* ── Breakdown sub-rows (Customer Portal / Tally style) ── */}
+                          {e.voucherType !== 'Opening' && (() => {
+                            const raw = e.rawVoucher || {};
+                            const fullLegs = raw.full_legs || [];
+                            
+                            const drLegs: { label: string, amount: number, indent: string }[] = [];
+                            const crLegs: { label: string, amount: number, indent: string }[] = [];
+                            
+                            if (fullLegs.length > 0) {
+                                // Robustly determine taxable amount (base value for tax %)
+                                // It is the sum of amounts of all legs that are NOT tax/TDS and NOT the customer/vendor ledger itself.
+                                const isTaxOrTds = (name: string) => name.includes('Tax Liability') || name.includes('Tax Credit') || name.includes('TDS') || name.includes('TCS');
+                                const baseLegs = fullLegs.filter((l: any) => !isTaxOrTds(l.ledger_name) && l.ledger_name !== drillDownLedger);
+                                const taxableAmount = baseLegs.reduce((sum: number, l: any) => sum + (l.credit > 0 ? l.credit : l.debit), 0);
+
+                                fullLegs.forEach((leg: any) => {
+                                    let label = leg.ledger_name;
+                                    const amount = leg.debit > 0 ? leg.debit : leg.credit;
+                                    
+                                    if (taxableAmount > 0 && (label.includes('Tax Liability') || label.includes('Tax Credit') || label.includes('TDS') || label.includes('TCS'))) {
+                                        const perc = parseFloat(((amount / taxableAmount) * 100).toFixed(2));
+                                        if (perc > 0) {
+                                            if (label.includes('Liability')) {
+                                                if (label.includes('(CGST)')) label = `Output CGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(SGST)') || label.includes('UTGST')) label = `Output SGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(IGST)')) label = `Output IGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(Cess)')) label = `Output Cess Ledger @ ${perc}%`;
+                                                else if (label.includes('State Cess')) label = `Output State Cess Ledger @ ${perc}%`;
+                                                else label = `${label} @ ${perc}%`;
+                                            } else if (label.includes('Credit')) {
+                                                if (label.includes('(CGST)')) label = `Input CGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(SGST)') || label.includes('UTGST')) label = `Input SGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(IGST)')) label = `Input IGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(Cess)')) label = `Input Cess Ledger @ ${perc}%`;
+                                                else if (label.includes('State Cess')) label = `Input State Cess Ledger @ ${perc}%`;
+                                                else label = `${label} @ ${perc}%`;
+                                            } else if (label.includes('TDS') || label.includes('TCS')) {
+                                                label = `${label} @ ${perc}%`;
+                                            }
+                                        }
+                                    }
+
+                                    if (leg.debit > 0) {
+                                        drLegs.push({ label, amount: leg.debit, indent: 'pl-10' });
+                                    }
+                                    if (leg.credit > 0) {
+                                        crLegs.push({ label, amount: leg.credit, indent: 'pl-16' });
+                                    }
+                                });
+                            } else {
+                                // Fallback if full_legs isn't available for some reason
+                                if (e.debit > 0) {
+                                    drLegs.push({ label: drillDownLedger, amount: e.debit, indent: 'pl-10' });
+                                    crLegs.push({ label: e.particulars || 'Ledger', amount: e.debit, indent: 'pl-16' });
+                                } else if (e.credit > 0) {
+                                    drLegs.push({ label: e.particulars || 'Ledger', amount: e.credit, indent: 'pl-10' });
+                                    crLegs.push({ label: drillDownLedger, amount: e.credit, indent: 'pl-16' });
+                                }
+                            }
+
+                            return (
+                              <>
+                                {drLegs.map((leg, i) => (
+                                  <tr key={`dr-${i}`} className="bg-white border-b border-gray-50/50">
+                                    <td className="border-r border-gray-50 py-1.5"></td>
+                                    <td className={`py-1.5 border-r border-gray-50 ${leg.indent} pr-4`}>
+                                      <div className="flex justify-between items-center text-xs font-medium text-gray-700">
+                                        <span>{leg.label}</span>
+                                        <div className="flex items-center gap-1 ml-4">
+                                          <span className="font-bold text-gray-900">₹{leg.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-gray-400 text-[10px]">Dr</span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td colSpan={6}></td>
+                                  </tr>
+                                ))}
+                                {crLegs.map((leg, i) => (
+                                  <tr key={`cr-${i}`} className="bg-white border-b border-gray-50/50">
+                                    <td className="border-r border-gray-50 py-1.5"></td>
+                                    <td className={`py-1.5 border-r border-gray-50 ${leg.indent} pr-4`}>
+                                      <div className="flex justify-between items-center text-xs font-medium text-indigo-600">
+                                        <span>{leg.label}</span>
+                                        <div className="flex items-center gap-1 ml-4">
+                                          <span className="font-bold">₹{leg.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-gray-400 text-[10px]">Cr</span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td colSpan={6}></td>
+                                  </tr>
+                                ))}
+                                {/* Spacer row between transactions */}
+                                <tr className="bg-white"><td colSpan={8} className="py-1"></td></tr>
+                              </>
+                            );
+                          })()}
                         </React.Fragment>
                       )
                     }) : (
-                      <tr><td colSpan={9} className="px-6 py-12 text-center text-sm text-gray-400">No transactions found for <strong>{drillDownLedger}</strong>.</td></tr>
+                      <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-400">No transactions found for <strong>{drillDownLedger}</strong>.</td></tr>
                     )}
                   </tbody>
                   {filteredDrillData.length > 0 && (
                     <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-bold">
                       <tr>
-                        <td colSpan={5} className="px-6 py-4 text-right text-sm text-gray-700">TOTAL</td>
-                        <td className={`px-6 py-4 text-sm font-mono text-right ${last?.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>{last ? `₹${last.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${last.balanceType}` : ''}</td>
+                        <td colSpan={4} className="px-6 py-4 text-right text-sm text-gray-700">TOTALS:</td>
+                        <td className="px-6 py-4"></td>
                         <td className="px-6 py-4 text-sm text-right text-orange-600">₹{totalDr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        <td className="px-6 py-4 text-sm text-right text-green-700">₹{totalCr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        <td></td>
+                        <td className="px-6 py-4 text-sm text-right text-green-700">-</td>
+                        <td className={`px-6 py-4 text-sm font-mono text-right ${last?.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>{last ? `₹${last.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${last.balanceType}` : ''}</td>
                       </tr>
                     </tfoot>
                   )}

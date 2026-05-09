@@ -325,7 +325,8 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             from accounting.models import JournalEntry
             from decimal import Decimal as D
 
-            tenant_id = self.context.get('request').user.tenant_id
+            request = self.context.get('request')
+            tenant_id = request.user.tenant_id if request and hasattr(request, 'user') else invoice.tenant_id
             payment_obj = getattr(invoice, 'payment_details', None)
             if not payment_obj:
                 print("[SalesSerializer] Skipped posting: No payment details found on instance")
