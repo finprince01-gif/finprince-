@@ -46,6 +46,8 @@ interface ReportsPageProps {
   ledgers: Ledger[];
   ledgerGroups: LedgerGroupMaster[];
   stockItems: StockItem[];
+  onNavigate?: (page: Page, params?: any) => void;
+  setViewVoucherData?: (data: any) => void;
 }
 
 
@@ -76,7 +78,7 @@ const formatToDMY = (dateVal: any) => {
   return str;
 };
 
-const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
+const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [], onNavigate, setViewVoucherData }) => {
   // Report Options Mapping
   const { hasTabAccess, isSuperuser } = usePermissions();
 
@@ -139,6 +141,15 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   const [panelActiveTab, setPanelActiveTab] = useState<string>('invoice');
   const [isEditingVoucher, setIsEditingVoucher] = useState<boolean>(false);
   const [editedVoucher, setEditedVoucher] = useState<any>(null);
+
+  const handleViewTransaction = (e: any) => {
+    if (setViewVoucherData && onNavigate) {
+      setViewVoucherData({ ...e, ledgerName: drillDownLedger });
+      onNavigate('Vouchers', { viewVoucher: { ...e, ledgerName: drillDownLedger } });
+    } else {
+      setSelectedTransaction({ ...e, ledgerName: drillDownLedger });
+    }
+  };
 
   useEffect(() => {
     let accountVal = '';
@@ -1798,14 +1809,33 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
-          {filteredVouchers.length > 0 ? filteredVouchers.map((v, idx) => (
-            <tr key={`daybook-${v.type}-${v.date}-${v.id || idx}`} className="hover:bg-gray-50 transition-colors">
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(v.date).toLocaleDateString()}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{v.type}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{getVoucherParty(v)}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">₹{getVoucherAmount(v).toFixed(2)}</td>
-            </tr>
-          )) : (
+          {filteredVouchers.length > 0 ? filteredVouchers.map((v, idx) => {
+            const party = getVoucherParty(v);
+            return (
+              <tr 
+                key={`daybook-${v.type}-${v.date}-${v.id || idx}`} 
+                className="hover:bg-indigo-50 transition-colors cursor-pointer group"
+                onClick={() => {
+                  if (party && party !== 'Unknown') {
+                    setReportType('LedgerReport');
+                    setSelectedLedger(`ledger:${party}`);
+                    setDrillDownLedger(party);
+                  }
+                }}
+                title={`View Ledger Report for ${party}`}
+              >
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(v.date).toLocaleDateString()}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{v.type}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-indigo-600 group-hover:font-semibold transition-colors flex items-center gap-1">
+                  {party}
+                  <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">₹{getVoucherAmount(v).toFixed(2)}</td>
+              </tr>
+            );
+          }) : (
             <tr>
               <td colSpan={4} className="px-6 py-12 text-sm text-center text-gray-500">
                 {(startDate || endDate) ? 'No transactions found for the selected filter.' : 'No transactions found.'}
@@ -1975,7 +2005,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             {e.voucherType !== 'Opening' && (
-                              <button onClick={() => setSelectedTransaction({ ...e, ledgerName: drillDownLedger })} className="text-indigo-600 hover:text-indigo-900 mx-auto inline-block" title="View Transaction">
+                              <button onClick={() => handleViewTransaction(e)} className="text-indigo-600 hover:text-indigo-900 mx-auto inline-block" title="View Transaction">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                               </button>
                             )}
@@ -2033,7 +2063,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                         <React.Fragment key={`dd-j-${idx}`}>
                           {/* ── Main transaction row ── */}
                           <tr className="border-b border-gray-100 hover:bg-indigo-50/30 transition-colors cursor-pointer"
-                            onClick={() => e.voucherType !== 'Opening' && setSelectedTransaction({ ...e, ledgerName: drillDownLedger })}>
+                            onClick={() => e.voucherType !== 'Opening' && handleViewTransaction(e)}>
                             <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top border-r border-gray-100">{fmtDate(e.date)}</td>
                             <td className="px-6 py-4 text-sm font-bold text-gray-800 border-r border-gray-100">{e.voucherType !== 'Opening' ? '(as per details)' : e.particulars || 'Opening Balance'}</td>
                             <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-100">{e.voucherType || '-'}</td>
@@ -3078,49 +3108,157 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                               </table>
                             </div>
                             <div className="grid grid-cols-2 gap-6 mt-4">
+
                               <div>
+
                                 <label className="label-text">
+
                                   {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'PURCHASE LEDGER' : 'SALES LEDGER'}
+
                                 </label>
+
                                 <input
+
                                   type="text"
-                                  value={editedVoucher?.sales_ledger || editedVoucher?.purchase_ledger || (selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'Purchase Account' : 'Sales Account')}
+
+                                  value={
+
+                                    selectedTransaction?.voucherType?.toLowerCase() === 'purchase'
+
+                                      ? (editedVoucher?.purchase_ledger || editedVoucher?.supply_inr_details?.purchase_ledger || editedVoucher?.supply_foreign_details?.purchase_ledger || '')
+
+                                      : (editedVoucher?.sales_ledger || editedVoucher?.supply_inr_details?.sales_ledger || '')
+
+                                  }
+
                                   disabled={!isEditingVoucher}
+
                                   onChange={(e) => {
-                                    handleFieldChange('sales_ledger', e.target.value);
-                                    handleFieldChange('purchase_ledger', e.target.value);
+
+                                    if (selectedTransaction?.voucherType?.toLowerCase() === 'purchase') {
+
+                                      handleFieldChange('purchase_ledger', e.target.value);
+
+                                      handleFieldChange('supply_inr_details.purchase_ledger', e.target.value);
+
+                                    } else {
+
+                                      handleFieldChange('sales_ledger', e.target.value);
+
+                                    }
+
                                   }}
+
                                   className="erp-input"
+
                                 />
+
                               </div>
+
                               <div>
-                                <label className="label-text">LEDGER NARRATION</label>
+
+                                <label className="label-text">PURCHASE ORDER NO.</label>
+
                                 <input
+
                                   type="text"
-                                  value={editedVoucher?.ledger_narration || ''}
+
+                                  value={
+
+                                    editedVoucher?.supply_inr_details?.purchase_order_no
+
+                                    || editedVoucher?.supply_foreign_details?.purchase_order_no
+
+                                    || editedVoucher?.purchase_order_no
+
+                                    || ''
+
+                                  }
+
                                   disabled={!isEditingVoucher}
-                                  onChange={(e) => handleFieldChange('ledger_narration', e.target.value)}
+
+                                  onChange={(e) => {
+
+                                    handleFieldChange('purchase_order_no', e.target.value);
+
+                                    handleFieldChange('supply_inr_details.purchase_order_no', e.target.value);
+
+                                  }}
+
                                   className="erp-input"
+
                                 />
+
                               </div>
+
+                              <div className="col-span-2">
+
+                                <label className="label-text">LEDGER NARRATION</label>
+
+                                <input
+
+                                  type="text"
+
+                                  value={editedVoucher?.ledger_narration || editedVoucher?.supply_inr_details?.description || ''}
+
+                                  disabled={!isEditingVoucher}
+
+                                  onChange={(e) => {
+
+                                    handleFieldChange('ledger_narration', e.target.value);
+
+                                    handleFieldChange('supply_inr_details.description', e.target.value);
+
+                                  }}
+
+                                  className="erp-input"
+
+                                />
+
+                              </div>
+
                             </div>
+
                           </div>
+
                         )}
 
                         {panelActiveTab === 'payment' && (() => {
                           const dd = editedVoucher?.due_details;
+                          // TDS/TCS under Income Tax (reduces payable to vendor; paid to govt)
                           const tdsIt = parseFloat(dd?.tds_it ?? dd?.tdsIt ?? editedVoucher?.tds_it ?? 0);
                           const tdsGst = parseFloat(dd?.tds_gst ?? dd?.tdsGst ?? editedVoucher?.tds_gst ?? 0);
+                          // Advance already paid against this invoice
                           const advance = parseFloat(dd?.advance_paid ?? dd?.advancePaid ?? editedVoucher?.advance_paid ?? 0);
-                          const netAmountDue = parseFloat(dd?.to_pay ?? dd?.toPay ?? editedVoucher?.to_pay ?? 0);
                           const postingNote = dd?.posting_note ?? dd?.postingNote ?? editedVoucher?.narration ?? '';
-                          const invoiceVal = parseFloat(editedVoucher?.total ?? 0);
-                          const taxableAmt = parseFloat(editedVoucher?.total_taxable_amount ?? editedVoucher?.totalTaxableAmount ?? 0);
-                          const totalIgst = parseFloat(editedVoucher?.total_igst ?? editedVoucher?.totalIgst ?? 0);
-                          const totalCgst = parseFloat(editedVoucher?.total_cgst ?? editedVoucher?.totalCgst ?? 0);
-                          const totalSgst = parseFloat(editedVoucher?.total_sgst ?? editedVoucher?.totalSgst ?? 0);
-                          const totalCess = (editedVoucher?.items || []).reduce((s: number, it: any) => s + parseFloat(it.cess ?? 0), 0);
+                          // Invoice Value = total gross value of the purchase invoice (taxable + taxes)
+                          const invoiceVal = parseFloat(
+                            editedVoucher?.total
+                            ?? editedVoucher?.total_amount
+                            ?? 0
+                          );
+                          // Tax summary — computed from line items
+                          const taxableAmt = parseFloat(editedVoucher?.total_taxable_amount ?? editedVoucher?.totalTaxableAmount ?? 0)
+                            || (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.taxableValue ?? it.taxable_value ?? 0), 0);
+                          const totalIgst = parseFloat(editedVoucher?.total_igst ?? editedVoucher?.totalIgst ?? 0)
+                            || (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.igst ?? it.igst_amount ?? 0), 0);
+                          const totalCgst = parseFloat(editedVoucher?.total_cgst ?? editedVoucher?.totalCgst ?? 0)
+                            || (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.cgst ?? it.cgst_amount ?? 0), 0);
+                          const totalSgst = parseFloat(editedVoucher?.total_sgst ?? editedVoucher?.totalSgst ?? 0)
+                            || (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.sgst ?? it.sgst_amount ?? 0), 0);
+                          const totalCess = (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.cess ?? it.cess_amount ?? 0), 0);
+                          // Accounting formulas (as per standard purchase voucher)
+                          // Gross Amount Due = Invoice Value − TDS/TCS Under Income Tax
                           const grossDue = invoiceVal - tdsIt;
+                          // Net Amount Due = Gross Amount Due − Advance Paid
+                          // (This is what the vendor still needs to be paid)
+                          const netAmountDue = grossDue - advance;
+
                           return (
                             <div className="space-y-6" style={{ animation: 'fadeIn 0.15s ease' }}>
                               {/* Tax Summary Table — mirrors the top summary in Due Details */}
@@ -3180,23 +3318,50 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                                   />
                                 </div>
                                 <div>
+                                  <label className="label-text">TDS UNDER GST (RCM)</label>
+                                  <input
+                                    type="number"
+                                    value={tdsGst}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('due_details.tds_gst', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-mono"
+                                  />
+                                </div>
+                                <div>
                                   <label className="label-text">GROSS AMOUNT DUE</label>
                                   <input
                                     type="number"
                                     value={grossDue.toFixed(2)}
                                     disabled={true}
                                     className="erp-input font-mono bg-gray-50 text-gray-600"
+                                    title="Invoice Value − TDS/TCS Under Income Tax"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">PAYMENT TERMS</label>
+                                  <input
+                                    type="text"
+                                    value={dd?.terms || editedVoucher?.terms || ''}
+                                    disabled={!isEditingVoucher}
+                                    placeholder="e.g. Net 30 days"
+                                    onChange={(e) => handleFieldChange('due_details.terms', e.target.value)}
+                                    className="erp-input"
                                   />
                                 </div>
                                 <div className="col-span-2">
                                   <label className="label-text font-bold" style={{ color: '#4f46e5' }}>NET AMOUNT DUE</label>
-                                  <input
-                                    type="number"
-                                    value={netAmountDue}
-                                    disabled={!isEditingVoucher}
-                                    onChange={(e) => handleFieldChange('due_details.to_pay', parseFloat(e.target.value) || 0)}
-                                    className="erp-input font-bold text-indigo-700 text-lg"
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      value={netAmountDue.toFixed(2)}
+                                      disabled={!isEditingVoucher}
+                                      onChange={(e) => handleFieldChange('due_details.to_pay', parseFloat(e.target.value) || 0)}
+                                      className="erp-input font-bold text-indigo-700 text-lg flex-1"
+                                    />
+                                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                                      (Invoice − TDS/IT − Advance)
+                                    </span>
+                                  </div>
                                 </div>
                                 <div className="col-span-2">
                                   <label className="label-text">POSTING NOTE</label>

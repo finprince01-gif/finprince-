@@ -253,8 +253,10 @@ export interface ExtractedLineItem {
 }
 
 export interface ExtractedInvoiceData {
+  voucherId?: number | string;
+  invoiceNumber?: string;
+  branch?: string;
   sellerName: string;
-  invoiceNumber: string;
   invoiceDate: string; // YYYY-MM-DD
   dueDate?: string; // YYYY-MM-DD
   subtotal: number;

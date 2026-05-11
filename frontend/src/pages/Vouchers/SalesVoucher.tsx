@@ -188,6 +188,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             setCustomerName(sellerName);
             if (sellerName) handleCustomerChange(sellerName);
             if (prefilledData.gstin) setGstin(prefilledData.gstin);
+            if (prefilledData.branch) setCustomerBranch(prefilledData.branch);
             if (prefilledData.placeOfSupply) setPlaceOfSupply(prefilledData.placeOfSupply);
             if (prefilledData.invoiceType) setInvoiceType(prefilledData.invoiceType);
             if (prefilledData.currency) setCustomerBillingCurrency(prefilledData.currency);

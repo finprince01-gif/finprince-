@@ -532,11 +532,27 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         dispatch_data = validated_data.pop('dispatch_details', None)
         eway_bill_details_data = validated_data.pop('eway_bill_details', None)
 
+        # Update custom mapped fields from frontend
+        if 'party' in self.initial_data:
+            instance.customer_name = self.initial_data.get('party', '')
+        if 'bill_to_address_1' in self.initial_data:
+            instance.bill_to = self.initial_data.get('bill_to_address_1', '')
+        if 'ship_to_address_1' in self.initial_data:
+            instance.ship_to = self.initial_data.get('ship_to_address_1', '')
+        if 'voucher_number' in self.initial_data:
+            instance.sales_invoice_no = self.initial_data.get('voucher_number', '')
+        if 'voucher_series' in self.initial_data:
+            instance.voucher_name = self.initial_data.get('voucher_series', '')
+        
         # Update Invoice Header
         instance = super().update(instance, validated_data)
         tenant_id = instance.tenant_id
 
         # Update Items
+        # Map flat items array back if nested items is missing in validated_data
+        if items_data is None and 'items' in self.initial_data:
+            items_data = self.initial_data['items']
+
         if items_data is not None:
             instance.items.all().delete()
             for item in items_data:
@@ -567,6 +583,23 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             instance.eway_bill_details.all().delete()
             for eway_data in eway_bill_details_data:
                 VoucherSalesEwayBill.objects.create(invoice=instance, tenant_id=tenant_id, **eway_data)
+
+        # Update the unified Voucher object
+        if instance.voucher_id:
+            try:
+                payment_obj = getattr(instance, 'payment_details', None)
+                final_total = decimal.Decimal(str(payment_obj.payment_invoice_value if payment_obj else 0)).quantize(
+                    decimal.Decimal('0.00'), rounding=decimal.ROUND_HALF_UP
+                )
+                voucher = Voucher.objects.get(id=instance.voucher_id)
+                voucher.date = instance.date
+                voucher.party = instance.customer_name
+                voucher.total = final_total
+                voucher.invoice_no = instance.sales_invoice_no
+                voucher.voucher_number = instance.sales_invoice_no or f"SAL-{instance.id}"
+                voucher.save()
+            except Voucher.DoesNotExist:
+                pass
 
         # --- Record Advance Allocation Maps Update (Phase 4C) ---
         if instance.voucher_id:
