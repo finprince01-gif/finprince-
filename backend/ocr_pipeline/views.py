@@ -9,7 +9,7 @@ import json
 import hashlib
 import os
 
-from .models import InvoiceTempOCR, OCRJob, OCRTask
+from .models import InvoiceTempOCR, OCRJob, OCRTask, FinalizedSnapshot, PipelineStatus, SessionFinalizationState
 from .tasks import process_invoice_task
 from .service import process_invoice_upload
 from .normalize import normalize
@@ -52,6 +52,11 @@ class CleanOCRStagingView(views.APIView):
         voucher_type = request.data.get('voucher_type', 'PURCHASE')
         upload_session_id = request.data.get('upload_session_id') or request.query_params.get('upload_session_id')
         tenant_id = request.user.branch_id
+        
+        logger.info(
+            f"[SESSION_TRACE_UPLOAD] session={upload_session_id} tenant={tenant_id} "
+            f"voucher_type={voucher_type} file_count={len(files)}"
+        )
 
         if not files:
             return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
@@ -104,9 +109,10 @@ class CleanOCRStagingView(views.APIView):
                     job.processed_files += 1
                     continue
 
-                # Upload to S3
+                # Upload to storage (local fallback if S3 not configured)
                 s3_key = f"ocr/{tenant_id}/{job.id}/{file_hash}_{original_display_name.replace('/', '_')}"
-                file_url = storage.upload_file(file_bytes, s3_key, uploaded_file.content_type)
+                safe_content_type = uploaded_file.content_type or 'application/octet-stream'
+                file_url = storage.upload_file(file_bytes, s3_key, safe_content_type)
                 
                 # Create Task
                 task = OCRTask.objects.create(
@@ -117,11 +123,12 @@ class CleanOCRStagingView(views.APIView):
                     status='PENDING'
                 )
                 
-                # Push to SQS
+                # Push to queue (Redis or SQS based on QUEUE_BACKEND)
                 queue.push({
                     "task_id": str(task.id),
                     "job_id": str(job.id),
                     "file_url": file_url,
+                    "file_hash": file_hash,
                     "voucher_type": voucher_type,
                     "tenant_id": tenant_id,
                     "upload_session_id": upload_session_id,
@@ -155,6 +162,14 @@ class CleanOCRStagingView(views.APIView):
         
         print(f"DEBUG: GET OCR Staging. session_id='{session_id}', tenant_id='{tenant_id}', resume='{resume}'")
         
+        # ── ASYNC PIPELINE STATUS CONSTANTS ──
+        ASYNC_IN_PROGRESS_STATUSES = {
+            'PROCESSING', 'OCR_PROCESSING', 'OCR_QUEUED',
+            'AI_QUEUED', 'AI_PROCESSING', 'UPLOADING',
+            'FINALIZATION_RUNNING', 'SNAPSHOT_BUILDING'
+        }
+        TERMINAL_STATUSES = {PipelineStatus.FINALIZED, PipelineStatus.FAILED}
+
         file_paths = request.query_params.get('file_paths')
         
         # ── Step 3: Verify API Source (Per Request: Minimal Filtering for Debug) ──
@@ -167,9 +182,99 @@ class CleanOCRStagingView(views.APIView):
                     tenant_id=tenant_id
                 )
         elif session_id:
-            logger.info(f"[STAGING QUERY] session_id={session_id}, tenant_id={tenant_id}")
-            records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
-            logger.info(f"[STAGING QUERY RESULT] Found {records.count()} records")
+            logger.info(f"[UI_SNAPSHOT_FETCH] session_id={session_id}")
+            # Filter to only non-empty snapshots (invoice_count > 0)
+            # Old failed runs produce empty snapshots (invoice_count=0) — exclude them.
+            snapshots = FinalizedSnapshot.objects.filter(
+                session_id=session_id, tenant_id=tenant_id, invoice_count__gt=0
+            ).order_by('created_at')
+
+            if snapshots.exists():
+                latest_snap = snapshots.latest('created_at')
+                snap_data = latest_snap.snapshot_json or {}
+                invoices = snap_data.get('invoices', [])
+                
+                # Attempt to find a real record ID for session reference
+                ref_record = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id).first()
+                ref_id = ref_record.id if ref_record else str(latest_snap.id)
+
+                # Wrap invoices into the "record-like" structure the UI mapper expects
+                records_data = []
+                for inv in invoices:
+                    records_data.append({
+                        "id": ref_id,
+                        "status": PipelineStatus.FINALIZED,
+                        "validationStatus": "READY",
+                        "db_status": PipelineStatus.FINALIZED,
+                        "extracted_data": inv,
+                        "file_path": inv.get("Folder Path", ""),
+                        "invoice_no": inv.get("Invoice No", ""),
+                        "branch": inv.get("Branch", ""),
+                        "Branch": inv.get("Branch", ""),
+                        "vendor_name": inv.get("Name", ""),
+                        "vendor_gstin": inv.get("GSTIN", ""),
+                        "total_amount": inv.get("Total Invoice Value", "0.00"),
+                        "file_hash": str(latest_snap.id)
+                    })
+
+                logger.info(f"[SNAPSHOT_AGGREGATE] session={session_id} union_count={len(records_data)} from latest snapshot {latest_snap.id}")
+                return Response({
+                    "status": "completed",
+                    "data": records_data,
+                    "snapshot_id": str(latest_snap.id)
+                })
+
+            # If no snapshot exists, check if any record is still processing.
+            records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id)
+            if records.exists():
+                # Mandatory Fix #6: Authoritative Progress Calculation
+                states = SessionFinalizationState.objects.filter(id__in=records.values_list('id', flat=True))
+                logger.info(f"[FORENSIC_STAGING_QUERY] session={session_id} found_states={states.count()} records={records.count()}")
+                
+                total_expected = sum(s.total_pages_expected for s in states)
+                total_completed = sum(s.total_pages_completed for s in states)
+                
+                # Fallback if states not created yet
+                if total_expected == 0:
+                    total_expected = records.count() # Assume 1 page per record as fallback
+                    total_completed = records.filter(status__in=TERMINAL_STATUSES).count()
+
+                progress = (total_completed / total_expected * 100) if total_expected > 0 else 0
+                logger.info(f"[PROGRESS_SYNC] session={session_id} progress={progress}% ({total_completed}/{total_expected})")
+
+                is_terminal = all(r.status in TERMINAL_STATUSES for r in records)
+
+                # If progress is 100% from SessionFinalizationState but record status
+                # hasn't updated to FINALIZED yet (assembly in-flight), don't block.
+                # We ignore FINALIZATION_RUNNING and SNAPSHOT_BUILDING here because 
+                # progress=100 means the extraction phase is terminal.
+                if not is_terminal and progress >= 100:
+                    ignore_statuses = {
+                        PipelineStatus.FINALIZATION_RUNNING, 
+                        PipelineStatus.SNAPSHOT_BUILDING,
+                        'FINALIZATION_RUNNING',
+                        'SNAPSHOT_BUILDING'
+                    }
+                    all_pipeline_done = all(
+                        r.status in TERMINAL_STATUSES or r.status in ignore_statuses
+                        for r in records
+                    )
+                    if all_pipeline_done:
+                        is_terminal = True
+                        logger.info(f"[UI_UNBLOCK_PROGRESS100] session={session_id} — progress=100%, treating as terminal.")
+
+                if not is_terminal:
+                    logger.info(f"[UI_RENDER_BLOCKED] session={session_id} - Pipeline in progress.")
+                    return Response({
+                        "status": "PROCESSING",
+                        "progress_percent": round(progress, 2),
+                        "message": f"AI is finalizing assembly ({total_completed}/{total_expected})...",
+                        "data": [] # Return empty data to prevent ghost row rendering
+                    })
+            
+            # Fallback for terminal records without snapshot (unlikely)
+            records = records.order_by('created_at', 'id')
+            logger.info(f"[BACKEND_STAGING_FETCH] session={session_id} record_count={records.count()}")
         elif file_paths:
             paths = file_paths.split(',')
             records = InvoiceTempOCR.objects.filter(file_path__in=paths, tenant_id=tenant_id).order_by('created_at', 'id')
@@ -203,26 +308,65 @@ class CleanOCRStagingView(views.APIView):
             v_status = getattr(r, 'validation_status', None)
             v_id = getattr(r, 'vendor_id', None)
             v_status_record = getattr(r, 'status', None)
+
+            # ── ASYNC-SAFE UI STATUS MAPPING ──
+            # Priority: terminal error > in-progress async > voucher created > validation status
+            #
+            # RULE: Never map a record to FAILED/EXTRACTION_FAILED while it is still in
+            # an async pipeline stage. Only do so once it has reached a true terminal state.
             
-            # Robust mapping for UI status badges
-            ui_status = v_status or "PENDING"
-            if v_status in ['DUPLICATE', 'DUPLICATE_INVOICE', 'DUPLICATE_IN_BATCH']:
-                ui_status = 'DUPLICATE'
-            elif v_status_record == 'FAILED': 
-                ui_status = 'EXTRACTION_FAILED'
-            elif v_status_record == 'VOUCHER_CREATED' or r.processed is True:
-                ui_status = 'VOUCHER_CREATED'
-            elif v_status_record in ['EXTRACTING', 'UPLOADED', 'PENDING']: 
-                ui_status = 'PENDING'
-            elif v_status in ['DUPLICATE', 'DUPLICATE_INVOICE', 'DUPLICATE_IN_BATCH']:
-                ui_status = 'DUPLICATE'
+            # ── PHASE 6: UI STABILIZATION ──
+            # Rule: Never expose intermediate payloads.
+            # Exception: allow SNAPSHOT_BUILDING if assembly has already saved the final data.
+            is_stabilized = (
+                v_status_record == PipelineStatus.FINALIZED or 
+                v_status_record == PipelineStatus.FAILED or
+                (v_status_record == PipelineStatus.SNAPSHOT_BUILDING and 'invoices' in norm)
+            )
             
+            if not is_stabilized:
+                ui_status = 'PROCESSING'
+                # [UI_RENDER_BLOCKED]
+                norm = {"message": "Finalizing assembly...", "_blocked": True}
+                logger.info(f"[UI_RENDER_BLOCKED] record={r.id} status={v_status_record}")
+                # Empty data to prevent partial renders
+                row_data = {
+                    "id": r.id,
+                    "status": "PROCESSING",
+                    "db_status": v_status_record,
+                    "validationStatus": "PROCESSING",
+                    "_blocked": True
+                }
+                data.append(row_data)
+                continue
+            else:
+                # [UI_RENDER_ALLOWED]
+                logger.info(f"[UI_RENDER_ALLOWED] record={r.id} status={v_status_record}")
+                if v_status_record == 'FAILED' or v_status_record == 'OCR_FAILED':
+                    ui_status = 'EXTRACTION_FAILED'
+                elif v_status_record == 'VOUCHER_CREATED' or r.processed is True:
+                    ui_status = 'VOUCHER_CREATED'
+                else:
+                    ui_status = v_status or 'PENDING'
+                
+                # If it's a COMPLETED aggregate record, it should have been exploded already.
+                # The children will have status=EXTRACTED and their own data.
+                pass
+
             sections = norm.get("sections", {})
             supplier = sections.get("supplier_details", {})
-            
+
             # Use derived branch from DB field or extract from norm
             branch = r.branch or supplier.get("branch") or norm.get("branch") or "—"
-            
+
+            # ── PER-ROW STATUS (used by frontend polling stop logic) ──
+            # IMPORTANT: Only return 'SUCCESS' when the record has genuinely completed
+            # async processing (EXTRACTED, VOUCHER_CREATED). FAILED is also terminal.
+            # Do NOT include in-progress states here.
+            row_pipeline_status = 'PROCESSING'
+            if v_status_record in TERMINAL_STATUSES:
+                row_pipeline_status = 'SUCCESS'
+
             row_data = {
                 "id": r.id,
                 "file_hash": r.file_hash,
@@ -230,40 +374,72 @@ class CleanOCRStagingView(views.APIView):
                 "tenant_id": r.tenant_id,
                 # invoice_number is None when strict validation found nothing valid.
                 # Display '—' in UI rather than null/garbage.
-                "invoice_number": r.supplier_invoice_no or norm.get("invoice_number") or norm.get("supplier_invoice_no") or supplier.get("supplier_invoice_no") or "—",
+                "invoice_no": r.supplier_invoice_no or norm.get("invoice_no") or norm.get("invoice_number") or supplier.get("supplier_invoice_no") or "—",
+                "invoice_number": r.supplier_invoice_no or norm.get("invoice_number") or norm.get("invoice_no") or supplier.get("supplier_invoice_no") or "—",
                 "invoice_status": norm.get("invoice_status") or ("MISSING" if not (r.supplier_invoice_no or norm.get("invoice_number")) else "FOUND"),
                 "sales_invoice_no": r.supplier_invoice_no or norm.get("sales_invoice_no") or norm.get("supplier_invoice_no") or "—",
                 "invoice_date": norm.get("invoice_date") or supplier.get("invoice_date") or "—",
                 "total_amount": norm.get("total_invoice_value") or norm.get("total_amount") or "0.00",
                 "branch": branch,
+                "Branch": branch,
                 "vendor_name": supplier.get("vendor_name") or norm.get("vendor_name") or "—",
                 "vendor_gstin": r.gstin or supplier.get("gstin") or norm.get("gstin") or "—",
                 "gstin": r.gstin or supplier.get("gstin") or norm.get("gstin") or "—",
+                "irn": norm.get("irn") or supplier.get("irn") or "—",
+                "ack_no": norm.get("ack_no") or supplier.get("ack_no") or "—",
+                "ack_date": norm.get("ack_date") or supplier.get("ack_date") or "—",
                 "vendor_id": v_id,
-                "status": "SUCCESS" if v_status_record in ["EXTRACTED", "FAILED", "VOUCHER_CREATED"] else "PROCESSING",
+                # status: 'SUCCESS' means this record is done (terminal). 'PROCESSING' means wait.
+                "status": row_pipeline_status,
+                # db_status: raw DB status for debugging in browser devtools
+                "db_status": v_status_record,
                 "validationStatus": ui_status,
                 "validation_status": ui_status,
                 "vendor_status": "EXISTS" if (ui_status in ["FOUND", "READY", "RESOLVED", "VOUCHER_CREATED", "DUPLICATE"] or v_id) else "NEW",
                 "processed": r.processed,
+                "is_primary": r.is_primary,
+                "group_id": r.group_id,
                 "has_source": os.path.exists(os.path.join(settings.MEDIA_ROOT, 'ocr_temp', r.file_hash)) if r.file_hash else False,
                 "extracted_data": {
                     "sections": sections,
-                    "bill_from": norm.get("bill_from") or supplier.get("bill_from") or supplier.get("vendor_address") or norm.get("vendor_address") or "",
-                    "billing_address": supplier.get("billing_address") or norm.get("billing_address") or supplier.get("bill_to") or norm.get("bill_to") or "",
-                    "Bill Address To": supplier.get("billing_address") or norm.get("billing_address") or supplier.get("bill_to") or norm.get("bill_to") or "",
+                    "bill_from": norm.get("bill_address_from") or norm.get("bill_from") or supplier.get("bill_from") or supplier.get("vendor_address") or norm.get("vendor_address") or "",
+                    "bill_address_from": norm.get("bill_address_from") or norm.get("Bill Address From") or "",
+                    "Bill Address From": norm.get("Bill Address From") or norm.get("bill_address_from") or "",
+                    "billing_address": norm.get("bill_address_to") or norm.get("billing_address") or supplier.get("billing_address") or norm.get("billing_address") or supplier.get("bill_to") or norm.get("bill_to") or "",
+                    "bill_address_to": norm.get("bill_address_to") or norm.get("Bill Address To") or "",
+                    "Bill Address To": norm.get("Bill Address To") or norm.get("bill_address_to") or "",
                     "Place of Supply": norm.get("place_of_supply") or supplier.get("place_of_supply") or "",
                     "place_of_supply": norm.get("place_of_supply") or supplier.get("place_of_supply") or "",
+                    "Branch": branch,
+                    "branch": branch,
                     **norm
-                }, 
+                },
                 "created_at": r.created_at,
                 "voucher_type": r.voucher_type
             }
             data.append(row_data)
 
+        # ── PIPELINE-LEVEL STATUS (controls frontend polling) ──
+        # 'completed' → frontend stops polling. Use ONLY when ALL records are terminal.
+        # 'processing' → frontend keeps polling.
+        # A record with FAILED/EXTRACTION_FAILED is terminal — but the pipeline is
+        # only "done" when every single record has exited the async pipeline.
+        all_terminal = records.exists() and all(
+            getattr(r, 'status', None) in TERMINAL_STATUSES for r in records
+        )
+        pipeline_status = 'completed' if all_terminal else 'processing'
+
+        logger.info(
+            f"[STAGING POLL] session={request.query_params.get('upload_session_id')} "
+            f"records={len(data)} terminal={sum(1 for r in records if getattr(r,'status',None) in TERMINAL_STATUSES)} "
+            f"pipeline_status={pipeline_status}"
+        )
+
         return Response({
-            "status": "SUCCESS" if all(getattr(r, 'status', None) in ["EXTRACTED", "FAILED", "VOUCHER_CREATED"] for r in records) else "processing",
+            "status": pipeline_status,
             "data": data
         })
+
 
 class OCRJobStatusView(views.APIView):
     """
@@ -334,7 +510,7 @@ class OCRJobStatusView(views.APIView):
             # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
             normalized_patch = normalize(updated_data)
             record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
-            record.status = 'EXTRACTED'
+            record.status = PipelineStatus.FINALIZED
             record.supplier_invoice_no = (
                 sections.get('supplier_details', {}).get('supplier_invoice_no') or 
                 raw_target.get('supplier_invoice_no')
@@ -638,28 +814,55 @@ class ZohoReconstructView(views.APIView):
             data = {"invoices": data}
 
         # TRACE: Log incoming payload safely
+        # ── PHASE 7: RECONSTRUCT API SAFETY ──
         invoices_in = data.get("invoices", [])
-        if invoices_in and isinstance(invoices_in, list) and len(invoices_in) > 0 and invoices_in[0] and isinstance(invoices_in[0], dict):
-            logger.info(f"TRACE_API_IN: First invoice incoming vendor_address: {invoices_in[0].get('vendor_address')}")
-            logger.info(f"TRACE_API_IN: First invoice incoming bill_from: {invoices_in[0].get('bill_from')}")
+        
+        # ── MANDATORY FIX #2 & #10: RECONSTRUCT MUST USE SNAPSHOT ──
+        session_id = None
+        for inv in invoices_in:
+            rid = inv.get('id')
+            if rid:
+                # ── MANDATORY FIX #11: TYPE SAFETY FOR ID ──
+                record = None
+                if isinstance(rid, int) or (isinstance(rid, str) and rid.isdigit()):
+                    record = InvoiceTempOCR.objects.filter(id=rid).first()
+                
+                if record:
+                    session_id = record.upload_session_id
+                    # [PHASE 7] HARD RECONSTRUCT API BARRIER
+                    if record.status != PipelineStatus.FINALIZED:
+                        logger.warning(f"[RECONSTRUCT_BLOCKED] record={rid} status={record.status}")
+                        return Response({
+                            "status": "PROCESSING",
+                            "message": "Pipeline not finalized. Please wait.",
+                            "current_stage": record.status
+                        }, status=status.HTTP_202_ACCEPTED)
+                else:
+                    # If ID is not a numeric record ID, it might be a UUID from a snapshot.
+                    # We'll try to find the session_id from the first record in the request
+                    # or from the snapshot itself if we can.
+                    pass
+        
+        if session_id:
+            snapshot = FinalizedSnapshot.objects.filter(session_id=session_id).order_by('-created_at').first()
+            if snapshot:
+                logger.info(f"[SNAPSHOT_RECONSTRUCT_REDIRECT] Using snapshot data for session={session_id}")
+                # We return the snapshot data directly as the 'reconstructed' result.
+                # This ensures the UI only ever sees the canonical DTO.
+                return Response({"invoices": snapshot.snapshot_json.get("invoices", [])})
 
+        # If no session or no snapshot but record was terminal (fallback - should be rare)
         try:
             adapter = get_zoho_adapter()
             processed_invoices = adapter.reconstruct_invoices(data)
-            
-            # TRACE: Log outgoing payload safely
-            if processed_invoices and isinstance(processed_invoices, list) and isinstance(processed_invoices[0], dict):
-                logger.info(f"TRACE_API_OUT: First invoice outgoing bill_from: {processed_invoices[0].get('bill_from')}")
-
-            print("FINAL API RESPONSE:", processed_invoices)
-            for inv in processed_invoices:
-                if inv and not inv.get("bill_from"):
-                    print("BROKEN RECORD:", inv)
-                    raise Exception("CRITICAL: bill_from empty or missing")
-
             return Response({"invoices": processed_invoices})
-
 
         except Exception as e:
             logger.error(f"Zoho Reconstruct Failure: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            import traceback
+            logger.error(traceback.format_exc())
+            return Response({
+                "error": str(e),
+                "ready_for_zoho": False,
+                "status": "PARTIAL_ERROR"
+            }, status=status.HTTP_200_OK) # Return 200 to prevent frontend crash

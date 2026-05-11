@@ -2,11 +2,12 @@ from django.db import models
 
 class BulkInvoiceJob(models.Model):
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('success', 'Success'),
-        ('failed', 'Failed'),
-        ('partial', 'Partial Success'),
+        ('PENDING', 'Pending'),
+        ('QUEUED', 'Queued'),
+        ('PROCESSING', 'Processing'),
+        ('FINALIZING', 'Finalizing'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
     ]
     tenant_id = models.CharField(max_length=100)
     upload_session_id = models.CharField(max_length=255, null=True)
@@ -14,8 +15,9 @@ class BulkInvoiceJob(models.Model):
     total_files = models.IntegerField(default=0)
     processed_count = models.IntegerField(default=0)
     failed_count = models.IntegerField(default=0)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     segmentation_done = models.BooleanField(default=False)
+    is_cancelled = models.BooleanField(default=False)
     timeout_rate = models.FloatField(default=0.0)
     success_rate = models.FloatField(default=0.0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -27,18 +29,19 @@ class BulkInvoiceJob(models.Model):
 
 class InvoiceProcessingItem(models.Model):
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('success', 'Success'),
-        ('failed', 'Failed'),
-        ('partial', 'Partial Success'),
-        ('skipped', 'Skipped (blank)'),
+        ('PENDING', 'Pending'),
+        ('QUEUED', 'Queued'),
+        ('PROCESSING', 'Processing'),
+        ('FINALIZING', 'Finalizing'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
+        ('SKIPPED', 'Skipped (blank)'),
     ]
     job = models.ForeignKey(BulkInvoiceJob, on_delete=models.CASCADE, related_name='items')
     tenant_id = models.CharField(max_length=100, db_index=True)
     file_path = models.CharField(max_length=500)
     file_hash = models.CharField(max_length=64, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     retry_count = models.IntegerField(default=0)
     parent_item_id = models.BigIntegerField(null=True)
     page_number = models.IntegerField(default=1)
@@ -72,7 +75,7 @@ class InvoiceOCRTemp(models.Model):
     conflict_message = models.TextField(null=True, blank=True)
     vendor_id = models.BigIntegerField(null=True, blank=True)
     voucher_id = models.BigIntegerField(null=True, blank=True)
-    status = models.CharField(max_length=20, default='PROCESSING')
+    status = models.CharField(max_length=50, default='PROCESSING')
     
     # Persistent Identity & Grouping (Added for stable deduplication)
     group_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
@@ -91,6 +94,7 @@ class InvoiceOCRTemp(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'invoice_ocr_temp'
         unique_together = ('tenant_id', 'file_hash', 'upload_session_id')
         verbose_name = 'Invoice OCR Staging Item'

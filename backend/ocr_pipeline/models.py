@@ -1,5 +1,19 @@
 import uuid
 from django.db import models
+from enum import Enum
+
+class PipelineStatus(models.TextChoices):
+    PENDING = 'PENDING', 'Pending'
+    QUEUED = 'QUEUED', 'Queued'
+    PROCESSING = 'PROCESSING', 'Processing'
+    OCR_PROCESSING = 'OCR_PROCESSING', 'OCR Processing' # Internal stage
+    AI_PROCESSING = 'AI_PROCESSING', 'AI Processing'   # Internal stage
+    FINALIZING = 'FINALIZING', 'Finalizing'
+    SNAPSHOT_BUILDING = 'SNAPSHOT_BUILDING', 'Snapshot Building'
+    COMPLETED = 'COMPLETED', 'Completed'
+    FINALIZED = 'FINALIZED', 'Finalized' # Legacy alias for COMPLETED
+    FAILED = 'FAILED', 'Failed'
+
 
 class OCRJob(models.Model):
     STATUS_CHOICES = [
@@ -78,6 +92,66 @@ class OCRProcessingLock(models.Model):
             models.Index(fields=['file_hash', 'tenant_id']),
         ]
 
+class FinalizedSnapshot(models.Model):
+    """
+    PHASE 4: IMMUTABLE FINAL SNAPSHOT
+    Stores frozen, grouped, and normalized results once the pipeline is terminal.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session_id = models.CharField(max_length=255, db_index=True)
+    tenant_id = models.CharField(max_length=255, db_index=True)
+    job_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    
+    snapshot_json = models.JSONField() # Contains all grouped invoices + items
+    invoice_count = models.IntegerField(default=0)
+    checksum = models.CharField(max_length=64, null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    finalized_at = models.DateTimeField(null=True, blank=True)
+    snapshot_version = models.IntegerField(default=1)
+
+    class Meta:
+        db_table = 'finalized_snapshots'
+        indexes = [
+            models.Index(fields=['session_id', 'tenant_id']),
+        ]
+
+class SessionFinalizationState(models.Model):
+    """
+    MANDATORY FIX #1: Authoritative Completion Tracker.
+    Stores terminal aggregation state persistently.
+    """
+    id = models.CharField(max_length=255, primary_key=True) # Usually record_id or session_id
+    total_pages_expected = models.IntegerField(default=0)
+    total_pages_completed = models.IntegerField(default=0)
+    snapshot_created = models.BooleanField(default=False)
+    finalized_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'session_finalization_states'
+
+class InvoicePageResult(models.Model):
+    """
+    MANDATORY DURABILITY FIX: First-class DB persistence for finalized pages.
+    Ensures canonical page payloads are never lost even if Redis expires.
+    """
+    record_id = models.BigIntegerField(db_index=True)
+    page_number = models.IntegerField()
+    session_id = models.CharField(max_length=255, db_index=True)
+    canonical_payload = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'invoice_page_results'
+        unique_together = ('record_id', 'page_number')
+        indexes = [
+            models.Index(fields=['record_id', 'page_number']),
+            models.Index(fields=['session_id']),
+        ]
+
 class InvoiceTempOCR(models.Model):
     """
     Unified staging table for OCR extraction results.
@@ -95,7 +169,7 @@ class InvoiceTempOCR(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, default='PROCESSING')
+    status = models.CharField(max_length=50, default='PROCESSING')
     processed = models.BooleanField(default=False)
     
     validation_status = models.CharField(max_length=50, default='PENDING')

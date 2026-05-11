@@ -8,6 +8,7 @@ import os
 import time
 import hashlib
 import logging
+import uuid
 
 from django.conf import settings
 from rest_framework.views import APIView
@@ -16,6 +17,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny
 
 from .models import BulkInvoiceJob, InvoiceProcessingItem
+from ocr_pipeline.models import InvoiceTempOCR
 from .pipeline import storage
 from .pipeline.health import SystemHealth, IdempotencyLock, MAX_PAGES_PER_JOB
 from core.redis_client import redis_client
@@ -50,17 +52,37 @@ class BulkUploadAPIView(APIView):
             return self._busy(reason, 'infrastructure')
 
 
-        # ── GATE 3: Branch active job limit ──────────────────────────────────
+        # ── GATE 3: Branch active job limit (Hardened with Redis) ────────────
         max_jobs = getattr(settings, 'BULK_MAX_ACTIVE_JOBS_PER_TENANT', 5)
+        
+        # Redis check first (Fast)
+        redis_concurrency = redis_client.get_tenant_concurrency(tenant_id)
+        if redis_concurrency >= max_jobs:
+            msg = f"Tenant Overloaded: {redis_concurrency}/{max_jobs} active jobs in Redis. Please wait."
+            logger.warning(f"[UPLOAD] REDIS TENANT LIMIT for {tenant_id}: {redis_concurrency} active")
+            return self._busy(msg, 'tenant_limit')
+
+        # DB fallback (Consistency)
         active = BulkInvoiceJob.objects.filter(
             tenant_id=tenant_id, status__in=['pending', 'processing']
         ).count()
         if active >= max_jobs:
             msg = f"Too many active jobs ({active}/{max_jobs}). Wait for current batch to complete."
-            logger.warning(f"[UPLOAD] TENANT LIMIT for {tenant_id}: {active} active")
+            logger.warning(f"[UPLOAD] DB TENANT LIMIT for {tenant_id}: {active} active")
             return self._busy(msg, 'tenant_limit')
+        
+        # Pre-increment Redis counter to block race conditions
+        redis_client.incr_tenant_concurrency(tenant_id)
 
-        # ── GATE 4: Batch idempotency (Streaming SHA256) ──────────────────
+        # ── GATE 4: File size admission control (Requirement #2) ──────────────
+        MAX_FILE_SIZE_MB = getattr(settings, 'MAX_FILE_SIZE_MB', 50)
+        for f in files:
+            if f.size > MAX_FILE_SIZE_MB * 1024 * 1024:
+                msg = f"File {f.name} is too large ({f.size / (1024*1024):.1f}MB). Max allowed: {MAX_FILE_SIZE_MB}MB"
+                logger.warning(f"[UPLOAD] REJECTED: {msg}")
+                return Response({'error': msg}, status=413)
+
+        # ── GATE 5: Batch idempotency (Streaming SHA256) ──────────────────
         all_file_hashes = []
         for f in files:
             sha256 = hashlib.sha256()
@@ -98,19 +120,24 @@ class BulkUploadAPIView(APIView):
         ).first()
         
         if existing:
+            # ── FIX 6: HARDENED IDEMPOTENCY ──
+            # If job exists but is stuck, or if it was recently created by another thread
             logger.info(f"[IDEMPOTENCY] In-progress → Job {existing.id}")
             if new_session:
                 existing.upload_session_id = new_session
-                existing.save()
+                existing.save(update_fields=['upload_session_id'])
                    
-            if existing.status == 'pending':
-                # Re-trigger enqueuing if stuck in pending
-                logger.info(f"Re-enqueuing pending job {existing.id}")
+            if existing.status in ['pending', 'processing']:
+                # Re-trigger enqueuing if stuck (Safety)
+                logger.info(f"Re-enqueuing job {existing.id} (Status: {existing.status})")
                 self._enqueue_to_redis(existing, request.data.get('voucher_type', 'Purchase'), tenant_id)
-
             
-            return Response({'status': 'already_processing', 'job_id': existing.id,
-                             'total_files': existing.total_files})
+            return Response({
+                'status': 'already_processing', 
+                'job_id': existing.id,
+                'total_files': existing.total_files,
+                'message': 'Job already in progress. Polling resumed.'
+            })
 
         # ── GATE 5: Distributed lock (race condition) ─────────────────────────
         if not lock.acquire():
@@ -130,6 +157,7 @@ class BulkUploadAPIView(APIView):
             return Response({'error': 'Internal error. Please retry.'}, status=500)
 
     def _create_and_enqueue(self, request, tenant_id, files, fingerprint, lock):
+        voucher_type = request.data.get('voucher_type', 'Purchase')
         # ── GATE 6: Large job protection ─────────────────────────────────────
         if len(files) > MAX_PAGES_PER_JOB:
             logger.warning(f"[UPLOAD] Large batch ({len(files)} files > {MAX_PAGES_PER_JOB}). "
@@ -160,6 +188,10 @@ class BulkUploadAPIView(APIView):
                 for chunk in f.chunks():
                     destination.write(chunk)
             
+            # ── FIX 7: IMMEDIATE STAGING RECORDS (Race Condition Fix) ──
+            # Create InvoiceTempOCR records IMMEDIATELY so the frontend sees them
+            # during the first poll, even if workers haven't started.
+            
             # Pre-register item as 'pending_ingestion'
             item = InvoiceProcessingItem.objects.create(
                 job=job,
@@ -168,13 +200,33 @@ class BulkUploadAPIView(APIView):
                 status='pending',
                 page_count=1
             )
-            file_info.append({'id': item.id, 'temp_path': t_path, 'original_name': f.name})
+            
+            # ── [CRITICAL] Create Staging Record ──
+            staging_record = InvoiceTempOCR.objects.create(
+                tenant_id=tenant_id,
+                upload_session_id=job.upload_session_id,
+                file_path=f.name,
+                file_hash=f"PENDING_{item.id}_{int(time.time())}", # Temporary hash until IngestionWorker finishes
+                status='UPLOADING',
+                voucher_type=voucher_type
+            )
+            
+            file_info.append({
+                'id': item.id, 
+                'staging_record_id': staging_record.id,
+                'temp_path': t_path, 
+                'original_name': f.name
+            })
+
+        # ── [FORENSIC] CORRELATION ID ──
+        correlation_id = request.headers.get('X-Correlation-ID', f"cid_{uuid.uuid4().hex[:8]}")
+        logger.info(f"[UPLOAD] CID: {correlation_id} | Job: {job.id}")
 
         # ── PUSH TO INGESTION QUEUE ──
-        voucher_type = request.data.get('voucher_type', 'Purchase')
         task = {
             'id': f"ingest_{job.id}",
             'job_id': job.id,
+            'correlation_id': correlation_id,
             'tenant_id': tenant_id,
             'voucher_type': voucher_type,
             'file_info': file_info,
@@ -182,6 +234,8 @@ class BulkUploadAPIView(APIView):
             'enqueued_at': time.time()
         }
         
+        # ── [FORENSIC] ENQUEUE LOGGING ──
+        logger.info(f"[QUEUE_ENQUEUE_TARGET] job_id={job.id} queue='ingestion_queue' task_id=ingest_{job.id}")
         pushed = redis_client.push_to_queue('ingestion_queue', task)
         if not pushed:
             logger.error("[REDIS ERROR] Ingestion push failed for Job %s", job.id)
@@ -208,22 +262,45 @@ class BulkUploadAPIView(APIView):
              logger.critical(f"[ADMISSION CONTROL] Rejecting Job {job.id}. Total queue length {q_len}")
              return Response({'error': 'System is busy (Admission Control). Please try again later.'}, status=503)
 
-        # ── PRIORITY ROUTING ──
-        # High: 1-3 pages, Normal: 4-15 pages, Low: 16+ pages
-        file_count = job.total_files
-        if file_count <= 3:
-            p_queue = 'bulk_jobs_high'
-        elif file_count <= 15:
-            p_queue = 'bulk_jobs_normal'
-        else:
-            p_queue = 'bulk_jobs_low'
+        # ── PRIORITY ROUTING (RESTORED TO UNIFIED PIPELINE) ──
+        # Stabilization Phase: Use ingestion_queue for all jobs to ensure worker connectivity.
+        p_queue = 'ingestion_queue'
+
+        # Reconstruct file_info from DB items
+        file_info = []
+        # Only re-enqueue items that haven't succeeded yet
+        for item in job.items.exclude(status='success'):
+            # ── [RECONSTRUCT_METADATA] ──
+            # Filename heuristic: if it's a storage key (uuid---name), extract name
+            original_filename = os.path.basename(item.file_path)
+            if '---' in original_filename:
+                original_filename = original_filename.split('---', 1)[1]
+            
+            # Find the corresponding staging record
+            from ocr_pipeline.models import InvoiceTempOCR
+            staging = InvoiceTempOCR.objects.filter(
+                tenant_id=tenant_id, 
+                upload_session_id=job.upload_session_id,
+                file_path__icontains=original_filename
+            ).first()
+            
+            # Absolute path in temp_ingestion
+            abs_temp_path = os.path.join(settings.MEDIA_ROOT, 'temp_ingestion', str(job.id), original_filename)
+            
+            file_info.append({
+                'id': item.id,
+                'staging_record_id': staging.id if staging else None,
+                'temp_path': abs_temp_path,
+                'original_name': original_filename
+            })
 
         task = {
             'id': f"bulk_{job.id}",
             'job_id': job.id,
             'voucher_type': voucher_type,
             'tenant_id': tenant_id,
-            'file_count': file_count,
+            'file_count': len(file_info),
+            'file_info': file_info,
             'enqueued_at': time.time(),
             'upload_session_id': job.upload_session_id
         }
@@ -239,6 +316,8 @@ class BulkUploadAPIView(APIView):
         
         logger.info(f"[UPLOAD] Consumer health OK for Job {job.id}.")
 
+        # ── [FORENSIC] ENQUEUE LOGGING ──
+        logger.info(f"[QUEUE_ENQUEUE_TARGET] job_id={job.id} queue='{p_queue}' task_id=bulk_{job.id}")
         pushed = redis_client.push_to_queue(p_queue, task)
         if not pushed:
             logger.error("[REDIS ERROR] Push failed for Job %s", job.id)
@@ -250,7 +329,7 @@ class BulkUploadAPIView(APIView):
         return Response({
             'status':   'processing',
             'job_id':   job.id,
-            'total_files': file_count,
+            'total_files': job.items.count(),
             'file_paths': paths or []
         })
 
@@ -291,21 +370,71 @@ class HealthCheckAPIView(APIView):
 class BulkStatusAPIView(APIView):
     permission_classes = [AllowAny]
     def get(self, request, job_id, *args, **kwargs):
+        # ── [PHASE 1D] REDIS-FIRST POLLING ──
+        if redis_client.available:
+            try:
+                cached = redis_client.get_client().hgetall(f"job:progress:{job_id}")
+                if cached:
+                    # Convert byte keys to strings if necessary
+                    data = {k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v 
+                           for k, v in cached.items()}
+                    
+                    logger.info(f"[REDIS_STATUS_HIT] job={job_id} progress={data.get('progress')}%")
+                    
+                    return Response({
+                        'status':    data.get('status'),
+                        'progress':  int(data.get('progress', 0)),
+                        'total':     int(data.get('total', 0)),
+                        'processed': int(data.get('processed', 0)),
+                        'failed':    int(data.get('failed', 0)),
+                        'pending':   int(data.get('pending', 0)),
+                        'completed': data.get('status') in ['completed', 'failed', 'success', 'partial']
+                    })
+            except Exception as re:
+                logger.warning(f"[REDIS_STATUS_FAIL] job={job_id}: {re}")
+
+        # Fallback to DB
         try:
-            job     = BulkInvoiceJob.objects.get(id=job_id)
-            masters = job.items.filter(parent_item_id=None)
-            total   = masters.count() or job.total_files
-            success = masters.filter(status__in=['success', 'partial']).count()
-            failed  = masters.filter(status='failed').count()
-            pending = masters.filter(status__in=['pending', 'processing']).count()
+            job = BulkInvoiceJob.objects.get(id=job_id)
+            # ... (rest of the existing logic)
+            all_items = job.items.all()
+            total = all_items.count() or job.total_files
+            
+            # Sub-counts for granular progress (Requirement #2)
+            success = all_items.filter(status__in=['success', 'partial']).count()
+            failed = all_items.filter(status='failed').count()
+            processing = all_items.filter(status='processing').count()
+            pending = all_items.filter(status='pending').count()
+
+            # [FORENSIC] Deep state audit
+            logger.info(
+                f"[PROGRESS_AUDIT] job={job_id} status={job.status} total={total} "
+                f"S={success} F={failed} P={processing} Pend={pending}"
+            )
 
             if job.status == 'completed' and job.file_hash:
                 IdempotencyLock(job.file_hash).mark_done(job.id)
 
-            # Optimization: Calculate progress
+            # Optimization: Calculate progress (Phase 6 Fix)
+            # We use all items to ensure split multi-page PDFs advance the bar
             progress = 0
             if total > 0:
-                progress = int((success + failed) / total * 100)
+                # Terminal: success, failed
+                # Active: processing, pending
+                weighted_processed = success + failed + (processing * 0.6) + (pending * 0.1)
+                progress = int(min(weighted_processed / total * 100, 99))
+
+            # ── DEFENSIVE COMPLETION CHECK ──
+            # If all items are terminal but job is stuck in 'processing', auto-repair it.
+            is_completed = job.status in ['completed', 'failed', 'success']
+            terminal_count = success + failed
+            
+            if not is_completed and total > 0 and terminal_count >= total:
+                logger.warning(f"[STUCK_JOB_RECOVERY] Job {job_id} was '{job.status}' but all {total} items terminal. Auto-completing.")
+                job.status = 'completed'
+                job.save(update_fields=['status'])
+                is_completed = True
+                progress = 100
 
             return Response({
                 'status':    job.status,
@@ -314,7 +443,7 @@ class BulkStatusAPIView(APIView):
                 'processed': success,
                 'failed':    failed,
                 'pending':   pending,
-                'completed': job.status in ['completed', 'failed', 'success']
+                'completed': is_completed
             })
 
         except BulkInvoiceJob.DoesNotExist:

@@ -232,9 +232,9 @@ class AIRequestQueue:
         self._local_worker_started = False
 
     def enqueue(self, request_data: dict) -> dict:
-        # Check Redis Health
-        if not redis_client.available:
-            logger.error("[REDIS DOWN] Cannot enqueue AI task. Redis unavailable.")
+        # PID-safe availability check — triggers lazy init in spawned subprocesses
+        if not redis_client.is_healthy():
+            logger.error("[REDIS DOWN] Cannot enqueue AI task. Redis unavailable (PID=%s).", os.getpid())
             return {'error': 'AI System Unavailable (Redis Down)', 'code': 'REDIS_DOWN', 'status': 503}
 
         # Backpressure control (Admission Control)
@@ -250,6 +250,18 @@ class AIRequestQueue:
                 'status': 503
             }
 
+        # ── [OPERATIONAL HARDENING] TENANT-LEVEL BACKPRESSURE ──
+        tenant_id = request_data.get('tenant_id', 'anonymous')
+        MAX_TENANT_TASKS = 100 # Adjust based on node capacity
+        t_tasks = redis_client.get_tenant_concurrency(tenant_id)
+        if t_tasks > MAX_TENANT_TASKS:
+            logger.warning(f"[TENANT_BACKPRESSURE] Tenant {tenant_id} reached limit {MAX_TENANT_TASKS}. Rejecting.")
+            return {
+                'error': f'Tenant Task Limit Reached ({MAX_TENANT_TASKS}). Please wait for current tasks to finish.',
+                'code': 'TENANT_BACKPRESSURE',
+                'status': 429
+            }
+
         request_id = hashlib.md5(f"{time.time()}:{json.dumps(request_data)}".encode()).hexdigest()
         
         task = {
@@ -259,6 +271,8 @@ class AIRequestQueue:
             'enqueued_at': time.time()
         }
         
+        # ── [FORENSIC] ENQUEUE LOGGING ──
+        logger.info(f"[QUEUE_ENQUEUE_TARGET] job_id='{request_id}' queue='{self.queue_name}' task_id='{request_id}'")
         pushed = redis_client.push_to_queue(self.queue_name, task)
         if not pushed:
             logger.error("[REDIS ERROR] Failed to push task to queue.")
@@ -864,24 +878,14 @@ class AIServiceProxy:
             'cache_key': cache_key,
             'metadata': metadata or {}
         })
-
-        # ── CENTRALIZED QUEUEING (NO BYPASS) ──────────────────────────
-        # All requests must flow through the central AI Request Queue to ensure
-        # adaptive throttling, concurrency control, and fair use.
+        
+        wait_for_result = request_data.get('wait_for_result', False)
+        # ── ASYNC QUEUE PATH (MANDATORY) ──────────────────────────────────
+        # ALL AI extraction MUST go through queue workers to ensure
+        # scalability and isolation. Never execute AI inline in request threads.
         try:
-            logger.info(f"Enqueuing {request_type} request for user {user_id}")
-            result = ai_request_queue.enqueue(full_request)
-            
-            # If caller is a worker or needs the result immediately, poll for it.
-            if request_data.get('wait_for_result'):
-                job_id = result.get('job_id')
-                if not job_id:
-                    return result
-                
-                logger.info(f"Worker waiting for AI result: {job_id}")
-                return self._wait_for_completion(job_id)
-
-            return result
+            logger.info(f"Enqueuing {request_type} request for user {user_id} (wait_for_result={wait_for_result})")
+            return ai_request_queue.enqueue(full_request)
         except Exception as e:
             logger.error(f"Queue submission failed: {e}")
             return {'error': f'Service busy (Queue error): {str(e)}'}

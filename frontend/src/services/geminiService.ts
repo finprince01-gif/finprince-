@@ -246,8 +246,9 @@ export const getGroundedAgentResponse = async (
  * Poll for AI task status until completed or timed out
  */
 const pollAiTaskStatus = async (jobId: string): Promise<{ reply: string }> => {
-    const maxAttempts = 120; // 1 minute at 500ms intervals
+    const maxAttempts = 20; 
     let attempts = 0;
+    let delay = 1000; // Start with 1s
 
     while (attempts < maxAttempts) {
         try {
@@ -255,16 +256,15 @@ const pollAiTaskStatus = async (jobId: string): Promise<{ reply: string }> => {
             if (response.reply) {
                 return { reply: response.reply };
             }
-            // If status is 202 (processing), it will fall through to wait
         } catch (error: any) {
-            // Check if it's still processing (202)
             if (error.status !== 202) {
                 throw error;
             }
         }
         
         attempts++;
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, delay));
+        delay = Math.min(delay * 1.5, 10000); // Exponential backoff up to 10s
     }
     
     throw new Error("AI request timed out. Please try again.");

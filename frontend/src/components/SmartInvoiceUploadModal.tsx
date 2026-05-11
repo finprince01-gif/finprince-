@@ -22,7 +22,7 @@ import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherS
 
 // VendorStatus: Frontend display states + backend canonical values (EXISTS/NEW)
 type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR' | 'EXISTS' | 'NEW' | 'MATCHED' | 'CREATE_VENDOR';
-type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE' | 'DUPLICATE_IN_BATCH' | 'SUCCESS' | 'FAILED' | 'NEED_VENDOR' | 'INCOMPLETE' | 'EXTRACTING' | 'SCANNING';
+type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE' | 'DUPLICATE_IN_BATCH' | 'SUCCESS' | 'FAILED' | 'NEED_VENDOR' | 'INCOMPLETE' | 'EXTRACTING' | 'SCANNING' | 'PROCESSING';
 
 interface ScanResult {
     id: string;
@@ -97,23 +97,23 @@ const getCellValue = (data: any, col: string): string => {
 
     // 3. Robust aliasing
     const ALIASES: Record<string, string[]> = {
-        'invoice_date': ['Date', 'Voucher Date', 'Inv Date', 'Bill Date', 'Reference Date'],
-        'invoice_no': ['Supplier Invoice No.', 'Supplier Invoice No', 'Voucher Number', 'Reference No', 'Inv No', 'Bill No'],
+        'invoice_date': ['Date', 'Voucher Date', 'Inv Date', 'Bill Date', 'Reference Date', 'invoice_date'],
+        'invoice_no': ['Supplier Invoice No.', 'Supplier Invoice No', 'Voucher Number', 'Reference No', 'Inv No', 'Bill No', 'invoice_no', 'invoice_number'],
         'reference_no': ['Reference No.', 'Reference', 'Ref No', 'Supplier Invoice No.'],
-        'vendor_name': ['Vendor Name', 'Supplier Name', 'Party Name', 'Party', 'Customer Name', 'Buyer/Supplier - Mailing Name', 'Bill From'],
-        'vendor_address': ['Vendor Address', 'Address', 'Supplier Address', 'Bill From', 'Buyer/Supplier - Address', 'Buyer/Supplier - Bill to/from', 'Bill From Address', 'Ship From Address', 'Consignee Address'],
-        'bill_from': ['Bill From Address', 'Bill From', 'Office Address', 'Dispatch from Name'],
+        'vendor_name': ['Vendor Name', 'Supplier Name', 'Party Name', 'Party', 'Customer Name', 'Buyer/Supplier - Mailing Name', 'Bill From', 'vendor_name'],
+        'vendor_address': ['Vendor Address', 'Address', 'Supplier Address', 'Bill From', 'Buyer/Supplier - Address', 'Buyer/Supplier - Bill to/from', 'Bill From Address', 'Ship From Address', 'Consignee Address', 'vendor_address'],
+        'bill_from': ['Bill From Address', 'Bill From', 'bill_address_from', 'Office Address', 'Dispatch from Name', 'bill_from'],
         'ship_from': ['Ship From Address', 'Ship From', 'Dispatch From Address'],
-        'vendor_gstin': ['GSTIN', 'Supplier GSTIN', 'Party GSTIN', 'Buyer/Supplier - GSTIN/UIN'],
+        'vendor_gstin': ['GSTIN', 'Supplier GSTIN', 'Party GSTIN', 'Buyer/Supplier - GSTIN/UIN', 'gstin', 'vendor_gstin'],
         'voucher_type': ['Voucher Type Name', 'Transaction Type', 'Voucher Type'],
         'voucher_series': ['Voucher Number Series Name', 'Voucher Series'],
         'narration': ['Voucher Narration', 'Narration', 'Remarks', 'Notes'],
-        'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type'],
-        'total_cgst': ['Total CGST', 'CGST', 'Central Tax', 'CGST Amount'],
-        'total_sgst': ['Total SGST', 'SGST', 'SGST/UTGST', 'State Tax', 'SGST Amount', 'Total SGST/UTGST'],
-        'total_igst': ['Total IGST', 'IGST', 'Integrated Tax', 'IGST Amount'],
-        'taxable_value': ['Taxable Value', 'Assessable Value', 'Taxable Amount'],
-        'total_amount': ['Total Invoice Value', 'Grand Total', 'Amount', 'Invoice Value', 'Item Amount', 'Ledger Amount'],
+        'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type', 'place_of_supply'],
+        'total_cgst': ['Total CGST', 'CGST', 'Central Tax', 'CGST Amount', 'cgst'],
+        'total_sgst': ['Total SGST', 'SGST', 'SGST/UTGST', 'State Tax', 'SGST Amount', 'Total SGST/UTGST', 'sgst'],
+        'total_igst': ['Total IGST', 'IGST', 'Integrated Tax', 'IGST Amount', 'igst'],
+        'taxable_value': ['Taxable Value', 'Assessable Value', 'Taxable Amount', 'taxable_value'],
+        'total_amount': ['Total Invoice Value', 'invoice_total', 'Grand Total', 'Amount', 'Invoice Value', 'Item Amount', 'Ledger Amount', 'total_amount', 'invoice_total'],
         'ledger_name': ['Ledger Name', 'Account Name', 'Particulars'],
     };
 
@@ -198,9 +198,9 @@ const ReviewDetailsPanel: React.FC<{ row: ScanResult; onClose: () => void }> = (
                                 {items.map((it: any, i: number) => (
                                     <tr key={i}>
                                         <td className="px-2 py-2 font-medium text-gray-700 leading-tight">{it['description'] || it['Item Name'] || it['Description'] || 'Unknown Item'}</td>
-                                        <td className="px-2 py-2 text-right text-gray-600">{it['quantity'] || it['Qty'] || it['Quantity']}</td>
+                                        <td className="px-2 py-2 text-right text-gray-600">{it['qty'] || it['quantity'] || it['Qty'] || it['Quantity']}</td>
                                         <td className="px-2 py-2 text-right text-gray-600">{it['rate'] || it['Item Rate'] || it['Rate']}</td>
-                                        <td className="px-2 py-2 text-right font-bold text-gray-800">{it['amount'] || it['Invoice Value'] || it['Amount'] || it['Item Amount']}</td>
+                                        <td className="px-2 py-2 text-right font-bold text-gray-800">{it['total_amount'] || it['amount'] || it['Invoice Value'] || it['Amount'] || it['Item Amount']}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -281,7 +281,7 @@ const normalizeVoucherField = (k: string, voucherType: string) => {
     } else {
         // Default to Purchase terminology for Purchase, Expenses, etc.
         if (nk === 'supplied_invoice_no' || nk === 'supplier_inv_no' || nk === 'invoice_no' || nk === 'invoice_number' || nk === 'supplier_invoice_no') {
-            return 'supplier_invoice_no';
+            return 'invoice_no';
         }
         if (nk === 'vendor' || nk === 'supplier_name' || nk === 'party_name' || nk === 'vendor_name') {
             return 'vendor_name';
@@ -289,13 +289,19 @@ const normalizeVoucherField = (k: string, voucherType: string) => {
         if (nk === 'order_no' || nk === 'purchase_order_no') {
             return 'purchase_order_no';
         }
+        if (nk === 'bill_from' || nk === 'bill_address_from' || nk === 'bill_from_address') {
+            return 'bill_address_from';
+        }
+        if (nk === 'bill_to' || nk === 'bill_address_to' || nk === 'bill_to_address') {
+            return 'bill_address_to';
+        }
     }
 
     if (nk === 'date' || nk === 'inv_date' || nk === 'voucher_date') {
         return 'invoice_date';
     }
-    if (nk === 'invoice_value' || nk === 'grand_total' || nk === 'total_amount') {
-        return 'total_invoice_value';
+    if (nk === 'invoice_value' || nk === 'grand_total' || nk === 'total_amount' || nk === 'invoice_total') {
+        return 'invoice_total';
     }
     if (nk === 'taxable_value' || nk === 'assessable_value') {
         return 'total_taxable_value';
@@ -329,10 +335,10 @@ const EditInvoiceModal: React.FC<{
                     httpClient.get(`/api/voucher-schema/?type=${voucherType}`),
                     httpClient.get(`/api/ocr-staging/${row.id}/`)
                 ]);
-                
+
                 const fetchedSchema = schemaRes as VoucherSchema;
                 const dbRow = (rowRes?.data && rowRes.data[0]) || null;
-                
+
                 if (!dbRow) throw new Error("Record not found in DB.");
 
                 console.log("SCHEMA:", fetchedSchema);
@@ -341,34 +347,34 @@ const EditInvoiceModal: React.FC<{
                 setDynamicSchema(fetchedSchema);
 
                 const raw = JSON.parse(JSON.stringify(dbRow.extracted_data || {}));
-                
+
                 // ── INITIALIZATION (Strictly Schema Driven + Section Based) ──
                 const normalizedSections: any = {};
                 Object.entries(fetchedSchema.sections || {}).forEach(([sectionName, fields]: any) => {
                     if (sectionName === 'items') {
-                         const itmsRaw = raw.sections?.items || raw.items || raw.line_items || [];
-                         normalizedSections['items'] = (itmsRaw.length > 0 ? itmsRaw : [{}]).map((item: any) => {
-                             const normalizedItem: any = {};
-                             fields.forEach((f: any) => {
-                                 const val = item[f.name] || item[f.label] || getCellValue(item, f.label);
-                                 normalizedItem[f.name] = (val === '—') ? "" : val;
-                             });
-                             return normalizedItem;
-                         });
+                        const itmsRaw = raw.sections?.items || raw.items || raw.line_items || [];
+                        normalizedSections['items'] = (itmsRaw.length > 0 ? itmsRaw : [{}]).map((item: any) => {
+                            const normalizedItem: any = {};
+                            fields.forEach((f: any) => {
+                                const val = item[f.name] || item[f.label] || getCellValue(item, f.label);
+                                normalizedItem[f.name] = (val === '—') ? "" : val;
+                            });
+                            return normalizedItem;
+                        });
                     } else {
-                         // Find raw data for this section
-                         const secRaw = raw.sections?.[sectionName] || raw[sectionName] || raw.invoice || raw.header || raw || {};
-                         const normalizedSection: any = {};
-                         fields.forEach((f: any) => {
-                             const val = secRaw[f.name] || secRaw[f.label] || getCellValue(secRaw, f.label);
-                             normalizedSection[f.name] = (val === '—') ? "" : val;
-                         });
-                         normalizedSections[sectionName] = normalizedSection;
+                        // Find raw data for this section
+                        const secRaw = raw.sections?.[sectionName] || raw[sectionName] || raw.invoice || raw.header || raw || {};
+                        const normalizedSection: any = {};
+                        fields.forEach((f: any) => {
+                            const val = secRaw[f.name] || secRaw[f.label] || getCellValue(secRaw, f.label);
+                            normalizedSection[f.name] = (val === '—') ? "" : val;
+                        });
+                        normalizedSections[sectionName] = normalizedSection;
                     }
                 });
 
-                setData({ 
-                    ...raw, 
+                setData({
+                    ...raw,
                     sections: normalizedSections
                 });
             } catch (err) {
@@ -430,12 +436,12 @@ const EditInvoiceModal: React.FC<{
             // STEP 2: Enforce Schema-Driven Flow (Save full sections)
             const result: any = await httpClient.patch(
                 `/api/ocr-staging/${row.file_hash}/`,
-                { 
+                {
                     extracted_data: data,
                     voucher_type: voucherType.toUpperCase()
                 }
             );
-            
+
             onSave(result.extracted_data || data, {
                 status: result.status || 'missing',
                 vendor_id: result.vendor_id ?? null,
@@ -515,10 +521,10 @@ const EditInvoiceModal: React.FC<{
                         </div>
                         <button
                             onClick={() => {
-                                onSave(data, { 
-                                    status: 'VENDOR_MISSING', 
-                                    vendor_id: null, 
-                                    vendor_name: sections.supplier_details?.vendor_name || row.vendor_name 
+                                onSave(data, {
+                                    status: 'VENDOR_MISSING',
+                                    vendor_id: null,
+                                    vendor_name: sections.supplier_details?.vendor_name || row.vendor_name
                                 });
                                 onClose();
                                 setTimeout(() => window.dispatchEvent(new CustomEvent('re-open-create-vendor', { detail: row.file_hash })), 100);
@@ -557,7 +563,7 @@ const EditInvoiceModal: React.FC<{
                                             const nk = field.name;
                                             const kLabel = field.label;
                                             const isMandatory = field.mandatory;
-                                            
+
                                             let v = sectionData[nk];
                                             let displayVal = "";
                                             if (v !== null && v !== undefined) {
@@ -681,6 +687,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const pollingIntervalRef2 = useRef<NodeJS.Timeout | null>(null); // setInterval handle
     const retryCountRef = useRef(0); // Mirror retryCount in a ref for non-stale access in interval
+    const stalledAt100Ref = useRef<number | null>(null);
 
     useEffect(() => {
         isMounted.current = true;
@@ -711,23 +718,23 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const [editingRow, setEditingRow] = useState<ScanResult | null>(null);
     const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
 
-    
-    
-    
+
+
+
     // ─────────────────────────────────────────────────────────────────────────────
     // ULTIMATE MERGE LOGIC: Grouping by normalized Invoice No + GSTIN
     // ─────────────────────────────────────────────────────────────────────────────
     const mergedResults = React.useMemo(() => {
         if (!scanResults || !scanResults.length) return [];
-        
+
         const groups: Record<string, ScanResult[]> = {};
         const normalize = (s: any) => String(s || '').replace(/[^A-Z0-9]/g, '').trim().toUpperCase();
-        
+
         // Month-Aware Date Fingerprint (handles 'Sep', 'Sept', '09', etc.)
         const dateFingerprint = (d: any) => {
             let s = String(d || '').toLowerCase().trim();
             if (!s || s === '—') return "";
-            const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+            const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
             months.forEach((m, i) => {
                 // Handle both 'sept' and 'sep' for September
                 const monthNum = String(i + 1).padStart(2, '0');
@@ -758,13 +765,15 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             }
             else if (group_id) {
                 key = `GID_${group_id}`;
-            } 
+            }
             else if (invNo && (gstin || normalize(r.vendor_name))) {
                 key = `M2V_${invNo}_${gstin || normalize(r.vendor_name)}`;
-            } 
+            }
             else {
                 key = `UNGROUPED_${r.file_hash || r.id}`;
             }
+
+            console.log(`[FRONTEND GROUP] record=${r.id} hash=${r.file_hash?.substring(0, 8)}... key=${key} invNo='${invNo}' gstin=${gstin} dateFingerprint='${date}'`);
 
             if (!groups[key]) groups[key] = [];
             groups[key].push(r);
@@ -772,7 +781,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
         const final = Object.values(groups).map(group => {
             if (group.length === 1) return { ...group[0], _isMerged: false, _mergedCount: 1, _allHashes: [group[0].file_hash] };
-            
+
             // SORT: Put rows with more data/vendor_id at the top
             const sorted = [...group].sort((a, b) => {
                 if (a.vendor_id && !b.vendor_id) return -1;
@@ -781,7 +790,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 const bAmt = parseFloat(String(getCellValue(b, 'total_amount') || b.total_amount).replace(/[₹,]/g, '') || '0');
                 return bAmt - aAmt;
             });
-            
+
             const primary = { ...sorted[0] };
             const finalMergedCount = group.length;
 
@@ -814,7 +823,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 }
             };
         });
-        
+
         console.log("MERGED RESULTS COUNT:", final.length, "FROM RAW:", scanResults.length);
         return final;
     }, [scanResults, pollingIntervalRef2.current]); // Added a few more deps to ensure refresh
@@ -829,8 +838,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // ── Resume Workflow State ──
     const [isCheckingUnresolved, setIsCheckingUnresolved] = useState(true);
-    const [unresolvedCount, setUnresolvedCount] = useState(0); 
-    const [needsVendorCount, setNeedsVendorCount] = useState(0); 
+    const [unresolvedCount, setUnresolvedCount] = useState(0);
+    const [needsVendorCount, setNeedsVendorCount] = useState(0);
     const [readyToFinalizeCount, setReadyToFinalizeCount] = useState(0);
     const [showResumePrompt, setShowResumePrompt] = useState(false);
     const [useAllUnresolved, setUseAllUnresolved] = useState(false);
@@ -857,13 +866,13 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             const rows = (res && Array.isArray(res.data)) ? res.data : (Array.isArray(res) ? res : []);
 
             if (rows.length > 0) {
-                const vendorNeededCount = rows.filter((r: any) => 
+                const vendorNeededCount = rows.filter((r: any) =>
                     !r.processed && (
                         r.validation_status === 'NEED_VENDOR' ||
                         r.validation_status === 'VENDOR_MISSING' ||
                         r.validation_status === 'NOT_FOUND' ||
                         (r.vendor_status === 'CREATE_VENDOR') ||
-                        (!r.vendor_id && !['READY','FOUND','RESOLVED','SUCCESS','DUPLICATE','VOUCHER_CREATED'].includes(r.validation_status))
+                        (!r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'DUPLICATE', 'VOUCHER_CREATED'].includes(r.validation_status))
                     )
                 ).length;
 
@@ -1022,7 +1031,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             }
             console.log("Calling OCR Staging API:", url);
             const res: any = await httpClient.get(url);
-            
+
             if (!isMounted.current) return true;
             setIsLoading(false);
             setFetchError(null);
@@ -1035,9 +1044,66 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 // Legacy plain-array response (backward compat)
                 rows = res;
                 pipelineStatus = rows.every(r => !['PENDING', 'processing'].includes(r.validation_status || '')) ? 'completed' : 'processing';
-            } else if (res && Array.isArray(res.data)) {
-                rows = res.data;
+            } else if (res && res.status === 'FINALIZED') {
+                console.log(`[FRONTEND_RAW_RESPONSE] status=FINALIZED session=${session_id} invoices=${res.invoices?.length || 0}`);
+                console.log('✅ SNAPSHOT RECEIVED — HALTING POLL.');
+                const snapshotInvoices = (res.invoices || []).map((inv: any, idx: number) => {
+                    console.log(`[FRONTEND_TRANSFORM_INPUT] index=${idx} keys=${Object.keys(inv).join(',')}`);
+                    const result = {
+                        id: `snap_${idx}_${inv.invoice_no}`,
+                        file_hash: res.snapshot_id || `snap_${session_id}`,
+                        file_path: inv.file_path || 'Finalized Result',
+                        invoice_number: inv.invoice_no,
+                        invoice_date: inv.invoice_date,
+                        vendor_name: inv.vendor_name,
+                        vendor_gstin: inv.gstin,
+                        branch: inv.branch || '—',
+                        total_amount: String(inv.invoice_total),
+                        extracted_data: inv,
+                        validationStatus: 'READY' as const,
+                        processed: false,
+                        _isSnapshot: true,
+                        _isMerged: false,
+                        _mergedCount: 1,
+                        // Map extra fields for UI consistency
+                        total_taxable_value: String(inv.taxable_value || '0.00'),
+                        total_igst: String(inv.igst || '0.00'),
+                        total_cgst: String(inv.cgst || '0.00'),
+                        total_sgst: String(inv.sgst || '0.00')
+                    };
+                    console.log(`[FRONTEND_ROW_BUILDER] id=${result.id} inv_no=${result.invoice_number} total=${result.total_amount}`);
+                    return result;
+                });
+                console.log(`[FRONTEND_DTO_RECEIVED] Snapshot contains ${snapshotInvoices.length} invoices.`);
+                if (snapshotInvoices.length > 0) {
+                    console.log('[UI_TABLE_MAPPING] Sample Row bill_from:', snapshotInvoices[0].extracted_data?.bill_address_from);
+                }
+                setScanResults(snapshotInvoices);
+                setScanProgress(100);
+                setIsLoading(false);
+                setStep('review');
+                return true; // Stop polling
+            } else if (res && (res.data !== undefined || res.status === 'PROCESSING')) {
+                rows = res.data || [];
                 pipelineStatus = res.status || 'processing';
+
+                // ── Update Progress (Fix #6) ──
+                if (res.progress_percent !== undefined) {
+                    setScanProgress(res.progress_percent);
+
+                    // ── Stall Escape (Fix #10) ──
+                    if (res.progress_percent >= 100) {
+                        if (!stalledAt100Ref.current) stalledAt100Ref.current = Date.now();
+                        const stallDuration = (Date.now() - stalledAt100Ref.current) / 1000;
+                        if (stallDuration > 10) {
+                            console.warn(`[STALL_ESCAPE] Progress at 100% for ${stallDuration}s. Forcing snapshot check...`);
+                            // We don't need to do anything special here as the next poll will hit the same endpoint,
+                            // but the log confirms we've noticed the stall.
+                        }
+                    } else {
+                        stalledAt100Ref.current = null;
+                    }
+                }
             } else {
                 console.error("Unexpected API response format:", res);
                 setScanResults([]);
@@ -1084,36 +1150,77 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
                 // HARDENING: UI MUST READ validation_status AS PRIMARY (Step 4 Fix)
                 const backendStatus = r.validation_status || 'PENDING';
+                // db_status: raw DB pipeline stage (new field added to API)
+                const dbStatus = r.db_status || r.status || '';
+
+                // ── ASYNC-SAFE STATUS RESOLUTION ──
+                // The backend now returns db_status = the raw DB status field.
+                // If db_status is an in-progress async stage, ALWAYS show SCANNING.
+                // Never trust validation_status when the record is mid-pipeline.
+                const ASYNC_IN_PROGRESS = new Set([
+                    'PROCESSING', 'OCR_PROCESSING', 'OCR_QUEUED',
+                    'AI_QUEUED', 'AI_PROCESSING', 'UPLOADING', 'EXTRACTING', 'UPLOADED',
+                ]);
+                const ASYNC_TERMINAL = new Set([
+                    'EXTRACTED', 'FAILED', 'VOUCHER_CREATED', 'OCR_FAILED',
+                ]);
+
                 let vStatus: ValidationStatus = 'PENDING';
 
-                if (['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'duplicate'].includes(backendStatus)) vStatus = 'DUPLICATE';
-                else if (['READY', 'success', 'SUCCESS', 'found', 'FOUND', 'MATCHED', 'matched', 'EXISTS', 'exists'].includes(backendStatus)) vStatus = 'READY';
-                else if (backendStatus === 'VOUCHER_CREATED' || backendStatus === 'Voucher Created' || r.processed === true) vStatus = 'VOUCHER_CREATED';
-                else if (backendStatus === 'RESOLVED' || backendStatus === 'resolved' || backendStatus === 'MATCHED_VENDOR') vStatus = 'RESOLVED';
-                else if (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'not_found', 'Vendor Missing', 'CREATE_VENDOR'].includes(backendStatus)) vStatus = 'NEED_VENDOR';
-                else if (backendStatus === 'GSTIN_CONFLICT' || backendStatus === 'gstin_conflict') vStatus = 'GSTIN_CONFLICT';
-                else if (backendStatus === 'NEEDS_ATTENTION' || backendStatus === 'needs_attention' || backendStatus === 'INCOMPLETE' || backendStatus === 'incomplete') vStatus = 'NEEDS_ATTENTION';
-                else if (['EXTRACTION_FAILED', 'extraction_failed', 'ERROR', 'error'].includes(backendStatus)) vStatus = 'EXTRACTION_FAILED';
-                else if (['VALIDATION_FAILED', 'validation_failed', 'FAILED', 'failed'].includes(backendStatus)) vStatus = 'VALIDATION_FAILED';
-                else if (backendStatus === 'processing' || backendStatus === 'PROCESSING' || backendStatus === 'EXTRACTING' || backendStatus === 'UPLOADED') vStatus = 'processing';
+                if (backendStatus === 'PROCESSING' || ASYNC_IN_PROGRESS.has(dbStatus)) {
+                    // Record is in an async pipeline stage — show SCANNING spinner
+                    vStatus = 'processing';
+                } else if (['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'duplicate'].includes(backendStatus)) {
+                    vStatus = 'DUPLICATE';
+                } else if (['READY', 'success', 'SUCCESS', 'found', 'FOUND', 'MATCHED', 'matched', 'EXISTS', 'exists'].includes(backendStatus)) {
+                    vStatus = 'READY';
+                } else if (backendStatus === 'VOUCHER_CREATED' || backendStatus === 'Voucher Created' || r.processed === true) {
+                    vStatus = 'VOUCHER_CREATED';
+                } else if (backendStatus === 'RESOLVED' || backendStatus === 'resolved' || backendStatus === 'MATCHED_VENDOR') {
+                    vStatus = 'RESOLVED';
+                } else if (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'not_found', 'Vendor Missing', 'CREATE_VENDOR'].includes(backendStatus)) {
+                    vStatus = 'NEED_VENDOR';
+                } else if (backendStatus === 'GSTIN_CONFLICT' || backendStatus === 'gstin_conflict') {
+                    vStatus = 'GSTIN_CONFLICT';
+                } else if (backendStatus === 'NEEDS_ATTENTION' || backendStatus === 'needs_attention' || backendStatus === 'INCOMPLETE' || backendStatus === 'incomplete') {
+                    vStatus = 'NEEDS_ATTENTION';
+                } else if (['EXTRACTION_FAILED', 'extraction_failed', 'ERROR', 'error'].includes(backendStatus)) {
+                    vStatus = 'EXTRACTION_FAILED';
+                } else if (['VALIDATION_FAILED', 'validation_failed', 'FAILED', 'failed'].includes(backendStatus)) {
+                    vStatus = 'VALIDATION_FAILED';
+                } else if (
+                    backendStatus === 'processing' ||
+                    backendStatus === 'PROCESSING' ||
+                    backendStatus === 'EXTRACTING' ||
+                    backendStatus === 'UPLOADED'
+                ) {
+                    vStatus = 'processing';
+                }
 
-                if (rawExtracted._fallback || r.conflict_message?.toLowerCase().includes('low-confidence')) {
+                // Low-confidence override (only when pipeline is complete)
+                if (ASYNC_TERMINAL.has(dbStatus) && (r.extracted_data?._fallback || r.conflict_message?.toLowerCase().includes('low-confidence'))) {
                     vStatus = 'LOW_CONFIDENCE';
                 }
 
                 // If backend says READY but we have no vendor, it's not actually ready for finalization
+                // Only apply this check when the pipeline has completed (not mid-processing)
                 if (['READY', 'RESOLVED'].includes(vStatus) && !r.vendor_id) vStatus = 'NEED_VENDOR';
-                
-                // Fallback for non-transient status that hit no case
-                if (vStatus === 'PENDING' && r.status === 'SUCCESS') vStatus = 'NEEDS_ATTENTION';
+
+                // GUARDED: Only convert PENDING→NEEDS_ATTENTION when the record is
+                // genuinely terminal (db_status is a done state), not mid-pipeline.
+                // This prevents premature NEEDS_ATTENTION during async AI processing.
+                if (vStatus === 'PENDING' && r.status === 'SUCCESS' && ASYNC_TERMINAL.has(dbStatus)) {
+                    vStatus = 'NEEDS_ATTENTION';
+                }
 
                 // ── Resolve display fields using variadic clean() ──
                 // Prioritize standardized snake_case keys over legacy ERP headers
                 const invoiceNumber = clean(
                     r.supplier_invoice_no, r.invoice_number,
+                    inv['invoice_no'], inv['invoice_number'],
                     inv['supplier_invoice_no'], inv['supplied_invoice_no'],
                     inv['Supplier Invoice No'], inv['Supplier Invoice No.'],
-                    inv['invoice_number'], inv['Invoice No'], inv['Invoice Number'],
+                    inv['Invoice No'], inv['Invoice Number'],
                 );
                 const invoiceDate = clean(
                     r.invoice_date,
@@ -1132,7 +1239,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 );
                 const totalAmount = clean(
                     r.total_invoice_value, r.total_amount,
-                    inv['total_invoice_value'],
+                    inv['invoice_total'], inv['total_invoice_value'],
                     inv['Total Invoice Value'], inv['Grand Total'], inv['total_amount'], inv['total_invoice_amount']
                 );
 
@@ -1273,15 +1380,15 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
                 const done = await doFetch(sid, vFilterRef.current);
                 if (!done && isMounted.current) {
-                    const nextDelay = Math.min(delay * 2, 30000); // Exponential backoff
+                    const nextDelay = Math.min(delay * 2, 8000); // Phase 5: Exponential backoff capped at 8s
                     startPoll(nextDelay);
                 }
             }, delay);
             pollingIntervalRef2.current = timeoutId as any;
         };
 
-        // Start first poll after 2 seconds
-        startPoll(2000);
+        // Start first poll after 1 second (Phase 5)
+        startPoll(1000);
 
     }, [uploadSessionId, doFetch, stopPolling]);
 
@@ -1363,7 +1470,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             setScanProgress(100);
 
             // Show info about recovered results (excluding those hidden by filter, e.g. hard duplicates)
-            const actionableFound = (res.results || []).filter((r: any) => 
+            const actionableFound = (res.results || []).filter((r: any) =>
                 r.is_duplicate && !['DUPLICATE', 'VOUCHER_CREATED'].includes(r.status)
             ).length;
 
@@ -1462,7 +1569,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     const handleRescan = async (row: ScanResult) => {
         // Show loading state for the specific row
-        setScanResults(prev => prev.map(r => 
+        setScanResults(prev => prev.map(r =>
             r.file_hash === row.file_hash ? { ...r, validationStatus: 'processing' as ValidationStatus } : r
         ));
 
@@ -1470,7 +1577,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             const res: any = await httpClient.post('/api/ocr-staging-rescan/', {
                 file_hash: row.file_hash
             });
-            
+
             if (res.success) {
                 showSuccess(`Rescan initiated for ${row.file_path}`);
                 // Fresh pull from DB
@@ -1558,12 +1665,12 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
         // Count READY rows from ALL scan results (not just the visible filtered table).
         // This fixes the bug where being on 'Pending' tab hid READY rows, causing a false "0 ready" error.
-        const allReadyRows = scanResults.filter(r => 
+        const allReadyRows = scanResults.filter(r =>
             (r.vendor_id || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR'].includes(r.validationStatus)) &&
             r.validationStatus !== 'VOUCHER_CREATED' &&
             r.validationStatus !== 'DUPLICATE'
         );
-        const allPendingRows = scanResults.filter(r => 
+        const allPendingRows = scanResults.filter(r =>
             !r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'NEED_VENDOR'].includes(r.validationStatus)
         );
         const validCount = readyToFinalizeCount > 0 ? readyToFinalizeCount : allReadyRows.length;
@@ -1715,12 +1822,19 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const readyCount = mergedResults.filter(r => ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus)).length;
     const duplicatesCount = mergedResults.filter(r => ['DUPLICATE', 'DUPLICATE_IN_BATCH'].includes(r.validationStatus)).length;
     const errorCount = mergedResults.filter(r => r.validationStatus === 'VALIDATION_FAILED' || r.validationStatus === 'EXTRACTION_FAILED' || r.validationStatus === 'ERROR').length;
+    // pendingCount: records still in async pipeline (show SCANNING spinner in banner)
     const pendingCount = mergedResults.filter(r => ['PENDING', 'PROCESSING', 'processing', 'scanning'].includes(r.validationStatus)).length;
     const vouchersCreatedCount = mergedResults.filter(r => r.validationStatus === 'VOUCHER_CREATED').length;
 
-    // Attention Needed includes everything that isn't already successfully filed as a voucher.
-    // Synchronized with mergedResults to match the 35 uploaded files.
-    const attentionNeededCount = mergedResults.filter(r => r.validationStatus !== 'VOUCHER_CREATED').length;
+    // ── ATTENTION NEEDED COUNT ──
+    // Only count records that have COMPLETED async processing but require user action.
+    // Explicitly EXCLUDE records that are still in-flight (processing/PENDING/scanning)
+    // so the counter stays 0 while AI workers are running.
+    const IN_PROGRESS_STATUSES = new Set(['processing', 'PENDING', 'PROCESSING', 'scanning', 'EXTRACTING']);
+    const attentionNeededCount = mergedResults.filter(r =>
+        !IN_PROGRESS_STATUSES.has(r.validationStatus) &&
+        r.validationStatus !== 'VOUCHER_CREATED'
+    ).length;
 
     // Default filter on first load of review step
     useEffect(() => {
@@ -1734,6 +1848,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         }
     }, [step, attentionNeededCount, readyCount]);
 
+    // ── PHASE 5 & 6: PIPELINE-GATED UI ──
+    const isPipelineStabilized = scanResults.length > 0 && scanResults.every(r => !r._blocked && r.validationStatus !== 'processing');
+    const isExportDisabled = finalizing || scanResults.length === 0 || !isPipelineStabilized;
 
     return (
         <>
@@ -1747,7 +1864,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 // Support hierarchical structure or flat structure
                 const sections = resolvingRow.extracted_data?.sections || {};
                 const supplier = sections.supplier_details || resolvingRow.extracted_data || {};
-                
+
                 // Extract items for Supplier Items pre-filling
                 const rawItems = sections.items || resolvingRow.extracted_data?.items || resolvingRow.extracted_data?.line_items || [];
                 const supplier_items = rawItems.map((it: any) => ({
@@ -1867,7 +1984,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                     {step === 'review' && (
                                         <span className="flex items-center gap-2">
                                             <span className="text-white/80 font-medium">
-                                                {mergedResults.length} voucher{mergedResults.length !== 1 ? 's' : ''} 
+                                                {mergedResults.length} voucher{mergedResults.length !== 1 ? 's' : ''}
                                                 <span className="mx-1 opacity-40">|</span>
                                                 {mergedResults.reduce((acc, r) => acc + (r._mergedCount || 1), 0)} file{mergedResults.reduce((acc, r) => acc + (r._mergedCount || 1), 0) !== 1 ? 's' : ''}
                                             </span>
@@ -1941,7 +2058,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             <div className="text-xs text-indigo-700 mt-1 font-medium italic space-y-1">
                                                 {needsVendorCount > 0 && (
                                                     <p className="text-orange-700 font-black flex items-center gap-1">
-                                                        ⚠️ {needsVendorCount} invoice{needsVendorCount !== 1 ? 's' : ''} require{needsVendorCount !== 1 ? '' : 's' } vendor registration.
+                                                        ⚠️ {needsVendorCount} invoice{needsVendorCount !== 1 ? 's' : ''} require{needsVendorCount !== 1 ? '' : 's'} vendor registration.
                                                     </p>
                                                 )}
                                             </div>
@@ -1950,7 +2067,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                     onClick={() => {
                                                         useAllUnresolvedRef.current = true;
                                                         setUseAllUnresolved(true);
-                                                        setFilterStatus('pending'); 
+                                                        setFilterStatus('pending');
                                                         fetchStagedInvoices(null, false, 'create_vendor');
                                                         setStep('review');
                                                     }}
@@ -2213,7 +2330,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             .filter(r => {
                                                 // If we are on the 'Ready' tab, only show Ready/Found/Success
                                                 if (filterStatus === 'ready') return ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus);
-                                                
+
                                                 // If we are on the 'Pending' tab:
                                                 if (filterStatus === 'pending') {
                                                     // CRITICAL: If the user chose the 'View Unresolved Vendors' shortcut, we stay strict.
@@ -2229,7 +2346,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             })
                                             .map((row, idx) => {
                                                 const invoice = row.extracted_data?.invoice || row.extracted_data?.header || row.extracted_data || {};
-                                                
+
                                                 // CROSS-CHECK: Robust Instant Vendor Link
                                                 const rowGstin = (row.extracted_data?.sections?.supplier_details?.gstin || row.vendor_gstin || "").toString().trim().toUpperCase();
                                                 const rowBranch = (row.extracted_data?.sections?.supplier_details?.branch || row.branch || "").toString().trim().toUpperCase();
@@ -2237,7 +2354,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
                                                 const matchedOther = scanResults.find(r => {
                                                     if (r.file_hash === row.file_hash) return false;
-                                                    
+
                                                     const isRMatched = r.vendor_id || ["READY", "FOUND", "RESOLVED", "SUCCESS", "DUPLICATE"].includes(r.validationStatus);
                                                     if (!isRMatched) return false;
 
@@ -2249,7 +2366,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                     if (rowName && rName && rowName === rName && rowBranch === rBranch) return true;
                                                     return false;
                                                 });
-                                                
+
                                                 const effectiveVendorId = row.vendor_id || matchedOther?.vendor_id;
                                                 const hasEffectiveMatch = !!effectiveVendorId || ["READY", "FOUND", "RESOLVED", "SUCCESS", "DUPLICATE", "VOUCHER_CREATED"].includes(row.validationStatus);
 
@@ -2261,7 +2378,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                             <input
                                                                 type="checkbox"
                                                                 className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                        checked={selectedHashes.has(row.file_hash)}
+                                                                checked={selectedHashes.has(row.file_hash)}
                                                                 onChange={() => toggleSelectRow(row.file_hash)}
                                                                 onClick={e => e.stopPropagation()}
                                                             />
@@ -2269,21 +2386,21 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                         <td className="px-3 py-3 text-center text-xs font-bold text-gray-500">
                                                             {idx + 1}
                                                         </td>
-                                                         <td className="px-3 py-3">
-                                                             <div className="flex flex-col">
-                                                                 <div className="flex items-center gap-1.5 min-w-0">
-                                                                     <span className="truncate max-w-[120px] font-medium text-gray-700" title={row.file_path}>
-                                                                         {row.file_path.split('/').pop()}
-                                                                     </span>
-                                                                     {row._isMerged && (
-                                                                         <span className="flex-shrink-0 bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter border border-indigo-200">
-                                                                             {row._mergedCount} FILES
-                                                                         </span>
-                                                                     )}
-                                                                 </div>
-                                                                 <button onClick={() => setDetailsRow(row)} className="text-[10px] text-indigo-500 hover:text-indigo-700 underline font-bold text-left mt-0.5">View Details</button>
-                                                             </div>
-                                                         </td>
+                                                        <td className="px-3 py-3">
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                    <span className="truncate max-w-[120px] font-medium text-gray-700" title={row.file_path}>
+                                                                        {row.file_path.split('/').pop()}
+                                                                    </span>
+                                                                    {row._isMerged && (
+                                                                        <span className="flex-shrink-0 bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter border border-indigo-200">
+                                                                            {row._mergedCount} FILES
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <button onClick={() => setDetailsRow(row)} className="text-[10px] text-indigo-500 hover:text-indigo-700 underline font-bold text-left mt-0.5">View Details</button>
+                                                            </div>
+                                                        </td>
                                                         <td className="px-3 py-3 font-bold text-gray-800 text-[11px]">{getCellValue(row, 'invoice_number')}</td>
                                                         <td className="px-3 py-3 text-[11px] text-gray-600 font-medium whitespace-nowrap">{getCellValue(row, 'invoice_date')}</td>
                                                         <td className="px-4 py-3">
@@ -2296,40 +2413,40 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                         <td className="px-3 py-3 text-right font-black text-gray-900 text-[11px]">₹{getCellValue(row, 'total_amount')}</td>
                                                         {/* Vendor Status */}
                                                         <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                             {row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" ? (
-                                                                  <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                      <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                  </span>
-                                                              ) : row.validationStatus === "EXTRACTION_FAILED" ? (
-                                                                   <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">FAILED</span>
-                                                              ) : hasEffectiveMatch ? (
-                                                                  <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded">ALREADY EXIST</span>
-                                                             ) : (
-                                                                  <span className="bg-orange-100 text-orange-800 border border-orange-300 px-2 py-1 rounded">Create Vendor</span>
-                                                             )}
-                                                         </td>
-                                                         {/* Voucher Status */}
-                                                         <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
-                                                             {row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" ? (
-                                                                  <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
-                                                                      <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
-                                                                  </span>
-                                                             ) : row.validationStatus === "VOUCHER_CREATED" ? (
-                                                                  <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
-                                                             ) : row.validationStatus === "DUPLICATE" ? (
-                                                                  <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
-                                                             ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR'].includes(row.validationStatus)) ? (
-                                                                  <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
-                                                             ) : (
-                                                                  <span className="bg-gray-100 text-gray-400 border border-gray-200 px-2 py-1 rounded">Wait</span>
-                                                             )}
-                                                         </td>
+                                                            {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "scanning") ? (
+                                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                </span>
+                                                            ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">FAILED</span>
+                                                            ) : hasEffectiveMatch ? (
+                                                                <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded">ALREADY EXIST</span>
+                                                            ) : (
+                                                                <span className="bg-orange-100 text-orange-800 border border-orange-300 px-2 py-1 rounded">Create Vendor</span>
+                                                            )}
+                                                        </td>
+                                                        {/* Voucher Status */}
+                                                        <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                            {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "scanning") ? (
+                                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                </span>
+                                                            ) : row.validationStatus === "VOUCHER_CREATED" ? (
+                                                                <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
+                                                            ) : row.validationStatus === "DUPLICATE" ? (
+                                                                <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
+                                                            ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR'].includes(row.validationStatus)) ? (
+                                                                <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
+                                                            ) : (
+                                                                <span className="bg-gray-100 text-gray-400 border border-gray-200 px-2 py-1 rounded">Wait</span>
+                                                            )}
+                                                        </td>
                                                         <td className="px-2 py-3 text-center">
-                                                            <div 
+                                                            <div
                                                                 className="flex items-center justify-center gap-1"
-                                                                style={{ 
-                                                                    opacity: (['PENDING', 'processing', 'SCANNING', 'EXTRACTING', 'resolving', 'validating'].includes(row.validationStatus)) ? 0.3 : 1,
-                                                                    pointerEvents: (['PENDING', 'processing', 'SCANNING', 'EXTRACTING', 'resolving', 'validating'].includes(row.validationStatus)) ? 'none' : 'auto'
+                                                                style={{
+                                                                    opacity: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 0.3 : 1,
+                                                                    pointerEvents: (['PENDING', 'processing', 'PROCESSING', 'SCANNING', 'EXTRACTING', 'scanning', 'resolving', 'validating'].includes(row.validationStatus)) ? 'none' : 'auto'
                                                                 }}
                                                             >
                                                                 {!hasEffectiveMatch && ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) && (
@@ -2352,18 +2469,18 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                                     else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
                                                                                     else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
                                                                                     else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
-                                                                             const updated = {
-                                                                                    ...r,
-                                                                                    validationStatus: newStatus,
-                                                                                    vendor_id: result.vendor_id ?? r.vendor_id,
-                                                                                    vendor_name: result.vendor_name || r.vendor_name,
-                                                                                    // Sync vendor_status from PATCH response (Handle both legacy and modern codes)
-                                                                                    vendor_status: (result.vendor_status === 'EXISTS' || result.vendor_status === 'MATCHED')
-                                                                                        ? 'MATCHED' as VendorStatus
-                                                                                        : (result.vendor_status === 'NEW' || result.vendor_status === 'CREATE_VENDOR')
-                                                                                            ? 'CREATE_VENDOR' as VendorStatus
-                                                                                            : r.vendor_status,
-                                                                                };
+                                                                                    const updated = {
+                                                                                        ...r,
+                                                                                        validationStatus: newStatus,
+                                                                                        vendor_id: result.vendor_id ?? r.vendor_id,
+                                                                                        vendor_name: result.vendor_name || r.vendor_name,
+                                                                                        // Sync vendor_status from PATCH response (Handle both legacy and modern codes)
+                                                                                        vendor_status: (result.vendor_status === 'EXISTS' || result.vendor_status === 'MATCHED')
+                                                                                            ? 'MATCHED' as VendorStatus
+                                                                                            : (result.vendor_status === 'NEW' || result.vendor_status === 'CREATE_VENDOR')
+                                                                                                ? 'CREATE_VENDOR' as VendorStatus
+                                                                                                : r.vendor_status,
+                                                                                    };
                                                                                     if (newStatus === 'VENDOR_MISSING') setTimeout(() => setResolvingRow(updated), 150);
                                                                                     return updated;
                                                                                 }));
@@ -2375,16 +2492,16 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                                                     </button>
                                                                 )}
-                                                                 <button onClick={() => setEditingRow(row)} className="p-1 hover:bg-indigo-100 rounded text-indigo-600" title="Edit Data">
-                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                     </svg>
-                                                                 </button>
-                                                                 <button onClick={() => handleRescan(row)} className="p-1 hover:bg-violet-100 rounded text-violet-600" title="Rescan (AI re-extraction)">
-                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                                                     </svg>
-                                                                 </button>
+                                                                <button onClick={() => setEditingRow(row)} className="p-1 hover:bg-indigo-100 rounded text-indigo-600" title="Edit Data">
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                    </svg>
+                                                                </button>
+                                                                <button onClick={() => handleRescan(row)} className="p-1 hover:bg-violet-100 rounded text-violet-600" title="Rescan (AI re-extraction)">
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                                    </svg>
+                                                                </button>
 
 
                                                                 <button onClick={() => handleRemove(row.file_hash)} className="p-1 hover:bg-red-100 rounded text-red-600" title="Remove Invoice">
@@ -2484,15 +2601,20 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             </button>
                                             <button
                                                 onClick={handleDownloadExcel}
-                                                className="px-6 py-2.5 bg-white text-indigo-700 border border-indigo-200 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+                                                disabled={isExportDisabled}
+                                                className="px-6 py-2.5 bg-white text-indigo-700 border border-indigo-200 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2 disabled:opacity-40"
                                             >
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                                 </svg>
                                                 Download Excel
                                             </button>
-                                            <button onClick={handleFinalize} disabled={!canFinalize || finalizing} className="px-8 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-sm font-bold shadow-xl disabled:opacity-40 flex items-center gap-2">
-                                                {finalizing ? 'Saving...' : 'Finalize & Save Vouchers'}
+                                            <button
+                                                onClick={handleFinalize}
+                                                disabled={isExportDisabled || !canFinalize}
+                                                className="px-8 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-sm font-bold shadow-xl disabled:opacity-40 flex items-center gap-2"
+                                            >
+                                                {finalizing ? 'Saving...' : !isPipelineStabilized ? 'Finalizing Assembly...' : 'Finalize & Save Vouchers'}
                                             </button>
                                         </>
                                     )}
