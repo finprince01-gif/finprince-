@@ -51,13 +51,15 @@ interface ReceiptVoucherProps {
     clearPrefilledData?: () => void;
     isLimitReached?: boolean;
     onLimitReached?: () => void;
+    isReadOnlyMode?: boolean;
 }
 
 const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     prefilledData,
     clearPrefilledData,
     isLimitReached,
-    onLimitReached
+    onLimitReached,
+    isReadOnlyMode = false
 }) => {
     // Tab state
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
@@ -1100,7 +1102,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
             {/* Single Tab Content */}
             {activeTab === 'single' && (
-                <>
+                <fieldset disabled={isReadOnlyMode} className={isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}>
                     {/* Top Row */}
                     <div className="grid grid-cols-4 gap-4">
                         <div>
@@ -1405,14 +1407,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             {isExactMatch ? 'Post Receipt' : 'Complete Allocation'}
                         </button>
                     </div>
-                </>
+                </fieldset>
             )
             }
 
             {/* Bulk Tab Content */}
             {
                 activeTab === 'bulk' && (
-                    <div className="grid grid-cols-2 gap-6">
+                    <fieldset disabled={isReadOnlyMode} className={`grid grid-cols-2 gap-6 ${isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}`}>
                         {/* Left Panel */}
                         <div className="space-y-6">
                             {/* Top Fields */}
@@ -1734,7 +1736,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </fieldset>
                 )
             }
         </div >
