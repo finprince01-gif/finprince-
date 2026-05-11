@@ -688,7 +688,7 @@ class ApiService {
                     // ── Tax totals ────────────────────────────────────────────────────────
                     // Pull from the line items stored in detail when available;
                     // fall back to the aggregated fields already on the base Voucher record.
-                    const lineItems: any[] = detail.line_items || [];
+                    const lineItems: any[] = detail.line_items || detail.items || [];
                     const computedTaxable = lineItems.reduce((s: number, it: any) =>
                         s + parseFloat(it.taxable_value || it.taxableValue || '0'), 0);
                     const computedCgst = lineItems.reduce((s: number, it: any) =>
@@ -756,6 +756,7 @@ class ApiService {
                             cgst: parseFloat(item.cgst_amount || item.cgst || '0'),
                             sgst: parseFloat(item.sgst_amount || item.sgst || '0'),
                             cess: parseFloat(item.cess_amount || item.cess || '0'),
+                            gstRate: item.gst_rate || item.gstRate || '0',
                             invoiceValue: parseFloat(item.invoice_value || item.invoiceValue || '0'),
                             // Keep snake_case originals for write-back
                             igst_amount: parseFloat(item.igst_amount || item.igst || '0'),

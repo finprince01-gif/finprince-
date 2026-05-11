@@ -42,6 +42,7 @@ interface SalesVoucherProps {
     customers?: any[];
     onRefreshCustomers?: () => void;
     companyDetails: CompanyDetails;
+    isReadOnlyMode?: boolean;
 }
 
 const SalesVoucher: React.FC<SalesVoucherProps> = ({
@@ -51,7 +52,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     onLimitReached,
     customers = [],
     onRefreshCustomers,
-    companyDetails
+    companyDetails,
+    isReadOnlyMode = false
 }) => {
     const [activeTab, setActiveTab] = useState('invoice');
     const [isIssueSlipModalOpen, setIsIssueSlipModalOpen] = useState(false);
@@ -410,7 +412,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             setVoucherName('');
             setSelectedSeriesId(null);
             setSalesInvoiceNo('');
-        } else if (selectedSeriesId) {
+        } else if (selectedSeriesId && !isReadOnlyMode) {
             // Optional: Re-fetch next number to be sure it's fresh
             try {
                 const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${selectedSeriesId}/next-number/`);
@@ -419,7 +421,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 console.error("Failed to re-fetch invoice number during reset", e);
             }
         }
-    }, [selectedSeriesId]);
+    }, [selectedSeriesId, isReadOnlyMode]);
 
 
     React.useEffect(() => {
@@ -2952,7 +2954,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             </div>
 
             {/* Content Section */}
-            <div className="min-h-[400px] bg-white">
+            <fieldset disabled={isReadOnlyMode} className={`min-h-[400px] bg-white ${isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}`}>
                 {activeTab === 'invoice' && (
                     <div className="space-y-6">
                         {/* Row 1: Date, Sales Invoice No, Customer Name, Upload Document */}
@@ -5655,7 +5657,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                             </div>
                         </div>
                     )}
-            </div>
+            </fieldset>
             {/* Issue Slip Modal */}
             {
                 isIssueSlipModalOpen && (

@@ -4337,8 +4337,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     const voucherId = viewVoucherData.sourceId || viewVoucherData.source_id 
       || rawVoucher.sourceId || rawVoucher.source_id
-      || rawVoucher.id || rawVoucher.voucher_id || rawVoucher.voucherId
-      || viewVoucherData.id || viewVoucherData.voucher_id || viewVoucherData.voucherId;
+      || rawVoucher.voucher_id || rawVoucher.voucherId || rawVoucher.id
+      || viewVoucherData.voucher_id || viewVoucherData.voucherId || viewVoucherData.id;
     
     const source = viewVoucherData.source || rawVoucher.source;
 
@@ -4374,7 +4374,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           if (supplyInr?.description) setPurchaseDescription(supplyInr.description);
           if (Array.isArray(items) && items.length > 0) {
             setPurchaseItems(items.map((item: any, idx: number) => ({
-              id: idx + 1,
+              id: String(idx + 1),
               itemCode: item.item_code || item.itemCode || '',
               itemName: item.item_name || item.itemName || '',
               hsnSac: item.hsn_sac || item.hsnSac || '',
@@ -4382,13 +4382,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               uom: item.uom || '',
               rate: parseFloat(item.rate || item.itemRate || '0'),
               taxableValue: parseFloat(item.taxable_value || item.taxableValue || '0'),
+              foreignRate: parseFloat(item.foreign_rate || item.foreignRate || '0'),
+              foreignAmount: parseFloat(item.foreign_amount || item.foreignAmount || '0'),
               igst: parseFloat(item.igst_amount || item.igst || '0'),
               cgst: parseFloat(item.cgst_amount || item.cgst || '0'),
               sgst: parseFloat(item.sgst_amount || item.sgst || '0'),
               cess: parseFloat(item.cess_amount || item.cess || '0'),
               invoiceValue: parseFloat(item.invoice_value || item.invoiceValue || '0'),
-              gstRate: item.gst_rate || item.gstRate || '18',
-              rateMismatch: false, qtyMismatch: false,
+              gstRate: item.gst_rate || item.gstRate || '0',
+              description: item.description || '',
+              poRate: item.poRate || null,
+              invoiceRate: item.invoiceRate || null,
+              rateMismatch: false,
+              poQty: item.poQty || null,
+              invoiceQty: item.invoiceQty || null,
+              qtyMismatch: false,
+              grnQty: item.grnQty || null,
+              sourcePoNo: item.sourcePoNo || null
             })));
           }
           setPurchaseActiveTab('supplier');
@@ -4503,7 +4513,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
 
         {/* Tab Content */}
-        <div className="p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px]">
+        <fieldset disabled={isReadOnlyMode} className={`p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px] ${isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}`}>
           {purchaseActiveTab === 'supplier' && (
             <div className="space-y-6">
               {/* Row 1: Date, Supplier Invoice No, Purchase Voucher Series, Purchase Voucher No */}
@@ -6516,7 +6526,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 )}
               </div>
             )}
-        </div>
+        </fieldset>
       </div>
     );
   };
@@ -7286,7 +7296,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
 
         {/* Tab Content */}
-        <div className="p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px]">
+        <fieldset disabled={isReadOnlyMode} className={`p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px] ${isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}`}>
           {creditNoteActiveTab === 'invoice' && (
             <div className="space-y-6">
               {/* Row 1: Date, Credit Note Series, Credit Note No. */}
@@ -9325,7 +9335,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
           )}
 
-        </div>
+        </fieldset>
       </div>
     );
   };
@@ -11365,14 +11375,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }} />
 
 
-            <fieldset disabled={isReadOnlyMode} className={`border-0 p-0 m-0 contents ${isReadOnlyMode ? 'pointer-events-none opacity-90 select-none' : ''}`}>
-              {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} onRefreshCustomers={fetchRichData} companyDetails={companyDetails} />}
+            <div className={`border-0 p-0 m-0 contents ${isReadOnlyMode ? 'opacity-90 select-none' : ''}`}>
+              {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} onRefreshCustomers={fetchRichData} companyDetails={companyDetails} isReadOnlyMode={isReadOnlyMode} />}
               {voucherType === 'Payment' && (
                 <PaymentVoucherSingle
                   prefilledData={localPrefilledData}
                   clearPrefilledData={handleClearPrefilledData}
                   isLimitReached={isLimitReached}
                   onLimitReached={handleLimitReached}
+                  isReadOnlyMode={isReadOnlyMode}
                 />
               )}
               {voucherType === 'Receipt' && (
@@ -11381,12 +11392,25 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   clearPrefilledData={handleClearPrefilledData}
                   isLimitReached={isLimitReached}
                   onLimitReached={handleLimitReached}
+                  isReadOnlyMode={isReadOnlyMode}
                 />
               )}
               {voucherType === 'Purchase' && renderPurchaseForm()}
-              {voucherType === 'Contra' && renderSimpleForm(voucherType)}
-              {voucherType === 'Journal' && renderJournalForm()}
-              {voucherType === 'Expenses' && renderExpensesForm()}
+              {voucherType === 'Contra' && (
+                <fieldset disabled={isReadOnlyMode} className={isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}>
+                  {renderSimpleForm(voucherType)}
+                </fieldset>
+              )}
+              {voucherType === 'Journal' && (
+                <fieldset disabled={isReadOnlyMode} className={isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}>
+                  {renderJournalForm()}
+                </fieldset>
+              )}
+              {voucherType === 'Expenses' && (
+                <fieldset disabled={isReadOnlyMode} className={isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}>
+                  {renderExpensesForm()}
+                </fieldset>
+              )}
               {voucherType === 'Credit Note' && renderCreditNoteForm()}
               {voucherType === 'Debit Note' && (
                 <DebitNoteVoucher
@@ -11394,9 +11418,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   clearPrefilledData={handleClearPrefilledData}
                   companyDetails={companyDetails}
                   onAddVouchers={onAddVouchers}
+                  isReadOnlyMode={isReadOnlyMode}
                 />
               )}
-            </fieldset>
+            </div>
 
             {!isReadOnlyMode && (
               <>
