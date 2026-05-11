@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePermissions } from '../../hooks/usePermissions';
 import type { Ledger, Voucher, StockItem, SalesPurchaseVoucher, LedgerGroupMaster } from '../../types';
-import { showError } from '../../utils/toast';
+import { showError, showSuccess } from '../../utils/toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 import { apiService } from '../../services/api';
+import { httpClient } from '../../services/httpClient';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -45,6 +46,8 @@ interface ReportsPageProps {
   ledgers: Ledger[];
   ledgerGroups: LedgerGroupMaster[];
   stockItems: StockItem[];
+  onNavigate?: (page: Page, params?: any) => void;
+  setViewVoucherData?: (data: any) => void;
 }
 
 
@@ -54,7 +57,28 @@ type GSTForm = 'GSTR-1' | 'GSTR-2' | 'GSTR-2A' | 'GSTR-2B' | 'GSTR-3B' | 'GSTR-4
 
 type GSTTab = 'B2B' | 'B2C-L' | 'B2C-S' | 'Exports' | 'CDN' | 'Advances' | 'ITC-Eligible' | 'ITC-Ineligible' | 'RCM-Liability' | 'ITC-Available' | 'ITC-Reversal' | 'Outward' | 'ITC' | 'Payment';
 
-const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
+const formatToDMY = (dateVal: any) => {
+  if (!dateVal) return '-';
+  const str = String(dateVal).trim();
+  if (!str || str === '-') return '-';
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return `${parseInt(match[3])}/${parseInt(match[2])}/${match[1]}`;
+  }
+  try {
+    const parts = str.split(/[\/\-]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parseInt(parts[2])}/${parseInt(parts[1])}/${parts[0]}`;
+      } else if (parts[2].length === 4) {
+        return `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
+      }
+    }
+  } catch (e) { }
+  return str;
+};
+
+const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [], onNavigate, setViewVoucherData }) => {
   // Report Options Mapping
   const { hasTabAccess, isSuperuser } = usePermissions();
 
@@ -105,10 +129,157 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   const [endDate, setEndDate] = useState<string>('');
   // Drill-down: null = summary view (all ledgers list), string = detail view for that ledger
   const [drillDownLedger, setDrillDownLedger] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<string>('all');
+  const [selectedSection, setSelectedSection] = useState<string>('all');
+  const isTdsTcsLedger = drillDownLedger ? (drillDownLedger.toLowerCase().includes('tds') || drillDownLedger.toLowerCase().includes('tcs')) : false;
   const [drillDownData, setDrillDownData] = useState<any[]>([]);
   const [isDrillDownLoading, setIsDrillDownLoading] = useState<boolean>(false);
   // Transaction detail slide-out panel
   const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
+  const [voucherDetails, setVoucherDetails] = useState<any | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [panelActiveTab, setPanelActiveTab] = useState<string>('invoice');
+  const [isEditingVoucher, setIsEditingVoucher] = useState<boolean>(false);
+  const [editedVoucher, setEditedVoucher] = useState<any>(null);
+
+  const handleViewTransaction = (e: any) => {
+    if (setViewVoucherData && onNavigate) {
+      setViewVoucherData({ ...e, ledgerName: drillDownLedger });
+      onNavigate('Vouchers', { viewVoucher: { ...e, ledgerName: drillDownLedger } });
+    } else {
+      setSelectedTransaction({ ...e, ledgerName: drillDownLedger });
+    }
+  };
+
+  useEffect(() => {
+    let accountVal = '';
+    let partyVal = '';
+    let amt = 0;
+
+    if (selectedTransaction) {
+      const isPayment = selectedTransaction?.voucherType?.toLowerCase() === 'payment';
+      const isReceipt = selectedTransaction?.voucherType?.toLowerCase() === 'receipt';
+      const isContra = selectedTransaction?.voucherType?.toLowerCase() === 'contra';
+      const isExpense = selectedTransaction?.voucherType?.toLowerCase() === 'expense' || selectedTransaction?.voucherType?.toLowerCase() === 'expenses';
+
+      const ledgerNameClean = (selectedTransaction?.ledgerName || drillDownLedger || '').replace('ledger:', '').replace('group:', '');
+      const otherParty = selectedTransaction?.particulars || '';
+
+      if (isPayment) {
+        if ((selectedTransaction?.debit || 0) > 0) {
+          partyVal = ledgerNameClean;
+          accountVal = otherParty;
+        } else {
+          accountVal = ledgerNameClean;
+          partyVal = otherParty;
+        }
+      } else if (isReceipt) {
+        if ((selectedTransaction?.debit || 0) > 0) {
+          accountVal = ledgerNameClean;
+          partyVal = otherParty;
+        } else {
+          partyVal = ledgerNameClean;
+          accountVal = otherParty;
+        }
+      } else if (isContra || isExpense) {
+        if ((selectedTransaction?.debit || 0) > 0) {
+          partyVal = ledgerNameClean;
+          accountVal = otherParty;
+        } else {
+          accountVal = ledgerNameClean;
+          partyVal = otherParty;
+        }
+      } else {
+        accountVal = otherParty;
+        partyVal = ledgerNameClean;
+      }
+      amt = selectedTransaction?.debit || selectedTransaction?.credit || 0;
+    }
+
+    if (voucherDetails) {
+      const copy = JSON.parse(JSON.stringify(voucherDetails));
+      if (!copy.date) copy.date = selectedTransaction?.date || '';
+      if (!copy.voucher_number && !copy.voucher_no) copy.voucher_number = selectedTransaction?.voucherNo || '';
+      if (!copy.amount && !copy.total) {
+        copy.amount = amt;
+        copy.total = amt;
+      }
+      if (!copy.account && !copy.fromAccount && !copy.from_account) {
+        copy.account = accountVal;
+        copy.fromAccount = accountVal;
+        copy.from_account = accountVal;
+      }
+      if (!copy.party && !copy.toAccount && !copy.to_account) {
+        copy.party = partyVal;
+        copy.toAccount = partyVal;
+        copy.to_account = partyVal;
+      }
+      if (!copy.ref_no && !copy.refNo) {
+        copy.ref_no = selectedTransaction?.referenceNo && selectedTransaction?.referenceNo !== '-' ? selectedTransaction.referenceNo : '';
+      }
+      setEditedVoucher(copy);
+    } else if (selectedTransaction) {
+      setEditedVoucher({
+        date: selectedTransaction?.date || '',
+        voucher_type: selectedTransaction?.voucherType || '',
+        voucher_number: selectedTransaction?.voucherNo || '',
+        amount: amt,
+        total: amt,
+        account: accountVal,
+        party: partyVal,
+        ref_no: selectedTransaction?.referenceNo && selectedTransaction?.referenceNo !== '-' ? selectedTransaction.referenceNo : '',
+        narration: selectedTransaction?.rawVoucher?.narration || ''
+      });
+    } else {
+      setEditedVoucher(null);
+    }
+  }, [voucherDetails, selectedTransaction, drillDownLedger]);
+
+  useEffect(() => {
+    if (selectedTransaction) {
+      const type = selectedTransaction?.voucherType?.toLowerCase() || '';
+      if (['payment', 'receipt', 'contra', 'expense'].includes(type)) {
+        setPanelActiveTab('voucher');
+      } else {
+        setPanelActiveTab('invoice');
+      }
+    }
+  }, [selectedTransaction]);
+
+  const handleFieldChange = (path: string, value: any) => {
+    setEditedVoucher((prev: any) => {
+      if (!prev) return prev;
+      const copy = { ...prev };
+      const keys = path.split('.');
+      let current = copy;
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!current[keys[i]]) current[keys[i]] = {};
+        current = current[keys[i]];
+      }
+      current[keys[keys.length - 1]] = value;
+      return copy;
+    });
+  };
+
+  // Fetch voucher details when a transaction is selected
+  useEffect(() => {
+    const voucherId = selectedTransaction?.voucher_id || selectedTransaction?.rawVoucher?.voucher_id || selectedTransaction?.voucherId || selectedTransaction?.rawVoucher?.voucherId;
+    if (selectedTransaction && voucherId) {
+      setIsLoadingDetails(true);
+      apiService.getVoucher(voucherId)
+        .then(details => {
+          setVoucherDetails(details);
+          setIsLoadingDetails(false);
+        })
+        .catch(err => {
+          console.error('Error fetching voucher details:', err);
+          setIsLoadingDetails(false);
+          setVoucherDetails(null);
+        });
+    } else {
+      setVoucherDetails(null);
+    }
+  }, [selectedTransaction]);
   // Multi-view mode for Ledger drill-down (mirrors VendorPortal procurement)
   const [ledgerViewMode, setLedgerViewMode] = useState<'list' | 'ledger' | 'month' | 'journal' | 'allocation'>('ledger');
   // Column filters for the ledger view
@@ -117,6 +288,10 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   // Month view multi-select
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [isMonthFilterOpen, setIsMonthFilterOpen] = useState(false);
+  // Allocation modal state
+  const [allocationModalRow, setAllocationModalRow] = useState<any | null>(null);
+  const [selectedAllocationAdvances, setSelectedAllocationAdvances] = useState<any[]>([]);
+  const [isAllocating, setIsAllocating] = useState(false);
 
   const monthNameToNumber: Record<string, string> = {
     'January': '01', 'February': '02', 'March': '03', 'April': '04',
@@ -977,8 +1152,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
     if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
       const [prefix, name] = selectedLedger.split(':');
-      
-      const filteredLedgers = prefix === 'group' 
+
+      const filteredLedgers = prefix === 'group'
         ? ledgers.filter(l => l.group === name).map(l => l.name)
         : [name];
 
@@ -1028,12 +1203,12 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
   const ledgerEntries = useMemo(() => {
     const [prefix, nameOrId] = (selectedLedger || '').split(':');
-    
+
     // If we have direct journal entries, use them as the source of truth for Ledger Report
     if (entries && entries.length > 0) {
       let balance = 0;
       let targetEntries = entries;
-      
+
       // Filter by ledger if selected
       if (selectedLedger && selectedLedger !== 'all' && prefix === 'ledger') {
         targetEntries = entries.filter(e => e.ledger === nameOrId || String(e.ledger_id) === nameOrId);
@@ -1082,106 +1257,106 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     // Fallback to deriving from vouchers if entries prop is empty
     if (!filteredVouchers.length) return [];
 
-        // Handle ALL Ledgers case — shows every debit/credit line across all accounts
-        if (selectedLedger === 'all') {
-          const ledgerRunningBals: { [ledger: string]: number } = {};
-          const allEntries: any[] = [];
+    // Handle ALL Ledgers case — shows every debit/credit line across all accounts
+    if (selectedLedger === 'all') {
+      const ledgerRunningBals: { [ledger: string]: number } = {};
+      const allEntries: any[] = [];
 
-          filteredVouchers.forEach(v => {
-            const addEntry = (ledger: string, dr: number, cr: number, part: string, id: string | number) => {
-                const currentBal = (ledgerRunningBals[ledger] || 0) + dr - cr;
-                ledgerRunningBals[ledger] = currentBal;
-                allEntries.push({
-                    id, date: v.date, type: v.type, particulars: part, debit: dr, credit: cr,
-                    balance: Math.abs(currentBal),
-                    balanceType: currentBal > 0 ? 'Dr' : currentBal < 0 ? 'Cr' : ''
-                });
-            };
-
-            if ('entries' in v && v.entries && Array.isArray(v.entries)) {
-              (v as any).entries.forEach((e: any, idx: number) => {
-                const dr = Number(e.debit) || 0;
-                const cr = Number(e.credit) || 0;
-                const counterparts = (v as any).entries.filter((x: any) => x !== e).map((x: any) => x.ledger).join(', ') || e.ledger || 'N/A';
-                addEntry(e.ledger, dr, cr, counterparts, `${v.id}-${idx}`);
-              });
-            } else {
-              const amount = getVoucherAmount(v);
-              if (v.type === 'Payment') {
-                // Payment: Pay FROM cash (CREDIT cash) → Pay TO vendor (DEBIT vendor)
-                const vendorName = (v as any).party   || 'Vendor';
-                const cashName   = (v as any).account || 'Cash/Bank';
-                // vendor1 → Debit (liability reduced; we paid them)
-                addEntry(vendorName, amount, 0, cashName,   `${v.id}-1`);
-                // cash1   → Credit (money leaves)
-                addEntry(cashName,   0, amount, vendorName, `${v.id}-2`);
-
-              } else if (v.type === 'Receipt') {
-                // Receipt: Receive FROM customer (CREDIT customer) INTO cash (DEBIT cash)
-                const custName = (v as any).party   || 'Customer';
-                const cashName = (v as any).account || 'Cash/Bank';
-                // customer → Credit (receivable settled)
-                addEntry(custName, 0, amount, cashName, `${v.id}-1`);
-                // cash    → Debit (money arrives)
-                addEntry(cashName, amount, 0, custName, `${v.id}-2`);
-
-              } else if (v.type === 'Contra') {
-                // Contra: Transfer FROM one account TO another
-                // fromAccount → Credit (money leaves), toAccount → Debit (money arrives)
-                const fromAcc = (v as any).fromAccount || 'Account';
-                const toAcc   = (v as any).toAccount   || 'Account';
-                addEntry(fromAcc, 0, amount, toAcc,   `${v.id}-1`);
-                addEntry(toAcc,   amount, 0, fromAcc, `${v.id}-2`);
-
-              } else {
-                // Sales → Debit customer. Purchase → Credit vendor.
-                const partyName = getVoucherParty(v);
-                const isSales   = v.type === 'Sales';
-                addEntry(
-                  partyName,
-                  isSales ? amount : 0,
-                  isSales ? 0 : amount,
-                  isSales ? 'Sales' : 'Purchases',
-                  v.id
-                );
-              }
-            }
+      filteredVouchers.forEach(v => {
+        const addEntry = (ledger: string, dr: number, cr: number, part: string, id: string | number) => {
+          const currentBal = (ledgerRunningBals[ledger] || 0) + dr - cr;
+          ledgerRunningBals[ledger] = currentBal;
+          allEntries.push({
+            id, date: v.date, type: v.type, particulars: part, debit: dr, credit: cr,
+            balance: Math.abs(currentBal),
+            balanceType: currentBal > 0 ? 'Dr' : currentBal < 0 ? 'Cr' : ''
           });
+        };
 
-          return allEntries;
+        if ('entries' in v && v.entries && Array.isArray(v.entries)) {
+          (v as any).entries.forEach((e: any, idx: number) => {
+            const dr = Number(e.debit) || 0;
+            const cr = Number(e.credit) || 0;
+            const counterparts = (v as any).entries.filter((x: any) => x !== e).map((x: any) => x.ledger).join(', ') || e.ledger || 'N/A';
+            addEntry(e.ledger, dr, cr, counterparts, `${v.id}-${idx}`);
+          });
+        } else {
+          const amount = getVoucherAmount(v);
+          if (v.type === 'Payment') {
+            // Payment: Pay FROM cash (CREDIT cash) → Pay TO vendor (DEBIT vendor)
+            const vendorName = (v as any).party || 'Vendor';
+            const cashName = (v as any).account || 'Cash/Bank';
+            // vendor1 → Debit (liability reduced; we paid them)
+            addEntry(vendorName, amount, 0, cashName, `${v.id}-1`);
+            // cash1   → Credit (money leaves)
+            addEntry(cashName, 0, amount, vendorName, `${v.id}-2`);
+
+          } else if (v.type === 'Receipt') {
+            // Receipt: Receive FROM customer (CREDIT customer) INTO cash (DEBIT cash)
+            const custName = (v as any).party || 'Customer';
+            const cashName = (v as any).account || 'Cash/Bank';
+            // customer → Credit (receivable settled)
+            addEntry(custName, 0, amount, cashName, `${v.id}-1`);
+            // cash    → Debit (money arrives)
+            addEntry(cashName, amount, 0, custName, `${v.id}-2`);
+
+          } else if (v.type === 'Contra') {
+            // Contra: Transfer FROM one account TO another
+            // fromAccount → Credit (money leaves), toAccount → Debit (money arrives)
+            const fromAcc = (v as any).fromAccount || 'Account';
+            const toAcc = (v as any).toAccount || 'Account';
+            addEntry(fromAcc, 0, amount, toAcc, `${v.id}-1`);
+            addEntry(toAcc, amount, 0, fromAcc, `${v.id}-2`);
+
+          } else {
+            // Sales → Debit customer. Purchase → Credit vendor.
+            const partyName = getVoucherParty(v);
+            const isSales = v.type === 'Sales';
+            addEntry(
+              partyName,
+              isSales ? amount : 0,
+              isSales ? 0 : amount,
+              isSales ? 'Sales' : 'Purchases',
+              v.id
+            );
+          }
         }
+      });
+
+      return allEntries;
+    }
 
     // Single Ledger view
     const name = nameOrId;
-      if (prefix === 'group') {
-        // Handle group view
-        const groupLedgers = ledgers.filter(l => l.group === name).map(l => l.name);
-        let balance = 0;
-        const groupEntries: any[] = [];
-        
-        filteredVouchers.forEach(v => {
-          if ('entries' in v && v.entries && Array.isArray(v.entries)) {
-            (v as any).entries.forEach((e: any) => {
-              if (groupLedgers.includes(e.ledger)) {
-                const dr = Number(e.debit) || 0;
-                const cr = Number(e.credit) || 0;
-                balance += dr - cr;
-                groupEntries.push({
-                  id: v.id,
-                  date: v.date,
-                  type: v.type,
-                  particulars: e.ledger,
-                  debit: dr,
-                  credit: cr,
-                  balance
-                });
-              }
-            });
-          }
-        });
-        
-        return groupEntries;
-      }
+    if (prefix === 'group') {
+      // Handle group view
+      const groupLedgers = ledgers.filter(l => l.group === name).map(l => l.name);
+      let balance = 0;
+      const groupEntries: any[] = [];
+
+      filteredVouchers.forEach(v => {
+        if ('entries' in v && v.entries && Array.isArray(v.entries)) {
+          (v as any).entries.forEach((e: any) => {
+            if (groupLedgers.includes(e.ledger)) {
+              const dr = Number(e.debit) || 0;
+              const cr = Number(e.credit) || 0;
+              balance += dr - cr;
+              groupEntries.push({
+                id: v.id,
+                date: v.date,
+                type: v.type,
+                particulars: e.ledger,
+                debit: dr,
+                credit: cr,
+                balance
+              });
+            }
+          });
+        }
+      });
+
+      return groupEntries;
+    }
 
     let runningBalance = 0;
     return filteredVouchers.map(v => {
@@ -1282,7 +1457,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   const ledgerSummary = useMemo(() => {
     const map = new Map<string, number>();
     const add = (name: string, delta: number) => name && map.set(name, (map.get(name) || 0) + delta);
-    
+
     // 1. Initialize with Opening Balances
     if (ledgers && ledgers.length > 0) {
       ledgers.forEach(l => {
@@ -1299,24 +1474,44 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     // 2. Process Transactions
     if (entries && entries.length > 0) {
       entries.forEach(e => {
+        // Date filtering
+        const vDate = e.transaction_date || e.date;
+        if (vDate) {
+          const d = new Date(vDate);
+          if (startDate && d < new Date(startDate)) return;
+          if (endDate && d > new Date(endDate)) return;
+        }
+
         const n = e.ledger_name || e.ledger || e.particulars;
         add(n, (Number(e.debit) || 0) - (Number(e.credit) || 0));
       });
     } else {
       filteredVouchers.forEach(v => {
         const amt = getVoucherAmount(v);
-        if (v.type === 'Payment') { add((v as any).party||'Vendor', +amt); add((v as any).account||'Cash/Bank', -amt); }
-        else if (v.type === 'Receipt') { add((v as any).party||'Customer', -amt); add((v as any).account||'Cash/Bank', +amt); }
-        else if (v.type === 'Contra') { add((v as any).fromAccount||'Account', -amt); add((v as any).toAccount||'Account', +amt); }
+        if (v.type === 'Payment') { add((v as any).party || 'Vendor', +amt); add((v as any).account || 'Cash/Bank', -amt); }
+        else if (v.type === 'Receipt') { add((v as any).party || 'Customer', -amt); add((v as any).account || 'Cash/Bank', +amt); }
+        else if (v.type === 'Contra') { add((v as any).fromAccount || 'Account', -amt); add((v as any).toAccount || 'Account', +amt); }
         else if ('entries' in v && Array.isArray((v as any).entries)) {
-          (v as any).entries.forEach((e: any) => add(e.ledger, (Number(e.debit)||0)-(Number(e.credit)||0)));
-        } else { const p = getVoucherParty(v); add(p, v.type==='Sales' ? +amt : -amt); }
+          (v as any).entries.forEach((e: any) => add(e.ledger, (Number(e.debit) || 0) - (Number(e.credit) || 0)));
+        } else { const p = getVoucherParty(v); add(p, v.type === 'Sales' ? +amt : -amt); }
       });
     }
-    return Array.from(map.entries())
+    let result = Array.from(map.entries())
       .map(([name, net]) => ({ name, balance: Math.abs(net), balanceType: net > 0 ? 'Dr' : net < 0 ? 'Cr' : '' }))
       .filter(r => r.balance > 0).sort((a, b) => a.name.localeCompare(b.name));
-  }, [entries, filteredVouchers, ledgers]);
+
+    if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
+      const [prefix, name] = selectedLedger.split(':');
+      if (prefix === 'ledger') {
+        result = result.filter(r => r.name === name);
+      } else if (prefix === 'group') {
+        const groupLedgers = ledgers.filter(l => l.group === name).map(l => l.name);
+        result = result.filter(r => groupLedgers.includes(r.name));
+      }
+    }
+
+    return result;
+  }, [entries, filteredVouchers, ledgers, selectedLedger, reportType, startDate, endDate]);
 
   // ═══ DRILL-DOWN ENTRIES useMemo ════════════════════════════════════════════
   const drillDownEntries = useMemo(() => {
@@ -1324,7 +1519,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     const name = drillDownLedger;
     let running = 0;
     const rows: any[] = [];
-    
+
     // 1. Add Opening Balance Row
     const ledger = ledgers?.find(l => l.name === name);
     if (ledger && ledger.opening_balance) {
@@ -1340,22 +1535,29 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       }
     }
 
-    const push = (date: string, particulars: string, voucherType: string, voucherNo: string, dr: number, cr: number) => {
+    const push = (date: string, particulars: string, voucherType: string, voucherNo: string, dr: number, cr: number, refNo: string = '', raw: any = null) => {
       running += dr - cr;
-      rows.push({ date, particulars, voucherType, voucherNo, debit: dr, credit: cr,
-        balance: Math.abs(running), balanceType: running > 0 ? 'Dr' : running < 0 ? 'Cr' : '' });
+      rows.push({
+        id: raw?.id,
+        date, particulars, voucherType, voucherNo, referenceNo: refNo, debit: dr, credit: cr,
+        balance: Math.abs(running), balanceType: running > 0 ? 'Dr' : running < 0 ? 'Cr' : '', rawVoucher: raw
+      });
     };
 
     // PRIMARY: Use data fetched from the API for this specific ledger
     if (drillDownData && drillDownData.length > 0) {
       drillDownData.forEach(e => {
+        const refNo = e.reference_number || e.referenceNo || e.ref_no || '-';
+        const allocStatus = e.allocation_status || e.allocationStatus || 'Unutilized';
         push(
           e.transaction_date || e.date || '',
           e.particulars || 'N/A',
           e.voucher_type || e.type || '',
-          e.voucher_number || '',
+          e.voucher_number || e.voucherNo || '',
           Number(e.debit) || 0,
-          Number(e.credit) || 0
+          Number(e.credit) || 0,
+          refNo,
+          { ...e, allocation_status: allocStatus, reference_number: refNo }
         );
       });
       return rows;
@@ -1364,23 +1566,45 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     if (entries && entries.length > 0) {
       const rel = entries.filter(e => (e.ledger_name || e.ledger || '') === name);
       if (rel.length > 0) {
-        rel.forEach(e => push(e.transaction_date || e.date || '', e.particulars || e.ledger || 'N/A', e.voucher_type || e.type || '', e.voucher_number || '', Number(e.debit) || 0, Number(e.credit) || 0));
+        rel.forEach(e => push(
+          e.transaction_date || e.date || '', 
+          e.particulars || e.ledger || 'N/A', 
+          e.voucher_type || e.type || '', 
+          e.voucher_number || e.voucherNo || '', 
+          Number(e.debit) || 0, 
+          Number(e.credit) || 0, 
+          e.reference_number || e.referenceNo || '-',
+          e
+        ));
         return rows;
       }
     }
     // FALLBACK: Try vouchers
     filteredVouchers.forEach(v => {
       const amt = getVoucherAmount(v);
-      const vNo = (v as any).voucher_number||(v as any).voucherNumber||'';
-      if (v.type==='Payment') { const vn=(v as any).party||'Vendor', cn=(v as any).account||'Cash/Bank'; if(vn===name) push(v.date,cn,v.type,vNo,amt,0); if(cn===name) push(v.date,vn,v.type,vNo,0,amt); }
-      else if (v.type==='Receipt') { const cn=(v as any).party||'Customer', an=(v as any).account||'Cash/Bank'; if(cn===name) push(v.date,an,v.type,vNo,0,amt); if(an===name) push(v.date,cn,v.type,vNo,amt,0); }
-      else if (v.type==='Contra') { const fa=(v as any).fromAccount||'Account', ta=(v as any).toAccount||'Account'; if(fa===name) push(v.date,ta,v.type,vNo,0,amt); if(ta===name) push(v.date,fa,v.type,vNo,amt,0); }
+      const vNo = (v as any).voucher_number || (v as any).voucherNumber || '';
+      if (v.type === 'Payment') { const vn = (v as any).party || 'Vendor', cn = (v as any).account || 'Cash/Bank'; if (vn === name) push(v.date, cn, v.type, vNo, amt, 0); if (cn === name) push(v.date, vn, v.type, vNo, 0, amt); }
+      else if (v.type === 'Receipt') { const cn = (v as any).party || 'Customer', an = (v as any).account || 'Cash/Bank'; if (cn === name) push(v.date, an, v.type, vNo, 0, amt); if (an === name) push(v.date, cn, v.type, vNo, amt, 0); }
+      else if (v.type === 'Contra') { const fa = (v as any).fromAccount || 'Account', ta = (v as any).toAccount || 'Account'; if (fa === name) push(v.date, ta, v.type, vNo, 0, amt); if (ta === name) push(v.date, fa, v.type, vNo, amt, 0); }
       else if ('entries' in v && Array.isArray((v as any).entries)) {
-        (v as any).entries.forEach((e: any) => { if(e.ledger===name) { const cp=(v as any).entries.filter((x:any)=>x!==e).map((x:any)=>x.ledger).join(', ')||'Journal'; push(v.date,cp,v.type,vNo,Number(e.debit)||0,Number(e.credit)||0); } });
-      } else { const p=getVoucherParty(v); if(p===name) { const s=v.type==='Sales'; push(v.date,s?'Sales':'Purchases',v.type,vNo,s?amt:0,s?0:amt); } }
+        (v as any).entries.forEach((e: any) => { if (e.ledger === name) { const cp = (v as any).entries.filter((x: any) => x !== e).map((x: any) => x.ledger).join(', ') || 'Journal'; push(v.date, cp, v.type, vNo, Number(e.debit) || 0, Number(e.credit) || 0); } });
+      } else { const p = getVoucherParty(v); if (p === name) { const s = v.type === 'Sales'; push(v.date, s ? 'Sales' : 'Purchases', v.type, vNo, s ? amt : 0, s ? 0 : amt); } }
     });
     return rows;
   }, [drillDownLedger, drillDownData, entries, filteredVouchers, selectedLedger, ledgers]);
+
+  const availableSections = useMemo(() => {
+    if (!isTdsTcsLedger || !drillDownEntries) return [];
+    const sectionsSet = new Set<string>();
+    drillDownEntries.forEach((e: any) => {
+      if (e.rawVoucher?.tds_components) {
+        e.rawVoucher.tds_components.forEach((c: any) => {
+          if (c.component) sectionsSet.add(c.component);
+        });
+      }
+    });
+    return Array.from(sectionsSet);
+  }, [drillDownEntries, isTdsTcsLedger]);
 
   // ═══ FILTERED LEDGER DATA (for Ledger / Journal views) ══════════════════════
   const filteredDrillData = useMemo(() => {
@@ -1394,13 +1618,34 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       const vtMatch = !ledgerFilters.voucherType || (e.voucherType || '').toLowerCase().includes(ledgerFilters.voucherType.toLowerCase());
       const drMatch = !ledgerFilters.debit || String(e.debit || '').includes(ledgerFilters.debit);
       const crMatch = !ledgerFilters.credit || String(e.credit || '').includes(ledgerFilters.credit);
-      return dateMatch && partMatch && vNoMatch && vtMatch && drMatch && crMatch;
+
+      let sessionMatch = true;
+      if (isTdsTcsLedger && selectedSession !== 'all' && e.date) {
+        try {
+          const d = new Date(e.date);
+          if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = d.getMonth() + 1;
+            const sessionStartYear = month >= 4 ? year : year - 1;
+            const sessionStr = `${sessionStartYear}-${sessionStartYear + 1}`;
+            if (sessionStr !== selectedSession) sessionMatch = false;
+          }
+        } catch (err) { }
+      }
+
+      let sectionFilterMatch = true;
+      if (isTdsTcsLedger && selectedSection !== 'all') {
+        const hasSec = e.rawVoucher?.tds_components?.some((c: any) => c.component === selectedSection);
+        if (!hasSec) sectionFilterMatch = false;
+      }
+
+      return dateMatch && partMatch && vNoMatch && vtMatch && drMatch && crMatch && sessionMatch && sectionFilterMatch;
     });
-  }, [drillDownEntries, ledgerFilters]);
+  }, [drillDownEntries, ledgerFilters, isTdsTcsLedger, selectedSession, selectedSection]);
 
   // ═══ MONTH VIEW DATA ═════════════════════════════════════════════════════════
   const ledgerMonthData = useMemo(() => {
-    const months = ['April','May','June','July','August','September','October','November','December','January','February','March'];
+    const months = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
     let cumBal = 0;
     return months.map(month => {
       const mStr = monthNameToNumber[month];
@@ -1421,32 +1666,131 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   // ═══ ALLOCATION VIEW DATA ════════════════════════════════════════════════════
   const allocationRows = useMemo(() => {
     if (!drillDownEntries || drillDownEntries.length === 0) return [];
-    // Group by voucherNo
+
+    // Group by referenceNo to find linked vouchers
     const groups: Record<string, any[]> = {};
-    drillDownEntries.forEach(e => {
-      if (e.voucherType === 'Opening') return;
-      const key = e.voucherNo || `standalone-${Math.random()}`;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(e);
+    drillDownEntries.forEach(entry => {
+      if (entry.voucherType === 'Opening') return;
+      const vt = (entry.voucherType || '').toLowerCase();
+      const isSource = vt.includes('sales') || vt.includes('purchase') || vt.includes('journal') || vt.includes('opening');
+      const isApplication = vt.includes('receipt') || vt.includes('payment') || vt.includes('contra');
+      
+      let ref = entry.referenceNo?.trim() || entry.rawVoucher?.reference_number?.trim() || '-';
+      
+      // For source vouchers, if referenceNo is empty, treat voucherNo as the reference
+      if (isSource && (ref === '-' || !ref)) {
+        ref = entry.voucherNo?.trim() || entry.rawVoucher?.voucher_number?.trim() || '-';
+      }
+
+      if (ref === '-') {
+        const uniqueId = `standalone-${Math.random()}`;
+        groups[uniqueId] = [entry];
+        return;
+      }
+      const groupKey = ref;
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(entry);
     });
 
     const rows: any[] = [];
-    Object.entries(groups).forEach(([, entries]) => {
-      const src = entries[0];
-      const isDr = (src.debit || 0) > 0;
-      const amt = isDr ? (src.debit || 0) : (src.credit || 0);
-      const apps = entries.slice(1);
-      if (apps.length === 0) {
-        rows.push({ date: src.date, postedFrom: src.voucherType, refNo: src.voucherNo || '-', netAmount: amt, appliedDate: '-', appliedRefNo: '-', appliedAmount: '-', pendingBalance: amt, status: 'Due', rowSpan: 1, isFirstInSource: true });
+
+    // Process groups and sort by date
+    const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
+      const firstA = groups[aRef][0];
+      const firstB = groups[bRef][0];
+      return new Date(firstA?.date || 0).getTime() - new Date(firstB?.date || 0).getTime();
+    });
+
+    sortedGroupRefs.forEach(ref => {
+      const entries = groups[ref];
+
+      // If it's a standalone group
+      if (ref.startsWith('standalone-')) {
+        const entry = entries[0];
+        const vt = (entry.voucherType || '').toLowerCase();
+        // Only show sources in Allocation View
+        if (!['sales', 'purchase', 'journal', 'opening'].includes(vt) && entry.debit === 0 && entry.credit === 0) return;
+
+        const isDr = (entry.debit || 0) > 0;
+        const amt = isDr ? (entry.debit || 0) : (entry.credit || 0);
+
+        rows.push({
+          date: entry.date,
+          postedFrom: entry.voucherType,
+          refNo: entry.referenceNo !== '-' ? entry.referenceNo : (entry.voucherNo || '-'),
+          netAmount: amt,
+          appliedDate: '-',
+          appliedRefNo: '-',
+          appliedAmount: '-',
+          pendingBalance: amt,
+          status: amt === 0 ? 'Paid' : 'Due',
+          rowSpan: 1,
+          isFirstInSource: true
+        });
+        return;
+      }
+
+      // For linked groups
+      const sources = entries.filter(e => !['receipt', 'payment', 'contra'].includes((e.voucherType || '').toLowerCase()));
+      const applications = entries.filter(e => ['receipt', 'payment', 'contra'].includes((e.voucherType || '').toLowerCase()));
+
+      if (sources.length === 0) return;
+
+      const firstSource = sources[0];
+      const isDr = (firstSource.debit || 0) > 0;
+
+      // Calculate total source amount for the group
+      const totalSourceAmt = sources.reduce((sum, s) => sum + (isDr ? (s.debit || 0) : (s.credit || 0)), 0);
+
+      if (applications.length === 0) {
+        const sourceAllocStatus = firstSource.rawVoucher?.allocation_status;
+        const displayStatus = sourceAllocStatus === 'Utilized' ? 'Paid' : (totalSourceAmt === 0 ? 'Paid' : 'Due');
+        rows.push({
+          date: firstSource.date,
+          postedFrom: firstSource.voucherType,
+          refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : (firstSource.voucherNo || '-'),
+          netAmount: totalSourceAmt,
+          appliedDate: '-',
+          appliedRefNo: '-',
+          appliedAmount: '-',
+          pendingBalance: totalSourceAmt,
+          status: displayStatus,
+          rowSpan: 1,
+          isFirstInSource: true
+        });
       } else {
-        let lastPending = amt;
-        const totalApp = apps.reduce((s, a) => s + ((a.debit || 0) > 0 ? (a.debit || 0) : (a.credit || 0)), 0);
-        const calcStatus = Math.round(amt * 100) <= Math.round(totalApp * 100) ? 'Paid' : (totalApp > 0 ? 'Partially Paid' : 'Due');
-        apps.forEach((app, idx) => {
-          const appAmt = (app.debit || 0) > 0 ? (app.debit || 0) : (app.credit || 0);
-          const pending = Math.max(0, lastPending - appAmt);
-          rows.push({ date: src.date, postedFrom: src.voucherType, refNo: src.voucherNo || '-', netAmount: amt, appliedDate: app.date, appliedRefNo: app.voucherNo || '-', appliedAmount: appAmt, pendingBalance: pending, status: calcStatus, rowSpan: apps.length, isFirstInSource: idx === 0 });
-          lastPending = pending;
+        let lastPending = totalSourceAmt;
+        const totalAppAmt = applications.reduce((sum, a) => sum + (isDr ? (a.credit || 0) : (a.debit || 0)), 0);
+        
+        let calcStatus = 'Due';
+        if (Math.round(totalSourceAmt * 100) <= Math.round(totalAppAmt * 100)) {
+            calcStatus = 'Paid';
+        } else if (totalAppAmt > 0) {
+            calcStatus = 'Partially Paid';
+        }
+        
+        // If any application is explicitly utilized, we can also consider it partially paid at least
+        if (calcStatus === 'Due' && applications.some(a => a.rawVoucher?.allocation_status === 'Utilized')) {
+            calcStatus = 'Partially Paid';
+        }
+
+        applications.forEach((app, appIdx) => {
+          const appAmt = isDr ? (app.credit || 0) : (app.debit || 0);
+          const currentPending = Math.max(0, lastPending - appAmt);
+          rows.push({
+            date: firstSource.date,
+            postedFrom: firstSource.voucherType,
+            refNo: firstSource.referenceNo !== '-' ? firstSource.referenceNo : (firstSource.voucherNo || '-'),
+            netAmount: totalSourceAmt,
+            appliedDate: app.date,
+            appliedRefNo: app.voucherNo || '-',
+            appliedAmount: appAmt,
+            pendingBalance: currentPending,
+            status: calcStatus,
+            rowSpan: applications.length,
+            isFirstInSource: appIdx === 0
+          });
+          lastPending = currentPending;
         });
       }
     });
@@ -1465,14 +1809,33 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
-          {filteredVouchers.length > 0 ? filteredVouchers.map((v, idx) => (
-            <tr key={`daybook-${v.type}-${v.date}-${v.id || idx}`} className="hover:bg-gray-50 transition-colors">
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(v.date).toLocaleDateString()}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{v.type}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{getVoucherParty(v)}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">₹{getVoucherAmount(v).toFixed(2)}</td>
-            </tr>
-          )) : (
+          {filteredVouchers.length > 0 ? filteredVouchers.map((v, idx) => {
+            const party = getVoucherParty(v);
+            return (
+              <tr 
+                key={`daybook-${v.type}-${v.date}-${v.id || idx}`} 
+                className="hover:bg-indigo-50 transition-colors cursor-pointer group"
+                onClick={() => {
+                  if (party && party !== 'Unknown') {
+                    setReportType('LedgerReport');
+                    setSelectedLedger(`ledger:${party}`);
+                    setDrillDownLedger(party);
+                  }
+                }}
+                title={`View Ledger Report for ${party}`}
+              >
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(v.date).toLocaleDateString()}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{v.type}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-indigo-600 group-hover:font-semibold transition-colors flex items-center gap-1">
+                  {party}
+                  <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">₹{getVoucherAmount(v).toFixed(2)}</td>
+              </tr>
+            );
+          }) : (
             <tr>
               <td colSpan={4} className="px-6 py-12 text-sm text-center text-gray-500">
                 {(startDate || endDate) ? 'No transactions found for the selected filter.' : 'No transactions found.'}
@@ -1507,9 +1870,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 </span>
               </td>
               <td className="px-6 py-3 whitespace-nowrap text-right">
-                <span className={`text-sm font-mono font-bold ${row.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>
+                <span className={`text-sm font-mono font-bold ${row.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>
                   ₹{row.balance.toFixed(2)}
-                  <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded font-semibold ${row.balanceType==='Dr'?'bg-orange-100 text-orange-700':'bg-green-100 text-green-700'}`}>{row.balanceType}</span>
+                  <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded font-semibold ${row.balanceType === 'Dr' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{row.balanceType}</span>
                 </span>
               </td>
             </tr>
@@ -1522,7 +1885,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             <tr>
               <td className="px-6 py-3 text-sm font-bold text-gray-600">{ledgerSummary.length} Ledgers</td>
               <td className="px-6 py-3 text-right text-sm font-bold text-orange-600">
-                Dr: ₹{ledgerSummary.filter(r=>r.balanceType==='Dr').reduce((s,r)=>s+r.balance,0).toFixed(2)}
+                Dr: ₹{ledgerSummary.filter(r => r.balanceType === 'Dr').reduce((s, r) => s + r.balance, 0).toFixed(2)}
               </td>
             </tr>
           </tfoot>
@@ -1537,6 +1900,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-IN') : '-';
     const totalDr = filteredDrillData.reduce((s, e) => s + (e.debit || 0), 0);
     const totalCr = filteredDrillData.reduce((s, e) => s + (e.credit || 0), 0);
+
+    const isTdsTcsLedger = drillDownLedger && (drillDownLedger.toLowerCase().includes('tds') || drillDownLedger.toLowerCase().includes('tcs'));
 
     const viewBtns = [
       { key: 'ledger', label: 'Bill-wise View' },
@@ -1568,15 +1933,15 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
               {last && (
                 <div className="text-right mr-4">
                   <div className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">Closing Balance</div>
-                  <div className={`text-2xl font-bold ${last.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>
+                  <div className={`text-2xl font-bold ${last.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>
                     ₹{last.balance.toFixed(2)}
-                    <span className={`ml-2 text-sm px-2 py-0.5 rounded font-semibold ${last.balanceType==='Dr'?'bg-orange-100 text-orange-700':'bg-green-100 text-green-700'}`}>{last.balanceType}</span>
+                    <span className={`ml-2 text-sm px-2 py-0.5 rounded font-semibold ${last.balanceType === 'Dr' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{last.balanceType}</span>
                   </div>
                 </div>
               )}
               {viewBtns.map(b => (
                 <button key={b.key} onClick={() => setLedgerViewMode(b.key as any)}
-                  className={`px-4 py-2 rounded-[4px] text-sm font-medium border transition-colors shadow-sm ${ledgerViewMode===b.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                  className={`px-4 py-2 rounded-[4px] text-sm font-medium border transition-colors shadow-sm ${ledgerViewMode === b.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
                   {b.label}
                 </button>
               ))}
@@ -1589,7 +1954,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           <div className="erp-card border border-slate-200 overflow-hidden p-0">
             {isDrillDownLoading ? (
               <div className="flex items-center justify-center py-16 gap-3 text-indigo-600">
-                <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                 <span className="text-sm font-semibold">Loading transactions...</span>
               </div>
             ) : (
@@ -1600,6 +1965,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">Date</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">Created From</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">Reference No</th>
+                      {isTdsTcsLedger && (
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">Section</th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">Ledger</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">Status</th>
                       <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">Debit (₹)</th>
@@ -1612,41 +1980,49 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                     {filteredDrillData.length > 0 ? filteredDrillData.map((e, idx) => {
                       const st = allocationRows.find(r => r.refNo === e.voucherNo && r.isFirstInSource)?.status || '-';
                       return (
-                      <tr key={`dd-${idx}`}
-                        className={`transition-colors ${e.voucherType==='Opening' ? 'bg-indigo-50/50' : 'hover:bg-indigo-50'}`}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-50">{fmtDate(e.date)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{e.voucherType||'-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium border-r border-gray-50">{e.voucherNo||'-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-50">{e.particulars||'-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
-                          {st !== '-' && e.voucherType !== 'Opening' ? (
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${st === 'Paid' || st === 'Utilized' ? 'bg-green-100 text-green-800' : st === 'Due' ? 'bg-red-100 text-red-800' : st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{st}</span>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-50">{e.debit>0?`₹${e.debit.toFixed(2)}`:'-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-50">{e.credit>0?`₹${e.credit.toFixed(2)}`:'-'}</td>
-                        <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-bold border-r border-gray-50 ${e.balanceType==='Dr'?'text-orange-600':e.balanceType==='Cr'?'text-green-700':'text-gray-400'}`}>
-                          {e.balance>0 ? <>{`₹${e.balance.toFixed(2)} `}<span className={`text-[10px] font-normal uppercase ${e.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>{e.balanceType}</span></> : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          {e.voucherType !== 'Opening' && (
-                            <button onClick={() => setSelectedTransaction({ ...e, ledgerName: drillDownLedger })} className="text-indigo-600 hover:text-indigo-900 mx-auto inline-block" title="View Transaction">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                            </button>
+                        <tr key={`dd-${idx}`}
+                          className={`transition-colors ${e.voucherType === 'Opening' ? 'bg-indigo-50/50' : 'hover:bg-indigo-50'}`}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-50">{fmtDate(e.date)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{e.voucherType || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium border-r border-gray-50">{e.voucherNo || '-'}</td>
+                          {isTdsTcsLedger && (
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600 border-r border-gray-50">
+                              {e.rawVoucher?.tds_components ? e.rawVoucher.tds_components.map((c: any) => c.component).join(', ') : '-'}
+                            </td>
                           )}
-                        </td>
-                      </tr>
-                    )}) : (
-                      <tr><td colSpan={9} className="px-6 py-12 text-center text-sm text-gray-400">No transactions found for <strong>{drillDownLedger}</strong>.</td></tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-50">
+                            {isTdsTcsLedger && e.particulars && typeof e.particulars === 'string' ? e.particulars.split(' | ')[0] : (e.particulars || '-')}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
+                            {st !== '-' && e.voucherType !== 'Opening' ? (
+                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${st === 'Paid' || st === 'Utilized' ? 'bg-green-100 text-green-800' : st === 'Due' ? 'bg-red-100 text-red-800' : st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{st}</span>
+                            ) : '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-50">{e.debit > 0 ? `₹${e.debit.toFixed(2)}` : '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-50">{e.credit > 0 ? `₹${e.credit.toFixed(2)}` : '-'}</td>
+                          <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-bold border-r border-gray-50 ${e.balanceType === 'Dr' ? 'text-orange-600' : e.balanceType === 'Cr' ? 'text-green-700' : 'text-gray-400'}`}>
+                            {e.balance > 0 ? <>{`₹${e.balance.toFixed(2)} `}<span className={`text-[10px] font-normal uppercase ${e.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>{e.balanceType}</span></> : '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            {e.voucherType !== 'Opening' && (
+                              <button onClick={() => handleViewTransaction(e)} className="text-indigo-600 hover:text-indigo-900 mx-auto inline-block" title="View Transaction">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    }) : (
+                      <tr><td colSpan={isTdsTcsLedger ? 10 : 9} className="px-6 py-12 text-center text-sm text-gray-400">No transactions found for <strong>{drillDownLedger}</strong>.</td></tr>
                     )}
                   </tbody>
                   {filteredDrillData.length > 0 && (
                     <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                       <tr>
-                        <td colSpan={5} className="px-6 py-3 text-right text-gray-900 text-sm">TOTAL</td>
+                        <td colSpan={isTdsTcsLedger ? 6 : 5} className="px-6 py-3 text-right text-gray-900 text-sm">TOTAL</td>
                         <td className="px-6 py-3 text-right text-gray-900 text-sm">₹{totalDr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                         <td className="px-6 py-3 text-right text-gray-900 text-sm">₹{totalCr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        <td className={`px-6 py-3 text-right text-sm ${last?.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>{last?`₹${last.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`:''}</td>
+                        <td className={`px-6 py-3 text-right text-sm ${last?.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>{last ? `₹${last.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : ''}</td>
                         <td></td>
                       </tr>
                     </tfoot>
@@ -1662,7 +2038,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           <div className="erp-card border border-slate-200 overflow-hidden p-0">
             {isDrillDownLoading ? (
               <div className="flex items-center justify-center py-16 gap-3 text-indigo-600">
-                <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                 <span className="text-sm font-semibold">Loading journal view...</span>
               </div>
             ) : (
@@ -1675,84 +2051,145 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Type</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">VCH No.</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Status</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[150px] border-r border-gray-50">Running Bal</th>
                       <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px] border-r border-gray-50">Debit (₹)</th>
                       <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px] border-r border-gray-50">Credit (₹)</th>
-                      <th className="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-[80px]">Action</th>
+                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[150px]">RUNNING BALANCE</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white">
                     {filteredDrillData.length > 0 ? filteredDrillData.map((e, idx) => {
                       const st = allocationRows.find(r => r.refNo === e.voucherNo && r.isFirstInSource)?.status || '-';
                       return (
-                      <React.Fragment key={`dd-j-${idx}`}>
-                        <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top border-r border-gray-50">{fmtDate(e.date)}</td>
-                          <td className="px-6 py-4 text-sm font-bold text-gray-800 border-r border-gray-50">{e.particulars||'-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-50">{e.voucherType||'-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-500 border-r border-gray-50">{e.voucherNo||'-'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
-                            {st !== '-' && e.voucherType !== 'Opening' ? (
-                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${st === 'Paid' || st === 'Utilized' ? 'bg-green-100 text-green-800' : st === 'Due' ? 'bg-red-100 text-red-800' : st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{st}</span>
-                            ) : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-right font-bold text-gray-900 border-r border-gray-50">
-                            {e.balance>0 ? <>{`₹${e.balance.toLocaleString('en-IN', {minimumFractionDigits:2})} `}<span className={`text-[10px] font-normal uppercase ${e.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>{e.balanceType}</span></> : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right border-r border-gray-50">{e.debit>0?`₹${e.debit.toLocaleString('en-IN', {minimumFractionDigits:2})}`:'-'}</td>
-                          <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right border-r border-gray-50">{e.credit>0?`₹${e.credit.toLocaleString('en-IN', {minimumFractionDigits:2})}`:'-'}</td>
-                          <td className="px-6 py-4 text-center">
-                            {e.voucherType !== 'Opening' && (
-                              <button onClick={() => setSelectedTransaction({ ...e, ledgerName: drillDownLedger })} className="text-indigo-600 hover:text-indigo-900 mx-auto inline-block" title="View Transaction">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        {/* Sub-rows for journal view */}
-                        {e.debit > 0 && e.voucherType !== 'Opening' && (
-                          <tr className="bg-white border-b border-gray-50/30">
-                            <td className="border-r border-gray-50"></td>
-                            <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
-                              <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
-                                <span>{drillDownLedger} A/c</span>
-                                <div className="flex items-center gap-1">
-                                  <span className="font-bold">₹{e.debit.toLocaleString('en-IN', {minimumFractionDigits:2})}</span>
-                                  <span className="text-gray-400 text-[10px]">Dr</span>
-                                </div>
-                              </div>
+                        <React.Fragment key={`dd-j-${idx}`}>
+                          {/* ── Main transaction row ── */}
+                          <tr className="border-b border-gray-100 hover:bg-indigo-50/30 transition-colors cursor-pointer"
+                            onClick={() => e.voucherType !== 'Opening' && handleViewTransaction(e)}>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top border-r border-gray-100">{fmtDate(e.date)}</td>
+                            <td className="px-6 py-4 text-sm font-bold text-gray-800 border-r border-gray-100">{e.voucherType !== 'Opening' ? '(as per details)' : e.particulars || 'Opening Balance'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-100">{e.voucherType || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-500 border-r border-gray-100">{e.voucherNo || '-'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100">
+                              {st !== '-' && e.voucherType !== 'Opening' ? (
+                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${st === 'Paid' || st === 'Utilized' ? 'bg-green-100 text-green-800' : st === 'Due' ? 'bg-red-100 text-red-800' : st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{st}</span>
+                              ) : '-'}
                             </td>
-                            <td colSpan={7}></td>
-                          </tr>
-                        )}
-                        {e.credit > 0 && e.voucherType !== 'Opening' && (
-                          <tr className="bg-white border-b border-gray-50/30">
-                            <td className="border-r border-gray-50"></td>
-                            <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
-                              <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
-                                <span>{drillDownLedger} A/c</span>
-                                <div className="flex items-center gap-1">
-                                  <span className="font-bold">₹{e.credit.toLocaleString('en-IN', {minimumFractionDigits:2})}</span>
-                                  <span className="text-gray-400 text-[10px]">Cr</span>
-                                </div>
-                              </div>
+                            <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right border-r border-gray-100">{e.debit > 0 ? `₹${e.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right border-r border-gray-100">{e.credit > 0 ? `₹${e.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">
+                              {e.balance > 0 ? <>{`₹${e.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} `}<span className={`text-[10px] font-normal uppercase ${e.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>{e.balanceType}</span></> : '-'}
                             </td>
-                            <td colSpan={7}></td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    )}) : (
-                      <tr><td colSpan={9} className="px-6 py-12 text-center text-sm text-gray-400">No transactions found for <strong>{drillDownLedger}</strong>.</td></tr>
+                          {/* ── Breakdown sub-rows (Customer Portal / Tally style) ── */}
+                          {e.voucherType !== 'Opening' && (() => {
+                            const raw = e.rawVoucher || {};
+                            const fullLegs = raw.full_legs || [];
+                            
+                            const drLegs: { label: string, amount: number, indent: string }[] = [];
+                            const crLegs: { label: string, amount: number, indent: string }[] = [];
+                            
+                            if (fullLegs.length > 0) {
+                                // Robustly determine taxable amount (base value for tax %)
+                                // It is the sum of amounts of all legs that are NOT tax/TDS and NOT the customer/vendor ledger itself.
+                                const isTaxOrTds = (name: string) => name.includes('Tax Liability') || name.includes('Tax Credit') || name.includes('TDS') || name.includes('TCS');
+                                const baseLegs = fullLegs.filter((l: any) => !isTaxOrTds(l.ledger_name) && l.ledger_name !== drillDownLedger);
+                                const taxableAmount = baseLegs.reduce((sum: number, l: any) => sum + (l.credit > 0 ? l.credit : l.debit), 0);
+
+                                fullLegs.forEach((leg: any) => {
+                                    let label = leg.ledger_name;
+                                    const amount = leg.debit > 0 ? leg.debit : leg.credit;
+                                    
+                                    if (taxableAmount > 0 && (label.includes('Tax Liability') || label.includes('Tax Credit') || label.includes('TDS') || label.includes('TCS'))) {
+                                        const perc = parseFloat(((amount / taxableAmount) * 100).toFixed(2));
+                                        if (perc > 0) {
+                                            if (label.includes('Liability')) {
+                                                if (label.includes('(CGST)')) label = `Output CGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(SGST)') || label.includes('UTGST')) label = `Output SGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(IGST)')) label = `Output IGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(Cess)')) label = `Output Cess Ledger @ ${perc}%`;
+                                                else if (label.includes('State Cess')) label = `Output State Cess Ledger @ ${perc}%`;
+                                                else label = `${label} @ ${perc}%`;
+                                            } else if (label.includes('Credit')) {
+                                                if (label.includes('(CGST)')) label = `Input CGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(SGST)') || label.includes('UTGST')) label = `Input SGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(IGST)')) label = `Input IGST Ledger @ ${perc}%`;
+                                                else if (label.includes('(Cess)')) label = `Input Cess Ledger @ ${perc}%`;
+                                                else if (label.includes('State Cess')) label = `Input State Cess Ledger @ ${perc}%`;
+                                                else label = `${label} @ ${perc}%`;
+                                            } else if (label.includes('TDS') || label.includes('TCS')) {
+                                                label = `${label} @ ${perc}%`;
+                                            }
+                                        }
+                                    }
+
+                                    if (leg.debit > 0) {
+                                        drLegs.push({ label, amount: leg.debit, indent: 'pl-10' });
+                                    }
+                                    if (leg.credit > 0) {
+                                        crLegs.push({ label, amount: leg.credit, indent: 'pl-16' });
+                                    }
+                                });
+                            } else {
+                                // Fallback if full_legs isn't available for some reason
+                                if (e.debit > 0) {
+                                    drLegs.push({ label: drillDownLedger, amount: e.debit, indent: 'pl-10' });
+                                    crLegs.push({ label: e.particulars || 'Ledger', amount: e.debit, indent: 'pl-16' });
+                                } else if (e.credit > 0) {
+                                    drLegs.push({ label: e.particulars || 'Ledger', amount: e.credit, indent: 'pl-10' });
+                                    crLegs.push({ label: drillDownLedger, amount: e.credit, indent: 'pl-16' });
+                                }
+                            }
+
+                            return (
+                              <>
+                                {drLegs.map((leg, i) => (
+                                  <tr key={`dr-${i}`} className="bg-white border-b border-gray-50/50">
+                                    <td className="border-r border-gray-50 py-1.5"></td>
+                                    <td className={`py-1.5 border-r border-gray-50 ${leg.indent} pr-4`}>
+                                      <div className="flex justify-between items-center text-xs font-medium text-gray-700">
+                                        <span>{leg.label}</span>
+                                        <div className="flex items-center gap-1 ml-4">
+                                          <span className="font-bold text-gray-900">₹{leg.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-gray-400 text-[10px]">Dr</span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td colSpan={6}></td>
+                                  </tr>
+                                ))}
+                                {crLegs.map((leg, i) => (
+                                  <tr key={`cr-${i}`} className="bg-white border-b border-gray-50/50">
+                                    <td className="border-r border-gray-50 py-1.5"></td>
+                                    <td className={`py-1.5 border-r border-gray-50 ${leg.indent} pr-4`}>
+                                      <div className="flex justify-between items-center text-xs font-medium text-indigo-600">
+                                        <span>{leg.label}</span>
+                                        <div className="flex items-center gap-1 ml-4">
+                                          <span className="font-bold">₹{leg.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-gray-400 text-[10px]">Cr</span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td colSpan={6}></td>
+                                  </tr>
+                                ))}
+                                {/* Spacer row between transactions */}
+                                <tr className="bg-white"><td colSpan={8} className="py-1"></td></tr>
+                              </>
+                            );
+                          })()}
+                        </React.Fragment>
+                      )
+                    }) : (
+                      <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-400">No transactions found for <strong>{drillDownLedger}</strong>.</td></tr>
                     )}
                   </tbody>
                   {filteredDrillData.length > 0 && (
                     <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-bold">
                       <tr>
-                        <td colSpan={5} className="px-6 py-4 text-right text-sm text-gray-700">TOTAL</td>
-                        <td className={`px-6 py-4 text-sm font-mono text-right ${last?.balanceType==='Dr'?'text-orange-600':'text-green-700'}`}>{last?`₹${last.balance.toLocaleString('en-IN', {minimumFractionDigits:2})} ${last.balanceType}`:''}</td>
-                        <td className="px-6 py-4 text-sm text-right text-orange-600">₹{totalDr.toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
-                        <td className="px-6 py-4 text-sm text-right text-green-700">₹{totalCr.toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
-                        <td></td>
+                        <td colSpan={4} className="px-6 py-4 text-right text-sm text-gray-700">TOTALS:</td>
+                        <td className="px-6 py-4"></td>
+                        <td className="px-6 py-4 text-sm text-right text-orange-600">₹{totalDr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-6 py-4 text-sm text-right text-green-700">-</td>
+                        <td className={`px-6 py-4 text-sm font-mono text-right ${last?.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>{last ? `₹${last.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${last.balanceType}` : ''}</td>
                       </tr>
                     </tfoot>
                   )}
@@ -1771,13 +2208,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 <button onClick={() => setIsMonthFilterOpen(!isMonthFilterOpen)}
                   className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                   <span>{selectedMonths.length > 0 ? `${selectedMonths.length} Selected` : 'All Months'}</span>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
                 {isMonthFilterOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-                    {['April','May','June','July','August','September','October','November','December','January','February','March'].map(m => (
+                    {['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'].map(m => (
                       <label key={m} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer">
-                        <input type="checkbox" checked={selectedMonths.includes(m)} onChange={() => setSelectedMonths(selectedMonths.includes(m) ? selectedMonths.filter(x=>x!==m) : [...selectedMonths, m])} className="w-4 h-4 text-indigo-600 border-gray-300 rounded"/>
+                        <input type="checkbox" checked={selectedMonths.includes(m)} onChange={() => setSelectedMonths(selectedMonths.includes(m) ? selectedMonths.filter(x => x !== m) : [...selectedMonths, m])} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
                         <span className="ml-2 text-sm text-gray-700">{m}</span>
                       </label>
                     ))}
@@ -1803,7 +2240,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       <td className="px-6 py-5 text-sm text-right text-gray-600 font-medium">{e.debit !== '-' ? `₹${e.debit}` : '-'}</td>
                       <td className="px-6 py-5 text-sm text-right text-gray-600 font-medium">{e.credit !== '-' ? `₹${e.credit}` : '-'}</td>
                       <td className="px-6 py-5 text-sm text-right font-bold text-gray-900">
-                        {e.closingBalance !== '-' ? <>₹{Math.abs(e.rawBalance).toLocaleString('en-IN',{minimumFractionDigits:2})}<span className="ml-1 text-gray-500 text-xs font-normal">{e.rawBalance>0?'Dr':'Cr'}</span></> : '-'}
+                        {e.closingBalance !== '-' ? <>₹{Math.abs(e.rawBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}<span className="ml-1 text-gray-500 text-xs font-normal">{e.rawBalance > 0 ? 'Dr' : 'Cr'}</span></> : '-'}
                       </td>
                     </tr>
                   ))}
@@ -1811,8 +2248,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 <tfoot className="bg-[#F8F9FA]">
                   <tr>
                     <td className="px-6 py-4 text-sm font-bold text-gray-500 text-center tracking-wide">TOTAL</td>
-                    <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">₹{ledgerMonthData.reduce((s,e)=>s+(e.debit!=='-'?parseFloat(e.debit.replace(/,/g,'')):0),0).toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
-                    <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">₹{ledgerMonthData.reduce((s,e)=>s+(e.credit!=='-'?parseFloat(e.credit.replace(/,/g,'')):0),0).toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
+                    <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">₹{ledgerMonthData.reduce((s, e) => s + (e.debit !== '-' ? parseFloat(e.debit.replace(/,/g, '')) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">₹{ledgerMonthData.reduce((s, e) => s + (e.credit !== '-' ? parseFloat(e.credit.replace(/,/g, '')) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -1832,12 +2269,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                     <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Posted From</th>
                     <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Reference No.</th>
                     <th rowSpan={2} className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Amount</th>
-                    <th colSpan={3} className="px-6 py-2 border-r border-slate-200 bg-indigo-50/30 text-center text-[11px] font-black text-indigo-600 uppercase tracking-widest">Voucher Applied</th>
-                    <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                    <th colSpan={4} className="px-6 py-2 border-r border-slate-200 bg-indigo-50/30 text-center text-[11px] font-black text-indigo-600 uppercase tracking-widest">Voucher Applied</th>
+                    <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-200">Status</th>
+                    <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-widest">Actions</th>
                   </tr>
                   <tr>
                     <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Date</th>
                     <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Ref No.</th>
+                    <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Applied</th>
                     <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-200">Pending</th>
                   </tr>
                 </thead>
@@ -1848,27 +2287,196 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                         <>
                           <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{row.date ? new Date(row.date).toLocaleDateString('en-IN') : '-'}</td>
                           <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
-                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.postedFrom==='Purchase'?'bg-blue-50 text-blue-600 border border-blue-100':row.postedFrom==='Sales'?'bg-emerald-50 text-emerald-600 border border-emerald-100':'bg-slate-50 text-slate-600 border border-slate-100'}`}>{row.postedFrom}</span>
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.postedFrom === 'Purchase' ? 'bg-blue-50 text-blue-600 border border-blue-100' : row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>{row.postedFrom}</span>
                           </td>
                           <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top">{row.refNo}</td>
-                          <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">{row.netAmount !== '-' ? `₹${Number(row.netAmount).toLocaleString('en-IN',{minimumFractionDigits:2})}` : '-'}</td>
+                          <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">{row.netAmount !== '-' ? `₹${Number(row.netAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
                         </>
                       )}
                       <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">{row.appliedDate !== '-' ? new Date(row.appliedDate).toLocaleDateString('en-IN') : '-'}</td>
                       <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">{row.appliedRefNo}</td>
-                      <td className="px-6 py-4 text-sm text-right font-bold text-slate-900 border-r border-slate-100">{row.pendingBalance !== '-' ? `₹${Number(row.pendingBalance).toLocaleString('en-IN',{minimumFractionDigits:2})}` : '-'}</td>
+                      <td className="px-6 py-4 text-sm text-right font-bold text-emerald-600 border-r border-slate-100">{row.appliedAmount !== '-' ? `₹${Number(row.appliedAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
+                      <td className="px-6 py-4 text-sm text-right font-bold text-slate-900 border-r border-slate-100">{row.pendingBalance !== '-' ? `₹${Number(row.pendingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
                       {row.isFirstInSource && (
-                        <td rowSpan={row.rowSpan} className="px-6 py-4 text-center align-top">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.status==='Paid'||row.status==='Utilized'?'bg-emerald-50 text-emerald-600 border border-emerald-100':row.status==='Partially Paid'?'bg-amber-50 text-amber-600 border border-amber-100':row.status==='Due'?'bg-rose-50 text-rose-600 border border-rose-100':'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>{row.status}</span>
-                        </td>
+                        <>
+                          <td rowSpan={row.rowSpan} className="px-6 py-4 text-center align-top border-r border-slate-100">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.status === 'Paid' || row.status === 'Utilized' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : row.status === 'Partially Paid' ? 'bg-amber-50 text-amber-600 border border-amber-100' : row.status === 'Due' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>{row.status}</span>
+                          </td>
+                          <td rowSpan={row.rowSpan} className="px-6 py-4 text-center align-top">
+                            {(row.status === 'Due' || row.status === 'Partially Paid') && (
+                              <button
+                                onClick={() => setAllocationModalRow(row)}
+                                className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-indigo-700 transition-colors uppercase tracking-widest flex items-center gap-1 mx-auto"
+                              >
+                                Reference
+                              </button>
+                            )}
+                          </td>
+                        </>
                       )}
                     </tr>
                   ))}
                   {allocationRows.length === 0 && (
-                    <tr><td colSpan={8} className="px-6 py-20 text-center text-slate-400 text-sm">No allocation data found for <strong>{drillDownLedger}</strong>.</td></tr>
+                    <tr><td colSpan={9} className="px-6 py-20 text-center text-slate-400 text-sm">No allocation data found for <strong>{drillDownLedger}</strong>.</td></tr>
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {allocationModalRow && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvances([]); }}>
+            <div className="bg-white w-[800px] max-w-[92vw] rounded-lg shadow-2xl overflow-hidden border border-gray-200" onClick={e => e.stopPropagation()}>
+              {/* Modal Header */}
+              <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-indigo-100" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  <h3 className="text-white font-bold text-lg">Advance Allocation Details</h3>
+                </div>
+                <button onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvances([]); }} className="text-white hover:text-gray-200 transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              <div className="p-6">
+                {/* Info Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Invoice Ref</label>
+                    <div className="text-sm font-bold text-gray-900">{allocationModalRow.refNo}</div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Ledger</label>
+                    <div className="text-sm font-bold text-gray-900 truncate">{drillDownLedger}</div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Inv Amount</label>
+                    <div className="text-sm font-bold text-gray-900">₹{Number(allocationModalRow.netAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Pending</label>
+                    <div className="text-sm font-bold text-red-600">₹{Number(allocationModalRow.pendingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                  </div>
+                </div>
+
+                {/* Available Payment Vouchers */}
+                {(() => {
+                  const advances = filteredDrillData.filter(e =>
+                    e.voucherType && ['Receipt', 'Payment', 'receipt', 'payment'].some(t => (e.voucherType || '').toLowerCase().includes(t.toLowerCase())) &&
+                    (e.referenceNo === '-' || !e.referenceNo || e.referenceNo.trim() === '')
+                  );
+                  return advances.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Available Payment Vouchers</h4>
+                        <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{advances.length} Found</span>
+                      </div>
+                      <div className="max-h-[320px] overflow-y-auto border border-gray-200 rounded">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                            <tr className="text-left text-xs text-gray-600 uppercase tracking-wider">
+                              <th className="px-4 py-3 font-semibold">Select</th>
+                              <th className="px-4 py-3 font-semibold">Voucher No.</th>
+                              <th className="px-4 py-3 font-semibold">Date</th>
+                              <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                              <th className="px-4 py-3 text-right font-semibold">Pending</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                            {advances.map((adv: any, idx: number) => {
+                              const isSelected = selectedAllocationAdvances.some(a => a.voucherNo === adv.voucherNo);
+                              return (
+                                <tr key={idx} className={`hover:bg-gray-50 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedAllocationAdvances(prev => prev.filter(a => a.voucherNo !== adv.voucherNo));
+                                  } else {
+                                    setSelectedAllocationAdvances(prev => [...prev, adv]);
+                                  }
+                                }}>
+                                  <td className="px-4 py-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => { }} // Managed by row onClick
+                                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 font-medium text-gray-900">{adv.voucherNo || '-'}</td>
+                                  <td className="px-4 py-3 text-gray-500">{adv.date ? new Date(adv.date).toLocaleDateString('en-IN') : '-'}</td>
+                                  <td className="px-4 py-3 text-right text-gray-900 font-bold">
+                                    {adv.credit > 0 ? `₹${adv.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : adv.debit > 0 ? `₹${adv.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-bold text-rose-600">
+                                    ₹{Number(adv.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                      <svg className="w-10 h-10 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                      <p className="text-sm text-gray-500 font-medium">No linked payment vouchers found</p>
+                    </div>
+                  );
+                })()}
+
+                {/* Footer Buttons */}
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => { setAllocationModalRow(null); setSelectedAllocationAdvances([]); }}
+                    className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors uppercase tracking-widest text-[10px]"
+                  >
+                    Close Window
+                  </button>
+                  <button
+                    disabled={selectedAllocationAdvances.length === 0 || isAllocating}
+                    onClick={async () => {
+                      if (selectedAllocationAdvances.length === 0) {
+                        showError('Please select at least one payment voucher to proceed.');
+                        return;
+                      }
+                      setIsAllocating(true);
+                      try {
+                        await Promise.all(selectedAllocationAdvances.map(async (adv) => {
+                          const entryId = adv.id || adv.rawVoucher?.id;
+                          if (entryId) {
+                            await httpClient.patch(`/api/journal-entries/${entryId}/`, {
+                              reference_number: allocationModalRow.refNo,
+                              allocation_status: 'Utilized'
+                            });
+                          }
+                        }));
+
+                        // Refresh drill-down data to reflect changes
+                        if (drillDownLedger) {
+                          const ledgerName = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
+                          apiService.getJournalEntriesReport(ledgerName, startDate, endDate)
+                            .then(data => setDrillDownData(Array.isArray(data) ? data : []))
+                            .catch(() => { });
+                        }
+                        showSuccess(`Successfully allocated ${selectedAllocationAdvances.length} voucher(s) to ${allocationModalRow.refNo}`);
+                        setAllocationModalRow(null);
+                        setSelectedAllocationAdvances([]);
+                      } catch (err: any) {
+                        showError(err?.message || 'Failed to proceed with allocation.');
+                      } finally {
+                        setIsAllocating(false);
+                      }
+                    }}
+                    className={`flex-1 py-3 font-bold rounded transition-colors uppercase tracking-widest text-[10px] shadow-lg ${selectedAllocationAdvances.length > 0 && !isAllocating
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                      }`}
+                  >
+                    {isAllocating ? 'Processing...' : 'Proceed Allocation'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1884,7 +2492,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             />
             {/* Slide panel */}
             <div
-              className="fixed top-0 right-0 h-full w-full max-w-md z-50 bg-white shadow-2xl flex flex-col"
+              className="fixed top-0 right-0 h-full w-full max-w-5xl z-50 bg-white shadow-2xl flex flex-col animate-slide-in"
               style={{ animation: 'slideInRight 0.22s cubic-bezier(0.4,0,0.2,1)' }}
             >
               {/* Panel header */}
@@ -1893,102 +2501,1096 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   <div className="text-xs font-bold uppercase tracking-widest text-indigo-200 mb-0.5">Transaction Details</div>
                   <div className="text-lg font-bold">{selectedTransaction.voucherNo || 'N/A'}</div>
                 </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      if (isEditingVoucher) {
+                        setIsEditingVoucher(false);
+                        setEditedVoucher(JSON.parse(JSON.stringify(voucherDetails)));
+                      } else {
+                        setIsEditingVoucher(true);
+                      }
+                    }}
+                    className="px-4 py-1.5 rounded-lg text-xs font-bold bg-white text-indigo-700 hover:bg-indigo-50 transition-colors uppercase tracking-wider"
+                  >
+                    {isEditingVoucher ? 'Cancel Edit' : 'Edit Voucher'}
+                  </button>
+                  <button
+                    onClick={() => { setSelectedTransaction(null); setIsEditingVoucher(false); }}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                    aria-label="Close panel"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Panel tabs */}
+              <div className="flex border-b border-gray-200 bg-gray-50 flex-shrink-0 overflow-x-auto">
+                {(['payment', 'receipt', 'contra', 'expense'].includes(selectedTransaction?.voucherType?.toLowerCase() || '')
+                  ? [
+                    { id: 'voucher', label: (selectedTransaction?.voucherType || 'VOUCHER').toUpperCase() + ' DETAILS' },
+                    { id: 'allocations', label: 'ALLOCATED INVOICES' }
+                  ]
+                  : [
+                    { id: 'invoice', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'SUPPLIER DETAILS' : 'INVOICE DETAILS' },
+                    { id: 'item', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'SUPPLY DETAILS' : 'ITEM & TAX DETAILS' },
+                    { id: 'payment', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'DUE DETAILS' : 'PAYMENT DETAILS' },
+                    { id: 'dispatch', label: selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'TRANSIT DETAILS' : 'DISPATCH DETAILS' },
+                    ...(selectedTransaction?.voucherType?.toLowerCase() !== 'purchase' ? [{ id: 'einvoice', label: 'E-INVOICE & E-WAY BILL DETAILS' }] : [])
+                  ]
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setPanelActiveTab(tab.id)}
+                    className={`px-5 py-3 text-xs font-bold transition-colors border-b-2 whitespace-nowrap ${panelActiveTab === tab.id
+                        ? 'border-indigo-600 text-indigo-600 bg-white border-b-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Scrollable Content Area */}
+              <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                {!isLoadingDetails && (
+                  <>
+                    {['payment', 'receipt', 'contra', 'expense'].includes(selectedTransaction?.voucherType?.toLowerCase() || '') ? (
+                      <>
+                        {panelActiveTab === 'voucher' && (
+                          <div className="grid grid-cols-2 gap-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                            <div>
+                              <label className="label-text">DATE *</label>
+                              <input
+                                type="date"
+                                value={editedVoucher?.date || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('date', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">VOUCHER TYPE</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.voucher_type || selectedTransaction?.voucherType || ''}
+                                disabled={true}
+                                className="erp-input bg-gray-50 text-gray-500 cursor-not-allowed font-bold"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">VOUCHER NUMBER *</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.voucher_number || editedVoucher?.voucher_no || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => {
+                                  handleFieldChange('voucher_number', e.target.value);
+                                  handleFieldChange('voucher_no', e.target.value);
+                                }}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">
+                                {(() => {
+                                  const vt = selectedTransaction?.voucherType?.toLowerCase() || '';
+                                  if (vt === 'contra') return 'TRANSFER FROM *';
+                                  if (vt === 'expense' || vt === 'expenses') return 'PAID FROM (BANK/CASH) *';
+                                  if (vt === 'receipt') return 'RECEIVE IN (BANK/CASH) *';
+                                  return 'PAY FROM (BANK/CASH) *';
+                                })()}
+                              </label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.account || editedVoucher?.fromAccount || editedVoucher?.from_account || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => {
+                                  handleFieldChange('account', e.target.value);
+                                  handleFieldChange('fromAccount', e.target.value);
+                                  handleFieldChange('from_account', e.target.value);
+                                }}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">
+                                {(() => {
+                                  const vt = selectedTransaction?.voucherType?.toLowerCase() || '';
+                                  if (vt === 'contra') return 'TRANSFER TO *';
+                                  if (vt === 'expense' || vt === 'expenses') return 'EXPENSE LEDGER *';
+                                  if (vt === 'receipt') return 'RECEIVED FROM (CUSTOMER/PARTY) *';
+                                  return 'PAY TO (VENDOR/PARTY) *';
+                                })()}
+                              </label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.party || editedVoucher?.toAccount || editedVoucher?.to_account || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => {
+                                  handleFieldChange('party', e.target.value);
+                                  handleFieldChange('toAccount', e.target.value);
+                                  handleFieldChange('to_account', e.target.value);
+                                }}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">AMOUNT (₹) *</label>
+                              <input
+                                type="number"
+                                value={editedVoucher?.amount || editedVoucher?.total || 0}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => {
+                                  handleFieldChange('amount', parseFloat(e.target.value) || 0);
+                                  handleFieldChange('total', parseFloat(e.target.value) || 0);
+                                }}
+                                className="erp-input font-bold text-indigo-700"
+                              />
+                            </div>
+                            {/* Contra-specific extra fields */}
+                            {selectedTransaction?.voucherType?.toLowerCase() === 'contra' && (
+                              <div>
+                                <label className="label-text">DEDUCT CHARGES FROM</label>
+                                <input
+                                  type="text"
+                                  value={editedVoucher?.deduct_charges_from || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('deduct_charges_from', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                            )}
+                            {selectedTransaction?.voucherType?.toLowerCase() === 'contra' && (
+                              <div>
+                                <label className="label-text">CONVERSION CHARGES</label>
+                                <input
+                                  type="number"
+                                  value={editedVoucher?.conversion_charges || 0}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('conversion_charges', parseFloat(e.target.value) || 0)}
+                                  className="erp-input font-mono"
+                                />
+                              </div>
+                            )}
+                            {selectedTransaction?.voucherType?.toLowerCase() === 'contra' && (
+                              <div>
+                                <label className="label-text">FEMA PURPOSE CODE</label>
+                                <input
+                                  type="text"
+                                  value={editedVoucher?.fema_purpose_code || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('fema_purpose_code', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <label className="label-text">REFERENCE NUMBER</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.reference_number || editedVoucher?.ref_no || editedVoucher?.refNo || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => {
+                                  handleFieldChange('reference_number', e.target.value);
+                                  handleFieldChange('ref_no', e.target.value);
+                                  handleFieldChange('refNo', e.target.value);
+                                }}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="label-text">
+                                {selectedTransaction?.voucherType?.toLowerCase() === 'contra' ? 'POSTING NOTE' : 'NARRATION / NOTES'}
+                              </label>
+                              <textarea
+                                value={editedVoucher?.narration || editedVoucher?.postingNote || editedVoucher?.posting_note || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => {
+                                  handleFieldChange('narration', e.target.value);
+                                  handleFieldChange('postingNote', e.target.value);
+                                  handleFieldChange('posting_note', e.target.value);
+                                }}
+                                className="erp-input h-24 resize-none py-2"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {panelActiveTab === 'allocations' && (
+                          <div className="space-y-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                            <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
+                              <table className="min-w-full divide-y divide-gray-200 text-xs">
+                                <thead className="bg-gray-50 font-bold text-gray-700 uppercase tracking-wider">
+                                  <tr>
+                                    <th className="px-4 py-3 text-left">Invoice No / Ref No</th>
+                                    <th className="px-4 py-3 text-left">Invoice Date</th>
+                                    <th className="px-4 py-3 text-right">Invoice Amount (₹)</th>
+                                    <th className="px-4 py-3 text-right">Paid Now (₹)</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {(editedVoucher?.allocations && editedVoucher.allocations.length > 0) ? (
+                                    editedVoucher.allocations.map((alloc: any, idx: number) => (
+                                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-4 py-3">
+                                          <input
+                                            type="text"
+                                            value={alloc.invoice_no || alloc.reference_number || alloc.refNo || alloc.invoiceNo || ''}
+                                            disabled={!isEditingVoucher}
+                                            onChange={(e) => {
+                                              const copy = [...editedVoucher.allocations];
+                                              copy[idx] = { ...alloc, invoice_no: e.target.value, reference_number: e.target.value, refNo: e.target.value };
+                                              handleFieldChange('allocations', copy);
+                                            }}
+                                            className="erp-input py-1 text-xs"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <input
+                                            type="date"
+                                            value={alloc.date || alloc.invoice_date || ''}
+                                            disabled={!isEditingVoucher}
+                                            onChange={(e) => {
+                                              const copy = [...editedVoucher.allocations];
+                                              copy[idx] = { ...alloc, date: e.target.value, invoice_date: e.target.value };
+                                              handleFieldChange('allocations', copy);
+                                            }}
+                                            className="erp-input py-1 text-xs"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-medium">
+                                          ₹{Number(alloc.amount || alloc.invoice_amount || 0).toFixed(2)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-bold text-indigo-600">
+                                          ₹{Number(alloc.payNow || alloc.allocated_amount || alloc.payment || 0).toFixed(2)}
+                                        </td>
+                                      </tr>
+                                    ))
+                                  ) : (
+                                    <tr>
+                                      <td colSpan={4} className="px-4 py-8 text-center text-gray-400 font-medium">
+                                        Direct ledger posting. No invoice-level allocations recorded.
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {panelActiveTab === 'invoice' && (
+                          <div className="grid grid-cols-2 gap-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                            <div>
+                              <label className="label-text">DATE *</label>
+                              <input
+                                type="date"
+                                value={editedVoucher?.date || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('date', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">
+                                {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'PURCHASE INVOICE SERIES' : 'SALES INVOICE SERIES'}
+                              </label>
+                              <select
+                                value={editedVoucher?.purchase_voucher_series || editedVoucher?.voucher_series || editedVoucher?.voucher_name || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => {
+                                  handleFieldChange('purchase_voucher_series', e.target.value);
+                                  handleFieldChange('voucher_series', e.target.value);
+                                  handleFieldChange('voucher_name', e.target.value);
+                                }}
+                                className="erp-select"
+                              >
+                                <option value="">SELECT SERIES</option>
+                                <option value="Standard">Standard Series</option>
+                                {(() => {
+                                  const v = editedVoucher?.purchase_voucher_series || editedVoucher?.voucher_series || editedVoucher?.voucher_name;
+                                  return v && !['Standard', ''].includes(v) ? (
+                                    <option value={v}>{v}</option>
+                                  ) : null;
+                                })()}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="label-text">
+                                {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'PURCHASE INVOICE NO. *' : 'SALES INVOICE NO. *'}
+                              </label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.voucher_number || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('voucher_number', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">
+                                {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'VENDOR NAME *' : 'CUSTOMER NAME *'}
+                              </label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.party || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('party', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">BRANCH</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.branch || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('branch', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">GSTIN</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.gstin || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('gstin', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' && (
+                              <div>
+                                <label className="label-text">SUPPLIER INVOICE DATE</label>
+                                <input
+                                  type="date"
+                                  value={editedVoucher?.supplier_invoice_date || editedVoucher?.date || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('supplier_invoice_date', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                            )}
+                            {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' && (
+                              <div>
+                                <label className="label-text">SUPPLIER INVOICE NO.</label>
+                                <input
+                                  type="text"
+                                  value={editedVoucher?.supplier_invoice_no || editedVoucher?.invoice_no || editedVoucher?.invoiceNo || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('supplier_invoice_no', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                            )}
+                            {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' && (
+                              <div>
+                                <label className="label-text">GRN REFERENCE NO.</label>
+                                <input
+                                  type="text"
+                                  value={editedVoucher?.grn_reference || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('grn_reference', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                            )}
+                            <div className="col-span-2 grid grid-cols-2 gap-6 mt-2">
+                              <div>
+                                <label className="label-text font-bold text-indigo-700">Bill To (Full Address)</label>
+                                <input
+                                  type="text"
+                                  placeholder="Address Line 1"
+                                  value={editedVoucher?.bill_to_address_1 || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('bill_to_address_1', e.target.value)}
+                                  className="erp-input mb-2"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Address Line 2"
+                                  value={editedVoucher?.bill_to_address_2 || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('bill_to_address_2', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text font-bold text-indigo-700">Ship To (Full Address)</label>
+                                <input
+                                  type="text"
+                                  placeholder="Address Line 1"
+                                  value={editedVoucher?.ship_to_address_1 || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('ship_to_address_1', e.target.value)}
+                                  className="erp-input mb-2"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Address Line 2"
+                                  value={editedVoucher?.ship_to_address_2 || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('ship_to_address_2', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {panelActiveTab === 'item' && (
+                          <div className="space-y-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                            <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
+                              <table className="min-w-full divide-y divide-gray-200 text-xs">
+                                <thead className="bg-gray-50 font-bold text-gray-700 uppercase tracking-wider">
+                                  <tr>
+                                    <th className="px-3 py-2.5 text-left">Item Code</th>
+                                    <th className="px-3 py-2.5 text-left">Item Name</th>
+                                    <th className="px-3 py-2.5 text-left">HSN/SAC</th>
+                                    <th className="px-3 py-2.5 text-right">Qty</th>
+                                    <th className="px-3 py-2.5 text-left">UOM</th>
+                                    <th className="px-3 py-2.5 text-right">Rate</th>
+                                    <th className="px-3 py-2.5 text-right">Taxable</th>
+                                    <th className="px-3 py-2.5 text-right">IGST</th>
+                                    <th className="px-3 py-2.5 text-right">CGST</th>
+                                    <th className="px-3 py-2.5 text-right">SGST</th>
+                                    <th className="px-3 py-2.5 text-right">Invoice Value</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {(editedVoucher?.items && editedVoucher.items.length > 0) ? editedVoucher.items.map((item: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="text"
+                                          value={item.item_code || item.itemCode || ''}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            itemsCopy[idx] = { ...item, item_code: e.target.value, itemCode: e.target.value };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="text"
+                                          value={item.item_name || item.itemName || ''}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            itemsCopy[idx] = { ...item, item_name: e.target.value, itemName: e.target.value };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="text"
+                                          value={item.hsn_code || item.hsnSac || ''}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            itemsCopy[idx] = { ...item, hsn_code: e.target.value, hsnSac: e.target.value };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="number"
+                                          value={item.quantity || item.qty || 0}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            const qty = parseFloat(e.target.value) || 0;
+                                            const rate = parseFloat(item.itemRate || item.rate) || 0;
+                                            const taxable = qty * rate;
+                                            itemsCopy[idx] = { ...item, quantity: qty, qty, itemRate: rate, rate, taxableValue: taxable };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs text-right"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="text"
+                                          value={item.uom || ''}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            itemsCopy[idx] = { ...item, uom: e.target.value };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="number"
+                                          value={item.itemRate || item.rate || 0}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            const rate = parseFloat(e.target.value) || 0;
+                                            const qty = parseFloat(item.quantity || item.qty) || 0;
+                                            const taxable = qty * rate;
+                                            itemsCopy[idx] = { ...item, itemRate: rate, rate, taxableValue: taxable };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs text-right"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-mono font-medium">
+                                        ₹{(parseFloat(item.taxableValue || item.taxable_value) || ((parseFloat(item.quantity || item.qty) || 0) * (parseFloat(item.itemRate || item.rate) || 0))).toFixed(2)}
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="number"
+                                          value={item.igst_amount ?? item.igst ?? 0}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            itemsCopy[idx] = { ...item, igst_amount: parseFloat(e.target.value) || 0, igst: parseFloat(e.target.value) || 0 };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs text-right"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="number"
+                                          value={item.cgst_amount ?? item.cgst ?? 0}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            itemsCopy[idx] = { ...item, cgst_amount: parseFloat(e.target.value) || 0, cgst: parseFloat(e.target.value) || 0 };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs text-right"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="number"
+                                          value={item.sgst_amount ?? item.sgst ?? 0}
+                                          disabled={!isEditingVoucher}
+                                          onChange={(e) => {
+                                            const itemsCopy = [...editedVoucher.items];
+                                            itemsCopy[idx] = { ...item, sgst_amount: parseFloat(e.target.value) || 0, sgst: parseFloat(e.target.value) || 0 };
+                                            handleFieldChange('items', itemsCopy);
+                                          }}
+                                          className="erp-input py-1 text-xs text-right"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-bold text-indigo-700">
+                                        ₹{(parseFloat(item.invoiceValue || item.invoice_value) || ((parseFloat(item.taxableValue || item.taxable_value) || 0) + (parseFloat(item.igst_amount ?? item.igst ?? 0) as number) + (parseFloat(item.cgst_amount ?? item.cgst ?? 0) as number) + (parseFloat(item.sgst_amount ?? item.sgst ?? 0) as number))).toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  )) : (
+                                    <tr>
+                                      <td colSpan={11} className="px-4 py-8 text-center text-gray-400">
+                                        No items found. Defaulting to standard voucher ledger row.
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6 mt-4">
+
+                              <div>
+
+                                <label className="label-text">
+
+                                  {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'PURCHASE LEDGER' : 'SALES LEDGER'}
+
+                                </label>
+
+                                <input
+
+                                  type="text"
+
+                                  value={
+
+                                    selectedTransaction?.voucherType?.toLowerCase() === 'purchase'
+
+                                      ? (editedVoucher?.purchase_ledger || editedVoucher?.supply_inr_details?.purchase_ledger || editedVoucher?.supply_foreign_details?.purchase_ledger || '')
+
+                                      : (editedVoucher?.sales_ledger || editedVoucher?.supply_inr_details?.sales_ledger || '')
+
+                                  }
+
+                                  disabled={!isEditingVoucher}
+
+                                  onChange={(e) => {
+
+                                    if (selectedTransaction?.voucherType?.toLowerCase() === 'purchase') {
+
+                                      handleFieldChange('purchase_ledger', e.target.value);
+
+                                      handleFieldChange('supply_inr_details.purchase_ledger', e.target.value);
+
+                                    } else {
+
+                                      handleFieldChange('sales_ledger', e.target.value);
+
+                                    }
+
+                                  }}
+
+                                  className="erp-input"
+
+                                />
+
+                              </div>
+
+                              <div>
+
+                                <label className="label-text">PURCHASE ORDER NO.</label>
+
+                                <input
+
+                                  type="text"
+
+                                  value={
+
+                                    editedVoucher?.supply_inr_details?.purchase_order_no
+
+                                    || editedVoucher?.supply_foreign_details?.purchase_order_no
+
+                                    || editedVoucher?.purchase_order_no
+
+                                    || ''
+
+                                  }
+
+                                  disabled={!isEditingVoucher}
+
+                                  onChange={(e) => {
+
+                                    handleFieldChange('purchase_order_no', e.target.value);
+
+                                    handleFieldChange('supply_inr_details.purchase_order_no', e.target.value);
+
+                                  }}
+
+                                  className="erp-input"
+
+                                />
+
+                              </div>
+
+                              <div className="col-span-2">
+
+                                <label className="label-text">LEDGER NARRATION</label>
+
+                                <input
+
+                                  type="text"
+
+                                  value={editedVoucher?.ledger_narration || editedVoucher?.supply_inr_details?.description || ''}
+
+                                  disabled={!isEditingVoucher}
+
+                                  onChange={(e) => {
+
+                                    handleFieldChange('ledger_narration', e.target.value);
+
+                                    handleFieldChange('supply_inr_details.description', e.target.value);
+
+                                  }}
+
+                                  className="erp-input"
+
+                                />
+
+                              </div>
+
+                            </div>
+
+                          </div>
+
+                        )}
+
+                        {panelActiveTab === 'payment' && (() => {
+                          const dd = editedVoucher?.due_details;
+                          // TDS/TCS under Income Tax (reduces payable to vendor; paid to govt)
+                          const tdsIt = parseFloat(dd?.tds_it ?? dd?.tdsIt ?? editedVoucher?.tds_it ?? 0);
+                          const tdsGst = parseFloat(dd?.tds_gst ?? dd?.tdsGst ?? editedVoucher?.tds_gst ?? 0);
+                          // Advance already paid against this invoice
+                          const advance = parseFloat(dd?.advance_paid ?? dd?.advancePaid ?? editedVoucher?.advance_paid ?? 0);
+                          const postingNote = dd?.posting_note ?? dd?.postingNote ?? editedVoucher?.narration ?? '';
+                          // Invoice Value = total gross value of the purchase invoice (taxable + taxes)
+                          const invoiceVal = parseFloat(
+                            editedVoucher?.total
+                            ?? editedVoucher?.total_amount
+                            ?? 0
+                          );
+                          // Tax summary — computed from line items
+                          const taxableAmt = parseFloat(editedVoucher?.total_taxable_amount ?? editedVoucher?.totalTaxableAmount ?? 0)
+                            || (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.taxableValue ?? it.taxable_value ?? 0), 0);
+                          const totalIgst = parseFloat(editedVoucher?.total_igst ?? editedVoucher?.totalIgst ?? 0)
+                            || (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.igst ?? it.igst_amount ?? 0), 0);
+                          const totalCgst = parseFloat(editedVoucher?.total_cgst ?? editedVoucher?.totalCgst ?? 0)
+                            || (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.cgst ?? it.cgst_amount ?? 0), 0);
+                          const totalSgst = parseFloat(editedVoucher?.total_sgst ?? editedVoucher?.totalSgst ?? 0)
+                            || (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.sgst ?? it.sgst_amount ?? 0), 0);
+                          const totalCess = (editedVoucher?.items || []).reduce((s: number, it: any) =>
+                                s + parseFloat(it.cess ?? it.cess_amount ?? 0), 0);
+                          // Accounting formulas (as per standard purchase voucher)
+                          // Gross Amount Due = Invoice Value − TDS/TCS Under Income Tax
+                          const grossDue = invoiceVal - tdsIt;
+                          // Net Amount Due = Gross Amount Due − Advance Paid
+                          // (This is what the vendor still needs to be paid)
+                          const netAmountDue = grossDue - advance;
+
+                          return (
+                            <div className="space-y-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                              {/* Tax Summary Table — mirrors the top summary in Due Details */}
+                              <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
+                                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">Taxable Value</th>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">IGST</th>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">CGST</th>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">SGST/UTGST</th>
+                                      <th className="px-4 py-3 text-center font-semibold text-gray-700 uppercase tracking-wide text-xs">Cess</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white">
+                                    <tr>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{taxableAmt.toFixed(2)}</td>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalIgst.toFixed(2)}</td>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalCgst.toFixed(2)}</td>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalSgst.toFixed(2)}</td>
+                                      <td className="px-4 py-3 text-center font-mono font-medium text-gray-800">{totalCess.toFixed(2)}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              {/* Due Details fields */}
+                              <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                  <label className="label-text">INVOICE VALUE</label>
+                                  <input
+                                    type="number"
+                                    value={invoiceVal}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('total', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">TDS/TCS UNDER INCOME TAX</label>
+                                  <input
+                                    type="number"
+                                    value={tdsIt}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('due_details.tds_it', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">ADVANCE PAID</label>
+                                  <input
+                                    type="number"
+                                    value={advance}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('due_details.advance_paid', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">TDS UNDER GST (RCM)</label>
+                                  <input
+                                    type="number"
+                                    value={tdsGst}
+                                    disabled={!isEditingVoucher}
+                                    onChange={(e) => handleFieldChange('due_details.tds_gst', parseFloat(e.target.value) || 0)}
+                                    className="erp-input font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">GROSS AMOUNT DUE</label>
+                                  <input
+                                    type="number"
+                                    value={grossDue.toFixed(2)}
+                                    disabled={true}
+                                    className="erp-input font-mono bg-gray-50 text-gray-600"
+                                    title="Invoice Value − TDS/TCS Under Income Tax"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label-text">PAYMENT TERMS</label>
+                                  <input
+                                    type="text"
+                                    value={dd?.terms || editedVoucher?.terms || ''}
+                                    disabled={!isEditingVoucher}
+                                    placeholder="e.g. Net 30 days"
+                                    onChange={(e) => handleFieldChange('due_details.terms', e.target.value)}
+                                    className="erp-input"
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <label className="label-text font-bold" style={{ color: '#4f46e5' }}>NET AMOUNT DUE</label>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      value={netAmountDue.toFixed(2)}
+                                      disabled={!isEditingVoucher}
+                                      onChange={(e) => handleFieldChange('due_details.to_pay', parseFloat(e.target.value) || 0)}
+                                      className="erp-input font-bold text-indigo-700 text-lg flex-1"
+                                    />
+                                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                                      (Invoice − TDS/IT − Advance)
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="col-span-2">
+                                  <label className="label-text">POSTING NOTE</label>
+                                  <textarea
+                                    value={postingNote}
+                                    disabled={!isEditingVoucher}
+                                    placeholder="Enter posting notes..."
+                                    onChange={(e) => {
+                                      handleFieldChange('due_details.posting_note', e.target.value);
+                                      handleFieldChange('narration', e.target.value);
+                                    }}
+                                    className="erp-input h-20 resize-none py-2"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {panelActiveTab === 'dispatch' && (() => {
+                          const td = editedVoucher?.transit_details || editedVoucher?.dispatch_details;
+                          return (
+                            <div className="grid grid-cols-2 gap-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                              <div>
+                                <label className="label-text">
+                                  {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIVED IN' : 'DISPATCH FROM'}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={td?.received_in || td?.dispatch_from || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.received_in', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">DELIVERY TYPE</label>
+                                <input
+                                  type="text"
+                                  value={td?.delivery_type || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.delivery_type', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">MODE OF TRANSPORT</label>
+                                <input
+                                  type="text"
+                                  value={td?.mode || td?.mode_of_transport || 'Road'}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.mode', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">TRANSPORTER ID/GSTIN</label>
+                                <input
+                                  type="text"
+                                  value={td?.transporter_id || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.transporter_id', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">
+                                  {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIPT DATE' : 'DISPATCH DATE'}
+                                </label>
+                                <input
+                                  type="date"
+                                  value={td?.receipt_date || td?.dispatch_date || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.receipt_date', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">TRANSPORTER NAME</label>
+                                <input
+                                  type="text"
+                                  value={td?.transporter_name || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.transporter_name', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">
+                                  {selectedTransaction?.voucherType?.toLowerCase() === 'purchase' ? 'RECEIPT TIME' : 'DISPATCH TIME'}
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="HH:MM:SS"
+                                  value={td?.receipt_time || td?.dispatch_time || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.receipt_time', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div>
+                                <label className="label-text">VEHICLE NO.</label>
+                                <input
+                                  type="text"
+                                  value={td?.vehicle_no || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.vehicle_no', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="label-text">LR/GR/CONSIGNMENT NO</label>
+                                <input
+                                  type="text"
+                                  value={td?.lr_gr_consignment || ''}
+                                  disabled={!isEditingVoucher}
+                                  onChange={(e) => handleFieldChange('transit_details.lr_gr_consignment', e.target.value)}
+                                  className="erp-input"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {panelActiveTab === 'einvoice' && (
+                          <div className="grid grid-cols-2 gap-6" style={{ animation: 'fadeIn 0.15s ease' }}>
+                            <div>
+                              <label className="label-text">E-INVOICE STATUS</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.einvoice_details?.status || 'Not Generated'}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('einvoice_details.status', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">IRN</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.einvoice_details?.irn || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('einvoice_details.irn', e.target.value)}
+                                className="erp-input font-mono text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">ACK NO.</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.einvoice_details?.ack_no || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('einvoice_details.ack_no', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">ACK DATE</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.einvoice_details?.ack_date || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('einvoice_details.ack_date', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">E-WAY BILL NO.</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.ewaybill_details?.number || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('ewaybill_details.number', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                            <div>
+                              <label className="label-text">E-WAY BILL DATE</label>
+                              <input
+                                type="text"
+                                value={editedVoucher?.ewaybill_details?.date || ''}
+                                disabled={!isEditingVoucher}
+                                onChange={(e) => handleFieldChange('ewaybill_details.date', e.target.value)}
+                                className="erp-input"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Panel Footer */}
+              <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-gray-50 flex gap-4 justify-end">
+                {isEditingVoucher && (
+                  <button
+                    onClick={async () => {
+                      const vId = selectedTransaction?.voucher_id || selectedTransaction?.rawVoucher?.voucher_id || selectedTransaction?.voucherId || selectedTransaction?.rawVoucher?.voucherId;
+                      if (vId && editedVoucher) {
+                        try {
+                          setIsLoadingDetails(true);
+                          const updated = await apiService.updateVoucher(vId, editedVoucher);
+                          setVoucherDetails(updated);
+                          setIsEditingVoucher(false);
+                          showSuccess('Voucher updated successfully!');
+                          // Refresh reports drilldown
+                          if (drillDownLedger) {
+                            const name = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
+                            apiService.getJournalEntriesReport(name, startDate, endDate)
+                              .then(res => setDrillDownData(Array.isArray(res) ? res : []))
+                              .catch(() => { });
+                          }
+                        } catch (err: any) {
+                          showError(err?.message || 'Failed to save changes.');
+                        } finally {
+                          setIsLoadingDetails(false);
+                        }
+                      }
+                    }}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors uppercase tracking-wider shadow-md"
+                  >
+                    Save Changes
+                  </button>
+                )}
                 <button
-                  onClick={() => setSelectedTransaction(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                  aria-label="Close panel"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className={`px-6 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${
-                selectedTransaction.voucherType === 'PAYMENT' || selectedTransaction.voucherType === 'Payment' ? 'bg-orange-50 text-orange-700 border-b border-orange-100' :
-                selectedTransaction.voucherType === 'RECEIPT' || selectedTransaction.voucherType === 'Receipt' ? 'bg-green-50 text-green-700 border-b border-green-100' :
-                selectedTransaction.voucherType === 'Sales' ? 'bg-blue-50 text-blue-700 border-b border-blue-100' :
-                selectedTransaction.voucherType === 'Purchase' ? 'bg-purple-50 text-purple-700 border-b border-purple-100' :
-                'bg-gray-50 text-gray-600 border-b border-gray-100'
-              }`}>
-                {selectedTransaction.voucherType} Voucher
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
-                    <div className="text-xs font-semibold text-orange-500 uppercase">Debit</div>
-                    <div className="text-xl font-bold text-orange-700">{selectedTransaction.debit > 0 ? `₹${selectedTransaction.debit.toFixed(2)}` : '—'}</div>
-                  </div>
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-                    <div className="text-xs font-semibold text-green-500 uppercase">Credit</div>
-                    <div className="text-xl font-bold text-green-700">{selectedTransaction.credit > 0 ? `₹${selectedTransaction.credit.toFixed(2)}` : '—'}</div>
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
-                  <div className="px-4 py-2.5 bg-gray-100 border-b border-gray-200">
-                    <span className="text-xs font-bold text-gray-500 uppercase">Voucher Info</span>
-                  </div>
-                  {[
-                    { label: 'Ledger Account', value: selectedTransaction.ledgerName },
-                    { label: 'Date', value: selectedTransaction.date ? new Date(selectedTransaction.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : '-' },
-                    { label: 'Voucher No', value: selectedTransaction.voucherNo || '-' },
-                    { label: 'Voucher Type', value: selectedTransaction.voucherType || '-' },
-                    { label: 'Particulars', value: selectedTransaction.particulars || '-' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex items-start justify-between px-4 py-3 border-b border-gray-100 last:border-b-0">
-                      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-28 flex-shrink-0">{label}</span>
-                      <span className="text-sm font-semibold text-gray-800 text-right">{value}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Accounting entry preview */}
-                <div className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
-                  <div className="px-4 py-2.5 bg-gray-100 border-b border-gray-200">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Journal Entry</span>
-                  </div>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="px-4 py-2 text-left font-semibold text-gray-500">Account</th>
-                        <th className="px-4 py-2 text-right font-semibold text-gray-500">Dr</th>
-                        <th className="px-4 py-2 text-right font-semibold text-gray-500">Cr</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedTransaction.debit > 0 && (
-                        <tr className="border-b border-gray-100">
-                          <td className="px-4 py-2.5 font-semibold text-gray-800">{selectedTransaction.ledgerName}</td>
-                          <td className="px-4 py-2.5 text-right font-mono font-bold text-orange-600">₹{selectedTransaction.debit.toFixed(2)}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-300">—</td>
-                        </tr>
-                      )}
-                      {selectedTransaction.credit > 0 && (
-                        <tr className="border-b border-gray-100">
-                          <td className="px-4 py-2.5 font-semibold text-gray-800">{selectedTransaction.ledgerName}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-300">—</td>
-                          <td className="px-4 py-2.5 text-right font-mono font-bold text-green-600">₹{selectedTransaction.credit.toFixed(2)}</td>
-                        </tr>
-                      )}
-                      {selectedTransaction.particulars && selectedTransaction.particulars !== '-' && (
-                        <tr>
-                          <td className="px-4 py-2.5 font-semibold text-gray-500 pl-8">↳ {selectedTransaction.particulars}</td>
-                          <td className="px-4 py-2.5 text-right font-mono text-green-600">{selectedTransaction.credit > 0 ? `₹${selectedTransaction.credit.toFixed(2)}` : ''}</td>
-                          <td className="px-4 py-2.5 text-right font-mono text-orange-600">{selectedTransaction.debit > 0 ? `₹${selectedTransaction.debit.toFixed(2)}` : ''}</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50">
-                <button
-                  onClick={() => setSelectedTransaction(null)}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-sm transition-colors"
+                  onClick={() => { setSelectedTransaction(null); setIsEditingVoucher(false); }}
+                  className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg text-xs transition-colors uppercase tracking-wider"
                 >
                   Close
                 </button>
@@ -2409,11 +4011,57 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 <label className="label-text">Select Ledger/Group</label>
                 <LedgerSelector
                   selectedValue={selectedLedger}
-                  onChange={setSelectedLedger}
+                  onChange={(val) => {
+                    setSelectedLedger(val);
+                    if (val && val !== 'all') {
+                      const [prefix, name] = val.split(':');
+                      if (prefix === 'ledger') {
+                        setDrillDownLedger(name);
+                      } else {
+                        setDrillDownLedger(null);
+                      }
+                    } else {
+                      setDrillDownLedger(null);
+                    }
+                  }}
                   groups={ledgerGroups}
                   ledgers={ledgers}
                 />
               </div>
+              {isTdsTcsLedger && (
+                <div className="min-w-[180px]">
+                  <label htmlFor="sessionFilter" className="label-text">Select Session</label>
+                  <select
+                    id="sessionFilter"
+                    value={selectedSession}
+                    onChange={(e) => setSelectedSession(e.target.value)}
+                    className="erp-select"
+                  >
+                    <option value="all">All Sessions</option>
+                    <option value="2024-2025">2024-2025</option>
+                    <option value="2025-2026">2025-2026</option>
+                    <option value="2026-2027">2026-2027</option>
+                  </select>
+                </div>
+              )}
+              {isTdsTcsLedger && (
+                <div className="min-w-[180px]">
+                  <label htmlFor="sectionFilter" className="label-text">Select Section</label>
+                  <select
+                    id="sectionFilter"
+                    value={selectedSection}
+                    onChange={(e) => setSelectedSection(e.target.value)}
+                    className="erp-select"
+                  >
+                    <option value="all">All Sections</option>
+                    {availableSections.map((sec) => (
+                      <option key={sec} value={sec}>
+                        {sec}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="min-w-[200px]">
                 <label htmlFor="ledgerStartDate" className="label-text">Start Date</label>
                 <input
@@ -2774,5 +4422,3 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 };
 
 export default ReportsPage;
-
-

@@ -41,13 +41,15 @@ interface DebitNoteVoucherProps {
     clearPrefilledData?: () => void;
     companyDetails: CompanyDetails;
     onAddVouchers: (vouchers: Voucher[]) => void;
+    isReadOnlyMode?: boolean;
 }
 
 const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     prefilledData,
     clearPrefilledData,
     companyDetails,
-    onAddVouchers
+    onAddVouchers,
+    isReadOnlyMode = false
 }) => {
     const [activeTab, setActiveTab] = useState('invoice');
 
@@ -1104,7 +1106,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 </div>
             </div>
 
-            <div className="min-h-[400px] bg-white">
+            <fieldset disabled={isReadOnlyMode} className={`min-h-[400px] bg-white ${isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}`}>
                 {activeTab === 'invoice' && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2672,7 +2674,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                         </div>
                     </div>
                 )}
-            </div>
+            </fieldset>
 
 
             {isIssueSlipModalOpen && (

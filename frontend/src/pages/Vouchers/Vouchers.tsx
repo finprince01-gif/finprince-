@@ -43,6 +43,8 @@ interface VouchersPageProps {
   companyDetails: CompanyDetails;
   onNavigate: (page: Page) => void;
   permissions: string[];
+  viewVoucherData?: any;
+  clearViewVoucherData?: () => void;
 }
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -60,7 +62,7 @@ const UPLOAD_OPTIONS_CONFIG: Record<string, string[]> = {
 
 
 
-const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onNavigate, permissions = [] }) => {
+const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onNavigate, permissions = [], viewVoucherData, clearViewVoucherData }) => {
 
   const { hasTabAccess, isSuperuser } = usePermissions();
 
@@ -84,6 +86,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const defaultVoucherType = availableVoucherTypes.length > 0 ? availableVoucherTypes[0].id : ('Sales' as VoucherType);
 
   const [voucherType, setVoucherType] = useState<VoucherType>(defaultVoucherType);
+  const [isReadOnlyMode, setIsReadOnlyMode] = useState(!!viewVoucherData);
+  const [drillDownDetails, setDrillDownDetails] = useState<any>(null);
+  const [drillDownLoading, setDrillDownLoading] = useState(false);
 
   useEffect(() => {
     if (availableVoucherTypes.length > 0 && !availableVoucherTypes.find(v => v.id === voucherType)) {
@@ -485,9 +490,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   }, [prefilledData]);
 
   const handleClearPrefilledData = () => {
+    // Removed redundant clearViewVoucherData() that caused cyclic state wipe on edit mount
     clearPrefilledData();
     setLocalPrefilledData(null);
   };
+
+
 
   const handleLimitReached = () => {
     setIsUpgradeModalOpen(true);
@@ -745,8 +753,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   }, [cnReverseIncomeTaxTcs, cnReverseIncomeTaxTds, cnSelectedSalesInvoices, cnSalesInvoicesList, cnItems]);
 
   const salesLedgerOptions = useMemo(() => {
-    return Array.from(new Set(ledgers.map(l => l.name))).filter(Boolean);
-  }, [ledgers]);
+    // Include both user-created ledgers and default hierarchy ledgers
+    const userLedgerNames = ledgers.map(l => l.name);
+    const defaultLedgerNames = hierarchy
+      .map(r => r.ledger_1)
+      .filter(name => {
+        if (!name) return false;
+        const n = name.toLowerCase().trim();
+        return !['purchase account', 'sales account'].includes(n);
+      });
+
+    return Array.from(new Set([...userLedgerNames, ...defaultLedgerNames])).filter(Boolean) as string[];
+  }, [ledgers, hierarchy]);
 
   const calculateCreditNoteTotals = () => {
     return cnItems.reduce((acc, item) => ({
@@ -869,6 +887,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Purchase Due Details State
   const [purchaseTdsIt, setPurchaseTdsIt] = useState('0.00');
   const [purchaseTaxIsTcs, setPurchaseTaxIsTcs] = useState(false); // true = TCS (add to amount due), false = TDS (subtract)
+  const [purchaseAvailableTcsSections, setPurchaseAvailableTcsSections] = useState<string[]>([]);
+  const [purchaseAvailableTdsSections, setPurchaseAvailableTdsSections] = useState<string[]>([]);
+  const [purchaseSelectedStatutorySection, setPurchaseSelectedStatutorySection] = useState<string>('');
+  const [purchaseAutoTdsEnabled, setPurchaseAutoTdsEnabled] = useState(false);
+  const [vendorTaxType, setVendorTaxType] = useState<string>('NONE');
   const [purchaseAdvancePaid, setPurchaseAdvancePaid] = useState('0.00');
   const [purchaseToPay, setPurchaseToPay] = useState('0.00');
   const [purchasePostingNote, setPurchasePostingNote] = useState('');
@@ -1128,7 +1151,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         try {
           // If a party (vendor) is selected, filter by it. Status is filtered to 'Pending Approval'.
           const queryParty = (party && !wasPartyAutoSet) ? party : undefined;
-          const res = await apiService.getVendorPurchaseOrders(queryParty || undefined, 'Pending Approval');
+          const res = await apiService.getVendorPurchaseOrders(queryParty || undefined);
           if (res?.data) {
             setAvailablePOs(res.data);
           } else if (Array.isArray(res)) {
@@ -2605,45 +2628,134 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       (v.vendor_name || '').trim().toLowerCase() === lowerParty
     );
 
-    if (!vendor) return;
+    if (!vendor) {
+      setPurchaseAutoTdsEnabled(false);
+      setPurchaseTdsIt('0.00');
+      return;
+    }
 
-    // Use tds_rate if available, otherwise fallback to tcs_rate
-    const rawTds = vendor.tds_rate;
-    const rawTcs = vendor.tcs_rate;
+    const isAuto = (vendor.enable_automatic_tds_posting === true || vendor.enable_automatic_tds_posting === 'true' || vendor.enable_automatic_tds_posting === 1);
+    setPurchaseAutoTdsEnabled(isAuto);
 
-    let activeRateStr = '';
+    // Only calculate if "Enable automatic TDS Posting" is checked for this vendor
+    if (!isAuto) {
+      setPurchaseTdsIt('0.00');
+      return;
+    }
+
+    const TDS_RATE_MAP: Record<string, number> = {
+      // Common Sections
+      'Contracts- Individual/HUF': 0.01,
+      'Contracts- Others': 0.02,
+      'Commission/Brokerage': 0.02,
+      'Rent- Land, Building, Furniture & fitting': 0.02,
+      'Rent- Plant & Machinery, Equipment': 0.10,
+      'Technical Services': 0.02,
+      'Professional Services': 0.10,
+      "Director's Remuneration": 0.10,
+      'Purchase of Goods': 0.001,
+      'Interest other than interest on securities': 0.10,
+      'Benefit or Perquisite': 0.10,
+      'Immovable Property Transfer': 0.01,
+      'Rent by Individual or HUF': 0.02,
+      'Joint Development Agreements': 0.10,
+      'Contractors & Professionals': 0.02,
+      'E-Commerce': 0.01,
+
+      // Sections from Portal (Full Strings)
+      'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': 0.10,
+      'Section 393(1) [Sl. No. 5(i)] - Interest on Securities': 0.10,
+      'Section 393(1) [Sl. No. 5(ii/iii)] - Interest other than Securities': 0.10,
+      'Section 393(1) [Sl. No. 7] - Dividends (Domestic Company)': 0.10,
+      'Section 393(1) [Sl. No. 6(i)] - Contractor Payments (Large Payer) - Individual/HUF': 0.01,
+      'Section 393(1) [Sl. No. 6(i)] - Contractor Payments (Large Payer) - Other than Individual/HUF': 0.02,
+      'Section 393(1) [Sl. No. 6(ii)] - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': 0.05,
+      'Section 393(1) [Sl. No. 6(iii).D(a)] - Technical Services / Call Centre / Film Royalty': 0.02,
+      'Section 393(1) [Sl. No. 6(iii).D(b)] - Professional Fees / Other Royalty': 0.10,
+      'Section 393(1) [Sl. No. 1(i)] - Insurance Commission': 0.02,
+      'Section 393(1) [Sl. No. 1(ii)] - General Commission or Brokerage': 0.02,
+      'Section 393(1) [Sl. No. 2(i)] - Rent (Individual/HUF Payer > ₹50,000/mo)': 0.02,
+      'Section 393(1) [Sl. No. 2(ii).D(a)] - Rent on Plant & Machinery': 0.02,
+      'Section 393(1) [Sl. No. 2(ii).D(b)] - Rent on Land & Building': 0.10,
+      'Section 393(1) [Sl. No. 3(i)] - Transfer of Immovable Property (> ₹50L)': 0.01,
+      'Section 393(1) [Sl. No. 8(ii)] - Purchase of Goods (exceeding ₹50L)': 0.001,
+      'Section 393(1) [Sl. No. 8(vi)] - Virtual Digital Assets (VDA/Crypto)': 0.01,
+      'Section 393(3) [Sl. No. 1] - Winnings from Lottery / Puzzles': 0.30,
+      'Section 393(3) [Sl. No. 5] - Regular Filer (ITR filed in previous years) > 1 cr': 0.02,
+      'Section 393(3) [Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 20L': 0.02,
+      'Section 393(3) [Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 1Cr': 0.05,
+      'Section 393(3) [Sl. No. 5] - Co-operative Societies > 3 cr': 0.02,
+      'Section 393(3) [Sl. No. 7] - Payments to Partners (Salary/Comm. > ₹20k)': 0.10,
+      'Section 393(2) [Sl. No. 1] - Sportsmen / Sports Association (Non-Resident)': 0.20,
+      'Section 393(2) [Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': 0.05,
+      'Section 393(2) [Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': 0.09,
+      'Section 393(2) [Sl. No. 11/12] - Income/LTCG from Offshore Fund Units': 0.10,
+      'Section 393(2) [Sl. No. 13/14] - Interest/Dividends/LTCG on Bonds/GDR': 0.10,
+      'Section 393(2) [Sl. No. 17] - Any other sum payable to Non-Resident': 0.30,
+    };
+
+    const TCS_RATE_MAP: Record<string, number> = {
+      'Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+      'Sale of Tendu Leaves': 0.05,
+      'Sale of Forest Produce': 0.02,
+      'Sale of Timber': 0.02,
+      'Sale of Motor Vehicles': 0.01,
+      'Sale of Specified Luxury Goods': 0.01,
+
+      // Full Strings
+      'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+      'Section 206C(1) - Sale of Tendu Leaves': 0.05,
+      'Section 206C(1) - Sale of Forest Produce': 0.02,
+      'Section 206C(1) - Sale of Timber': 0.02,
+      'Section 206C(1F) - Sale of Motor Vehicles': 0.01,
+      'Section 206C(1F) - Sale of Specified Luxury Goods': 0.01,
+    };
+
+    let rateDecimal = 0;
     let isTcs = false;
-    if (rawTds && rawTds !== '-' && rawTds !== '0%') {
-      activeRateStr = rawTds;
+
+    if (vendorTaxType === 'TDS' && purchaseSelectedStatutorySection) {
+      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
+      rateDecimal = TDS_RATE_MAP[name] ?? 0;
       isTcs = false;
-    } else if (rawTcs && rawTcs !== '-' && rawTcs !== '0%') {
-      activeRateStr = rawTcs;
+    } else if (vendorTaxType === 'TCS' && purchaseSelectedStatutorySection) {
+      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
+      rateDecimal = TCS_RATE_MAP[name] ?? 0;
       isTcs = true;
+    } else {
+      // Fallback for legacy data
+      const rawTds = vendor.tds_rate;
+      const rawTcs = vendor.tcs_rate;
+      let activeRateStr = '';
+      if (rawTds && rawTds !== '-' && rawTds !== '0%') {
+        activeRateStr = rawTds;
+        isTcs = false;
+      } else if (rawTcs && rawTcs !== '-' && rawTcs !== '0%') {
+        activeRateStr = rawTcs;
+        isTcs = true;
+      }
+
+      if (activeRateStr) {
+        const numeric = parseFloat(activeRateStr.split('/')[0].replace(/[^\d.]/g, ''));
+        if (!isNaN(numeric) && numeric > 0) {
+          rateDecimal = numeric / 100;
+        }
+      }
     }
 
-    if (!activeRateStr) {
+    if (rateDecimal <= 0) {
       setPurchaseTdsIt('0.00');
       setPurchaseTaxIsTcs(false);
       return;
     }
 
-    // e.g. "5%", "1%", "0.10%" (take first part if slash exists)
-    const numeric = parseFloat(activeRateStr.split('/')[0].replace(/[^\d.]/g, ''));
-    if (isNaN(numeric) || numeric <= 0) {
-      setPurchaseTdsIt('0.00');
-      setPurchaseTaxIsTcs(false);
-      return;
-    }
-
-    const rateDecimal = numeric / 100;
     // TDS/TCS is on Invoice Value (including GST)
     const totalInvoice = purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0);
-
     const taxAmount = (totalInvoice * rateDecimal).toFixed(2);
 
     setPurchaseTdsIt(taxAmount);
     setPurchaseTaxIsTcs(isTcs);
-  }, [party, vendorId, purchaseItems, richVendors, voucherType]);
+  }, [party, vendorId, purchaseItems, richVendors, voucherType, vendorTaxType, purchaseSelectedStatutorySection]);
   // ─────────────────────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2972,23 +3084,33 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     ])].filter(Boolean);
 
     // Ledger lists used in voucher account dropdowns must only contain true ledgers.
-    const allLedgerOptions = Array.from(new Set(
-      effectiveLedgers.filter(isRealLedgerLeaf).map(l => l.name)
-    )).filter(Boolean);
+    const defaultLedgerNames = hierarchy
+      .map(r => r.ledger_1)
+      .filter(name => {
+        if (!name) return false;
+        const n = name.toLowerCase().trim();
+        return !['purchase account', 'sales account'].includes(n);
+      });
+
+    const allLedgerOptions = Array.from(new Set([
+      ...effectiveLedgers.filter(isRealLedgerLeaf).map(l => l.name),
+      ...defaultLedgerNames
+    ])).filter(Boolean) as string[];
 
     // Purchase Ledger dropdown: only Masters > Ledgers entries, excluding customer/vendor party groups
     const EXCLUDED_PARTY_GROUPS = ['sundry debtors', 'sundry creditors'];
     const EXCLUDED_NAMES = ['purchase account', 'sales account'];
-    const purchaseLedgerOptions = Array.from(new Set(
-      effectiveLedgers
+    const purchaseLedgerOptions = Array.from(new Set([
+      ...effectiveLedgers
         .filter(l => {
           if (!isRealLedgerLeaf(l)) return false;
           const group = (l.group || '').toLowerCase().trim();
           const name = (l.name || '').toLowerCase().trim();
           return !EXCLUDED_PARTY_GROUPS.includes(group) && !EXCLUDED_NAMES.includes(name);
         })
-        .map(l => l.name)
-    )).filter(Boolean) as string[];
+        .map(l => l.name),
+      ...defaultLedgerNames.filter(n => !EXCLUDED_NAMES.includes(n.toLowerCase().trim()))
+    ])).filter(Boolean) as string[];
 
     return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
@@ -3086,6 +3208,49 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
         setPurchaseTerms(parts.join('\n\n'));
         setMasterTermsData(vendor);
+
+        // Parse Multi-select Statutory Sections
+        console.log('Vendor Statutory Raw Data:', {
+          name: vendor.vendor_name,
+          tds_s: vendor.tds_section,
+          tds_sa: vendor.tds_section_applicable,
+          tcs_s: vendor.tcs_section,
+          tcs_sa: vendor.tcs_section_applicable,
+          tax_type: vendor.tax_type
+        });
+
+        const tcsStr = vendor.tcs_section_applicable || vendor.tcs_section || '';
+        const tdsStr = vendor.tds_section_applicable || vendor.tds_section || '';
+        
+        // Split logic: prefer pipe delimiter, fallback to comma (ignoring commas inside parentheses)
+        const splitPattern = /,(?![^(]*\))/;
+        const tcsList = tcsStr.includes('|') ? tcsStr.split('|') : tcsStr.split(splitPattern);
+        const tdsList = tdsStr.includes('|') ? tdsStr.split('|') : tdsStr.split(splitPattern);
+        
+        const filteredTcs = tcsList.filter(Boolean).map(s => s.trim());
+        const filteredTds = tdsList.filter(Boolean).map(s => s.trim());
+        
+        setPurchaseAvailableTcsSections(filteredTcs);
+        setPurchaseAvailableTdsSections(filteredTds);
+
+        const derivedTaxType = vendor.tax_type || (tcsList.length > 0 ? 'TCS' : tdsList.length > 0 ? 'TDS' : 'NONE');
+        setVendorTaxType(derivedTaxType);
+
+        const isAuto = (vendor.enable_automatic_tds_posting === true || vendor.enable_automatic_tds_posting === 'true' || vendor.enable_automatic_tds_posting === 1);
+        setPurchaseAutoTdsEnabled(isAuto);
+
+        // Default selection - only if automatic posting is enabled for this vendor
+        if (isAuto) {
+          if (derivedTaxType === 'TCS' && tcsList.length > 0) {
+            setPurchaseSelectedStatutorySection(tcsList[0]);
+          } else if (derivedTaxType === 'TDS' && tdsList.length > 0) {
+            setPurchaseSelectedStatutorySection(tdsList[0]);
+          } else {
+            setPurchaseSelectedStatutorySection('');
+          }
+        } else {
+          setPurchaseSelectedStatutorySection('');
+        }
       }
 
       // 2. Try to match Customer from Rich Data
@@ -3406,10 +3571,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       // alert('Debug: Sending Payload. Check Console.');
 
       try {
-
-        const response = await httpClient.post('/api/vouchers/purchase/', purchaseData);
-
-        showSuccess('Purchase Voucher Saved Successfully!');
+        const isEditing = !!viewVoucherData;
+        const voucherId = isEditing ? (viewVoucherData.rawVoucher?.voucher_id || viewVoucherData.voucherId || viewVoucherData.id || viewVoucherData.rawVoucher?.id) : null;
+        
+        let response;
+        if (isEditing && voucherId) {
+          response = await httpClient.put(`/api/vouchers/purchase/${voucherId}/`, purchaseData);
+          showSuccess('Purchase Voucher Updated Successfully!');
+        } else {
+          response = await httpClient.post('/api/vouchers/purchase/', purchaseData);
+          showSuccess('Purchase Voucher Saved Successfully!');
+        }
 
         // Increment the voucher number if a series was selected
         if (selectedPurchaseConfig && purchaseVoucherConfigs.length > 0) {
@@ -4141,6 +4313,175 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   };
 
   // New Purchase Voucher Form with Tabs
+
+  // ── Drill-Down: fetch full voucher details when navigating from Reports ──
+  useEffect(() => {
+    if (!viewVoucherData) {
+      setIsReadOnlyMode(false);
+      setDrillDownDetails(null);
+      return;
+    }
+
+    const rawVoucher = viewVoucherData.rawVoucher || viewVoucherData;
+    const vType = (viewVoucherData.voucherType || viewVoucherData.type || rawVoucher.voucher_type || '').toLowerCase();
+
+    const typeMap: Record<string, string> = {
+      purchase: 'Purchase', sales: 'Sales', payment: 'Payment',
+      receipt: 'Receipt', contra: 'Contra', journal: 'Journal',
+      expenses: 'Expenses', expense: 'Expenses',
+    };
+    const mappedType = typeMap[vType] || (vType ? vType.charAt(0).toUpperCase() + vType.slice(1) : 'Purchase');
+    setVoucherType(mappedType);
+    setIsReadOnlyMode(true);
+    setDrillDownDetails(null);
+
+    const voucherId = viewVoucherData.sourceId || viewVoucherData.source_id 
+      || rawVoucher.sourceId || rawVoucher.source_id
+      || rawVoucher.voucher_id || rawVoucher.voucherId || rawVoucher.id
+      || viewVoucherData.voucher_id || viewVoucherData.voucherId || viewVoucherData.id;
+    
+    const source = viewVoucherData.source || rawVoucher.source;
+
+    if (!voucherId) {
+      // Fallback: use raw data directly
+      setDrillDownDetails({ ...rawVoucher, _mappedType: mappedType, _rawEntry: viewVoucherData });
+      return;
+    }
+
+    setDrillDownLoading(true);
+    apiService.getVoucher(voucherId, {}, source).then(details => {
+      if (details) {
+        setDrillDownDetails({ ...details, _mappedType: mappedType, _rawEntry: viewVoucherData });
+        // Also hydrate form fields for when user clicks Edit
+        setDate(details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate());
+        setNarration(details.narration || '');
+        const vendorName = details.party || details.vendor_name || '';
+        if (vendorName) setParty(vendorName);
+        if (mappedType === 'Purchase') {
+          setInvoiceNo(details.supplier_invoice_no || details.voucher_number || details.voucher_no || '');
+          setSupplierInvoiceDate(details.supplier_invoice_date || details.date || '');
+          if (details.gstin) setGstin(details.gstin);
+          if (details.branch) setSelectedBranch(details.branch);
+          if (details.voucher_number || details.voucher_no) setVoucherNumber(details.voucher_number || details.voucher_no);
+          if (details.purchase_voucher_series) setSelectedPurchaseConfig(details.purchase_voucher_series);
+          if (details.grn_reference) setGrnRefNo(details.grn_reference);
+          if (details.invoice_in_foreign_currency) setInvoiceInForeignCurrency(details.invoice_in_foreign_currency);
+          if (details.bill_from) setBillFromAddress1(details.bill_from);
+          if (details.ship_from) setShipFromAddress1(details.ship_from);
+          const supplyInr = details.supply_inr_details;
+          const items = details.line_items || supplyInr?.items || details.items || [];
+          if (supplyInr?.purchase_ledger) setPurchaseLedger(supplyInr.purchase_ledger);
+          if (supplyInr?.description) setPurchaseDescription(supplyInr.description);
+          if (Array.isArray(items) && items.length > 0) {
+            setPurchaseItems(items.map((item: any, idx: number) => ({
+              id: String(idx + 1),
+              itemCode: item.item_code || item.itemCode || '',
+              itemName: item.item_name || item.itemName || '',
+              hsnSac: item.hsn_sac || item.hsnSac || '',
+              qty: parseFloat(item.quantity || item.qty || '0'),
+              uom: item.uom || '',
+              rate: parseFloat(item.rate || item.itemRate || '0'),
+              taxableValue: parseFloat(item.taxable_value || item.taxableValue || '0'),
+              foreignRate: parseFloat(item.foreign_rate || item.foreignRate || '0'),
+              foreignAmount: parseFloat(item.foreign_amount || item.foreignAmount || '0'),
+              igst: parseFloat(item.igst_amount || item.igst || '0'),
+              cgst: parseFloat(item.cgst_amount || item.cgst || '0'),
+              sgst: parseFloat(item.sgst_amount || item.sgst || '0'),
+              cess: parseFloat(item.cess_amount || item.cess || '0'),
+              invoiceValue: parseFloat(item.invoice_value || item.invoiceValue || '0'),
+              gstRate: item.gst_rate || item.gstRate || '0',
+              description: item.description || '',
+              poRate: item.poRate || null,
+              invoiceRate: item.invoiceRate || null,
+              rateMismatch: false,
+              poQty: item.poQty || null,
+              invoiceQty: item.invoiceQty || null,
+              qtyMismatch: false,
+              grnQty: item.grnQty || null,
+              sourcePoNo: item.sourcePoNo || null
+            })));
+          }
+          setPurchaseActiveTab('supplier');
+        } else if (mappedType === 'Sales') {
+          setLocalPrefilledData({
+            voucherId: voucherId,
+            invoiceNumber: details.voucher_number || details.voucher_no || '',
+            branch: details.branch || '',
+            gstin: details.gstin || '',
+            invoiceDate: details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate(),
+            sellerName: details.party || '',
+            totalAmount: details.total_amount || details.total || 0,
+            subtotal: details.total_taxable_amount || 0,
+            cgstAmount: details.total_cgst || 0,
+            sgstAmount: details.total_sgst || 0,
+            igstAmount: details.total_igst || 0,
+            lineItems: (details.items || []).map((item: any) => ({
+              itemDescription: item.itemName || item.item_name || '',
+              hsnCode: item.hsnSac || item.hsn_sac || '',
+              quantity: item.qty || 0,
+              rate: item.itemRate || item.rate || 0,
+              amount: item.invoiceValue || 0,
+              taxableValue: item.taxableValue || 0,
+              cgst: item.cgst || 0,
+              sgst: item.sgst || 0,
+              igst: item.igst || 0,
+            })),
+          } as any);
+        }
+      }
+    }).catch(err => {
+      console.error('[VouchersPage] drill-down fetch failed:', err);
+      const fallback = { ...rawVoucher, _mappedType: mappedType, _rawEntry: viewVoucherData };
+      setDrillDownDetails(fallback);
+
+      // Hydrate fallback basics into form states so "Edit" view isn't blank!
+      const fallbackDate = rawVoucher.date || viewVoucherData.date;
+      if (fallbackDate) setDate(new Date(fallbackDate).toISOString().split('T')[0]);
+      const fallbackParty = rawVoucher.party || viewVoucherData.ledgerName || viewVoucherData.ledger || '';
+      if (fallbackParty) setParty(fallbackParty);
+      setNarration(rawVoucher.narration || viewVoucherData.narration || '');
+
+      if (mappedType === 'Sales') {
+          setLocalPrefilledData({
+            voucherId: voucherId,
+            invoiceNumber: rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '',
+            invoiceDate: fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate(),
+            sellerName: fallbackParty,
+            totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
+            lineItems: [], // No detail on fallback
+          } as any);
+      } else if (mappedType === 'Purchase') {
+          setInvoiceNo(rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '');
+          setSupplierInvoiceDate(fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate());
+      }
+    }).finally(() => setDrillDownLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewVoucherData]);
+
+  // Resolve vendorId from party name once richVendors finishes loading
+  useEffect(() => {
+    if (isReadOnlyMode && party && richVendors.length > 0) {
+      const match = richVendors.find((v: any) => v.vendor_name === party);
+      if (match) {
+        if (!vendorId) setVendorId(match.id);
+        
+        // If running Purchase flow and missing basic branch/address fields, 
+        // auto-fill from Vendor Master to avoid user seeing blank fields.
+        if (voucherType === 'Purchase') {
+          const matchGst = vendorGstDetails.find(g => g.vendor_basic_detail === match.id);
+          if (matchGst) {
+            if (!gstin) setGstin(matchGst.gstin);
+            if (!selectedBranch && matchGst.reference_name) setSelectedBranch(matchGst.reference_name);
+            if (!billFromAddress1 && matchGst.branch_address) setAddressFields(matchGst.branch_address);
+          } else if (match.billing_address && !billFromAddress1) {
+             setAddressFields(match.billing_address);
+          }
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReadOnlyMode, party, richVendors, vendorId, vendorGstDetails, voucherType]);
+
   const renderPurchaseForm = () => {
     return (
       <div className="space-y-6">
@@ -4172,7 +4513,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
 
         {/* Tab Content */}
-        <div className="p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px]">
+        <fieldset disabled={isReadOnlyMode} className={`p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px] ${isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}`}>
           {purchaseActiveTab === 'supplier' && (
             <div className="space-y-6">
               {/* Row 1: Date, Supplier Invoice No, Purchase Voucher Series, Purchase Voucher No */}
@@ -4248,6 +4589,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       value={party}
                       onChange={handlePartyChange}
                       options={purchasePartyOptions}
+                      onFocus={fetchRichData}
                       placeholder="Select Vendor"
                       className="w-full"
                       disabled={isVendorDisabled}
@@ -4802,7 +5144,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       readOnly
                                       className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                     />
-                                    <span>{po.po_number} {po.vendor_name ? `- ${po.vendor_name}` : ''}</span>
+                                    <span>{po.po_number} ({po.status}) {po.vendor_name ? `- ${po.vendor_name}` : ''}</span>
                                   </div>
                                 );
                               })
@@ -5445,7 +5787,40 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">TDS/TCS under Income Tax</label>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                        {vendorTaxType === 'TCS' ? 'TCS' : 'TDS'} under Income Tax
+                      </label>
+
+                      {/* Dropdown for sections - Only show if Auto TDS is enabled */}
+                      {purchaseAutoTdsEnabled && vendorTaxType === 'TDS' && purchaseAvailableTdsSections.length > 0 && (
+                        <div className="mb-2">
+                          <select
+                            value={purchaseSelectedStatutorySection}
+                            onChange={(e) => setPurchaseSelectedStatutorySection(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-indigo-200 rounded-[4px] bg-white text-xs focus:ring-indigo-500 focus:border-indigo-500 font-medium text-indigo-700 shadow-sm hover:border-indigo-300 transition-colors"
+                          >
+                            {purchaseAvailableTdsSections.length > 1 && <option value="">Select TDS Section</option>}
+                            {purchaseAvailableTdsSections.map(s => (
+                              <option key={s} value={s}>{s.includes('|') ? s.split('|')[0] + ' - ' + s.split('|')[1] : s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {purchaseAutoTdsEnabled && vendorTaxType === 'TCS' && purchaseAvailableTcsSections.length > 0 && (
+                        <div className="mb-2">
+                          <select
+                            value={purchaseSelectedStatutorySection}
+                            onChange={(e) => setPurchaseSelectedStatutorySection(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-indigo-200 rounded-[4px] bg-white text-xs focus:ring-indigo-500 focus:border-indigo-500 font-medium text-indigo-700 shadow-sm hover:border-indigo-300 transition-colors"
+                          >
+                            {purchaseAvailableTcsSections.length > 1 && <option value="">Select TCS Section</option>}
+                            {purchaseAvailableTcsSections.map(s => (
+                              <option key={s} value={s}>{s.includes('|') ? s.split('|')[0] + ' - ' + s.split('|')[1] : s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       <input
                         type="text"
                         value={purchaseTdsIt}
@@ -6151,7 +6526,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 )}
               </div>
             )}
-        </div>
+        </fieldset>
       </div>
     );
   };
@@ -6360,7 +6735,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={advanceAmount}
-                     
+
                       onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
@@ -6403,7 +6778,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <input
                               type="number" onWheel={(e) => e.currentTarget.blur()}
                               value={transaction.receipt || ''}
-                             
+
                               onChange={e => handleReceiptChange(transaction.id, parseFloat(e.target.value) || 0)}
                               placeholder="0"
                               className="w-24 px-2 py-1 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
@@ -6423,7 +6798,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={totalReceipt}
                       readOnly
-                     
+
                       className="w-32 px-3 py-2 text-right border border-gray-300 rounded-[4px] bg-gray-50 text-gray-700 font-semibold"
                     />
                   </div>
@@ -6499,7 +6874,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="number" onWheel={(e) => e.currentTarget.blur()}
                     value={runningBalance}
                     readOnly
-                   
+
                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                   />
                 </div>
@@ -6544,7 +6919,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         key={`amount-${row.id}`}
                         type="number" onWheel={(e) => e.currentTarget.blur()}
                         value={row.amount || ''}
-                       
+
                         onChange={e => {
                           const newRows = bulkRows.map(r => r.id === row.id ? { ...r, amount: parseFloat(e.target.value) || 0 } : r);
                           setBulkRows(newRows);
@@ -6628,7 +7003,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               <input
                                 type="number" onWheel={(e) => e.currentTarget.blur()}
                                 value={transaction.receipt || ''}
-                               
+
                                 onChange={e => handleReceiptChange(transaction.id, parseFloat(e.target.value) || 0)}
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-center"
                               />
@@ -6665,7 +7040,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <input
                           type="number" onWheel={(e) => e.currentTarget.blur()}
                           value={advanceAmount || ''}
-                         
+
                           onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
                           className="w-full px-3 py-2 border border-gray-300 rounded"
                         />
@@ -6921,7 +7296,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
 
         {/* Tab Content */}
-        <div className="p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px]">
+        <fieldset disabled={isReadOnlyMode} className={`p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px] ${isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}`}>
           {creditNoteActiveTab === 'invoice' && (
             <div className="space-y-6">
               {/* Row 1: Date, Credit Note Series, Credit Note No. */}
@@ -7452,7 +7827,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             } else if (type === 'IGST') {
                               setCnInForeignCurrency('Yes');
                               setCnInputType(['IGST']);
-                              
+
                               // Handle foreign currency conversion if switching to 'Yes'
                               const exRate = parseFloat(String(cnExchangeRate)) || 1;
                               setCnItems(prev => prev.map(item => {
@@ -8960,7 +9335,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
           )}
 
-        </div>
+        </fieldset>
       </div>
     );
   };
@@ -10317,7 +10692,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <input
                   type="number" onWheel={(e) => e.currentTarget.blur()}
                   value={row.totalAmount || ''}
-                 
+
                   onChange={e => handleExpenseRowChange(row.id, 'totalAmount', parseFloat(e.target.value) || 0)}
                   className={`erp-input ${row.totalAmount <= 0 ? 'border-red-300' : ''}`}
                   placeholder="0.00"
@@ -10371,7 +10746,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.taxableValue || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'taxableValue', parseFloat(e.target.value) || 0)}
                       className="erp-input"
                       placeholder="0.00"
@@ -10382,7 +10757,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.igst || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'igst', parseFloat(e.target.value) || 0)}
                       className="erp-input bg-gray-50"
                       placeholder="0.00"
@@ -10393,7 +10768,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.cgst || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'cgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
                       className={`erp-input ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
@@ -10405,7 +10780,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.sgst || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'sgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
                       className={`erp-input ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
@@ -10417,7 +10792,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={row.cess || ''}
-                     
+
                       onChange={e => handleExpenseRowChange(row.id, 'cess', parseFloat(e.target.value) || 0)}
                       className="erp-input"
                       placeholder="0.00"
@@ -10587,7 +10962,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={entry.debit || ''}
-                     
+
                       onChange={e => handleEntryChange(index, 'debit', parseFloat(e.target.value) || 0)}
                       className="erp-input h-9 text-right font-mono"
                       placeholder="0.00"
@@ -10597,7 +10972,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <input
                       type="number" onWheel={(e) => e.currentTarget.blur()}
                       value={entry.credit || ''}
-                     
+
                       onChange={e => handleEntryChange(index, 'credit', parseFloat(e.target.value) || 0)}
                       className="erp-input h-9 text-right font-mono"
                       placeholder="0.00"
@@ -10684,8 +11059,39 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
       ) : (
         <>
+          {isReadOnlyMode && (
+            <div className="bg-indigo-600 text-white p-5 rounded-xl flex justify-between items-center mb-6 shadow-[0_10px_30px_-10px_rgba(79,70,229,0.4)] animate-in fade-in slide-in-from-top-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 flex items-center justify-center bg-white/20 backdrop-blur-md border border-white/30 rounded-xl shadow-inner">
+                   <Icon name="eye" className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                   <p className="font-black text-lg uppercase tracking-wide leading-tight">READ-ONLY VIEW</p>
+                   <p className="text-indigo-100 text-sm font-medium opacity-90">You are currently viewing {drillDownDetails?._mappedType || voucherType} Voucher {drillDownDetails?.voucher_number || drillDownDetails?._rawEntry?.voucherNo || ""}.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                 <button onClick={() => setIsReadOnlyMode(false)} className="flex items-center gap-2 bg-white text-indigo-700 px-7 py-3 rounded-xl font-black text-sm shadow-md hover:bg-indigo-50 transition-all active:scale-95">
+                   <Icon name="edit" className="w-4 h-4" />
+                   EDIT VOUCHER
+                 </button>
+                 <button 
+                   onClick={() => {
+                     setIsReadOnlyMode(false);
+                     setDrillDownDetails(null);
+                     if (clearViewVoucherData) clearViewVoucherData();
+                   }} 
+                   className="flex items-center gap-2 bg-indigo-800/60 text-indigo-50 px-5 py-3 rounded-xl font-bold text-sm border border-indigo-400/40 hover:bg-indigo-800/90 transition-all active:scale-95"
+                 >
+                   <Icon name="x" className="w-4 h-4" />
+                   CLOSE
+                 </button>
+              </div>
+            </div>
+          )}
+
           {/* Main Tabs */}
-          <div className="erp-tab-container">
+          <div className={`erp-tab-container ${isReadOnlyMode ? 'opacity-50 pointer-events-none cursor-not-allowed select-none' : ''}`}>
             {availableVoucherTypes.map(type => (
               <button
                 key={type.id}
@@ -10815,13 +11221,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       </div>
                                     )}
                                     <button
-                                      onClick={() => { 
-                                        setExtractionMode('zoho'); 
-                                        setScanType('bulk'); 
-                                        setScannerFiles(null); 
-                                        setIsInvoiceScannerOpen(true); 
-                                        setIsScannerMenuOpen(false); 
-                                        setIsOthersSubmenuOpen(false); 
+                                      onClick={() => {
+                                        setExtractionMode('zoho');
+                                        setScanType('bulk');
+                                        setScannerFiles(null);
+                                        setIsInvoiceScannerOpen(true);
+                                        setIsScannerMenuOpen(false);
+                                        setIsOthersSubmenuOpen(false);
                                       }}
                                       className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                                       role="menuitem"
@@ -10830,13 +11236,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       Zoho
                                     </button>
                                     <button
-                                      onClick={() => { 
-                                        setExtractionMode('sap'); 
-                                        setScanType('bulk'); 
-                                        setScannerFiles(null); 
-                                        setIsInvoiceScannerOpen(true); 
-                                        setIsScannerMenuOpen(false); 
-                                        setIsOthersSubmenuOpen(false); 
+                                      onClick={() => {
+                                        setExtractionMode('sap');
+                                        setScanType('bulk');
+                                        setScannerFiles(null);
+                                        setIsInvoiceScannerOpen(true);
+                                        setIsScannerMenuOpen(false);
+                                        setIsOthersSubmenuOpen(false);
                                       }}
                                       className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                                       role="menuitem"
@@ -10968,102 +11374,124 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               `
             }} />
 
-            {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
-            {voucherType === 'Payment' && (
-              <PaymentVoucherSingle
-                prefilledData={localPrefilledData}
-                clearPrefilledData={handleClearPrefilledData}
-                isLimitReached={isLimitReached}
-                onLimitReached={handleLimitReached}
-              />
-            )}
-            {voucherType === 'Receipt' && (
-              <ReceiptVoucher
-                prefilledData={localPrefilledData}
-                clearPrefilledData={handleClearPrefilledData}
-                isLimitReached={isLimitReached}
-                onLimitReached={handleLimitReached}
-              />
-            )}
-            {voucherType === 'Purchase' && renderPurchaseForm()}
-            {voucherType === 'Contra' && renderSimpleForm(voucherType)}
-            {voucherType === 'Journal' && renderJournalForm()}
-            {voucherType === 'Expenses' && renderExpensesForm()}
-            {voucherType === 'Credit Note' && renderCreditNoteForm()}
-            {voucherType === 'Debit Note' && (
-              <DebitNoteVoucher
-                prefilledData={localPrefilledData}
-                clearPrefilledData={handleClearPrefilledData}
-                companyDetails={companyDetails}
-                onAddVouchers={onAddVouchers}
-              />
-            )}
 
-            {voucherType === 'Purchase' && (
-              purchaseActiveTab !== 'transit' ? (
-                <button
-                  onClick={() => {
-                    setShowPurchaseMismatches(true);
-                    const hasMismatch = purchaseItems.some(item => item.rateMismatch || item.qtyMismatch);
-                    if (hasMismatch) {
-                      showError("Please resolve Quantity or Rate mismatches before proceeding.");
-                      return;
-                    }
+            <div className={`border-0 p-0 m-0 contents ${isReadOnlyMode ? 'opacity-90 select-none' : ''}`}>
+              {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} onRefreshCustomers={fetchRichData} companyDetails={companyDetails} isReadOnlyMode={isReadOnlyMode} />}
+              {voucherType === 'Payment' && (
+                <PaymentVoucherSingle
+                  prefilledData={localPrefilledData}
+                  clearPrefilledData={handleClearPrefilledData}
+                  isLimitReached={isLimitReached}
+                  onLimitReached={handleLimitReached}
+                  isReadOnlyMode={isReadOnlyMode}
+                />
+              )}
+              {voucherType === 'Receipt' && (
+                <ReceiptVoucher
+                  prefilledData={localPrefilledData}
+                  clearPrefilledData={handleClearPrefilledData}
+                  isLimitReached={isLimitReached}
+                  onLimitReached={handleLimitReached}
+                  isReadOnlyMode={isReadOnlyMode}
+                />
+              )}
+              {voucherType === 'Purchase' && renderPurchaseForm()}
+              {voucherType === 'Contra' && (
+                <fieldset disabled={isReadOnlyMode} className={isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}>
+                  {renderSimpleForm(voucherType)}
+                </fieldset>
+              )}
+              {voucherType === 'Journal' && (
+                <fieldset disabled={isReadOnlyMode} className={isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}>
+                  {renderJournalForm()}
+                </fieldset>
+              )}
+              {voucherType === 'Expenses' && (
+                <fieldset disabled={isReadOnlyMode} className={isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}>
+                  {renderExpensesForm()}
+                </fieldset>
+              )}
+              {voucherType === 'Credit Note' && renderCreditNoteForm()}
+              {voucherType === 'Debit Note' && (
+                <DebitNoteVoucher
+                  prefilledData={localPrefilledData}
+                  clearPrefilledData={handleClearPrefilledData}
+                  companyDetails={companyDetails}
+                  onAddVouchers={onAddVouchers}
+                  isReadOnlyMode={isReadOnlyMode}
+                />
+              )}
+            </div>
 
-                    if (purchaseActiveTab === 'supplier') {
-                      if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
-                      else setPurchaseActiveTab('supply');
-                    }
-                    else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
-                    else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
-                    else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
-                    else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
-                  }}
-                  className="erp-button-primary"
-                >
-                  Next
-                </button>
-              ) : (
-                <div className="flex space-x-3">
-                  <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
-                  <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                  <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
-                </div>
-              )
-            )}
+            {!isReadOnlyMode && (
+              <>
+                {voucherType === 'Purchase' && (
+                  purchaseActiveTab !== 'transit' ? (
+                    <button
+                      onClick={() => {
+                        setShowPurchaseMismatches(true);
+                        const hasMismatch = purchaseItems.some(item => item.rateMismatch || item.qtyMismatch);
+                        if (hasMismatch) {
+                          showError("Please resolve Quantity or Rate mismatches before proceeding.");
+                          return;
+                        }
 
-            {voucherType === 'Credit Note' && (
-              creditNoteActiveTab !== 'transit' ? (
-                <button
-                  onClick={() => {
-                    const creditTabs = cnInForeignCurrency === 'Yes'
-                      ? ['invoice', 'items_foreign', 'items_inr', 'due', 'transit']
-                      : ['invoice', 'items', 'due', 'transit'];
+                        if (purchaseActiveTab === 'supplier') {
+                          if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
+                          else setPurchaseActiveTab('supply');
+                        }
+                        else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
+                        else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
+                        else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
+                        else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
+                      }}
+                      className="erp-button-primary"
+                    >
+                      Next
+                    </button>
+                  ) : (
+                    <div className="flex space-x-3 mt-4">
+                      <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                      <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                      <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                    </div>
+                  )
+                )}
 
-                    const idx = creditTabs.indexOf(creditNoteActiveTab);
-                    if (idx >= 0 && idx < creditTabs.length - 1) {
-                      setCreditNoteActiveTab(creditTabs[idx + 1] as any);
-                    }
-                  }}
-                  className="erp-button-primary"
-                >
-                  Next
-                </button>
-              ) : (
-                <div className="flex space-x-3">
-                  <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
-                  <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                  <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
-                </div>
-              )
-            )}
+                {voucherType === 'Credit Note' && (
+                  creditNoteActiveTab !== 'transit' ? (
+                    <button
+                      onClick={() => {
+                        const creditTabs = cnInForeignCurrency === 'Yes'
+                          ? ['invoice', 'items_foreign', 'items_inr', 'due', 'transit']
+                          : ['invoice', 'items', 'due', 'transit'];
 
-            {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Credit Note', 'Debit Note'].includes(voucherType) && (
-              <div className="flex space-x-3">
-                <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
-                <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
-              </div>
+                        const idx = creditTabs.indexOf(creditNoteActiveTab);
+                        if (idx >= 0 && idx < creditTabs.length - 1) {
+                          setCreditNoteActiveTab(creditTabs[idx + 1] as any);
+                        }
+                      }}
+                      className="erp-button-primary"
+                    >
+                      Next
+                    </button>
+                  ) : (
+                    <div className="flex space-x-3 mt-4">
+                      <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                      <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                      <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                    </div>
+                  )
+                )}
+
+                {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Credit Note', 'Debit Note'].includes(voucherType) && (
+                  <div className="flex space-x-3 mt-4">
+                    <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                    <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                    <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

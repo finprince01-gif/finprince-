@@ -51,13 +51,15 @@ interface PaymentVoucherSingleProps {
     clearPrefilledData?: () => void;
     isLimitReached?: boolean;
     onLimitReached?: () => void;
+    isReadOnlyMode?: boolean;
 }
 
 const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     prefilledData,
     clearPrefilledData,
     isLimitReached,
-    onLimitReached
+    onLimitReached,
+    isReadOnlyMode = false
 }) => {
     // Tab state
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
@@ -1155,7 +1157,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
             {/* Single Tab Content */}
             {activeTab === 'single' && (
-                <>
+                <fieldset disabled={isReadOnlyMode} className={isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}>
                     {/* Top Row: Date, Voucher Type, Voucher Number, Ref No */}
                     <div className="grid grid-cols-4 gap-4">
                         <div>
@@ -1482,14 +1484,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             {isExactMatch ? 'Post Payment' : 'Complete Allocation'}
                         </button>
                     </div>
-                </>
+                </fieldset>
             )
             }
 
             {/* Bulk Tab Content */}
             {
                 activeTab === 'bulk' && (
-                    <div className="grid grid-cols-2 gap-6">
+                    <fieldset disabled={isReadOnlyMode} className={`grid grid-cols-2 gap-6 ${isReadOnlyMode ? 'pointer-events-none opacity-90' : ''}`}>
                         {/* Left Panel */}
                         <div className="space-y-6">
                             {/* Top Fields */}
@@ -1844,7 +1846,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </fieldset>
 
                 )
             }

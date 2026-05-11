@@ -20,17 +20,21 @@ class VoucherPurchaseViewSet(viewsets.ModelViewSet):
             'due_details', 'transit_details', 'supply_foreign_details', 'supply_inr_details'
         )
 
+        # For detail (retrieve) actions, always return all records — never filter by to_pay.
+        # This ensures the drill-down panel always loads complete voucher data regardless of
+        # payment status (fully paid invoices still need to be viewable/editable).
+        if self.action == 'retrieve':
+            return queryset.order_by('-date', '-created_at')
+
         # Optional: show_all=true to skip 'to_pay' and 'payment' exclusion (e.g. for Debit Notes)
         show_all = self.request.query_params.get('show_all') == 'true'
 
         if not show_all:
-            # MANDATORY: Only show vouchers with positive outstanding 'to_pay'
+            # List endpoint: only show vouchers with positive outstanding 'to_pay'
             queryset = queryset.filter(
                 due_details__to_pay__isnull=False,
                 due_details__to_pay__gt=0
             )
-
-            pass # Handled by to_pay filter above
         
         # Optional: Filter by vendor name/branch if provided
         vendor_name = self.request.query_params.get('vendor_name')

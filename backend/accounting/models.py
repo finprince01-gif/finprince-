@@ -299,6 +299,7 @@ class Voucher(BaseModel):
     amount = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True)
     total = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
+    ref_no = models.CharField(max_length=150, null=True, blank=True, help_text="Reference Number (Cheque, NEFT, etc)")
     source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, ocr)")
     
     # Sales/Purchase specific
@@ -427,6 +428,8 @@ class JournalEntry(BaseModel):
     voucher_number = models.CharField(max_length=50, null=True, blank=True)
     transaction_date = models.DateField(null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
+    reference_number = models.CharField(max_length=100, null=True, blank=True)
+    allocation_status = models.CharField(max_length=20, default='Unutilized')
     
     ledger = models.ForeignKey(
         MasterLedger, 

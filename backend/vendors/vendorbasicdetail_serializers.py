@@ -217,6 +217,7 @@ class VendorBasicDetailListSerializer(serializers.ModelSerializer):
             'dispute_redressal_terms': terms.dispute_redressal_terms if terms else None,
             # TDS fields
             'tds_section_applicable': tds.tds_section_applicable if tds else None,
+            'tds_section': tds.tds_section if tds else None,
             'tds_rate': tds.tds_rate if tds else None,
             'tcs_section_applicable': tds.tcs_section_applicable if tds else None,
             'tcs_rate': tds.tcs_rate if tds else None,
@@ -224,6 +225,7 @@ class VendorBasicDetailListSerializer(serializers.ModelSerializer):
             'enable_automatic_tds_posting': tds.enable_automatic_tds_posting if tds else False,
             'pan_number': tds.pan_number if tds else None,
             'tan_number': tds.tan_number if tds else None,
+            'tax_type': 'TCS' if tds and (tds.tcs_section_applicable or getattr(tds, 'tcs_section', None)) else ('TDS' if tds and (tds.tds_section_applicable or tds.tds_section) else 'NONE'),
         })
         
         return data

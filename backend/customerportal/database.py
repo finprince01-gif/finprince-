@@ -12,6 +12,7 @@ class CustomerMaster(models.Model):
     Stores all customer information
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     customer_code = models.CharField(max_length=50, unique=True)
     customer_name = models.CharField(max_length=255)
@@ -79,6 +80,7 @@ class CustomerMasterCategory(models.Model):
     Replaces the old CustomerCategory model
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     category = models.CharField(max_length=100)
     group = models.CharField(max_length=100, default='', blank=True)
@@ -103,7 +105,7 @@ class CustomerMasterCategory(models.Model):
             parts.append(self.group)
         if self.subgroup:
             parts.append(self.subgroup)
-        return " > ".join(parts)
+        return " > ".join([str(p) for p in parts if p])
     
     @property
     def full_path(self) -> str:
@@ -117,6 +119,7 @@ class CustomerMastersSalesQuotation(models.Model):
     Manages sales quotation series configuration (prefix, suffix, digits, etc.)
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     series_name = models.CharField(max_length=100)
     customer_category = models.CharField(max_length=100, null=True, blank=True)
@@ -147,9 +150,9 @@ class CustomerMastersSalesQuotation(models.Model):
     
     def get_next_number(self):
         """Generate the next quotation number in the series"""
-        self.current_number += 1
+        self.current_number += 1  # type: ignore
         self.save()
-        number_str = str(self.current_number).zfill(self.required_digits)
+        number_str = str(self.current_number).zfill(int(self.required_digits))  # type: ignore
         return f"{self.prefix}{number_str}{self.suffix}"
 
 
@@ -159,6 +162,7 @@ class CustomerMastersSalesOrder(models.Model):
     Manages sales order series configuration (prefix, suffix, digits, etc.)
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     series_name = models.CharField(max_length=100)
     customer_category = models.CharField(max_length=100, null=True, blank=True)
@@ -189,9 +193,9 @@ class CustomerMastersSalesOrder(models.Model):
     
     def get_next_number(self):
         """Generate the next order number in the series"""
-        self.current_number += 1
+        self.current_number += 1  # type: ignore
         self.save()
-        number_str = str(self.current_number).zfill(self.required_digits)
+        number_str = str(self.current_number).zfill(int(self.required_digits))  # type: ignore
         return f"{self.prefix}{number_str}{self.suffix}"
 
 
@@ -201,6 +205,7 @@ class CustomerMasterCustomerBasicDetails(models.Model):
     Stores basic customer information from the 'Basic Details' tab
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     
     # Basic Details
@@ -261,6 +266,7 @@ class CustomerMasterCustomerGSTDetails(models.Model):
     Stores GST registration details and branch information
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     customer_basic_detail = models.ForeignKey(
         CustomerMasterCustomerBasicDetails,
@@ -314,6 +320,7 @@ class CustomerMasterCustomerTDS(models.Model):
     Stores TDS and other statutory information
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     customer_basic_detail = models.OneToOneField(
         CustomerMasterCustomerBasicDetails,
@@ -360,6 +367,7 @@ class CustomerMasterCustomerBanking(models.Model):
     Stores bank account details for customers
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     customer_basic_detail = models.ForeignKey(
         CustomerMasterCustomerBasicDetails,
@@ -406,6 +414,7 @@ class CustomerMasterCustomerProductService(models.Model):
     Stores products/services associated with a customer
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True, null=True, blank=True)
     customer_basic_detail = models.ForeignKey(
         CustomerMasterCustomerBasicDetails, 
@@ -443,6 +452,7 @@ class CustomerMasterCustomerTermsCondition(models.Model):
     Stores terms and conditions associated with a customer
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True, null=True, blank=True)
     customer_basic_detail = models.OneToOneField(
         CustomerMasterCustomerBasicDetails, 
@@ -489,6 +499,7 @@ class CustomerTransaction(models.Model):
     ]
     
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     customer_id = models.IntegerField(db_index=True)
     transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
@@ -893,6 +904,7 @@ class CustomerTransactionSalesOrderBasicDetails(models.Model):
     Stores basic sales order information
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     
     # Basic Details
@@ -940,6 +952,7 @@ class CustomerTransactionSalesOrderItemDetails(models.Model):
     Stores item details for each sales order
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     so_basic_detail = models.ForeignKey(
         CustomerTransactionSalesOrderBasicDetails, 
@@ -982,6 +995,7 @@ class CustomerTransactionSalesOrderDeliveryTerms(models.Model):
     Stores delivery terms for each sales order
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     so_basic_detail = models.OneToOneField(
         CustomerTransactionSalesOrderBasicDetails, 
@@ -1016,6 +1030,7 @@ class CustomerTransactionSalesOrderPaymentAndSalesperson(models.Model):
     Stores payment terms and salesperson details for each sales order
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     so_basic_detail = models.OneToOneField(
         CustomerTransactionSalesOrderBasicDetails, 
@@ -1053,6 +1068,7 @@ class CustomerTransactionSalesOrderQuotationDetails(models.Model):
     Stores quotation linking details for each sales order
     """
     id = models.AutoField(primary_key=True)
+    objects = models.Manager()
     tenant_id = models.CharField(max_length=36, db_index=True)
     so_basic_detail = models.OneToOneField(
         CustomerTransactionSalesOrderBasicDetails, 

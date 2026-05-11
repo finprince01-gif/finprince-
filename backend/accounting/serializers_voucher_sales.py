@@ -325,7 +325,8 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             from accounting.models import JournalEntry
             from decimal import Decimal as D
 
-            tenant_id = self.context.get('request').user.tenant_id
+            request = self.context.get('request')
+            tenant_id = request.user.tenant_id if request and hasattr(request, 'user') else invoice.tenant_id
             payment_obj = getattr(invoice, 'payment_details', None)
             if not payment_obj:
                 print("[SalesSerializer] Skipped posting: No payment details found on instance")
@@ -348,8 +349,11 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             # Resolve Customer TCS/TDS Ledger and Amount
             tcs_amt = float(payment_obj.payment_tds_income_tax or 0)
             
-            # Customer owes us the full Invoice Total PLUS any TCS collected from them
-            customer_debit_amt = total_amount + tcs_amt
+            # The user wants TDS/TCS on sales to be a 'Receivable' (Asset).
+            # To balance, the Customer debit must be the NET amount (Invoice Total - Tax Deduction).
+            # Total Debit = (total_amount - tcs_amt) [Customer] + (tcs_amt) [Receivable] = total_amount.
+            # Total Credit = (payment_taxable_value) [Sales] + (total_tax) [GST] = total_amount.
+            customer_debit_amt = total_amount - tcs_amt
 
             entries = []
             if customer.ledger_id:
@@ -358,13 +362,12 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 print(f"[SalesSerializer] Posting Error: Customer {customer.name} has no ledger mapping.")
                 return
 
-            # TCS/TDS (Credit - we owe govt)
+            # TCS/TDS collected/deducted on Sales — this is a RECEIVABLE (Asset)
             tcs_master_ledger = None
             tcs_section_name = "Unspecified Section"
+            is_tcs = True # Default to TCS if unknown
+            
             if tcs_amt > 0:
-                tcs_master_ledger = get_standard_ledger(tenant_id, 'TCS Payable', 'Duties & Taxes', 'Liability')
-                entries.append({"ledger_id": tcs_master_ledger.id, "debit": 0, "credit": tcs_amt})
-                
                 # Try to resolve the specific section name for supplementary rows
                 if invoice.customer_id:
                     try:
@@ -373,15 +376,59 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                             customer_basic_detail_id=invoice.customer_id
                         ).first()
                         if tds_obj:
-                            if tds_obj.tcs_enabled and tds_obj.tcs_section:
-                                tcs_section_name = tds_obj.tcs_section.strip()
-                            elif tds_obj.tds_enabled and tds_obj.tds_section:
-                                tcs_section_name = tds_obj.tds_section.strip()
+                            has_tcs_section = bool(getattr(tds_obj, 'tcs_section', ''))
+                            has_tds_section = bool(getattr(tds_obj, 'tds_section', ''))
+                            is_tcs_enabled = getattr(tds_obj, 'tcs_enabled', False)
+                            is_tds_enabled = getattr(tds_obj, 'tds_enabled', False)
+                            
+                            if is_tcs_enabled or has_tcs_section:
+                                tcs_section_name = getattr(tds_obj, 'tcs_section', '').strip() or "Unspecified Section"
+                                is_tcs = True
+                            elif is_tds_enabled or has_tds_section:
+                                tcs_section_name = getattr(tds_obj, 'tds_section', '').strip() or "Unspecified Section"
+                                is_tcs = False
                     except Exception:
                         pass
+                        
+                ledger_name_str = 'TCS Receivable' if is_tcs else 'TDS Receivable'
+                tcs_master_ledger = get_standard_ledger(tenant_id, ledger_name_str, 'Duties & Taxes', 'Asset')
+                entries.append({"ledger_id": tcs_master_ledger.id, "debit": tcs_amt, "credit": 0})
 
             # Sales (Credit - Taxable Value)
-            entries.append({"ledger_id": sales_ledger.id, "debit": 0, "credit": float(payment_obj.payment_taxable_value or 0)})
+            from accounting.services.ledger_service import _resolve_ledger
+            sales_ledger_map = {}
+            default_sales_ledger = get_standard_ledger(tenant_id, 'Sales Account', 'Sales Accounts', 'Income')
+
+            total_item_taxable = 0.0
+            
+            # Process domestic items
+            for item in invoice.items.all():
+                amt = float(item.taxable_value or 0)
+                if amt > 0:
+                    l_obj = _resolve_ledger(item.sales_ledger, tenant_id) if item.sales_ledger else None
+                    l_id = l_obj.id if l_obj else default_sales_ledger.id
+                    sales_ledger_map[l_id] = sales_ledger_map.get(l_id, 0.0) + amt
+                    total_item_taxable += amt
+
+            # Process foreign items
+            for f_item in invoice.foreign_items.all():
+                amt = float(f_item.amount or 0)
+                if amt > 0:
+                    l_obj = _resolve_ledger(f_item.sales_ledger, tenant_id) if f_item.sales_ledger else None
+                    l_id = l_obj.id if l_obj else default_sales_ledger.id
+                    sales_ledger_map[l_id] = sales_ledger_map.get(l_id, 0.0) + amt
+                    total_item_taxable += amt
+
+            # Check if there is any difference between item sum and payment_taxable_value (e.g., due to rounding or missing items)
+            payment_taxable = float(payment_obj.payment_taxable_value or 0)
+            diff = payment_taxable - total_item_taxable
+
+            if abs(diff) > 0.01:
+                sales_ledger_map[default_sales_ledger.id] = sales_ledger_map.get(default_sales_ledger.id, 0.0) + diff
+
+            for l_id, amt in sales_ledger_map.items():
+                if amt > 0:
+                    entries.append({"ledger_id": l_id, "debit": 0, "credit": amt})
 
             # Collect individual GST amounts
             igst_amt = float(payment_obj.payment_igst or 0)
@@ -442,12 +489,12 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                 if detail_rows:
                     JournalEntry.objects.bulk_create(detail_rows)
 
-            # Write supplementary TCS detail rows for drill-down breakdown
+            # Write supplementary TCS/TDS detail rows for drill-down breakdown
             if tcs_amt > 0 and tcs_master_ledger:
-                tcs_detail_type = "SALES_TCS_DETAIL"
+                tcs_detail_type = "SALES_TCS_DETAIL" if is_tcs else "SALES_TDS_DETAIL"
                 JournalEntry.objects.filter(
                     tenant_id=tenant_id,
-                    voucher_type=tcs_detail_type,
+                    voucher_type__in=["SALES_TCS_DETAIL", "SALES_TDS_DETAIL"],
                     voucher_id=v_id
                 ).delete()
                 
@@ -458,10 +505,10 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
                     voucher_number=invoice.sales_invoice_no,
                     transaction_date=invoice.date,
                     ledger_id=tcs_master_ledger.id,
-                    ledger_name=f"TCS Payable ({tcs_section_name})",
+                    ledger_name=f"{ledger_name_str} ({tcs_section_name})",
                     ledger_id_val=tcs_master_ledger.id,
-                    debit=D('0.00'),
-                    credit=D(str(tcs_amt)),
+                    debit=D(str(tcs_amt)),
+                    credit=D('0.00'),
                 )
 
             invoice.posting_status = 'POSTED'
@@ -485,11 +532,27 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         dispatch_data = validated_data.pop('dispatch_details', None)
         eway_bill_details_data = validated_data.pop('eway_bill_details', None)
 
+        # Update custom mapped fields from frontend
+        if 'party' in self.initial_data:
+            instance.customer_name = self.initial_data.get('party', '')
+        if 'bill_to_address_1' in self.initial_data:
+            instance.bill_to = self.initial_data.get('bill_to_address_1', '')
+        if 'ship_to_address_1' in self.initial_data:
+            instance.ship_to = self.initial_data.get('ship_to_address_1', '')
+        if 'voucher_number' in self.initial_data:
+            instance.sales_invoice_no = self.initial_data.get('voucher_number', '')
+        if 'voucher_series' in self.initial_data:
+            instance.voucher_name = self.initial_data.get('voucher_series', '')
+        
         # Update Invoice Header
         instance = super().update(instance, validated_data)
         tenant_id = instance.tenant_id
 
         # Update Items
+        # Map flat items array back if nested items is missing in validated_data
+        if items_data is None and 'items' in self.initial_data:
+            items_data = self.initial_data['items']
+
         if items_data is not None:
             instance.items.all().delete()
             for item in items_data:
@@ -520,6 +583,23 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             instance.eway_bill_details.all().delete()
             for eway_data in eway_bill_details_data:
                 VoucherSalesEwayBill.objects.create(invoice=instance, tenant_id=tenant_id, **eway_data)
+
+        # Update the unified Voucher object
+        if instance.voucher_id:
+            try:
+                payment_obj = getattr(instance, 'payment_details', None)
+                final_total = decimal.Decimal(str(payment_obj.payment_invoice_value if payment_obj else 0)).quantize(
+                    decimal.Decimal('0.00'), rounding=decimal.ROUND_HALF_UP
+                )
+                voucher = Voucher.objects.get(id=instance.voucher_id)
+                voucher.date = instance.date
+                voucher.party = instance.customer_name
+                voucher.total = final_total
+                voucher.invoice_no = instance.sales_invoice_no
+                voucher.voucher_number = instance.sales_invoice_no or f"SAL-{instance.id}"
+                voucher.save()
+            except Voucher.DoesNotExist:
+                pass
 
         # --- Record Advance Allocation Maps Update (Phase 4C) ---
         if instance.voucher_id:

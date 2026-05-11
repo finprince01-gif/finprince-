@@ -250,7 +250,11 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = JournalEntry
-        fields = ['id', 'ledger', 'ledger_name', 'debit', 'credit', 'voucher_type', 'voucher_number', 'transaction_date', 'voucher_id']
+        fields = [
+            'id', 'ledger', 'ledger_name', 'debit', 'credit', 
+            'voucher_type', 'voucher_number', 'transaction_date', 
+            'voucher_id', 'reference_number', 'allocation_status'
+        ]
         read_only_fields = ['id']
 
 
@@ -271,6 +275,7 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
     totalCredit = serializers.DecimalField(source='total_credit', max_digits=20, decimal_places=2, required=False)
     fromAccount = serializers.CharField(source='from_account', required=False, allow_blank=True)
     toAccount = serializers.CharField(source='to_account', required=False, allow_blank=True)
+    refNo = serializers.CharField(source='ref_no', required=False, allow_blank=True)
     
     class Meta:
         model = Voucher
@@ -281,7 +286,8 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
             'party': {'required': False, 'allow_blank': True},
             'account': {'required': False, 'allow_blank': True},
             'from_account': {'required': False, 'allow_blank': True},
-            'to_account': {'required': False, 'allow_blank': True}
+            'to_account': {'required': False, 'allow_blank': True},
+            'ref_no': {'required': False, 'allow_blank': True}
         }
     
     def to_representation(self, instance):
@@ -299,6 +305,7 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
         ret['totalCredit'] = instance.total_credit
         ret['fromAccount'] = instance.from_account
         ret['toAccount'] = instance.to_account
+        ret['refNo'] = instance.ref_no
         
         # Add items for sales/purchase
         if instance.type in ['sales', 'purchase']:
