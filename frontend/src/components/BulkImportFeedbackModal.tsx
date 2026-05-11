@@ -270,7 +270,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                             { label: 'EMAIL ADDRESS', key: 'Email Address', placeholder: 'vendor@example.com', required: true },
                                             { label: 'CONTACT NO', key: 'Contact Number', placeholder: '+91 XXXXX XXXXX', required: true },
                                             { label: 'IS THIS VENDOR ALSO A CUSTOMER?', key: 'Is Also Customer', type: 'toggle' },
-                                            { label: 'TCS APPLICABLE?', key: 'TCS Applicable', type: 'toggle' },
+                                            { label: 'GST TCS APPLICABLE?', key: 'TCS Applicable', type: 'toggle' },
                                         ]
                                     },
                                     {

@@ -1015,7 +1015,27 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const allDisplayCategories = useMemo(() => {
         const userCats = categories.filter(c => c.is_active).map(c => c.category);
         return Array.from(new Set([...VENDOR_SYSTEM_CATEGORIES, ...userCats]));
-    }, [categories, VENDOR_SYSTEM_CATEGORIES]);
+    }, [categories]);
+
+    // Full path category options for dropdowns (System + DB)
+    const vendorCategoryOptions = useMemo(() => {
+        const system = [...VENDOR_SYSTEM_CATEGORIES];
+        const dbPaths = categories.map(cat => 
+            cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')
+        );
+        const combined = [...system, ...dbPaths];
+        const seen = new Set<string>();
+        const result: string[] = [];
+        combined.forEach(p => {
+            const trimmed = p.trim();
+            const lower = trimmed.toLowerCase();
+            if (lower && !seen.has(lower)) {
+                seen.add(lower);
+                result.push(trimmed);
+            }
+        });
+        return result.sort((a, b) => a.localeCompare(b));
+    }, [categories]);
 
 
     // PO Settings State
@@ -3803,10 +3823,10 @@ return (
                                                 value={vendorCategoryFilter}
                                                 onChange={(e) => setVendorCategoryFilter(e.target.value)}
                                             >
-                                                <option>All Categories</option>
-                                                {categories.map((cat) => (
-                                                    <option key={cat.id} value={cat.full_path || cat.category}>
-                                                        {cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')}
+                                                <option value="All Categories">All Categories</option>
+                                                {vendorCategoryOptions.map((opt) => (
+                                                    <option key={opt} value={opt}>
+                                                        {opt}
                                                     </option>
                                                 ))}
                                             </select>
@@ -4003,7 +4023,7 @@ return (
                                             Vendor Category <span className="text-red-500">*</span>
                                         </label>
                                         <SearchableDropdown
-                                            options={categories.map(cat => cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > '))}
+                                            options={vendorCategoryOptions}
                                             value={vendorCategory}
                                             onChange={(val) => setVendorCategory(val)}
                                             placeholder="Select Category"
@@ -4194,7 +4214,7 @@ return (
 
                                     <div className="col-span-1">
                                         <label className="label-text">
-                                            TCS Applicable?
+                                            GST TCS applicable
                                         </label>
                                         <div className="flex gap-2">
                                             <button
