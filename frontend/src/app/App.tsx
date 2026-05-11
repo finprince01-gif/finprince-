@@ -259,6 +259,13 @@ const App: React.FC = () => {
   // Deactivation modal - shown when user account is deactivated
   const [showDeactivationModal, setShowDeactivationModal] = useState(false);
 
+  // Drill-down voucher viewing state
+  const [viewVoucherData, setViewVoucherData] = useState<any>(null);
+
+  const handleClearViewVoucherData = useCallback(() => {
+    setViewVoucherData(null);
+  }, []);
+
   // ============================================================================
   // NAVIGATION HANDLER
   // ============================================================================
@@ -267,7 +274,14 @@ const App: React.FC = () => {
    * Handle page navigation
    * Called when user clicks on sidebar menu items
    */
-  const handleNavigate = (page: Page) => setCurrentPage(page);
+  const handleNavigate = (page: Page, params?: any) => {
+    if (page === 'Vouchers' && params?.viewVoucher) {
+      setViewVoucherData(params.viewVoucher);
+    } else if (page !== 'Vouchers') {
+      setViewVoucherData(null);
+    }
+    setCurrentPage(page);
+  };
 
   // Handle logout: clear all session data and redirect to login
   const handleLogout = useCallback(async () => {
@@ -1196,6 +1210,8 @@ const App: React.FC = () => {
         onInvoiceUpload={handleInvoiceUpload}
         companyDetails={companyDetails}
         permissions={[]}
+        viewVoucherData={viewVoucherData}
+        clearViewVoucherData={handleClearViewVoucherData}
       />;
       case 'Reports': return <ErrorBoundary><ReportsPage
         vouchers={vouchers}
@@ -1203,6 +1219,8 @@ const App: React.FC = () => {
         ledgers={ledgers}
         ledgerGroups={ledgerGroups}
         stockItems={stockItems}
+        onNavigate={handleNavigate}
+        setViewVoucherData={setViewVoucherData}
       /></ErrorBoundary>;
 
       case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />;

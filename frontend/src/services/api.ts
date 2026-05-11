@@ -609,8 +609,26 @@ class ApiService {
      * @param id - Voucher ID
      * @returns Detailed voucher object
      */
-    async getVoucher(id: number | string, options: AxiosRequestConfig = {}) {
-        const response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+    async getVoucher(id: number | string, options: AxiosRequestConfig = {}, source?: string) {
+        let response: any;
+        try {
+            if (source === 'sales_invoice') {
+                response = await httpClient.get<any>(`/api/invoices/${id}/`, undefined, options);
+                response.type = response.type || 'Sales';
+            } else if (source === 'purchase_voucher') {
+                response = await httpClient.get<any>(`/api/vouchers/purchase/${id}/?show_all=true`, undefined, options);
+                response.type = response.type || 'Purchase';
+            } else {
+                response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+            }
+        } catch (e) {
+            // Fallback for legacy calls if specific endpoints fail
+            if (source) {
+                response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+            } else {
+                throw e;
+            }
+        }
         
         const typeMap: Record<string, string> = {
             'sales': 'Sales',
@@ -629,48 +647,104 @@ class ApiService {
 
         // Fetch detailed data from source-specific endpoint when available
         const referenceId = response.reference_id;
-        const source = response.source || '';
+        const actualSource = response.source || source || '';
 
         if (referenceId) {
             try {
                 let detailEndpoint = '';
-                if (source === 'purchase_voucher' || base.type === 'Purchase') {
-                    detailEndpoint = `/api/vouchers/purchase/${referenceId}/`;
-                } else if (source === 'sales_voucher' || source === 'sales_invoice' || base.type === 'Sales') {
+
+                if (actualSource === 'purchase_voucher' || base.type === 'Purchase') {
+                    // Use show_all=true so the detail endpoint bypasses the to_pay>0 filter —
+                    // fully-paid invoices must still load their complete data in the drill-down view.
+                    detailEndpoint = `/api/vouchers/purchase/${referenceId}/?show_all=true`;
+                } else if (actualSource === 'sales_voucher' || actualSource === 'sales_invoice' || base.type === 'Sales') {
                     detailEndpoint = `/api/vouchers/sales/${referenceId}/`;
                 }
 
                 if (detailEndpoint) {
                     const detail = await httpClient.get<any>(detailEndpoint, undefined, options);
-                    // Merge detail fields: party/vendor info, address, due details, line items
+                    const isPurchase = (actualSource === 'purchase_voucher' || base.type === 'Purchase');
+
+                    // ── Address mapping ───────────────────────────────────────────────────
+                    // For Purchase vouchers:
+                    //   • bill_from (DB field) = buyer's BILL TO address  (confusingly named in model)
+                    //   • ship_from (DB field) = buyer's SHIP TO address
+                    // For Sales vouchers:
+                    //   • bill_to / ship_to are the customer delivery addresses
+                    const billToAddr = isPurchase
+                        ? (detail.bill_from || '')
+                        : (detail.bill_to || detail.bill_from || '');
+                    const shipToAddr = isPurchase
+                        ? (detail.ship_from || '')
+                        : (detail.ship_to || detail.ship_from || '');
+
+                    // ── Invoice/voucher number ─────────────────────────────────────────────
+                    // For Purchase: the user-facing voucher number is purchase_voucher_no (e.g. sedrfgt000012351)
+                    // purchase_voucher_no is the auto-generated system voucher no shown on the ledger list
+                    const voucherNum = isPurchase
+                        ? (detail.purchase_voucher_no || base.voucher_number || '')
+                        : (detail.sales_invoice_no || detail.voucher_number || base.voucher_number || '');
+
+                    // ── Tax totals ────────────────────────────────────────────────────────
+                    // Pull from the line items stored in detail when available;
+                    // fall back to the aggregated fields already on the base Voucher record.
+                    const lineItems: any[] = detail.line_items || [];
+                    const computedTaxable = lineItems.reduce((s: number, it: any) =>
+                        s + parseFloat(it.taxable_value || it.taxableValue || '0'), 0);
+                    const computedCgst = lineItems.reduce((s: number, it: any) =>
+                        s + parseFloat(it.cgst_amount || it.cgst || '0'), 0);
+                    const computedSgst = lineItems.reduce((s: number, it: any) =>
+                        s + parseFloat(it.sgst_amount || it.sgst || '0'), 0);
+                    const computedIgst = lineItems.reduce((s: number, it: any) =>
+                        s + parseFloat(it.igst_amount || it.igst || '0'), 0);
+
                     return {
                         ...base,
-                        // Party/vendor info
+                        // ── User-facing voucher number ─────────────────────────────────
+                        voucher_number: voucherNum,
+                        voucher_no: voucherNum,
+                        // ── Party / vendor info ────────────────────────────────────────
                         party: detail.vendor_name || detail.customer_name || base.party,
                         gstin: detail.gstin || base.gstin || '',
                         branch: detail.branch || base.branch || '',
-                        bill_to_address_1: detail.bill_from || detail.bill_to || '',
-                        ship_to_address_1: detail.ship_from || detail.ship_to || '',
-                        // Supplier invoice details
+                        // ── Addresses (BILL TO / SHIP TO as shown in the UI) ──────────
+                        bill_to_address_1: billToAddr,
+                        ship_to_address_1: shipToAddr,
+                        // ── Supplier-specific header fields ───────────────────────────
                         supplier_invoice_no: detail.supplier_invoice_no || base.invoice_no || '',
                         supplier_invoice_date: detail.supplier_invoice_date || base.date || '',
                         purchase_voucher_series: detail.purchase_voucher_series || '',
                         grn_reference: detail.grn_reference || '',
                         input_type: detail.input_type || '',
                         invoice_in_foreign_currency: detail.invoice_in_foreign_currency || 'No',
-                        // Due/payment details (nested object with TDS, advance, to_pay)
+                        // ── Nested sub-documents ──────────────────────────────────────
                         due_details: detail.due_details || null,
-                        // Supply details
                         supply_inr_details: detail.supply_inr_details || null,
                         supply_foreign_details: detail.supply_foreign_details || null,
-                        // Extract ledger info to root for easy binding
-                        purchase_ledger: detail.supply_inr_details?.purchase_ledger || detail.supply_foreign_details?.purchase_ledger || '',
-                        sales_ledger: detail.supply_inr_details?.sales_ledger || detail.supply_foreign_details?.sales_ledger || '',
-                        ledger_narration: detail.supply_inr_details?.description || detail.supply_foreign_details?.description || '',
-                        // Dispatch/transit details
                         transit_details: detail.transit_details || null,
-                        // Line items with correct field names (from purchase/sales serializer)
-                        items: (detail.line_items || []).map((item: any) => ({
+                        // ── Flat ledger fields pulled from supply sub-document ─────────
+                        // purchase_ledger: the expense/purchase account debited in the entry
+                        // (e.g. "Purchase Account", "Raw Materials" — NOT a cash/bank ledger)
+                        purchase_ledger: detail.supply_inr_details?.purchase_ledger
+                            || detail.supply_foreign_details?.purchase_ledger
+                            || '',
+                        sales_ledger: (detail as any).supply_inr_details?.sales_ledger
+                            || (detail as any).supply_foreign_details?.sales_ledger
+                            || '',
+                        ledger_narration: detail.supply_inr_details?.description
+                            || detail.supply_foreign_details?.description
+                            || '',
+                        // ── Tax aggregates (computed from line items, fallback to Voucher) ─
+                        total_taxable_amount: computedTaxable || base.total_taxable_amount || 0,
+                        totalTaxableAmount: computedTaxable || base.total_taxable_amount || 0,
+                        total_cgst: computedCgst || base.total_cgst || 0,
+                        totalCgst: computedCgst || base.total_cgst || 0,
+                        total_sgst: computedSgst || base.total_sgst || 0,
+                        totalSgst: computedSgst || base.total_sgst || 0,
+                        total_igst: computedIgst || base.total_igst || 0,
+                        totalIgst: computedIgst || base.total_igst || 0,
+                        // ── Line items with normalised field names ────────────────────
+                        items: lineItems.map((item: any) => ({
                             itemCode: item.item_code || item.itemCode || '',
                             itemName: item.item_name || item.itemName || '',
                             hsnSac: item.hsn_sac || item.hsnSac || '',
@@ -683,11 +757,12 @@ class ApiService {
                             sgst: parseFloat(item.sgst_amount || item.sgst || '0'),
                             cess: parseFloat(item.cess_amount || item.cess || '0'),
                             invoiceValue: parseFloat(item.invoice_value || item.invoiceValue || '0'),
-                            // Keep originals too for read/write
+                            // Keep snake_case originals for write-back
                             igst_amount: parseFloat(item.igst_amount || item.igst || '0'),
                             cgst_amount: parseFloat(item.cgst_amount || item.cgst || '0'),
                             sgst_amount: parseFloat(item.sgst_amount || item.sgst || '0'),
-                        })) || base.items || [],
+                            cess_amount: parseFloat(item.cess_amount || item.cess || '0'),
+                        })),
                     };
                 }
             } catch (detailErr) {
@@ -781,10 +856,7 @@ class ApiService {
         return { success: true };
     }
 
-    async updateVoucher(id: number, data: Partial<Voucher>) {
-        const normalizedData = data.type ? { ...data, type: this.normalizeVoucherType(data.type) } : data;
-        const response = await httpClient.put<Voucher>(`/api/vouchers/${id}/`, normalizedData);
-
+    async updateVoucher(id: number, data: Partial<any>) {
         const typeMap: Record<string, string> = {
             'sales': 'Sales',
             'purchase': 'Purchase',
@@ -794,9 +866,33 @@ class ApiService {
             'journal': 'Journal'
         };
 
+        const isPurchase = data.type === 'Purchase' || data.source === 'purchase_voucher' || (data.type && data.type.toLowerCase() === 'purchase');
+        const isSales = data.type === 'Sales' || data.source === 'sales_voucher' || data.source === 'sales_invoice' || (data.type && data.type.toLowerCase() === 'sales');
+        
+        if (isPurchase && (data.reference_id || data.referenceId)) {
+            const refId = data.reference_id || data.referenceId;
+            const response = await httpClient.patch<any>(`/api/vouchers/purchase/${refId}/`, data);
+            return {
+                ...response,
+                type: 'Purchase'
+            };
+        }
+
+        if (isSales && (data.reference_id || data.referenceId)) {
+            const refId = data.reference_id || data.referenceId;
+            const response = await httpClient.patch<any>(`/api/vouchers/sales/${refId}/`, data);
+            return {
+                ...response,
+                type: 'Sales'
+            };
+        }
+
+        const normalizedData = data.type ? { ...data, type: this.normalizeVoucherType(data.type) } : data;
+        const response = await httpClient.put<Voucher>(`/api/vouchers/${id}/`, normalizedData);
+
         return {
             ...response,
-            type: (typeMap[response.type.toLowerCase()] || response.type) as any
+            type: (typeMap[response.type?.toLowerCase() || ''] || response.type) as any
         };
     }
 

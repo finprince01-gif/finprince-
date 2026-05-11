@@ -209,36 +209,10 @@ class VoucherViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     def bulk_create(self, request):
         """Create multiple vouchers at once"""
         vouchers_data = request.data if isinstance(request.data, list) else [request.data]
-        
-        # Use bulk serializers or iterate
-        # Standard DRF create logic for list:
         serializer = self.get_serializer(data=vouchers_data, many=True)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer) # This calls perform_create above, which checks limit again (inc=1).
-        # Wait, calling self.perform_create(serializer) where serializer is a ListSerializer...
-        # Standard ModelViewSet uses ListCreateAPIView logic but bulk_create is custom action.
-        # If I call perform_create with a list serializer, does it work?
-        # Usually perform_create expects an instance or validates data.
-        # super().perform_create() saves the serializer.
-        
-        # If I call super().perform_create(serializer), it might loop over instances if ListSerializer supports save()
-        # DRF 3+ ListSerializer.save() calls create() on child serializer for each item.
-        # So it might call perform_create n times if hook logic is standard?
-        # No, ListSerializer.save() calls child.create(). It does NOT call view.perform_create() for each item.
-        # view.perform_create is called ONCE by the view handler.
-        
-        # So checks:
-        # 1. bulk_create checks Total Limit.
-        # 2. perform_create checks Single Limit (inc=1 default).
-        
-        # If I use `serializer.save()`, it bypasses `perform_create` of the view unless I call it.
-        # The explicit `serializer.save()` line exists in original code.
-        # So I just need to add the check before it.
-        
         serializer.save()
-        
         return Response({'success': True, 'count': len(vouchers_data)}, status=status.HTTP_201_CREATED)
-
 
 class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
     queryset = JournalEntry.objects.all() # pyre-ignore

@@ -366,6 +366,30 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         due_data = due_data if isinstance(due_data, dict) else None
         transit_data = transit_data if isinstance(transit_data, dict) else None
 
+        # Map flat items array back to supply_inr_data if present in initial_data
+        if supply_inr_data is not None and 'items' in self.initial_data and not supply_inr_data.get('items'):
+            supply_inr_data['items'] = self.initial_data['items']
+
+        # Update custom mapped fields from frontend
+        if 'party' in self.initial_data:
+            instance.vendor_name = self.initial_data.get('party', '')
+        if 'bill_to_address_1' in self.initial_data:
+            instance.bill_from = self.initial_data.get('bill_to_address_1', '')
+        if 'ship_to_address_1' in self.initial_data:
+            instance.ship_from = self.initial_data.get('ship_to_address_1', '')
+        if 'supplier_invoice_date' in self.initial_data:
+            instance.supplier_invoice_date = self.initial_data.get('supplier_invoice_date', '')
+        elif 'date' in self.initial_data:
+            instance.supplier_invoice_date = self.initial_data.get('date', '')
+        if 'purchase_voucher_series' in self.initial_data:
+            instance.purchase_voucher_series = self.initial_data.get('purchase_voucher_series', '')
+        if 'grn_reference' in self.initial_data:
+            instance.grn_reference = self.initial_data.get('grn_reference', '')
+        if 'input_type' in self.initial_data:
+            instance.input_type = self.initial_data.get('input_type', '')
+        if 'gstin' in self.initial_data:
+            instance.gstin = self.initial_data.get('gstin', '')
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
