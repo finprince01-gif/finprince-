@@ -401,6 +401,32 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [bulkStatus, setBulkStatus] = useState<{ total: number; processed: number; failed: number; pending: number; status: string } | null>(null);
     const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const startTimeRef = useRef<number | null>(null);
+    // Cancellation flag — set to true to abort an in-progress polling loop
+    const cancelExtractionRef = useRef<boolean>(false);
+
+    const activePollIdRef = useRef<number>(0);
+
+    const handleCancelExtraction = () => {
+        // 1. Signal the polling loop to stop immediately
+        activePollIdRef.current += 1; // Monotonic increment to invalidate current loop
+        cancelExtractionRef.current = true;
+        // 2. Clear any pending setTimeout
+        if (pollingIntervalRef.current) {
+            clearTimeout(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+        // 3. Reset all extraction UI state
+        setIsExtracting(false);
+        setBulkStatus(null);
+        setBulkJobId(null);
+        setCountdownSeconds(null);
+        startTimeRef.current = null;
+        // 4. Rotate the session ID so the NEXT upload starts with a clean session
+        const newId = String(Date.now());
+        uploadSessionIdRef.current = newId;
+        console.log(`[CANCEL] Extraction cancelled. New session allocated: ${newId}`);
+    };
+
 
     const firstInvoiceVendorStr = invoiceResults.length > 0 && !isExtracting && voucherType === 'Purchase'
         ? String(invoiceResults[0].invoice['Vendor Name'] || '') + '|' + String(invoiceResults[0].invoice['GSTIN'] || '') + '|' + String(invoiceResults[0].invoice['Branch'] || '')
@@ -549,6 +575,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const processFiles = async (files: FileList | File[]) => {
         if (isExtracting) return;
         setIsExtracting(true);
+        // Reset cancellation flag for this new extraction run
+        cancelExtractionRef.current = false;
+        // ALWAYS rotate session ID on each new upload.
+        // This prevents fetchStagingData from accidentally reading data from a
+        // previous (potentially cancelled) session when the new job completes.
+        const newId = String(Date.now());
+        uploadSessionIdRef.current = newId;
+        console.log(`[SESSION ROTATED] New session for upload: ${newId}`);
+        // Clear any results from a previous extraction so the UI is clean
+        setInvoiceResults([]);
+        setBulkStatus(null);
+        setBulkJobId(null);
 
         const newFiles: File[] = [];
         const newNames: string[] = [];
@@ -593,12 +631,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         setCountdownSeconds(initialEstimate);
 
         try {
-            if (!uploadSessionIdRef.current) {
-                const newId = String(Date.now());
-                uploadSessionIdRef.current = newId;
-                console.log(`[SESSION GENERATED] ${newId}`);
-            }
-            const currentSessionId = uploadSessionIdRef.current;
+            // uploadSessionIdRef is already set to a fresh ID at the top of processFiles.
+            // We just read it here — no conditional generation needed.
+            const currentSessionId = uploadSessionIdRef.current!; // guaranteed non-null (set above)
             console.log(`[SESSION USED FOR UPLOAD] ${currentSessionId}`);
 
             const formData = new FormData();
@@ -760,15 +795,21 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             if (extractionMode === 'zoho' && stagedResults.length > 0) {
                 try {
                     const invoicesForAdapter = stagedResults.map((r: any) => ({
-                        invoice_number: r.supplier_invoice_no || r.extracted_data?.supplier_invoice_no || r.extracted_data?.invoice_no,
+                        invoice_no: r.supplier_invoice_no || r.extracted_data?.invoice_no || r.extracted_data?.supplier_invoice_no || r.extracted_data?.invoice_number,
                         invoice_date: r.extracted_data?.invoice_date,
                         vendor_name: r.extracted_data?.vendor_name || r.extracted_data?.sections?.supplier_details?.vendor_name,
-                        vendor_address: r.extracted_data?.bill_from || r.extracted_data?.vendor_address || r.extracted_data?.sections?.supplier_details?.vendor_address,
-                        bill_from: r.extracted_data?.bill_from || r.extracted_data?.sections?.supplier_details?.bill_from,
-                        gstin: r.gstin,
+                        gstin: r.gstin || r.extracted_data?.gstin,
+                        bill_address_from: r.extracted_data?.bill_address_from || r.extracted_data?.bill_from || r.extracted_data?.vendor_address || r.extracted_data?.sections?.supplier_details?.bill_from,
+                        bill_address_to: r.extracted_data?.bill_address_to || r.extracted_data?.billing_address || r.extracted_data?.customer_address,
+                        place_of_supply: r.extracted_data?.place_of_supply,
                         total_taxable_value: r.extracted_data?.total_taxable_value || r.extracted_data?.sections?.supply_details?.total_taxable_value,
-                        total_invoice_value: r.extracted_data?.total_invoice_value || r.extracted_data?.sections?.supply_details?.total_invoice_value,
-                        items: r.extracted_data?.sections?.items || r.extracted_data?.line_items || r.extracted_data?.items || []
+                        total_igst: r.extracted_data?.total_igst || r.extracted_data?.sections?.supply_details?.total_igst,
+                        total_cgst: r.extracted_data?.total_cgst || r.extracted_data?.sections?.supply_details?.total_cgst,
+                        total_sgst: r.extracted_data?.total_sgst || r.extracted_data?.sections?.supply_details?.total_sgst,
+                        invoice_total: r.extracted_data?.invoice_total || r.extracted_data?.total_invoice_value || r.extracted_data?.total_amount || r.extracted_data?.sections?.supply_details?.total_invoice_value,
+                        items: r.extracted_data?.items || r.extracted_data?.sections?.items || r.extracted_data?.line_items || [],
+                        file_path: r.file_path,
+                        id: r.id
                     }));
 
                     console.log("[TRACE L1] invoicesForAdapter[0].bill_from:", invoicesForAdapter[0]?.bill_from);
@@ -961,86 +1002,84 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     state: firstRow['State'] || ''
                 });
             }
+
         } catch (err) {
             console.error("Failed to fetch staging data:", err);
         }
     };
 
     const startPolling = (jobId: number) => {
-        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-        console.log(`[POLLING STARTED] Monitoring Job: ${jobId}`);
+        if (pollingIntervalRef.current) clearTimeout(pollingIntervalRef.current);
+        const pollId = ++activePollIdRef.current;
+        console.log(`[POLLING_STARTED] Job: ${jobId} | PollID: ${pollId}`);
         
         let consecutiveNoChange = 0;
         let lastProcessed = -1;
-        let currentInterval = 2000; // 2s as requested
-        let isPollingActive = true;
+        let currentInterval = 500; // Faster polling for real-time feel
 
         const poll = async () => {
-            if (!isPollingActive) return;
+            if (pollId !== activePollIdRef.current || cancelExtractionRef.current) return;
             
             try {
                 const status = await httpClient.get<any>(`/api/bulk-status/${jobId}/`);
-                console.log(`[POLLING RESPONSE] Job: ${jobId} | Progress: ${status.progress}% | Completed: ${status.completed}`);
-                setBulkStatus(status);
-                
-                const currentProcessed = (status.processed || 0) + (status.failed || 0);
-                
-                // Adaptive Interval Logic
-                if (currentProcessed > lastProcessed) {
-                    consecutiveNoChange = 0;
-                    currentInterval = 2000; 
-                } else {
-                    consecutiveNoChange++;
-                    if (consecutiveNoChange > 5) {
-                        currentInterval = Math.min(currentInterval + 2000, 10000);
-                    }
-                }
-                lastProcessed = currentProcessed;
+                if (pollId !== activePollIdRef.current) return;
 
-                // ── SYNC FIX: ONLY FETCH STAGING WHEN FULLY COMPLETED ──
-                if (status.completed) {
-                    console.log(`[OCR COMPLETED] Job: ${jobId}. Fetching results...`);
-                    isPollingActive = false;
+                const normalizedStatus = String(status.status || '').toUpperCase();
+                const isTerminal = status.completed === true || 
+                                  ['COMPLETED', 'FAILED', 'SUCCESS', 'PARTIAL'].includes(normalizedStatus);
+
+                console.log(`[POLLING_RESPONSE] Job: ${jobId} | Status: ${normalizedStatus} | Progress: ${status.progress}%`);
+                
+                // Monotonic progress guard
+                setBulkStatus(prev => {
+                    if (prev && prev.progress > status.progress && !isTerminal) return prev;
+                    return { ...status, status: normalizedStatus, completed: isTerminal };
+                });
+                
+                if (isTerminal) {
+                    console.log(`[OCR_TERMINAL_DETECTED] Job: ${jobId}. Finalizing UI.`);
                     setIsExtracting(false);
                     startTimeRef.current = null;
+                    setCountdownSeconds(null);
                     
-                    console.log(`[STAGING FETCH START] Session: ${uploadSessionIdRef.current}`);
+                    // Instant hydration
                     await fetchStagingData();
-                    console.log(`[STAGING FETCH COMPLETED]`);
-
-                    if (status.status !== 'failed') {
-                        showSuccess(`✅ Processing completed! ${status.processed} processed, ${status.failed} failed.`);
+                    
+                    if (normalizedStatus !== 'FAILED') {
+                        showSuccess(`✅ Extraction Complete: ${status.processed} processed.`);
                     }
                     return;
                 }
 
-                // ── Accurate Time Remaining Calculation ──
+                // Adaptive backoff
+                const currentProcessed = (status.processed || 0) + (status.failed || 0);
+                if (currentProcessed > lastProcessed) {
+                    consecutiveNoChange = 0;
+                    currentInterval = 500; 
+                } else {
+                    consecutiveNoChange++;
+                    if (consecutiveNoChange > 4) {
+                        currentInterval = Math.min(currentInterval + 500, 3000);
+                    }
+                }
+                lastProcessed = currentProcessed;
+
+                // Time estimation
                 if (startTimeRef.current && status.total > 0) {
                     const elapsedMs = Date.now() - startTimeRef.current;
-                    const remainingCount = status.total - currentProcessed;
-
                     if (currentProcessed > 0) {
                         const msPerFile = elapsedMs / currentProcessed;
-                        const remainingBatches = Math.ceil(remainingCount / 10);
-                        const zohoBuffer = extractionMode === 'zoho' ? 5 : 0;
-                        const newEstimateSeconds = Math.max(1, Math.round((remainingBatches * msPerFile) / 1000) + zohoBuffer);
-                        
-                        setCountdownSeconds(prev => {
-                            if (prev === null) return newEstimateSeconds;
-                            if (Math.abs(prev - newEstimateSeconds) > 3) {
-                                return newEstimateSeconds > prev ? prev + 1 : prev - 1;
-                            }
-                            return prev;
-                        });
+                        const remainingCount = status.total - currentProcessed;
+                        const estimate = Math.round((remainingCount * msPerFile) / 1000);
+                        setCountdownSeconds(estimate);
                     }
                 }
             } catch (err) {
-                console.error("[POLLING ERROR]", err);
-                currentInterval = 10000; 
+                console.error("[POLLING_ERROR]", err);
+                currentInterval = 2000; 
             }
 
-            if (isPollingActive) {
-                // @ts-ignore
+            if (pollId === activePollIdRef.current && !cancelExtractionRef.current) {
                 pollingIntervalRef.current = setTimeout(poll, currentInterval);
             }
         };
@@ -1050,8 +1089,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
 
     useEffect(() => {
+
         return () => {
-            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+            // pollingIntervalRef stores a setTimeout handle, not setInterval.
+            if (pollingIntervalRef.current) clearTimeout(pollingIntervalRef.current);
         };
     }, []);
 
@@ -1493,11 +1534,21 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                             <Icon name="spinner" className="w-5 h-5 animate-spin" />
                                             <span>{scanType === 'bulk' ? 'Processing Bulk Job...' : 'Processing invoices...'}</span>
                                         </div>
-                                        {bulkStatus && (
-                                            <span className="text-xs font-bold text-indigo-600">
-                                                {Math.round(((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100)}%
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {bulkStatus && (
+                                                <span className="text-xs font-bold text-indigo-600">
+                                                    {Math.round(((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100)}%
+                                                </span>
+                                            )}
+                                            {/* Cancel Extraction Button */}
+                                            <button
+                                                onClick={handleCancelExtraction}
+                                                title="Cancel extraction"
+                                                className="text-xs font-semibold text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-2 py-0.5 transition-colors bg-red-50 hover:bg-red-100"
+                                            >
+                                                ✕ Cancel
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {bulkStatus ? (

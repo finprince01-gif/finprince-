@@ -31,14 +31,13 @@ def worker(item_id, job_id, voucher_type, upload_session_id, tenant_id):
             from django import db
             db.connections.close_all()
             
-            # 1. IDEMPOTENCY CHECK
-            # Prevent duplicate processing of the same page/item
+            # 1. IDEMPOTENCY CHECK — PID-safe: triggers lazy Redis init in subprocess
             task_lock_key = f"lock:item:{item_id}"
-            if redis_client.available:
+            if redis_client.is_healthy():
                 if not redis_client.get_client().setnx(task_lock_key, "locked"):
                     logger.warning(f"Item {item_id} already locked. Skipping.")
                     return {'item_id': item_id, 'status': 'skipped'}
-                redis_client.get_client().expire(task_lock_key, 600) # 10 min lock
+                redis_client.get_client().expire(task_lock_key, 600)  # 10 min lock
 
             item = InvoiceProcessingItem.objects.get(id=item_id)
             if item.status == 'success':

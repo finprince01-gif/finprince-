@@ -101,3 +101,21 @@ def _s3_download_bytes(key: str) -> bytes:
     client.download_fileobj(S3_BUCKET, key, buf)
     buf.seek(0)
     return buf.read()
+
+
+def get_signed_url(key: str, expires_in: int = 3600) -> str:
+    """
+    Generate a signed URL for direct browser access or inter-service transfer.
+    (Requirement Phase 1F)
+    """
+    if USE_S3:
+        client = _get_s3_client()
+        return client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET, 'Key': key},
+            ExpiresIn=expires_in
+        )
+    
+    # Local fallback (returns media URL)
+    from django.conf import settings
+    return f"{settings.MEDIA_URL}bulk_pipeline/{key}"

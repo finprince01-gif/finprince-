@@ -21,6 +21,11 @@ class StagingRepository:
     def find_by_hash_and_tenant(self, file_hash, tenant_id):
         return InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=str(tenant_id)).first()
 
+    def find_by_id(self, record_id):
+        """Retrieves a record by its primary key."""
+        return InvoiceTempOCR.objects.filter(id=record_id).first()
+
+
     def update_status(self, record_id, status, error_code=None):
         update_fields = {'status': status}
         if error_code:

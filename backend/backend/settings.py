@@ -272,23 +272,44 @@ SPECTACULAR_SETTINGS = {
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Cache Configuration - Cleaned (Redis removed)
+# Redis URL Isolation
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+REDIS_BROKER_URL = os.getenv('REDIS_BROKER_URL', REDIS_URL)
+REDIS_CACHE_URL = os.getenv('REDIS_CACHE_URL', REDIS_URL)
+REDIS_STATE_URL = os.getenv('REDIS_STATE_URL', REDIS_URL)
+
+# Cache Configuration - Production Hardened
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_CACHE_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': int(os.getenv('REDIS_POOL_SIZE', '100')),
+                'retry_on_timeout': True,
+                'socket_timeout': 5,
+                'socket_connect_timeout': 5,
+            },
+            'IGNORE_EXCEPTIONS': True, # Fail-open for cache to prevent API downtime
+        },
+        'KEY_PREFIX': 'finpixe',
     }
 }
 
 # Celery Configuration
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = REDIS_BROKER_URL
+CELERY_RESULT_BACKEND = REDIS_BROKER_URL
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+# Production: Ensure queue durability
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
 
 # ============================================================================
 # BULK PROCESSING PIPELINE SETTINGS
@@ -446,3 +467,9 @@ MIGRATION_MODULES = {}
 # BANK RECONCILIATION SETTINGS
 # ============================================================================
 BANK_MATCH_TOLERANCE = 1
+
+# ============================================================================
+# MEDIA FILES (Local storage for dev when S3 is not configured)
+# ============================================================================
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'

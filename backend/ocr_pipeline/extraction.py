@@ -11,43 +11,93 @@ from core.ai_proxy import ai_service
 
 logger = logging.getLogger(__name__)
 
-def extract_json_from_text(text):
-    """
-    Robust JSON extraction:
-    1. Look for ```json ... ``` blocks (case-insensitive).
-    2. Fallback to finding the first { and its matching }.
-    """
-    if not text:
-        return ""
-        
-    # 1. Markdown regex: matches ```json ... ``` or just ``` ... ```
-    markdown_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL | re.IGNORECASE)
-    if markdown_match:
-        return markdown_match.group(1).strip()
-    
-    # 2. Brace-balancing fallback
-    start_idx = text.find('{')
-    if start_idx == -1:
-        return text.strip()
-        
-    brace_count = 0
-    end_idx = -1
-    
-    for i in range(start_idx, len(text)):
-        if text[i] == '{':
-            brace_count += 1
-        elif text[i] == '}':
-            brace_count -= 1
-            if brace_count == 0:
-                end_idx = i
-                break
-                
-    if end_idx != -1:
-        return text[start_idx : end_idx + 1].strip()
-    
-    return text.strip()
+_JSON_QUARANTINE_LOG = logging.getLogger("AIJsonQuarantine")
 
-def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.0.0", user_id='system', tenant_id='system', wait_for_result=True, record_id=None, item_id=None):
+def _repair_json(raw: str, record_id=None, page=None) -> tuple:
+    """
+    5-stage deterministic JSON repair pipeline.
+    Returns (repaired_str, strategy_used, error_info).
+    Never raises.
+    """
+    strategy = "NONE"
+    error_info = {}
+
+    if not raw:
+        return "", "EMPTY", {}
+
+    text = raw
+
+    # Stage 1: Strip markdown fences safely
+    md = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
+    if md:
+        text = md.group(1).strip()
+        strategy = "MARKDOWN_STRIP"
+
+    # Stage 2: Isolate first valid JSON object via brace balancing
+    start = text.find('{')
+    if start == -1:
+        _JSON_QUARANTINE_LOG.warning(
+            f"[AI_JSON_QUARANTINE] record={record_id} page={page} reason=NO_BRACE_FOUND "
+            f"preview={raw[:120]!r}"
+        )
+        return "", "NO_JSON", {"reason": "no opening brace"}
+
+    depth = 0
+    end = -1
+    for i in range(start, len(text)):
+        if text[i] == '{': depth += 1
+        elif text[i] == '}': depth -= 1
+        if depth == 0:
+            end = i
+            break
+    if end != -1:
+        text = text[start:end + 1]
+        if strategy == "NONE":
+            strategy = "BRACE_BALANCE"
+
+    # Stage 3: Remove trailing commas before } and ]
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
+    # Stage 4: Repair invalid escape sequences (\' → ', \" already valid)
+    text = re.sub(r'\\(?!["\\bfnrt/u])', r'\\\\', text)
+
+    # Stage 5: First parse attempt — if it fails, try quote normalization
+    try:
+        json.loads(text)
+        return text, strategy, {}
+    except json.JSONDecodeError as e:
+        error_info = {"pos": e.pos, "msg": e.msg, "doc_snippet": e.doc[max(0, e.pos-20):e.pos+20] if e.doc else ""}
+
+    # Stage 5b: Normalize smart/curly quotes to ASCII (last resort)
+    text_q = text.translate(str.maketrans('\u2018\u2019\u201c\u201d', "''\"\"")
+    ).replace('\u2032', "'").replace('\u2033', '"')
+    try:
+        json.loads(text_q)
+        return text_q, "QUOTE_NORMALIZE", error_info
+    except json.JSONDecodeError:
+        pass
+
+    _JSON_QUARANTINE_LOG.error(
+        f"[AI_JSON_QUARANTINE] record={record_id} page={page} "
+        f"strategy={strategy} error_pos={error_info.get('pos')} "
+        f"offending_token={error_info.get('msg')!r} "
+        f"context={error_info.get('doc_snippet')!r} "
+        f"preview={text[:200]!r}"
+    )
+    return text, "REPAIR_FAILED", error_info
+
+
+def extract_json_from_text(text, record_id=None, page=None):
+    """
+    Backwards-compatible wrapper around _repair_json.
+    Returns the best repaired string (or empty on total failure).
+    """
+    repaired, strategy, _ = _repair_json(text, record_id=record_id, page=page)
+    if strategy not in ("NONE", "EMPTY", "NO_JSON", "REPAIR_FAILED"):
+        logger.debug(f"[JSON_REPAIR_APPLIED] record={record_id} page={page} strategy={strategy}")
+    return repaired
+
+def extract_invoice(client, file_bytes, voucher_type='Purchase', public_ip="0.0.0.0", user_id='system', tenant_id='system', wait_for_result=True, record_id=None, item_id=None, upload_session_id=None, job_id=None):
     """
     Extracts invoice data using the central AI Proxy service with fallbacks.
     Returns a unified JSON object matching the internal schema.
@@ -114,8 +164,6 @@ Failure to extract ANY field that is visible on the document is unacceptable.
   ]
 }}
 
----
-
 # 🧠 EXTRACTION STRATEGY (STRICT RULES)
 
 ## 1. DATA SEPARATION & MAPPING
@@ -123,37 +171,45 @@ Failure to extract ANY field that is visible on the document is unacceptable.
 * **LINE ITEMS**: Extract as a list of rows into the "items" array. 
 * **NO MIXING**: Do NOT mix header values into item rows incorrectly. 
 
-## 2. FINANCIAL VALIDATION
+## 2. SECTION BOUNDARY & ADDRESS EXTRACTION (MANDATORY)
+* **HARD SEGMENTATION**: Use the following anchors to isolate address blocks:
+    - **Ship-To (Consignee) Window**:
+        - START: "Consignee (Ship to)"
+        - END: "Buyer (Bill to)"
+    - **Bill-To (Buyer) Window**:
+        - START: "Buyer (Bill to)"
+        - END: "Place of Supply" OR Start of item table
+* **ADDRESS PRECISION**: 
+    - "vendor_address" MUST contain the data from the "Consignee (Ship to)" section.
+    - "billing_address" MUST ONLY contain data from the "Buyer (Bill to)" section.
+    - NEVER leak "Consignee" data into the "billing_address" field.
+    - If a section is empty or missing, return NULL for that address.
+
+## 3. FINANCIAL VALIDATION
 * **TOTAL INTEGRITY**: Total Invoice Value MUST equal sum(Taxable Value + Taxes).
 * **ROW ACCURACY**: Row count MUST match visible table rows.
 * **DO NOT GUESS**: If a field is missing, return NULL. Do NOT hallucinate.
 
 ## 4. VENDOR/SUPPLIER IDENTIFICATION
 * **INVOICE NUMBER (HIGH RELIABILITY)**: 
-    * **MULTI-PATTERN DETECTION**: Detect invoice numbers in ALL possible formats:
-        - Standard: "Invoice No: 25-26/335"
-        - Reversed: "25-26/335 Invoice No"
-        - Inline: "Invoice No 089/25-26"
-        - Loose OCR: "Inv No - SS/25-26/0487"
-    * **CANDIDATE SELECTION (RANKING)**: If multiple candidates exist, choose based on:
-        1. Proximity to "Invoice No" or "Bill No" label (Highest Priority).
-        2. Location near top of document or near Date field.
-        3. Presence of structured separators (slashes "/" or dashes "-").
-        4. Longer structured values are preferred over simple short numbers.
+    * **MULTI-PATTERN DETECTION**: Detect invoice numbers in ALL possible formats.
+    * **CANDIDATE SELECTION (RANKING)**: 
+        1. Proximity to "Invoice No" or "Bill No" label.
+        2. Location near top or Date field.
+        3. Presence of separators (/, -).
     * **VALIDATION**: Must contain at least ONE digit. 3-25 chars long.
-    * **REJECT**: Pure alphabetic strings (BANK, TOTAL, etc.), labels, or values < 3 chars.
-    * **DO NOT GUESS**: Return NULL if no valid candidate clearly satisfies the rules.
 * **VENDOR/SUPPLIER**: The entity issuing the bill.
-* **BILLING ADDRESS**: Full address of the Buyer/Customer.
 * **PLACE OF SUPPLY**: Look for state label or code (e.g., "33-Tamil Nadu").
 
 ## 5. LINE ITEM EXTRACTION (STRICT)
 * **HSN/SAC**: Every line must have an HSN code if visible.
 * **UOM**: Extract units (Nos, Pcs, Kgs, etc.).
-* **LINE TOTALS**: `taxable_value` + taxes = `amount`. Ensure this math holds.
+* **LINE TOTALS**: `taxable_value` + taxes = `amount`.
 
-## 6. MULTI-PAGE AWARENESS
-* If this document is a segment of a larger invoice, ensure you still extract the header info (GSTIN, Invoice No) from any available labels on the page.
+## 6. MULTI-PAGE & CONTINUATION DETECTION
+* **CONTINUATION MARKERS**: Detect if this page is a continuation. Look for:
+    - "continued to page", "page 2", "amount chargeable", "total invoice value", "rounded off", "tax amount", "bank details", "authorised signatory"
+* **HEADER PERSISTENCE**: If this is a continuation page, still attempt to extract the `invoice_no` and `vendor_name` from labels at the top.
 
 # 🚫 RULES
 * Return ONLY valid JSON.
@@ -161,7 +217,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
 * NO hallway citations or placeholders.
 """
 
-    def _call_ai_for_page(segment_bytes, page_ocr_text, page_idx, total_pages, item_id):
+    def _call_ai_for_page(segment_bytes, page_ocr_text, page_idx, total_pages, item_id, job_id=None, wait_for_result=True):
         """
         HARD ISOLATION RULE: ONE PAGE -> ONE OCR TEXT -> ONE IMAGE -> ONE REQUEST
         """
@@ -179,7 +235,8 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             'mime_type': 'image/jpeg',
             'voucher_type': voucher_type,
             'page_index': page_idx + 1,
-            'wait_for_result': wait_for_result # Use the passed parameter
+            'wait_for_result': wait_for_result, # Use the passed parameter
+            '_pdf_ocr_text': page_ocr_text # Preserve for finalization
         }
         
         prompt_size = len(page_isolated_prompt)
@@ -192,12 +249,35 @@ Failure to extract ANY field that is visible on the document is unacceptable.
         metadata = {
             'record_id': record_id,
             'item_id': item_id,
+            'job_id': job_id,
+            'upload_session_id': upload_session_id,
             'page_index': page_idx + 1,
-            'total_pages': total_pages
+            'total_pages': total_pages,
+            'id': f"ai_{record_id}_{page_idx+1}_{int(time.time())}" # Unique AI Task ID
         }
+        
+        logger.info(
+            f"[AI_TASK_ENQUEUED] "
+            f"record={record_id} "
+            f"page={page_idx+1} "
+            f"task={metadata['id']} "
+            f"session={upload_session_id}"
+        )
+        
+        logger.info(f"[AI_EXTRACTION_CALL] record={record_id} page={page_idx+1} session={upload_session_id}")
         response = ai_service.make_request('extraction', request_data, user_id, tenant_id, metadata=metadata)
         
+        # ── [ADDRESS_EXTRACTION_FORENSIC] ──
+        if response and 'reply' in response:
+            reply = response.get('reply', '')
+            logger.info(f"[AI_REPLY_RECEIVED] length={len(reply)}")
+            if "vendor_address" in reply.lower():
+                logger.info(f"[ADDRESS_KEY_DETECTED] key='vendor_address' found in AI reply")
+            if "billing_address" in reply.lower():
+                logger.info(f"[ADDRESS_KEY_DETECTED] key='billing_address' found in AI reply")
+        
         if not wait_for_result:
+            logger.info(f"[PIPELINE_AI_ENQUEUE] record_id={record_id} queue=ai_requests")
             return response # Return the enqueued job info immediately
 
         if 'error' in response:
@@ -212,14 +292,37 @@ Failure to extract ANY field that is visible on the document is unacceptable.
         if not cleaned_json_text:
             return {"_error": "NO_JSON_FOUND", "_raw": raw_text}
         
+        repaired_text, repair_strategy, repair_err = _repair_json(
+            cleaned_json_text, record_id=record_id, page=page_idx + 1
+        )
+        logger.info(
+            f"[JSON_PARSE_ATTEMPT] record={record_id} page={page_idx+1} "
+            f"strategy={repair_strategy} repair_err={repair_err}"
+        )
         try:
-            result = json.loads(cleaned_json_text)
+            result = json.loads(repaired_text)
             if not isinstance(result, dict):
-                 return {"_error": "INVALID_JSON_STRUCTURE", "_raw": raw_text}
+                return {"_error": "INVALID_JSON_STRUCTURE", "_raw": raw_text}
+
+            logger.info(
+                f"[EXTRACTION_SUCCESS] record={record_id} page={page_idx+1} "
+                f"repair_strategy={repair_strategy} "
+                f"keys={list(result.get('header', {}).keys()) if 'header' in result else list(result.keys())}"
+            )
+            if page_ocr_text:
+                result["_pdf_ocr_text"] = page_ocr_text
             result["_raw_text"] = raw_text
             return result
         except json.JSONDecodeError as jde:
-            logger.error(f"JSON Decode Error in Proxy response: {str(jde)}")
+            # True semantic failure — formatting repair could not help
+            logger.error(
+                f"[JSON_DECODE_FAIL] record={record_id} page={page_idx+1} "
+                f"repair_strategy={repair_strategy} pos={jde.pos} msg={jde.msg}"
+            )
+            _JSON_QUARANTINE_LOG.error(
+                f"[AI_JSON_QUARANTINE_FINAL] record={record_id} page={page_idx+1} "
+                f"raw_preview={raw_text[:300]!r}"
+            )
             return {"_error": "JSON_DECODE_FAILED", "_raw": raw_text}
 
     # ── STEP 3: PARALLEL EXECUTION (OPTIMIZED) ──
@@ -227,34 +330,99 @@ Failure to extract ANY field that is visible on the document is unacceptable.
     
     def process_single_page(i):
         p_start = time.monotonic()
+        # ── [AI_TASK_STARTED] Forensics ──
+        logger.info(
+            f"[AI_TASK_STARTED] "
+            f"record={record_id} "
+            f"page={i+1} "
+            f"session={upload_session_id}"
+        )
+        
         try:
-            # 1. Extract ONLY this page's OCR text
             page = doc[i]
-            page_text = page.get_text("text")
             
-            # 2. IMAGE OPTIMIZATION: Resize and Compress
-            # High-res OCR often produces 4K images. We scale down to 2000px max height/width 
-            # to stay within Gemini's sweet spot and reduce payload size.
-            pix = page.get_pixmap(dpi=150)
+            # ── [PHASE 2 & 3] ROTATION & IMAGE DETECTION ──
+            rotation = page.rotation
+            logger.info(f"[PAGE_ROTATION] page={i+1} degrees={rotation}")
             
-            # Convert to PIL for easy resizing (if available) or use fitz methods
-            # Here we use fitz's inherent scaling if needed, but 150dpi is already good.
-            # We add an extra layer of safety to ensure payload is < 1MB
+            # Detect if it's a scanned image PDF (no text)
+            raw_text_content = page.get_text("text").strip()
+            is_scanned = len(raw_text_content) < 10
+            
+            if is_scanned:
+                logger.info(f"[IMAGE_PDF_DETECTED] page={i+1} Switching to High DPI rasterization")
+                # Phase 3: High DPI for scans
+                pix = page.get_pixmap(dpi=300)
+            else:
+                pix = page.get_pixmap(dpi=150)
+
+            # Auto-Rotation Check (Simple heuristic or PyMuPDF's rotation)
+            # If rotation is 90/180/270, pixmap already handles it in some versions, 
+            # but we can force it if needed.
+            
             img_bytes = pix.tobytes("jpg", jpg_quality=80)
             
-            # If still too large (> 1.5MB), scale down further
-            if len(img_bytes) > 1500000:
-                pix = page.get_pixmap(dpi=100)
-                img_bytes = pix.tobytes("jpg", jpg_quality=75)
+            # ── [PHASE 8] FALLBACK OCR CHAIN ──
+            page_text = raw_text_content
+            if is_scanned or len(page_text) < 50:
+                logger.info(f"[FALLBACK_OCR_TRIGGERED] page={i+1} reason='Low text density'")
+                # If we had Tesseract/Paddle, we'd call them here. 
+                # For now, we rely on Gemini's Vision capability as the ultimate fallback.
+                page_text = f"[SCANNED_PAGE_NO_DIRECT_TEXT] Image size: {len(img_bytes)} bytes"
+
+            logger.info(f"[OCR_TEXT_LENGTH] page={i+1} length={len(page_text)}")
             
-            logger.info(f"[PERF] Page {i+1} Optimized: {len(img_bytes)} bytes | Time: {time.monotonic() - p_start:.2f}s")
+            # Clean up OCR text
+            page_text = re.sub(r'\s+', ' ', page_text).strip()
             
+            # ── [PHASE 9] MULTI-INVOICE DETECTION HINT ──
+            if len(page_text) > 1000:
+                gst_matches = len(re.findall(r'\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}', page_text))
+                if gst_matches > 1:
+                    logger.info(f"[MULTI_INVOICE_DETECTED] page={i+1} GST_count={gst_matches}")
+
             # 3. Call Gemini
-            res = _call_ai_for_page(img_bytes, page_text, i, page_count, item_id)
+            res = _call_ai_for_page(img_bytes, page_text, i, page_count, item_id, job_id=job_id, wait_for_result=wait_for_result)
+            
+            # ── [PHASE 4] RELAXED VALIDATION & STATUS ──
+            final_status = "EXTRACTED"
+            if isinstance(res, dict):
+                res["_pdf_ocr_text"] = page_text
+                res["_page_no"] = i+1
+                
+                header = res.get("header", {})
+                has_essential = header.get("invoice_no") and header.get("vendor_name")
+                if not has_essential and (res.get("items") or header.get("total_amount")):
+                    logger.info(f"[VALIDATION_DECISION] page={i+1} result=PARTIAL_EXTRACTION")
+                    res["_status"] = "PARTIAL_EXTRACTION"
+                    final_status = "PARTIAL_EXTRACTION"
+                else:
+                    logger.info(f"[VALIDATION_DECISION] page={i+1} result=SUCCESS")
+                    res["_status"] = "SUCCESS"
+
+            logger.info(f"[PAGE_FINAL_STATUS] page={i+1} status={final_status} time={time.monotonic() - p_start:.2f}s")
+            logger.info(
+                f"[AI_TASK_COMPLETED] "
+                f"record={record_id} "
+                f"page={i+1} "
+                f"session={upload_session_id} "
+                f"status={res.get('_status') or 'SUCCESS'}"
+            )
             return i, res
+            
         except Exception as e:
             logger.error(f"Failed to process page {i+1}: {e}")
-            return i, {"_error": str(e)}
+            # ── [PHASE 1] NEVER DROP PAGES ──
+            placeholder = {
+                "status": "OCR_FAILED",
+                "_error": str(e),
+                "_page_no": i+1,
+                "header": {},
+                "items": [],
+                "failure_reason": "RUNTIME_EXCEPTION"
+            }
+            logger.info(f"[PAGE_FINAL_STATUS] page={i+1} status=OCR_FAILED")
+            return i, placeholder
 
     logger.info(f"[PERF] Starting Parallel OCR for {page_count} pages...")
     
@@ -267,35 +435,22 @@ Failure to extract ANY field that is visible on the document is unacceptable.
 
     if doc: doc.close()
 
-    # ── STEP 4: DETERMINISTIC MERGING (BY PAGE ORDER) ──
-    final_result = None
+    # ── STEP 4: PAGE-BY-PAGE ISOLATION (Root Cause Fix) ──
+    pages_map = {}
     for i in range(page_count):
-        page_result = results_map.get(i)
-        # Check for both internal _error and AI Proxy error
-        if not page_result or "_error" in page_result or "error" in page_result:
-            err_msg = page_result.get("error") or page_result.get("_error") if page_result else "UNKNOWN_ERROR"
-            if final_result is None:
-                return {"error": err_msg, "_error": err_msg}
-            logger.warning(f"Skipping corrupted page {i+1}: {err_msg}")
-            continue
+        page_result = results_map.get(i) or {"status": "OCR_FAILED", "_error": "MISSING_RESULT"}
+        page_result["_page_no"] = i + 1
+        pages_map[str(i+1)] = page_result
 
-        if final_result is None:
-            final_result = page_result
-        else:
-            # Merge items
-            final_result.setdefault("items", []).extend(page_result.get("items", []))
-            # Merge raw text
-            final_result["_raw_text"] = final_result.get("_raw_text", "") + "\n" + page_result.get("_raw_text", "")
-            # Header Merge (Intelligent Patching)
-            for k, v in page_result.get("header", {}).items():
-                curr_h = final_result["header"]
-                if not curr_h.get(k) or curr_h.get(k) == 0 or curr_h.get(k) == "":
-                    if v: curr_h[k] = v
+    # [ROOT-CAUSE FIX] Return first page as primary, but NEVER merge unrelated pages here.
+    # The assembly/splitting logic in pipeline.py handles multi-invoice PDFs.
+    if results_map:
+        final_result = results_map[0].copy()
+    else:
+        final_result = {"status": "OCR_FAILED", "_error": "NO_PAGES_PROCESSED"}
 
+    final_result["_pages"] = pages_map
+    
+    logger.info(f"[EXTRACTION_COMPLETE] pages={page_count} session={upload_session_id} record={record_id}")
     logger.info(f"[PERF] Total Pipeline Time: {time.monotonic() - t_start:.2f}s for {page_count} pages")
     return final_result
-
-
-
-
-

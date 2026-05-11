@@ -92,22 +92,34 @@ def segment_pdf_by_boundaries(file_bytes: bytes) -> List[bytes]:
         split_decision = False
         reason = "Continuing same invoice"
         
-        # --- UPDATED SEGMENTATION LOGIC ---
-        if last_inv_no and curr_inv_no:
-            if last_inv_no == curr_inv_no:
-                split_decision = False
-                reason = "same invoice"
-            else:
+        # --- UPDATED SEGMENTATION LOGIC (Conservative) ---
+        if curr_inv_no:
+            if last_inv_no and last_inv_no != curr_inv_no:
+                # We found a DIFFERENT invoice number → definite split
                 split_decision = True
-                reason = "mismatch"
-        elif not curr_inv_no:
-            # Safe split if invoice number is missing on current page
-            split_decision = True
-            reason = "missing"
+                reason = f"New invoice number: {curr_inv_no} (prev: {last_inv_no})"
+            elif not last_inv_no:
+                # We didn't have a previous number but found one now
+                # This could be a split if the previous page was a "blind" continuation
+                # or it could be the first page of a new invoice. 
+                # To be safe, we split only if the previous page had a total amount.
+                if last_total:
+                    split_decision = True
+                    reason = "New invoice detected (previous had no number but had total)"
+                else:
+                    split_decision = False
+                    reason = "Initial invoice number found"
+            else:
+                # curr_inv_no == last_inv_no
+                split_decision = False
+                reason = "Same invoice number"
         else:
-            # Current page has invoice number but previous didn't (or both None)
-            split_decision = True
-            reason = "new invoice detected"
+            # Current page has NO invoice number
+            # We assume it's a CONTINUATION unless the total amount significantly changes
+            # or other logic (like a fresh GSTIN or Vendor Name) suggests otherwise.
+            # But here we stay conservative to prevent breaking multi-page invoices.
+            split_decision = False
+            reason = "Continuation (no new invoice number)"
 
         # DEBUG LOGGING (MANDATORY FORMAT)
         logger.info(json.dumps({
@@ -138,7 +150,10 @@ def segment_pdf_by_boundaries(file_bytes: bytes) -> List[bytes]:
         new_doc.close()
 
     doc.close()
-    logger.info(f"SEGMENTATION COMPLETE: Created {len(blobs)} segments.")
+    logger.info(
+        f"[SEGMENTATION COMPLETE] total_pages={total_pages} "
+        f"segments={len(blobs)} groups={[g for g in invoice_groups]}"
+    )
     return blobs
 
 def run_grouping_logic(tenant_id, upload_session_id):
@@ -147,41 +162,64 @@ def run_grouping_logic(tenant_id, upload_session_id):
     """
     if not upload_session_id:
         return
-        
-    logger.info(f"Running STRICT grouping logic for session {upload_session_id}")
-    
+
+    logger.info(f"[GROUPING START] session={upload_session_id} tenant={tenant_id}")
+
     records = InvoiceTempOCR.objects.filter(
-        tenant_id=str(tenant_id), 
+        tenant_id=str(tenant_id),
         upload_session_id=upload_session_id,
         processed=False
     ).order_by('created_at', 'id')
-    
-    seen = {} # invoice_no -> group_id
-    
+
+    record_count = records.count()
+    logger.info(f"[GROUPING] {record_count} unprocessed records found for session {upload_session_id}")
+
+    seen = {}  # invoice_no -> group_id
+
     for r in records:
         inv_no = (r.supplier_invoice_no or "").strip()
-        
+        gstin = (r.gstin or "").strip().upper()
+        file_hash = (r.file_hash or "")[:12]
+
         if not inv_no:
-            # Cannot group without invoice number, treat as standalone
+            # Cannot group safely without invoice number
+            logger.info(
+                f"[GROUPING] record={r.id} hash={file_hash}... "
+                f"inv_no=MISSING → STANDALONE"
+            )
             r.is_primary = True
             r.group_id = None
             r.save()
             continue
-            
-        key = inv_no.lower()
+
+        # CRITICAL FIX: Group by (InvoiceNo + GSTIN) to prevent multi-vendor collision
+        # If GSTIN is missing, we use 'UNKNOWN' to keep them distinct from records with GSTINs
+        key = f"{inv_no.lower()}|{gstin or 'UNKNOWN_GSTIN'}"
+        
         if key not in seen:
-            # STEP 1: STRICT INVOICE MATCH (New identity)
-            group_id = hashlib.sha256(f"{inv_no}_{upload_session_id}".encode()).hexdigest()[:16]
+            # STEP 1: New Group
+            group_id = hashlib.sha256(f"{key}_{upload_session_id}".encode()).hexdigest()[:16]
             seen[key] = group_id
             r.is_primary = True
             r.group_id = group_id
-            logger.info(f"GROUPING: New primary record {r.id} for invoice {inv_no}")
+            logger.info(
+                f"[GROUPING] record={r.id} hash={file_hash}... "
+                f"key='{key}' → NEW_PRIMARY group_id={group_id}"
+            )
         else:
-            # Subsquent page for the same invoice number
+            # Subsequent page for the same invoice/vendor pair
+            existing_group_id = seen[key]
             r.is_primary = False
-            r.group_id = seen[key]
-            logger.info(f"GROUPING: Merging record {r.id} into group for invoice {inv_no}")
-        
+            r.group_id = existing_group_id
+            logger.info(
+                f"[GROUPING] record={r.id} hash={file_hash}... "
+                f"key='{key}' → CONTINUATION of group_id={existing_group_id}"
+            )
+
         r.save()
-    
-    logger.info(f"STRICT Grouping complete for session {upload_session_id}.")
+
+    groups_formed = len(seen)
+    logger.info(
+        f"[GROUPING COMPLETE] session={upload_session_id} "
+        f"records={record_count} distinct_invoices={groups_formed} standalone={record_count - sum(1 for _ in seen)}"
+    )

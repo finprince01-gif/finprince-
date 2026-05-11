@@ -6,9 +6,13 @@ import logging
 import signal
 import threading
 import traceback
+import hashlib
+import socket
+import multiprocessing
+import queue
 from typing import Dict, Any, Optional, List
 
-# 1. SETUP LOGGING FIRST (Crucial for visibility)
+# 1. SETUP LOGGING FIRST
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -18,468 +22,495 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("Worker")
-logger.info("Worker process starting up...")
 
-# 2. INITIALIZE DJANGO PROPERLY
+# ── WORKER RESOURCE LIMITS ──
+MAX_PAGES_LIMIT = int(os.getenv('MAX_PAGES_PER_JOB', '100'))
+OCR_TIMEOUT_SEC = int(os.getenv('OCR_TIMEOUT_SEC', '1800'))  
+MEMORY_LIMIT_MB = int(os.getenv('MEMORY_LIMIT_MB', '2048'))
+
+def _isolated_wrapper(q, func, *f_args):
+    """Module-level wrapper for picklability in multiprocessing."""
+    try:
+        import resource
+        mem_bytes = MEMORY_LIMIT_MB * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+    except (ImportError, ValueError):
+        pass
+    
+    try:
+        from django.db import connections
+        for conn in connections.all():
+            conn.close()
+        
+        res = func(*f_args)
+        q.put({'success': True, 'data': res})
+    except Exception as e:
+        q.put({'success': False, 'error': str(e), 'trace': traceback.format_exc()})
+
+class ResourceGuard:
+    """Isolates heavy processing into a separate process with limits."""
+    @staticmethod
+    def run_isolated(func, args, timeout=OCR_TIMEOUT_SEC):
+        ctx = multiprocessing.get_context('spawn')
+        result_queue = ctx.Queue()
+
+        p = ctx.Process(target=_isolated_wrapper, args=(result_queue, func, *args))
+        p.start()
+        
+        try:
+            res_data = result_queue.get(timeout=timeout)
+            p.join(5)
+            if p.is_alive(): p.terminate()
+            return res_data
+        except queue.Empty:
+            logger.error(f"[RESOURCE_GUARD] Task timed out after {timeout}s. Terminating process {p.pid}")
+            p.terminate()
+            p.join()
+            return {'success': False, 'error': f'TIMEOUT: Task exceeded {timeout}s'}
+        except Exception as e:
+            if p.is_alive(): p.terminate()
+            return {'success': False, 'error': str(e)}
+
+class WorkerLockManager:
+    """Ensures only one instance of the worker runtime is active on the cluster."""
+    LOCK_KEY = "worker_runtime_lock"
+    LOCK_TTL = 60
+    HEARTBEAT_INTERVAL = 30
+
+    def __init__(self):
+        self.hostname = socket.gethostname()
+        self.pid = os.getpid()
+        self.worker_info = f"{self.hostname}:{self.pid}:{time.time()}"
+        self.active = False
+        self._hb_thread = None
+
+    def acquire(self) -> bool:
+        from core.redis_client import redis_client
+        client = redis_client.get_client()
+        if not client: return False
+
+        if client.set(self.LOCK_KEY, self.worker_info, nx=True, ex=self.LOCK_TTL):
+            self.active = True
+            logger.info(f"[WORKER_SINGLETON_ACQUIRED] info={self.worker_info}")
+            self._start_heartbeat()
+            return True
+
+        existing = client.get(self.LOCK_KEY)
+        if existing:
+            try:
+                parts = str(existing).split(':')
+                if parts[0] == self.hostname:
+                    try:
+                        os.kill(int(parts[1]), 0)
+                        return False
+                    except (OSError, ValueError):
+                        client.set(self.LOCK_KEY, self.worker_info, ex=self.LOCK_TTL)
+                        self.active = True
+                        self._start_heartbeat()
+                        return True
+            except: pass
+        return False
+
+    def _start_heartbeat(self):
+        def hb():
+            from core.redis_client import redis_client
+            while self.active:
+                try: redis_client.get_client().expire(self.LOCK_KEY, self.LOCK_TTL)
+                except: pass
+                time.sleep(self.HEARTBEAT_INTERVAL)
+        self._hb_thread = threading.Thread(target=hb, daemon=True)
+        self._hb_thread.start()
+
+    def release(self):
+        self.active = False
+        from core.redis_client import redis_client
+        try: redis_client.get_client().delete(self.LOCK_KEY)
+        except: pass
+
+global_lock_manager = WorkerLockManager()
+
+# 2. INITIALIZE DJANGO
 try:
-    logger.info("Initializing Django...")
-    # Ensure the backend directory is in the path for imports
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(current_dir, '..'))
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    
+    if project_root not in sys.path: sys.path.insert(0, project_root)
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
     import django
-    logger.info("Calling django.setup()...")
     django.setup()
-    logger.info("Django initialized successfully.")
 except Exception as e:
     logger.critical(f"Failed to initialize Django: {e}")
-    traceback.print_exc()
     sys.exit(1)
 
-# Now safe to import models and core components
-logger.info("Importing project components...")
-from django.conf import settings
-from django.db import connection, transaction, close_old_connections
+# SAFE IMPORTS
+from core.constants import JobStatus, ItemStatus
+from django.db import transaction, close_old_connections
 from core.redis_client import redis_client
-from vouchers.models import BulkInvoiceJob, InvoiceProcessingItem, InvoiceOCRTemp
-from ocr_pipeline.models import InvoiceTempOCR
-from ocr_pipeline.pipeline import run_ocr_pipeline
+from vouchers.models import BulkInvoiceJob, InvoiceProcessingItem
+from ocr_pipeline.models import PipelineStatus, InvoiceTempOCR, SessionFinalizationState, InvoicePageResult
+from ocr_pipeline.pipeline import run_ocr_pipeline, is_page_valid, assemble_multi_page_record
+from ocr_pipeline.normalize import get_canonical_export_record
 from core.ai_proxy import process_ai_request
+
 from vouchers.pipeline import storage
-logger.info("Project components imported.")
 
 class BaseWorker:
     def __init__(self, queue_name: Any):
         self.queue_names = [queue_name] if isinstance(queue_name, str) else queue_name
         self.running = True
-        self.last_metrics_log = 0
-        self.worker_id = f"{self.__class__.__name__}-{threading.get_ident()}"
+        self.pid = os.getpid()
+        self.worker_id = f"{self.__class__.__name__}-PID{self.pid}-{int(time.time())}"
         
         try:
             signal.signal(signal.SIGINT, self.stop)
             signal.signal(signal.SIGTERM, self.stop)
-        except ValueError:
-            pass
+        except ValueError: pass
 
     def stop(self, *args):
-        logger.info(f"Shutdown signal received for worker listening on {self.queue_names}")
         self.running = False
 
     def run(self):
-        logger.info(f"Worker listener active for queues: {self.queue_names}")
-        
-        if not redis_client.available:
-            logger.error("Redis is not available. Worker cannot start.")
-            return
-
+        logger.info(f"Worker {self.worker_id} active for: {self.queue_names}")
         while self.running:
+            task = None
+            stop_hb = threading.Event()
             try:
                 redis_client.record_heartbeat(self.worker_id)
-                if time.time() - self.last_metrics_log > 30:
-                    redis_client.log_metrics()
-                    self.last_metrics_log = time.time()
-
-                task = redis_client.pop_reliable(self.queue_names, timeout=5)
+                close_old_connections()
                 
+                task = redis_client.pop_reliable(self.queue_names, timeout=30, worker_id=self.worker_id)
+                if not task: continue
+                
+                task_id = task.get('id', 'unknown')
+                logger.info(f"[TASK_START] task={task_id} queue={task.get('_source_queue')}")
+                
+                # Dynamic task heartbeat
+                def task_hb():
+                    while not stop_hb.is_set():
+                        try: redis_client.update_task_heartbeat(task_id)
+                        except: pass
+                        time.sleep(20)
+                threading.Thread(target=task_hb, daemon=True).start()
+
+                try:
+                    t_start = time.time()
+                    self.process_task(task)
+                    exec_time = time.time() - t_start
+                    logger.info(f"[TASK_SUCCESS] task={task_id} time={exec_time:.2f}s")
+                except Exception as e:
+                    logger.exception(f"[TASK_ERROR] task={task_id}: {e}")
+                    retries = redis_client.increment_retry_count(task)
+                    if retries > 5:
+                        logger.critical(f"[TASK_FATAL] task={task_id} max retries exceeded. Moving to DLQ.")
+                        redis_client.push_to_dlq(task.get('_source_queue'), task, str(e))
+                        # INFORM PIPELINE OF PERMANENT FAILURE
+                        self.handle_permanent_failure(task, str(e))
+                    else:
+                        # Standard re-enqueue (BaseWorker)
+                        redis_client.enqueue(task.get('_source_queue'), task)
+            except Exception as e:
+                logger.error(f"[WORKER_LOOP_CRASH] {e}")
+                time.sleep(2)
+            finally:
                 if task:
-                    task_id = task.get('id', 'unknown')
-                    logger.info(f"[*] [{self.__class__.__name__}] Picked up task {task_id}")
-                    
-                    # ── HEARTBEAT THREAD ──
-                    # Start a thread to keep the heartbeat alive during processing
-                    stop_heartbeat = threading.Event()
-                    def heartbeat_loop():
-                        while not stop_heartbeat.is_set():
-                            redis_client.update_task_heartbeat(task_id)
-                            time.sleep(15)
-                    
-                    hb_thread = threading.Thread(target=heartbeat_loop, daemon=True)
-                    hb_thread.start()
+                    # ALWAYS ACK (atomic remove from processing queue)
+                    redis_client.complete_task(task)
+                stop_hb.set()
 
-                    try:
-                        close_old_connections()
-                        self.process_task(task)
-                        redis_client.complete_task(task)
-                        logger.info(f"[*] [{self.__class__.__name__}] Task {task_id} done.")
-                    except Exception as e:
-                        # ── FATAL ESCAPE HATCH ──
-                        # If an exception escapes process_task (bug in worker), we MUST log it
-                        # and potentially ACK it to prevent infinite loops if retries are exhausted.
-                        logger.error(f"[*] [{self.__class__.__name__}] FATAL ERROR in task {task_id}: {e}")
-                        traceback.print_exc()
-                        
-                        # Increment retries even on fatal crash
-                        retries = redis_client.increment_retry_count(task)
-                        if retries > 5:
-                            logger.critical(f"[*] [{self.__class__.__name__}] Task {task_id} reached MAX FATAL RETRIES. Dropping.")
-                            redis_client.complete_task(task)
-                        else:
-                            # Let it stay in processing for RecoveryThread or manually retry
-                            pass
-                    finally:
-                        stop_heartbeat.set()
-                        hb_thread.join(timeout=1)
-                else:
-                    time.sleep(0.1)
-            except Exception:
-                logger.exception(f"CRITICAL: Worker loop failure in {self.queue_names}")
-                time.sleep(5)
+    def handle_permanent_failure(self, task: Dict[str, Any], error: str):
+        """Optional hook for subclasses to update DB/Status on fatal errors."""
+        pass
 
-    def process_task(self, task: Dict[str, Any]):
-        raise NotImplementedError()
+
+def update_job_progress(job_id):
+    """Refreshes job metrics and sets terminal JobStatus.COMPLETED when all items are done."""
+    try:
+        with transaction.atomic():
+            job = BulkInvoiceJob.objects.select_for_update().get(id=job_id)
+            masters = job.items.filter(parent_item_id=None)
+            total = job.total_files
+            
+            terminal_items = masters.filter(status__in=[JobStatus.COMPLETED, JobStatus.FAILED, ItemStatus.SKIPPED])
+            success_count = masters.filter(status=JobStatus.COMPLETED).count()
+            failed_count = masters.filter(status=JobStatus.FAILED).count()
+            terminal_count = terminal_items.count()
+            
+            progress = int((terminal_count / total * 100)) if total > 0 else 100
+            
+            logger.info(f"[TELEMETRY] Job {job_id}: {progress}% | S:{success_count} F:{failed_count} T:{total}")
+
+            if terminal_count >= total and total > 0:
+                job.status = JobStatus.COMPLETED
+                job.save()
+                redis_client.decr_tenant_concurrency(job.tenant_id)
+                logger.info(f"[TELEMETRY] JOB_COMPLETED: {job_id}")
+
+            # Update Redis Cache for UI
+            if redis_client.available:
+                redis_client.get_client().hset(f"job:progress:{job_id}", mapping={
+                    'status': job.status, 'progress': progress, 'total': total,
+                    'processed': success_count, 'failed': failed_count, 'updated_at': time.time()
+                })
+                redis_client.get_client().expire(f"job:progress:{job_id}", 3600)
+    except Exception as e:
+        logger.error(f"[TELEMETRY_ERROR] Job {job_id}: {e}")
+
+def check_session_completion(record_id, total_pages, page_idx, item_id=None):
+    """Barrier to trigger document assembly only when all pages reach a terminal state."""
+    try:
+        from django.utils import timezone
+        record_obj = InvoiceTempOCR.objects.filter(id=record_id).only('upload_session_id', 'file_hash').first()
+        if not record_obj: return
+        
+        session_id = record_obj.upload_session_id
+        finalized_key = f"finalized_pages_set:{session_id}_{record_id}"
+        terminal_key = f"terminal_pages_set:{session_id}_{record_id}"
+        
+        done_count = redis_client.get_client().scard(finalized_key)
+        terminal_count = redis_client.get_client().scard(terminal_key)
+
+        logger.info(f"[BARRIER_CHECK] record={record_id} terminal={terminal_count}/{total_pages} finalized={done_count}/{total_pages}")
+
+        if terminal_count < total_pages:
+            return  # Barrier not reached
+
+        # Assembly Singleton Lock
+        assembly_lock = f"lock:assembly:{record_id}"
+        if not redis_client.get_client().set(assembly_lock, "1", nx=True, ex=300):
+            return
+
+        try:
+            # Check durability: do we have all pages in DB or Redis?
+            present_in_db = InvoicePageResult.objects.filter(record_id=record_id).count()
+            if present_in_db < done_count:
+                logger.warning(f"[ASSEMBLY_DEFERRED] DB pages {present_in_db} < finalized {done_count}")
+                return
+
+            logger.info(f"[ASSEMBLY_START] record={record_id} session={session_id}")
+            res = assemble_multi_page_record(record_obj)
+            
+            final_status = JobStatus.COMPLETED if res.get('status') != 'ERROR' else JobStatus.FAILED
+            
+            if item_id:
+                InvoiceProcessingItem.objects.filter(id=item_id).update(status=final_status)
+                if final_status in [JobStatus.COMPLETED, JobStatus.FAILED]:
+                    item = InvoiceProcessingItem.objects.filter(id=item_id).first()
+                    if item:
+                        update_job_progress(item.job_id)
+                        logger.info(f"[SESSION_COMPLETED] job={item.job_id} status={final_status}")
+                logger.info(f"[PAGE_LIFECYCLE] record={record_id} STAGE='ASSEMBLY_COMPLETE' status={final_status}")
+
+
+        finally:
+            redis_client.get_client().delete(assembly_lock)
+
+    except Exception as e:
+        logger.error(f"[BARRIER_CRASH] {e}")
 
 class IngestionWorker(BaseWorker):
-    """STAGE 1: Reads local temp files, hashes, and uploads to permanent storage"""
-    def __init__(self):
-        super().__init__("ingestion_queue")
+    def __init__(self): super().__init__("ingestion_queue")
 
     def process_task(self, task: Dict[str, Any]):
         job_id = task.get('job_id')
-        file_info = task.get('file_info', [])
-        tenant_id = task.get('tenant_id')
-        
-        logger.info(f"[INGESTION START] Job {job_id} | {len(file_info)} files")
-        
-        try:
-            job = BulkInvoiceJob.objects.get(id=job_id)
-            job.status = 'processing'
-            job.save()
+        files = task.get('file_info', [])
+        job = BulkInvoiceJob.objects.get(id=job_id)
+        job.status = JobStatus.PROCESSING
+        job.save()
 
-            for info in file_info:
-                item_id = info['id']
-                temp_path = info['temp_path']
-                
-                try:
-                    # 1. Read and Hash (Streaming)
-                    sha256 = hashlib.sha256()
-                    with open(temp_path, 'rb') as f:
-                        for chunk in iter(lambda: f.read(65536), b""):
-                            sha256.update(chunk)
-                    file_hash = sha256.hexdigest()
-                    
-                    # 2. Upload to Storage
-                    key = storage.make_key(job_id, os.path.basename(temp_path))
-                    with open(temp_path, 'rb') as f:
-                        storage.upload_bytes(f.read(), key) 
-                    
-                    # 3. Update DB
-                    item = InvoiceProcessingItem.objects.get(id=item_id)
-                    item.file_path = key
-                    item.file_hash = file_hash
-                    item.status = 'pending'
-                    item.save()
-                    
-                    # 4. Enqueue OCR
-                    ocr_task = {
-                        'item_id': item.id,
-                        'job_id': job.id,
-                        'tenant_id': tenant_id,
-                        'voucher_type': task.get('voucher_type'),
-                        'upload_session_id': task.get('upload_session_id'),
-                        'id': f"ocr_{item.id}",
-                        'retries': 0
-                    }
-                    redis_client.enqueue("ocr_queue", ocr_task)
-                    logger.info(f"[INGESTION] Item {item_id} enqueued to OCR")
-                except Exception as e:
-                    logger.error(f"[INGESTION ERROR] Item {item_id}: {e}")
-                    InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed', error_message=str(e))
-                finally:
-                    # ALWAYS cleanup temp file
-                    if os.path.exists(temp_path):
-                        try: os.remove(temp_path)
-                        except: pass
+        for info in files:
+            item_id = info['id']
+            try:
+                item = InvoiceProcessingItem.objects.get(id=item_id)
+                item.status = ItemStatus.PROCESSING
+                item.save()
 
-            # Cleanup temp directory if empty
-            if file_info:
-                temp_dir = os.path.dirname(file_info[0]['temp_path'])
-                if temp_dir and os.path.exists(temp_dir) and not os.listdir(temp_dir):
-                    try: os.rmdir(temp_dir)
-                    except: pass
+                # Hash and Upload
+                path = info['temp_path']
+                with open(path, 'rb') as f: content = f.read()
+                file_hash = hashlib.sha256(content).hexdigest()
+                key = storage.make_key(job_id, os.path.basename(path))
+                storage.upload_bytes(content, key)
 
-        except Exception as e:
-            logger.error(f"[INGESTION FATAL] Job {job_id}: {e}")
+                item.file_path = key
+                item.file_hash = file_hash
+                item.save()
+
+                # Enqueue OCR
+                ocr_task = {
+                    'item_id': item.id, 'staging_record_id': info.get('staging_record_id'),
+                    'job_id': job.id, 'tenant_id': job.tenant_id,
+                    'upload_session_id': job.upload_session_id, 'id': f"ocr_{item.id}_{int(time.time())}"
+                }
+                redis_client.enqueue("ocr_queue", ocr_task)
+                if os.path.exists(path): os.remove(path)
+            except Exception as e:
+                logger.error(f"[INGEST_ERR] item={item_id}: {e}")
+                InvoiceProcessingItem.objects.filter(id=item_id).update(status=ItemStatus.FAILED)
+                update_job_progress(job_id)
+
+    def handle_permanent_failure(self, task: Dict[str, Any], error: str):
+        job_id = task.get('job_id')
+        if job_id:
+            BulkInvoiceJob.objects.filter(id=job_id).update(status=JobStatus.FAILED)
+            update_job_progress(job_id)
+
 
 class OCRWorker(BaseWorker):
-    """STAGE 2: Downloads, splits, optimizes, and enqueues AI extraction tasks (Fire-and-Forget)"""
-    def __init__(self):
-        super().__init__("ocr_queue")
+    def __init__(self): super().__init__("ocr_queue")
 
     def process_task(self, task: Dict[str, Any]):
         item_id = task.get('item_id')
-        job_id = task.get('job_id')
-        tenant_id = task.get('tenant_id')
-        session_id = task.get('upload_session_id')
+        record_id = task.get('staging_record_id')
         
-        try:
-            item = InvoiceProcessingItem.objects.get(id=item_id)
-            item.status = 'processing'
-            item.save()
+        item = InvoiceProcessingItem.objects.get(id=item_id)
+        file_bytes = storage.download_bytes(item.file_path)
+        
+        from ocr_pipeline.repository import StagingRepository
+        record = StagingRepository().find_by_id(record_id)
+        record.status = PipelineStatus.PROCESSING
+        record.save()
 
-            file_bytes = storage.download_bytes(item.file_path)
-            
-            from ocr_pipeline.repository import StagingRepository
-            repo = StagingRepository()
-            
-            # Create or reuse staging record
-            record = repo.find_by_hash_and_tenant(item.file_hash, tenant_id)
-            if not record or record.upload_session_id != session_id:
-                record = repo.create_record(
-                    item.file_hash, 
-                    os.path.basename(item.file_path), 
-                    task.get('voucher_type', 'Purchase'), 
-                    tenant_id, 
-                    session_id
-                )
+        # RUN OCR PIPELINE (Forces Async AI Queueing)
+        ResourceGuard.run_isolated(run_ocr_pipeline, (file_bytes, record, False, item_id, task.get('job_id')))
+        logger.info(f"[OCR_STAGE_DONE] record={record_id} AI tasks enqueued.")
 
-            record.status = 'OCR_PROCESSING'
-            record.save()
+    def handle_permanent_failure(self, task: Dict[str, Any], error: str):
+        record_id = task.get('staging_record_id')
+        item_id = task.get('item_id')
+        if record_id:
+            InvoiceTempOCR.objects.filter(id=record_id).update(status=PipelineStatus.FAILED)
+            # INFORM BARRIER
+            try:
+                # Page count is unknown here, so we mark it failed in DB
+                item = InvoiceProcessingItem.objects.get(id=item_id)
+                item.status = JobStatus.FAILED
+                item.save()
+                update_job_progress(item.job_id)
+            except: pass
 
-            # ── NON-BLOCKING PIPELINE ──
-            # We call run_ocr_pipeline with a flag to NOT wait for AI
-            from ocr_pipeline.pipeline import run_ocr_pipeline
-            res = run_ocr_pipeline(file_bytes, record, wait_for_ai=False, item_id=item_id)
-            
-            # If wait_for_ai=False, run_ocr_pipeline enqueues to ai_requests and returns
-            # We mark the item as 'processing' (waiting for AI)
-            item.status = 'processing'
-            item.save()
-            
-            logger.info(f"[OCR STAGE DONE] Item {item_id} | AI tasks enqueued for {record.id}. Worker free.")
-
-        except Exception as e:
-            logger.error(f"[OCR ERROR] Item {item_id}: {e}")
-            InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed', error_message=str(e))
 
 class AIWorker(BaseWorker):
-    """STAGE 3: Consumes AI tasks, calls Gemini, and enqueues for Finalization"""
-    def __init__(self):
-        super().__init__("ai_requests")
+    def __init__(self): super().__init__("ai_requests")
 
     def process_task(self, task: Dict[str, Any]):
-        task_id = task.get('id') # This is the ai_request UUID
-        request_data = task.get('request_data')
-        tenant_id = task.get('tenant_id')
+        metadata = task.get('request_data', {}).get('metadata', {})
+        record_id = metadata.get('record_id')
+        page_idx = metadata.get('page_index', 1)
         
-        logger.info(f"[AI START] Task {task_id}")
+        logger.info(f"[PAGE_LIFECYCLE] record={record_id} page={page_idx} STAGE='AI_START'")
         
-        try:
-            result = process_ai_request(request_data)
-            
-            # Result stored in Redis for any pollers (legacy support)
-            result_key = f"ai_result:{task_id}"
-            redis_client.get_client().setex(result_key, 3600, json.dumps(result))
-            
-            # ── TRIGGER FINALIZATION ──
-            # The metadata MUST be propagated for finalization to find the DB records
-            finalize_task = {
-                'ai_task_id': task_id,
-                'result': result,
-                'metadata': request_data.get('metadata', {}), # FIX: Metadata is inside request_data
-                'tenant_id': tenant_id or request_data.get('tenant_id'),
-                'id': f"fin_{task_id}"
-            }
-            redis_client.enqueue("finalization_queue", finalize_task)
-            logger.info(f"[AI STAGE DONE] Task {task_id} completed. Finalization enqueued.")
+        res = ResourceGuard.run_isolated(process_ai_request, (task.get('request_data'),))
+        if not res.get('success'): raise RuntimeError(res.get('error'))
+        
+        result = res['data']
+        # Preserve OCR text
+        if '_pdf_ocr_text' in task.get('request_data'):
+            result['_pdf_ocr_text'] = task.get('request_data')['_pdf_ocr_text']
 
-        except Exception as e:
-            logger.error(f"[AI ERROR] Task {task_id}: {e}")
+        # Enqueue Finalization
+        fin_task = {
+            'ai_task_id': task.get('id'), 'result': result, 'metadata': metadata,
+            'tenant_id': task.get('tenant_id'), 'id': f"fin_{task.get('id')}"
+        }
+        redis_client.enqueue("finalization_queue", fin_task)
+        logger.info(f"[PAGE_LIFECYCLE] record={record_id} page={page_idx} STAGE='AI_COMPLETE'")
+
+    def handle_permanent_failure(self, task: Dict[str, Any], error: str):
+        metadata = task.get('request_data', {}).get('metadata', {})
+        record_id = metadata.get('record_id')
+        page_idx = metadata.get('page_index', 1)
+        total_pages = metadata.get('total_pages', 1)
+        session_id = metadata.get('upload_session_id')
+        
+        if record_id and session_id:
+            terminal_key = f"terminal_pages_set:{session_id}_{record_id}"
+            redis_client.get_client().sadd(terminal_key, page_idx)
+            check_session_completion(record_id, total_pages, page_idx, metadata.get('item_id'))
+
 
 class FinalizationWorker(BaseWorker):
-    """STAGE 4: Normalizes AI result, validates, and creates Voucher records"""
-    def __init__(self):
-        super().__init__("finalization_queue")
+    def __init__(self): super().__init__("finalization_queue")
 
     def process_task(self, task: Dict[str, Any]):
         metadata = task.get('metadata', {})
         record_id = metadata.get('record_id')
-        item_id = metadata.get('item_id')
         page_idx = metadata.get('page_index', 1)
         total_pages = metadata.get('total_pages', 1)
-        ai_result = task.get('result', {})
+        session_id = metadata.get('upload_session_id')
         
-        if not record_id:
-            logger.error(f"[FINALIZATION ERROR] No record_id in metadata. Task: {task.get('id')}")
-            return
+        finalized_key = f"finalized_pages_set:{session_id}_{record_id}"
+        terminal_key = f"terminal_pages_set:{session_id}_{record_id}"
 
         try:
-            # 1. Parse Extracted Data
-            reply = ai_result.get('reply')
-            if reply and isinstance(reply, str):
-                try:
-                    extracted = json.loads(reply)
-                except:
-                    from core.ai_proxy import safe_extract_json
-                    cleaned = safe_extract_json(reply)
-                    extracted = json.loads(cleaned) if cleaned else ai_result
-            else:
-                extracted = ai_result.get('reply_json') or ai_result.get('data') or ai_result
-
-            # 2. Atomic Update of Record
-            from ocr_pipeline.pipeline import normalize, validate_and_process
-            
-            # ── DISTRIBUTED LOCK (Idempotency) ──
-            # Prevent race conditions between retries or recovery false positives
-            lock_key = f"lock:finalization:{record_id}"
-            if not redis_client.get_client().set(lock_key, "1", nx=True, ex=300):
-                logger.warning(f"[IDEMPOTENCY] Finalization for {record_id} already in progress. Skipping.")
+            if task.get('error'):
+                logger.error(f"[AI_ERROR_PROPAGATED] record={record_id} page={page_idx}: {task['error']}")
+                redis_client.get_client().sadd(terminal_key, page_idx)
+                check_session_completion(record_id, total_pages, page_idx, metadata.get('item_id'))
                 return
 
-            try:
-                with transaction.atomic():
-                    record = InvoiceTempOCR.objects.select_for_update().get(id=record_id)
-                    
-                    if record.status == 'VOUCHER_CREATED':
-                        logger.info(f"Record {record_id} already finalized. Skipping.")
-                        return
+            result = task.get('result', {})
+            canonical = get_canonical_export_record(result)
+            
+            if not is_page_valid(canonical)[0]:
+                logger.warning(f"[PAGE_INVALID] record={record_id} page={page_idx}")
 
-                    # Normalize this page's result
-                    normalized_page = normalize(extracted)
-                
-                # ── MERGE LOGIC ──
-                    # ── PRESERVE PAGES (Safe Merging) ──
-                    # Instead of blindly extending items, we store pages separately
-                    # to allow the reconstruction layer to detect split invoices.
-                    existing_data = record.extracted_data or {}
-                    if '_pages' not in existing_data:
-                        # Migrate legacy data if exists
-                        existing_data['_pages'] = {}
-                        if 'sections' in existing_data and 'items' in existing_data.get('sections', {}):
-                             # Keep as page 1
-                             existing_data['_pages']['1'] = existing_data.copy()
+            # Persist to DB
+            InvoicePageResult.objects.update_or_create(
+                record_id=record_id, page_number=page_idx,
+                defaults={'session_id': session_id, 'canonical_payload': canonical}
+            )
+            
+            # Redis Storage for Assembly
+            redis_client.get_client().set(f"page_data:{record_id}:{page_idx}", json.dumps(canonical), ex=7200)
+            
+            # Mark Terminal
+            redis_client.get_client().sadd(finalized_key, page_idx)
+            redis_client.get_client().sadd(terminal_key, page_idx)
+            redis_client.get_client().expire(finalized_key, 7200)
+            redis_client.get_client().expire(terminal_key, 7200)
 
-                    existing_data['_pages'][str(page_idx)] = normalized_page
-                    
-                    # Also maintain a 'summary' view for the UI (Page 1 + Aggregated Items)
-                    if page_idx == 1 or not record.supplier_invoice_no:
-                        for k, v in normalized_page.items():
-                            if k != 'sections' and k != '_pages':
-                                existing_data[k] = v
-                                # ── SYNC TO TOP-LEVEL COLUMNS ──
-                                if hasattr(record, k):
-                                    setattr(record, k, v)
-                        
-                        # Explicitly sync supplier_details to columns if missing
-                        supp = normalized_page.get('sections', {}).get('supplier_details', {})
-                        if not record.gstin: record.gstin = supp.get('gstin')
-                        if not record.supplier_invoice_no: record.supplier_invoice_no = supp.get('supplier_invoice_no')
-                    
-                    # Merge items for the 'preview' but the source of truth is now _pages
-                    if 'sections' not in existing_data: existing_data['sections'] = {}
-                    if 'items' not in existing_data['sections']: existing_data['sections']['items'] = []
-                    
-                    new_items = normalized_page.get('sections', {}).get('items', [])
-                    existing_data['sections']['items'].extend(new_items)
-                    
-                    record.extracted_data = existing_data
-
-                    record.status = 'EXTRACTED'
-                    record.save()
-                    
-                    # ── COMPLETION TRACKING ──
-                # Use Redis to track how many pages of this record are processed
-                counter_key = f"pages_done:{record_id}"
-                done_count = redis_client.get_client().incr(counter_key)
-                redis_client.get_client().expire(counter_key, 3600) # 1 hour TTL
-                
-                if done_count >= total_pages:
-                    logger.info(f"[FINALIZING] All {total_pages} pages received for Record {record_id}. Creating voucher.")
-                    # Final step: Business Logic + DB Voucher Creation
-                    res = validate_and_process(record, auto_save=True)
-                    
-                    # 3. Update parent Bulk Job progress
-                    if not item_id:
-                        item = InvoiceProcessingItem.objects.filter(
-                            job__upload_session_id=record.upload_session_id, 
-                            file_hash=record.file_hash
-                        ).first()
-                        item_id = item.id if item else None
-                    
-                    if item_id:
-                        InvoiceProcessingItem.objects.filter(id=item_id).update(status='success')
-                        item = InvoiceProcessingItem.objects.get(id=item_id)
-                        self._update_job_progress(item.job_id)
-
-                    redis_client.get_client().delete(counter_key)
-            finally:
-                # Always release lock
-                redis_client.get_client().delete(lock_key)
-
-            logger.info(f"[PIPELINE COMPLETE] Page {page_idx}/{total_pages} of Record {record_id} processed.")
+            logger.info(f"[PAGE_LIFECYCLE] record={record_id} page={page_idx} STAGE='FINALIZED'")
+            check_session_completion(record_id, total_pages, page_idx, metadata.get('item_id'))
 
         except Exception as e:
-            logger.error(f"[FINALIZATION ERROR] Record {record_id} Page {page_idx}: {e}")
-            # If we fail, we should check if we should retry or mark as FAILED
-            retries = redis_client.increment_retry_count(task)
-            if retries > 3:
-                logger.critical(f"[FINALIZATION FATAL] Giving up on Record {record_id} after {retries} retries.")
-                InvoiceTempOCR.objects.filter(id=record_id).update(status='FAILED', validation_status='ERROR', validation_message=f"Finalization failed after retries: {e}")
-                if item_id:
-                     InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed', error_message=str(e))
-                # Cleanup counter so it doesn't stay stuck
-                redis_client.get_client().delete(f"pages_done:{record_id}")
-            else:
-                # Re-enqueue for retry with backoff
-                time.sleep(min(30, 2 ** retries))
-                redis_client.enqueue("finalization_queue", task)
+            logger.exception(f"[FINALIZATION_ERR] {e}")
+            raise
 
-    def _update_job_progress(self, job_id):
-        # Same logic as before to update BulkInvoiceJob status
-        try:
-            with transaction.atomic():
-                job = BulkInvoiceJob.objects.select_for_update().get(id=job_id)
-                items = job.items.filter(parent_item_id=None)
-                total = job.total_files
-                processed = items.filter(status__in=['success', 'failed']).count()
-                if processed >= total and total > 0:
-                    job.status = 'completed'
-                    job.save()
-        except: pass
+def worker_process_wrapper(worker_class, *args):
+    from django import db
+    db.connections.close_all()
+    from core.redis_client import RedisClient, redis_client
+    RedisClient._instance = None
+    redis_client._init_connection()
+    worker_class(*args).run()
 
 def start_workers():
-    logger.info("Initializing worker threads (Production Hardened Pipeline)...")
-    threads = []
+    if not global_lock_manager.acquire(): sys.exit(1)
     
-    # ── STAGE 0: RECOVERY THREAD (Operational Safety) ──
-    def recovery_loop():
-        logger.info("Recovery thread active (Heartbeat-aware monitoring)...")
-        queues = ['ingestion_queue', 'ocr_queue', 'ai_requests', 'finalization_queue']
-        while True:
-            try:
-                # Recover tasks stuck in processing: queues ONLY if heartbeats are dead
-                # Faster interval (30s) because heartbeats make it safe
-                redis_client.recover_stale_tasks(queues)
-                time.sleep(30) 
-            except: time.sleep(10)
+    # Startup Recovery
+    queues = ['ingestion_queue', 'ocr_queue', 'ai_requests', 'finalization_queue']
+    try:
+        redis_client.recover_stale_tasks(queues)
+    except Exception as e:
+        logger.error(f"[STARTUP_RECOVERY_ERROR] {e}")
 
-    rt = threading.Thread(target=recovery_loop, daemon=True, name="RecoveryThread")
-    threads.append(rt)
-    rt.start()
-
-    # Distribution of threads based on stage weight
-    worker_configs = [
-        (IngestionWorker, 1),
-        (OCRWorker, 2),
-        (AIWorker, 4),
-        (FinalizationWorker, 2)
-    ]
+    processes = []
+    configs = [(IngestionWorker, 1), (OCRWorker, 2), (AIWorker, 4), (FinalizationWorker, 2)]
     
-    for worker_class, count in worker_configs:
+    for worker_class, count in configs:
         for i in range(count):
-            t = threading.Thread(target=worker_class().run, daemon=True, name=f"{worker_class.__name__}-{i}")
-            threads.append(t)
-            t.start()
-            logger.info(f"Started thread: {t.name}")
+            p = multiprocessing.Process(target=worker_process_wrapper, args=(worker_class,), name=f"{worker_class.__name__}-{i}")
+            p.start()
+            processes.append(p)
 
     try:
-        while True:
-            time.sleep(10)
-    except KeyboardInterrupt:
-        logger.info("Worker process stopped.")
+        while True: time.sleep(10)
+    except KeyboardInterrupt: pass
+    finally:
+        for p in processes: p.terminate()
+        global_lock_manager.release()
 
 if __name__ == "__main__":
-    import hashlib
+    multiprocessing.freeze_support()
+    try: multiprocessing.set_start_method("spawn", force=True)
+    except RuntimeError: pass
     start_workers()
