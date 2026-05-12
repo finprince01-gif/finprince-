@@ -52,6 +52,7 @@ interface ReceiptVoucherProps {
     isLimitReached?: boolean;
     onLimitReached?: () => void;
     isReadOnlyMode?: boolean;
+    onAddVouchers?: (vouchers: any[], saveToMySQL?: boolean) => void;
 }
 
 const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
@@ -59,7 +60,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     clearPrefilledData,
     isLimitReached,
     onLimitReached,
-    isReadOnlyMode = false
+    isReadOnlyMode = false,
+    onAddVouchers
 }) => {
     // Tab state
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
@@ -369,20 +371,21 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     // Auto-Recover Configuration from Voucher Number prefix (Drill-down)
     useEffect(() => {
-        if (isReadOnlyMode && voucherNumber && receiptVoucherConfigs.length > 0 && !selectedReceiptConfig) {
-            // Attempt to match the voucherNumber's prefix to one of the configurations
-            const vNumLower = voucherNumber.toLowerCase();
-            
-            const matchedConfig = receiptVoucherConfigs.find(cfg => {
-                const prefix = (cfg.prefix || '').toLowerCase();
-                return prefix && vNumLower.startsWith(prefix);
-            });
-            
-            if (matchedConfig) {
-                setSelectedReceiptConfig(matchedConfig.voucher_name);
-            } else if (receiptVoucherConfigs.length > 0) {
-                // If no prefix matches but configurations exist, fallback to the first one to prevent completely empty select
-                setSelectedReceiptConfig(receiptVoucherConfigs[0].voucher_name);
+        if (isReadOnlyMode && voucherNumber && receiptVoucherConfigs.length > 0) {
+            // Only attempt to match if the current selection is invalid or generic
+            const currentMatch = receiptVoucherConfigs.find(cfg => cfg.voucher_name === selectedReceiptConfig);
+            if (!currentMatch) {
+                const vNumLower = voucherNumber.toLowerCase();
+                const matchedConfig = receiptVoucherConfigs.find(cfg => {
+                    const prefix = (cfg.prefix || '').toLowerCase();
+                    return prefix && vNumLower.startsWith(prefix);
+                });
+                
+                if (matchedConfig) {
+                    setSelectedReceiptConfig(matchedConfig.voucher_name);
+                } else if (!selectedReceiptConfig && receiptVoucherConfigs.length > 0) {
+                    setSelectedReceiptConfig(receiptVoucherConfigs[0].voucher_name);
+                }
             }
         }
     }, [voucherNumber, receiptVoucherConfigs, isReadOnlyMode, selectedReceiptConfig]);
@@ -934,8 +937,22 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     }
                 }
 
-                await httpClient.post('/api/vouchers/receipts/', payload);
+                const response: any = await httpClient.post('/api/vouchers/receipts/', payload);
                 showSuccess('Receipt Voucher posted successfully!');
+
+                // Sync component state with parent so dashboards and reports update instantly
+                if (onAddVouchers) {
+                    onAddVouchers([{
+                        id: response?.id?.toString() || Date.now().toString(),
+                        type: 'Receipt',
+                        date: date,
+                        party: receiveFrom,
+                        amount: Number(finalAmount),
+                        narration: postingNote,
+                        account: receiveIn,
+                        ...response
+                    }], false);
+                }
 
                 // Increment the voucher series counter so the next number is ready
                 const savedConfig = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
@@ -1085,8 +1102,22 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     notes: postingNote
                 };
 
-                await httpClient.post('/api/vouchers/receipts/', payload);
+                const response: any = await httpClient.post('/api/vouchers/receipts/', payload);
                 showSuccess(`Consolidated Receipt Voucher posted successfully.`);
+
+                // Sync component state with parent so dashboards and reports update instantly
+                if (onAddVouchers) {
+                    onAddVouchers([{
+                        id: response?.id?.toString() || Date.now().toString(),
+                        type: 'Receipt',
+                        date: date,
+                        party: 'Multiple Parties',
+                        amount: Number(bulkTotalReceipt),
+                        narration: postingNote,
+                        account: receiveIn,
+                        ...response
+                    }], false);
+                }
 
                 // Increment the voucher series counter so the next number is ready
                 const savedConfigBulk = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
