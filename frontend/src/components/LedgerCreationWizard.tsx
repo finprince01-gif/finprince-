@@ -94,7 +94,6 @@ const ITEM_RANKS: Record<string, number> = {
     'longtermprovisions': 43,
     'shorttermborrowings': 44,
     'othercurrentliabilities': 45,
-    'othercurrentassets': 46,
     'shorttermprovisions': 47,
 
     // Loans
@@ -266,9 +265,22 @@ const ITEM_RANKS: Record<string, number> = {
 };
 
 const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false, isOtherEntities = false) => {
+    const isLiab = (node: TreeNode) => {
+        const cat = (node.fullPath?.category || '').toLowerCase().trim();
+        return cat === 'liability' || cat === 'liabilities';
+    };
+
+    const getRank = (node: TreeNode, ranksMap: Record<string, number>, liabRank: number, assetRank: number) => {
+        const c = clean(node.name);
+        if (c === 'othercurrentassets') {
+            return isLiab(node) ? liabRank : assetRank;
+        }
+        return ranksMap[c];
+    };
+
     nodes.sort((a, b) => {
-        let ar = ITEM_RANKS[clean(a.name)] ?? 9999;
-        let br = ITEM_RANKS[clean(b.name)] ?? 9999;
+        let ar = getRank(a, ITEM_RANKS, 46, 88) ?? 9999;
+        let br = getRank(b, ITEM_RANKS, 46, 88) ?? 9999;
 
         if (isOtherEntities) {
             const otherRanks: Record<string, number> = {
@@ -280,7 +292,6 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'longtermprovisions': 13,
                 'shorttermborrowings': 14,
                 'othercurrentliabilities': 15,
-                'othercurrentassets': 16,
                 'shorttermprovisions': 17,
                 'propertyplantequipment': 20,
                 'noncurrentinvestments': 21,
@@ -291,8 +302,10 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'cashandcashequivalents': 26,
                 'shorttermloansandadvances': 27,
             };
-            if (otherRanks[clean(a.name)]) ar = otherRanks[clean(a.name)];
-            if (otherRanks[clean(b.name)]) br = otherRanks[clean(b.name)];
+            const customAr = getRank(a, otherRanks, 16, 28);
+            const customBr = getRank(b, otherRanks, 16, 28);
+            if (customAr !== undefined) ar = customAr;
+            if (customBr !== undefined) br = customBr;
         } else if (isCompany) {
             const companyRanks: Record<string, number> = {
                 'sharecapital': 1,
@@ -304,7 +317,6 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'longtermprovisions': 13,
                 'shorttermborrowings': 14,
                 'othercurrentliabilities': 15,
-                'othercurrentassets': 16,
                 'shorttermprovisions': 17,
                 'propertyplantequipment': 20,
                 'noncurrentinvestments': 21,
@@ -315,8 +327,10 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'cashandcashequivalents': 26,
                 'shorttermloansandadvances': 27,
             };
-            if (companyRanks[clean(a.name)]) ar = companyRanks[clean(a.name)];
-            if (companyRanks[clean(b.name)]) br = companyRanks[clean(b.name)];
+            const customAr = getRank(a, companyRanks, 16, 28);
+            const customBr = getRank(b, companyRanks, 16, 28);
+            if (customAr !== undefined) ar = customAr;
+            if (customBr !== undefined) br = customBr;
         } else if (isLLP) {
             const llpRanks: Record<string, number> = {
                 'partnerscapitalcontribution': 1,
@@ -329,7 +343,6 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'longtermprovisions': 13,
                 'shorttermborrowings': 14,
                 'othercurrentliabilities': 15,
-                'othercurrentassets': 16,
                 'shorttermprovisions': 17,
                 'propertyplantequipment': 20,
                 'noncurrentinvestments': 21,
@@ -377,8 +390,10 @@ const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false,
                 'msmeinterestexpense': 135,
                 'interestoncapitalcontributedbypartners': 136,
             };
-            if (llpRanks[clean(a.name)]) ar = llpRanks[clean(a.name)];
-            if (llpRanks[clean(b.name)]) br = llpRanks[clean(b.name)];
+            const customAr = getRank(a, llpRanks, 16, 28);
+            const customBr = getRank(b, llpRanks, 16, 28);
+            if (customAr !== undefined) ar = customAr;
+            if (customBr !== undefined) br = customBr;
         }
 
         if (ar !== br) return ar - br;
