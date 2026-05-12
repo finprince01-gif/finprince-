@@ -159,6 +159,26 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             'voucher_number': {'required': False},
         }
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        
+        # 1. Map Ledger Names for Frontend Visibility (Drill-down)
+        if hasattr(instance, 'pay_to_ledger') and instance.pay_to_ledger:
+            ret['receive_in'] = instance.pay_to_ledger.name
+            ret['account'] = instance.pay_to_ledger.name # Visual alias for generic mappings
+        
+        if hasattr(instance, 'pay_from_ledger') and instance.pay_from_ledger:
+            ret['customer'] = instance.pay_from_ledger.name
+            ret['party'] = instance.pay_from_ledger.name
+            
+        # 2. Force Hydrate items if queryset was empty due to reverse relations naming
+        if not ret.get('items') and hasattr(instance, 'get_items'):
+            items_qs = instance.get_items()
+            if items_qs:
+                ret['items'] = ReceiptVoucherItemSerializer(items_qs, many=True, context=self.context).data
+
+        return ret
+
     def _get_party_ids(self, ledger):
         """Extract vendor/customer database IDs from a MasterLedger."""
         l_id = ledger.id

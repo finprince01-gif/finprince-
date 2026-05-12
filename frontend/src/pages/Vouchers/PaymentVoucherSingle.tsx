@@ -461,15 +461,34 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if (prefilledData.sellerName) setPayTo(findLedgerName(prefilledData.sellerName));
             if ((prefilledData as any).account) setPayFrom(findLedgerName((prefilledData as any).account));
 
-            // Removed auto-filling of the top amount / advance section to prevent auto-population as requested by the user.
+            // Fill critical details if they are provided, specifically for drill-down/read-only mode
+            if ((prefilledData as any).totalAmount !== undefined) {
+                const amt = parseFloat((prefilledData as any).totalAmount) || 0;
+                if (isReadOnlyMode || amt > 0) {
+                    setTopAmount(amt);
+                }
+            }
+
+            if ((prefilledData as any).invoiceNumber) {
+                setVoucherNumber((prefilledData as any).invoiceNumber);
+            }
+
+            if ((prefilledData as any).voucher_type) {
+                setSelectedPaymentConfig((prefilledData as any).voucher_type);
+            }
+            
             if ((prefilledData as any).reference_number) {
+                setRefNo((prefilledData as any).reference_number);
                 setSingleAdvanceRefNo((prefilledData as any).reference_number);
             }
+
             if ((prefilledData as any).narration) setPostingNote((prefilledData as any).narration);
             if ((prefilledData as any).bank_transaction_id) setBankTransactionId((prefilledData as any).bank_transaction_id);
-            if (clearPrefilledData) clearPrefilledData();
+            
+            // Only clear if NOT in read-only mode (otherwise repeated renders lose view state)
+            if (clearPrefilledData && !isReadOnlyMode) clearPrefilledData();
         }
-    }, [prefilledData, clearPrefilledData, allLedgers]);
+    }, [prefilledData, clearPrefilledData, allLedgers, isReadOnlyMode]);
 
     // Fetch payment configurations on mount
     useEffect(() => {

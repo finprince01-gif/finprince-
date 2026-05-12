@@ -4428,6 +4428,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             })),
           } as any);
         }
+        else if (mappedType === 'Payment' || mappedType === 'Receipt') {
+          setLocalPrefilledData({
+            voucherId: voucherId,
+            invoiceNumber: details.voucher_number || details.voucher_no || '',
+            invoiceDate: details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate(),
+            sellerName: details.items?.[0]?.pay_to_ledger_name || details.items?.[0]?.vendor_name || details.items?.[0]?.customer_name || details.party || '',
+            account: details.pay_from_name || details.account || '',
+            totalAmount: parseFloat(details.total_amount || details.amount || 0),
+            narration: details.narration || '',
+            reference_number: details.ref_no || '',
+            voucher_type: details.voucher_type || details.type || '',
+          } as any);
+        }
       }
     }).catch(err => {
       console.error('[VouchersPage] drill-down fetch failed:', err);
@@ -4453,6 +4466,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       } else if (mappedType === 'Purchase') {
           setInvoiceNo(rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '');
           setSupplierInvoiceDate(fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate());
+      } else if (mappedType === 'Payment' || mappedType === 'Receipt') {
+          setLocalPrefilledData({
+            voucherId: voucherId,
+            invoiceNumber: rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '',
+            invoiceDate: fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate(),
+            sellerName: rawVoucher.party || fallbackParty,
+            account: rawVoucher.account || '',
+            totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
+            narration: rawVoucher.narration || viewVoucherData.narration || '',
+            reference_number: rawVoucher.ref_no || '',
+            voucher_type: rawVoucher.voucher_type || rawVoucher.type || '',
+          } as any);
       }
     }).finally(() => setDrillDownLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
