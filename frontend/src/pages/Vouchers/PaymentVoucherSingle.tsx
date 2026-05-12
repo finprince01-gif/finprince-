@@ -52,6 +52,7 @@ interface PaymentVoucherSingleProps {
     isLimitReached?: boolean;
     onLimitReached?: () => void;
     isReadOnlyMode?: boolean;
+    onAddVouchers?: (vouchers: any[], saveToMySQL?: boolean) => void;
 }
 
 const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
@@ -59,7 +60,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     clearPrefilledData,
     isLimitReached,
     onLimitReached,
-    isReadOnlyMode = false
+    isReadOnlyMode = false,
+    onAddVouchers
 }) => {
     // Tab state
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
@@ -657,8 +659,22 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 is_amount_only: true
             };
             
-            await httpClient.post('/api/vouchers/payment-single/save-amount-only/', payload);
+            const response: any = await httpClient.post('/api/vouchers/payment-single/save-amount-only/', payload);
             showSuccess("Payment recorded (Amount Only)");
+
+            // Sync with parent state to enable immediate updates across other tabs/reports
+            if (onAddVouchers) {
+                onAddVouchers([{
+                    id: response?.id?.toString() || Date.now().toString(),
+                    type: 'Payment',
+                    date: date,
+                    party: payTo,
+                    amount: Number(topAmount),
+                    narration: postingNote,
+                    account: payFrom,
+                    ...response
+                }], false);
+            }
             handleCancel();
         } catch (error) {
             showError("Failed to record payment. Please try again.");
@@ -1117,8 +1133,22 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 ...(bankTransactionId ? { bank_transaction_id: bankTransactionId } : {})
             };
 
-            await httpClient.post('/api/vouchers/payment/', payload);
+            const response: any = await httpClient.post('/api/vouchers/payment/', payload);
             showSuccess(`${activeTab === 'single' ? 'Single' : 'Bulk'} Payment Voucher posted successfully!`);
+
+            // Sync with parent state to enable immediate updates across other tabs/reports
+            if (onAddVouchers) {
+                onAddVouchers([{
+                    id: response?.id?.toString() || Date.now().toString(),
+                    type: 'Payment',
+                    date: date,
+                    party: activeTab === 'single' ? payTo : 'Multiple Parties',
+                    amount: Number(topAmount > 0 ? topAmount : totalPayment),
+                    narration: postingNote,
+                    account: payFrom,
+                    ...response
+                }], false);
+            }
 
             // Increment the voucher series counter so the next number is ready
             const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === (selectedPaymentConfig || voucherType));

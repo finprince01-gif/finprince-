@@ -36,7 +36,7 @@ interface VouchersPageProps {
   vouchers: Voucher[];
   ledgers: Ledger[];
   stockItems: StockItem[];
-  onAddVouchers: (vouchers: Voucher[]) => void;
+  onAddVouchers: (vouchers: Voucher[], saveToMySQL?: boolean) => void;
   prefilledData: ExtractedInvoiceData | null;
   clearPrefilledData: () => void;
   onInvoiceUpload: (file: File, voucherType?: string) => void;
@@ -3583,6 +3583,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           showSuccess('Purchase Voucher Saved Successfully!');
         }
 
+        // Instantly propagate to application cache so reports reveal update immediately
+        if (onAddVouchers) {
+          onAddVouchers([{
+            id: response?.id?.toString() || Date.now().toString(),
+            type: 'Purchase',
+            date: date,
+            party: party,
+            amount: Number(calculatePurchaseTotals().invoiceValue),
+            narration: purchasePostingNote,
+            ...response
+          }], false);
+        }
+
         // Increment the voucher number if a series was selected
         if (selectedPurchaseConfig && purchaseVoucherConfigs.length > 0) {
           const config = purchaseVoucherConfigs.find(c => c.voucher_name === selectedPurchaseConfig);
@@ -3694,8 +3707,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           }
         };
 
-        await httpClient.post('/api/vouchers/credit-note/', creditNoteData);
+        const response: any = await httpClient.post('/api/vouchers/credit-note/', creditNoteData);
         showSuccess('Credit Note Saved Successfully!');
+
+        // Instantly propagate to application cache so reports reveal update immediately
+        if (onAddVouchers) {
+          onAddVouchers([{
+            id: response?.id?.toString() || Date.now().toString(),
+            type: 'Credit Note',
+            date: cnDate,
+            party: cnCustomer,
+            amount: Number(totals.invoiceValue),
+            narration: cnPostingNote,
+            ...response
+          }], false);
+        }
 
         // Increment number logic if applicable
         if (selectedCnConfig && cnVoucherConfigs.length > 0) {
@@ -4429,12 +4455,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           } as any);
         }
         else if (mappedType === 'Payment' || mappedType === 'Receipt') {
+          // For Receipt: sellerName = Receive From (Customer), account = Receive In (Bank)
+          // For Payment: sellerName = Paid To (Vendor), account = Paid From (Bank)
+          const isReceipt = mappedType === 'Receipt';
+          
           setLocalPrefilledData({
             voucherId: voucherId,
             invoiceNumber: details.voucher_number || details.voucher_no || '',
             invoiceDate: details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate(),
-            sellerName: details.items?.[0]?.pay_to_ledger_name || details.items?.[0]?.vendor_name || details.items?.[0]?.customer_name || details.party || '',
-            account: details.pay_from_name || details.account || '',
+            sellerName: isReceipt 
+              ? (details.party || details.customer_name || details.items?.[0]?.customer_name || '')
+              : (details.party || details.vendor_name || details.items?.[0]?.vendor_name || ''),
+            account: isReceipt
+              ? (details.receive_in || details.account || details.pay_to_name || '')
+              : (details.paid_from || details.account || details.pay_from_name || ''),
             totalAmount: parseFloat(details.total_amount || details.amount || 0),
             narration: details.narration || '',
             reference_number: details.ref_no || '',
@@ -11105,6 +11139,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                      setIsReadOnlyMode(false);
                      setDrillDownDetails(null);
                      if (clearViewVoucherData) clearViewVoucherData();
+                     if (onNavigate) onNavigate('Reports');
                    }} 
                    className="flex items-center gap-2 bg-indigo-800/60 text-indigo-50 px-5 py-3 rounded-xl font-bold text-sm border border-indigo-400/40 hover:bg-indigo-800/90 transition-all active:scale-95"
                  >
@@ -11401,7 +11436,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
 
             <div className={`border-0 p-0 m-0 contents ${isReadOnlyMode ? 'opacity-90 select-none' : ''}`}>
-              {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} onRefreshCustomers={fetchRichData} companyDetails={companyDetails} isReadOnlyMode={isReadOnlyMode} />}
+              {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} onRefreshCustomers={fetchRichData} companyDetails={companyDetails} isReadOnlyMode={isReadOnlyMode} onAddVouchers={onAddVouchers} />}
               {voucherType === 'Payment' && (
                 <PaymentVoucherSingle
                   prefilledData={localPrefilledData}
@@ -11409,6 +11444,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   isLimitReached={isLimitReached}
                   onLimitReached={handleLimitReached}
                   isReadOnlyMode={isReadOnlyMode}
+                  onAddVouchers={onAddVouchers}
                 />
               )}
               {voucherType === 'Receipt' && (
@@ -11418,6 +11454,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   isLimitReached={isLimitReached}
                   onLimitReached={handleLimitReached}
                   isReadOnlyMode={isReadOnlyMode}
+                  onAddVouchers={onAddVouchers}
                 />
               )}
               {voucherType === 'Purchase' && renderPurchaseForm()}

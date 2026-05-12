@@ -43,6 +43,7 @@ interface SalesVoucherProps {
     onRefreshCustomers?: () => void;
     companyDetails: CompanyDetails;
     isReadOnlyMode?: boolean;
+    onAddVouchers?: (vouchers: any[], saveToMySQL?: boolean) => void;
 }
 
 const SalesVoucher: React.FC<SalesVoucherProps> = ({
@@ -53,7 +54,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     customers = [],
     onRefreshCustomers,
     companyDetails,
-    isReadOnlyMode = false
+    isReadOnlyMode = false,
+    onAddVouchers
 }) => {
     const [activeTab, setActiveTab] = useState('invoice');
     const [isIssueSlipModalOpen, setIsIssueSlipModalOpen] = useState(false);
@@ -2174,8 +2176,22 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 }))
             };
 
-            await apiService.createSalesVoucherNew(payload);
+            const response: any = await apiService.createSalesVoucherNew(payload);
             showSuccess('Sales Voucher Saved Successfully!');
+
+            // Propagate to main container state to enable immediate visibility on dashboards and reports
+            if (onAddVouchers) {
+                onAddVouchers([{
+                    id: response?.id?.toString() || Date.now().toString(),
+                    type: 'Sales',
+                    date: date,
+                    party: customerName,
+                    total: Number(calculateTotals().invoiceValue),
+                    invoiceNo: salesInvoiceNo,
+                    narration: paymentPostingNote,
+                    ...response
+                }], false);
+            }
 
             // Increment series counter so next invoice gets auto-incremented number
             if (selectedSeriesId) {
@@ -2241,8 +2257,22 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 eway_bill_details: ewayValidationEntries.map(entry => ({ eway_bill_available: entry.available === 'Yes', eway_bill_no: entry.ewayBillNo || '', eway_bill_date: formatDate(entry.date || ''), validity_period: entry.validityPeriod || '', distance: entry.distance || '', irn, ack_no: ackNo, ack_date: formatDate(ackDate) }))
             };
 
-            await apiService.createSalesVoucherNew(payload);
+            const response: any = await apiService.createSalesVoucherNew(payload);
             showSuccess('Sales Voucher Saved Successfully!');
+
+            // Propagate to main container state to enable immediate visibility on dashboards and reports
+            if (onAddVouchers) {
+                onAddVouchers([{
+                    id: response?.id?.toString() || Date.now().toString(),
+                    type: 'Sales',
+                    date: date,
+                    party: customerName,
+                    total: Number(calculateTotals().invoiceValue),
+                    invoiceNo: salesInvoiceNo,
+                    narration: paymentPostingNote,
+                    ...response
+                }], false);
+            }
 
             // Increment series counter so next invoice gets auto-incremented number
             if (selectedSeriesId) {
