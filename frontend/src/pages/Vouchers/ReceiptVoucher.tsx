@@ -292,7 +292,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 if (!name) return '';
                 const normalized = name.trim().toLowerCase();
                 const found = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
-                return found ? found.name : '';
+                return found ? found.name : name; // Fallback to original string so it still displays
             };
 
             if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);
@@ -304,21 +304,41 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 }
             }
             if ((prefilledData as any).account) setReceiveIn(findLedgerName((prefilledData as any).account));
-            // Removed auto-filling of the top amount / advance section to prevent auto-population as requested by the user.
-            if (prefilledData.invoiceNumber) {
-                setSingleAdvanceRefNo(prefilledData.invoiceNumber);
-            } else if ((prefilledData as any).reference_number) {
-                setSingleAdvanceRefNo((prefilledData as any).reference_number);
+            
+            // Fill critical details if they are provided, specifically for drill-down/read-only mode
+            if ((prefilledData as any).totalAmount !== undefined) {
+                const amt = parseFloat((prefilledData as any).totalAmount) || 0;
+                if (isReadOnlyMode || amt > 0) {
+                    setTopAmount(amt);
+                }
             }
+
+            if ((prefilledData as any).invoiceNumber) {
+                setVoucherNumber((prefilledData as any).invoiceNumber);
+            }
+
+            if ((prefilledData as any).voucher_type) {
+                setSelectedReceiptConfig((prefilledData as any).voucher_type);
+            }
+
+            if ((prefilledData as any).reference_number) {
+                setRefNo((prefilledData as any).reference_number);
+                setSingleAdvanceRefNo((prefilledData as any).reference_number);
+            } else if (prefilledData.invoiceNumber) {
+                 setSingleAdvanceRefNo(prefilledData.invoiceNumber);
+            }
+            
             if ((prefilledData as any).narration) {
                 setPostingNote((prefilledData as any).narration);
             }
             if ((prefilledData as any).bank_transaction_id) {
                 setBankTransactionId((prefilledData as any).bank_transaction_id);
             }
-            if (clearPrefilledData) clearPrefilledData();
+            
+            // Only clear if NOT in read-only mode (otherwise repeated renders lose view state)
+            if (clearPrefilledData && !isReadOnlyMode) clearPrefilledData();
         }
-    }, [prefilledData, clearPrefilledData, allLedgers]);
+    }, [prefilledData, clearPrefilledData, allLedgers, isReadOnlyMode]);
 
     // Fetch receipt voucher configurations on mount
     useEffect(() => {
@@ -334,6 +354,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 }));
 
                 setReceiptVoucherConfigs(receiptConfigs);
+                
+                // If there's only 1, default to it
                 if (receiptConfigs && receiptConfigs.length === 1) {
                     setSelectedReceiptConfig(receiptConfigs[0].voucher_name);
                 }
@@ -344,6 +366,26 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         };
         fetchReceiptConfigs();
     }, []);
+
+    // Auto-Recover Configuration from Voucher Number prefix (Drill-down)
+    useEffect(() => {
+        if (isReadOnlyMode && voucherNumber && receiptVoucherConfigs.length > 0 && !selectedReceiptConfig) {
+            // Attempt to match the voucherNumber's prefix to one of the configurations
+            const vNumLower = voucherNumber.toLowerCase();
+            
+            const matchedConfig = receiptVoucherConfigs.find(cfg => {
+                const prefix = (cfg.prefix || '').toLowerCase();
+                return prefix && vNumLower.startsWith(prefix);
+            });
+            
+            if (matchedConfig) {
+                setSelectedReceiptConfig(matchedConfig.voucher_name);
+            } else if (receiptVoucherConfigs.length > 0) {
+                // If no prefix matches but configurations exist, fallback to the first one to prevent completely empty select
+                setSelectedReceiptConfig(receiptVoucherConfigs[0].voucher_name);
+            }
+        }
+    }, [voucherNumber, receiptVoucherConfigs, isReadOnlyMode, selectedReceiptConfig]);
 
     // Generate voucher number when receipt configuration is selected
     useEffect(() => {
