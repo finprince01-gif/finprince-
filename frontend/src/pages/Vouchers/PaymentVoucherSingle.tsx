@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { httpClient, apiService } from '../../services';
 import { showError, showSuccess } from '../../utils/toast';
 import { Ledger } from '../../types';
@@ -229,7 +229,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 ledgerOptions.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
                 portalEntities.forEach((o: any) => masterMap.set(o.name.toLowerCase(), o));
 
-                setPayToOptions(Array.from(masterMap.values()).sort((a,b) => a.name.localeCompare(b.name)));
+                setPayToOptions(Array.from(masterMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
             } catch (error) {
                 console.error('Error fetching data:', error);
                 showError('Failed to fetch master data');
@@ -413,10 +413,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         selected: false,
                         due_status: item.due_status
                     }));
-                    setBulkTransactions(mapped.filter(item => 
-                        item.due_status === 'Due' || 
-                        item.due_status === 'Due Today' || 
-                        item.due_status === 'Partially Paid' || 
+                    setBulkTransactions(mapped.filter(item =>
+                        item.due_status === 'Due' ||
+                        item.due_status === 'Due Today' ||
+                        item.due_status === 'Partially Paid' ||
                         item.due_status === 'Partially Received'
                     ));
                 } catch (error) {
@@ -478,7 +478,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if ((prefilledData as any).voucher_type) {
                 setSelectedPaymentConfig((prefilledData as any).voucher_type);
             }
-            
+
             if ((prefilledData as any).reference_number) {
                 setRefNo((prefilledData as any).reference_number);
                 setSingleAdvanceRefNo((prefilledData as any).reference_number);
@@ -486,31 +486,31 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
             if ((prefilledData as any).narration) setPostingNote((prefilledData as any).narration);
             if ((prefilledData as any).bank_transaction_id) setBankTransactionId((prefilledData as any).bank_transaction_id);
-            
+
             // Only clear if NOT in read-only mode (otherwise repeated renders lose view state)
             if (clearPrefilledData && !isReadOnlyMode) clearPrefilledData();
         }
     }, [prefilledData, clearPrefilledData, allLedgers, isReadOnlyMode]);
 
-    // Fetch payment configurations on mount
-    useEffect(() => {
-        const fetchConfigs = async () => {
-            try {
-                const data = await httpClient.get<any[]>('/api/masters/master-voucher-payments/');
-                const configs = (data || []).map(config => ({
-                    ...config,
-                    voucher_type: config.voucher_type || 'payments'
-                }));
-                setPaymentVoucherConfigs(configs);
-                if (configs && configs.length === 1) {
-                    setSelectedPaymentConfig(configs[0].voucher_name);
-                }
-            } catch (err) {
-                console.error('Failed to fetch payment configs:', err);
+    const fetchConfigs = useCallback(async () => {
+        try {
+            const data = await httpClient.get<any[]>('/api/masters/master-voucher-payments/');
+            const configs = (data || []).map(config => ({
+                ...config,
+                voucher_type: config.voucher_type || 'payments'
+            }));
+            setPaymentVoucherConfigs(configs);
+            if (configs && configs.length === 1 && !selectedPaymentConfig) {
+                setSelectedPaymentConfig(configs[0].voucher_name);
             }
-        };
+        } catch (err) {
+            console.error('Failed to fetch payment configs:', err);
+        }
+    }, [selectedPaymentConfig]);
+
+    useEffect(() => {
         fetchConfigs();
-    }, []);
+    }, [fetchConfigs]);
 
     // Generate voucher number when configuration is selected
     useEffect(() => {
@@ -518,22 +518,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             const config = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
             if (config) {
                 if (config.enable_auto_numbering) {
-                    // Logic to format it locally for immediate feedback
                     const num = config.current_number || config.start_from || 1;
                     const digits = config.required_digits || 4;
                     const prefix = config.prefix || '';
                     const suffix = config.suffix || '';
-                    let generatedNumber = '';
-                    if (suffix && !isNaN(Number(suffix))) {
-                        const baseStr = String(config.start_from || 1).padStart(digits, '0') + suffix;
-                        const base = parseInt(baseStr);
-                        const offset = num - (config.start_from || 1);
-                        const fullNum = base + offset;
-                        const totalDigits = digits + suffix.length;
-                        generatedNumber = `${prefix}${String(fullNum).padStart(totalDigits, '0')}`;
-                    } else {
-                        generatedNumber = `${prefix}${String(num).padStart(digits, '0')}${suffix || ''}`;
-                    }
+                    const generatedNumber = `${prefix}${String(num).padStart(digits, '0')}${suffix}`;
                     setVoucherNumber(generatedNumber);
                 } else {
                     setVoucherNumber('Manual Input');
@@ -629,13 +618,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             showError("Please select a 'Pay To' party first.");
             return;
         }
-        
+
         try {
             const findLedgerId = (name: string) => {
                 if (!name) return null;
                 const normalized = name.trim().toLowerCase();
                 const found = payToOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
-                if (found) return found.id;
+                if (found) return found.ledger_id || found.id;
                 return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
             };
 
@@ -658,7 +647,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 narration: postingNote,
                 is_amount_only: true
             };
-            
+
             const response: any = await httpClient.post('/api/vouchers/payment-single/save-amount-only/', payload);
             showSuccess("Payment recorded (Amount Only)");
 
@@ -675,9 +664,15 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     ...response
                 }], false);
             }
+            if (response.next_voucher_number) {
+                setVoucherNumber(response.next_voucher_number);
+            }
+            fetchConfigs(); // Refresh configs to get new current_number
             handleCancel();
-        } catch (error) {
-            showError("Failed to record payment. Please try again.");
+        } catch (error: any) {
+            console.error("Payment save error:", error);
+            const msg = error.response?.data?.error || error.response?.data?.message || "Failed to record payment. Please try again.";
+            showError(msg);
         }
     };
 
@@ -909,7 +904,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
     const handleCancel = () => {
         setDate(getCurrentDate());
-        setVoucherNumber('');
+        // setVoucherNumber(''); // Don't clear it here, let the useEffect handle it from the config
         setRefNo('');
         setTopAmount(0);
         setPayFrom('');
@@ -953,7 +948,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     return;
                 }
             }
-            
+
             if (isUnderAllocated) {
                 showError(`₹${difference.toLocaleString('en-IN', { minimumFractionDigits: 2 })} still needs to be allocated`);
             } else if (hasAnyOverAllocation) {
@@ -969,7 +964,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 if (!name) return null;
                 const normalized = name.trim().toLowerCase();
                 const found = payToOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
-                if (found) return found.id;
+                if (found) return found.ledger_id || found.id;
                 return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
             };
 
@@ -1322,7 +1317,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                     setTopAmount(val);
                                     handleTotalAmountChange(val);
                                 }}
-                               
+
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-right"
                                 placeholder="0.00"
                             />
@@ -1375,7 +1370,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                         type="number" onWheel={(e) => e.currentTarget.blur()}
                                         value={singleAdvanceAmount || ''}
                                         onChange={(e) => setSingleAdvanceAmount(parseFloat(e.target.value) || 0)}
-                                       
+
                                         className="w-full px-3 py-2 border border-indigo-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                                         placeholder="0.00"
                                     />
@@ -1396,77 +1391,76 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
                         {payTo ? (
                             <>
-                            <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
-                                <table className="w-full">
-                                    <thead className="bg-indigo-600 border-b-2 border-indigo-700 text-white">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">DATE</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase">REFERENCE NUMBER</th>
-                                            <th className="px-3 py-3 text-center text-xs font-semibold uppercase">BILL STATUS</th>
-                                            <th className="px-3 py-3 text-center text-xs font-semibold uppercase">ALLOCATION</th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PENDING</th>
-                                            <th className="px-6 py-3 text-center text-xs font-semibold uppercase">ACTION</th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PAYMENT</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {pendingTransactions.map((txn, index) => {
-                                            const status = getRowStatus(txn.payment || 0, txn.amount);
-                                            const isProblemRow = (isUnderAllocated && (txn.payment === 0 || txn.payment < txn.amount - 0.01)) || (isOverAllocated && txn.payment > txn.amount + 0.01);
-                                            
-                                            return (
-                                                <tr key={index} className={`transition-colors ${isProblemRow ? 'bg-red-50/30' : 'hover:bg-gray-50'}`}>
-                                                    <td className="px-6 py-4 text-sm text-gray-700">{txn.date}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-700">
-                                                        <div className="font-medium">{txn.referenceNumber}</div>
-                                                        {txn.dueDate && (
-                                                            <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
-                                                            ? 'bg-red-100 text-red-600 border border-red-200'
-                                                            : (txn.dueStatus === 'Partially Received' || txn.dueStatus === 'Partially Paid')
-                                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
-                                                                : 'bg-green-100 text-green-600 border border-green-200'
-                                                            }`}>
-                                                            {txn.dueStatus}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className={`px-2 py-1 rounded-[4px] border text-[10px] font-black uppercase tracking-tight ${status.bg} ${status.text} ${status.border}`}>
-                                                            {status.label}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-red-600">
-                                                        ₹{Math.max(0, txn.amount - txn.payment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <button
-                                                            onClick={() => handlePay(index)}
-                                                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-600 text-white text-xs font-medium rounded"
-                                                        >
-                                                            Pay
-                                                        </button>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <input
-                                                            type="number" onWheel={(e) => e.currentTarget.blur()}
-                                                            value={txn.payment || ''}
-                                                            onChange={(e) => handlePaymentChange(index, parseFloat(e.target.value) || 0)}
-                                                            placeholder="0"
-                                                            className={`w-24 px-3 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${
-                                                                status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' : 
-                                                                status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' : 
-                                                                status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
-                                                            }`}
-                                                        />
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
+                                    <table className="w-full">
+                                        <thead className="bg-indigo-600 border-b-2 border-indigo-700 text-white">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold uppercase">DATE</th>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold uppercase">REFERENCE NUMBER</th>
+                                                <th className="px-3 py-3 text-center text-xs font-semibold uppercase">BILL STATUS</th>
+                                                <th className="px-3 py-3 text-center text-xs font-semibold uppercase">ALLOCATION</th>
+                                                <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PENDING</th>
+                                                <th className="px-6 py-3 text-center text-xs font-semibold uppercase">ACTION</th>
+                                                <th className="px-6 py-3 text-right text-xs font-semibold uppercase">PAYMENT</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {pendingTransactions.map((txn, index) => {
+                                                const status = getRowStatus(txn.payment || 0, txn.amount);
+                                                const isProblemRow = (isUnderAllocated && (txn.payment === 0 || txn.payment < txn.amount - 0.01)) || (isOverAllocated && txn.payment > txn.amount + 0.01);
+
+                                                return (
+                                                    <tr key={index} className={`transition-colors ${isProblemRow ? 'bg-red-50/30' : 'hover:bg-gray-50'}`}>
+                                                        <td className="px-6 py-4 text-sm text-gray-700">{txn.date}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-700">
+                                                            <div className="font-medium">{txn.referenceNumber}</div>
+                                                            {txn.dueDate && (
+                                                                <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-3 py-4 text-center">
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
+                                                                ? 'bg-red-100 text-red-600 border border-red-200'
+                                                                : (txn.dueStatus === 'Partially Received' || txn.dueStatus === 'Partially Paid')
+                                                                    ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                                    : 'bg-green-100 text-green-600 border border-green-200'
+                                                                }`}>
+                                                                {txn.dueStatus}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-3 py-4 text-center">
+                                                            <div className={`px-2 py-1 rounded-[4px] border text-[10px] font-black uppercase tracking-tight ${status.bg} ${status.text} ${status.border}`}>
+                                                                {status.label}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-red-600">
+                                                            ₹{Math.max(0, txn.amount - txn.payment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <button
+                                                                onClick={() => handlePay(index)}
+                                                                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-600 text-white text-xs font-medium rounded"
+                                                            >
+                                                                Pay
+                                                            </button>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <input
+                                                                type="number" onWheel={(e) => e.currentTarget.blur()}
+                                                                value={txn.payment || ''}
+                                                                onChange={(e) => handlePaymentChange(index, parseFloat(e.target.value) || 0)}
+                                                                placeholder="0"
+                                                                className={`w-24 px-3 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' :
+                                                                        status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' :
+                                                                            status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
+                                                                    }`}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                                 {/* Allocation Summary Strip */}
                                 <div className={`border-2 mt-2 px-6 py-3 flex items-center justify-between rounded-[4px] ${isExactMatch ? 'bg-emerald-50 border-emerald-100' : isOverAllocated ? 'bg-red-50 border-red-100' : 'bg-orange-50 border-orange-100'}`}>
@@ -1524,11 +1518,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         <button
                             onClick={handlePostPayment}
                             disabled={!canPost}
-                            className={`px-8 py-2 font-bold rounded-[4px] text-sm transition-all uppercase tracking-wider ${
-                                canPost 
-                                    ? 'bg-white border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50' 
+                            className={`px-8 py-2 font-bold rounded-[4px] text-sm transition-all uppercase tracking-wider ${canPost
+                                    ? 'bg-white border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50'
                                     : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                            }`}
+                                }`}
                         >
                             {isExactMatch ? 'Post Payment' : 'Complete Allocation'}
                         </button>
@@ -1618,7 +1611,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                         type="number" onWheel={(e) => e.currentTarget.blur()}
                                         value={runningBalance}
                                         readOnly
-                                       
+
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                                     />
                                 </div>
@@ -1666,7 +1659,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                 type="number" onWheel={(e) => e.currentTarget.blur()}
                                                 value={row.amount || ''}
                                                 onChange={e => handlePaymentRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
-                                               
+
                                                 placeholder="Pay now/Advance total"
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm h-[40px]"
                                             />
@@ -1797,11 +1790,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                                             value={transaction.payNow || ''}
                                                                             onChange={e => handlePayNowChange(transaction.id, parseFloat(e.target.value) || 0)}
                                                                             placeholder="0"
-                                                                            className={`w-20 px-2 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${
-                                                                                status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' : 
-                                                                                status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' : 
-                                                                                status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
-                                                                            }`}
+                                                                            className={`w-20 px-2 py-1.5 text-right border rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold ${status.status === 'OVER' ? 'border-red-500 bg-red-50 text-red-700' :
+                                                                                    status.status === 'PARTIAL' ? 'border-orange-300 bg-orange-50 text-orange-700' :
+                                                                                        status.status === 'FULL' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'
+                                                                                }`}
                                                                         />
                                                                     </td>
                                                                     <td className="py-3 px-2">
@@ -1874,7 +1866,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                     type="number" onWheel={(e) => e.currentTarget.blur()}
                                                     value={advanceAmount || ''}
                                                     onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
-                                                   
+
                                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                                                 />
                                             </div>

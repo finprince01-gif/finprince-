@@ -70,6 +70,17 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
     const [postingNote, setPostingNote] = useState('');
     const [reasonsForReturn, setReasonsForReturn] = useState('');
 
+    // Transit Details State
+    const [transitReceivedIn, setTransitReceivedIn] = useState('');
+    const [transitMode, setTransitMode] = useState('Road');
+    const [transitReceiptDate, setTransitReceiptDate] = useState(new Date().toISOString().split('T')[0]);
+    const [transitReceiptTime, setTransitReceiptTime] = useState('');
+    const [transitDeliveryType, setTransitDeliveryType] = useState('Self');
+    const [transitTransporterId, setTransitTransporterId] = useState('');
+    const [transitTransporterName, setTransitTransporterName] = useState('');
+    const [transitVehicleNo, setTransitVehicleNo] = useState('');
+    const [transitLrGrConsignment, setTransitLrGrConsignment] = useState('');
+
     // Data Source State
     const [locations, setLocations] = useState<Location[]>([]);
     const [grnSeriesList, setGrnSeriesList] = useState<any[]>([]);
@@ -695,7 +706,18 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                 short_excess_qty: parseFloat(item.shortExcessQty) || 0,
                 remarks: item.remarks,
                 no_of_boxes: item.boxes || '0'
-            }))
+            })),
+
+            // Transit Details
+            dispatch_from: transitReceivedIn,
+            mode_of_transport: transitMode,
+            dispatch_date: transitReceiptDate,
+            dispatch_time: transitReceiptTime,
+            delivery_type: transitDeliveryType,
+            transporter_id: transitTransporterId,
+            transporter_name: transitTransporterName,
+            vehicle_no: transitVehicleNo,
+            lr_gr_consignment: transitLrGrConsignment
         };
 
 
@@ -1098,6 +1120,116 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                         <button onClick={handleAddItem} className="mt-2 text-indigo-600 hover:text-indigo-800 text-sm font-semibold flex items-center gap-1">
                             + Add Another Item
                         </button>
+                    </div>
+
+                    {/* Transit Details Section */}
+                    <div className="border-t border-gray-100 pt-6">
+                        <h4 className="text-sm font-bold text-gray-900 uppercase mb-4 flex items-center gap-2">
+                            Transit Details
+                        </h4>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Received In / Dispatch From</label>
+                                    <select
+                                        value={transitReceivedIn}
+                                        onChange={(e) => setTransitReceivedIn(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                    >
+                                        <option value="">Select Location</option>
+                                        {locations.map((loc) => (
+                                            <option key={loc.id} value={loc.name}>{loc.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mode of Transport</label>
+                                    <select
+                                        value={transitMode}
+                                        onChange={(e) => setTransitMode(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                    >
+                                        <option value="Road">Road</option>
+                                        <option value="Air">Air</option>
+                                        <option value="Sea">Sea</option>
+                                        <option value="Rail">Rail</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Received Date</label>
+                                    <input
+                                        type="date"
+                                        value={transitReceiptDate}
+                                        onChange={(e) => setTransitReceiptDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Received Time</label>
+                                    <input
+                                        type="time"
+                                        value={transitReceiptTime}
+                                        onChange={(e) => setTransitReceiptTime(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-6">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Delivery Type</label>
+                                <select
+                                    value={transitDeliveryType}
+                                    onChange={(e) => setTransitDeliveryType(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                >
+                                    <option value="Self">Self</option>
+                                    <option value="Third Party">Third Party</option>
+                                    <option value="Courier">Courier</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Transporter ID/GSTIN</label>
+                                <input
+                                    type="text"
+                                    value={transitTransporterId}
+                                    onChange={(e) => setTransitTransporterId(e.target.value)}
+                                    placeholder="15-digit GSTIN"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Transporter Name</label>
+                                <input
+                                    type="text"
+                                    value={transitTransporterName}
+                                    onChange={(e) => setTransitTransporterName(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Vehicle No.</label>
+                                <input
+                                    type="text"
+                                    value={transitVehicleNo}
+                                    onChange={(e) => setTransitVehicleNo(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-6">
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">LR/GR/CONSIGNMENT NO</label>
+                            <input
+                                type="text"
+                                value={transitLrGrConsignment}
+                                onChange={(e) => setTransitLrGrConsignment(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                        </div>
                     </div>
 
                     {/* Posting Note & Reasons for Return */}

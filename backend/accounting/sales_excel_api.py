@@ -9,7 +9,7 @@ from rest_framework import status, permissions
 import uuid
 from django.http import HttpResponse
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
 from .serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
 
 logger = logging.getLogger(__name__)
@@ -226,6 +226,7 @@ class SalesExcelTemplateDownloadView(APIView):
     def get(self, request):
         wb = Workbook()
         ws = wb.active
+        if ws is None: ws = wb.create_sheet()
         ws.title = "Sales Voucher"
         
         # Headers
@@ -233,7 +234,7 @@ class SalesExcelTemplateDownloadView(APIView):
             cell = ws.cell(row=1, column=col_idx, value=col_def["label"])
             cell.font = Font(bold=True, color="FFFFFF")
             
-            tab_name = col_def["tab"]
+            tab_name = str(col_def["tab"])
             bg_color = TAB_COLORS.get(tab_name, "000000")
             cell.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
             
@@ -243,9 +244,17 @@ class SalesExcelTemplateDownloadView(APIView):
             cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
             
             # Width
-            ws.column_dimensions[cell.column_letter].width = max(len(col_def["label"]) + 5, 15)
+            ws.column_dimensions[cell.column_letter].width = max(len(str(col_def["label"])) + 5, 15)
 
         ws.freeze_panes = "A2"
+        
+        # Enable sheet protection to prevent header modification
+        ws.protection.sheet = True
+        
+        # Unlock rows 2 to 1000 for data entry (up to 1000 records)
+        for row in range(2, 1001):
+            for col in range(1, len(SALES_VOUCHER_COLUMNS) + 1):
+                ws.cell(row=row, column=col).protection = Protection(locked=False)
         
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -268,6 +277,7 @@ class SalesExcelErrorReportView(APIView):
 
         wb = Workbook()
         ws = wb.active
+        if ws is None: ws = wb.create_sheet()
         ws.title = "Failed Rows"
 
         # Headers: Original Labels + Error Message
@@ -314,6 +324,8 @@ class SalesExcelUploadView(APIView):
         try:
             wb = load_workbook(excel_file, data_only=True)
             ws = wb.active
+            if ws is None:
+                return Response({"error": "No active sheet found in Excel file"}, status=status.HTTP_400_BAD_REQUEST)
             
             # 1. Map Headers to Columns (Case-insensitive & Trimmed)
             # Create a index map using normalized Uppercase labels
@@ -326,13 +338,13 @@ class SalesExcelUploadView(APIView):
             # Map of Our internal Label -> Excel Column Index
             header_map = {}
             for col_cfg in SALES_VOUCHER_COLUMNS:
-                label = col_cfg["label"]
+                label = str(col_cfg["label"])
                 norm = label.strip().upper()
                 if norm in excel_col_index:
                     header_map[label] = excel_col_index[norm]
 
-            uploaded_labels = set(excel_col_index.keys())
-            missing_cols = [l for l in REQUIRED_LABELS if l.strip().upper() not in uploaded_labels]
+            uploaded_labels = {str(k).upper() for k in excel_col_index.keys()}
+            missing_cols = [str(l) for l in REQUIRED_LABELS if str(l).strip().upper() not in uploaded_labels]
             if missing_cols:
                 return Response({
                     "error": "Missing required columns",
@@ -341,15 +353,17 @@ class SalesExcelUploadView(APIView):
 
             # 2. Extract Data Rows
             rows_data = []
-            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
-                if not any(row): continue # Skip empty rows
-                
-                row_dict = {}
-                for label, col_idx in header_map.items():
-                    row_dict[label] = row[col_idx] if col_idx < len(row) else None
-                
-                row_dict["_row_num"] = row_idx
-                rows_data.append(row_dict)
+            if ws is None: rows_data = [] # Extra safety
+            else:
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+                    if not any(row): continue # Skip empty rows
+                    
+                    row_dict = {}
+                    for label, col_idx in header_map.items():
+                        row_dict[label] = row[col_idx] if col_idx < len(row) else None
+                    
+                    row_dict["_row_num"] = row_idx
+                    rows_data.append(row_dict)
 
             if not rows_data:
                 return Response({"error": "No data found in Excel file"}, status=status.HTTP_400_BAD_REQUEST)
@@ -374,6 +388,9 @@ class SalesExcelUploadView(APIView):
 
             # 4. Processing Helpers
             def _safe_float(v):
+                if str(v).startswith("="): v = str(v).replace("=", "")
+                if str(v).startswith("+"): v = str(v).replace("+", "")
+                if str(v).startswith("-"): v = str(v).replace("-", "")
                 if v is None or v == "": return 0.0
                 try: 
                     if isinstance(v, str):
@@ -383,8 +400,10 @@ class SalesExcelUploadView(APIView):
 
             def _get_date(v, default=None):
                 if v is None or v == "": return default
-                if isinstance(v, (datetime.datetime, datetime.date)):
+                if hasattr(v, 'date'): # Handles datetime.datetime and potentially other objects
                     return v.date()
+                if isinstance(v, datetime.date):
+                    return v
                 if isinstance(v, str) and v.strip():
                     try:
                         for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y"):
@@ -405,7 +424,7 @@ class SalesExcelUploadView(APIView):
                     return v.time().strftime("%H:%M:%S")
                 if isinstance(v, (int, float)):
                     try:
-                        total_seconds = int(round(v * 24 * 3600))
+                        total_seconds = round(v * 24 * 3600)
                         hours = total_seconds // 3600
                         minutes = (total_seconds % 3600) // 60
                         seconds = total_seconds % 60
@@ -423,11 +442,12 @@ class SalesExcelUploadView(APIView):
             # 5. Process Each Group
             created_vouchers = []
             creation_errors = []
+            total_items_count = 0 # Initialize counter
             # Pre-fetch inventory and service masters for auto-filling item details
-            inventory_master = list(InventoryItem.objects.filter(tenant_id=tenant_id, is_active=True).values(
+            inventory_master = list(InventoryItem.objects.filter(tenant_id=tenant_id, is_active=True).values( # type: ignore
                 'item_code', 'item_name', 'hsn_code', 'uom', 'rate', 'gst_rate'
             ))
-            service_master = list(Service.objects.filter(tenant_id=tenant_id, is_active=True).values(
+            service_master = list(Service.objects.filter(tenant_id=tenant_id, is_active=True).values( # type: ignore
                 'service_code', 'service_name', 'sac_code', 'uom', 'gst_rate'
             ))
 
@@ -555,7 +575,7 @@ class SalesExcelUploadView(APIView):
                                 pos = str(invoice_payload.get("place_of_supply") or "").strip().lower()
                                 
                                 # Fetch company state from tenant
-                                tenant_obj = Tenant.objects.filter(id=tenant_id).first()
+                                tenant_obj = Tenant.objects.filter(id=tenant_id).first() # type: ignore
                                 company_state = str(tenant_obj.state or "tamil nadu").strip().lower()
                                 
                                 total_tax = round(taxable * (m_gst / 100), 2)
@@ -628,8 +648,8 @@ class SalesExcelUploadView(APIView):
                         val = first.get(prefix + label_suffix)
                         if val not in (None, ""):
                             ewb_data_found = True
-                            ewb_obj[key] = _get_date(val) if "Date" in label_suffix else str(val).strip()
-                        else: ewb_obj[key] = None
+                            ewb_obj[key] = _get_date(val) if "Date" in label_suffix else str(val).strip() # type: ignore
+                        else: ewb_obj[key] = None # type: ignore
                     if ewb_data_found: eway_details.append(ewb_obj)
                 
                 print(f"DEBUG BRAIN: Voucher {v_no} -> extracted {len(eway_details)} E-Way Bills")
@@ -701,7 +721,7 @@ class SalesExcelUploadView(APIView):
                         "status": "Failed"
                     })
 
-            expected_labels_norm = {l.strip().upper() for l in HEADER_LABELS}
+            expected_labels_norm = {str(l).strip().upper() for l in HEADER_LABELS}
             extra_labels = list(uploaded_labels - expected_labels_norm)
             warnings = [f"Unknown columns ignored: {extra_labels}"] if extra_labels else []
 
@@ -733,8 +753,10 @@ def _safe_float(v):
 
 def _get_date(v, default=None):
     if v is None or v == "": return default
-    if isinstance(v, (datetime.datetime, datetime.date)):
+    if isinstance(v, datetime.datetime):
         return v.date()
+    if isinstance(v, datetime.date):
+        return v
     if isinstance(v, str) and v.strip():
         try:
             for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y"):
@@ -755,7 +777,7 @@ def _get_time(v):
         return v.time().strftime("%H:%M:%S")
     if isinstance(v, (int, float)):
         try:
-            total_seconds = int(round(v * 24 * 3600))
+            total_seconds = round(v * 24 * 3600)
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
             seconds = total_seconds % 60
@@ -871,9 +893,12 @@ class SalesExcelWorkflowUploadView(APIView):
             ws = wb.active
             
             # Map Excel Columns
+            if ws is None:
+                return Response({"error": "No active sheet found"}, status=400)
+            
             excel_col_index = {str(cell.value).strip().upper(): idx for idx, cell in enumerate(ws[1]) if cell.value}
-            header_map = {c["label"]: excel_col_index[c["label"].upper()] 
-                         for c in SALES_VOUCHER_COLUMNS if c["label"].upper() in excel_col_index}
+            header_map = {str(c["label"]): excel_col_index[str(c["label"]).upper()] 
+                         for c in SALES_VOUCHER_COLUMNS if str(c["label"]).upper() in excel_col_index}
 
             # Batch Extract
             rows_data = []
@@ -1024,12 +1049,13 @@ class SalesExcelWorkflowFinalizeView(APIView):
                             elif col["tab"] == "Dispatch Details":
                                 dispatch_details[key] = val
                             elif col["tab"] == "E-Invoice & E-Way Bill Details":
-                                if key.startswith("ewb1_"):
-                                    ewb_entries[1][key.replace("ewb1_", "")] = val
-                                elif key.startswith("ewb2_"):
-                                    ewb_entries[2][key.replace("ewb2_", "")] = val
-                                elif key.startswith("ewb3_"):
-                                    ewb_entries[3][key.replace("ewb3_", "")] = val
+                                k_str = str(key)
+                                if k_str.startswith("ewb1_"):
+                                    ewb_entries[1][k_str.replace("ewb1_", "")] = val
+                                elif k_str.startswith("ewb2_"):
+                                    ewb_entries[2][k_str.replace("ewb2_", "")] = val
+                                elif k_str.startswith("ewb3_"):
+                                    ewb_entries[3][k_str.replace("ewb3_", "")] = val
                                 elif key in valid_header_keys:
                                     payload[key] = val
                             elif key in valid_header_keys:

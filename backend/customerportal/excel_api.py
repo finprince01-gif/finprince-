@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.http import HttpResponse
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
 import io
 
 from .database import (
@@ -80,8 +80,131 @@ class CustomerExcelTemplateDownloadView(APIView):
     
     def get(self, request):
         wb = Workbook()
-        ws = wb.active
-        ws.title = "Customer Template"
+        
+        # 1. Create Readme & Instructions sheet as the active/first sheet
+        ws_readme = wb.active
+        assert ws_readme is not None
+        ws_readme.title = "Instructions & Readme"
+        
+        # Title Block
+        ws_readme.merge_cells("A1:D1")
+        title_cell = ws_readme["A1"]
+        title_cell.value = "Customer Master Creation - Excel Upload Instructions"
+        title_cell.font = Font(size=14, bold=True, color="FFFFFF")
+        title_cell.fill = PatternFill(start_color="1D4ED8", end_color="1D4ED8", fill_type="solid")
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws_readme.row_dimensions[1].height = 40
+        
+        # Subtitle / Note
+        ws_readme.merge_cells("A2:D2")
+        sub_cell = ws_readme["A2"]
+        sub_cell.value = "Please read these guidelines carefully before populating the 'Customer Template' tab to ensure a successful upload."
+        sub_cell.font = Font(size=10, italic=True, color="4B5563")
+        sub_cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws_readme.row_dimensions[2].height = 20
+        
+        # Table Headers
+        headers = ["Field Label", "Mandatory / Optional", "Format & Length", "Description & Guidelines"]
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws_readme.cell(row=4, column=col_idx, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="374151", end_color="374151", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            thin = Side(border_style="thin", color="D1D5DB")
+            cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+        ws_readme.row_dimensions[4].height = 25
+        
+        # Instruction Rows grouped by Sections matching UI Tabs
+        readme_data = [
+            {"section": "1. BASIC DETAILS"},
+            ("Customer Name", "Mandatory", "Text", "Full legal entity name or trade name of the customer."),
+            ("Category", "Mandatory", "Text", "Must match an existing customer category (e.g., Regular, VIP)."),
+            ("Email Address", "Mandatory", "Email Format", "Primary communication email for sending sales invoices and payment links."),
+            ("Contact Number", "Mandatory", "Numeric / Text", "Primary contact phone or mobile number."),
+            ("Customer Code", "Optional", "Text", "Custom unique customer identifier. Auto-generated if left empty."),
+            ("PAN Number", "Optional", "10 Characters", "Must be exactly 10 alphanumeric characters in standard PAN format (e.g., ABCDE1234F)."),
+            ("Billing Currency", "Optional", "Text (e.g., INR, USD)", "Default billing currency for sales invoices. Defaults to INR if empty."),
+            ("Is Also Vendor", "Optional", "Yes / No", "Indicate if this customer also acts as a supplier to your business."),
+            
+            {"section": "2. GST & BRANCH DETAILS"},
+            ("Branch Name", "Mandatory", "Text", "Name of the customer's billing/shipping branch or location (e.g., Main Branch, HQ)."),
+            ("Address Line 1", "Mandatory", "Text", "Flat/House no., building name, or street address."),
+            ("Address Line 2", "Mandatory", "Text", "Locality, sector, area, or road name."),
+            ("GSTIN", "Optional", "15 Characters", "Must be exactly 15 alphanumeric characters in valid GSTIN format starting with state code."),
+            ("Address Line 3, City, State, Pincode, Country", "Optional", "Text / Numeric", "Additional detailed address and geographical identifiers."),
+            
+            {"section": "3. PRODUCTS/SERVICES"},
+            ("Item Code, Item Name", "Optional", "Text", "Initial product or service mapping requested by this customer."),
+            ("HSN/SAC Code", "Optional", "Numeric", "HSN/SAC classification code. Must be entirely numeric if provided."),
+            ("Customer Item Code / Name", "Optional", "Text", "Customer's internal item code and description mapping."),
+            
+            {"section": "4. TDS & OTHER STATUTORY DETAILS"},
+            ("TDS Section", "Optional", "Text", "Applicable Income Tax TDS section for direct tax mapping."),
+            ("TCS Enabled / Section", "Optional", "Text", "Specify if statutory TCS collection applies to sales invoices for this customer."),
+            ("MSME / FSSAI / IEC Numbers", "Optional", "Text / Numeric", "Statutory registration numbers for compliant invoicing."),
+            
+            {"section": "5. BANKING INFO"},
+            ("Bank Account No", "Optional", "Numeric / Text", "Customer's bank account number for digital collections/refunds."),
+            ("Bank Name, Bank Branch", "Optional", "Text", "Name of the bank and specific branch location."),
+            ("IFSC Code, Swift Code", "Optional", "Text / Numeric", "IFSC routing code (11 characters) or international Swift code."),
+            
+            {"section": "6. TERMS & CONDITIONS"},
+            ("Credit Period, Credit Terms", "Optional", "Numeric / Text", "Agreed sales credit repayment window and general commercial terms."),
+            ("Penalty terms, Delivery terms", "Optional", "Text", "Late payment interest clauses and shipping/freight agreements."),
+            ("Warranty details, Force Majeure", "Optional", "Text", "Standard product warranty terms and liability limitation conditions."),
+            ("Dispute Terms", "Optional", "Text", "Jurisdiction and arbitration rules for resolving invoice disputes.")
+        ]
+        
+        current_row = 5
+        thin_side = Side(border_style="thin", color="E5E7EB")
+        border_all = Border(top=thin_side, left=thin_side, right=thin_side, bottom=thin_side)
+        
+        for item in readme_data:
+            if isinstance(item, dict) and "section" in item:
+                ws_readme.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+                cell = ws_readme.cell(row=current_row, column=1, value=item["section"])
+                cell.font = Font(size=11, bold=True, color="1E40AF")
+                cell.fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+                cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+                
+                for c in range(1, 5):
+                    ws_readme.cell(row=current_row, column=c).border = border_all
+                ws_readme.row_dimensions[current_row].height = 25
+                current_row += 1
+            else:
+                fill_color = "FFFFFF" if current_row % 2 != 0 else "F9FAFB"
+                row_fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+                
+                for col_idx, val in enumerate(item, 1):
+                    cell = ws_readme.cell(row=current_row, column=col_idx, value=val)
+                    cell.fill = row_fill
+                    cell.border = border_all
+                    cell.font = Font(size=10, color="1F2937")
+                    
+                    if col_idx == 1:
+                        cell.font = Font(size=10, bold=True, color="111827")
+                        cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+                    elif col_idx == 2:
+                        is_mand = (val == "Mandatory")
+                        cell.font = Font(size=10, bold=is_mand, color="B91C1C" if is_mand else "4B5563")
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+                    elif col_idx == 3:
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+                    else:
+                        cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                
+                ws_readme.row_dimensions[current_row].height = 22
+                current_row += 1
+            
+        # Set specific column widths for Readme sheet
+        ws_readme.column_dimensions['A'].width = 28
+        ws_readme.column_dimensions['B'].width = 22
+        ws_readme.column_dimensions['C'].width = 25
+        ws_readme.column_dimensions['D'].width = 65
+        
+        # 2. Create the actual Customer Template sheet
+        ws = wb.create_sheet(title="Customer Template")
+        assert ws is not None
         
         # Headers
         for col_idx, col_def in enumerate(CUSTOMER_COLUMNS, 1):
@@ -97,6 +220,16 @@ class CustomerExcelTemplateDownloadView(APIView):
             ws.column_dimensions[cell.column_letter].width = 20
 
         ws.freeze_panes = "A2"
+        
+        # Enable sheet protection to prevent header modification
+        ws.protection.sheet = True
+        
+        # Unlock rows 2 to 1000 for data entry (up to 1000 records)
+        for row in range(2, 1001):
+            for col in range(1, len(CUSTOMER_COLUMNS) + 1):
+                ws.cell(row=row, column=col).protection = Protection(locked=False)
+        
+        wb.active = 0
         
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -114,6 +247,7 @@ class CustomerExcelExportView(APIView):
         
         wb = Workbook()
         ws = wb.active
+        assert ws is not None
         ws.title = "Customers"
         
         # Headers
@@ -185,7 +319,7 @@ class CustomerExcelExportView(APIView):
                 })
             
             for col_idx, col_def in enumerate(CUSTOMER_COLUMNS, 1):
-                ws.cell(row=row_idx, column=col_idx, value=data.get(col_def["label"], ""))
+                ws.cell(row=row_idx, column=col_idx, value=data.get(str(col_def["label"]), ""))
 
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -213,12 +347,13 @@ class CustomerExcelUploadView(APIView):
             if excel_file:
                 wb = load_workbook(excel_file, data_only=True)
                 ws = wb.active
+                assert ws is not None
                 
                 # Header mapping
                 header_index = {}
                 for idx, cell in enumerate(ws[1], 1):
-                    if cell.value:
-                        header_index[cell.value.strip()] = idx
+                    if cell.value is not None:
+                        header_index[str(cell.value).strip()] = idx
                 
                 # Validate required columns
                 for col in CUSTOMER_COLUMNS:
@@ -375,8 +510,8 @@ class CustomerExcelUploadView(APIView):
                         )
                         
                         # Ledger creation
-                        ledger_code = f"CUST-LED-{customer.id}"
-                        ledger = MasterLedger.objects.create(
+                        ledger_code = f"CUST-LED-{getattr(customer, 'id', None)}"
+                        ledger = MasterLedger.objects.create(  # type: ignore
                             tenant_id=tenant_id,
                             name=c_name,
                             group='Sundry Debtors',
@@ -388,7 +523,7 @@ class CustomerExcelUploadView(APIView):
                         # 2. GST Details
                         gstin = row_data.get("GSTIN")
                         if gstin or row_data.get("Branch Name"):
-                            CustomerMasterCustomerGSTDetails.objects.create(
+                            CustomerMasterCustomerGSTDetails.objects.create(  # type: ignore
                                 tenant_id=tenant_id,
                                 customer_basic_detail=customer,
                                 gstin=gstin,
@@ -406,7 +541,7 @@ class CustomerExcelUploadView(APIView):
                                 created_by=username
                             )
                         else:
-                            CustomerMasterCustomerGSTDetails.objects.create(
+                            CustomerMasterCustomerGSTDetails.objects.create(  # type: ignore
                                 tenant_id=tenant_id,
                                 customer_basic_detail=customer,
                                 is_unregistered=True,
@@ -416,7 +551,7 @@ class CustomerExcelUploadView(APIView):
                         # 3. Banking Details
                         acc_no = row_data.get("Bank Account No")
                         if acc_no:
-                            CustomerMasterCustomerBanking.objects.create(
+                            CustomerMasterCustomerBanking.objects.create(  # type: ignore
                                 tenant_id=tenant_id,
                                 customer_basic_detail=customer,
                                 account_number=acc_no,
@@ -428,10 +563,10 @@ class CustomerExcelUploadView(APIView):
                                 created_by=username
                             )
                         else:
-                            CustomerMasterCustomerBanking.objects.create(tenant_id=tenant_id, customer_basic_detail=customer, created_by=username)
+                            CustomerMasterCustomerBanking.objects.create(tenant_id=tenant_id, customer_basic_detail=customer, created_by=username)  # type: ignore
  
                         # 4. TDS Details
-                        CustomerMasterCustomerTDS.objects.create(
+                        CustomerMasterCustomerTDS.objects.create(  # type: ignore
                             tenant_id=tenant_id,
                             customer_basic_detail=customer,
                             msme_no=row_data.get("MSME No"),
@@ -444,7 +579,7 @@ class CustomerExcelUploadView(APIView):
                         )
                         
                         # Update terms & conditions
-                        CustomerMasterCustomerTermsCondition.objects.create(
+                        CustomerMasterCustomerTermsCondition.objects.create(  # type: ignore
                             tenant_id=tenant_id,
                             customer_basic_detail=customer,
                             credit_period=row_data.get("Credit Period"),
@@ -481,7 +616,7 @@ class CustomerExcelUploadView(APIView):
                             if hsn and not str(hsn).replace(" ", "").isdigit():
                                 raise Exception(f"Invalid HSN/SAC Code: '{hsn}'. HSN codes must be numeric.")
 
-                            CustomerMasterCustomerProductService.objects.create(
+                            CustomerMasterCustomerProductService.objects.create(  # type: ignore
                                 tenant_id=tenant_id,
                                 customer_basic_detail=customer,
                                 item_code=item_code,
@@ -495,7 +630,7 @@ class CustomerExcelUploadView(APIView):
                             )
                         
                         results["successful_imports"].append({
-                            "id": None if dry_run else customer.id,
+                            "id": None if dry_run else getattr(customer, 'id', None),
                             "name": customer.customer_name,
                             "code": customer.customer_code,
                             "row_data": row_data # Include row data for preview editing

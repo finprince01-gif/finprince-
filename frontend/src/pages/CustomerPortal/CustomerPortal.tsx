@@ -1347,8 +1347,8 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
     const handleCustomerExcelDownload = async (type: 'template' | 'export') => {
         try {
             const endpoint = type === 'template'
-                ? '/api/customerportal/excel/template/'
-                : '/api/customerportal/excel/export/';
+                ? `/api/customerportal/excel/template/?t=${Date.now()}`
+                : `/api/customerportal/excel/export/?t=${Date.now()}`;
 
             showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
 
