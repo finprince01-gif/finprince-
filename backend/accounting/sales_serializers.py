@@ -242,3 +242,4 @@ class FileUploadSerializer(serializers.Serializer):
             raise serializers.ValidationError(str(e))
         
         return value
+        return value

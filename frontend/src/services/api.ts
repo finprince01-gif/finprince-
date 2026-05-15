@@ -629,7 +629,7 @@ class ApiService {
                 throw e;
             }
         }
-        
+
         const typeMap: Record<string, string> = {
             'sales': 'Sales',
             'purchase': 'Purchase',
@@ -869,7 +869,7 @@ class ApiService {
 
         const isPurchase = data.type === 'Purchase' || data.source === 'purchase_voucher' || (data.type && data.type.toLowerCase() === 'purchase');
         const isSales = data.type === 'Sales' || data.source === 'sales_voucher' || data.source === 'sales_invoice' || (data.type && data.type.toLowerCase() === 'sales');
-        
+
         if (isPurchase && (data.reference_id || data.referenceId)) {
             const refId = data.reference_id || data.referenceId;
             const response = await httpClient.patch<any>(`/api/vouchers/purchase/${refId}/`, data);

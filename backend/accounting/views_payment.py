@@ -237,6 +237,11 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             pay_from_ledger = _resolve_ledger(pay_from_id, tenant_id)
             pay_to_ledger = _resolve_ledger(pay_to_id, tenant_id)
             
+            if not pay_from_ledger:
+                return Response({'error': f'Invalid Pay From ledger ID: {pay_from_id}'}, status=status.HTTP_400_BAD_REQUEST)
+            if not pay_to_ledger:
+                return Response({'error': f'Invalid Pay To ledger ID: {pay_to_id}'}, status=status.HTTP_400_BAD_REQUEST)
+            
             # Resolve Party IDs
             def get_party_ids(ledger):
                 if not ledger: return None, None, None
@@ -252,14 +257,50 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
             # Generate Voucher Number
             from masters.models import MasterVoucherPayments
-            series = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            # Find the specific series the user selected in the frontend
+            v_type_name = data.get('voucher_type')
+            series = None
+            if v_type_name:
+                series = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, voucher_name=v_type_name, is_active=True).first()
+            
+            # Fallback to any active series if name match fails
+            if not series:
+                series = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            
             v_num = data.get('voucher_number')
+            
+            # If the provided number is already taken, and we have a series, 
+            # we should ignore the provided number and find the next available one.
+            if series and v_num and v_num != 'Manual Input':
+                from .models import Transaction
+                if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                    v_num = None # Force auto-generation
+
             if series and (not v_num or v_num == 'Manual Input'):
-                v_num = series.get_next_number()
+                from .models import Transaction
+                # Loop to find the next truly available number
+                while True:
+                    v_num = series.get_next_number()
+                    if not Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                        break
+                    series.increment_number()
+            
+            # CRITICAL FIX: If we are using the series number (pre-filled or auto-generated), 
+            # we MUST increment the counter so the NEXT voucher gets a new number.
+            if series and v_num and v_num == series.get_next_number():
                 series.increment_number()
+            
             if not v_num or v_num == 'Manual Input':
                 import uuid
                 v_num = f"PAY-{uuid.uuid4().hex[:6].upper()}"
+            else:
+                # For manual input that is NOT 'Manual Input' text, check for collisions one last time
+                from .models import Transaction
+                if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                    return Response({'error': f'Voucher number {v_num} is already taken.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Calculate the next number for the frontend
+            next_v_num = series.get_next_number() if series else None
 
             # Create Voucher (Transaction)
             # Use the exact logic requested: instance.amount = entered_amount
@@ -300,7 +341,12 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                 customer_id=pf_c, vendor_id=pf_v
             )
 
-        return Response({'message': 'Amount saved successfully', 'id': instance.id, 'voucher_number': v_num}, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': 'Amount saved successfully', 
+            'id': instance.id, 
+            'voucher_number': v_num,
+            'next_voucher_number': next_v_num
+        }, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         user = self.request.user
