@@ -480,51 +480,6 @@ def resolve_cancellation_status(po_id) -> str:
 
     return 'Cancelled'
 
-def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) -> bool:
-    """
-    Update PO status
-    
-    Returns:
-        bool: True if updated successfully
-    """
-    query = """
-        UPDATE vendor_transaction_po
-        SET status = %s, updated_by = %s, updated_at = NOW()
-        WHERE id = %s
-    """
-    
-    with connection.cursor() as cursor:
-        cursor.execute(query, [status, updated_by, po_id])
-        return cursor.rowcount > 0
-def get_pending_pos_for_vendor(tenant_id: str, vendor_id: Any, vendor_name: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Get all purchase orders for a specific vendor (used for GRN dropdown).
-    Matches by vendor_id OR vendor_name (denormalized field).
-    """
-    v_id = None
-    try:
-        if vendor_id and str(vendor_id).isdigit():
-            v_id = int(vendor_id)
-    except (ValueError, TypeError):
-        pass
-
-    query = """
-        SELECT id, po_number, status
-        FROM vendor_transaction_po
-        WHERE tenant_id = %s 
-          AND (
-            (vendor_basic_detail_id = %s)
-            OR (LOWER(TRIM(vendor_name)) = LOWER(TRIM(%s)))
-          )
-          AND is_active = 1
-        ORDER BY created_at DESC
-    """
-    with connection.cursor() as cursor:
-        cursor.execute(query, [tenant_id, v_id, vendor_name or ''])
-        columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
-    return False
-
 def auto_update_po_if_fully_executed(tenant_id: str, po_number: str) -> bool:
     """
     If a PO is used in a GRN or Voucher, check its current status.
@@ -566,10 +521,12 @@ def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) 
     with connection.cursor() as cursor:
         cursor.execute(query, [status, updated_by, po_id])
         return cursor.rowcount > 0
+
 def get_pending_pos_for_vendor(tenant_id: str, vendor_id: Any, vendor_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Get all purchase orders for a specific vendor (used for GRN dropdown).
     Matches by vendor_id OR vendor_name (denormalized field).
+    Excludes POs with status 'Executed Cancelled'.
     """
     v_id = None
     try:
@@ -587,9 +544,11 @@ def get_pending_pos_for_vendor(tenant_id: str, vendor_id: Any, vendor_name: Opti
             OR (LOWER(TRIM(vendor_name)) = LOWER(TRIM(%s)))
           )
           AND is_active = 1
+          AND (status IS NULL OR status != 'Executed Cancelled')
         ORDER BY created_at DESC
     """
     with connection.cursor() as cursor:
         cursor.execute(query, [tenant_id, v_id, vendor_name or ''])
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
