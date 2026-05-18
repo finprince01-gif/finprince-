@@ -300,24 +300,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     // Helper: format number from config (mirrors backend _format_invoice_number logic)
     const formatInvoiceNo = (config: any): string => {
         const num = config.current_number || config.start_from || 1;
-        const start = config.start_from || 1;
         const digits = config.required_digits || 4;
         const prefix = config.prefix || '';
         const suffix = config.suffix || '';
 
-        if (suffix && /^\d+$/.test(suffix)) {
-            // Numeric suffix: treat as part of the sequential number
-            // e.g. start=1, digits=4, suffix='24' → base=000124=124, offset=num-start
-            const baseStr = String(start).padStart(digits, '0') + suffix;
-            const base = parseInt(baseStr, 10);
-            const offset = num - start;
-            const fullNum = base + offset;
-            const totalDigits = digits + suffix.length;
-            return `${prefix}${String(fullNum).padStart(totalDigits, '0')}`;
-        } else {
-            // Non-numeric suffix: pad number then append suffix
-            return `${prefix}${String(num).padStart(digits, '0')}${suffix}`;
-        }
+        return `${prefix}${String(num).padStart(digits, '0')}${suffix}`;
     };
 
     // Helper: fetch next number from backend and update display
@@ -6156,4 +6143,3 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 };
 
 export default SalesVoucher;
-

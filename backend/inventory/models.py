@@ -623,9 +623,17 @@ class InventoryOperationNewGRN(BaseModel):
     posting_note = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Posted')
 
-    # Auto-restored missing columns
-    
-    # Auto-restored missing columns
+    # Dispatch / Transit Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
+    dispatch_date = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
+
     secondary_ref_no = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:

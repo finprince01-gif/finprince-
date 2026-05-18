@@ -280,6 +280,11 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             pay_from_ledger = _resolve_ledger(pay_from_id, tenant_id)
             pay_to_ledger = _resolve_ledger(pay_to_id, tenant_id)
             
+            if not pay_from_ledger:
+                return Response({'error': f'Invalid Pay From ledger ID: {pay_from_id}'}, status=status.HTTP_400_BAD_REQUEST)
+            if not pay_to_ledger:
+                return Response({'error': f'Invalid Pay To ledger ID: {pay_to_id}'}, status=status.HTTP_400_BAD_REQUEST)
+            
             # Resolve Party IDs
             def get_party_ids(ledger):
                 if not ledger: return None, None, None
@@ -322,6 +327,14 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             if not v_num:
                 import uuid
                 v_num = f"PAY-{uuid.uuid4().hex[:6].upper()}"
+            else:
+                # For manual input that is NOT 'Manual Input' text, check for collisions one last time
+                from .models import Transaction
+                if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                    return Response({'error': f'Voucher number {v_num} is already taken.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Calculate the next number for the frontend
+            next_v_num = series.get_next_number() if series else None
 
             # Create Voucher (Transaction)
             # Use the exact logic requested: instance.amount = entered_amount
@@ -362,7 +375,12 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                 customer_id=pf_c, vendor_id=pf_v
             )
 
-        return Response({'message': 'Amount saved successfully', 'id': instance.id, 'voucher_number': v_num}, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': 'Amount saved successfully', 
+            'id': instance.id, 
+            'voucher_number': v_num,
+            'next_voucher_number': next_v_num
+        }, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         user = self.request.user

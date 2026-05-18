@@ -418,6 +418,33 @@ const InventoryPage: React.FC = () => {
   const [grnPostingNote, setGrnPostingNote] = useState('');
   const [postingNote, setPostingNote] = useState('');
 
+  // Transit Details State for GRN
+  const [grnTransitReceivedIn, setGrnTransitReceivedIn] = useState('');
+  const [grnTransitMode, setGrnTransitMode] = useState('Road');
+  const [grnTransitReceiptDate, setGrnTransitReceiptDate] = useState(todayStr);
+  const [grnTransitReceiptTime, setGrnTransitReceiptTime] = useState('');
+  const [grnTransitDeliveryType, setGrnTransitDeliveryType] = useState('Self');
+  const [grnTransitTransporterId, setGrnTransitTransporterId] = useState('');
+  const [grnTransitTransporterName, setGrnTransitTransporterName] = useState('');
+  const [grnTransitVehicleNo, setGrnTransitVehicleNo] = useState('');
+  const [grnTransitLrGrConsignment, setGrnTransitLrGrConsignment] = useState('');
+
+  // Advanced Transit States (matching Vouchers)
+  const [grnTransitBolNo, setGrnTransitBolNo] = useState('');
+  const [grnTransitBolDate, setGrnTransitBolDate] = useState('');
+  const [grnTransitShippingBillNo, setGrnTransitShippingBillNo] = useState('');
+  const [grnTransitShippingBillDate, setGrnTransitShippingBillDate] = useState('');
+  const [grnTransitShipPortCode, setGrnTransitShipPortCode] = useState('');
+  const [grnTransitVesselFlightNo, setGrnTransitVesselFlightNo] = useState('');
+  const [grnTransitPortOfLoading, setGrnTransitPortOfLoading] = useState('');
+  const [grnTransitPortOfDischarge, setGrnTransitPortOfDischarge] = useState('');
+  const [grnTransitOriginCity, setGrnTransitOriginCity] = useState('');
+  const [grnTransitOriginCountry, setGrnTransitOriginCountry] = useState('');
+  const [grnTransitFinalDestCity, setGrnTransitFinalDestCity] = useState('');
+  const [grnTransitFinalDestCountry, setGrnTransitFinalDestCountry] = useState('');
+  const [grnTransitRrNo, setGrnTransitRrNo] = useState('');
+  const [grnTransitRrDate, setGrnTransitRrDate] = useState('');
+
   // Auto-select Series
   useEffect(() => {
     if (!showIssueSlipForm || issueSlipSeriesList.length === 0 || selectedIssueSlipSeriesName) return;
@@ -2698,6 +2725,24 @@ const InventoryPage: React.FC = () => {
       if (allNewItems.length > 0) {
         setGrnItems(allNewItems);
       }
+
+      // Auto-fill transit details from the first PO if available
+      if (selectedPOList.length > 0) {
+        const firstPOId = grnReferenceNoOptions.find(po => po.po_number === selectedPOList[0])?.id;
+        if (firstPOId) {
+          const poResponse = await apiService.getVendorPurchaseOrderById(firstPOId);
+          if (poResponse && poResponse.success && poResponse.data) {
+            const poData = poResponse.data;
+            if (poData.mode_of_transport) setGrnTransitMode(poData.mode_of_transport);
+            if (poData.dispatch_from) setGrnTransitReceivedIn(poData.dispatch_from);
+            if (poData.delivery_type) setGrnTransitDeliveryType(poData.delivery_type);
+            if (poData.transporter_id) setGrnTransitTransporterId(poData.transporter_id);
+            if (poData.transporter_name) setGrnTransitTransporterName(poData.transporter_name);
+            if (poData.vehicle_no) setGrnTransitVehicleNo(poData.vehicle_no);
+            if (poData.lr_gr_consignment) setGrnTransitLrGrConsignment(poData.lr_gr_consignment);
+          }
+        }
+      }
     } catch (err) {
       console.error("Error fetching full PO details:", err);
     }
@@ -3030,7 +3075,18 @@ const InventoryPage: React.FC = () => {
             sgst: item.sgst || 0,
             cess: item.cess || 0,
             total_value: item.total_value || 0
-          }))
+          })),
+
+        // Transit Details
+        dispatch_from: grnTransitReceivedIn,
+        mode_of_transport: grnTransitMode,
+        dispatch_date: grnTransitReceiptDate,
+        dispatch_time: grnTransitReceiptTime,
+        delivery_type: grnTransitDeliveryType,
+        transporter_id: grnTransitTransporterId,
+        transporter_name: grnTransitTransporterName,
+        vehicle_no: grnTransitVehicleNo,
+        lr_gr_consignment: grnTransitLrGrConsignment
       };
 
       await httpClient.post('/api/inventory/operations/new-grn/', payload);
@@ -3055,6 +3111,17 @@ const InventoryPage: React.FC = () => {
       setGrnDocument(null);
       setGrnDocumentPreview(null);
       setGrnSecondaryRefNo('');
+
+      // Reset Transit Details
+      setGrnTransitReceivedIn('');
+      setGrnTransitMode('Road');
+      setGrnTransitReceiptDate(todayStr);
+      setGrnTransitReceiptTime('');
+      setGrnTransitDeliveryType('Self');
+      setGrnTransitTransporterId('');
+      setGrnTransitTransporterName('');
+      setGrnTransitVehicleNo('');
+      setGrnTransitLrGrConsignment('');
     } catch (error) {
       console.error('Error saving GRN:');
       showError('Failed to save GRN. Please check your inputs.');
@@ -8374,6 +8441,243 @@ const InventoryPage: React.FC = () => {
                         </button>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Transit Details Section */}
+                  <div className="border-t border-gray-100 pt-6">
+                    <h4 className="text-sm font-bold text-gray-900 uppercase mb-4 flex items-center gap-2">
+                      Transit Details
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Received In / Dispatch From</label>
+                          <select
+                            value={grnTransitReceivedIn}
+                            onChange={(e) => setGrnTransitReceivedIn(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">Select Location</option>
+                            {locations.map((loc) => (
+                              <option key={loc.id} value={loc.name}>{loc.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mode of Transport</label>
+                          <select
+                            value={grnTransitMode}
+                            onChange={(e) => setGrnTransitMode(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="Road">Road</option>
+                            <option value="Air">Air</option>
+                            <option value="Sea">Sea</option>
+                            <option value="Rail">Rail</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Received Date</label>
+                          <input
+                            type="date"
+                            value={grnTransitReceiptDate}
+                            onChange={(e) => setGrnTransitReceiptDate(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Received Time</label>
+                          <input
+                            type="time"
+                            value={grnTransitReceiptTime}
+                            onChange={(e) => setGrnTransitReceiptTime(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mode Specific Sections */}
+                    {grnTransitMode === 'Road' ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                        {/* Left Column: Road Details */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Delivery Type</label>
+                            <select
+                              value={grnTransitDeliveryType}
+                              onChange={(e) => setGrnTransitDeliveryType(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                            >
+                              <option value="Self">Self</option>
+                              <option value="Third Party">Third Party</option>
+                              <option value="Courier">Courier</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Transporter ID/GSTIN</label>
+                            <input
+                              type="text"
+                              value={grnTransitTransporterId}
+                              onChange={(e) => setGrnTransitTransporterId(e.target.value)}
+                              placeholder="15-digit GSTIN"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Transporter Name</label>
+                            <input
+                              type="text"
+                              value={grnTransitTransporterName}
+                              onChange={(e) => setGrnTransitTransporterName(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Vehicle No.</label>
+                            <input
+                              type="text"
+                              value={grnTransitVehicleNo}
+                              onChange={(e) => setGrnTransitVehicleNo(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">LR/GR/CONSIGNMENT NO</label>
+                            <input
+                              type="text"
+                              value={grnTransitLrGrConsignment}
+                              onChange={(e) => setGrnTransitLrGrConsignment(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Right Column: Upload Box (Mirrors Vouchers) */}
+                        <div className="flex items-start justify-center">
+                          <div className="w-full">
+                            <input
+                              type="file"
+                              id="grn-transit-doc"
+                              onChange={handleGrnDocumentChange}
+                              className="hidden"
+                              accept=".jpg,.jpeg,.pdf"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById('grn-transit-doc')?.click()}
+                              className="w-full h-48 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-white hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
+                            >
+                              <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              <span className="text-sm font-medium uppercase">Upload Transit Document</span>
+                              {grnDocument && (
+                                <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {grnDocument.name}</span>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Advanced Mode Layout (Air/Sea/Rail) */
+                      <div className="mt-6 space-y-6">
+                        <div className="bg-gray-50 p-6 rounded-[4px] border border-gray-200">
+                          <h3 className="text-lg font-bold text-indigo-700 mb-4">From PORT</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Delivery Type</label>
+                                <select value={grnTransitDeliveryType} onChange={(e) => setGrnTransitDeliveryType(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                  <option value="Self">Self</option>
+                                  <option value="Third Party">Third Party</option>
+                                  <option value="Courier">Courier</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Transporter ID/GSTIN</label>
+                                <input type="text" value={grnTransitTransporterId} onChange={(e) => setGrnTransitTransporterId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Transporter Name</label>
+                                <input type="text" value={grnTransitTransporterName} onChange={(e) => setGrnTransitTransporterName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                              </div>
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Vehicle/Flight No.</label>
+                                <input type="text" value={grnTransitVehicleNo} onChange={(e) => setGrnTransitVehicleNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">LR/GR/Consignment No</label>
+                                <input type="text" value={grnTransitLrGrConsignment} onChange={(e) => setGrnTransitLrGrConsignment(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                              </div>
+                            </div>
+
+                            {/* Right Column: Upload Box (Mirrors Vouchers) */}
+                            <div className="flex items-start justify-center border-l border-gray-200 pl-6">
+                              <div className="w-full">
+                                <input
+                                  type="file"
+                                  id="grn-transit-doc-adv"
+                                  onChange={handleGrnDocumentChange}
+                                  className="hidden"
+                                  accept=".jpg,.jpeg,.pdf"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => document.getElementById('grn-transit-doc-adv')?.click()}
+                                  className="w-full h-48 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-white hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
+                                >
+                                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                  </svg>
+                                  <span className="text-sm font-medium uppercase">Upload Document</span>
+                                  {grnDocument && (
+                                    <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {grnDocument.name}</span>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-50 p-6 rounded-[4px] border border-gray-200">
+                          <h3 className="text-lg font-bold text-indigo-700 mb-4">Upto PORT</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Bill of Lading No.</label>
+                                <input type="text" value={grnTransitBolNo} onChange={(e) => setGrnTransitBolNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Shipping Bill No.</label>
+                                <input type="text" value={grnTransitShippingBillNo} onChange={(e) => setGrnTransitShippingBillNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                              </div>
+                              {grnTransitMode === 'Rail' && (
+                                <div>
+                                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Railway Receipt No.</label>
+                                  <input type="text" value={grnTransitRrNo} onChange={(e) => setGrnTransitRrNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Bill of Lading Date</label>
+                                <input type="date" value={grnTransitBolDate} onChange={(e) => setGrnTransitBolDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Port of Loading</label>
+                                <input type="text" value={grnTransitPortOfLoading} onChange={(e) => setGrnTransitPortOfLoading(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Additional Fields for Sales Return */}

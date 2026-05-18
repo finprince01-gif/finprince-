@@ -16,9 +16,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
   const { hasPageAccess } = usePermissions();
   const { subscriptionUsage } = useSubscriptionUsage();
 
-  const allNavItems: { name: Page; icon: string }[] = [
+  const allNavItems: { name: Page; icon: string; label?: string }[] = [
     { name: 'Dashboard', icon: 'dashboard' },
-    { name: 'Masters', icon: 'ledger' },
+    { name: 'Masters', icon: 'ledger', label: 'Accounting Master' },
     { name: 'Inventory', icon: 'inventory' },
     { name: 'Vouchers', icon: 'vouchers' },
     { name: 'Vendor Portal', icon: 'vendor-portal' },
@@ -94,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
                   <div className="erp-nav-icon">
                     <Icon name={item.icon as any} className="w-5 h-5" />
                   </div>
-                  <span className="flex-1 text-left">{item.name}</span>
+                  <span className="flex-1 text-left">{item.label || item.name}</span>
                   {isActive && (
                     <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
                   )}

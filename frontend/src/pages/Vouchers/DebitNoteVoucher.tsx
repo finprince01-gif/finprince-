@@ -343,6 +343,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         try {
             await onAddVouchers([payload as any]);
             showSuccess('Debit Note Voucher Saved Successfully!');
+            // Refresh the next voucher number after save
+            fetchNextNo();
         } catch (error) {
             console.error('Error saving Debit Note:', error);
             showError('Failed to save Debit Note Voucher.');
@@ -519,22 +521,23 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         }
     };
 
-    // Fetch next number when series changes
-    useEffect(() => {
+    const fetchNextNo = useCallback(async () => {
         if (selectedSeriesId) {
-            const fetchNextNo = async () => {
-                try {
-                    const data = await apiService.getDebitNoteNextNumber(selectedSeriesId);
-                    setDebitNoteNo(data.invoice_number);
-                } catch (error) {
-                    console.error("Error fetching next debit note number:", error);
-                }
-            };
-            fetchNextNo();
+            try {
+                const data = await apiService.getDebitNoteNextNumber(selectedSeriesId);
+                setDebitNoteNo(data.invoice_number);
+            } catch (error) {
+                console.error("Error fetching next debit note number:", error);
+            }
         } else {
             setDebitNoteNo('');
         }
     }, [selectedSeriesId]);
+
+    // Fetch next number when series changes
+    useEffect(() => {
+        fetchNextNo();
+    }, [selectedSeriesId, fetchNextNo]);
 
     // E-Invoice & E-way Bill Details State
     const [ewayValidationEntries, setEwayValidationEntries] = useState<any[]>([{

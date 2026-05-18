@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.http import HttpResponse
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
 import io
 
 from .models import (
@@ -79,8 +79,130 @@ class VendorExcelTemplateDownloadView(APIView):
     
     def get(self, request):
         wb = Workbook()
-        ws = wb.active
-        ws.title = "Vendor Template"
+        
+        # 1. Create Readme & Instructions sheet as the active/first sheet
+        ws_readme = wb.active
+        assert ws_readme is not None
+        ws_readme.title = "Instructions & Readme"
+        
+        # Title Block
+        ws_readme.merge_cells("A1:D1")
+        title_cell = ws_readme["A1"]
+        title_cell.value = "Vendor Master Creation - Excel Upload Instructions"
+        title_cell.font = Font(size=14, bold=True, color="FFFFFF")
+        title_cell.fill = PatternFill(start_color="047857", end_color="047857", fill_type="solid")
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws_readme.row_dimensions[1].height = 40
+        
+        # Subtitle / Note
+        ws_readme.merge_cells("A2:D2")
+        sub_cell = ws_readme["A2"]
+        sub_cell.value = "Please read these guidelines carefully before populating the 'Vendor Template' tab to ensure a successful upload."
+        sub_cell.font = Font(size=10, italic=True, color="4B5563")
+        sub_cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws_readme.row_dimensions[2].height = 20
+        
+        # Table Headers
+        headers = ["Field Label", "Mandatory / Optional", "Format & Length", "Description & Guidelines"]
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws_readme.cell(row=4, column=col_idx, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="374151", end_color="374151", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            thin = Side(border_style="thin", color="D1D5DB")
+            cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+        ws_readme.row_dimensions[4].height = 25
+        
+        # Instruction Rows grouped by Sections matching UI Tabs
+        readme_data = [
+            {"section": "1. BASIC DETAILS"},
+            ("Vendor Name", "Mandatory", "Text", "Full legal entity name or trade name of the vendor."),
+            ("Category", "Mandatory", "Text", "Must match an existing vendor category (e.g., Raw Material, Packing Material)."),
+            ("Email Address", "Mandatory", "Email Format", "Primary communication email for sending purchase orders and notifications."),
+            ("Contact Number", "Mandatory", "Numeric / Text", "Primary contact phone or mobile number."),
+            ("Vendor Code", "Optional", "Text", "Custom unique vendor identifier. Auto-generated if left empty."),
+            ("PAN Number", "Optional", "10 Characters", "Must be exactly 10 alphanumeric characters in standard PAN format (e.g., ABCDE1234F)."),
+            ("Billing Currency", "Optional", "Text (e.g., INR, USD)", "Default billing currency for purchase orders. Defaults to INR if empty."),
+            
+            {"section": "2. BRANCH DETAILS"},
+            ("Branch Name", "Mandatory", "Text", "Name of the vendor's billing/shipping branch or location (e.g., Main Branch, Factory)."),
+            ("Address Line 1", "Mandatory", "Text", "Flat/House no., building name, or street address."),
+            ("Address Line 2", "Mandatory", "Text", "Locality, sector, area, or road name."),
+            ("GSTIN", "Optional", "15 Characters", "Must be exactly 15 alphanumeric characters in valid GSTIN format starting with state code."),
+            ("Address Line 3, City, State, Pincode, Country", "Optional", "Text / Numeric", "Additional detailed address and geographical identifiers."),
+            
+            {"section": "3. PRODUCTS/SERVICES"},
+            ("Item Code, Item Name", "Optional", "Text", "Initial product or service mapping supplied by this vendor."),
+            ("HSN/SAC Code", "Optional", "Numeric", "HSN/SAC classification code. Must be entirely numeric if provided."),
+            ("Supplier Item Code / Name", "Optional", "Text", "Vendor's internal item code and description mapping."),
+            
+            {"section": "4. TDS & OTHER STATUTORY DETAILS"},
+            ("TDS Section", "Optional", "Text", "Applicable Income Tax TDS section for bill deduction."),
+            ("TCS Applicable / Section", "Optional", "Text", "Specify if GST/Income Tax TCS is applicable for this vendor."),
+            ("MSME / FSSAI / IEC Numbers", "Optional", "Text / Numeric", "Statutory registration numbers for regulatory mapping."),
+            
+            {"section": "5. BANKING INFO"},
+            ("Bank Account No", "Optional", "Numeric / Text", "Vendor's bank account number for digital transfers."),
+            ("Bank Name, Bank Branch", "Optional", "Text", "Name of the bank and specific branch location."),
+            ("IFSC Code, Swift Code", "Optional", "Text / Numeric", "IFSC routing code (11 characters) or international Swift code."),
+            
+            {"section": "6. TERMS & CONDITIONS"},
+            ("Credit Period, Credit Limit", "Optional", "Numeric / Text", "Agreed payment credit window and spending ceiling."),
+            ("Credit terms, Penalty terms", "Optional", "Text", "Standard financial credit and late payment clauses."),
+            ("Delivery terms, Warranty details", "Optional", "Text", "FOB/CIF shipping terms and product guarantee rules."),
+            ("Force Majeure, Dispute terms", "Optional", "Text", "Legal contingencies and dispute resolution jurisdiction.")
+        ]
+        
+        current_row = 5
+        thin_side = Side(border_style="thin", color="E5E7EB")
+        border_all = Border(top=thin_side, left=thin_side, right=thin_side, bottom=thin_side)
+        
+        for item in readme_data:
+            if isinstance(item, dict) and "section" in item:
+                ws_readme.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+                cell = ws_readme.cell(row=current_row, column=1, value=item["section"])
+                cell.font = Font(size=11, bold=True, color="065F46")
+                cell.fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+                cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+                
+                for c in range(1, 5):
+                    ws_readme.cell(row=current_row, column=c).border = border_all
+                ws_readme.row_dimensions[current_row].height = 25
+                current_row += 1
+            else:
+                fill_color = "FFFFFF" if current_row % 2 != 0 else "F9FAFB"
+                row_fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+                
+                for col_idx, val in enumerate(item, 1):
+                    cell = ws_readme.cell(row=current_row, column=col_idx, value=val)
+                    cell.fill = row_fill
+                    cell.border = border_all
+                    cell.font = Font(size=10, color="1F2937")
+                    
+                    if col_idx == 1:
+                        cell.font = Font(size=10, bold=True, color="111827")
+                        cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+                    elif col_idx == 2:
+                        is_mand = (val == "Mandatory")
+                        cell.font = Font(size=10, bold=is_mand, color="B91C1C" if is_mand else "4B5563")
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+                    elif col_idx == 3:
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+                    else:
+                        cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                
+                ws_readme.row_dimensions[current_row].height = 22
+                current_row += 1
+            
+        # Set specific column widths for Readme sheet
+        ws_readme.column_dimensions['A'].width = 28
+        ws_readme.column_dimensions['B'].width = 22
+        ws_readme.column_dimensions['C'].width = 25
+        ws_readme.column_dimensions['D'].width = 65
+        
+        # 2. Create the actual Vendor Template sheet
+        ws = wb.create_sheet(title="Vendor Template")
+        assert ws is not None
         
         # Headers
         for col_idx, col_def in enumerate(VENDOR_COLUMNS, 1):
@@ -96,6 +218,16 @@ class VendorExcelTemplateDownloadView(APIView):
             ws.column_dimensions[cell.column_letter].width = 20
 
         ws.freeze_panes = "A2"
+        
+        # Enable sheet protection to prevent header modification
+        ws.protection.sheet = True
+        
+        # Unlock rows 2 to 1000 for data entry (up to 1000 records)
+        for row in range(2, 1001):
+            for col in range(1, len(VENDOR_COLUMNS) + 1):
+                ws.cell(row=row, column=col).protection = Protection(locked=False)
+        
+        wb.active = 0
         
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -113,6 +245,7 @@ class VendorExcelExportView(APIView):
         
         wb = Workbook()
         ws = wb.active
+        assert ws is not None
         ws.title = "Vendors"
         
         # Headers
@@ -182,7 +315,7 @@ class VendorExcelExportView(APIView):
                 })
             
             for col_idx, col_def in enumerate(VENDOR_COLUMNS, 1):
-                ws.cell(row=row_idx, column=col_idx, value=data.get(col_def["label"], ""))
+                ws.cell(row=row_idx, column=col_idx, value=data.get(str(col_def["label"]), ""))
 
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -210,12 +343,13 @@ class VendorExcelUploadView(APIView):
             if excel_file:
                 wb = load_workbook(excel_file, data_only=True)
                 ws = wb.active
+                assert ws is not None
                 
                 # Header mapping
                 header_index = {}
                 for idx, cell in enumerate(ws[1], 1):
-                    if cell.value:
-                        header_index[cell.value.strip()] = idx
+                    if cell.value is not None:
+                        header_index[str(cell.value).strip()] = idx
                 
                 # Validate required columns
                 for col in VENDOR_COLUMNS:
@@ -358,7 +492,7 @@ class VendorExcelUploadView(APIView):
                         # 2. GST Details
                         gstin = row_data.get("GSTIN") or row_data.get("gstin")
                         if gstin or row_data.get("Branch Name") or row_data.get("reference_name"):
-                            VendorMasterGSTDetails.objects.create(
+                            VendorMasterGSTDetails.objects.create(  # type: ignore
                                 tenant_id=tenant_id,
                                 vendor_basic_detail=vendor,
                                 gstin=gstin,
@@ -379,7 +513,7 @@ class VendorExcelUploadView(APIView):
                         # 3. Banking Details
                         acc_no = row_data.get("Bank Account No") or row_data.get("bank_account_no")
                         if acc_no:
-                            VendorMasterBanking.objects.create(
+                            VendorMasterBanking.objects.create(  # type: ignore
                                 tenant_id=tenant_id,
                                 vendor_basic_detail=vendor,
                                 bank_account_no=str(acc_no),
@@ -391,10 +525,10 @@ class VendorExcelUploadView(APIView):
                                 created_by=username
                             )
                         else:
-                            VendorMasterBanking.objects.create(tenant_id=tenant_id, vendor_basic_detail=vendor, created_by=username)
+                            VendorMasterBanking.objects.create(tenant_id=tenant_id, vendor_basic_detail=vendor, created_by=username)  # type: ignore
  
                         # 4. TDS Details
-                        VendorMasterTDS.objects.create(
+                        VendorMasterTDS.objects.create(  # type: ignore
                             tenant_id=tenant_id,
                             vendor_basic_detail=vendor,
                             msme_udyam_no=row_data.get("MSME No") or row_data.get("msme_udyam_no"),
@@ -406,7 +540,7 @@ class VendorExcelUploadView(APIView):
                         )
                         
                         # 5. Terms and Conditions
-                        VendorMasterTerms.objects.create(
+                        VendorMasterTerms.objects.create(  # type: ignore
                             tenant_id=tenant_id,
                             vendor_basic_detail=vendor,
                             credit_period=row_data.get("Credit Period") or row_data.get("credit_period"),
@@ -457,13 +591,13 @@ class VendorExcelUploadView(APIView):
 
                             VendorProductServiceDatabase.upsert_product_services(
                                 tenant_id=tenant_id,
-                                vendor_basic_detail_id=vendor.id,
+                                vendor_basic_detail_id=getattr(vendor, 'id', None),
                                 items=products_to_save,
                                 created_by=username
                             )
                         
                         results["successful_imports"].append({
-                            "id": None if dry_run else vendor.id,
+                            "id": None if dry_run else getattr(vendor, 'id', None),
                             "name": vendor.vendor_name,
                             "code": vendor.vendor_code,
                             "row_data": row_data

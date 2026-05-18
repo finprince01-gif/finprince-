@@ -1,12 +1,14 @@
 """
 API ViewSets for Separate Voucher Master Tables
 """
+from typing import Optional
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from django.db import transaction as db_transaction
+from django.db import models
 
 
 from .models import (
@@ -48,12 +50,16 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         """Filter by tenant_id"""
         try:
             tenant_id = self.get_tenant_id(self.request)
-            queryset = self.queryset.filter(tenant_id=tenant_id)
+            qs = getattr(self, 'queryset', None)
+            if qs is None:
+                return models.QuerySet().none()
+                
+            queryset = qs.filter(tenant_id=tenant_id)
             if self.action == 'list':
                 return queryset.filter(is_active=True)
             return queryset
         except:
-            return self.queryset.none()
+            return models.QuerySet().none()
     
     def perform_create(self, serializer):
         """Set tenant_id and created_by on create"""
@@ -74,25 +80,13 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         if num is None:
             num = config.start_from or 1
             
-        start = config.start_from or 1
         digits = config.required_digits or 4
         prefix = config.prefix or ''
         suffix = config.suffix or ''
 
-        if suffix and str(suffix).isdigit():
-            # Numeric suffix: treat as part of the total sequential number
-            # Use start_from as the baseline
-            base_str = str(start).zfill(digits) + str(suffix)
-            base = int(base_str)
-            offset = num - start
-            full_num = base + offset
-            total_digits = digits + len(str(suffix))
-            return f"{prefix}{str(full_num).zfill(total_digits)}"
-        else:
-            # Non-numeric or missing suffix: pad number then append suffix
-            return f"{prefix}{str(num).zfill(digits)}{suffix}"
+        return f"{prefix}{str(num).zfill(digits)}{suffix}"
 
-    def _get_db_max_number(self, series) -> int:
+    def _get_db_max_number(self, series) -> Optional[int]:
         """
         Heuristic to find the maximum sequential number used in the database for this series.
         Helps recover from counter jumps or out-of-sync master tables.
@@ -104,11 +98,14 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         # Mapping from Master model to Transaction model
         model_map = {
             'MasterVoucherSales': ('accounting.VoucherSalesInvoiceDetails', 'sales_invoice_no'),
-            'MasterVoucherCreditNote': ('accounting.VoucherSalesInvoiceDetails', 'sales_invoice_no'),
+            'MasterVoucherCreditNote': ('accounting.VoucherCreditNoteSupplierDetails', 'credit_note_no'),
             'MasterVoucherPurchases': ('accounting.VoucherPurchaseDetails', 'purchase_invoice_no'),
-            'MasterVoucherDebitNote': ('accounting.VoucherPurchaseDetails', 'purchase_invoice_no'),
-            'MasterVoucherReceipts': ('accounting.VoucherReceiptDetails', 'receipt_no'),
-            'MasterVoucherPayments': ('accounting.VoucherPaymentDetails', 'payment_no'),
+            'MasterVoucherDebitNote': ('accounting.VoucherDebitNoteSupplierDetails', 'debit_note_no'),
+            'MasterVoucherReceipts': ('accounting.Transaction', 'voucher_number'),
+            'MasterVoucherPayments': ('accounting.Transaction', 'voucher_number'),
+            'MasterVoucherExpenses': ('accounting.VoucherExpense', 'voucher_number'),
+            'MasterVoucherJournal': ('accounting.VoucherJournal', 'voucher_number'),
+            'MasterVoucherContra': ('accounting.VoucherContra', 'voucher_number'),
         }
         
         type_name = series.__class__.__name__
@@ -120,22 +117,38 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         try:
             Model = apps.get_model(model_path)
             v_name_clean = series.voucher_name.strip()
+            prefix = series.prefix or ''
+            suffix = series.suffix or ''
             
             # Phase 1: Direct DB Max (Efficient for large tables)
-            db_res = Model.objects.filter(
-                tenant_id=series.tenant_id,
-                voucher_name__iexact=v_name_clean
-            ).aggregate(max_val=Max(field_name))
+            query = Model.objects.filter(tenant_id=series.tenant_id)
+            
+            # Special handling for unified Transaction model
+            if model_path == 'accounting.Transaction':
+                v_type = 'PAYMENT' if type_name == 'MasterVoucherPayments' else 'RECEIPT'
+                query = query.filter(transaction_type=v_type)
+            else:
+                if hasattr(Model, 'voucher_name'):
+                    query = query.filter(voucher_name__iexact=v_name_clean)
+
+            # CRITICAL: Filter by prefix/suffix so different series don't contaminate each other.
+            # e.g. PAY000326-27 must NOT affect max calculation for CN*20 series.
+            if prefix:
+                query = query.filter(**{f'{field_name}__startswith': prefix})
+            if suffix:
+                query = query.filter(**{f'{field_name}__endswith': suffix})
+
+            db_res = query.aggregate(max_val=Max(field_name))
             
             max_val = db_res.get('max_val')
             required_digits = series.required_digits or 4
             
             if max_val:
                 clean_no = str(max_val)
-                if series.prefix and clean_no.startswith(series.prefix):
-                    clean_no = clean_no[len(series.prefix):]
-                if series.suffix and clean_no.endswith(series.suffix):
-                    clean_no = clean_no[:-len(series.suffix)]
+                if prefix and clean_no.startswith(prefix):
+                    clean_no = clean_no[len(prefix):]
+                if suffix and clean_no.endswith(suffix):
+                    clean_no = clean_no[:-len(suffix)]
                 
                 match = re.search(r'(\d+)', clean_no)
                 if match:
@@ -147,10 +160,20 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
                     except: pass
 
             # Phase 2: Fallback Scan (Scan last 500 records)
-            records = Model.objects.filter(
-                tenant_id=series.tenant_id,
-                voucher_name__iexact=v_name_clean
-            ).order_by('-id')[:500].values_list(field_name, flat=True)
+            query_fb = Model.objects.filter(tenant_id=series.tenant_id)
+            if model_path == 'accounting.Transaction':
+                v_type = 'PAYMENT' if type_name == 'MasterVoucherPayments' else 'RECEIPT'
+                query_fb = query_fb.filter(transaction_type=v_type)
+            elif hasattr(Model, 'voucher_name'):
+                query_fb = query_fb.filter(voucher_name__iexact=v_name_clean)
+
+            # Apply prefix/suffix filter here too
+            if prefix:
+                query_fb = query_fb.filter(**{f'{field_name}__startswith': prefix})
+            if suffix:
+                query_fb = query_fb.filter(**{f'{field_name}__endswith': suffix})
+
+            records = query_fb.order_by('-id')[:500].values_list(field_name, flat=True)
             
             max_num = 0
             for no in records:
@@ -186,8 +209,9 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         
         needs_save = False
         if db_max is not None:
-            # If counter is behind DB or wildly ahead, align it
-            if db_max >= expected_next or expected_next > db_max + 1:
+            # Only move counter FORWARD if it's behind the actual DB state.
+            # Never pull it backward automatically, as users might have intentionally skipped numbers.
+            if db_max >= expected_next:
                 series.current_number = db_max + 1
                 needs_save = True
         
@@ -205,7 +229,12 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='increment-number')
     def increment_number(self, request, pk=None):
         with db_transaction.atomic():
-            series = self.queryset.model.objects.select_for_update().get(pk=pk)
+            qs = getattr(self, 'queryset', None)
+            model = qs.model if qs is not None else None
+            if not model:
+                return Response({"error": "Model not found"}, status=400)
+                
+            series = model.objects.select_for_update().get(pk=pk)
             assigned_number = self._format_invoice_number(series)
             series.current_number = (series.current_number or series.start_from or 1) + 1
             series.save(update_fields=['current_number', 'updated_at'])
@@ -220,7 +249,7 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
 
 class MasterVoucherSalesViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Sales Voucher Master"""
-    queryset = MasterVoucherSales.objects.all()
+    queryset = MasterVoucherSales.objects.all() # type: ignore
     serializer_class = MasterVoucherSalesSerializer
 
 
@@ -228,47 +257,47 @@ class MasterVoucherSalesViewSet(BaseVoucherMasterViewSet):
 
 class MasterVoucherCreditNoteViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Credit Note Voucher Master"""
-    queryset = MasterVoucherCreditNote.objects.all()
+    queryset = MasterVoucherCreditNote.objects.all() # type: ignore
     serializer_class = MasterVoucherCreditNoteSerializer
 
 
 class MasterVoucherReceiptsViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Receipts Voucher Master"""
-    queryset = MasterVoucherReceipts.objects.all()
+    queryset = MasterVoucherReceipts.objects.all() # type: ignore
     serializer_class = MasterVoucherReceiptsSerializer
 
 
 class MasterVoucherPurchasesViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Purchases Voucher Master"""
-    queryset = MasterVoucherPurchases.objects.all()
+    queryset = MasterVoucherPurchases.objects.all() # type: ignore
     serializer_class = MasterVoucherPurchasesSerializer
 
 
 class MasterVoucherDebitNoteViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Debit Note Voucher Master"""
-    queryset = MasterVoucherDebitNote.objects.all()
+    queryset = MasterVoucherDebitNote.objects.all() # type: ignore
     serializer_class = MasterVoucherDebitNoteSerializer
 
 
 class MasterVoucherPaymentsViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Payments Voucher Master"""
-    queryset = MasterVoucherPayments.objects.all()
+    queryset = MasterVoucherPayments.objects.all() # type: ignore
     serializer_class = MasterVoucherPaymentsSerializer
 
 
 class MasterVoucherExpensesViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Expenses Voucher Master"""
-    queryset = MasterVoucherExpenses.objects.all()
+    queryset = MasterVoucherExpenses.objects.all() # type: ignore
     serializer_class = MasterVoucherExpensesSerializer
 
 
 class MasterVoucherJournalViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Journal Voucher Master"""
-    queryset = MasterVoucherJournal.objects.all()
+    queryset = MasterVoucherJournal.objects.all() # type: ignore
     serializer_class = MasterVoucherJournalSerializer
 
 
 class MasterVoucherContraViewSet(BaseVoucherMasterViewSet):
     """ViewSet for Contra Voucher Master"""
-    queryset = MasterVoucherContra.objects.all()
+    queryset = MasterVoucherContra.objects.all() # type: ignore
     serializer_class = MasterVoucherContraSerializer

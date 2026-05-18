@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { httpClient, apiService } from '../../services';
 import { showError, showSuccess } from '../../utils/toast';
 
@@ -389,32 +389,33 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefilledData, clearPrefilledData, allLedgers, isReadOnlyMode]);
 
+    const fetchReceiptConfigs = useCallback(async () => {
+        try {
+            // Use the dedicated receipts endpoint which is more reliable than the generic one
+            const data = await httpClient.get<any[]>('/api/masters/master-voucher-receipts/');
+
+            // Add voucher_type property if missing (important for some downstream logic)
+            const receiptConfigs = (data || []).map(config => ({
+                ...config,
+                voucher_type: config.voucher_type || 'receipts'
+            }));
+
+            setReceiptVoucherConfigs(receiptConfigs);
+            
+            // If there's only 1 and none selected, default to it
+            if (receiptConfigs && receiptConfigs.length === 1 && !selectedReceiptConfig) {
+                setSelectedReceiptConfig(receiptConfigs[0].voucher_name);
+            }
+        } catch (error) {
+            console.error('Error fetching receipt voucher configurations:', error);
+            setReceiptVoucherConfigs([]);
+        }
+    }, [selectedReceiptConfig]);
+
     // Fetch receipt voucher configurations on mount
     useEffect(() => {
-        const fetchReceiptConfigs = async () => {
-            try {
-                // Use the dedicated receipts endpoint which is more reliable than the generic one
-                const data = await httpClient.get<any[]>('/api/masters/master-voucher-receipts/');
-
-                // Add voucher_type property if missing (important for some downstream logic)
-                const receiptConfigs = (data || []).map(config => ({
-                    ...config,
-                    voucher_type: config.voucher_type || 'receipts'
-                }));
-
-                setReceiptVoucherConfigs(receiptConfigs);
-                
-                // If there's only 1, default to it
-                if (receiptConfigs && receiptConfigs.length === 1) {
-                    setSelectedReceiptConfig(receiptConfigs[0].voucher_name);
-                }
-            } catch (error) {
-                console.error('Error fetching receipt voucher configurations:', error);
-                setReceiptVoucherConfigs([]);
-            }
-        };
         fetchReceiptConfigs();
-    }, []);
+    }, [fetchReceiptConfigs]);
 
     // Synchronize prefilled voucher_type with options once they finish loading
     useEffect(() => {
@@ -467,7 +468,12 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             setVoucherNumber(res.invoice_number || '');
                         })
                         .catch(() => {
-                            setVoucherNumber('');
+                            // Fallback to local generation if API fails
+                            const num = config.current_number || config.start_from || 1;
+                            const digits = config.required_digits || 4;
+                            const prefix = config.prefix || '';
+                            const suffix = config.suffix || '';
+                            setVoucherNumber(`${prefix}${String(num).padStart(digits, '0')}${suffix}`);
                         });
                 } else {
                     setVoucherNumber('Manual Input');
@@ -603,8 +609,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             }
             
             handleCancel();
-        } catch (error) {
-            showError("Failed to record receipt. Please try again.");
+        } catch (error: any) {
+            console.error("Receipt save error:", error);
+            const msg = error.response?.data?.error || error.response?.data?.message || "Failed to record receipt. Please try again.";
+            showError(msg);
         }
     };
 
@@ -871,7 +879,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     const handleCancel = () => {
         setDate(getCurrentDate());
-        setVoucherNumber('');
+        // setVoucherNumber(''); // DO NOT clear, let useEffect maintain the next number
         setRefNo('');
         setTopAmount(0);
         setReceiveIn('');
@@ -895,7 +903,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         setSingleAdvanceAmount(0);
         setShowSingleAdvanceSection(false);
         setTotalReceipt(0);
-        setSelectedReceiptConfig('');
+        // setSelectedReceiptConfig(''); // Keep config selected
     };
 
     const handlePostReceipt = async () => {

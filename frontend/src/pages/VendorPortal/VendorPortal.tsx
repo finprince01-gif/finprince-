@@ -607,9 +607,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const fetchVendorLedger = async (vendorId: number | string, vendorName: string) => {
         setLoadingLedger(true);
         try {
-            // Fetch aggregated transactions from the new Vendor Portal endpoint
-            const res: any = await httpClient.get(`/api/vendors/transactions/by_vendor/?vendor_id=${vendorId}`);
-            const transactions = Array.isArray(res) ? res : (res.results || []);
+            // Fetch aggregated transactions and purchase vouchers
+            const [res, purchaseDataRes] = await Promise.all([
+                httpClient.get(`/api/vendors/transactions/by_vendor/?vendor_id=${vendorId}`),
+                httpClient.get(`/api/vouchers/purchase/?show_all=true`)
+            ]);
+            const transactions = Array.isArray(res) ? res : ((res as any).results || []);
+            const purchaseData = Array.isArray(purchaseDataRes) ? purchaseDataRes : ((purchaseDataRes as any).results || []);
 
             const allEntries = transactions.map((t: any) => {
                 const transactionType = (t.transaction_type || t.type || '').toLowerCase();
@@ -627,6 +631,21 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     'journal': 'Journal'
                 };
                 const type = typeMap[transactionType] || (transactionType.charAt(0).toUpperCase() + transactionType.slice(1));
+
+                // Attach purchase details if it's a purchase
+                if (transactionType === 'purchase') {
+                    const matchedPurchase = purchaseData.find((p: any) => 
+                        p.purchase_voucher_no === t.transaction_number || 
+                        p.supplier_invoice_no === t.transaction_number || 
+                        `PUR-${p.id}` === t.transaction_number
+                    );
+                    if (matchedPurchase) {
+                        t.supply_inr_details = matchedPurchase.supply_inr_details;
+                        t.due_details = matchedPurchase.due_details;
+                        t.items = matchedPurchase.items;
+                        t.line_items = matchedPurchase.line_items;
+                    }
+                }
 
                 return {
                     id: `t-${t.id}`,
@@ -1292,8 +1311,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
     const handleVendorExcelDownload = async (type: 'template' | 'export') => {
         try {
             const endpoint = type === 'template'
-                ? '/api/vendors/excel/template/'
-                : '/api/vendors/excel/export/';
+                ? `/api/vendors/excel/template/?t=${Date.now()}`
+                : `/api/vendors/excel/export/?t=${Date.now()}`;
 
             showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
 
@@ -4385,7 +4404,7 @@ return (
                                                             onClick={() => handleAddPob(record.id)}
                                                             className="text-xs font-medium text-indigo-600 hover:text-slate-700 border border-indigo-600 rounded px-2 py-1 hover:bg-indigo-50/50 transition-colors"
                                                         >
-                                                            + Add Manual Branch
+                                                            {record.placesOfBusiness.length === 0 ? '+ Principle place of business' : '+ Add Manual Branch'}
                                                         </button>
                                                     </h5>
 
@@ -4528,11 +4547,11 @@ return (
                                                                                     />
                                                                                 </div>
                                                                                 <div>
-                                                                                    <label className="label-text mb-1 uppercase">Contact Person</label>
+                                                                                    <label className="label-text mb-1 uppercase">Branch Contact Person</label>
                                                                                     <input type="text" value={pob.contactPerson} onChange={(e) => updatePobField(record.id, pob.id, 'contactPerson', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
                                                                                 </div>
                                                                                 <div>
-                                                                                    <label className="label-text mb-1 uppercase">Email Address</label>
+                                                                                    <label className="label-text mb-1 uppercase">Branch Email Address</label>
                                                                                     <input
                                                                                         type="text"
                                                                                         value={pob.email}
@@ -4542,7 +4561,7 @@ return (
                                                                                     />
                                                                                 </div>
                                                                                 <div>
-                                                                                    <label className="label-text mb-1 uppercase">Contact No</label>
+                                                                                    <label className="label-text mb-1 uppercase">Branch Contact No</label>
                                                                                     <input
                                                                                         type="text"
                                                                                         value={pob.contactNumber}
@@ -6563,37 +6582,37 @@ return (
                                                     </div>
                                                 </div>
                                                 <div className="overflow-x-auto">
-                                                    <table className="min-w-full">
-                                                        <thead className="border-y border-gray-100 bg-white">
+                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                        <thead className="bg-[#F8F9FA]">
                                                             <tr>
-                                                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Date</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider min-w-[350px] border-r border-gray-50">Transaction Particulars</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Type</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">VCH No.</th>
-                                                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px] border-r border-gray-50">Status</th>
-                                                                <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[150px] border-r border-gray-50">Running Bal</th>
-                                                                <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px] border-r border-gray-50">Debit (₹)</th>
-                                                                <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px]">Credit (₹)</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Date</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100 min-w-[350px]">Transaction Particulars</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Status</th>
+                                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
+                                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Credit (₹)</th>
+                                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="bg-white">
+                                                        <tbody className="bg-white divide-y divide-gray-200">
                                                             {filteredLedgerData.map((entry) => (
                                                                 <React.Fragment key={entry.id}>
                                                                     {/* Main Transaction Row */}
-                                                                    <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                                                        <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top border-r border-gray-50">
+                                                                    <tr className="hover:bg-indigo-50/30 transition-colors border-b border-gray-100">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-50">
                                                                             {formatDate(entry.date)}
                                                                         </td>
-                                                                        <td className="px-6 py-4 text-sm font-bold text-gray-800 border-r border-gray-50">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">
                                                                             {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' || entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
                                                                         </td>
-                                                                        <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-50">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">
                                                                             {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' ? 'PURCHASE' : entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' ? 'PAYMENT' : entry.transferFrom}
                                                                         </td>
-                                                                        <td className="px-6 py-4 text-sm text-gray-500 border-r border-gray-50">
-                                                                            {entry.referenceNo}
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">
+                                                                            {entry.referenceNo || '-'}
                                                                         </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-50">
                                                                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
                                                                                 entry.status === 'Due' ? 'bg-red-100 text-red-800' :
                                                                                     entry.status === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
@@ -6604,19 +6623,19 @@ return (
                                                                                 {entry.status}
                                                                             </span>
                                                                         </td>
-                                                                        <td className="px-6 py-4 text-sm text-right font-bold text-gray-900 border-r border-gray-50">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">
+                                                                            {entry.debit !== '-' && entry.debit !== 0 ? `₹${parseFloat(entry.debit.toString()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400 font-bold border-r border-gray-50">
+                                                                            {entry.credit !== '-' && entry.credit !== 0 ? `₹${parseFloat(entry.credit.toString()).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
                                                                             {entry.runningBalance !== '-' ? (
                                                                                 <span>
-                                                                                    ₹{Math.abs(parseFloat(entry.runningBalance.toString().replace(/,/g, ''))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                                                    <span className="ml-1 text-gray-400 text-[10px] font-normal uppercase">{parseFloat(entry.runningBalance.toString().replace(/,/g, '')) >= 0 ? 'Cr' : 'Dr'}</span>
+                                                                                    {Math.abs(parseFloat(entry.runningBalance.toString().replace(/,/g, ''))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                                    <span className="ml-1 text-gray-500 text-xs font-normal">{parseFloat(entry.runningBalance.toString().replace(/,/g, '')) >= 0 ? 'Cr' : 'Dr'}</span>
                                                                                 </span>
                                                                             ) : '-'}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right border-r border-gray-50">
-                                                                            {entry.debit !== '-' && entry.debit !== 0 ? `₹${entry.debit}` : '-'}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">
-                                                                            {entry.credit !== '-' && entry.credit !== 0 ? `₹${entry.credit}` : '-'}
                                                                         </td>
                                                                     </tr>
 
@@ -6626,7 +6645,7 @@ return (
                                                                         if (typeof supplyInrDetails === 'string') {
                                                                             try { supplyInrDetails = JSON.parse(supplyInrDetails); } catch { supplyInrDetails = {}; }
                                                                         }
-                                                                        const items = supplyInrDetails?.items || [];
+                                                                        const items = entry.rawVoucher?.line_items?.length ? entry.rawVoucher.line_items : (supplyInrDetails?.items || []);
                                                                         const dueDetails = entry.rawVoucher?.due_details;
                                                                         const tdsIt = dueDetails ? parseFloat(dueDetails.tds_it || 0) : 0;
                                                                         const tdsGst = dueDetails ? parseFloat(dueDetails.tds_gst || 0) : 0;
@@ -6635,93 +6654,122 @@ return (
                                                                         return (
                                                                             <>
                                                                                 {/* DEBIT rows: Purchase + GST */}
-                                                                                {items.map((item: any, idx: number) => {
-                                                                                    const taxable = parseFloat(item.taxableValue) || 0;
-                                                                                    const cgst = parseFloat(item.cgst) || 0;
-                                                                                    const sgst = parseFloat(item.sgst) || 0;
-                                                                                    const igst = parseFloat(item.igst) || 0;
-                                                                                    const totalGstVal = cgst + sgst + igst;
-                                                                                    let gstPct = item.gstPercentage || item.gst_percentage;
-                                                                                    if (!gstPct && taxable > 0 && totalGstVal > 0) gstPct = Math.round((totalGstVal / taxable) * 100);
+                                                                                {(() => {
+                                                                                    const totalTaxable = items.reduce((sum: number, item: any) => sum + (parseFloat(item.taxable_value || item.taxableValue) || 0), 0);
+                                                                                    const totalCgst = items.reduce((sum: number, item: any) => sum + (parseFloat(item.cgst_amount || item.cgst) || 0), 0);
+                                                                                    const totalSgst = items.reduce((sum: number, item: any) => sum + (parseFloat(item.sgst_amount || item.sgst) || 0), 0);
+                                                                                    const totalIgst = items.reduce((sum: number, item: any) => sum + (parseFloat(item.igst_amount || item.igst) || 0), 0);
+                                                                                    const totalCess = items.reduce((sum: number, item: any) => sum + (parseFloat(item.cess_amount || item.cess) || 0), 0);
+                                                                                    const totalStateCess = items.reduce((sum: number, item: any) => sum + (parseFloat(item.stateCess || item.state_cess) || 0), 0);
+
 
                                                                                     return (
-                                                                                        <React.Fragment key={idx}>
-                                                                                            {taxable > 0 && (
-                                                                                                <tr className="bg-white border-b border-gray-50/30">
-                                                                                                    <td className="border-r border-gray-50"></td>
-                                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
-                                                                                                        <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
-                                                                                                            <span>Purchase A/c {item.itemName ? `(${item.itemName})` : ''} {gstPct ? `@ ${gstPct}%` : ''}</span>
+                                                                                        <>
+                                                                                            {totalTaxable > 0 && (
+                                                                                                <tr className="bg-white">
+                                                                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                    <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                                                                        <div className="flex justify-between items-center w-full">
+                                                                                                            <span>Purchase Ledger</span>
                                                                                                             <div className="flex items-center gap-1">
-                                                                                                                <span className="font-bold">₹{taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                                                                                                <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                                                <span className="text-gray-900 font-bold ml-4">₹{totalTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                                                <span className="text-gray-500 text-[10px] font-normal">Dr</span>
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     </td>
-                                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                                    <td colSpan={2}></td>
+                                                                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                    <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                    <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                                                 </tr>
                                                                                             )}
                                                                                             {[
-                                                                                                { val: cgst, label: 'Input CGST Account' },
-                                                                                                { val: sgst, label: 'Input SGST Account' },
-                                                                                                { val: igst, label: 'Input IGST Account' }
-                                                                                            ].map((gst, gIdx) => gst.val > 0 && (
-                                                                                                <tr key={gIdx} className="bg-white border-b border-gray-50/30">
-                                                                                                    <td className="border-r border-gray-50"></td>
-                                                                                                    <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
-                                                                                                        <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
-                                                                                                            <span>{gst.label}</span>
-                                                                                                            <div className="flex items-center gap-1">
-                                                                                                                <span className="font-bold">₹{gst.val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                                                                                                <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                                { val: totalCgst, label: 'Input CGST Ledger' },
+                                                                                                { val: totalSgst, label: 'Input SGST Ledger' },
+                                                                                                { val: totalIgst, label: 'Input IGST Ledger' },
+                                                                                                { val: totalCess, label: 'Input Cess Ledger' },
+                                                                                                { val: totalStateCess, label: 'Input State Cess Ledger' }
+                                                                                            ].map((gst, gIdx) => {
+                                                                                                if (gst.val <= 0) return null;
+                                                                                                const taxPerc = totalTaxable > 0 ? parseFloat((gst.val / totalTaxable * 100).toFixed(2)) : 0;
+                                                                                                const labelWithPerc = taxPerc > 0 ? `${gst.label} @ ${taxPerc}%` : gst.label;
+                                                                                                return (
+                                                                                                    <tr key={gIdx} className="bg-white">
+                                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                        <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                                                                            <div className="flex justify-between items-center w-full">
+                                                                                                                <span>{labelWithPerc}</span>
+                                                                                                                <div className="flex items-center gap-1">
+                                                                                                                    <span className="text-gray-900 font-bold ml-4">₹{gst.val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                                                    <span className="text-gray-500 text-[10px] font-normal">Dr</span>
+                                                                                                                </div>
                                                                                                             </div>
-                                                                                                        </div>
-                                                                                                    </td>
-                                                                                                    <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                                    <td colSpan={2}></td>
-                                                                                                </tr>
-                                                                                            ))}
-                                                                                        </React.Fragment>
+                                                                                                        </td>
+                                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                                                                    </tr>
+                                                                                                );
+                                                                                            })}
+                                                                                        </>
                                                                                     );
-                                                                                })}
+                                                                                })()}
 
                                                                                 {/* CREDIT rows: Vendor + TDS */}
                                                                                 {netPayable > 0 && (
-                                                                                    <tr className="bg-white border-b border-gray-50/30">
-                                                                                        <td className="border-r border-gray-50"></td>
-                                                                                        <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
-                                                                                            <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                                    <tr className="bg-white">
+                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                        <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                                                            <div className="flex justify-between items-center w-full">
                                                                                                 <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c</span>
                                                                                                 <div className="flex items-center gap-1">
-                                                                                                    <span className="font-bold">₹{netPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                                                                                    <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                                    <span className="text-gray-900 font-bold ml-4">₹{netPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                                    <span className="text-gray-500 text-[10px] font-normal">Cr</span>
                                                                                                 </div>
                                                                                             </div>
                                                                                         </td>
-                                                                                        <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                        <td colSpan={2}></td>
+                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                                     </tr>
                                                                                 )}
                                                                                 {[
-                                                                                    { val: tdsIt, label: 'TDS Payable (Income Tax)' },
+                                                                                    { val: tdsIt, label: 'TDS Payable (IT)' },
                                                                                     { val: tdsGst, label: 'TDS Payable (GST)' }
-                                                                                ].map((tds, tIdx) => tds.val > 0 && (
-                                                                                    <tr key={tIdx} className="bg-white border-b border-gray-50/30">
-                                                                                        <td className="border-r border-gray-50"></td>
-                                                                                        <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
-                                                                                            <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
-                                                                                                <span>{tds.label}</span>
-                                                                                                <div className="flex items-center gap-1">
-                                                                                                    <span className="font-bold">₹{tds.val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                                                                                    <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                ].map((tds, tIdx) => {
+                                                                                    if (tds.val <= 0) return null;
+                                                                                    const totalTaxable = items.reduce((sum: number, item: any) => sum + (parseFloat(item.taxable_value || item.taxableValue) || 0), 0);
+                                                                                    const taxPerc = totalTaxable > 0 ? parseFloat((tds.val / totalTaxable * 100).toFixed(2)) : 0;
+                                                                                    const labelWithPerc = taxPerc > 0 ? `${tds.label} @ ${taxPerc}%` : tds.label;
+                                                                                    return (
+                                                                                        <tr key={tIdx} className="bg-white">
+                                                                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                            <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                                                                <div className="flex justify-between items-center w-full">
+                                                                                                    <span>{labelWithPerc}</span>
+                                                                                                    <div className="flex items-center gap-1">
+                                                                                                        <span className="text-gray-900 font-bold ml-4">₹{tds.val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                                                                        <span className="text-gray-500 text-[10px] font-normal">Cr</span>
+                                                                                                    </div>
                                                                                                 </div>
-                                                                                            </div>
-                                                                                        </td>
-                                                                                        <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                        <td colSpan={2}></td>
-                                                                                    </tr>
-                                                                                ))}
+                                                                                            </td>
+                                                                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                            <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                            <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                                                        </tr>
+                                                                                    );
+                                                                                })}
                                                                             </>
                                                                         );
                                                                     })()}
@@ -6730,34 +6778,42 @@ return (
                                                                     {entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' && (
                                                                         <>
                                                                             {/* DEBIT: Vendor A/c */}
-                                                                            <tr className="bg-white border-b border-gray-50/30">
-                                                                                <td className="border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
-                                                                                    <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                            <tr className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                                                    <div className="flex justify-between items-center w-full">
                                                                                         <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c</span>
                                                                                         <div className="flex items-center gap-1">
-                                                                                            <span className="font-bold">₹{entry.debit}</span>
-                                                                                            <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{entry.debit}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Dr</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
-                                                                                <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                <td colSpan={2}></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                             {/* CREDIT: Bank/Cash A/c */}
-                                                                            <tr className="bg-white border-b border-gray-50/30">
-                                                                                <td className="border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
-                                                                                    <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                            <tr className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                                                    <div className="flex justify-between items-center w-full">
                                                                                         <span>{entry.rawVoucher.pay_from_name || entry.rawVoucher.pay_from || entry.rawVoucher.payment_mode || 'Bank/Cash A/c'}</span>
                                                                                         <div className="flex items-center gap-1">
-                                                                                            <span className="font-bold">₹{entry.debit}</span>
-                                                                                            <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{entry.debit}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Cr</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
-                                                                                <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                <td colSpan={2}></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         </>
                                                                     )}
@@ -6765,34 +6821,42 @@ return (
                                                                     {(entry.rawVoucher?.transaction_type?.toLowerCase() === 'receipt' || entry.rawVoucher?.transaction_type?.toLowerCase() === 'advance_receipt') && (
                                                                         <>
                                                                             {/* DEBIT: Bank/Cash A/c */}
-                                                                            <tr className="bg-white border-b border-gray-50/30">
-                                                                                <td className="border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
-                                                                                    <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                            <tr className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                                                    <div className="flex justify-between items-center w-full">
                                                                                         <span>{entry.rawVoucher.receipt_mode || entry.rawVoucher.pay_from_name || 'Bank/Cash A/c'}</span>
                                                                                         <div className="flex items-center gap-1">
-                                                                                            <span className="font-bold">₹{entry.debit !== '-' ? entry.debit : entry.credit}</span>
-                                                                                            <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{entry.debit !== '-' ? entry.debit : entry.credit}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Dr</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
-                                                                                <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                <td colSpan={2}></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                             {/* CREDIT: Vendor A/c */}
-                                                                            <tr className="bg-white border-b border-gray-50/30">
-                                                                                <td className="border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
-                                                                                    <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                            <tr className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                                                    <div className="flex justify-between items-center w-full">
                                                                                         <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c</span>
                                                                                         <div className="flex items-center gap-1">
-                                                                                            <span className="font-bold">₹{entry.debit !== '-' ? entry.debit : entry.credit}</span>
-                                                                                            <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{entry.debit !== '-' ? entry.debit : entry.credit}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Cr</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
-                                                                                <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                <td colSpan={2}></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         </>
                                                                     )}
@@ -6801,34 +6865,42 @@ return (
                                                                     {entry.rawVoucher?.transaction_type?.toLowerCase() === 'advance_payment' && (
                                                                         <>
                                                                             {/* DEBIT: Vendor A/c */}
-                                                                            <tr className="bg-white border-b border-gray-50/30">
-                                                                                <td className="border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
-                                                                                    <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                            <tr className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                                                    <div className="flex justify-between items-center w-full">
                                                                                         <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c (Advance)</span>
                                                                                         <div className="flex items-center gap-1">
-                                                                                            <span className="font-bold">₹{entry.debit}</span>
-                                                                                            <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{entry.debit}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Dr</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
-                                                                                <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                <td colSpan={2}></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                             {/* CREDIT: Bank/Cash A/c */}
-                                                                            <tr className="bg-white border-b border-gray-50/30">
-                                                                                <td className="border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
-                                                                                    <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                            <tr className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                                                    <div className="flex justify-between items-center w-full">
                                                                                         <span>{entry.rawVoucher.pay_from_name || entry.rawVoucher.payment_mode || 'Bank/Cash A/c'}</span>
                                                                                         <div className="flex items-center gap-1">
-                                                                                            <span className="font-bold">₹{entry.debit}</span>
-                                                                                            <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{entry.debit}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Cr</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
-                                                                                <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                <td colSpan={2}></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         </>
                                                                     )}
@@ -6836,42 +6908,53 @@ return (
                                                                     {entry.rawVoucher?.transaction_type?.toLowerCase() === 'debit_note' && (
                                                                         <>
                                                                             {/* DEBIT: Vendor A/c */}
-                                                                            <tr className="bg-white border-b border-gray-50/30">
-                                                                                <td className="border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50 pl-12">
-                                                                                    <div className="flex justify-between items-center w-full text-xs font-medium text-gray-700">
+                                                                            <tr className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                                                    <div className="flex justify-between items-center w-full">
                                                                                         <span>{entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c</span>
                                                                                         <div className="flex items-center gap-1">
-                                                                                            <span className="font-bold">₹{entry.debit}</span>
-                                                                                            <span className="text-gray-400 text-[10px]">Dr</span>
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{entry.debit}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Dr</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
-                                                                                <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                <td colSpan={2}></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                             {/* CREDIT: Purchase Return / GST Reversal */}
-                                                                            <tr className="bg-white border-b border-gray-50/30">
-                                                                                <td className="border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1.5 border-r border-gray-50 pl-20">
-                                                                                    <div className="flex justify-between items-center w-full text-xs font-bold text-indigo-600">
+                                                                            <tr className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                                                    <div className="flex justify-between items-center w-full">
                                                                                         <span>Purchase Return A/c (incl. Tax)</span>
                                                                                         <div className="flex items-center gap-1">
-                                                                                            <span className="font-bold">₹{entry.debit}</span>
-                                                                                            <span className="text-gray-400 text-[10px]">Cr</span>
+                                                                                            <span className="text-gray-900 font-bold ml-4">₹{entry.debit}</span>
+                                                                                            <span className="text-gray-500 text-[10px] font-normal">Cr</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
-                                                                                <td colSpan={4} className="border-r border-gray-50"></td>
-                                                                                <td colSpan={2}></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
                                                                             </tr>
                                                                         </>
                                                                     )}
+                                                                    <tr className="bg-white">
+                                                                        <td className="py-2" colSpan={8}></td>
+                                                                    </tr>
                                                                 </React.Fragment>
                                                             ))}
                                                             {filteredLedgerData.length === 0 && (
                                                                 <tr>
-                                                                    <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500 border-b border-slate-200">
+                                                                    <td colSpan={8} className="px-6 py-8 text-center text-sm text-gray-500 border-b border-slate-200">
                                                                         No journal entries found matching criteria.
                                                                     </td>
                                                                 </tr>
