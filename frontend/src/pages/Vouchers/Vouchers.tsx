@@ -4257,8 +4257,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       || rawVoucher.sourceId || rawVoucher.source_id
       || rawVoucher.voucher_id || rawVoucher.voucherId || rawVoucher.id
       || viewVoucherData.voucher_id || viewVoucherData.voucherId || viewVoucherData.id;
-
-    const source = viewVoucherData.source || rawVoucher.source;
+    
+    const source = viewVoucherData.source || rawVoucher.source || mappedType.toLowerCase();
 
     if (!voucherId) {
       // Fallback: use raw data directly
@@ -4324,25 +4324,58 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setLocalPrefilledData({
             voucherId: voucherId,
             invoiceNumber: details.voucher_number || details.voucher_no || '',
+            // ── Sales Series ─────────────────────────────────────────────
+            voucher_name: details.voucher_name || details.voucher_series || details.sales_series || details.sales_voucher_series || '',
             branch: details.branch || '',
             gstin: details.gstin || '',
             invoiceDate: details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate(),
-            sellerName: details.party || '',
+            sellerName: details.party || details.customer_name || '',
+            placeOfSupply: details.place_of_supply || details.placeOfSupply || '',
+            invoiceType: details.invoice_type || details.invoiceType || 'Regular',
+            stateType: details.state_type || details.stateType || 'within',
             totalAmount: details.total_amount || details.total || 0,
             subtotal: details.total_taxable_amount || 0,
             cgstAmount: details.total_cgst || 0,
             sgstAmount: details.total_sgst || 0,
             igstAmount: details.total_igst || 0,
+            
+            // ── Addresses ──
+            billToAddress1: details.bill_to_address_1 || details.bill_to_address || '',
+            shipToAddress1: details.ship_to_address_1 || details.ship_to_address || '',
+            
+            // ── Extracted payment details ──
+            stateCess: details.payment_details?.payment_state_cess || '0',
+            tdsIncomeTax: details.payment_details?.payment_tds_income_tax || '0',
+            tdsGst: details.payment_details?.payment_tds_gst || '0',
+            advanceAmount: details.payment_details?.payment_advance || '0',
+            payable: details.payment_details?.payment_payable || '0',
+            postingNote: details.payment_details?.posting_note || '',
+
+            // ── Extracted dispatch details ──
+            dispatchFrom: details.dispatch_details?.dispatch_from || '',
+            modeOfTransport: details.dispatch_details?.mode_of_transport || '',
+            dispatchDate: details.dispatch_details?.dispatch_date || '',
+            dispatchTime: details.dispatch_details?.dispatch_time || '',
+            transporterId: details.dispatch_details?.transporter_id || '',
+            transporterName: details.dispatch_details?.transporter_name || '',
+            vehicleNo: details.dispatch_details?.vehicle_no || '',
+            lrGrConsignment: details.dispatch_details?.lr_gr_consignment || '',
+
             lineItems: (details.items || []).map((item: any) => ({
-              itemDescription: item.itemName || item.item_name || '',
+              itemDescription: item.itemName || item.item_name || item.description || '',
+              itemCode: item.itemCode || item.item_code || '',
               hsnCode: item.hsnSac || item.hsn_sac || '',
-              quantity: item.qty || 0,
-              rate: item.itemRate || item.rate || 0,
-              amount: item.invoiceValue || 0,
-              taxableValue: item.taxableValue || 0,
-              cgst: item.cgst || 0,
-              sgst: item.sgst || 0,
-              igst: item.igst || 0,
+              quantity: parseFloat(item.qty || item.quantity || '0') || 0,
+              rate: parseFloat(item.itemRate || item.rate || '0') || 0,
+              amount: parseFloat(item.invoiceValue || item.invoice_value || '0') || 0,
+              taxableValue: parseFloat(item.taxableValue || item.taxable_value || '0') || 0,
+              cgst: parseFloat(item.cgst || item.cgst_amount || '0') || 0,
+              sgst: parseFloat(item.sgst || item.sgst_amount || '0') || 0,
+              igst: parseFloat(item.igst || item.igst_amount || '0') || 0,
+              cess: parseFloat(item.cess || item.cess_amount || '0') || 0,
+              uom: item.uom || '',
+              // Per-row sales ledger so the Sales Ledger column populates
+              salesLedger: item.salesLedger || item.sales_ledger || '',
             })),
           } as any);
         }
@@ -4381,14 +4414,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setNarration(rawVoucher.narration || viewVoucherData.narration || '');
 
       if (mappedType === 'Sales') {
-        setLocalPrefilledData({
-          voucherId: voucherId,
-          invoiceNumber: rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '',
-          invoiceDate: fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate(),
-          sellerName: fallbackParty,
-          totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
-          lineItems: [], // No detail on fallback
-        } as any);
+          setLocalPrefilledData({
+            voucherId: voucherId,
+            invoiceNumber: rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '',
+            voucher_name: rawVoucher.voucher_name || rawVoucher.voucher_series || rawVoucher.sales_series || '',
+            invoiceDate: fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate(),
+            sellerName: fallbackParty,
+            totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
+            lineItems: [], // No detail on fallback
+          } as any);
       } else if (mappedType === 'Purchase') {
         setInvoiceNo(rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '');
         setSupplierInvoiceDate(fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate());

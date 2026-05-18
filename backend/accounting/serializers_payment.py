@@ -316,6 +316,43 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         except Exception as e:
             print(f"!!! Customer Portal Sync Failure (Payment): {str(e)}")
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        
+        # Map Ledger Names for Frontend Visibility (Drill-down)
+        if hasattr(instance, 'pay_from_ledger') and instance.pay_from_ledger:
+            ret['pay_from'] = instance.pay_from_ledger.name
+            ret['account'] = instance.pay_from_ledger.name
+        
+        if hasattr(instance, 'pay_to_ledger') and instance.pay_to_ledger:
+            ret['party'] = instance.pay_to_ledger.name
+            
+        # Auto-resolve voucher_type from MasterVoucherPayments prefix
+        if 'voucher_type' not in ret or not ret['voucher_type'] or str(ret['voucher_type']).lower() in ['payment', 'payments']:
+            from masters.models import MasterVoucherPayments
+            v_num = getattr(instance, 'voucher_number', '')
+            if v_num:
+                tenant_id = getattr(instance, 'tenant_id', None)
+                matched_cfg = None
+                configs = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True)
+                for cfg in configs:
+                    prefix = cfg.prefix or ''
+                    if prefix and str(v_num).lower().startswith(prefix.lower()):
+                        matched_cfg = cfg
+                        break
+                if matched_cfg:
+                    ret['voucher_type'] = matched_cfg.voucher_name
+                elif configs.exists():
+                    ret['voucher_type'] = configs.first().voucher_name
+
+        # Force Hydrate items if queryset was empty
+        if not ret.get('items') and hasattr(instance, 'get_items'):
+            items_qs = instance.get_items()
+            if items_qs:
+                ret['items'] = PaymentVoucherItemSerializer(items_qs, many=True, context=self.context).data
+
+        return ret
+
     class Meta:
         model = Voucher
         fields = '__all__'
@@ -559,45 +596,108 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     pay_to_vendor_id_val=p_v_id
                 )
 
-            self._mirror_to_generic_voucher(voucher)
+            gv = self._mirror_to_generic_voucher(voucher)
             self._mirror_to_vendor_portal(voucher)
             self._mirror_to_customer_portal(voucher)
-            self._post_journal_entries(voucher)
+            self._post_journal_entries(voucher, generic_voucher_id=gv.id if gv else None)
 
             return voucher
         
     def update(self, instance, validated_data):
-        items_data = validated_data.pop('items', None)
-        instance = super().update(instance, validated_data)
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            items_data = validated_data.pop('items', None)
 
-        if items_data is not None:
-            # Replace child items wholesale
-            instance.delete_items()
-            total = Decimal("0")
-            for item_data in items_data:
-                pay_to_ledger = item_data.pop('pay_to_ledger')
-                amt = _safe_decimal(item_data.get('amount', 0))
-                total += amt
-                
-                # Use PendingTransaction as the single source of truth
-                PendingTransaction.objects.create(
-                    voucher=instance, 
-                    pay_to_ledger=pay_to_ledger, 
-                    pay_from_ledger=instance.pay_from_ledger,
-                    vouch_amount=instance.vouch_amount, 
-                    **item_data
-                )
-            instance.total_amount = total
-            instance.amount = total
-            instance.vouch_amount = total
-            instance.save(update_fields=['total_amount', 'amount', 'vouch_amount', 'updated_at'])
-            
-            self._mirror_to_vendor_portal(instance)
-            self._mirror_to_customer_portal(instance)
-            self._mirror_to_generic_voucher(instance)
-            self._post_journal_entries(instance)
+            # --- Strip ALL unique_together / non-model fields to prevent IntegrityError ---
+            validated_data.pop('type', None)            # unique_together field — never change
+            validated_data.pop('voucher_number', None)  # unique_together field — never change
+            validated_data.pop('is_amount_only', None)
+            validated_data.pop('voucher_type', None)
+            validated_data.pop('total_payment', None)   # SerializerMethodField
 
-        return instance
+            # Resolve ledger fields before setting on instance
+            pay_from_raw = validated_data.pop('pay_from', None)
+            if pay_from_raw:
+                pay_from_ledger = _resolve_ledger(pay_from_raw, instance.tenant_id)
+                if pay_from_ledger:
+                    instance.pay_from_ledger = pay_from_ledger
+                    pf_l, pf_c, pf_v = self._get_party_ids(pay_from_ledger)
+                    instance.ledger_id_val = pf_l
+                    instance.party_customer_id = pf_c
+                    instance.party_vendor_id = pf_v
+                    instance.pay_from_ledger_id_val = pf_l
+                    instance.pay_from_customer_id_val = pf_c
+                    instance.pay_from_vendor_id_val = pf_v
+
+            # Apply safe scalar fields directly
+            safe_fields = ['date', 'narration', 'ref_no', 'posting_note',
+                           'amount', 'total_amount', 'vouch_amount']
+            for f in safe_fields:
+                if f in validated_data:
+                    setattr(instance, f, validated_data.pop(f))
+
+            # Discard any remaining fields to avoid unexpected writes
+            validated_data.clear()
+            instance.save()
+
+            if items_data is not None:
+                # Replace child items wholesale
+                instance.delete_items()
+                total = Decimal("0")
+                for item_data in items_data:
+                    pay_to_raw = item_data.pop('pay_to_ledger', None)
+                    pay_to_ledger = _resolve_ledger(pay_to_raw, instance.tenant_id) if pay_to_raw else None
+
+                    item_data.pop('transaction_details', None)
+                    item_data.pop('pending_transaction', None)
+                    item_data.pop('vendor_name', None)
+                    item_data.pop('allocations', None)
+                    item_data.pop('customer_name', None)
+
+                    received_amt = item_data.pop('received_amount', None)
+                    raw_amt = item_data.pop('amount', None)
+                    amt_to_use = received_amt or raw_amt or item_data.get('amount_applied', Decimal('0'))
+                    amt = _safe_decimal(amt_to_use)
+                    total += amt
+                    item_data['allocated_amount'] = amt
+                    item_data['amount'] = amt
+                    item_data.pop('amount_applied', None)
+
+                    p_l_id, p_c_id, p_v_id = self._get_party_ids(pay_to_ledger) if pay_to_ledger else (None, None, None)
+
+                    it_type = str(item_data.get('reference_type', '')).upper()
+                    target_model = AdvanceAllocation if it_type == 'ADVANCE' else PendingTransaction
+
+                    if it_type == 'ADVANCE':
+                        item_data['is_advance'] = True
+                        if not item_data.get('advance_ref_no'):
+                            item_data['advance_ref_no'] = item_data.get('reference_id') or 'ADVANCE'
+
+                    target_model.objects.create(
+                        tenant_id=instance.tenant_id,
+                        transaction=instance,
+                        pay_to_ledger=pay_to_ledger,
+                        pay_from_ledger=instance.pay_from_ledger,
+                        vouch_amount=instance.vouch_amount,
+                        ledger_id_val=p_l_id,
+                        party_vendor_id=p_v_id,
+                        party_customer_id=p_c_id,
+                        pay_to_ledger_id_val=p_l_id,
+                        pay_to_vendor_id_val=p_v_id,
+                        pay_to_customer_id_val=p_c_id,
+                        **item_data
+                    )
+                instance.total_amount = total
+                instance.amount = total
+                instance.vouch_amount = total
+                instance.save()
+
+                self._mirror_to_vendor_portal(instance)
+                self._mirror_to_customer_portal(instance)
+                gv = self._mirror_to_generic_voucher(instance)
+                self._post_journal_entries(instance, generic_voucher_id=gv.id if gv else None)
+
+            return instance
 
 
     # ------------------------------------------------------------------
@@ -638,10 +738,12 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     'party_vendor_id': voucher.party_vendor_id,
                 }
             )
+            return gv[0]
         except Exception as e:
             print(f"!!! Global Voucher mirror failed for Payment {voucher.id}: {e}")
+            return None
 
-    def _post_journal_entries(self, voucher: PaymentVoucher):
+    def _post_journal_entries(self, voucher: PaymentVoucher, generic_voucher_id=None):
         """
         Post double-entry journal records.
         """
@@ -678,7 +780,7 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 if len(entries) >= 2:
                     post_transaction(
                         voucher_type="PAYMENT",
-                        voucher_id=voucher.id,
+                        voucher_id=generic_voucher_id or voucher.id,
                         tenant_id=voucher.tenant_id,
                         entries=entries,
                         transaction_date=voucher.date,

@@ -1005,6 +1005,35 @@ class Transaction(BaseModel):
     def __str__(self):
         return f"{self.transaction_type}: {self.voucher_number} ({self.date})"
 
+    # ── Compatibility shims so ReceiptVoucherSerializer (model=Voucher) doesn't crash ──
+    @property
+    def type(self):
+        """Alias transaction_type -> type for Voucher-serializer compatibility"""
+        tt = (self.transaction_type or '').upper()
+        if tt == 'RECEIPT':
+            return 'receipt'
+        if tt == 'PAYMENT':
+            return 'payment'
+        return (self.transaction_type or '').lower()
+
+    @type.setter
+    def type(self, value):
+        self.transaction_type = (value or '').upper()
+
+    @property
+    def notes(self):
+        """Alias narration -> notes for serializer compatibility"""
+        return self.narration
+
+    @notes.setter
+    def notes(self, value):
+        self.narration = value
+
+    @property
+    def receive_in(self):
+        """Alias pay_to_ledger -> receive_in for receipt serializer compatibility"""
+        return self.pay_to_ledger
+
     def get_items(self):
         """Unified access to all allocation sub-items for mirroring/POST-logic"""
         # Circular import protection

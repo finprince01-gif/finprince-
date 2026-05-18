@@ -34,6 +34,19 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
         
         return queryset
 
+    def get_object(self):
+        from django.http import Http404
+        try:
+            return super().get_object()
+        except Http404:
+            pk = self.kwargs.get('pk')
+            from .models import Voucher
+            generic_voucher = Voucher.objects.filter(id=pk).first()
+            if generic_voucher and generic_voucher.reference_id:
+                self.kwargs['pk'] = generic_voucher.reference_id
+                return super().get_object()
+            raise
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -96,38 +109,31 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
 
             # Generate Voucher Number
             from masters.models import MasterVoucherReceipts
-            v_type_name = data.get('voucher_type')
-            series = None
-            if v_type_name:
-                series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, voucher_name=v_type_name, is_active=True).first() # type: ignore
+            series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
             
-            if not series:
-                series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first() # type: ignore
+            def _is_taken(v):
+                from accounting.models import ReceiptVoucher, AdvanceAllocation, PendingTransaction
+                return (
+                    ReceiptVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v).exists() or
+                    AdvanceAllocation.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists() or
+                    PendingTransaction.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists()
+                )
 
             v_num = data.get('voucher_number')
-            
-            # If the provided number is already taken, and we have a series, 
-            # we should ignore the provided number and find the next available one.
-            if series and v_num and v_num != 'Manual Input':
-                from .models import Transaction
-                if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists(): # type: ignore
-                    v_num = None # Force auto-generation
+            if v_num == 'Manual Input':
+                v_num = None
 
-            if series and (not v_num or v_num == 'Manual Input'):
-                from .models import Transaction
-                # Loop to find the next truly available number
-                while True:
-                    v_num = series.get_next_number()
-                    if not Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists(): # type: ignore
-                        break
+            if series:
+                expected_next = series.get_next_number()
+                if not v_num or v_num == expected_next or _is_taken(v_num):
+                    if not v_num:
+                        v_num = expected_next
+                    while _is_taken(v_num):
+                        series.increment_number()
+                        v_num = series.get_next_number()
                     series.increment_number()
             
-            # CRITICAL FIX: If we are using the series number (pre-filled or auto-generated), 
-            # we MUST increment the counter so the NEXT voucher gets a new number.
-            if series and v_num and v_num == series.get_next_number():
-                series.increment_number()
-
-            if not v_num or v_num == 'Manual Input':
+            if not v_num:
                 import uuid
                 v_num = f"RCV-{uuid.uuid4().hex[:6].upper()}"
             else:
@@ -184,6 +190,29 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
             'voucher_number': v_num,
             'next_voucher_number': next_v_num
         }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Override to wrap updates in an atomic transaction and return 200.
+        Fixes: 409 Conflict caused by super().update() passing constraint fields
+        directly to the Voucher model's save().
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            with db_transaction.atomic():
+                updated_instance = serializer.save()
+            return Response(self.get_serializer(updated_instance).data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            print(f"!!! Error in ReceiptVoucher update: {str(e)}\n{traceback.format_exc()}")
+            return Response(
+                {"message": f"Failed to update receipt voucher: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def perform_create(self, serializer):
         user = self.request.user

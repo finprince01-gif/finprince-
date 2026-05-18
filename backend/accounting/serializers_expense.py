@@ -212,10 +212,7 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
             instance.total_sgst = totals['total_sgst']
             instance.total_igst = totals['total_igst']
             instance.total_cess = totals['total_cess']
-            instance.save(update_fields=[
-                'total_amount', 'total_taxable_value',
-                'total_cgst', 'total_sgst', 'total_igst', 'total_cess'
-            ])
+            instance.save()
             self._sync_expense_items(instance, rows)
             self._post_journal_entries(instance)
             

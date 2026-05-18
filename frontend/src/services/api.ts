@@ -611,20 +611,35 @@ class ApiService {
      */
     async getVoucher(id: number | string, options: AxiosRequestConfig = {}, source?: string) {
         let response: any;
+        let fetchedAsDetail = false;
+        const normalizedSource = source?.toLowerCase() || '';
+
         try {
-            if (source === 'sales_invoice') {
+            if (normalizedSource === 'sales_invoice') {
                 response = await httpClient.get<any>(`/api/invoices/${id}/`, undefined, options);
                 response.type = response.type || 'Sales';
-            } else if (source === 'purchase_voucher') {
+            } else if (normalizedSource === 'purchase_voucher') {
                 response = await httpClient.get<any>(`/api/vouchers/purchase/${id}/?show_all=true`, undefined, options);
                 response.type = response.type || 'Purchase';
             } else {
                 response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
             }
-        } catch (e) {
-            // Fallback for legacy calls if specific endpoints fail
-            if (source) {
-                response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+        } catch (e: any) {
+            // Fallback for legacy calls where JournalEntry stored Transaction ID instead of generic Voucher ID
+            if (e?.response?.status === 404) {
+                if (normalizedSource === 'receipt') {
+                    response = await httpClient.get<any>(`/api/vouchers/receipts/${id}/`, undefined, options);
+                    response.type = 'Receipt';
+                    fetchedAsDetail = true;
+                } else if (normalizedSource === 'payment') {
+                    response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, options);
+                    response.type = 'Payment';
+                    fetchedAsDetail = true;
+                } else if (source) {
+                    response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+                } else {
+                    throw e;
+                }
             } else {
                 throw e;
             }
@@ -645,6 +660,26 @@ class ApiService {
             type: (typeMap[response.type?.toLowerCase()] || response.type) as any
         };
 
+        // Handle early return for legacy fallback items where referenceId isn't present
+        if (fetchedAsDetail) {
+            const detail = response;
+            if (base.type === 'Receipt' || base.type === 'Payment') {
+                const isReceipt = base.type === 'Receipt';
+                return {
+                    ...base,
+                    voucher_type: detail.voucher_type || base.voucher_type || detail.type || '',
+                    receive_in: isReceipt ? (detail.receive_in?.name || detail.receive_in || detail.account || base.account || '') : '',
+                    account: isReceipt ? (detail.receive_in?.name || detail.receive_in || detail.account || base.account || '') : (detail.pay_from?.name || detail.pay_from || detail.pay_from_name || base.account || ''),
+                    paid_from: !isReceipt ? (detail.pay_from?.name || detail.pay_from || detail.pay_from_name || base.account || '') : '',
+                    party: detail.party || detail.customer || detail.pay_to_name?.name || detail.pay_to_name || base.party || '',
+                    ref_no: detail.ref_no || base.ref_no || '',
+                    narration: detail.narration || base.narration || '',
+                    voucher_number: detail.voucher_number || base.voucher_number || '',
+                    items: detail.items || [],
+                };
+            }
+        }
+
         // Fetch detailed data from source-specific endpoint when available
         const referenceId = response.reference_id;
         const actualSource = response.source || source || '';
@@ -659,10 +694,47 @@ class ApiService {
                     detailEndpoint = `/api/vouchers/purchase/${referenceId}/?show_all=true`;
                 } else if (actualSource === 'sales_voucher' || actualSource === 'sales_invoice' || base.type === 'Sales') {
                     detailEndpoint = `/api/vouchers/sales/${referenceId}/`;
+                } else if (base.type === 'Receipt') {
+                    // Fetch the actual ReceiptVoucher model to get voucher_type (series), receive_in, ref_no
+                    detailEndpoint = `/api/vouchers/receipts/${referenceId}/`;
+                } else if (base.type === 'Payment') {
+                    // Fetch the actual PaymentVoucher model to get voucher_type (series), pay_from, ref_no
+                    detailEndpoint = `/api/vouchers/payment/${referenceId}/`;
                 }
 
                 if (detailEndpoint) {
                     const detail = await httpClient.get<any>(detailEndpoint, undefined, options);
+
+                    // ── Early return for Receipt / Payment ────────────────────────────
+                    // These models don't have line items or addresses — just patch the
+                    // key fields that are missing from the generic Voucher table.
+                    if (base.type === 'Receipt' || base.type === 'Payment') {
+                        const isReceipt = base.type === 'Receipt';
+                        return {
+                            ...base,
+                            // ── Voucher Series (the master series name like 'recp1') ──
+                            voucher_type: detail.voucher_type || base.voucher_type || detail.type || '',
+                            // ── Bank/Cash account the money flows through ─────────────
+                            receive_in: isReceipt
+                                ? (detail.receive_in || detail.account || base.account || '')
+                                : '',
+                            account: isReceipt
+                                ? (detail.receive_in || detail.account || base.account || '')
+                                : (detail.pay_from || detail.pay_from_name || base.account || ''),
+                            paid_from: !isReceipt
+                                ? (detail.pay_from || detail.pay_from_name || base.account || '')
+                                : '',
+                            // ── Party names ────────────────────────────────────────────
+                            party: detail.party || detail.customer || detail.pay_to_name || base.party || '',
+                            // ── Other fields ──────────────────────────────────────────
+                            ref_no: detail.ref_no || base.ref_no || '',
+                            narration: detail.narration || base.narration || '',
+                            voucher_number: detail.voucher_number || base.voucher_number || '',
+                            // ── Allocation Items ──────────────────────────────────────
+                            items: detail.items || [],
+                        };
+                    }
+
                     const isPurchase = (actualSource === 'purchase_voucher' || base.type === 'Purchase');
 
                     // ── Address mapping ───────────────────────────────────────────────────
@@ -703,6 +775,8 @@ class ApiService {
                         // ── User-facing voucher number ─────────────────────────────────
                         voucher_number: voucherNum,
                         voucher_no: voucherNum,
+                        // ── Sales Invoice Series ──────────────────────────────────────
+                        voucher_name: detail.voucher_name || detail.voucher_series || base.voucher_name || '',
                         // ── Party / vendor info ────────────────────────────────────────
                         party: detail.vendor_name || detail.customer_name || base.party,
                         gstin: detail.gstin || base.gstin || '',
@@ -719,6 +793,13 @@ class ApiService {
                         invoice_in_foreign_currency: detail.invoice_in_foreign_currency || 'No',
                         // ── Nested sub-documents ──────────────────────────────────────
                         due_details: detail.due_details || null,
+                        // ── Pass detail sub-objects directly for extraction ───────────
+                        payment_details: detail.payment_details || null,
+                        dispatch_details: detail.dispatch_details || null,
+                        eway_bill_details: detail.eway_bill_details || null,
+                        tax_type: detail.tax_type || '',
+                        place_of_supply: detail.place_of_supply || '',
+                        invoice_type: detail.invoice_type || '',
                         supply_inr_details: detail.supply_inr_details || null,
                         supply_foreign_details: detail.supply_foreign_details || null,
                         transit_details: detail.transit_details || null,
@@ -747,6 +828,9 @@ class ApiService {
                         items: lineItems.map((item: any) => ({
                             itemCode: item.item_code || item.itemCode || '',
                             itemName: item.item_name || item.itemName || '',
+                            // ── Per-item Sales/Purchase Ledger ────────────────────────
+                            salesLedger: item.sales_ledger || item.salesLedger || '',
+                            sales_ledger: item.sales_ledger || item.salesLedger || '',
                             hsnSac: item.hsn_sac || item.hsnSac || '',
                             qty: parseFloat(item.quantity || item.qty || '0'),
                             uom: item.uom || '',

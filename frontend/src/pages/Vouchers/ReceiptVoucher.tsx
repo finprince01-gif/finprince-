@@ -90,6 +90,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     const [totalReceipt, setTotalReceipt] = useState(0);
     const [topAmount, setTopAmount] = useState<number>(0);
+    const [editingVoucherId, setEditingVoucherId] = useState<number | null>(null);
 
     // Ledgers state
     const [allLedgers, setAllLedgers] = useState<Ledger[]>([]);
@@ -285,61 +286,107 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }
     }, [receiveIn, allLedgers]);
 
-    // Populate from AI Extraction
+    // Populate from AI Extraction / Drill-down
     useEffect(() => {
-        if (prefilledData && allLedgers.length > 0) {
+        if (!prefilledData) return;
 
-            // Helper to find exact ledger name from allLedgers (case-insensitive)
-            const findLedgerName = (name: string) => {
-                if (!name) return '';
-                const normalized = name.trim().toLowerCase();
-                const found = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
-                return found ? found.name : name; // Fallback to original string so it still displays
-            };
+        // Helper to find exact ledger name from allLedgers (case-insensitive)
+        const findLedgerName = (name: string) => {
+            if (!name) return '';
+            const normalized = name.trim().toLowerCase();
+            const found = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
+            return found ? found.name : name; // Fallback to original string so it still displays
+        };
 
-            if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);
-            if (prefilledData.sellerName) {
-                const ledgerName = findLedgerName(prefilledData.sellerName);
-                if (ledgerName) {
-                    setReceiveFrom(ledgerName);
-                    handleCustomerSelect(ledgerName);
-                }
+        if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);
+        if (prefilledData.sellerName) {
+            const ledgerName = findLedgerName(prefilledData.sellerName);
+            if (ledgerName) {
+                setReceiveFrom(ledgerName);
+                handleCustomerSelect(ledgerName);
             }
-            if ((prefilledData as any).account) setReceiveIn(findLedgerName((prefilledData as any).account));
-            
-            // Fill critical details if they are provided, specifically for drill-down/read-only mode
-            if ((prefilledData as any).totalAmount !== undefined) {
-                const amt = parseFloat((prefilledData as any).totalAmount) || 0;
-                if (isReadOnlyMode || amt > 0) {
-                    setTopAmount(amt);
-                }
-            }
-
-            if ((prefilledData as any).invoiceNumber) {
-                setVoucherNumber((prefilledData as any).invoiceNumber);
-            }
-
-            if ((prefilledData as any).voucher_type) {
-                setSelectedReceiptConfig((prefilledData as any).voucher_type);
-            }
-
-            if ((prefilledData as any).reference_number) {
-                setRefNo((prefilledData as any).reference_number);
-                setSingleAdvanceRefNo((prefilledData as any).reference_number);
-            } else if (prefilledData.invoiceNumber) {
-                 setSingleAdvanceRefNo(prefilledData.invoiceNumber);
-            }
-            
-            if ((prefilledData as any).narration) {
-                setPostingNote((prefilledData as any).narration);
-            }
-            if ((prefilledData as any).bank_transaction_id) {
-                setBankTransactionId((prefilledData as any).bank_transaction_id);
-            }
-            
-            // Only clear if NOT in read-only mode (otherwise repeated renders lose view state)
-            if (clearPrefilledData && !isReadOnlyMode) clearPrefilledData();
         }
+        // ── Receive In (Bank/Cash account) ─────────────────────────────
+        // Support both 'account' (mapped from drilldown) and 'receive_in' (direct API field)
+        const receiveInRaw = (prefilledData as any).receive_in || (prefilledData as any).account || '';
+        if (receiveInRaw) setReceiveIn(findLedgerName(receiveInRaw));
+
+        // Fill critical details if they are provided, specifically for drill-down/read-only mode
+        if ((prefilledData as any).totalAmount !== undefined) {
+            const amt = parseFloat((prefilledData as any).totalAmount) || 0;
+            if (isReadOnlyMode || amt > 0) {
+                setTopAmount(amt);
+            }
+        }
+
+        if ((prefilledData as any).invoiceNumber) {
+            setVoucherNumber((prefilledData as any).invoiceNumber);
+        }
+
+        if ((prefilledData as any).voucher_type) {
+            setSelectedReceiptConfig((prefilledData as any).voucher_type);
+        }
+
+        if ((prefilledData as any).reference_number) {
+            setRefNo((prefilledData as any).reference_number);
+            setSingleAdvanceRefNo((prefilledData as any).reference_number);
+        } else if (prefilledData.invoiceNumber) {
+             setSingleAdvanceRefNo(prefilledData.invoiceNumber);
+        }
+
+        if ((prefilledData as any).narration) {
+            setPostingNote((prefilledData as any).narration);
+        }
+        if ((prefilledData as any).bank_transaction_id) {
+            setBankTransactionId((prefilledData as any).bank_transaction_id);
+        }
+
+        // ── Capture existing voucher ID for edit mode (drill-down) ─────
+        const refId = (prefilledData as any).voucherId || (prefilledData as any).reference_id || (prefilledData as any).referenceId || (prefilledData as any).id || null;
+        if (refId) {
+            setEditingVoucherId(Number(refId));
+        } else {
+            setEditingVoucherId(null);
+        }
+
+        // ── Hydrate Allocation Items (Drill-down) ─────────────────────────────
+        if (isReadOnlyMode && (prefilledData as any).items && Array.isArray((prefilledData as any).items)) {
+            const itemsList = (prefilledData as any).items;
+            
+            // 1. Look for an advance item
+            const advanceItem = itemsList.find((i: any) => i.is_advance || i.reference_type === 'ADVANCE');
+            if (advanceItem) {
+                setShowSingleAdvanceSection(true);
+                setSingleAdvanceRefNo(advanceItem.advance_ref_no || advanceItem.ref_no || '');
+                setSingleAdvanceAmount(parseFloat(advanceItem.received_amount || advanceItem.amount_applied || advanceItem.amount || '0'));
+            }
+            
+            // 2. Map standard invoice allocation items
+            const invoices = itemsList.filter((i: any) => !i.is_advance && i.reference_type !== 'ADVANCE');
+            if (invoices.length > 0) {
+                const mappedPending: PendingTransaction[] = invoices.map((i: any) => {
+                    const applied = parseFloat(i.received_amount || i.amount_applied || i.amount || '0');
+                    const pendingBefore = parseFloat(i.pending_before || '0');
+                    const balAfter = parseFloat(i.balance_after || '0');
+                    
+                    return {
+                        id: (i.id || i.reference_id || Math.random()).toString(),
+                        date: i.invoice_date || i.date || getCurrentDate(),
+                        referenceNumber: i.reference_number || i.ref_no || i.reference_id || 'N/A',
+                        amount: pendingBefore || (applied + balAfter),
+                        receipt: applied,
+                        status: balAfter <= 0 ? 'Received' : 'Partially Received',
+                        dueDate: ''
+                    };
+                });
+                setPendingTransactions(mappedPending);
+                setTotalReceipt(mappedPending.reduce((sum, t) => sum + t.receipt, 0) + (advanceItem ? parseFloat(advanceItem.received_amount || advanceItem.amount_applied || advanceItem.amount || '0') : 0));
+            }
+        }
+
+        // Only clear if NOT in read-only mode (otherwise repeated renders lose view state)
+        if (clearPrefilledData && !isReadOnlyMode) clearPrefilledData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefilledData, clearPrefilledData, allLedgers, isReadOnlyMode]);
 
     const fetchReceiptConfigs = useCallback(async () => {
@@ -369,6 +416,21 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     useEffect(() => {
         fetchReceiptConfigs();
     }, [fetchReceiptConfigs]);
+
+    // Synchronize prefilled voucher_type with options once they finish loading
+    useEffect(() => {
+        if (prefilledData && (prefilledData as any).voucher_type && receiptVoucherConfigs.length > 0) {
+            const typeStr = String((prefilledData as any).voucher_type).trim();
+            if (typeStr.toLowerCase() !== 'receipt' && typeStr.toLowerCase() !== 'receipts') {
+                const match = receiptVoucherConfigs.find(c => 
+                    String(c.voucher_name).trim().toLowerCase() === typeStr.toLowerCase()
+                );
+                if (match) {
+                    setSelectedReceiptConfig(match.voucher_name);
+                }
+            }
+        }
+    }, [prefilledData, receiptVoucherConfigs]);
 
     // Auto-Recover Configuration from Voucher Number prefix (Drill-down)
     useEffect(() => {
@@ -517,7 +579,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 return;
             }
 
-            const payload = {
+            const payload: any = {
                 date: date,
                 voucher_type: selectedReceiptConfig,
                 voucher_number: voucherNumber,
@@ -525,17 +587,27 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 receive_in: receiveInId,
                 receive_from: receiveFromId,
                 amount: topAmount,
+                total_amount: topAmount,
                 narration: postingNote,
                 is_amount_only: true
             };
             
-            const response: any = await httpClient.post('/api/vouchers/receipt-single/save-amount-only/', payload);
-            showSuccess("Receipt recorded (Amount Only)");
-            
-            if (response.next_voucher_number) {
-                setVoucherNumber(response.next_voucher_number);
+            if (editingVoucherId) {
+                payload.items = [{
+                    customer: receiveFromId,
+                    amount: topAmount,
+                    received_amount: topAmount,
+                    reference_type: 'ADVANCE',
+                    advance_ref_no: 'ADVANCE',
+                    narration: 'Balance receipt'
+                }];
+                await httpClient.patch(`/api/vouchers/receipts/${editingVoucherId}/`, payload);
+                showSuccess("Receipt updated (Amount Only)");
+            } else {
+                await httpClient.post('/api/vouchers/receipt-single/save-amount-only/', payload);
+                showSuccess("Receipt recorded (Amount Only)");
             }
-            fetchReceiptConfigs(); // Refresh configs to trigger next-number update
+            
             handleCancel();
         } catch (error: any) {
             console.error("Receipt save error:", error);
@@ -602,6 +674,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         setSelectedCustomer(customerName);
         if (!customerName) {
             setBulkTransactions([]);
+            return;
+        }
+
+        // If in read-only mode, DO NOT fetch fresh outstanding bills as it would overwrite the hydrated ones
+        if (isReadOnlyMode) {
             return;
         }
 
@@ -942,7 +1019,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     items: items
                 };
 
-                if (singleAdvanceRefNo.trim() && singleAdvanceRefNo.trim() !== 'ADVANCE') {
+                if (singleAdvanceRefNo.trim() && singleAdvanceRefNo.trim() !== 'ADVANCE' && !editingVoucherId) {
                     const check = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/receipts/check-uniqueness/?ref_no=${encodeURIComponent(singleAdvanceRefNo)}`);
                     if (!check.is_unique) {
                         showError(`Reference Number '${singleAdvanceRefNo}' already exists.`);
@@ -950,8 +1027,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     }
                 }
 
-                const response: any = await httpClient.post('/api/vouchers/receipts/', payload);
-                showSuccess('Receipt Voucher posted successfully!');
+                let response: any;
+                if (editingVoucherId) {
+                    response = await httpClient.patch(`/api/vouchers/receipts/${editingVoucherId}/`, payload);
+                    showSuccess('Receipt Voucher updated successfully!');
+                } else {
+                    response = await httpClient.post('/api/vouchers/receipts/', payload);
+                    showSuccess('Receipt Voucher posted successfully!');
+                }
 
                 // Sync component state with parent so dashboards and reports update instantly
                 if (onAddVouchers) {
@@ -967,9 +1050,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     }], false);
                 }
 
-                // Increment the voucher series counter so the next number is ready
+                // Increment the voucher series counter so the next number is ready (Skip if editing existing!)
                 const savedConfig = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
-                if (savedConfig && savedConfig.enable_auto_numbering) {
+                if (savedConfig && savedConfig.enable_auto_numbering && !editingVoucherId) {
                     try {
                         await httpClient.post(`/api/masters/master-voucher-receipts/${savedConfig.id}/increment-number/`, {});
                         const res = await httpClient.get<any>(`/api/masters/master-voucher-receipts/${savedConfig.id}/next-number/`);
@@ -1115,8 +1198,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     notes: postingNote
                 };
 
-                const response: any = await httpClient.post('/api/vouchers/receipts/', payload);
-                showSuccess(`Consolidated Receipt Voucher posted successfully.`);
+                let response: any;
+                if (editingVoucherId) {
+                    response = await httpClient.patch(`/api/vouchers/receipts/${editingVoucherId}/`, payload);
+                    showSuccess(`Consolidated Receipt Voucher updated successfully.`);
+                } else {
+                    response = await httpClient.post('/api/vouchers/receipts/', payload);
+                    showSuccess(`Consolidated Receipt Voucher posted successfully.`);
+                }
 
                 // Sync component state with parent so dashboards and reports update instantly
                 if (onAddVouchers) {
@@ -1132,9 +1221,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     }], false);
                 }
 
-                // Increment the voucher series counter so the next number is ready
+                // Increment the voucher series counter so the next number is ready (Skip if editing existing!)
                 const savedConfigBulk = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
-                if (savedConfigBulk && savedConfigBulk.enable_auto_numbering) {
+                if (savedConfigBulk && savedConfigBulk.enable_auto_numbering && !editingVoucherId) {
                     try {
                         await httpClient.post(`/api/masters/master-voucher-receipts/${savedConfigBulk.id}/increment-number/`, {});
                         const res = await httpClient.get<any>(`/api/masters/master-voucher-receipts/${savedConfigBulk.id}/next-number/`);
