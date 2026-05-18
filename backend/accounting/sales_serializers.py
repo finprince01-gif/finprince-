@@ -50,6 +50,7 @@ class SalesVoucherItemSerializer(serializers.ModelSerializer):
     unit = serializers.CharField(source='uom', read_only=True)
     hsn_code = serializers.CharField(source='hsn_sac', read_only=True)
     rate = serializers.DecimalField(source='item_rate', max_digits=18, decimal_places=2, read_only=True)
+    quantity = serializers.DecimalField(source='qty', max_digits=18, decimal_places=4, read_only=True)
     
     # Tax fields mapping
     cgst_amount = serializers.DecimalField(source='cgst', max_digits=18, decimal_places=2, read_only=True)

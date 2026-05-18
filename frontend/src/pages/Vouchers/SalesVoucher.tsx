@@ -197,6 +197,20 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             if (prefilledData.invoiceType) setInvoiceType(prefilledData.invoiceType);
             if (prefilledData.currency) setCustomerBillingCurrency(prefilledData.currency);
 
+            // ── Capture existing voucher ID for edit mode (drill-down) ─────
+            const refId = (prefilledData as any).voucherId || (prefilledData as any).reference_id || (prefilledData as any).referenceId || (prefilledData as any).id || null;
+            if (refId) {
+                setEditingVoucherId(Number(refId));
+            } else {
+                setEditingVoucherId(null);
+            }
+
+            // ── Sales Invoice Series (drill-down) ─────────────────────────
+            const vNameFromPrefill = (prefilledData as any).voucher_name || (prefilledData as any).voucher_series || '';
+            if (vNameFromPrefill) {
+                setVoucherName(vNameFromPrefill);
+            }
+
             if (prefilledData.billToAddress1) setBillToAddress1(prefilledData.billToAddress1);
             if (prefilledData.billToAddress2) setBillToAddress2(prefilledData.billToAddress2);
             if (prefilledData.billToCity) setBillToCity(prefilledData.billToCity);
@@ -245,13 +259,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
                     return {
                         id: index + 1,
-                        itemCode: '',
+                        itemCode: (item as any).itemCode || '',
                         itemName: item.itemDescription || '',
-                        salesLedger: '',
+                        // ── Sales Ledger per row (drill-down) ─────────────
+                        salesLedger: (item as any).salesLedger || '',
                         description: item.itemDescription || '',
                         hsnSac: item.hsnCode || '',
                         qty: qty.toString(),
-                        uom: item.uom || '',
+                        uom: (item as any).uom || '',
                         itemRate: rate.toString(),
                         taxableValue: taxable.toFixed(2),
                         igst: igst.toFixed(2),
@@ -274,6 +289,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     // Invoice Details State
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [salesInvoiceNo, setSalesInvoiceNo] = useState('');
+    // Track existing voucher ID when editing (drill-down mode)
+    const [editingVoucherId, setEditingVoucherId] = useState<number | null>(null);
     const [voucherName, setVoucherName] = useState('');
     const [salesVoucherConfigs, setSalesVoucherConfigs] = useState<any[]>([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState<number | null>(null);
@@ -2176,8 +2193,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 }))
             };
 
-            const response: any = await apiService.createSalesVoucherNew(payload);
-            showSuccess('Sales Voucher Saved Successfully!');
+            // If editing an existing voucher, PATCH it. Otherwise POST (create new).
+            let response: any;
+            if (editingVoucherId) {
+                response = await httpClient.patch<any>(`/api/voucher-sales-new/${editingVoucherId}/`, payload);
+                showSuccess('Sales Voucher Updated Successfully!');
+            } else {
+                response = await apiService.createSalesVoucherNew(payload);
+                showSuccess('Sales Voucher Saved Successfully!');
+            }
 
             // Propagate to main container state to enable immediate visibility on dashboards and reports
             if (onAddVouchers) {
@@ -2193,8 +2217,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 }], false);
             }
 
-            // Increment series counter so next invoice gets auto-incremented number
-            if (selectedSeriesId) {
+            // Only increment series counter for new vouchers
+            if (!editingVoucherId && selectedSeriesId) {
                 await incrementInvoiceNumber(selectedSeriesId);
             }
 
@@ -2257,8 +2281,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 eway_bill_details: ewayValidationEntries.map(entry => ({ eway_bill_available: entry.available === 'Yes', eway_bill_no: entry.ewayBillNo || '', eway_bill_date: formatDate(entry.date || ''), validity_period: entry.validityPeriod || '', distance: entry.distance || '', irn, ack_no: ackNo, ack_date: formatDate(ackDate) }))
             };
 
-            const response: any = await apiService.createSalesVoucherNew(payload);
-            showSuccess('Sales Voucher Saved Successfully!');
+            // If editing an existing voucher, PATCH it. Otherwise POST (create new).
+            let response: any;
+            if (editingVoucherId) {
+                response = await httpClient.patch<any>(`/api/voucher-sales-new/${editingVoucherId}/`, payload);
+                showSuccess('Sales Voucher Updated Successfully!');
+            } else {
+                response = await apiService.createSalesVoucherNew(payload);
+                showSuccess('Sales Voucher Saved Successfully!');
+            }
 
             // Propagate to main container state to enable immediate visibility on dashboards and reports
             if (onAddVouchers) {
@@ -2274,8 +2305,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 }], false);
             }
 
-            // Increment series counter so next invoice gets auto-incremented number
-            if (selectedSeriesId) {
+            // Only increment series counter for new vouchers
+            if (!editingVoucherId && selectedSeriesId) {
                 await incrementInvoiceNumber(selectedSeriesId);
             }
 

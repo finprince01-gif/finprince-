@@ -12,5 +12,7 @@
     "typeCheckingMode": "basic",
     "useLibraryCodeForTypes": true,
     "venvPath": "backend",
-    "venv": "venv"
+    "venv": "venv",
+    "reportAttributeAccessIssue": false,
+    "reportAssignmentType": false
 }

@@ -266,7 +266,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     const voucherId = selectedTransaction?.voucher_id || selectedTransaction?.rawVoucher?.voucher_id || selectedTransaction?.voucherId || selectedTransaction?.rawVoucher?.voucherId;
     if (selectedTransaction && voucherId) {
       setIsLoadingDetails(true);
-      apiService.getVoucher(voucherId)
+      const sourceHint = selectedTransaction?.voucher_type || selectedTransaction?.voucherType || selectedTransaction?.rawVoucher?.voucher_type;
+      apiService.getVoucher(voucherId, {}, sourceHint)
         .then(details => {
           setVoucherDetails(details);
           setIsLoadingDetails(false);

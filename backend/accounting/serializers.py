@@ -318,6 +318,35 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
             entries = JournalEntry.objects.filter(voucher_id=instance.id, tenant_id=instance.tenant_id)
             ret['entries'] = JournalEntrySerializer(entries, many=True).data
         
+        # Auto-resolve voucher_type from prefix configurations for payment/receipt
+        v_type_lower = (instance.type or '').lower()
+        if v_type_lower in ['payment', 'receipt']:
+            current_vtype = ret.get('voucher_type')
+            if not current_vtype or str(current_vtype).lower() in ['payment', 'payments', 'receipt', 'receipts']:
+                v_num = getattr(instance, 'voucher_number', '') or getattr(instance, 'invoice_no', '')
+                tenant_id = getattr(instance, 'tenant_id', None)
+                
+                configs = None
+                if v_type_lower == 'payment':
+                    from masters.models import MasterVoucherPayments
+                    configs = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True)
+                else:
+                    from masters.models import MasterVoucherReceipts
+                    configs = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True)
+                
+                if configs:
+                    matched_cfg = None
+                    if v_num:
+                        for cfg in configs:
+                            prefix = cfg.prefix or ''
+                            if prefix and str(v_num).lower().startswith(prefix.lower()):
+                                matched_cfg = cfg
+                                break
+                    if matched_cfg:
+                        ret['voucher_type'] = matched_cfg.voucher_name
+                    elif configs.exists():
+                        ret['voucher_type'] = configs.first().voucher_name
+        
         return ret
     
     def validate(self, data):

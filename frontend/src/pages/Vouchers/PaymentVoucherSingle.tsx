@@ -86,6 +86,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
     const [totalPayment, setTotalPayment] = useState(0);
     const [topAmount, setTopAmount] = useState<number>(0);
+    const [editingVoucherId, setEditingVoucherId] = useState<number | null>(null);
 
     // Payment Voucher Configuration state
     const [paymentVoucherConfigs, setPaymentVoucherConfigs] = useState<any[]>([]);
@@ -256,6 +257,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if (!payTo) {
                 setPendingTransactions([]);
                 setAvailableAdvances([]);
+                return;
+            }
+            // If in read-only mode, DO NOT fetch fresh outstanding bills as it would overwrite the hydrated ones
+            if (isReadOnlyMode) {
                 return;
             }
             const selectedOpt = payToOptions.find(opt => opt.name === payTo);
@@ -461,7 +466,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
             if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);
             if (prefilledData.sellerName) setPayTo(findLedgerName(prefilledData.sellerName));
-            if ((prefilledData as any).account) setPayFrom(findLedgerName((prefilledData as any).account));
+            
+            // Support both 'pay_from' (direct API field) and 'account' (mapped from drilldown)
+            const payFromRaw = (prefilledData as any).pay_from || (prefilledData as any).account || '';
+            if (payFromRaw) setPayFrom(findLedgerName(payFromRaw));
 
             // Fill critical details if they are provided, specifically for drill-down/read-only mode
             if ((prefilledData as any).totalAmount !== undefined) {
@@ -487,6 +495,52 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if ((prefilledData as any).narration) setPostingNote((prefilledData as any).narration);
             if ((prefilledData as any).bank_transaction_id) setBankTransactionId((prefilledData as any).bank_transaction_id);
             
+            // ── Capture existing voucher ID for edit mode (drill-down) ─────
+            const refId = (prefilledData as any).voucherId || (prefilledData as any).reference_id || (prefilledData as any).referenceId || (prefilledData as any).id || null;
+            if (refId) {
+                setEditingVoucherId(Number(refId));
+            } else {
+                setEditingVoucherId(null);
+            }
+            
+            // ── Hydrate Allocation Items (Drill-down) ─────────────────────────────
+            if (isReadOnlyMode && (prefilledData as any).items && Array.isArray((prefilledData as any).items)) {
+                const itemsList = (prefilledData as any).items;
+                
+                // 1. Look for advance payment item
+                const advanceItem = itemsList.find((i: any) => i.is_advance || i.reference_type === 'ADVANCE');
+                if (advanceItem) {
+                    setShowSingleAdvanceSection(true);
+                    setSingleAdvanceRefNo(advanceItem.advance_ref_no || advanceItem.ref_no || '');
+                    const advAmt = parseFloat(advanceItem.amount_applied || advanceItem.amount || '0');
+                    setSingleAdvanceAmount(advAmt);
+                }
+                
+                // 2. Map standard invoice allocation items
+                const invoices = itemsList.filter((i: any) => !i.is_advance && i.reference_type !== 'ADVANCE');
+                if (invoices.length > 0) {
+                    const mappedPending = invoices.map((i: any) => {
+                        const applied = parseFloat(i.amount_applied || i.amount || '0');
+                        const pendingBefore = parseFloat(i.pending_before || i.pending_amount || '0');
+                        const balAfter = parseFloat(i.balance_after || '0');
+                        
+                        return {
+                            date: i.invoice_date || i.date || getCurrentDate(),
+                            referenceNumber: i.reference_number || i.ref_no || i.reference_id || 'N/A',
+                            amount: pendingBefore || (applied + balAfter),
+                            payment: applied,
+                            dueStatus: balAfter <= 0 ? 'Paid' : 'Partially Paid',
+                            dueDate: '',
+                            daysToDue: 0
+                        };
+                    });
+                    setPendingTransactions(mappedPending);
+                    // Force calculate total
+                    const totalAlloc = mappedPending.reduce((sum, t) => sum + t.payment, 0) + (advanceItem ? parseFloat(advanceItem.amount_applied || advanceItem.amount || '0') : 0);
+                    setTotalPayment(totalAlloc);
+                }
+            }
+
             // Only clear if NOT in read-only mode (otherwise repeated renders lose view state)
             if (clearPrefilledData && !isReadOnlyMode) clearPrefilledData();
         }
@@ -511,6 +565,42 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         };
         fetchConfigs();
     }, []);
+
+    // Synchronize prefilled voucher_type with options once they finish loading
+    useEffect(() => {
+        if (prefilledData && (prefilledData as any).voucher_type && paymentVoucherConfigs.length > 0) {
+            const typeStr = String((prefilledData as any).voucher_type).trim();
+            if (typeStr.toLowerCase() !== 'payment' && typeStr.toLowerCase() !== 'payments') {
+                const match = paymentVoucherConfigs.find(c => 
+                    String(c.voucher_name).trim().toLowerCase() === typeStr.toLowerCase()
+                );
+                if (match) {
+                    setSelectedPaymentConfig(match.voucher_name);
+                }
+            }
+        }
+    }, [prefilledData, paymentVoucherConfigs]);
+
+    // Auto-Recover Configuration from Voucher Number prefix (Drill-down)
+    useEffect(() => {
+        if (isReadOnlyMode && voucherNumber && paymentVoucherConfigs.length > 0) {
+            // Only attempt to match if the current selection is invalid or generic
+            const currentMatch = paymentVoucherConfigs.find(cfg => cfg.voucher_name === selectedPaymentConfig);
+            if (!currentMatch) {
+                const vNumLower = voucherNumber.toLowerCase();
+                const matchedConfig = paymentVoucherConfigs.find(cfg => {
+                    const prefix = (cfg.prefix || '').toLowerCase();
+                    return prefix && vNumLower.startsWith(prefix);
+                });
+                
+                if (matchedConfig) {
+                    setSelectedPaymentConfig(matchedConfig.voucher_name);
+                } else if (!selectedPaymentConfig && paymentVoucherConfigs.length > 0) {
+                    setSelectedPaymentConfig(paymentVoucherConfigs[0].voucher_name);
+                }
+            }
+        }
+    }, [voucherNumber, paymentVoucherConfigs, isReadOnlyMode, selectedPaymentConfig]);
 
     // Generate voucher number when configuration is selected
     useEffect(() => {
@@ -647,20 +737,35 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 return;
             }
 
-            const payload = {
+            const payload: any = {
                 date: date,
-                voucher_type: selectedPaymentConfig,
+                voucher_type: selectedPaymentConfig || voucherType,
                 voucher_number: voucherNumber,
                 ref_no: refNo,
                 pay_from: payFromId,
-                pay_to: payToId,
-                amount: topAmount,
+                total_amount: Number(topAmount),
+                amount: Number(topAmount),
                 narration: postingNote,
                 is_amount_only: true
             };
             
-            const response: any = await httpClient.post('/api/vouchers/payment-single/save-amount-only/', payload);
-            showSuccess("Payment recorded (Amount Only)");
+            let response: any;
+            if (editingVoucherId) {
+                // To update with "Amount Only", we provide a single unallocated advance item.
+                payload.items = [{
+                    pay_to_ledger: payToId,
+                    amount: topAmount,
+                    reference_type: 'ADVANCE',
+                    advance_ref_no: 'ADVANCE',
+                    narration: 'Balance payment'
+                }];
+                response = await httpClient.patch(`/api/vouchers/payment/${editingVoucherId}/`, payload);
+                showSuccess("Payment updated (Amount Only)");
+            } else {
+                payload.pay_to = payToId; // Required by the custom POST endpoint
+                response = await httpClient.post('/api/vouchers/payment-single/save-amount-only/', payload);
+                showSuccess("Payment recorded (Amount Only)");
+            }
 
             // Sync with parent state to enable immediate updates across other tabs/reports
             if (onAddVouchers) {
@@ -1102,21 +1207,23 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 return;
             }
 
-            // Pre-post uniqueness check for all advances & voucher number
-            if (voucherNumber && voucherNumber.trim()) {
-                const checkV = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/payment/check-uniqueness/?voucher_number=${encodeURIComponent(voucherNumber)}`);
-                if (!checkV.is_unique) {
-                    showError(`Voucher Number '${voucherNumber}' already exists. Please use a unique one.`);
-                    return;
+            // Pre-post uniqueness check for all advances & voucher number (Skip if editing!)
+            if (!editingVoucherId) {
+                if (voucherNumber && voucherNumber.trim()) {
+                    const checkV = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/payment/check-uniqueness/?voucher_number=${encodeURIComponent(voucherNumber)}`);
+                    if (!checkV.is_unique) {
+                        showError(`Voucher Number '${voucherNumber}' already exists. Please use a unique one.`);
+                        return;
+                    }
                 }
-            }
 
-            const advances = items.filter(i => i.reference_type === 'ADVANCE' && i.advance_ref_no && i.advance_ref_no !== 'ADVANCE');
-            for (const adv of advances) {
-                const check = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/payment/check-uniqueness/?ref_no=${encodeURIComponent(adv.advance_ref_no)}`);
-                if (!check.is_unique) {
-                    showError(`Reference Number '${adv.advance_ref_no}' already exists. Please choose a unique one.`);
-                    return;
+                const advances = items.filter(i => i.reference_type === 'ADVANCE' && i.advance_ref_no && i.advance_ref_no !== 'ADVANCE');
+                for (const adv of advances) {
+                    const check = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/payment/check-uniqueness/?ref_no=${encodeURIComponent(adv.advance_ref_no)}`);
+                    if (!check.is_unique) {
+                        showError(`Reference Number '${adv.advance_ref_no}' already exists. Please choose a unique one.`);
+                        return;
+                    }
                 }
             }
 
@@ -1133,8 +1240,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 ...(bankTransactionId ? { bank_transaction_id: bankTransactionId } : {})
             };
 
-            const response: any = await httpClient.post('/api/vouchers/payment/', payload);
-            showSuccess(`${activeTab === 'single' ? 'Single' : 'Bulk'} Payment Voucher posted successfully!`);
+            let response: any;
+            if (editingVoucherId) {
+                response = await httpClient.patch(`/api/vouchers/payment/${editingVoucherId}/`, payload);
+                showSuccess(`${activeTab === 'single' ? 'Single' : 'Bulk'} Payment Voucher updated successfully!`);
+            } else {
+                response = await httpClient.post('/api/vouchers/payment/', payload);
+                showSuccess(`${activeTab === 'single' ? 'Single' : 'Bulk'} Payment Voucher posted successfully!`);
+            }
 
             // Sync with parent state to enable immediate updates across other tabs/reports
             if (onAddVouchers) {
@@ -1150,9 +1263,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 }], false);
             }
 
-            // Increment the voucher series counter so the next number is ready
+            // Increment the voucher series counter so the next number is ready (Skip if editing existing!)
             const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === (selectedPaymentConfig || voucherType));
-            if (savedConfig && savedConfig.enable_auto_numbering) {
+            if (savedConfig && savedConfig.enable_auto_numbering && !editingVoucherId) {
                 try {
                     const res = await httpClient.post<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/increment-number/`, {});
                     // Use the next number returned by the increment call
