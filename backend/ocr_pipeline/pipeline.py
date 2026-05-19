@@ -1302,6 +1302,16 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         else:
             logger.info(f"[INVOICE_VISIBLE_TO_UI] record_id={record.id} inv_no='{invoice_no}' items={len(items)} status={record.status}")
 
+        # ── [PHASE 3] STAGING PERSISTENCE SAFETY ──
+        items = canonical.get("items", [])
+        if not items:
+            # [ROOT-CAUSE FIX #6] Never Drop Invoices
+            logger.warning(f"[INVOICE_WARNING_EMPTY_ITEMS] invoice={invoice_no} record={record.id}. Proceeding with warning state.")
+            record.validation_status = "REQUIRES_REVIEW"
+            record.validation_message = "Warning: No line items detected. Please verify OCR data."
+        else:
+            logger.info(f"[INVOICE_VISIBLE_TO_UI] record_id={record.id} inv_no='{invoice_no}' items={len(items)} status={record.status}")
+
         if not gstin or not invoice_no:
             # [ROOT-CAUSE FIX #2 & #5] Never Drop Invoices
             logger.warning(f"[INVOICE_WARNING_MISSING_HEADERS] invoice={invoice_no} record={record.id}. Missing GSTIN or Invoice No.")

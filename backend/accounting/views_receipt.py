@@ -18,7 +18,7 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
     Unified ViewSet for Receipt Vouchers.
     Replaces VoucherReceiptSingle and VoucherReceiptBulk viewsets.
     """
-    queryset = ReceiptVoucher.objects.all()
+    queryset = ReceiptVoucher.objects.all() # type: ignore
     serializer_class = ReceiptVoucherSerializer
     
     def get_queryset(self):
@@ -33,6 +33,19 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(items__customer__name__icontains=customer_name).distinct()
         
         return queryset
+
+    def get_object(self):
+        from django.http import Http404
+        try:
+            return super().get_object()
+        except Http404:
+            pk = self.kwargs.get('pk')
+            from .models import Voucher
+            generic_voucher = Voucher.objects.filter(id=pk).first()
+            if generic_voucher and generic_voucher.reference_id:
+                self.kwargs['pk'] = generic_voucher.reference_id
+                return super().get_object()
+            raise
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -87,8 +100,8 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
                 l_id = ledger.id
                 from vendors.models import VendorMasterBasicDetail
                 from customerportal.database import CustomerMasterCustomerBasicDetails
-                v = VendorMasterBasicDetail.objects.filter(ledger_id=l_id).first()
-                c = CustomerMasterCustomerBasicDetails.objects.filter(ledger_id=l_id).first()
+                v = VendorMasterBasicDetail.objects.filter(ledger_id=l_id).first() # type: ignore
+                c = CustomerMasterCustomerBasicDetails.objects.filter(ledger_id=l_id).first() # type: ignore
                 return (l_id, c.id if c else None, v.id if v else None)
 
             pf_l, pf_c, pf_v = get_party_ids(receive_in_ledger)
@@ -97,16 +110,43 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
             # Generate Voucher Number
             from masters.models import MasterVoucherReceipts
             series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            
+            def _is_taken(v):
+                from accounting.models import ReceiptVoucher, AdvanceAllocation, PendingTransaction
+                return (
+                    ReceiptVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v).exists() or
+                    AdvanceAllocation.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists() or
+                    PendingTransaction.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists()
+                )
+
             v_num = data.get('voucher_number')
-            if series and (not v_num or v_num == 'Manual Input'):
-                v_num = series.get_next_number()
-                series.increment_number()
-            if not v_num or v_num == 'Manual Input':
+            if v_num == 'Manual Input':
+                v_num = None
+
+            if series:
+                expected_next = series.get_next_number()
+                if not v_num or v_num == expected_next or _is_taken(v_num):
+                    if not v_num:
+                        v_num = expected_next
+                    while _is_taken(v_num):
+                        series.increment_number()
+                        v_num = series.get_next_number()
+                    series.increment_number()
+            
+            if not v_num:
                 import uuid
                 v_num = f"RCV-{uuid.uuid4().hex[:6].upper()}"
+            else:
+                # For manual input that is NOT 'Manual Input' text, check for collisions one last time
+                from .models import Transaction
+                if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists(): # type: ignore
+                    return Response({'error': f'Voucher number {v_num} is already taken.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Calculate the next number for the frontend
+            next_v_num = series.get_next_number() if series else None
 
             # Create Voucher (Transaction)
-            instance = ReceiptVoucher.objects.create(
+            instance = ReceiptVoucher.objects.create( # type: ignore
                 tenant_id=tenant_id,
                 voucher_number=v_num,
                 transaction_type='RECEIPT',
@@ -127,22 +167,52 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
             )
             
             # Create Journal Entries
-            JournalEntry.objects.create(
-                tenant_id=tenant_id, voucher_type='RECEIPT', voucher_id=instance.id,
-                voucher_number=v_num, transaction_date=date_str,
-                ledger=receive_in_ledger, ledger_name=receive_in_ledger.name,
-                debit=entered_amount, credit=0,
-                customer_id=pf_c, vendor_id=pf_v
-            )
-            JournalEntry.objects.create(
-                tenant_id=tenant_id, voucher_type='RECEIPT', voucher_id=instance.id,
-                voucher_number=v_num, transaction_date=date_str,
-                ledger=receive_from_ledger, ledger_name=receive_from_ledger.name,
-                debit=0, credit=entered_amount,
-                customer_id=pt_c, vendor_id=pt_v
-            )
+            if receive_in_ledger:
+                JournalEntry.objects.create( # type: ignore
+                    tenant_id=tenant_id, voucher_type='RECEIPT', voucher_id=instance.id,
+                    voucher_number=v_num, transaction_date=date_str,
+                    ledger=receive_in_ledger, ledger_name=receive_in_ledger.name,
+                    debit=entered_amount, credit=0,
+                    customer_id=pf_c, vendor_id=pf_v
+                )
+            if receive_from_ledger:
+                JournalEntry.objects.create( # type: ignore
+                    tenant_id=tenant_id, voucher_type='RECEIPT', voucher_id=instance.id,
+                    voucher_number=v_num, transaction_date=date_str,
+                    ledger=receive_from_ledger, ledger_name=receive_from_ledger.name,
+                    debit=0, credit=entered_amount,
+                    customer_id=pt_c, vendor_id=pt_v
+                )
 
-        return Response({'message': 'Amount saved successfully', 'id': instance.id, 'voucher_number': v_num}, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': 'Amount saved successfully', 
+            'id': instance.id, 
+            'voucher_number': v_num,
+            'next_voucher_number': next_v_num
+        }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Override to wrap updates in an atomic transaction and return 200.
+        Fixes: 409 Conflict caused by super().update() passing constraint fields
+        directly to the Voucher model's save().
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            with db_transaction.atomic():
+                updated_instance = serializer.save()
+            return Response(self.get_serializer(updated_instance).data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            print(f"!!! Error in ReceiptVoucher update: {str(e)}\n{traceback.format_exc()}")
+            return Response(
+                {"message": f"Failed to update receipt voucher: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -182,14 +252,14 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
              tenant_id = request.headers.get('X-Branch-Id')
 
         # Check for Advance Ref or Voucher Number in the unified transaction table
-        exists_voucher = Transaction.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists()
-        exists_advance = TransactionAllocation.objects.filter(
+        exists_voucher = Transaction.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists() # type: ignore
+        exists_advance = TransactionAllocation.objects.filter( # type: ignore
             reference_number=ref_no, 
             reference_type='ADVANCE',
             tenant_id=tenant_id
         ).exists()
         
-        is_unique = not (exists_voucher or exists_advance or Voucher.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists())
+        is_unique = not (exists_voucher or exists_advance or Voucher.objects.filter(voucher_number=ref_no, tenant_id=tenant_id).exists()) # type: ignore
         return Response({"is_unique": is_unique, "ref_no": ref_no})
 
 # --- DEPRECATED VIEWSETS (Aliases to prevent runtime errors in urls.py) ---

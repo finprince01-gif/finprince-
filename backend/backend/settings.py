@@ -281,8 +281,19 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # Cache Configuration - Pure DB/Local Memory (Redis Decommissioned)
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_CACHE_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': int(os.getenv('REDIS_POOL_SIZE', '100')),
+                'retry_on_timeout': True,
+                'socket_timeout': 5,
+                'socket_connect_timeout': 5,
+            },
+            'IGNORE_EXCEPTIONS': True, # Fail-open for cache to prevent API downtime
+        },
+        'KEY_PREFIX': 'finpixe',
     }
 }
 
@@ -294,6 +305,10 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+# Production: Ensure queue durability
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
 # Production: Ensure queue durability
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
@@ -451,6 +466,12 @@ MIGRATION_MODULES = {}
 # BANK RECONCILIATION SETTINGS
 # ============================================================================
 BANK_MATCH_TOLERANCE = 1
+
+# ============================================================================
+# MEDIA FILES (Local storage for dev when S3 is not configured)
+# ============================================================================
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
 
 # ============================================================================
 # MEDIA FILES (Local storage for dev when S3 is not configured)

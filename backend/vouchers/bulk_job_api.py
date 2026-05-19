@@ -55,6 +55,15 @@ class BulkUploadAPIView(APIView):
 
         # 2. Tenant Job Limit (DB-backed)
         max_jobs = getattr(settings, 'BULK_MAX_ACTIVE_JOBS_PER_TENANT', 5)
+        
+        # Redis check first (Fast)
+        redis_concurrency = redis_client.get_tenant_concurrency(tenant_id)
+        if redis_concurrency >= max_jobs:
+            msg = f"Tenant Overloaded: {redis_concurrency}/{max_jobs} active jobs in Redis. Please wait."
+            logger.warning(f"[UPLOAD] REDIS TENANT LIMIT for {tenant_id}: {redis_concurrency} active")
+            return self._busy(msg, 'tenant_limit')
+
+        # DB fallback (Consistency)
         active = BulkInvoiceJob.objects.filter(
             tenant_id=tenant_id, status__in=['PENDING', 'PROCESSING', 'QUEUED', 'FINALIZING']
         ).count()

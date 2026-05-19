@@ -1,10 +1,14 @@
 from rest_framework import serializers
 from .models_voucher_expense import VoucherExpense, ExpenseLineItem
-from .models import Voucher, MasterLedger
+from .models import Voucher, MasterLedger, Transaction
+from masters.models import MasterVoucherExpenses
 from .services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal, InvalidOperation
 import uuid
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_decimal(value):
@@ -77,8 +81,48 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
         rows = validated_data.pop('expense_rows', [])
         uploaded_files = validated_data.pop('uploaded_files', [])
 
-        if not validated_data.get('voucher_number'):
-            validated_data['voucher_number'] = f"EXP-{uuid.uuid4().hex[:6].upper()}"
+        # ── Voucher Numbering Logic ──────────────────────────────────────────
+        voucher_series_name = validated_data.get('voucher_series')
+        v_num = validated_data.get('voucher_number')
+        series = None
+
+        if voucher_series_name:
+            series = MasterVoucherExpenses.objects.filter(
+                tenant_id=tenant_id,
+                voucher_name=voucher_series_name,
+                is_active=True
+            ).first()
+
+        if series and series.enable_auto_numbering:
+            # Always force increment if current v_num matches current state or is empty
+            # OR if v_num is provided but we want to ensure uniqueness
+            next_num = series.current_number or series.start_from or 1
+            
+            # Loop to ensure we find a truly unique number in Transaction table
+            while True:
+                digits = series.required_digits or 4
+                prefix = series.prefix or ""
+                suffix = series.suffix or ""
+                candidate_num = f"{prefix}{str(next_num).zfill(digits)}{suffix}"
+                
+                if not Transaction.objects.filter(tenant_id=tenant_id, voucher_number=candidate_num).exists():
+                    v_num = candidate_num
+                    break
+                next_num += 1
+            
+            # Update the series counter
+            series.current_number = next_num + 1
+            series.save(update_fields=['current_number'])
+            validated_data['voucher_number'] = v_num
+        else:
+            # Fallback for manual or no series
+            if not v_num or v_num == 'Manual Input' or v_num == 'Auto-generated':
+                v_num = f"EXP-{uuid.uuid4().hex[:6].upper()}"
+                validated_data['voucher_number'] = v_num
+            else:
+                # Manual input - check collision
+                if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                    raise serializers.ValidationError({"voucher_number": f"Voucher number {v_num} already exists."})
 
         totals = {
             'total_amount': sum((_safe_decimal(row.get('totalAmount')) for row in rows if isinstance(row, dict)), Decimal("0")),
@@ -168,10 +212,7 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
             instance.total_sgst = totals['total_sgst']
             instance.total_igst = totals['total_igst']
             instance.total_cess = totals['total_cess']
-            instance.save(update_fields=[
-                'total_amount', 'total_taxable_value',
-                'total_cgst', 'total_sgst', 'total_igst', 'total_cess'
-            ])
+            instance.save()
             self._sync_expense_items(instance, rows)
             self._post_journal_entries(instance)
             

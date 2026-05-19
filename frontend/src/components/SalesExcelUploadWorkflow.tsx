@@ -9,6 +9,7 @@ import { SALES_VOUCHER_COLUMNS_BY_TAB, SalesVoucherTab, SALES_VOUCHER_KEY_MAP, S
 import { INDIA_STATE_CODES, GST_INVOICE_TYPES, EXPORT_TYPES } from '../utils/gstConstants';
 
 const TDS_RATE_MAP: Record<string, number> = {
+    // Common Sections
     'Contracts- Individual/HUF': 0.01,
     'Contracts- Others': 0.02,
     'Commission/Brokerage': 0.02,
@@ -25,6 +26,37 @@ const TDS_RATE_MAP: Record<string, number> = {
     'Joint Development Agreements': 0.10,
     'Contractors & Professionals': 0.02,
     'E-Commerce': 0.01,
+
+    // Sections from Portal (Full Strings)
+    'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': 0.10,
+    'Section 393(1) [Sl. No. 5(i)] - Interest on Securities': 0.10,
+    'Section 393(1) [Sl. No. 5(ii/iii)] - Interest other than Securities': 0.10,
+    'Section 393(1) [Sl. No. 7] - Dividends (Domestic Company)': 0.10,
+    'Section 393(1) [Sl. No. 6(i)] - Contractor Payments (Large Payer) - Individual/HUF': 0.01,
+    'Section 393(1) [Sl. No. 6(i)] - Contractor Payments (Large Payer) - Other than Individual/HUF': 0.02,
+    'Section 393(1) [Sl. No. 6(ii)] - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': 0.05,
+    'Section 393(1) [Sl. No. 6(iii).D(a)] - Technical Services / Call Centre / Film Royalty': 0.02,
+    'Section 393(1) [Sl. No. 6(iii).D(b)] - Professional Fees / Other Royalty': 0.10,
+    'Section 393(1) [Sl. No. 1(i)] - Insurance Commission': 0.02,
+    'Section 393(1) [Sl. No. 1(ii)] - General Commission or Brokerage': 0.02,
+    'Section 393(1) [Sl. No. 2(i)] - Rent (Individual/HUF Payer > ₹50,000/mo)': 0.02,
+    'Section 393(1) [Sl. No. 2(ii).D(a)] - Rent on Plant & Machinery': 0.02,
+    'Section 393(1) [Sl. No. 2(ii).D(b)] - Rent on Land & Building': 0.10,
+    'Section 393(1) [Sl. No. 3(i)] - Transfer of Immovable Property (> ₹50L)': 0.01,
+    'Section 393(1) [Sl. No. 8(ii)] - Purchase of Goods (exceeding ₹50L)': 0.001,
+    'Section 393(1) [Sl. No. 8(vi)] - Virtual Digital Assets (VDA/Crypto)': 0.01,
+    'Section 393(3) [Sl. No. 1] - Winnings from Lottery / Puzzles': 0.30,
+    'Section 393(3) [Sl. No. 5] - Regular Filer (ITR filed in previous years) > 1 cr': 0.02,
+    'Section 393(3) [Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 20L': 0.02,
+    'Section 393(3) [Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 1Cr': 0.05,
+    'Section 393(3) [Sl. No. 5] - Co-operative Societies > 3 cr': 0.02,
+    'Section 393(3) [Sl. No. 7] - Payments to Partners (Salary/Comm. > ₹20k)': 0.10,
+    'Section 393(2) [Sl. No. 1] - Sportsmen / Sports Association (Non-Resident)': 0.20,
+    'Section 393(2) [Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': 0.05,
+    'Section 393(2) [Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': 0.09,
+    'Section 393(2) [Sl. No. 11/12] - Income/LTCG from Offshore Fund Units': 0.10,
+    'Section 393(2) [Sl. No. 13/14] - Interest/Dividends/LTCG on Bonds/GDR': 0.10,
+    'Section 393(2) [Sl. No. 17] - Any other sum payable to Non-Resident': 0.30,
 };
 
 const TCS_RATE_MAP: Record<string, number> = {
@@ -34,6 +66,14 @@ const TCS_RATE_MAP: Record<string, number> = {
     'Sale of Timber': 0.02,
     'Sale of Motor Vehicles': 0.01,
     'Sale of Specified Luxury Goods': 0.01,
+
+    // Full Strings
+    'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': 0.01,
+    'Section 206C(1) - Sale of Tendu Leaves': 0.05,
+    'Section 206C(1) - Sale of Forest Produce': 0.02,
+    'Section 206C(1) - Sale of Timber': 0.02,
+    'Section 206C(1F) - Sale of Motor Vehicles': 0.01,
+    'Section 206C(1F) - Sale of Specified Luxury Goods': 0.01,
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────

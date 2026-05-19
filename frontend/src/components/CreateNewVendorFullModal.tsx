@@ -62,11 +62,6 @@ const TDS_SECTIONS = [
     'Section 194-IB', 'Section 195',
 ];
 
-const VENDOR_SYSTEM_CATEGORIES = [
-    'Raw Material', 'Work in Progress', 'Finished Goods',
-    'Stores and Spares', 'Packing Material', 'Stock in Trade',
-];
-
 const GST_TYPES = ['Regular', 'Composition', 'SEZ', 'Unregistered'] as const;
 
 const genId = () => Math.random().toString(36).slice(2, 9);
@@ -145,15 +140,21 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
 
     const [categories, setCategories] = useState<string[]>([]);
 
+    const VENDOR_DEFAULT_CATEGORIES = [
+        'Raw Material',
+        'Stores and Spares',
+        'Packing Material',
+        'Stock-in Trade',
+        'Fixed Assets',
+        'Capital Goods',
+        'Consumables',
+        'Services',
+        'Jobwork'
+    ];
+
     useEffect(() => {
         const fetchCategories = async () => {
             try {
-                // Use a standard set of defaults matching backend/vendorcategory_api.py
-                const DEFAULT_CATEGORIES = [
-                    "Raw Material", "Work in Progress", "Services", "Jobwork", "Stores and Spares",
-                    "Packing Material", "Stock in Trade", "Fixed Assets", "Capital Goods", "Consumables"
-                ];
-
                 const res: any = await httpClient.get('/api/vendors/categories/');
                 const arr = Array.isArray(res) ? res : (res.results || []);
 
@@ -164,7 +165,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                     return parts.join(' > ');
                 }).filter(Boolean);
 
-                const allPaths = [...DEFAULT_CATEGORIES, ...dbPaths];
+                const allPaths = [...VENDOR_DEFAULT_CATEGORIES, ...dbPaths];
                 const uniquePaths: string[] = [];
                 const seen = new Set<string>();
 
@@ -980,7 +981,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                 <div className="flex items-center gap-3 pt-5">
                     <input type="checkbox" id="autoTds" checked={enableAutoTds} onChange={e => setEnableAutoTds(e.target.checked)}
                         className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500" />
-                    <label htmlFor="autoTds" className="text-sm text-gray-700 font-medium cursor-pointer">Enable Automatic TDS Posting</label>
+                    <label htmlFor="autoTds" className="text-sm text-gray-700 font-medium cursor-pointer">Enable Automatic {tcsApplicable ? 'TCS' : 'TDS'} Posting</label>
                 </div>
             </div>
         </div>

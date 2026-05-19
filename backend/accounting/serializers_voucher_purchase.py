@@ -12,6 +12,8 @@ from .models_voucher_purchase import (  # type: ignore[import]
 )
 from .models import Voucher, MasterLedger  # type: ignore[import]
 from .services.ledger_service import post_transaction, _resolve_ledger  # type: ignore[import]
+from vendors.models import VendorTransactionPO
+from django.db.models import Q
 from accounting.services.inventory_sync import sync_purchase_to_grn
 from decimal import Decimal, ROUND_HALF_UP  # noqa: F401
 from accounting.services.advance_service import write_allocations
@@ -146,6 +148,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             except (json.JSONDecodeError, ValueError):
                 return None
         return val
+    
 
     @staticmethod
     def _as_dict(val):
@@ -185,22 +188,12 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         supplier_instance = VoucherPurchaseSupplierDetails.objects.create(**validated_data)
         tenant_id = supplier_instance.tenant_id
 
-        # Build a unique voucher_number to avoid DUPLICATE_ENTRY on the
-        # unique_together = ('voucher_number', 'tenant_id', 'type') constraint.
-        # Priority: purchase_voucher_no → supplier_invoice_no-{id} → PUR-{id}
-        _base = (
+        # Build a clean voucher_number (prefer purchase_voucher_no, then supplier_invoice_no, then generated)
+        purchase_voucher_number = (
             supplier_instance.purchase_voucher_no
-            or (
-                f"{supplier_instance.supplier_invoice_no}-{supplier_instance.id}"
-                if supplier_instance.supplier_invoice_no
-                else None
-            )
+            or supplier_instance.supplier_invoice_no
             or f"PUR-{supplier_instance.id}"
         )
-        # Extra safety: if the number still collides, append ID
-        if Voucher.objects.filter(voucher_number=_base, tenant_id=tenant_id, type='purchase').exists():
-            _base = f"{_base}-{supplier_instance.id}"
-        purchase_voucher_number = _base
 
         purchase_total_net = Decimal(str(due_data.get('to_pay', 0) if due_data is not None else 0))
         purchase_advance_paid = Decimal(str(due_data.get('advance_paid', 0) if due_data is not None else 0))
@@ -219,21 +212,24 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 total_sgst += float(item.get('sgst', 0))
                 total_igst += float(item.get('igst', 0))
 
-        voucher = Voucher.objects.create(
+        # Use update_or_create so repeated saves don't stack Voucher rows
+        voucher, _ = Voucher.objects.update_or_create(
             tenant_id=tenant_id,
             type='purchase',
-            date=supplier_instance.date,
-            voucher_number=purchase_voucher_number,
-            invoice_no=supplier_instance.supplier_invoice_no,
-            party=supplier_instance.vendor_name,
-            total=purchase_total_gross,
-            source='purchase_voucher',
             reference_id=supplier_instance.id,
-            is_inter_state=supplier_instance.input_type == 'Interstate',
-            total_taxable_amount=total_taxable,
-            total_cgst=total_cgst,
-            total_sgst=total_sgst,
-            total_igst=total_igst,
+            defaults={
+                'voucher_number': purchase_voucher_number,
+                'date': supplier_instance.date,
+                'invoice_no': supplier_instance.supplier_invoice_no,
+                'party': supplier_instance.vendor_name,
+                'total': purchase_total_gross,
+                'source': 'purchase_voucher',
+                'is_inter_state': supplier_instance.input_type == 'Interstate',
+                'total_taxable_amount': total_taxable,
+                'total_cgst': total_cgst,
+                'total_sgst': total_sgst,
+                'total_igst': total_igst,
+            }
         )
 
         setattr(supplier_instance, '_accounting_voucher_id', voucher.id)
@@ -303,11 +299,33 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         # 6. Double-Entry Posting
         self._post_journal_entries(supplier_instance, voucher.id, purchase_total_gross, supply_inr_data, supply_foreign_data, due_data)
 
+        # 6.5. PO Auto-Status Update
+        po_no = None
+        if supply_inr_data and supply_inr_data.get('purchase_order_no'):
+            po_no = supply_inr_data.get('purchase_order_no')
+        elif supply_foreign_data and supply_foreign_data.get('purchase_order_no'):
+            po_no = supply_foreign_data.get('purchase_order_no')
+            
+        if po_no:
+            try:
+                from vendors import vendorpo_database as db
+                db.auto_update_po_if_fully_executed(tenant_id, po_no)
+            except Exception:
+                pass
+
         # 7. Mirror to Vendor Portal
         self._mirror_to_vendor_portal(supplier_instance)
 
         # Auto-sync to Inventory > Operations > GRN
         sync_purchase_to_grn(supplier_instance, supply_inr_data, supply_foreign_data)
+
+        # Update PO Status
+        po_no = None
+        if supply_inr_data and supply_inr_data.get('purchase_order_no'):
+            po_no = supply_inr_data.get('purchase_order_no')
+        elif supply_foreign_data and supply_foreign_data.get('purchase_order_no'):
+            po_no = supply_foreign_data.get('purchase_order_no')
+        
 
         return supplier_instance
 
@@ -341,26 +359,65 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         due_data = due_data if isinstance(due_data, dict) else None
         transit_data = transit_data if isinstance(transit_data, dict) else None
 
+        # Map flat items array back to supply_inr_data if present in initial_data
+        if supply_inr_data is not None and 'items' in self.initial_data and not supply_inr_data.get('items'):
+            supply_inr_data['items'] = self.initial_data['items']
+
+        # Update custom mapped fields from frontend
+        if 'party' in self.initial_data:
+            instance.vendor_name = self.initial_data.get('party', '')
+        if 'bill_to_address_1' in self.initial_data:
+            instance.bill_from = self.initial_data.get('bill_to_address_1', '')
+        if 'ship_to_address_1' in self.initial_data:
+            instance.ship_from = self.initial_data.get('ship_to_address_1', '')
+        if 'supplier_invoice_date' in self.initial_data:
+            instance.supplier_invoice_date = self.initial_data.get('supplier_invoice_date', '')
+        elif 'date' in self.initial_data:
+            instance.supplier_invoice_date = self.initial_data.get('date', '')
+        if 'purchase_voucher_series' in self.initial_data:
+            instance.purchase_voucher_series = self.initial_data.get('purchase_voucher_series', '')
+        if 'grn_reference' in self.initial_data:
+            instance.grn_reference = self.initial_data.get('grn_reference', '')
+        if 'input_type' in self.initial_data:
+            instance.input_type = self.initial_data.get('input_type', '')
+        if 'gstin' in self.initial_data:
+            instance.gstin = self.initial_data.get('gstin', '')
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         tenant_id = instance.tenant_id
 
-        # Update the unified Voucher object
-        voucher_id = getattr(instance, 'voucher_id', None)
-        
         net_val = Decimal(str(due_data.get('to_pay', 0) if due_data else 0))
         adv_val = Decimal(str(due_data.get('advance_paid', 0) if due_data else 0))
         purchase_total_gross = net_val + adv_val
-        
-        if voucher_id:
-            try:
-                voucher = Voucher.objects.get(id=voucher_id)
-                voucher.date = instance.date
-                voucher.total = purchase_total_gross
-                voucher.save()
-            except Voucher.DoesNotExist:
-                pass
+
+        # ── Resolve the generic Voucher record for this supplier instance ──────
+        # VoucherPurchaseSupplierDetails has no voucher_id column, so we look up
+        # by reference_id which is set during create() to link the two tables.
+        p_ledger_name = None
+        if supply_inr_data: p_ledger_name = supply_inr_data.get('purchase_ledger')
+        elif supply_foreign_data: p_ledger_name = supply_foreign_data.get('purchase_ledger')
+
+        purchase_voucher_number = instance.purchase_voucher_no or instance.supplier_invoice_no or f"PUR-{instance.id}"
+
+        # update_or_create: ensures we always have one canonical Voucher row
+        # and that its totals/date are updated to match the edited purchase.
+        voucher_obj, _ = Voucher.objects.update_or_create(
+            tenant_id=tenant_id,
+            type='purchase',
+            reference_id=instance.id,
+            defaults={
+                'voucher_number': purchase_voucher_number,
+                'date': instance.date,
+                'party': instance.vendor_name,
+                'total': purchase_total_gross,
+                'invoice_no': instance.supplier_invoice_no,
+                'source': 'purchase_voucher',
+            }
+        )
+        voucher_id = voucher_obj.id  # This is the real, stable ID for journal entries
+
         # Update or Create Nested Relations
         if supply_foreign_data is not None:
             VoucherPurchaseSupplyForeignDetails.objects.update_or_create(
@@ -390,18 +447,18 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
 
         # Sync legacy JSON to new relational tables
         self._sync_relational_data(instance, supply_inr_data, supply_foreign_data, due_data)
-        
+
         # Advance Allocations (Main Accounting)
         try:
             if due_data and 'advance_references' in due_data:
                 adv_refs = due_data['advance_references']
                 if isinstance(adv_refs, str):
                     adv_refs = json.loads(adv_refs)
-                
+
                 if adv_refs:
                     write_allocations(
                         tenant_id=tenant_id,
-                        voucher_id=voucher_id,
+                        voucher_id=voucher_id,   # ← NOW correctly set
                         voucher_type='purchase',
                         advance_refs=adv_refs,
                         ledger_id=instance.vendor_basic_detail.ledger_id if instance.vendor_basic_detail else None
@@ -410,11 +467,12 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             print(f"!!! Advance Allocation Update Failed: {alloc_e}")
 
         self._mirror_to_vendor_portal(instance)
-        
+
         # Auto-sync to Inventory > Operations > GRN
         sync_purchase_to_grn(instance, supply_inr_data, supply_foreign_data)
 
-        # Refresh double-entry posting
+        # Refresh double-entry posting — now passes real voucher_id so
+        # post_transaction() will delete stale entries before inserting fresh ones
         self._post_journal_entries(instance, voucher_id, purchase_total_gross, supply_inr_data, supply_foreign_data, due_data)
 
         return instance

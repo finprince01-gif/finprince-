@@ -9,7 +9,12 @@ from .models_voucher_debit_note import (
     VoucherDebitNoteTransitDetails,
     VoucherDebitNoteItemLine,
 )
-from .models import Voucher
+from .models import Voucher, Transaction
+from masters.models import MasterVoucherDebitNote
+import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Nested serializers
@@ -172,6 +177,44 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             from core.tenant import get_tenant_from_request
             tenant_id = get_tenant_from_request(request)
             validated_data["tenant_id"] = tenant_id
+
+        # ── Voucher Numbering Logic ──────────────────────────────────────────
+        series_name = validated_data.get('debit_note_series')
+        v_num = validated_data.get('debit_note_no')
+        series = None
+
+        if series_name:
+            series = MasterVoucherDebitNote.objects.filter(
+                tenant_id=tenant_id,
+                voucher_name=series_name,
+                is_active=True
+            ).first()
+
+        if series and series.enable_auto_numbering:
+            next_num = series.current_number or series.start_from or 1
+            
+            while True:
+                digits = series.required_digits or 4
+                prefix = series.prefix or ""
+                suffix = series.suffix or ""
+                candidate_num = f"{prefix}{str(next_num).zfill(digits)}{suffix}"
+                
+                # Check collision in Transaction table
+                if not Transaction.objects.filter(tenant_id=tenant_id, voucher_number=candidate_num).exists():
+                    v_num = candidate_num
+                    break
+                next_num += 1
+            
+            series.current_number = next_num + 1
+            series.save(update_fields=['current_number'])
+            validated_data['debit_note_no'] = v_num
+        else:
+            if not v_num or v_num == 'Manual Input' or v_num == 'Auto-generated':
+                v_num = f"DN-{uuid.uuid4().hex[:6].upper()}"
+                validated_data['debit_note_no'] = v_num
+            else:
+                if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                    raise serializers.ValidationError({"debit_note_no": f"Voucher number {v_num} already exists."})
 
         # ── Persist header ────────────────────────────────────────────
         instance = VoucherDebitNoteSupplierDetails.objects.create(**validated_data)

@@ -34,7 +34,10 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
     The single/bulk distinction is a UI concept only and does NOT affect the
     API contract.
     """
-    queryset = PaymentVoucher.objects.prefetch_related('items__pay_to_ledger').all()
+    queryset = PaymentVoucher.objects.prefetch_related(
+        'pendingtransaction_items__pay_to_ledger',
+        'advanceallocation_items__pay_to_ledger'
+    ).all()
     serializer_class = PaymentVoucherSerializer
 
     def get_queryset(self):
@@ -47,9 +50,26 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
         # Optional filters
         pay_to_ledger = self.request.query_params.get('pay_to_ledger')
         if pay_to_ledger:
-            qs = qs.filter(items__pay_to_ledger__name__icontains=pay_to_ledger)
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(pendingtransaction_items__pay_to_ledger__name__icontains=pay_to_ledger) |
+                Q(advanceallocation_items__pay_to_ledger__name__icontains=pay_to_ledger)
+            )
 
         return qs.distinct()
+
+    def get_object(self):
+        from django.http import Http404
+        try:
+            return super().get_object()
+        except Http404:
+            pk = self.kwargs.get('pk')
+            from .models import Voucher
+            generic_voucher = Voucher.objects.filter(id=pk).first()
+            if generic_voucher and generic_voucher.reference_id:
+                self.kwargs['pk'] = generic_voucher.reference_id
+                return super().get_object()
+            raise
 
     @action(detail=False, methods=['get'], url_path='check-uniqueness')
     def check_uniqueness(self, request):
@@ -215,6 +235,29 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
+    def update(self, request, *args, **kwargs):
+        """
+        Override to wrap updates in an atomic transaction and return 200.
+        Fixes: 409 Conflict caused by super().update() passing constraint
+        fields (type, voucher_number) to the Voucher model.
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            with db_transaction.atomic():
+                updated_instance = serializer.save()
+            return Response(self.get_serializer(updated_instance).data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            print(f"!!! Error in PaymentVoucher update: {str(e)}\n{traceback.format_exc()}")
+            return Response(
+                {"message": f"Failed to update payment voucher: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=False, methods=['post'], url_path='save-amount-only')
     def save_amount_only(self, request):
         """
@@ -237,6 +280,11 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             pay_from_ledger = _resolve_ledger(pay_from_id, tenant_id)
             pay_to_ledger = _resolve_ledger(pay_to_id, tenant_id)
             
+            if not pay_from_ledger:
+                return Response({'error': f'Invalid Pay From ledger ID: {pay_from_id}'}, status=status.HTTP_400_BAD_REQUEST)
+            if not pay_to_ledger:
+                return Response({'error': f'Invalid Pay To ledger ID: {pay_to_id}'}, status=status.HTTP_400_BAD_REQUEST)
+            
             # Resolve Party IDs
             def get_party_ids(ledger):
                 if not ledger: return None, None, None
@@ -253,13 +301,40 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             # Generate Voucher Number
             from masters.models import MasterVoucherPayments
             series = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            
+            def _is_taken(v):
+                from accounting.models import PaymentVoucher, AdvanceAllocation, PendingTransaction
+                return (
+                    PaymentVoucher.objects.filter(tenant_id=tenant_id, voucher_number=v).exists() or
+                    AdvanceAllocation.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists() or
+                    PendingTransaction.objects.filter(tenant_id=tenant_id, transaction__voucher_number=v).exists()
+                )
+
             v_num = data.get('voucher_number')
-            if series and (not v_num or v_num == 'Manual Input'):
-                v_num = series.get_next_number()
-                series.increment_number()
-            if not v_num or v_num == 'Manual Input':
+            if v_num == 'Manual Input':
+                v_num = None
+
+            if series:
+                expected_next = series.get_next_number()
+                if not v_num or v_num == expected_next or _is_taken(v_num):
+                    if not v_num:
+                        v_num = expected_next
+                    while _is_taken(v_num):
+                        series.increment_number()
+                        v_num = series.get_next_number()
+                    series.increment_number()
+            
+            if not v_num:
                 import uuid
                 v_num = f"PAY-{uuid.uuid4().hex[:6].upper()}"
+            else:
+                # For manual input that is NOT 'Manual Input' text, check for collisions one last time
+                from .models import Transaction
+                if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                    return Response({'error': f'Voucher number {v_num} is already taken.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Calculate the next number for the frontend
+            next_v_num = series.get_next_number() if series else None
 
             # Create Voucher (Transaction)
             # Use the exact logic requested: instance.amount = entered_amount
@@ -300,7 +375,12 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                 customer_id=pf_c, vendor_id=pf_v
             )
 
-        return Response({'message': 'Amount saved successfully', 'id': instance.id, 'voucher_number': v_num}, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': 'Amount saved successfully', 
+            'id': instance.id, 
+            'voucher_number': v_num,
+            'next_voucher_number': next_v_num
+        }, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         user = self.request.user

@@ -442,13 +442,13 @@ class ForensicMerger:
 
         # Step 1: Detect roles for all members
         for inv in group:
+<<<<<<< HEAD
             # [MANDATORY HYDRATION] (Requirement #1)
             hydrate_identity_fields(inv)
             role = enforcer.classify_page(inv.get("_raw_text", ""), inv.get("items", []), invoice_data=inv)
+            role = enforcer.classify_page(inv.get("_raw_text", ""), inv.get("items", []))
+>>>>>>> 0216b6ff128cdd98f62573fd77aa18c48169590d
             inv["_page_role"] = role
-            inv["_copy_type"] = self.detect_copy_type(inv)
-            # ── [PAGE_ROLE_CLASSIFIED] Telemetry ──
-            logger.info(f"[PAGE_ROLE_CLASSIFIED] page={inv.get('_page_no')} role={role.replace('PAGE_ROLE_', '')}")
 
         # ── [MULTIPAGE_MERGE_APPLIED] Telemetry ──
         logger.info(f"[MULTIPAGE_MERGE_APPLIED] pages={[inv.get('_page_no') for inv in group]}")

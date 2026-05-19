@@ -51,7 +51,7 @@ class ReceiptVoucherItemSerializer(SafeModelSerializerMixin, serializers.ModelSe
     class Meta:
         model = PendingTransaction
         fields = [
-            'id', 'customer', 'customer_name', 'reference_id', 'reference_type', 
+            'id', 'customer', 'customer_name', 'reference_id', 'reference_number', 'reference_type', 
             'pending_transaction', 'amount', 'amount_applied', 'pending_before', 'received_amount', 
             'balance_after', 'is_advance', 'advance_ref_no', 'ref_no', 'invoice_date',
             'allocations', 'narration', 'posting_note'
@@ -158,6 +158,44 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             'type': {'required': False},
             'voucher_number': {'required': False},
         }
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        
+        # 1. Map Ledger Names for Frontend Visibility (Drill-down)
+        if hasattr(instance, 'pay_to_ledger') and instance.pay_to_ledger:
+            ret['receive_in'] = instance.pay_to_ledger.name
+            ret['account'] = instance.pay_to_ledger.name # Visual alias for generic mappings
+        
+        if hasattr(instance, 'pay_from_ledger') and instance.pay_from_ledger:
+            ret['customer'] = instance.pay_from_ledger.name
+            ret['party'] = instance.pay_from_ledger.name
+            
+        # Auto-resolve voucher_type from MasterVoucherReceipts prefix
+        if 'voucher_type' not in ret or not ret['voucher_type'] or str(ret['voucher_type']).lower() in ['receipt', 'receipts']:
+            from masters.models import MasterVoucherReceipts
+            v_num = getattr(instance, 'voucher_number', '')
+            if v_num:
+                tenant_id = getattr(instance, 'tenant_id', None)
+                matched_cfg = None
+                configs = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True)
+                for cfg in configs:
+                    prefix = cfg.prefix or ''
+                    if prefix and str(v_num).lower().startswith(prefix.lower()):
+                        matched_cfg = cfg
+                        break
+                if matched_cfg:
+                    ret['voucher_type'] = matched_cfg.voucher_name
+                elif configs.exists():
+                    ret['voucher_type'] = configs.first().voucher_name
+
+        # 2. Force Hydrate items if queryset was empty due to reverse relations naming
+        if not ret.get('items') and hasattr(instance, 'get_items'):
+            items_qs = instance.get_items()
+            if items_qs:
+                ret['items'] = ReceiptVoucherItemSerializer(items_qs, many=True, context=self.context).data
+
+        return ret
 
     def _get_party_ids(self, ledger):
         """Extract vendor/customer database IDs from a MasterLedger."""
@@ -391,10 +429,10 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 )
 
             # Mirroring and Posting
-            self._mirror_to_generic_voucher(receipt)
+            gv = self._mirror_to_generic_voucher(receipt)
             self._mirror_to_vendor_portal(receipt)
             self._mirror_to_customer_portal(receipt)
-            self._post_journal_entries(receipt)
+            self._post_journal_entries(receipt, generic_voucher_id=gv.id if gv else None)
 
             # --- Update Payment Status in Sales Module ---
             try:
@@ -416,54 +454,122 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             return receipt
         
     def update(self, instance, validated_data):
-        items_data = validated_data.pop('items', None)
-        instance = super().update(instance, validated_data)
-        
-        if items_data is not None:
-            instance.delete_items()
-            total = Decimal("0")
-            for item_data in items_data:
-                customer_data = item_data.pop('customer', None)
-                customer_ledger = customer_data if isinstance(customer_data, MasterLedger) else None
-                
-                i_l_id, i_c_id, i_v_id = self._get_party_ids(customer_ledger)
-                amt = _safe_decimal(item_data.get('received_amount', item_data.get('amount', 0)))
-                total += amt
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            items_data = validated_data.pop('items', None)
+            
+            # --- Pop ALL fields that are NOT real DB columns on the Voucher/Transaction model ---
+            # These cause unique_together violations or field-not-found errors if passed to super().update()
+            validated_data.pop('type', None)            # unique_together field — never change on update
+            validated_data.pop('voucher_number', None)  # unique_together field — never change on update
+            validated_data.pop('is_amount_only', None)  # frontend-only flag
+            validated_data.pop('voucher_type', None)    # display name, not a DB column in Transaction
+            validated_data.pop('total_receipt', None)   # SerializerMethodField — read-only
 
-                # Use PendingTransaction for consistency with create()
-                PendingTransaction.objects.create(
-                    voucher=instance,
-                    tenant_id=instance.tenant_id,
-                    ledger_id_val=i_l_id,
-                    party_customer_id=i_c_id,
-                    party_vendor_id=i_v_id,
-                    pay_from_ledger=customer_ledger,
-                    pay_to_ledger=instance.pay_to_ledger,
-                    vouch_amount=instance.vouch_amount,
-                    **item_data
-                )
-            instance.total_amount = total
-            instance.amount = total
-            instance.vouch_amount = total
-            instance.save(update_fields=['total_amount', 'amount', 'vouch_amount', 'updated_at'])
-        
-        self._mirror_to_generic_voucher(instance)
-        self._mirror_to_customer_portal(instance)
-        self._mirror_to_vendor_portal(instance)
-        self._post_journal_entries(instance)
+            # Resolve receive_in → pay_to_ledger
+            receive_in_raw = validated_data.pop('receive_in', None)
+            if receive_in_raw:
+                receive_in_ledger = _resolve_ledger(receive_in_raw, instance.tenant_id)
+                if receive_in_ledger:
+                    instance.pay_to_ledger = receive_in_ledger
+                    ri_l, ri_c, ri_v = self._get_party_ids(receive_in_ledger)
+                    instance.receive_in_ledger_id_val = ri_l
+                    instance.receive_in_customer_id_val = ri_c
+                    instance.receive_in_vendor_id_val = ri_v
 
-        # Update Payment Status in Sales Module
-        try:
-            items_qs = instance.get_items()
-            updated_invoices = set()
-            for item in items_qs:
-                if item.reference_id and str(item.reference_id) not in updated_invoices:
-                    update_sales_invoice_payment_status(instance.tenant_id, str(item.reference_id))
-                    updated_invoices.add(str(item.reference_id))
-        except Exception as e:
-            print(f"!!! Status Sync Update Error: {str(e)}")
-        
-        return instance
+            # Resolve receive_from/customer → pay_from_ledger
+            customer_raw = validated_data.pop('customer', None)
+            receive_from_raw = validated_data.pop('receive_from', None)
+            party_raw = customer_raw or receive_from_raw
+            if party_raw:
+                customer_ledger = _resolve_ledger(party_raw, instance.tenant_id)
+                if customer_ledger:
+                    instance.pay_from_ledger = customer_ledger
+                    rf_l, rf_c, rf_v = self._get_party_ids(customer_ledger)
+                    instance.ledger_id_val = rf_l
+                    instance.party_customer_id = rf_c
+                    instance.party_vendor_id = rf_v
+                    instance.receive_from_ledger_id_val = rf_l
+                    instance.receive_from_customer_id_val = rf_c
+                    instance.receive_from_vendor_id_val = rf_v
+
+            # Apply safe scalar fields directly to instance
+            safe_fields = ['date', 'narration', 'ref_no', 'posting_note',
+                           'amount', 'total_amount', 'vouch_amount']
+            for f in safe_fields:
+                if f in validated_data:
+                    setattr(instance, f, validated_data.pop(f))
+
+            # Discard any remaining unknown fields to avoid unexpected column writes
+            validated_data.clear()
+            instance.save()
+
+            if items_data is not None:
+                instance.delete_items()
+                total = Decimal("0")
+                for item_data in items_data:
+                    customer_data = item_data.pop('customer', None)
+                    customer_ledger = customer_data if isinstance(customer_data, MasterLedger) else None
+                    if customer_data and not customer_ledger:
+                        customer_ledger = _resolve_ledger(customer_data, instance.tenant_id)
+                    i_l_id, i_c_id, i_v_id = self._get_party_ids(customer_ledger) if customer_ledger else (None, None, None)
+
+                    # Pop all serializer-only / non-DB fields
+                    item_data.pop('pending_transaction', None)
+                    item_data.pop('customer_name', None)
+                    item_data.pop('allocations', None)
+
+                    received_amt = item_data.pop('received_amount', None)
+                    raw_amt = item_data.pop('amount', None)
+                    amt_to_use = received_amt or raw_amt or item_data.get('amount_applied', Decimal('0'))
+                    amt = _safe_decimal(amt_to_use)
+                    total += amt
+
+                    item_data['allocated_amount'] = amt
+                    item_data.pop('amount_applied', None)
+
+                    it_type = str(item_data.get('reference_type', '')).upper()
+                    target_model = AdvanceAllocation if it_type == 'ADVANCE' else PendingTransaction
+
+                    if it_type == 'ADVANCE':
+                        item_data['is_advance'] = True
+                        if not item_data.get('advance_ref_no'):
+                            item_data['advance_ref_no'] = item_data.get('reference_id') or 'ADVANCE'
+
+                    target_model.objects.create(
+                        tenant_id=instance.tenant_id,
+                        transaction=instance,
+                        ledger_id_val=i_l_id,
+                        party_customer_id=i_c_id,
+                        party_vendor_id=i_v_id,
+                        pay_from_ledger=customer_ledger,
+                        pay_to_ledger=instance.pay_to_ledger,
+                        vouch_amount=instance.vouch_amount,
+                        **item_data
+                    )
+
+                instance.total_amount = total
+                instance.amount = total
+                instance.vouch_amount = total
+                instance.save()
+
+            gv = self._mirror_to_generic_voucher(instance)
+            self._mirror_to_customer_portal(instance)
+            self._mirror_to_vendor_portal(instance)
+            self._post_journal_entries(instance, generic_voucher_id=gv.id if gv else None)
+
+            # Update Payment Status in Sales Module
+            try:
+                items_qs = instance.get_items()
+                updated_invoices = set()
+                for item in items_qs:
+                    if item.reference_id and str(item.reference_id) not in updated_invoices:
+                        update_sales_invoice_payment_status(instance.tenant_id, str(item.reference_id))
+                        updated_invoices.add(str(item.reference_id))
+            except Exception as e:
+                print(f"!!! Status Sync Update Error: {str(e)}")
+
+            return instance
 
     def _mirror_to_generic_voucher(self, receipt):
         """Unified voucher for cross-module reports"""
@@ -486,25 +592,31 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     "advance_ref_no": getattr(item, 'advance_ref_no', None)
                 })
 
-            Voucher.objects.create(
+            gv, _ = Voucher.objects.update_or_create(
                 tenant_id=receipt.tenant_id,
-                voucher_number=receipt.voucher_number,
-                type='receipt',
-                date=receipt.date,
-                party=", ".join(party_names) if party_names else "Bulk",
-                account=getattr(receipt.receive_in, 'name', None),
-                amount=receipt.amount,
-                total=receipt.total_amount,
-                source=getattr(receipt, 'source', 'manual'),
                 reference_id=receipt.id,
-                items_data=items_data,
-                ledger_id_val=receipt.ledger_id_val,
-                party_customer_id=receipt.party_customer_id,
-                party_vendor_id=receipt.party_vendor_id
+                type='receipt',
+                defaults={
+                    "voucher_number": receipt.voucher_number,
+                    "date": receipt.date,
+                    "party": ", ".join(party_names) if party_names else "Bulk",
+                    "account": getattr(receipt.receive_in, 'name', None),
+                    "amount": receipt.amount,
+                    "total": receipt.total_amount,
+                    "narration": receipt.narration,
+                    "ref_no": receipt.ref_no,
+                    "source": getattr(receipt, 'source', 'manual'),
+                    "items_data": items_data,
+                    "ledger_id_val": receipt.ledger_id_val,
+                    "party_customer_id": receipt.party_customer_id,
+                    "party_vendor_id": receipt.party_vendor_id
+                }
             )
+            return gv
         except Exception as e:
             import traceback
             print(f"[ReceiptSerializer] _mirror_to_generic_voucher failed: {e}\n{traceback.format_exc()}")
+            return None
     def _mirror_to_vendor_portal(self, receipt):
         """Mirror Vendor specific receipts to the Vendor Portal ledger"""
         from vendors.models import VendorMasterBasicDetail, VendorTransaction
@@ -662,7 +774,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         except Exception:
             pass
 
-    def _post_journal_entries(self, receipt):
+    def _post_journal_entries(self, receipt, generic_voucher_id=None):
         """Post the double-entry transactions"""
         try:
             total_decimal = Decimal(str(receipt.total_amount))
@@ -731,7 +843,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             if len(entries) >= 2:
                 post_transaction(
                     voucher_type="RECEIPT",
-                    voucher_id=receipt.id,
+                    voucher_id=generic_voucher_id or receipt.id,
                     tenant_id=receipt.tenant_id,
                     entries=entries,
                     transaction_date=receipt.date,

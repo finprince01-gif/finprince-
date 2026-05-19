@@ -299,6 +299,7 @@ class Voucher(BaseModel):
     amount = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True)
     total = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
+    ref_no = models.CharField(max_length=150, null=True, blank=True, help_text="Reference Number (Cheque, NEFT, etc)")
     source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, ocr)")
     
     # Sales/Purchase specific
@@ -427,6 +428,8 @@ class JournalEntry(BaseModel):
     voucher_number = models.CharField(max_length=50, null=True, blank=True)
     transaction_date = models.DateField(null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
+    reference_number = models.CharField(max_length=100, null=True, blank=True)
+    allocation_status = models.CharField(max_length=20, default='Unutilized')
     
     ledger = models.ForeignKey(
         MasterLedger, 
@@ -1002,6 +1005,35 @@ class Transaction(BaseModel):
     def __str__(self):
         return f"{self.transaction_type}: {self.voucher_number} ({self.date})"
 
+    # ── Compatibility shims so ReceiptVoucherSerializer (model=Voucher) doesn't crash ──
+    @property
+    def type(self):
+        """Alias transaction_type -> type for Voucher-serializer compatibility"""
+        tt = (self.transaction_type or '').upper()
+        if tt == 'RECEIPT':
+            return 'receipt'
+        if tt == 'PAYMENT':
+            return 'payment'
+        return (self.transaction_type or '').lower()
+
+    @type.setter
+    def type(self, value):
+        self.transaction_type = (value or '').upper()
+
+    @property
+    def notes(self):
+        """Alias narration -> notes for serializer compatibility"""
+        return self.narration
+
+    @notes.setter
+    def notes(self, value):
+        self.narration = value
+
+    @property
+    def receive_in(self):
+        """Alias pay_to_ledger -> receive_in for receipt serializer compatibility"""
+        return self.pay_to_ledger
+
     def get_items(self):
         """Unified access to all allocation sub-items for mirroring/POST-logic"""
         # Circular import protection
@@ -1053,8 +1085,13 @@ class AllocationBase(BaseModel):
         related_name='%(class)s_from',
         null=True, blank=True
     )
+<<<<<<< HEAD
     allocated_amount = models.DecimalField(max_digits=25, decimal_places=2, db_column='amount', null=True, blank=True)
     amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, db_column='advance', null=True, blank=True)
+=======
+    allocated_amount = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True)
+    amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
+>>>>>>> 0216b6ff128cdd98f62573fd77aa18c48169590d
     vouch_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text="Amount entered in the voucher header")
 
     

@@ -54,12 +54,12 @@ const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').t
 // Absolute ranks for specific item names to ensure they stay pinned regardless of parent
 const ITEM_RANKS: Record<string, number> = {
     // Root level
-    'asset': 1,
-    'expenditure': 2,
-    'income': 3,
-    'liability': 4,
-    'ownersfunds': 5,
-    'npofunds': 6,
+    'npofunds': 0,
+    'ownersfunds': 1,
+    'liability': 2,
+    'asset': 3,
+    'income': 4,
+    'expenditure': 5,
 
     // Owners' Funds
     'sharecapital': 10,
@@ -81,8 +81,11 @@ const ITEM_RANKS: Record<string, number> = {
     'investmentsindebenturesorbonds': 34,
     'investmentsinmutualfunds': 35,
     'investmentsproperty': 36,
-    'others': 37,
     'othernoncurrentinvestment': 38,
+
+
+    'unrestrictedfunds': 0.1,
+    'restrictedfunds': 0.2,
 
     // Liabilities
     'longtermborrowings': 40,
@@ -91,7 +94,6 @@ const ITEM_RANKS: Record<string, number> = {
     'longtermprovisions': 43,
     'shorttermborrowings': 44,
     'othercurrentliabilities': 45,
-    'othercurrentassets': 46,
     'shorttermprovisions': 47,
 
     // Loans
@@ -113,19 +115,293 @@ const ITEM_RANKS: Record<string, number> = {
     // Income
     'revenuefromoperations': 70,
     'otherincome': 71,
+
+    // Assets
+    'propertyplantequipment': 80,
+    'noncurrentinvestments': 81,
+    'deferredtaxassetsnet': 82,
+    'longtermloansandadvances': 83,
+    'othernoncurrentassets': 84,
+    'currentinvestments': 85,
+    'cashandcashequivalents': 86,
+    'shorttermloansandadvances': 87,
+
+    // Property, Plant & Equipment Sub-groups
+    'tangibleassets': 90,
+    'intangibleassets': 91,
+    'capitalworkinprogress': 92,
+    'intangibleassetsunderdevelopment': 93,
+
+    // Cash and cash equivalents Sub-groups
+    'cash': 100,
+    'inbankaccounts': 101,
+    'others': 999,
+
+    // Revenue from operations Sub-groups
+    'donationsandgrants': 109,
+    'saleofservices': 110,
+    'saleofgoods': 111,
+    'saleofservice': 112,
+
+    // GST Sales Sub-groups
+    'localsalesservices': 120,
+    'interstatesalesservices': 121,
+
+    // Local Sales Sub-groups
+    'localsaleofservicesnilrated': 130,
+    'localsaleofservicesexempted': 131,
+    'localsaleofservicestaxable': 132,
+
+    // Inter-state Sales Sub-groups
+    'interstatesaleofservicesnilrated': 140,
+    'interstatesaleofservicesexempted': 141,
+    'interstatesaleofservicestaxable': 142,
+
+    // GST Sales Goods Sub-groups
+    'localsalesgoods': 150,
+    'interstatesalesgoods': 151,
+    'exportofgoods': 152,
+
+    // Local Sales Goods Sub-groups
+    'localsaleofgoodsnilrated': 160,
+    'localsaleofgoodsexempted': 161,
+    'localsaleofgoodstaxable': 162,
+
+    // Export of Goods Sub-groups
+    'exportofgoodsnilrated': 170,
+    'exportofgoodsexempted': 171,
+    'exportofgoodswithpaymentoftax': 172,
+    'exportofgoodswithoutpaymentoftax': 173,
+
+    // Export of Service Sub-groups
+    'exportofservicenilrated': 180,
+    'exportofserviceexempted': 181,
+    'exportofservicewithpaymentoftax': 182,
+    'exportofservicewithoutpaymentoftax': 183,
+
+    // Other Income Sub-groups
+    'interestincome': 190,
+    'dividendincome': 191,
+    'netgainonfairvaluechanges': 192,
+    'netgainonderecognitionoffinancialinstrumentsunderamortisedcostcategory': 193,
+
+    // Expenditure Sub-groups
+    'costofmaterialsconsumed': 200,
+    'changesininventoriesoffinishedgoodsstockintradeandworkinprogress': 201,
+    'employeebenefitsexpenses': 202,
+    'financecosts': 203,
+    'depreciationamortizationandimpairment': 204,
+    'otherexpenses': 205,
+
+    // Employee Benefits Sub-groups
+    'salary': 210,
+    'bonus': 211,
+    'wages': 212,
+    'staffwelfareexpenses': 213,
+    'incentives': 214,
+
+    // Finance Costs Sub-groups
+    'interestonbankloan': 220,
+    'interestonotherloans': 221,
+    'otherborrowingcosts': 222,
+    'impairmentonfinancialinstruments': 223,
+
+    // Depreciation Sub-groups
+    'depreciationexpense': 230,
+    'amortizationexpense': 231,
+
+    // Other Expenses Sub-groups & Ledgers
+    'feesandcommissionexpense': 250,
+    'netlossonfairvaluechanges': 251,
+    'netlossonderecognitionoffinancialinstrumentsunderamortisedcostcategory': 252,
+    'rent': 253,
+    'electricity': 254,
+    'repairsmaintenance': 255,
+    'insurance': 256,
+    'processinglabourcharges': 257,
+    'travellingconveyanceboarding': 258,
+    'auditorsremuneration': 259,
+    'printingstationery': 260,
+    'advertisementexpense': 261,
+    'commission': 262,
+    'legalandprofessionalcharges': 263,
+    'miscellaneousexpenses': 264,
+    'fuelexpenses': 265,
+    'communicationexpenses': 266,
+    'freightclearingandforwarding': 267,
+    'commissionandbrokerage': 268,
+    'rocfees': 269,
+    'gstandvatpayments': 270,
+    'donations': 271,
+    'baddebtswrittenoff': 272,
+    'itinternetservermaintenanceexpenses': 273,
+    'businesssalespromotionexpenses': 274,
+    'exchangegain': 275,
+    'exchangeloss': 276,
+    'officemaintenance': 277,
+    'roundoff': 278,
+    'rebatesanddiscounts': 279,
+    'consumptionofstoresandspareparts': 280,
+    'licencesandtaxesexcludingtaxesonincome': 281,
+    'lossonsaleofassets': 282,
+    'statutoryfeeinterestpenalty': 283,
+    'directorsremuneration': 284,
+    'msmeinterestexpense': 285,
+    'dividendtoshareholders': 286,
+
+    // Long term loans Sub-groups
+    'termloans': 300,
+    'otherloansfacilities': 301,
+
+    // Short term loans Sub-groups
+    'shorttermloansfrombankssecured': 310,
+    'shorttermloansfromrelatedpartiessecured': 311,
+    'shorttermloansfromotherpartiessecured': 312,
+
+    // Unsecured Short term loans Sub-groups
+    'shorttermloansfrombanksunsecured': 320,
+    'shorttermloansfromrelatedpartiesunsecured': 321,
+    'shorttermloansfromotherpartiesunsecured': 322,
 };
 
-const sortHierarchyNodes = (nodes: TreeNode[]) => {
+const sortHierarchyNodes = (nodes: TreeNode[], isLLP = false, isCompany = false, isOtherEntities = false) => {
+    const isLiab = (node: TreeNode) => {
+        const cat = (node.fullPath?.category || '').toLowerCase().trim();
+        return cat === 'liability' || cat === 'liabilities';
+    };
+
+    const getRank = (node: TreeNode, ranksMap: Record<string, number>, liabRank: number, assetRank: number) => {
+        const c = clean(node.name);
+        if (c === 'othercurrentassets') {
+            return isLiab(node) ? liabRank : assetRank;
+        }
+        return ranksMap[c];
+    };
+
     nodes.sort((a, b) => {
-        const ar = ITEM_RANKS[clean(a.name)] ?? 9999;
-        const br = ITEM_RANKS[clean(b.name)] ?? 9999;
-        
+        let ar = getRank(a, ITEM_RANKS, 46, 88) ?? 9999;
+        let br = getRank(b, ITEM_RANKS, 46, 88) ?? 9999;
+
+        if (isOtherEntities) {
+            const otherRanks: Record<string, number> = {
+                'ownerscapitalaccount': 1,
+                'reservesandsurplus': 2,
+                'longtermborrowings': 10,
+                'otherlongtermliabilities': 11,
+                'deferredtaxliabilitiesnet': 12,
+                'longtermprovisions': 13,
+                'shorttermborrowings': 14,
+                'othercurrentliabilities': 15,
+                'shorttermprovisions': 17,
+                'propertyplantequipment': 20,
+                'noncurrentinvestments': 21,
+                'deferredtaxassetsnet': 22,
+                'longtermloansandadvances': 23,
+                'othernoncurrentassets': 24,
+                'currentinvestments': 25,
+                'cashandcashequivalents': 26,
+                'shorttermloansandadvances': 27,
+            };
+            const customAr = getRank(a, otherRanks, 16, 28);
+            const customBr = getRank(b, otherRanks, 16, 28);
+            if (customAr !== undefined) ar = customAr;
+            if (customBr !== undefined) br = customBr;
+        } else if (isCompany) {
+            const companyRanks: Record<string, number> = {
+                'sharecapital': 1,
+                'reservesandsurplus': 2,
+                'moneyreceivedagainstsharewarrants': 3,
+                'longtermborrowings': 10,
+                'otherlongtermliabilities': 11,
+                'deferredtaxliabilitiesnet': 12,
+                'longtermprovisions': 13,
+                'shorttermborrowings': 14,
+                'othercurrentliabilities': 15,
+                'shorttermprovisions': 17,
+                'propertyplantequipment': 20,
+                'noncurrentinvestments': 21,
+                'deferredtaxassetsnet': 22,
+                'longtermloansandadvances': 23,
+                'othernoncurrentassets': 24,
+                'currentinvestments': 25,
+                'cashandcashequivalents': 26,
+                'shorttermloansandadvances': 27,
+            };
+            const customAr = getRank(a, companyRanks, 16, 28);
+            const customBr = getRank(b, companyRanks, 16, 28);
+            if (customAr !== undefined) ar = customAr;
+            if (customBr !== undefined) br = customBr;
+        } else if (isLLP) {
+            const llpRanks: Record<string, number> = {
+                'partnerscapitalcontribution': 1,
+                'partnerscurrentaccount': 2,
+                'reservessurplus': 3,
+                'reservesandsurplus': 4,
+                'longtermborrowings': 10,
+                'otherlongtermliabilities': 11,
+                'deferredtaxliabilitiesnet': 12,
+                'longtermprovisions': 13,
+                'shorttermborrowings': 14,
+                'othercurrentliabilities': 15,
+                'shorttermprovisions': 17,
+                'propertyplantequipment': 20,
+                'noncurrentinvestments': 21,
+                'deferredtaxassetsnet': 22,
+                'longtermloansandadvances': 23,
+                'othernoncurrentassets': 24,
+                'currentinvestments': 25,
+                'cashandcashequivalents': 26,
+                'shorttermloansandadvances': 27,
+                'feesandcommissionexpense': 100,
+                'netlossonfairvaluechanges': 101,
+                'netlossonderecognitionoffinancialinstrumentsunderamortisedcostcategory': 102,
+                'rent': 103,
+                'electricity': 104,
+                'repairsmaintenance': 105,
+                'insurance': 106,
+                'processinglabourcharges': 107,
+                'travellingconveyanceboarding': 108,
+                'auditorsremuneration': 109,
+                'printingstationery': 110,
+                'advertisementexpense': 111,
+                'commission': 112,
+                'legalandprofessionalcharges': 113,
+                'miscellaneousexpenses': 114,
+                'fuelexpenses': 115,
+                'communicationexpenses': 116,
+                'freightclearingandforwarding': 117,
+                'commissionandbrokerage': 118,
+                'rocfees': 119,
+                'gstandvatpayments': 120,
+                'donations': 121,
+                'baddebtswrittenoff': 122,
+                'itinternetservermaintenanceexpenses': 123,
+                'businesssalespromotionexpenses': 124,
+                'exchangegain': 125,
+                'exchangeloss': 126,
+                'officemaintenance': 127,
+                'roundoff': 128,
+                'rebatesanddiscounts': 129,
+                'consumptionofstoresandspareparts': 130,
+                'licencesandtaxesexcludingtaxesonincome': 131,
+                'lossonsaleofassets': 132,
+                'statutoryfeeinterestpenalty': 133,
+                'partnersremuneration': 134,
+                'msmeinterestexpense': 135,
+                'interestoncapitalcontributedbypartners': 136,
+            };
+            const customAr = getRank(a, llpRanks, 16, 28);
+            const customBr = getRank(b, llpRanks, 16, 28);
+            if (customAr !== undefined) ar = customAr;
+            if (customBr !== undefined) br = customBr;
+        }
+
         if (ar !== br) return ar - br;
         return a.name.localeCompare(b.name);
     });
     nodes.forEach(node => {
         if (node.children && node.children.length > 0) {
-            sortHierarchyNodes(node.children);
+            sortHierarchyNodes(node.children, isLLP, isCompany, isOtherEntities);
         }
     });
 };
@@ -258,23 +534,13 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         const fetchData = async () => {
             try {
                 // Fetch both global hierarchy and tenant ledgers
-                const [hierarchyRes, ledgersRes] = await Promise.all([
-                    fetch('/api/masters/hierarchy/'),
-                    fetch('/api/masters/ledgers/', {
-                        credentials: 'include' // Include cookies for authentication
-                    })
+                const [globalHierarchy, ledgers] = await Promise.all([
+                    httpClient.get<HierarchyRow[]>('/api/masters/hierarchy/'),
+                    httpClient.get<Ledger[]>('/api/masters/ledgers/').catch(() => [])
                 ]);
 
-                if (!hierarchyRes.ok) throw new Error('Failed to fetch hierarchy');
-
-                const globalHierarchy: HierarchyRow[] = await hierarchyRes.json();
-
-                // Fetch tenant ledgers (may fail if not authenticated, that's ok)
-                let ledgers: Ledger[] = [];
-                if (ledgersRes.ok) {
-                    ledgers = await ledgersRes.json();
-                    setTenantLedgers(ledgers);
-                }
+                // Set tenant ledgers state
+                setTenantLedgers(ledgers);
 
                 // Convert tenant ledgers to hierarchy format
                 const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
@@ -292,8 +558,67 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     return vals.some(v => HIDDEN_GROUPS.includes(v));
                 };
 
+                const isNPO = globalHierarchy.some(r => r.type_of_business_1?.toLowerCase().includes('non-profit'));
+                
+                // Enhanced detection: Check both explicit field and presence of characteristic items
+                const hasCompanyItems = globalHierarchy.some(r => 
+                    r.type_of_business_1?.toLowerCase().trim() === 'company' ||
+                    r.group_1?.toLowerCase().includes('share capital') ||
+                    r.ledger_1?.toLowerCase().includes('share capital')
+                );
+                
+                const hasLLPItems = globalHierarchy.some(r => 
+                    r.type_of_business_1?.toLowerCase().includes('llp') || 
+                    r.type_of_business_1?.toLowerCase().includes('partnership') ||
+                    r.group_1?.toLowerCase().includes('partners') ||
+                    r.ledger_1?.toLowerCase().includes('partners')
+                );
+                
+                const hasOtherEntitiesItems = globalHierarchy.some(r => 
+                    r.type_of_business_1?.toLowerCase().trim() === 'all other entities' ||
+                    r.group_1?.toLowerCase().includes("owners' capital account") ||
+                    r.ledger_1?.toLowerCase().includes("owners' capital account")
+                );
+
+                const isCompany = hasCompanyItems;
+                const isOtherEntities = !isCompany && hasOtherEntitiesItems;
+                const isLLP = !isCompany && !isOtherEntities && hasLLPItems;
+
                 const mergedHierarchy = [...globalHierarchy, ...customHierarchy]
-                    .filter(row => !isHiddenRow(row))
+                    .filter(row => {
+                        if (isHiddenRow(row)) return false;
+
+                        // Special filter for Non-Profit Organizations: 
+                        // Under Export of Service, only show specific ledgers.
+                        if (isNPO && row.sub_group_3_1?.toLowerCase().trim() === 'export of service') {
+                            const cleanedLedger = (row.ledger_1 || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+                            const allowed = [
+                                'exportofservicenilrated',
+                                'exportofservicewithpaymentoftax',
+                                'exportofservicewithoutpaymentoftax'
+                            ];
+                            // If it's a ledger row under Export of Service and not in allowed list, hide it.
+                            if (cleanedLedger && !allowed.includes(cleanedLedger)) return false;
+                        }
+
+                        // Special filter for LLP/Partnership:
+                        // Under Other current liabilities, only show specific items.
+                        if (isLLP && row.group_1?.toLowerCase().trim() === 'other current liabilities') {
+                            const sg1 = (row.sub_group_1_1 || '').toLowerCase().trim();
+                            const allowed = [
+                                'interest accrued',
+                                'bank od/cc accounts',
+                                'gst payable',
+                                'tds payable',
+                                'duties & taxes (liability)',
+                                'others'
+                            ];
+                            // If it's an item under Other current liabilities and not in allowed list, hide it.
+                            if (sg1 && !allowed.includes(sg1)) return false;
+                        }
+
+                        return true;
+                    })
                     .map(row => {
                         // Merge duplicate "Finance costs" groups into a single "Finance Costs" entry
                         if (row.group_1?.toLowerCase().trim() === 'finance costs') {
@@ -305,7 +630,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
                 // Build tree structure
                 const tree = buildTreeStructure(mergedHierarchy, ledgers);
-                sortHierarchyNodes(tree);
+                sortHierarchyNodes(tree, isLLP, isCompany, isOtherEntities);
 
                 setTreeData([...tree]);
 
@@ -364,7 +689,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                 if (!level.value) return;
 
                 parentPath = currentPath;
-                currentPath = currentPath ? `${currentPath}>${level.value}` : level.value;
+                const normalizedValue = (level.value || '').toLowerCase().trim();
+                currentPath = currentPath ? `${currentPath}>${normalizedValue}` : normalizedValue;
 
                 if (!tree.has(currentPath)) {
                     // For custom rows, ALL intermediate nodes (sub_group_2, sub_group_3)
@@ -450,7 +776,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     ? parentPath.substring(0, parentPath.lastIndexOf('>'))
                     : '';
 
-                const sg3NodePath = grandparentPath ? `${grandparentPath}>${nSg3}` : nSg3;
+                const normalizedSg3 = (nSg3 || '').toLowerCase().trim();
+                const sg3NodePath = grandparentPath ? `${grandparentPath}>${normalizedSg3}` : normalizedSg3;
 
                 // Only do this once — check if sg3 node already exists
                 if (!tree.has(sg3NodePath)) {
@@ -523,7 +850,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     ? 6
                     : (nSg3 ? 4 : (nSg2 ? 3 : 6));
 
-            const childPath = `${parentPath}>${childDisplayName}`;
+            const childPath = `${parentPath}>${childDisplayName.toLowerCase().trim()}`;
 
             if (tree.has(childPath)) {
                 // Update existing node instead of replacing it (to preserve references in parent's children array)
@@ -630,82 +957,85 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     };
 
     const renderTree = (nodes: TreeNode[], parentPath = '', level = 0): React.ReactElement[] => {
-        return nodes.map((node, index) => {
-            const nodePath = parentPath ? `${parentPath}>${node.name}` : node.name;
-            const isExpanded = expandedNodes.has(nodePath);
-            const hasChildren = node.children.length > 0;
-            const isSelected = selectedNode?.name === node.name &&
-                selectedNode?.level === node.level &&
-                JSON.stringify(selectedNode?.fullPath) === JSON.stringify(node.fullPath);
+        const HIDDEN = ['sundry debtors', 'sundry creditors', 'duties & taxes', 'sales accounts', 'purchase accounts', 'purchase account'];
+        return nodes
+            .filter(node => !HIDDEN.includes((node.name || '').toLowerCase().trim()))
+            .map((node, index) => {
+                const nodePath = parentPath ? `${parentPath}>${node.name}` : node.name;
+                const isExpanded = expandedNodes.has(nodePath);
+                const hasChildren = node.children.length > 0;
+                const isSelected = selectedNode?.name === node.name &&
+                    selectedNode?.level === node.level &&
+                    JSON.stringify(selectedNode?.fullPath) === JSON.stringify(node.fullPath);
 
-            let textStyle = '';
-            let iconStyle = 'text-gray-400';
+                let textStyle = '';
+                let iconStyle = 'text-gray-400';
 
-            if (!hasChildren && node.level >= 5) {
-                // True ledger endpoints (ledger level only) are red + italic.
-                // Sub-group nodes with no children are structural and should not look like ledgers.
-                const sizeClass = level === 0 ? 'text-sm' : level === 1 ? 'text-[13.5px]' : 'text-[13px]';
-                textStyle = `${sizeClass} text-red-600 font-medium italic`;
-                iconStyle = 'text-red-500';
-            } else if (node.level === 0) {
-                // Category: Blue, Bold, Uppercase, Largest
-                textStyle = 'text-sm text-blue-600 font-bold uppercase tracking-wider';
-                iconStyle = 'text-blue-500';
-            } else if (node.level === 1) {
-                // Group: Black, Bold, Slightly smaller
-                textStyle = 'text-[13.5px] text-black font-bold';
-                iconStyle = 'text-black';
-            } else if (node.level === 2) {
-                // Sub Group 1: Black, Semi-bold
-                textStyle = 'text-[13px] text-gray-900 font-semibold';
-                iconStyle = 'text-gray-800';
-            } else if (node.level === 3) {
-                // Sub Group 2: Black, Medium weight
-                textStyle = 'text-[12px] text-gray-800 font-medium';
-                iconStyle = 'text-gray-700';
-            } else {
-                // Sub Group 3 and others: Normal weight, Smallest
-                textStyle = 'text-[11px] text-gray-700 font-normal';
-                iconStyle = 'text-gray-600';
-            }
+                if (!hasChildren && node.level >= 5) {
+                    // True ledger endpoints (ledger level only) are red + italic.
+                    // Sub-group nodes with no children are structural and should not look like ledgers.
+                    const sizeClass = level === 0 ? 'text-sm' : level === 1 ? 'text-[13.5px]' : 'text-[13px]';
+                    textStyle = `${sizeClass} text-red-600 font-medium italic`;
+                    iconStyle = 'text-red-500';
+                } else if (node.level === 0) {
+                    // Category: Blue, Bold, Uppercase, Largest
+                    textStyle = 'text-sm text-blue-600 font-bold uppercase tracking-wider';
+                    iconStyle = 'text-blue-500';
+                } else if (node.level === 1) {
+                    // Group: Black, Bold, Slightly smaller
+                    textStyle = 'text-[13.5px] text-black font-bold';
+                    iconStyle = 'text-black';
+                } else if (node.level === 2) {
+                    // Sub Group 1: Black, Semi-bold
+                    textStyle = 'text-[13px] text-gray-900 font-semibold';
+                    iconStyle = 'text-gray-800';
+                } else if (node.level === 3) {
+                    // Sub Group 2: Black, Medium weight
+                    textStyle = 'text-[12px] text-gray-800 font-medium';
+                    iconStyle = 'text-gray-700';
+                } else {
+                    // Sub Group 3 and others: Normal weight, Smallest
+                    textStyle = 'text-[11px] text-gray-700 font-normal';
+                    iconStyle = 'text-gray-600';
+                }
 
-            return (
-                <div key={nodePath} style={{ marginLeft: `${level * 20}px` }}>
-                    <div
-                        className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
-                        onClick={() => {
-                            selectNodeForPreview(node);
-                            // Reset inputs when selection changes
-                            setSubGroup3Input('');
-                            setLedgerTypeInput('');
-                        }}
-                        onDoubleClick={() => {
-                            if (hasChildren) {
-                                toggleNode(nodePath);
-                            }
-                        }}
-                    >
-                        {hasChildren ? (
-                            <span className={`mr-1 text-xs font-bold select-none ${iconStyle}`}>
-                                {isExpanded ? '−' : '+'}
+                return (
+                    <div key={nodePath} style={{ marginLeft: `${level * 20}px` }}>
+                        <div
+                            className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                            onClick={() => {
+                                selectNodeForPreview(node);
+                                // Reset inputs when selection changes
+                                setSubGroup3Input('');
+                                setLedgerTypeInput('');
+                            }}
+                            onDoubleClick={() => {
+                                if (hasChildren) {
+                                    toggleNode(nodePath);
+                                }
+                            }}
+                        >
+                            {hasChildren ? (
+                                <span className={`mr-1 text-xs font-bold select-none ${iconStyle}`}>
+                                    {isExpanded ? '−' : '+'}
+                                </span>
+                            ) : (
+                                <span className={`mr-1 text-xs ${iconStyle}`}>
+                                    {(node.isCustom && node.level >= 5) ? '★' : '•'}
+                                </span>
+                            )}
+                            <span className={`text-sm select-none ${textStyle}`}>
+                                {node.name}
                             </span>
-                        ) : (
-                            <span className={`mr-1 text-xs ${iconStyle}`}>
-                                {(node.isCustom && node.level >= 5) ? '★' : '•'}
-                            </span>
-                        )}
-                        <span className={`text-sm select-none ${textStyle}`}>
-                            {node.name}
-                        </span>
-                    </div>
-                    {hasChildren && isExpanded && (
-                        <div>
-                            {renderTree(node.children, nodePath, level + 1)}
                         </div>
-                    )}
-                </div>
-            );
-        });
+                        {hasChildren && isExpanded && (
+                            <div>
+                                {renderTree(node.children, nodePath, level + 1)}
+                            </div>
+                        )}
+                    </div>
+                );
+            });
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -777,22 +1107,19 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
     const refetchHierarchy = async (): Promise<TreeNode[] | null> => {
         try {
-            const [hierarchyRes, ledgersRes] = await Promise.all([
-                fetch('/api/masters/hierarchy/'),
-                fetch('/api/masters/ledgers/', { credentials: 'include' })
+            const [globalHierarchy, ledgers] = await Promise.all([
+                httpClient.get<HierarchyRow[]>('/api/masters/hierarchy/'),
+                httpClient.get<Ledger[]>('/api/masters/ledgers/').catch(() => [])
             ]);
-            if (hierarchyRes.ok && ledgersRes.ok) {
-                const globalHierarchy: HierarchyRow[] = await hierarchyRes.json();
-                const ledgers: Ledger[] = await ledgersRes.json();
-                setTenantLedgers(ledgers);
-                const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
-                const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
-                setHierarchyData(mergedHierarchy);
-                const tree = buildTreeStructure(mergedHierarchy, ledgers);
-                sortHierarchyNodes(tree); // ← Apply pinned order after every re-fetch
-                setTreeData([...tree]);
-                return tree;
-            }
+
+            setTenantLedgers(ledgers);
+            const customHierarchy = ledgers.map(ledger => convertLedgerToHierarchy(ledger, ledgers));
+            const mergedHierarchy = [...globalHierarchy, ...customHierarchy];
+            setHierarchyData(mergedHierarchy);
+            const tree = buildTreeStructure(mergedHierarchy, ledgers);
+            sortHierarchyNodes(tree); // ← Apply pinned order after every re-fetch
+            setTreeData([...tree]);
+            return tree;
         } catch (error) {
             console.error('Error refetching data:');
         }
@@ -995,10 +1322,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     </label>
                     <div className="border border-gray-300 rounded-[4px] p-3 max-h-[32rem] overflow-y-auto bg-gray-50">
                         {treeData.length > 0 ? (
-                            renderTree(treeData.filter(node => {
-                                const HIDDEN = ['sundry debtors', 'sundry creditors'];
-                                return !HIDDEN.includes((node.name || '').toLowerCase().trim());
-                            }))
+                            renderTree(treeData)
                         ) : (
                             <div className="text-gray-500 text-sm">No hierarchy data available</div>
                         )}

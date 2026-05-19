@@ -250,7 +250,11 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = JournalEntry
-        fields = ['id', 'ledger', 'ledger_name', 'debit', 'credit', 'voucher_type', 'voucher_number', 'transaction_date', 'voucher_id']
+        fields = [
+            'id', 'ledger', 'ledger_name', 'debit', 'credit', 
+            'voucher_type', 'voucher_number', 'transaction_date', 
+            'voucher_id', 'reference_number', 'allocation_status'
+        ]
         read_only_fields = ['id']
 
 
@@ -271,6 +275,7 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
     totalCredit = serializers.DecimalField(source='total_credit', max_digits=20, decimal_places=2, required=False)
     fromAccount = serializers.CharField(source='from_account', required=False, allow_blank=True)
     toAccount = serializers.CharField(source='to_account', required=False, allow_blank=True)
+    refNo = serializers.CharField(source='ref_no', required=False, allow_blank=True)
     
     class Meta:
         model = Voucher
@@ -281,7 +286,8 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
             'party': {'required': False, 'allow_blank': True},
             'account': {'required': False, 'allow_blank': True},
             'from_account': {'required': False, 'allow_blank': True},
-            'to_account': {'required': False, 'allow_blank': True}
+            'to_account': {'required': False, 'allow_blank': True},
+            'ref_no': {'required': False, 'allow_blank': True}
         }
     
     def to_representation(self, instance):
@@ -299,6 +305,7 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
         ret['totalCredit'] = instance.total_credit
         ret['fromAccount'] = instance.from_account
         ret['toAccount'] = instance.to_account
+        ret['refNo'] = instance.ref_no
         
         # Add items for sales/purchase
         if instance.type in ['sales', 'purchase']:
@@ -310,6 +317,35 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
             # Voucher links to JournalEntry via voucher_id (loosely coupled)
             entries = JournalEntry.objects.filter(voucher_id=instance.id, tenant_id=instance.tenant_id)
             ret['entries'] = JournalEntrySerializer(entries, many=True).data
+        
+        # Auto-resolve voucher_type from prefix configurations for payment/receipt
+        v_type_lower = (instance.type or '').lower()
+        if v_type_lower in ['payment', 'receipt']:
+            current_vtype = ret.get('voucher_type')
+            if not current_vtype or str(current_vtype).lower() in ['payment', 'payments', 'receipt', 'receipts']:
+                v_num = getattr(instance, 'voucher_number', '') or getattr(instance, 'invoice_no', '')
+                tenant_id = getattr(instance, 'tenant_id', None)
+                
+                configs = None
+                if v_type_lower == 'payment':
+                    from masters.models import MasterVoucherPayments
+                    configs = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True)
+                else:
+                    from masters.models import MasterVoucherReceipts
+                    configs = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True)
+                
+                if configs:
+                    matched_cfg = None
+                    if v_num:
+                        for cfg in configs:
+                            prefix = cfg.prefix or ''
+                            if prefix and str(v_num).lower().startswith(prefix.lower()):
+                                matched_cfg = cfg
+                                break
+                    if matched_cfg:
+                        ret['voucher_type'] = matched_cfg.voucher_name
+                    elif configs.exists():
+                        ret['voucher_type'] = configs.first().voucher_name
         
         return ret
     

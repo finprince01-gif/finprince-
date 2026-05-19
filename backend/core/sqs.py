@@ -124,6 +124,20 @@ class QueueService:
         
         if not sqs or not queue_url:
             return []
+            
+        if self.sqs and self.queue_url:
+            try:
+                response = self.sqs.receive_message(
+                    QueueUrl=self.queue_url,
+                    MaxNumberOfMessages=max_messages,
+                    WaitTimeSeconds=wait_time,
+                    AttributeNames=['All']
+                )
+                return response.get('Messages', [])
+            except Exception as e:
+                logger.error(f"SQS Receive Failed: {str(e)}")
+                return []
+        return []
 
         # [PHASE 11.9] Forensic Receive Trace (DEBUG only to reduce noise)
         logger.debug(f"[RECEIVE_MESSAGE_CALL] queue={queue_type} url={queue_url} wait={wait_time}")

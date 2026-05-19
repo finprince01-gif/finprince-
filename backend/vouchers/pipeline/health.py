@@ -63,13 +63,19 @@ class IdempotencyLock:
         pass
 
     def acquire(self) -> bool:
-        return True
+        if not redis_client.available: return True # Fail-open
+        return redis_client.get_client().set(self.key, "1", nx=True, ex=self.ttl)
 
     def release(self):
-        pass
+        if not redis_client.available: return
+        redis_client.get_client().delete(self.key)
 
     def mark_done(self, job_id: int):
-        pass
+        if not redis_client.available: return
+        redis_client.get_client().set(self.done_key, str(job_id), ex=86400) # 24hr
 
     def is_done(self) -> int | None:
-        return None
+        if not redis_client.available: return None
+        val = redis_client.get_client().get(self.done_key)
+        return int(val) if val else None
+

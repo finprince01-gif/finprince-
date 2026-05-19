@@ -16,7 +16,8 @@ import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import SalesOrderList from './SalesOrderList';
 import SalesOrderViewModal from './SalesOrderViewModal';
-import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt, Check, Download } from 'lucide-react';
+import { Search, Plus, Filter, Download, ChevronLeft, ChevronRight, Edit, Trash2, X, Info, Check, ChevronDown, Eye, Mail, Calendar, Pencil, FileText, ArrowLeft, Receipt } from 'lucide-react';
+import MultiSelectDropdown from '../../components/MultiSelectDropdown';
 import CustomerViewModal from './CustomerViewModal';
 import SalesGSTViewModal from './SalesGSTViewModal';
 import { formatDate } from '../../utils/formatting';
@@ -88,34 +89,34 @@ const ADDITIONAL_STATES: Record<string, { name: string; isoCode: string }[]> = {
 // TDS Rates Master Data
 const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; description: string } } = {
     'Section 392(7) - Premature EPF Withdrawal (> ₹50,000)': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,000' },
-    'Section 393(1) - Interest on Securities': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000' },
-    'Section 393(1) - Interest other than Securities': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
-    'Section 393(1) - Dividends (Domestic Company)': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000' },
-    'Section 393(1) - Contractor Payments (Large Payer) - Individual/HUF': { tdsRate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
-    'Section 393(1) - Contractor Payments (Large Payer) - Other than Individual/HUF': { tdsRate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
-    'Section 393(1) - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': { tdsRate: '5%', description: 'Threshold limit: ₹ 50,000' },
-    'Section 393(1) - Technical Services / Call Centre / Film Royalty': { tdsRate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
-    'Section 393(1) - Professional Fees / Other Royalty': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
-    'Section 393(1) - Insurance Commission': { tdsRate: '2%', description: 'Threshold limit: ₹ 20,000' },
-    'Section 393(1) - General Commission or Brokerage': { tdsRate: '2%', description: 'Threshold limit: ₹ 20,000' },
-    'Section 393(1) - Rent (Individual/HUF Payer > ₹50,000/mo)': { tdsRate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
-    'Section 393(1) - Rent on Plant & Machinery': { tdsRate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
-    'Section 393(1) - Rent on Land & Building': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
-    'Section 393(1) - Transfer of Immovable Property (> ₹50L)': { tdsRate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
-    'Section 393(1) - Purchase of Goods (exceeding ₹50L)': { tdsRate: '0.10%', description: 'Threshold limit: ₹ 20,000' },
-    'Section 393(1) - Virtual Digital Assets (VDA/Crypto)': { tdsRate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    'Section 393(3) - Winnings from Lottery / Puzzles': { tdsRate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    'Section 393(3) - Regular Filer (ITR filed in previous years) > 1 cr': { tdsRate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
-    'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 20L': { tdsRate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
-    'Section 393(3) - Non-Filer (ITR not filed for past 3 years) > 1Cr': { tdsRate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
-    'Section 393(3) - Co-operative Societies > 3 cr': { tdsRate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
-    'Section 393(3) - Payments to Partners (Salary/Comm. > ₹20k)': { tdsRate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
-    'Section 393(2) - Sportsmen / Sports Association (Non-Resident)': { tdsRate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': { tdsRate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    'Section 393(2) - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': { tdsRate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    'Section 393(2) - Income/LTCG from Offshore Fund Units': { tdsRate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    'Section 393(2) - Interest/Dividends/LTCG on Bonds/GDR': { tdsRate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-    'Section 393(2) - Any other sum payable to Non-Resident': { tdsRate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
+    'Section 393(1) [Sl. No. 5(i)] - Interest on Securities': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000' },
+    'Section 393(1) [Sl. No. 5(ii/iii)] - Interest other than Securities': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
+    'Section 393(1) [Sl. No. 7] - Dividends (Domestic Company)': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000' },
+    'Section 393(1) [Sl. No. 6(i)] - Contractor Payments (Large Payer) - Individual/HUF': { tdsRate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
+    'Section 393(1) [Sl. No. 6(i)] - Contractor Payments (Large Payer) - Other than Individual/HUF': { tdsRate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) [Sl. No. 6(ii)] - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)': { tdsRate: '5%', description: 'Threshold limit: ₹ 50,000' },
+    'Section 393(1) [Sl. No. 6(iii).D(a)] - Technical Services / Call Centre / Film Royalty': { tdsRate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
+    'Section 393(1) [Sl. No. 6(iii).D(b)] - Professional Fees / Other Royalty': { tdsRate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) [Sl. No. 1(i)] - Insurance Commission': { tdsRate: '2%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) [Sl. No. 1(ii)] - General Commission or Brokerage': { tdsRate: '2%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) [Sl. No. 2(i)] - Rent (Individual/HUF Payer > ₹50,000/mo)': { tdsRate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+    'Section 393(1) [Sl. No. 2(ii).D(a)] - Rent on Plant & Machinery': { tdsRate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
+    'Section 393(1) [Sl. No. 2(ii).D(b)] - Rent on Land & Building': { tdsRate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
+    'Section 393(1) [Sl. No. 3(i)] - Transfer of Immovable Property (> ₹50L)': { tdsRate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
+    'Section 393(1) [Sl. No. 8(ii)] - Purchase of Goods (exceeding ₹50L)': { tdsRate: '0.10%', description: 'Threshold limit: ₹ 20,000' },
+    'Section 393(1) [Sl. No. 8(vi)] - Virtual Digital Assets (VDA/Crypto)': { tdsRate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(3) [Sl. No. 1] - Winnings from Lottery / Puzzles': { tdsRate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(3) [Sl. No. 5] - Regular Filer (ITR filed in previous years) > 1 cr': { tdsRate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
+    'Section 393(3) [Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 20L': { tdsRate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
+    'Section 393(3) [Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 1Cr': { tdsRate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
+    'Section 393(3) [Sl. No. 5] - Co-operative Societies > 3 cr': { tdsRate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
+    'Section 393(3) [Sl. No. 7] - Payments to Partners (Salary/Comm. > ₹20k)': { tdsRate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
+    'Section 393(2) [Sl. No. 1] - Sportsmen / Sports Association (Non-Resident)': { tdsRate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) [Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023': { tdsRate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) [Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023': { tdsRate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) [Sl. No. 11/12] - Income/LTCG from Offshore Fund Units': { tdsRate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) [Sl. No. 13/14] - Interest/Dividends/LTCG on Bonds/GDR': { tdsRate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+    'Section 393(2) [Sl. No. 17] - Any other sum payable to Non-Resident': { tdsRate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
 };
 
 // TCS Rates Master Data
@@ -577,43 +578,43 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         iecCode: '',
         eouStatus: 'Export Oriented Unit (EOU)', // Default
         taxType: 'NONE' as 'TCS' | 'TDS' | 'NONE', // NEW: mutual-exclusive selector
-        tcsSection: '',
+        tcsSections: [] as string[],
         tcsEnabled: false,
-        tdsSection: '',
+        tdsSections: [] as string[],
         tdsEnabled: false
     });
 
     // TDS Sections Data
     const tdsSections = [
-        { section: 'Section 392(7)', name: 'Premature EPF Withdrawal (> ₹50,000)', rate: '10%', description: 'Threshold limit: ₹ 50,000' },
-        { section: 'Section 393(1)', name: 'Interest on Securities', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
-        { section: 'Section 393(1)', name: 'Interest other than Securities', rate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
-        { section: 'Section 393(1)', name: 'Dividends (Domestic Company)', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
-        { section: 'Section 393(1)', name: 'Contractor Payments (Large Payer) - Individual/HUF', rate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
-        { section: 'Section 393(1)', name: 'Contractor Payments (Large Payer) - Other than Individual/HUF', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
-        { section: 'Section 393(1)', name: 'Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)', rate: '5%', description: 'Threshold limit: ₹ 50,000' },
-        { section: 'Section 393(1)', name: 'Technical Services / Call Centre / Film Royalty', rate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
-        { section: 'Section 393(1)', name: 'Professional Fees / Other Royalty', rate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
-        { section: 'Section 393(1)', name: 'Insurance Commission', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
-        { section: 'Section 393(1)', name: 'General Commission or Brokerage', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
-        { section: 'Section 393(1)', name: 'Rent (Individual/HUF Payer > ₹50,000/mo)', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
-        { section: 'Section 393(1)', name: 'Rent on Plant & Machinery', rate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
-        { section: 'Section 393(1)', name: 'Rent on Land & Building', rate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
-        { section: 'Section 393(1)', name: 'Transfer of Immovable Property (> ₹50L)', rate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
-        { section: 'Section 393(1)', name: 'Purchase of Goods (exceeding ₹50L)', rate: '0.10%', description: 'Threshold limit: ₹ 20,000' },
-        { section: 'Section 393(1)', name: 'Virtual Digital Assets (VDA/Crypto)', rate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-        { section: 'Section 393(3)', name: 'Winnings from Lottery / Puzzles', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-        { section: 'Section 393(3)', name: 'Regular Filer (ITR filed in previous years) > 1 cr', rate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
-        { section: 'Section 393(3)', name: 'Non-Filer (ITR not filed for past 3 years) > 20L', rate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
-        { section: 'Section 393(3)', name: 'Non-Filer (ITR not filed for past 3 years) > 1Cr', rate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
-        { section: 'Section 393(3)', name: 'Co-operative Societies > 3 cr', rate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
-        { section: 'Section 393(3)', name: 'Payments to Partners (Salary/Comm. > ₹20k)', rate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
-        { section: 'Section 393(2)', name: 'Sportsmen / Sports Association (Non-Resident)', rate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-        { section: 'Section 393(2)', name: 'Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023', rate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-        { section: 'Section 393(2)', name: 'Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023', rate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-        { section: 'Section 393(2)', name: 'Income/LTCG from Offshore Fund Units', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-        { section: 'Section 393(2)', name: 'Interest/Dividends/LTCG on Bonds/GDR', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
-        { section: 'Section 393(2)', name: 'Any other sum payable to Non-Resident', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
+        { section: 'Section 392(7)', name: '- Premature EPF Withdrawal (> ₹50,000)', rate: '10%', description: 'Threshold limit: ₹ 50,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 5(i)] - Interest on Securities', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 5(ii/iii)] - Interest other than Securities', rate: '10%', description: 'Threshold limit: ₹ 50,000 (General) / ₹ 1,00,000 (Senior Citizens)' },
+        { section: 'Section 393(1)', name: '[Sl. No. 7] - Dividends (Domestic Company)', rate: '10%', description: 'Threshold limit: ₹ 10,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 6(i)] - Contractor Payments (Large Payer) - Individual/HUF', rate: '1%', description: 'Threshold limit: ₹ 30,000 (Single) / ₹ 1,00,000 (Annual Aggregate)' },
+        { section: 'Section 393(1)', name: '[Sl. No. 6(i)] - Contractor Payments (Large Payer) - Other than Individual/HUF', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 6(ii)] - Contractor/Professional/Comm. (Ind/HUF Payer > ₹50L)', rate: '5%', description: 'Threshold limit: ₹ 50,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 6(iii).D(a)] - Technical Services / Call Centre / Film Royalty', rate: '2%', description: 'Threshold limit: ₹ 2,40,000 (Annual) or ₹ 50,000 (Monthly per payer type)' },
+        { section: 'Section 393(1)', name: '[Sl. No. 6(iii).D(b)] - Professional Fees / Other Royalty', rate: '10%', description: 'Threshold limit: ₹ 50,00,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 1(i)] - Insurance Commission', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 1(ii)] - General Commission or Brokerage', rate: '2%', description: 'Threshold limit: ₹ 20,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 2(i)] - Rent (Individual/HUF Payer > ₹50,000/mo)', rate: '2%', description: 'Threshold limit: ₹ 50,00,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 2(ii).D(a)] - Rent on Plant & Machinery', rate: '2%', description: 'Threshold limit: ₹ 10,000 (General) / ₹ 50,000 (Specified Person)' },
+        { section: 'Section 393(1)', name: '[Sl. No. 2(ii).D(b)] - Rent on Land & Building', rate: '10%', description: 'Threshold limit: ₹ 10,000 (per transaction/aggregate as per type)' },
+        { section: 'Section 393(1)', name: '[Sl. No. 3(i)] - Transfer of Immovable Property (> ₹50L)', rate: '1%', description: 'Threshold limit: ₹ 1 Crore (Filers) / ₹ 20 Lakh (Non-filers)' },
+        { section: 'Section 393(1)', name: '[Sl. No. 8(ii)] - Purchase of Goods (exceeding ₹50L)', rate: '0.10%', description: 'Threshold limit: ₹ 50,00,000' },
+        { section: 'Section 393(1)', name: '[Sl. No. 8(vi)] - Virtual Digital Assets (VDA/Crypto)', rate: '1%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(3)', name: '[Sl. No. 1] - Winnings from Lottery / Puzzles', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(3)', name: '[Sl. No. 5] - Regular Filer (ITR filed in previous years) > 1 cr', rate: '2%', description: 'Threshold limit: Regular Filer (ITR filed in previous years) > 1 cr' },
+        { section: 'Section 393(3)', name: '[Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 20L', rate: '2%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 20L' },
+        { section: 'Section 393(3)', name: '[Sl. No. 5] - Non-Filer (ITR not filed for past 3 years) > 1Cr', rate: '5%', description: 'Threshold limit: Non-Filer (ITR not filed for past 3 years) > 1Cr' },
+        { section: 'Section 393(3)', name: '[Sl. No. 5] - Co-operative Societies > 3 cr', rate: '2%', description: 'Threshold limit: Co-operative Societies > 3 cr' },
+        { section: 'Section 393(3)', name: '[Sl. No. 7] - Payments to Partners (Salary/Comm. > ₹20k)', rate: '10%', description: 'Threshold limit: Payments to Partners (Salary/Comm. > ₹20k)' },
+        { section: 'Section 393(2)', name: '[Sl. No. 1] - Sportsmen / Sports Association (Non-Resident)', rate: '20%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: '[Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans before july1, 2023', rate: '5%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: '[Sl. No. 2/3/4] - Interest on Foreign Borrowings/IFSC Bonds for loans after july1, 2023', rate: '9%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: '[Sl. No. 11/12] - Income/LTCG from Offshore Fund Units', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: '[Sl. No. 13/14] - Interest/Dividends/LTCG on Bonds/GDR', rate: '10%', description: 'Threshold limit: No limit. Taxable from rupee 1' },
+        { section: 'Section 393(2)', name: '[Sl. No. 17] - Any other sum payable to Non-Resident', rate: '30%', description: 'Threshold limit: No limit. Taxable from rupee 1' }
     ];
 
     // State for TDS info modal
@@ -775,9 +776,9 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 fssai_no: statutoryDetails.fssaiNo || null,
                 iec_code: statutoryDetails.iecCode || null,
                 eou_status: statutoryDetails.eouStatus || null,
-                tcs_section: statutoryDetails.tcsSection || null,
+                tcs_section: statutoryDetails.tcsSections.join('|'),
                 tcs_enabled: statutoryDetails.tcsEnabled,
-                tds_section: statutoryDetails.tdsSection || null,
+                tds_section: statutoryDetails.tdsSections.join('|'),
                 tds_enabled: statutoryDetails.tdsEnabled,
                 // Banking Info
                 banking_info: bankAccounts.length > 0 ? { accounts: bankAccounts } : null,
@@ -1225,9 +1226,9 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
             iecCode: customer.iec_code || '',
             eouStatus: customer.eou_status || 'Export Oriented Unit (EOU)',
             taxType: customer.tcs_section ? 'TCS' : customer.tds_section ? 'TDS' : 'NONE',
-            tcsSection: customer.tcs_section || '',
+            tcsSections: customer.tcs_section ? (customer.tcs_section.includes('|') ? customer.tcs_section.split('|') : customer.tcs_section.split(/,(?![^(]*\))/)) : [],
             tcsEnabled: customer.tcs_enabled || false,
-            tdsSection: customer.tds_section || '',
+            tdsSections: customer.tds_section ? (customer.tds_section.includes('|') ? customer.tds_section.split('|') : customer.tds_section.split(/,(?![^(]*\))/)) : [],
             tdsEnabled: customer.tds_enabled || false
         });
 
@@ -1346,8 +1347,8 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
     const handleCustomerExcelDownload = async (type: 'template' | 'export') => {
         try {
             const endpoint = type === 'template'
-                ? '/api/customerportal/excel/template/'
-                : '/api/customerportal/excel/export/';
+                ? `/api/customerportal/excel/template/?t=${Date.now()}`
+                : `/api/customerportal/excel/export/?t=${Date.now()}`;
 
             showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
 
@@ -2699,9 +2700,9 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                                     ...statutoryDetails,
                                                     taxType: type,
                                                     // reset fields when switching
-                                                    tcsSection: type !== 'TCS' ? '' : statutoryDetails.tcsSection,
+                                                    tcsSections: type !== 'TCS' ? [] : statutoryDetails.tcsSections,
                                                     tcsEnabled: type !== 'TCS' ? false : statutoryDetails.tcsEnabled,
-                                                    tdsSection: type !== 'TDS' ? '' : statutoryDetails.tdsSection,
+                                                    tdsSections: type !== 'TDS' ? [] : statutoryDetails.tdsSections,
                                                     tdsEnabled: type !== 'TDS' ? false : statutoryDetails.tdsEnabled,
                                                 })}
                                                 className={`px-6 py-2 text-sm font-semibold transition-colors border-r border-gray-300 last:border-r-0 ${statutoryDetails.taxType === type
@@ -2717,7 +2718,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
 
                                 {/* TCS Card */}
                                 {statutoryDetails.taxType === 'TCS' && (
-                                    <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30 max-w-xl">
+                                    <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30 max-w-3xl">
                                         <div className="flex justify-between items-start mb-4">
                                             <h5 className="font-semibold text-gray-800">TCS Configuration</h5>
                                             <span className="text-gray-400" title="Information">
@@ -2725,64 +2726,98 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                             </span>
                                         </div>
                                         <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
-                                                <div className="flex items-center gap-2">
-                                                    <select
-                                                        className="flex-1 px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                        value={statutoryDetails.tcsSection}
-                                                        onChange={(e) => {
-                                                            setStatutoryDetails({ ...statutoryDetails, tcsSection: e.target.value });
-                                                            if (e.target.value) {
-                                                                const [section, name] = e.target.value.split('|');
-                                                                const tcsInfo = tcsSections.find(t => t.section === section && t.name === name);
-                                                                if (tcsInfo) { setSelectedTcsInfo(tcsInfo); setShowTcsInfo(true); }
-                                                            } else { setShowTcsInfo(false); setSelectedTcsInfo(null); }
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
+                                                    <MultiSelectDropdown
+                                                        options={tcsSections.map((tcs) => ({
+                                                            value: `${tcs.section} ${tcs.name}`,
+                                                            label: `${tcs.section} ${tcs.name} @ ${tcs.rate}`
+                                                        }))}
+                                                        selectedValues={statutoryDetails.tcsSections}
+                                                        onChange={(values) => {
+                                                            setStatutoryDetails({ ...statutoryDetails, tcsSections: values });
+                                                            if (values.length === 0) {
+                                                                setShowTcsInfo(false);
+                                                                setSelectedTcsInfo(null);
+                                                            } else if (!selectedTcsInfo || !values.includes(`${selectedTcsInfo.section} ${selectedTcsInfo.name}`)) {
+                                                                // If nothing selected or current info item removed, show first available
+                                                                const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === values[0]);
+                                                                if (tcsInfo) { setSelectedTcsInfo(tcsInfo); }
+                                                            }
                                                         }}
-                                                    >
-                                                        <option value="">Select TCS Section</option>
-                                                        {tcsSections.map((tcs, index) => (
-                                                            <option key={index} value={`${tcs.section}|${tcs.name}`}>
-                                                                {tcs.section} - {tcs.name} @ {tcs.rate}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {statutoryDetails.tcsSection && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowTcsInfo(!showTcsInfo)}
-                                                            className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-[4px] transition-colors"
-                                                            title={showTcsInfo ? "Hide Description" : "Show Description"}
-                                                        >
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle>
-                                                                <line x1="12" y1="16" x2="12" y2="12"></line>
-                                                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                            </svg>
-                                                        </button>
+                                                        placeholder="Select TCS Sections"
+                                                    />
+
+                                                    {statutoryDetails.tcsSections.length > 0 && (
+                                                        <div className="mt-3 space-y-2">
+                                                            {statutoryDetails.tcsSections.map((fullString) => {
+                                                                const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === fullString);
+                                                                const isCurrentlyViewed = selectedTcsInfo && `${selectedTcsInfo.section} ${selectedTcsInfo.name}` === fullString && showTcsInfo;
+
+                                                                return (
+                                                                    <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                                                        <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
+                                                                        <div className="flex items-center gap-1 ml-4">
+                                                                            <button
+                                                                                type="button"
+                                                                                className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                                                                onClick={() => {
+                                                                                    if (isCurrentlyViewed) {
+                                                                                        setShowTcsInfo(false);
+                                                                                    } else {
+                                                                                        setSelectedTcsInfo(tcsInfo || null);
+                                                                                        setShowTcsInfo(true);
+                                                                                    }
+                                                                                }}
+                                                                                title="View Section Info"
+                                                                            >
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                                </svg>
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                                                onClick={() => {
+                                                                                    const newSections = statutoryDetails.tcsSections.filter(s => s !== fullString);
+                                                                                    setStatutoryDetails({ ...statutoryDetails, tcsSections: newSections });
+                                                                                    if (isCurrentlyViewed) {
+                                                                                        setShowTcsInfo(false);
+                                                                                        setSelectedTcsInfo(null);
+                                                                                    }
+                                                                                }}
+                                                                                title="Remove Section"
+                                                                            >
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                                </svg>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     )}
-                                                </div>
-                                                {showTcsInfo && selectedTcsInfo && (
-                                                    <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-[4px]">
-                                                        <div className="flex items-start gap-2">
-                                                            <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                            </svg>
-                                                            <div className="flex-1">
-                                                                <div className="flex items-center justify-between mb-1">
-                                                                    <p className="text-xs font-medium text-indigo-900">Description</p>
-                                                                    {selectedTcsInfo.rate && (
-                                                                        <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 border border-indigo-300 rounded px-2 py-0.5">
-                                                                            TCS Rate: {selectedTcsInfo.rate}
-                                                                        </span>
-                                                                    )}
+
+                                                    {showTcsInfo && selectedTcsInfo && (
+                                                        <div className="p-4 bg-emerald-50/50 border-l-4 border-emerald-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
+                                                            <div className="flex items-start gap-3">
+                                                                <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                </svg>
+                                                                <div className="flex-1">
+                                                                    <h4 className="text-sm font-semibold text-emerald-900 mb-1">Section Details</h4>
+                                                                    <div className="space-y-1 text-sm text-emerald-800">
+                                                                        <p><span className="font-medium">Section:</span> {selectedTcsInfo.section}</p>
+                                                                        <p><span className="font-medium">Name:</span> {selectedTcsInfo.name}</p>
+                                                                        <p><span className="font-medium">Rate:</span> {selectedTcsInfo.rate}</p>
+                                                                        <p className="mt-2 text-xs italic opacity-80">{selectedTcsInfo.description}</p>
+                                                                    </div>
                                                                 </div>
-                                                                <p className="text-sm text-indigo-800 leading-relaxed">{selectedTcsInfo.description}</p>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                                    )}
+                                                </div>
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -2790,7 +2825,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                                     checked={statutoryDetails.tcsEnabled}
                                                     onChange={(e) => setStatutoryDetails({ ...statutoryDetails, tcsEnabled: e.target.checked })}
                                                 />
-                                                <span className="text-sm text-gray-700">Enable automatic TCS posting</span>
+                                                <span className="text-sm text-gray-700">Enable automatic TCS Posting</span>
                                             </label>
                                         </div>
                                     </div>
@@ -2798,7 +2833,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
 
                                 {/* TDS Card */}
                                 {statutoryDetails.taxType === 'TDS' && (
-                                    <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30 max-w-xl">
+                                    <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30 max-w-3xl">
                                         <div className="flex justify-between items-start mb-4">
                                             <h5 className="font-semibold text-gray-800">TDS Configuration</h5>
                                             <span className="text-gray-400" title="Information">
@@ -2806,62 +2841,97 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                             </span>
                                         </div>
                                         <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
-                                                <div className="flex items-center gap-2">
-                                                    <select
-                                                        className="flex-1 px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                        value={statutoryDetails.tdsSection}
-                                                        onChange={(e) => {
-                                                            setStatutoryDetails({ ...statutoryDetails, tdsSection: e.target.value });
-                                                            if (e.target.value) {
-                                                                const [section, name] = e.target.value.split('|');
-                                                                const tdsInfo = tdsSections.find(t => t.section === section && t.name === name);
-                                                                if (tdsInfo) { setSelectedTdsInfo(tdsInfo); setShowTdsInfo(true); }
-                                                            } else { setShowTdsInfo(false); setSelectedTdsInfo(null); }
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
+                                                    <MultiSelectDropdown
+                                                        options={tdsSections.map((tds) => ({
+                                                            value: `${tds.section} ${tds.name}`,
+                                                            label: `${tds.section} ${tds.name} @ ${tds.rate}`
+                                                        }))}
+                                                        selectedValues={statutoryDetails.tdsSections}
+                                                        onChange={(values) => {
+                                                            setStatutoryDetails({ ...statutoryDetails, tdsSections: values });
+                                                            if (values.length === 0) {
+                                                                setShowTdsInfo(false);
+                                                                setSelectedTdsInfo(null);
+                                                            } else if (!selectedTdsInfo || !values.includes(`${selectedTdsInfo.section} ${selectedTdsInfo.name}`)) {
+                                                                const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === values[0]);
+                                                                if (tdsInfo) { setSelectedTdsInfo(tdsInfo); }
+                                                            }
                                                         }}
-                                                    >
-                                                        <option value="">Select TDS Section</option>
-                                                        {tdsSections.map((tds, index) => (
-                                                            <option key={index} value={`${tds.section}|${tds.name}`}>
-                                                                {tds.section} - {tds.name} @ {tds.rate}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {statutoryDetails.tdsSection && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowTdsInfo(!showTdsInfo)}
-                                                            className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-[4px] transition-colors"
-                                                            title={showTdsInfo ? "Hide Description" : "Show Description"}
-                                                        >
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle>
-                                                                <line x1="12" y1="16" x2="12" y2="12"></line>
-                                                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                            </svg>
-                                                        </button>
+                                                        placeholder="Select TDS Sections"
+                                                    />
+
+                                                    {statutoryDetails.tdsSections.length > 0 && (
+                                                        <div className="mt-3 space-y-2">
+                                                            {statutoryDetails.tdsSections.map((fullString) => {
+                                                                const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === fullString);
+                                                                const isCurrentlyViewed = selectedTdsInfo && `${selectedTdsInfo.section} ${selectedTdsInfo.name}` === fullString && showTdsInfo;
+
+                                                                return (
+                                                                    <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                                                        <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
+                                                                        <div className="flex items-center gap-1 ml-4">
+                                                                            <button
+                                                                                type="button"
+                                                                                className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-indigo-600 bg-indigo-100' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                                                                onClick={() => {
+                                                                                    if (isCurrentlyViewed) {
+                                                                                        setShowTdsInfo(false);
+                                                                                    } else {
+                                                                                        setSelectedTdsInfo(tdsInfo || null);
+                                                                                        setShowTdsInfo(true);
+                                                                                    }
+                                                                                }}
+                                                                                title="View Section Info"
+                                                                            >
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                                </svg>
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                                                onClick={() => {
+                                                                                    const newSections = statutoryDetails.tdsSections.filter(s => s !== fullString);
+                                                                                    setStatutoryDetails({ ...statutoryDetails, tdsSections: newSections });
+                                                                                    if (isCurrentlyViewed) {
+                                                                                        setShowTdsInfo(false);
+                                                                                        setSelectedTdsInfo(null);
+                                                                                    }
+                                                                                }}
+                                                                                title="Remove Section"
+                                                                            >
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                                </svg>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     )}
-                                                </div>
-                                                {showTdsInfo && selectedTdsInfo && (
-                                                    <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-[4px]">
-                                                        <div className="flex items-start gap-2">
-                                                            <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                            </svg>
-                                                            <div className="flex-1">
-                                                                <div className="flex items-center justify-between mb-2">
-                                                                    <p className="text-xs font-medium text-indigo-900">Description</p>
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                                                        TDS Rate: {selectedTdsInfo.rate}
-                                                                    </span>
+
+                                                    {showTdsInfo && selectedTdsInfo && (
+                                                        <div className="p-4 bg-indigo-50/50 border-l-4 border-indigo-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
+                                                            <div className="flex items-start gap-3">
+                                                                <svg className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                </svg>
+                                                                <div className="flex-1">
+                                                                    <h4 className="text-sm font-semibold text-indigo-900 mb-1">Section Details</h4>
+                                                                    <div className="space-y-1 text-sm text-indigo-800">
+                                                                        <p><span className="font-medium">Section:</span> {selectedTdsInfo.section}</p>
+                                                                        <p><span className="font-medium">Name:</span> {selectedTdsInfo.name}</p>
+                                                                        <p><span className="font-medium">Rate:</span> {selectedTdsInfo.rate}</p>
+                                                                        <p className="mt-2 text-xs italic opacity-80">{selectedTdsInfo.description}</p>
+                                                                    </div>
                                                                 </div>
-                                                                <p className="text-sm text-indigo-800 leading-relaxed">{selectedTdsInfo.description}</p>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                                    )}
+                                                </div>
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -2869,7 +2939,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                                     checked={statutoryDetails.tdsEnabled}
                                                     onChange={(e) => setStatutoryDetails({ ...statutoryDetails, tdsEnabled: e.target.checked })}
                                                 />
-                                                <span className="text-sm text-gray-700">Enable automatic TDS posting</span>
+                                                <span className="text-sm text-gray-700">Enable automatic TDS Posting</span>
                                             </label>
                                         </div>
                                     </div>

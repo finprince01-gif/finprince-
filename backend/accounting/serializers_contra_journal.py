@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models_voucher_contra import VoucherContra
 from .models_voucher_journal import VoucherJournal, JournalVoucherEntry
-from .models import Voucher, MasterLedger
+from .models import Voucher, MasterLedger, Transaction
 from .services.ledger_service import post_transaction
 from core.tenant import get_tenant_from_request
 import uuid
@@ -67,8 +67,35 @@ class VoucherContraSerializer(serializers.ModelSerializer):
         tenant_id = get_tenant_from_request(request)
         validated_data['tenant_id'] = tenant_id
         
-        if not validated_data.get('voucher_number'):
+        # --- Robust Voucher Number Generation ---
+        from masters.models import MasterVoucherContra
+        v_type_name = validated_data.get('voucher_series') # Often used to pass the series name
+        series = None
+        if v_type_name:
+            series = MasterVoucherContra.objects.filter(tenant_id=tenant_id, voucher_name=v_type_name, is_active=True).first()
+        if not series:
+            series = MasterVoucherContra.objects.filter(tenant_id=tenant_id, is_active=True).first()
+
+        v_num = validated_data.get('voucher_number')
+        
+        if series and v_num and v_num != 'Manual Input':
+            if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                v_num = None
+
+        if series and (not v_num or v_num == 'Manual Input'):
+            while True:
+                v_num = series.get_next_number()
+                if not Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                    break
+                series.increment_number()
+        
+        if series and v_num and v_num == series.get_next_number():
+            series.increment_number()
+
+        if not v_num or v_num == 'Manual Input':
             validated_data['voucher_number'] = f"CN-{uuid.uuid4().hex[:6].upper()}"
+        else:
+            validated_data['voucher_number'] = v_num
 
         contra = super().create(validated_data)
 
@@ -150,8 +177,35 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
         
         entries_data = validated_data.pop('entries', [])
 
-        if not validated_data.get('voucher_number'):
+        # --- Robust Voucher Number Generation ---
+        from masters.models import MasterVoucherJournal
+        v_type_name = validated_data.get('voucher_series')
+        series = None
+        if v_type_name:
+            series = MasterVoucherJournal.objects.filter(tenant_id=tenant_id, voucher_name=v_type_name, is_active=True).first()
+        if not series:
+            series = MasterVoucherJournal.objects.filter(tenant_id=tenant_id, is_active=True).first()
+
+        v_num = validated_data.get('voucher_number')
+        
+        if series and v_num and v_num != 'Manual Input':
+            if Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                v_num = None
+
+        if series and (not v_num or v_num == 'Manual Input'):
+            while True:
+                v_num = series.get_next_number()
+                if not Transaction.objects.filter(tenant_id=tenant_id, voucher_number=v_num).exists():
+                    break
+                series.increment_number()
+        
+        if series and v_num and v_num == series.get_next_number():
+            series.increment_number()
+
+        if not v_num or v_num == 'Manual Input':
             validated_data['voucher_number'] = f"JN-{uuid.uuid4().hex[:6].upper()}"
+        else:
+            validated_data['voucher_number'] = v_num
 
         journal = super().create(validated_data)
         total_amount = journal.total_debit or journal.total_credit

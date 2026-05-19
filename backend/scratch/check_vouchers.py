@@ -1,26 +1,17 @@
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
-from django.db import connection
+from accounting.models import Voucher, JournalEntry
 
-def check_vouchers():
-    with connection.cursor() as cursor:
-        try:
-            cursor.execute("SELECT * FROM accounting_voucher LIMIT 1")
-            row = cursor.fetchone()
-            print(f"Successfully fetched a row: {row}")
-        except Exception as e:
-            print(f"Error fetching vouchers: {e}")
+vouchers = Voucher.objects.all().order_by('-id')[:10]
+print("--- LAST 10 VOUCHERS ---")
+for v in vouchers:
+    print(f"ID: {v.id} | Type: {v.type} | No: {v.voucher_number} | Date: {v.date} | Party: {v.party} | Account: {v.account} | Amount: {v.amount} | RefNo: {v.ref_no}")
 
-    # Check for missing fields in serializer vs model
-    from accounting.models import Voucher
-    from accounting.serializers import VoucherSerializer
-    
-    fields = [f.name for f in Voucher._meta.get_fields()]
-    print(f"Voucher model fields: {fields}")
-
-if __name__ == "__main__":
-    check_vouchers()
+print("\n--- JOURNAL ENTRIES ---")
+entries = JournalEntry.objects.all().order_by('-id')[:10]
+for e in entries:
+    print(f"ID: {e.id} | Ledger: {e.ledger_name} | Dr: {e.debit} | Cr: {e.credit} | VoucherType: {e.voucher_type} | VoucherNo: {e.voucher_number} | VoucherID: {e.voucher_id}")

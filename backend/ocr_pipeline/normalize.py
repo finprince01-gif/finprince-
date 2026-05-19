@@ -673,10 +673,10 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
 
 def get_ui_payload(invoice: Any) -> Dict[str, Any]:
     """
+<<<<<<< HEAD
     UI EGRESS MAPPING.
     STRICT CANONICAL PASSTHROUGH.
     [PHASE 11.9] Removed Title Case conversion. Frontend now expects canonical keys.
-    """
     ui_payload = get_canonical_export_record(invoice)
     
     # Forensic Row Audit
@@ -684,10 +684,10 @@ def get_ui_payload(invoice: Any) -> Dict[str, Any]:
     logger.debug(f"[TABLE_RENDER_VALUE] invoice_no='{ui_payload.get('invoice_no')}' total='{ui_payload.get('total_invoice_value')}'")
                 
     return ui_payload
-
-# ── CORE NORMALIZATION (RETAINED FOR PIPELINE) ───────────────────────────────
-
-def normalize(payload: Any) -> Dict[str, Any]:
+=======
+    Produces a UI-compatible payload with Capitalized Keys.
+    Essential for frontend table mapping.
+    """
     """
     Retained for backward compatibility in the async pipeline.
     Uses the new centralized normalization where applicable.
@@ -713,16 +713,22 @@ def normalize(payload: Any) -> Dict[str, Any]:
     # The real stabilization happens in the export functions
     result = payload.copy()
     
+<<<<<<< HEAD
     # ── [ROOT-CAUSE FIX] Preserve Both Title Case & Snake Case for UI Mapping ──
     norm_rec = get_normalized_export_record(payload)
     # 1. First merge the full record to preserve Title Case keys (e.g., "Total Invoice Value")
     result.update(norm_rec)
     
     # 2. Then ensure snake_case aliases exist for backward compatibility and internal logic
+=======
+    # ── SAFE OVERWRITE PROTECTION (Root Cause #6) ──
+    norm_rec = get_normalized_export_record(payload)
+>>>>>>> 0216b6ff128cdd98f62573fd77aa18c48169590d
     for k, v in norm_rec.items():
         internal_key = k.lower().replace(" ", "_").replace(".", "")
         existing = result.get(internal_key)
         
+<<<<<<< HEAD
         # Never overwrite populated field with empty
         if not is_empty(v):
             if is_empty(existing):
@@ -736,13 +742,28 @@ def normalize(payload: Any) -> Dict[str, Any]:
     if items:
         result["items"] = get_normalized_items(result)
         
+=======
+        # [ROOT-CAUSE FIX #6] Never overwrite populated field with empty
+        if not is_empty(v):
+            if is_empty(existing):
+                logger.info(f"[FIELD_POPULATED] key='{internal_key}'")
+                result[internal_key] = v
+            elif isinstance(v, str) and len(str(v)) > len(str(existing)):
+                logger.info(f"[FIELD_UPGRADED] key='{internal_key}' length {len(str(existing))} -> {len(str(v))}")
+                result[internal_key] = v
+            else:
+                logger.info(f"[FIELD_OVERWRITE_BLOCKED] key='{internal_key}' preserved existing='{existing}' over incoming='{v}'")
+>>>>>>> 0216b6ff128cdd98f62573fd77aa18c48169590d
     # [ROOT-CASE FIX] Ensure underscore fields are preserved
     for k, v in payload.items():
         if k.startswith("_") and k not in result:
             result[k] = v
 
+<<<<<<< HEAD
     # [NORMALIZE_STAGE_DONE] (Requirement #3)
     logger.info(f"[NORMALIZE_STAGE_DONE] item_count={len(result.get('items', []))}")
+=======
+>>>>>>> 0216b6ff128cdd98f62573fd77aa18c48169590d
     return result
 
 print("[NORMALIZE_EXPORT_CHECK]", "lossless_preserve" in globals())

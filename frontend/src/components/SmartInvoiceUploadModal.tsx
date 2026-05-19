@@ -1102,6 +1102,24 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
                 rows = res.data || [];
                 pipelineStatus = res.status || 'processing';
+
+                // ── Update Progress (Fix #6) ──
+                if (res.progress_percent !== undefined) {
+                    setScanProgress(res.progress_percent);
+
+                    // ── Stall Escape (Fix #10) ──
+                    if (res.progress_percent >= 100) {
+                        if (!stalledAt100Ref.current) stalledAt100Ref.current = Date.now();
+                        const stallDuration = (Date.now() - stalledAt100Ref.current) / 1000;
+                        if (stallDuration > 10) {
+                            console.warn(`[STALL_ESCAPE] Progress at 100% for ${stallDuration}s. Forcing snapshot check...`);
+                            // We don't need to do anything special here as the next poll will hit the same endpoint,
+                            // but the log confirms we've noticed the stall.
+                        }
+                    } else {
+                        stalledAt100Ref.current = null;
+                    }
+                }
             } else {
                 console.error("Unexpected API response format:", res);
                 setScanResults([]);
@@ -1411,10 +1429,6 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
         // Prefer SSE, fallback to polling
         startSSE(sid);
-
-    }, [uploadSessionId, doFetch, stopPolling]);
-
-    useEffect(() => {
         if (!uploadSessionId) return;
         if (step === 'review' && scanResults.length === 0) {
             // Do NOT pass uploadSessionId here. fetchStagedInvoices knows how to 

@@ -52,6 +52,11 @@ class CleanOCRStagingView(views.APIView):
         voucher_type = request.data.get('voucher_type', 'PURCHASE')
         upload_session_id = request.data.get('upload_session_id') or request.query_params.get('upload_session_id')
         tenant_id = request.user.branch_id
+        
+        logger.info(
+            f"[SESSION_TRACE_UPLOAD] session={upload_session_id} tenant={tenant_id} "
+            f"voucher_type={voucher_type} file_count={len(files)}"
+        )
 
         from core.sqs import QueueService
         queue = QueueService()
@@ -124,9 +129,10 @@ class CleanOCRStagingView(views.APIView):
                     job.processed_files += 1
                     continue
 
-                # Upload to S3
+                # Upload to storage (local fallback if S3 not configured)
                 s3_key = f"ocr/{tenant_id}/{job.id}/{file_hash}_{original_display_name.replace('/', '_')}"
-                file_url = storage.upload_file(file_bytes, s3_key, uploaded_file.content_type)
+                safe_content_type = uploaded_file.content_type or 'application/octet-stream'
+                file_url = storage.upload_file(file_bytes, s3_key, safe_content_type)
                 
                 # Create InvoiceTempOCR (The primary state container for the pipeline)
                 record = InvoiceTempOCR.objects.create(
@@ -155,6 +161,7 @@ class CleanOCRStagingView(views.APIView):
                     "record_id": record.id,
                     "job_id": str(job.id),
                     "file_url": file_url,
+                    "file_hash": file_hash,
                     "voucher_type": voucher_type,
                     "attempt": 1
                 }
@@ -554,6 +561,22 @@ class CleanOCRStagingView(views.APIView):
         if len(data) == 0:
             logger.info("[STAGING_QUERY_EMPTY_REASON] No staging rows returned because records were empty or filtered out.")
 
+        # ── PIPELINE-LEVEL STATUS (controls frontend polling) ──
+        # 'completed' → frontend stops polling. Use ONLY when ALL records are terminal.
+        # 'processing' → frontend keeps polling.
+        # A record with FAILED/EXTRACTION_FAILED is terminal — but the pipeline is
+        # only "done" when every single record has exited the async pipeline.
+        all_terminal = records.exists() and all(
+            getattr(r, 'status', None) in TERMINAL_STATUSES for r in records
+        )
+        pipeline_status = 'completed' if all_terminal else 'processing'
+
+        logger.info(
+            f"[STAGING POLL] session={request.query_params.get('upload_session_id')} "
+            f"records={len(data)} terminal={sum(1 for r in records if getattr(r,'status',None) in TERMINAL_STATUSES)} "
+            f"pipeline_status={pipeline_status}"
+        )
+
         return Response({
             "status": "COMPLETED" if session_id else "OK",
             "data": data,
@@ -787,6 +810,7 @@ class S3UploadPolicyView(views.APIView):
             'policy': policy
         })
 
+
 class OCRJobStatusView(views.APIView):
     """
     NEW: Pollable endpoint for background job status.
@@ -889,7 +913,7 @@ class OCRJobStatusView(views.APIView):
             # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
             normalized_patch = normalize(updated_data)
             record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
-            record.status = 'EXTRACTED'
+            record.status = PipelineStatus.FINALIZED
             record.supplier_invoice_no = (
                 sections.get('supplier_details', {}).get('supplier_invoice_no') or 
                 raw_target.get('supplier_invoice_no')
@@ -1352,22 +1376,11 @@ class ZohoReconstructView(views.APIView):
             if not inv.get('bill_from') and not inv.get('bill_address_from'):
                 logger.warning(f"FORENSIC_INV_IN[{idx}]: MISSING bill_from/bill_address_from!")
 
+        # If no session or no snapshot but record was terminal (fallback - should be rare)
         try:
             adapter = get_zoho_adapter()
             processed_invoices = adapter.reconstruct_invoices(data)
-            
-            # TRACE: Log outgoing payload safely
-            if processed_invoices and isinstance(processed_invoices, list) and isinstance(processed_invoices[0], dict):
-                logger.info(f"TRACE_API_OUT: First invoice outgoing bill_from: {processed_invoices[0].get('bill_from')}")
-
-            print("FINAL API RESPONSE:", processed_invoices)
-            for inv in processed_invoices:
-                if inv and not inv.get("bill_from"):
-                    print("BROKEN RECORD:", inv)
-                    raise Exception("CRITICAL: bill_from empty or missing")
-
             return Response({"invoices": processed_invoices})
-
 
         except Exception as e:
             logger.error(f"Zoho Reconstruct Failure: {str(e)}")
