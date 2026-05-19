@@ -442,12 +442,9 @@ class ForensicMerger:
 
         # Step 1: Detect roles for all members
         for inv in group:
-<<<<<<< HEAD
             # [MANDATORY HYDRATION] (Requirement #1)
             hydrate_identity_fields(inv)
             role = enforcer.classify_page(inv.get("_raw_text", ""), inv.get("items", []), invoice_data=inv)
-            role = enforcer.classify_page(inv.get("_raw_text", ""), inv.get("items", []))
->>>>>>> 0216b6ff128cdd98f62573fd77aa18c48169590d
             inv["_page_role"] = role
 
         # ── [MULTIPAGE_MERGE_APPLIED] Telemetry ──

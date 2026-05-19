@@ -281,19 +281,8 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # Cache Configuration - Pure DB/Local Memory (Redis Decommissioned)
 CACHES = {
     'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': REDIS_CACHE_URL,
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': int(os.getenv('REDIS_POOL_SIZE', '100')),
-                'retry_on_timeout': True,
-                'socket_timeout': 5,
-                'socket_connect_timeout': 5,
-            },
-            'IGNORE_EXCEPTIONS': True, # Fail-open for cache to prevent API downtime
-        },
-        'KEY_PREFIX': 'finpixe',
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
     }
 }
 

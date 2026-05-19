@@ -1085,13 +1085,8 @@ class AllocationBase(BaseModel):
         related_name='%(class)s_from',
         null=True, blank=True
     )
-<<<<<<< HEAD
-    allocated_amount = models.DecimalField(max_digits=25, decimal_places=2, db_column='amount', null=True, blank=True)
-    amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, db_column='advance', null=True, blank=True)
-=======
     allocated_amount = models.DecimalField(max_digits=25, decimal_places=2, null=True, blank=True)
     amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, null=True, blank=True)
->>>>>>> 0216b6ff128cdd98f62573fd77aa18c48169590d
     vouch_amount = models.DecimalField(max_digits=25, decimal_places=2, default=0, help_text="Amount entered in the voucher header")
 
     
