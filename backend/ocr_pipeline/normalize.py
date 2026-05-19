@@ -1,10 +1,19 @@
+from .schema import CanonicalInvoiceSchema, CanonicalInvoiceItem
 import logging
 import re
-from typing import Dict, Any, Optional
+import json
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+def log_canonical_schema_locked(invoice_no: str):
+    logger.info(f"[CANONICAL_SCHEMA_LOCKED] invoice_no='{invoice_no}'")
+
+def log_schema_drift_detected(field: str, expected_type: str, actual_type: str):
+    logger.warning(f"[SCHEMA_DRIFT_DETECTED] field='{field}' expected='{expected_type}' actual='{actual_type}'")
+
+# ── OCR & MAPPING CONSTANTS ──────────────────────────────────────────────────
 _OCR_DIGIT_MAP = str.maketrans({
     'o': '0', 'O': '0',
     'l': '1', 'I': '1',
@@ -12,886 +21,728 @@ _OCR_DIGIT_MAP = str.maketrans({
     'G': '6', 'B': '8',
 })
 
-# Month name aliases — handles OCR-garbled month tokens like "J{N" or "JAN"
-_MONTH_MAP = {
-    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
-}
+# [GSTIN_REGEX] (Requirement #1)
+GSTIN_PATTERN = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$')
 
-# Item description keywords — patterns found near rent/particulars labels
-_PARTICULARS_PATTERNS = [
-    r'(?:PARTICULARS?|NARRATION|DESCRIPTION)\s*[:\-]?\s*([^\n\r]{5,80})',
-    r'(RENT\s+FOR\s+THE\s+MONTH\s+OF\s+\w+)',
-    r'((?:MONTHLY\s+)?RENT\s+(?:FOR|OF)\s+[^\n\r]{3,60})',
-]
+def validate_gstin_checksum(gstin: str) -> bool:
+    """
+    Validates GSTIN using checksum digit (Mod 36).
+    """
+    if not gstin or len(gstin) != 15:
+        return False
+    
+    chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    try:
+        factor = 1
+        total = 0
+        for i in range(14):
+            val = chars.find(gstin[i])
+            if val == -1: return False
+            digit = val * factor
+            total += (digit // 36) + (digit % 36)
+            factor = 2 if factor == 1 else 1
+        
+        checksum = (36 - (total % 36)) % 36
+        return chars[checksum] == gstin[14]
+    except:
+        return False
 
+def normalize_gstin_safe(gstin: Any) -> str:
+    """
+    [PHASE 4] Non-destructive GSTIN normalization.
+    Only applies OCR heuristics if the original fails checksum AND the 
+    result of correction yields a valid checksum.
+    """
+    if is_empty(gstin): return ""
+    raw = str(gstin).strip().upper().replace(" ", "")
+    
+    # Clean noise: remove common OCR artifacts like leading/trailing special chars
+    raw = re.sub(r'[^A-Z0-9]', '', raw)
+
+    # 1. If already valid by REGEX or CHECKSUM, DO NOT MUTATE (Requirement #1)
+    if GSTIN_PATTERN.match(raw) or validate_gstin_checksum(raw):
+        logger.info(f"[GSTIN_VALIDATED] '{raw}' (Normalization skipped)")
+        return raw
+    
+    # 2. Try OCR corrections only if the length is plausible (15)
+    if len(raw) == 15:
+        corrected = raw.translate(_OCR_DIGIT_MAP)
+        if validate_gstin_checksum(corrected) or GSTIN_PATTERN.match(corrected):
+            logger.info(f"[GSTIN_CORRECTED] original='{raw}' corrected='{corrected}'")
+            return corrected
+    
+    # 3. If still invalid, return raw but log warning
+    logger.warning(f"[GSTIN_INVALID] checksum/regex failed for '{raw}'")
+    return raw
+
+EMPTY_VALUES = [None, "", [], {}, 0, 0.0, "0.0", "0.00", "—", "N/A", "null", "MISSING", "nan", "NaN"]
+
+# ── UTILITIES ────────────────────────────────────────────────────────────────
+
+def is_empty(val: Any) -> bool:
+    """Strict check for empty values to prevent destructive overwrites."""
+    if val in EMPTY_VALUES:
+        return True
+    if isinstance(val, str) and not val.strip():
+        return True
+    if isinstance(val, str) and val.lower() == "missing":
+        return True
+    return False
 
 def normalize_amount(amount: Any) -> float:
-    """
-    Convert various amount formats to float with OCR noise correction.
-    Recovery steps (applied in order before the existing strip):
-      1. If already numeric → return directly
-      2. Remove internal spaces: '4 2o0o' → '4 2o0o'
-      3. Apply OCR char substitutions: o→0, l→1, etc.
-      4. Strip all non-digit / non-dot characters
-      5. Parse as float
-    """
-    if amount is None or amount == "":
+    if is_empty(amount):
         return 0.0
-
     if isinstance(amount, (int, float)):
         return float(amount)
-
     raw = str(amount).strip()
-
-    # Step 0: strip leading currency symbols / prefixes (Rs., ₹, $, €, etc.)
-    # Do this BEFORE OCR substitution so 'Rs.' doesn't leave a stray '.'
     raw = re.sub(r'^(?:Rs\.?|INR|USD|EUR|GBP|₹|\$|€|£)\s*', '', raw, flags=re.IGNORECASE)
-
-    # Step 1: collapse internal whitespace inside numbers ('4 2 0 0 0' → '42000')
-
     compacted = re.sub(r'(?<=\d)\s+(?=\d)', '', raw)
-    compacted = re.sub(r'(?<=[A-Za-z])\s+(?=\d)', '', compacted)
-    compacted = re.sub(r'(?<=\d)\s+(?=[A-Za-z])', '', compacted)
-
-    # Step 2: apply OCR character substitutions (only inside what looks numeric)
     ocr_fixed = compacted.translate(_OCR_DIGIT_MAP)
-
-    # Step 3: strip non-numeric chars (commas, currency symbols, etc.)
     try:
-        cleaned = re.sub(r'[^\d.]', '', ocr_fixed)
+        cleaned = re.sub(r'[^\d.-]', '', ocr_fixed)
         result = float(cleaned) if cleaned else 0.0
-        if raw != str(result) and result != 0.0:
-            logger.info(f"[AMOUNT] raw={raw!r} → normalized={result}")
         return result
     except (ValueError, TypeError):
-        logger.warning(f"[AMOUNT] Failed to normalize: {amount!r}")
         return 0.0
-
-
-def ocr_recover_amount(text: str) -> float:
-    """
-    High-confidence amount extractor from raw OCR text.
-    Searches for the largest number near TOTAL/AMOUNT labels.
-    Applies full OCR substitution before scanning.
-    """
-    if not text:
-        return 0.0
-
-    upper = text.upper()
-
-    # Look for labelled amounts first (highest confidence)
-    label_patterns = [
-        r'(?:TOTAL|GRAND\s+TOTAL|AMOUNT|NET\s+AMOUNT)[^\d\n]{0,10}([\d,\s\.oOlI]+)',
-    ]
-    candidates = []
-    for pat in label_patterns:
-        for m in re.finditer(pat, upper):
-            raw_num = m.group(1).strip()
-            val = normalize_amount(raw_num)
-            if val > 0:
-                candidates.append(val)
-
-    # Fallback: scan all standalone numbers (pick largest)
-    if not candidates:
-        all_nums = re.findall(r'[\d][\d,\s\.oOlI]{1,12}[\d]', upper)
-        for n in all_nums:
-            val = normalize_amount(n)
-            if val > 0:
-                candidates.append(val)
-
-    return max(candidates) if candidates else 0.0
-
-
-# ── STRICT INVOICE NUMBER VALIDATION ─────────────────────────────────────────
-# Blacklist: words that OCR commonly misidentifies as invoice numbers.
-# Add any domain-specific garbage tokens here.
-_INV_BLACKLIST = {
-    # Generic document labels
-    "INVOICE", "INV", "BILL", "NO", "NUMBER", "NUM", "DATE", "TOTAL",
-    "AMOUNT", "GST", "TAX", "GSTIN", "PAN", "REF", "SI", "DOC",
-    # Common noise tokens seen in OCR output
-    "ING", "INC", "LTD", "PVT", "AUTHORIZED", "SIGNATORY", "BANK",
-    "DETAILS", "ORIGINAL", "DUPLICATE", "TRIPLICATE", "COPY",
-    "RECEIPT", "PURCHASE", "SALES", "DEBIT", "CREDIT", "NOTE",
-    "TAXABLE", "VALUE", "SUPPLY", "PLACE", "STATE", "CODE", "PAGE",
-    "BALANCE", "DUE", "PAYMENT", "TERMS", "SUBTOTAL", "GRAND",
-    "UNIT", "QTY", "QUANTITY", "RATE", "DESCRIPTION", "ITEM",
-}
-
-def is_valid_invoice_no(val: str, _source: str = "") -> bool:
-    """
-    STRICT Invoice Number Validator.
-
-    Rules (ALL must pass):
-      1. Must be a non-empty string.
-      2. Length between 1 and 25 characters. Minimum is 1 because valid short invoice
-         numbers like "7" or "18" exist. Garbage single characters ("A", "I") are
-         blocked by Rule 3 (must contain a real digit) and Rule 5 (pure-alpha reject).
-      3. Must contain at least ONE real digit (0-9). OCR character substitution
-         (I→1, O→0) is intentionally NOT applied here because it was the root
-         cause of "ING" being accepted — 'I' mapped to '1', producing a fake digit.
-      4. Must match the allowed character set: alphanumeric + [-/_. ()]
-      5. Must NOT be a pure-alphabetic string (all letters, no digits).
-      6. Must NOT appear in the blacklist of known noise words.
-
-    Returns True only when every rule passes.
-    """
-    if not val:
-        return False
-
-    cleaned = str(val).strip()
-    upper   = cleaned.upper()
-
-    # Rule 1 – length bounds (min=1 to allow short numerics like "7", "18")
-    if not (1 <= len(cleaned) <= 25):
-        logger.debug(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → length {len(cleaned)} out of [1,25]")
-        return False
-
-    # Rule 2 – must contain at least one REAL digit (no substitution)
-    if not any(c.isdigit() for c in cleaned):
-        logger.info(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → no real digits")
-        return False
-
-    # Rule 3 – allowed character set only
-    if not re.match(r'^[A-Za-z0-9/\-._\s()]+$', cleaned):
-        logger.info(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → illegal characters")
-        return False
-
-    # Rule 4 – blacklist exact match
-    if upper in _INV_BLACKLIST:
-        logger.info(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → blacklisted word")
-        return False
-
-    # Rule 5 – pure-alphabetic strings are never invoice numbers
-    if upper.isalpha():
-        logger.info(f"[INV_VALIDATE] REJECT '{cleaned}' ({_source}) → pure alphabetic, no digits")
-        return False
-
-    logger.debug(f"[INV_VALIDATE] ACCEPT '{cleaned}' ({_source}) — passed digit rule with min_length=1")
-    return True
 
 def normalize_date(date_val: Any) -> str:
-    """
-    Standardize various date formats to YYYY-MM-DD with OCR noise recovery.
-
-    Recovery pipeline (applied in order):
-      P1. Already a datetime object → format directly
-      P2. Clean standard formats → parse directly
-      P3. OCR character correction → retry standard parse
-      P4. Structural digit extraction → reconstruct DD-MM-YYYY from raw digits
-      P5. Give up → return original string (never return empty on non-empty input)
-    """
-    if not date_val:
-        return ""
-
-    if isinstance(date_val, datetime):
-        return date_val.strftime("%Y-%m-%d")
-
-    date_str = str(date_val).strip()
-    if not date_str:
-        return ""
-
-    raw_input = date_str  # kept for logging
-
-    # ── P2: Try standard formats on the raw string ──────────────────
+    """Robust date normalization to dd-mm-yyyy with exhaustive format support."""
+    if is_empty(date_val): return ""
+    if isinstance(date_val, datetime): 
+        return date_val.strftime("%d-%m-%Y")
+    
+    raw = str(date_val).strip()
+    logger.info(f"[DATE_PARSE_ATTEMPT] '{raw}'")
+    
+    # Remove boundary noise
+    raw_clean = re.sub(r'^[^a-zA-Z0-9]+', '', raw)
+    raw_clean = re.sub(r'[^a-zA-Z0-9]+$', '', raw_clean)
+    
+    # Standardize separators
+    clean_str = re.sub(r'[./\\]', '-', raw_clean)
+    
     _FORMATS = [
-        "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y",
-        "%d-%b-%y", "%d-%b-%Y", "%d %b %Y", "%d %b %y",
-        "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y",
-        "%d-%m-%y", "%d/%m/%y",
+        "%d-%m-%Y", "%Y-%m-%d", "%d-%m-%y", "%m-%d-%Y",
+        "%d %b %Y", "%d-%b-%Y", "%d-%b-%y", "%b %d %Y",
+        "%d %B %Y", "%d-%B-%Y", "%B %d, %Y", "%d/%m/%Y",
+        "%Y/%m/%d", "%m/%d/%Y", "%d.%m.%Y", "%d %b %y",
+        "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"
     ]
+    
     for fmt in _FORMATS:
         try:
-            result = datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
-            return result
-        except ValueError:
-            continue
-
-    # ── P3: OCR character correction then re-parse ───────────────────
-    # Replace common OCR noise chars with plausible date separators or digits.
-    # Strategy: keep only digits and known separators; replace everything else.
-    def _ocr_clean_date(s: str) -> str:
-        # Normalise separators first
-        s = re.sub(r'[/\\.]', '-', s)
-        # Replace OCR letter → digit substitutions
-        s = s.replace('O', '0').replace('o', '0')\
-             .replace('l', '1').replace('I', '1')\
-             .replace('S', '5').replace('Z', '2')
-        # Remove anything that's not a digit or separator now
-        s = re.sub(r'[^\d\-\s]', '', s)
-        # Collapse multiple separators/spaces to single '-'
-        s = re.sub(r'[\-\s]+', '-', s).strip('-')
-        return s
-
-    cleaned = _ocr_clean_date(date_str)
-    if cleaned and cleaned != date_str:
-        for fmt in _FORMATS:
+            dt = datetime.strptime(clean_str, fmt)
+            res = dt.strftime("%d-%m-%Y")
+            logger.info(f"[DATE_PARSE_SUCCESS] '{raw}' -> '{res}' (fmt: {fmt})")
+            return res
+        except:
             try:
-                result = datetime.strptime(cleaned, fmt).strftime("%Y-%m-%d")
-                logger.info(f"[DATE] raw={raw_input!r} → cleaned={cleaned!r} → normalized={result}")
-                return result
-            except ValueError:
-                continue
-
-        # Also try regex-based group extraction on the cleaned string
-        m = re.match(r'^(\d{1,2})-(\d{1,2})-(\d{2,4})$', cleaned)
-        if m:
-            day, mon, year = m.group(1), m.group(2), m.group(3)
-            for fmt in ["%d-%m-%Y", "%d-%m-%y"]:
-                try:
-                    temp = f"{int(day):02d}-{int(mon):02d}-{year}"
-                    result = datetime.strptime(temp, fmt).strftime("%Y-%m-%d")
-                    logger.info(f"[DATE] raw={raw_input!r} → reconstructed={result}")
-                    return result
-                except ValueError:
-                    continue
-
-    # ── P4: Digit-sequence reconstruction ────────────────────────────
-    # Pull out all digit runs; if we get exactly 3 (DD, MM, YY/YYYY) → reconstruct
-    digit_groups = re.findall(r'\d+', date_str)
-    if len(digit_groups) >= 3:
-        d, m_part, y = digit_groups[0], digit_groups[1], digit_groups[2]
-        # Sanity-check ranges before trusting the reconstruction
-        try:
-            dv, mv, yv = int(d), int(m_part), int(y)
-            if 1 <= dv <= 31 and 1 <= mv <= 12:
-                if yv < 100:  # two-digit year
-                    yv += 2000 if yv <= 50 else 1900
-                result = datetime(
-                    year=yv, month=mv, day=dv
-                ).strftime("%Y-%m-%d")
-                logger.info(
-                    f"[DATE] raw={raw_input!r} → digit-reconstructed={result} "
-                    f"(groups={digit_groups[:3]})"
-                )
-                return result
-        except (ValueError, OverflowError):
-            pass
-
-    # ── P5: Last-resort alpha-month extraction ───────────────────────
-    # Handles garbled strings like "51-)A.J{" where letters hint at month
-    # OCR-correct the string completely, then try alpha-month pattern
-    alpha_attempt = re.sub(r'[^A-Za-z0-9\-/\s]', ' ', date_str)
-    m_obj = re.search(
-        r'(\d{1,2})\s*[-/\s]?\s*([A-Za-z]{3})[A-Za-z]*\s*[-/\s]?\s*(\d{2,4})',
-        alpha_attempt
-    )
-    if m_obj:
-        day_s, mon_s, year_s = m_obj.group(1), m_obj.group(2).lower(), m_obj.group(3)
-        mon_num = _MONTH_MAP.get(mon_s)
-        if mon_num:
-            try:
-                yv = int(year_s)
-                if yv < 100:
-                    yv += 2000 if yv <= 50 else 1900
-                result = datetime(
-                    year=yv, month=mon_num, day=int(day_s)
-                ).strftime("%Y-%m-%d")
-                logger.info(f"[DATE] raw={raw_input!r} → alpha-month-recovered={result}")
-                return result
-            except (ValueError, OverflowError):
-                pass
-
-    logger.warning(f"[DATE] All recovery attempts failed for: {raw_input!r}")
-    return date_str
-
-
-def recover_item_description(raw_text: str) -> str:
-    """
-    Extracts item description / narration from raw OCR text.
-
-    Search order (highest → lowest confidence):
-      1. Label-anchored: text under 'PARTICULARS', 'NARRATION', 'DESCRIPTION'
-      2. Rent-pattern: 'RENT FOR THE MONTH OF <month>'
-      3. First non-label, non-numeric line of reasonable length
-
-    OCR correction applied: letter-substitution + casing normalisation.
-    Returns empty string if nothing recoverable is found.
-    """
-    if not raw_text:
-        return ""
-
-    text  = str(raw_text)
-    upper = text.upper()
-
-    # ── Step 1: known label-anchored patterns ────────────────────────
-    for pat in _PARTICULARS_PATTERNS:
-        m = re.search(pat, upper)
-        if m:
-            raw_candidate = m.group(1).strip()
-            corrected = _ocr_fix_description(raw_candidate)
-            if corrected:
-                logger.info(f"[ITEM] Extracted via pattern: {corrected!r}")
-                return corrected
-
-    # ── Step 2: scan lines for a plausible narration ─────────────────
-    skip_labels = {
-        'PARTICULARS', 'NARRATION', 'DESCRIPTION', 'INVOICE', 'BILL',
-        'DATE', 'AMOUNT', 'TOTAL', 'GST', 'TAX', 'NO', 'SL', 'SR',
-        'SGST', 'CGST', 'IGST', 'RATE', 'QTY', 'UNIT', 'HSN',
-    }
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped or len(stripped) < 8 or len(stripped) > 120:
-            continue
-        # Skip lines that are mostly numeric (amounts, dates)
-        if sum(c.isdigit() for c in stripped) > len(stripped) * 0.6:
-            continue
-        # Skip known header/label lines
-        if stripped.upper() in skip_labels:
-            continue
-        corrected = _ocr_fix_description(stripped)
-        if corrected and sum(c.isalpha() for c in corrected) > 4:
-            logger.info(f"[ITEM] Extracted via line scan: {corrected!r}")
-            return corrected
-
-    return ""
-
-
-def _ocr_fix_description(text: str) -> str:
-    """
-    OCR correction for description/narration strings.
-    Unlike numeric fields, this preserves alphabetic characters
-    but fixes specific letter-substitution patterns and normalises casing.
-    """
-    if not text:
-        return ""
-    # Replace common OCR garble: [ → L, ] → ], { → G (in word context)
-    s = text.upper()
-    s = s.replace('[', 'L').replace(']', 'I').replace('{', 'G').replace('}', 'D')
-    s = s.replace('|-|', 'H').replace('|\\|', 'N').replace('|V|', 'M')
-    # Collapse multiple spaces
-    s = re.sub(r'\s+', ' ', s).strip()
-    # Title-case for readability
-    # Use Python's str.title() then fix common apostrophe issues
-    result = s.title()
-    return result
-
-# ─────────────────────────────────────────────────────────────
-# Branch/City Derivation
-# ─────────────────────────────────────────────────────────────
-
-# Indian city name set — commonly found in vendor addresses
-# Extensible: just add city names here
-_KNOWN_CITIES = {
-    "coimbatore", "chennai", "mumbai", "pune", "delhi", "bangalore", "bengaluru",
-    "hyderabad", "kolkata", "ahmedabad", "surat", "jaipur", "lucknow", "kanpur",
-    "nagpur", "visakhapatnam", "indore", "thane", "bhopal", "pimpri", "patna",
-    "vadodara", "ghaziabad", "ludhiana", "agra", "nashik", "faridabad", "meerut",
-    "rajkot", "bhilai", "kalyan", "madurai", "jabalpur", "jamshedpur", "asansol",
-    "vasai", "virar", "allahabad", "dhanbad", "aurangabad", "amritsar", "tiruppur",
-    "ranchi", "howrah", "kochi", "erode", "salem", "tirunelveli", "navi mumbai",
-    "tirupur", "guwahati", "chandigarh", "hubli", "mysore", "bareilly",
-    "raipur", "jalandhar", "kolhapur", "gwalior", "vijayawada", "warangal",
-    "srinagar", "jodhpur", "madurai", "trichy", "tiruchirappalli", "pondicherry",
-    "vellore", "cuddalore", "nellore", "kurnool",
-}
-
-def derive_city_from_address(address: str) -> str:
-    """
-    Fallback: parse city from vendor_address when vendor_city is absent.
-
-    Strategy (in priority order):
-    1. Match word before a 6-digit PIN code → e.g. "Coimbatore - 641 001"
-    2. Match known Indian cities in the address text
-    3. Return "" (never hallucinate)
-    """
-    if not address:
-        return ""
-
-    addr = address.strip()
-
-    # Strategy 1 (Highest Priority): match known Indian cities in the address (case-insensitive)
-    addr_lower = addr.lower()
-    for city in sorted(_KNOWN_CITIES, key=len, reverse=True):  # longest match first
-        if re.search(r'\b' + re.escape(city) + r'\b', addr_lower):
-            result = city.title()
-            logger.info(f"BRANCH (known city match): '{result}' from address")
-            return result
-
-    # Strategy 2 (Secondary): word(s) immediately before a 6-digit PIN code
-    # Handles: "Coimbatore - 641001", "Coimbatore 641 001", "Coimbatore, 626 001"
-    match = re.search(
-        r'([A-Za-z][A-Za-z\s,\-]+?)\s*[-–,]?\s*(\d{3}\s?\d{3})\b',
-        addr
-    )
-    if match:
-        candidate = match.group(1).strip()
-        # Take only the last segment after comma/newline
-        candidate = re.split(r'[,\n]', candidate)[-1].strip()
-        # Strip common non-city prefixes
-        candidate = re.sub(
-            r'^(Dist\.?|District|Taluk|Village|Ward|Area|Near|Opp\.?|S\.?\s?No\.?|Plot\.?|No\.?|Phase|Block)\s*',
-            '', candidate, flags=re.IGNORECASE
-        ).strip()
-        
-        # FINAL CHECK: If candidate contains a known city, use that instead of the whole candidate
-        cand_lower = candidate.lower()
-        for city in sorted(_KNOWN_CITIES, key=len, reverse=True):
-            if city in cand_lower:
-                logger.info(f"BRANCH (PIN + City match): '{city.title()}' from candidate '{candidate}'")
-                return city.title()
-
-        if 2 <= len(candidate) <= 40:
-            logger.info(f"BRANCH (PIN strategy): '{candidate.title()}' from address")
-            return candidate.title()
-
-    return ""
-
-# ── Key Aliases for Robust Mapping (OCR Stability Layer) ─────
-KEY_ALIASES = {
-    "gstin": ["gstin", "vendor_gstin", "supplier_gstin", "gst_no", "tax_id", "GSTIN", "Supplier GSTIN", "Party GSTIN", "GSTIN/UIN"],
-    "vendor_name": ["vendor_name", "supplier_name", "seller_name", "party_name", "vendor", "Vendor Name", "Supplier Name", "Party Name", "Seller Name"],
-    "vendor_address": ["vendor_address", "supplier_address", "address", "bill_from", "seller_address", "Vendor Address", "Supplier Address", "Address", "Bill From"],
-    "billing_address": ["billing_address", "bill_to_address", "customer_address", "buyer_address", "Billing Address", "Bill To Address", "Customer Address", "Buyer Address", "Bill To", "Shipping Address"],
-    "vendor_state": ["vendor_state", "state", "place_of_supply", "vendor_place_of_supply", "Vendor State", "State", "Supplier State"],
-    "place_of_supply": ["place_of_supply", "pos", "ship_to_state", "supply_state", "Place of Supply", "POS", "Supply State", "Place of supply"],
-    "invoice_no": ["invoice_no", "invoice_number", "inv_no", "bill_no", "sales_invoice_no", "supplier_invoice_no", "reference_no", "tax_invoice_no", "Invoice No", "Invoice Number", "Bill No", "Bill Number", "Inv No", "Inv #", "Voucher Number", "Reference No"],
-    "invoice_date": ["invoice_date", "date", "bill_date", "inv_date", "voucher_date", "tax_invoice_date", "Invoice Date", "Date", "Bill Date", "Inv Date", "Voucher Date"],
-    "total_amount": ["total_amount", "total_invoice_value", "grand_total", "total", "invoice_value", "final_amount", "Total Amount", "Total Invoice Value", "Grand Total", "Total", "Invoice Value", "Invoice Amount", "Bill Amount"],
-    "taxable_value": ["taxable_value", "subtotal", "taxable_amount", "assessable_value", "net_amount", "taxable_value_total", "Taxable Value", "Subtotal", "Taxable Amount", "Assessable Value", "Net Amount"],
-    "total_cgst": ["total_cgst", "cgst", "cgst_amount", "central_tax", "cgst_value", "total_central_tax", "Total CGST", "CGST", "CGST Amount", "Central Tax"],
-    "total_sgst": ["total_sgst", "sgst", "sgst_amount", "state_tax", "utgst", "sgst_value", "total_state_tax", "Total SGST", "SGST", "SGST Amount", "State Tax", "SGST/UTGST", "Total SGST/UTGST"],
-    "total_igst": ["total_igst", "igst", "igst_amount", "integrated_tax", "igst_value", "igst_tax", "Total IGST", "IGST", "IGST Amount", "Integrated Tax"]
-}
-
-def resolve_key(data: Dict[str, Any], canonical_key: str) -> Any:
-    """
-    Looks up a value in data based on a list of aliases.
-    Recursive search inside 'sections' if present.
-    """
-    aliases = KEY_ALIASES.get(canonical_key, [canonical_key])
-    
-    # 0. DIRECT MATCH PRIORITY (for structured inputs)
-    if canonical_key in data and data[canonical_key] not in (None, ""):
-        return data[canonical_key]
-
-    # 1. Check top level
-    for alt in aliases:
-        if alt in data and data[alt] not in (None, ""):
-            return data[alt]
+                dt = datetime.strptime(raw, fmt)
+                res = dt.strftime("%d-%m-%Y")
+                logger.info(f"[DATE_PARSE_SUCCESS] '{raw}' -> '{res}' (fmt: {fmt})")
+                return res
+            except: continue
             
-    # 2. Check inside 'header' (for new extraction schema)
-    header = data.get("header", {})
-    if isinstance(header, dict):
-        for alt in aliases:
-            if alt in header and header[alt] not in (None, ""):
-                return header[alt]
+    logger.warning(f"[DATE_PARSE_FAIL] Could not parse: '{raw}'")
+    return raw
 
-    # 3. Check inside 'sections' (for re-normalization of already structured data)
-    sections = data.get("sections", {})
-    if sections:
-        for section in sections.values():
-            if isinstance(section, dict):
-                for alt in aliases:
-                    if alt in section and section[alt] not in (None, ""):
-                        return section[alt]
+def normalize_state(state: Any) -> str:
+    """Canonical mapping for Indian States and UTs."""
+    if is_empty(state): return ""
+    raw = str(state).strip().upper()
     
-    # 4. Last ditch: some models produce supply_details, supplier_details directly
-    for k in ["supply_details", "supplier_details", "supplyDetails", "supplierDetails"]:
-        sub = data.get(k, {})
-        if isinstance(sub, dict):
-            for alt in aliases:
-                if alt in sub and sub[alt] not in (None, ""):
-                    return sub[alt]
+    # Strip numeric prefixes (GST State Codes)
+    raw = re.sub(r'^\d+\s*[-/]?\s*', '', raw)
+    raw = re.sub(r'\s*[-/]?\s*\d+$', '', raw)
 
-    return None
-
-def resolve_address(data: Dict[str, Any], prefix: str = "vendor") -> Optional[str]:
-    """
-    Aggregates fragmented address fields if a single canonical string is missing.
-    """
-    # 1. Try canonical resolution first
-    canonical = resolve_key(data, f"{prefix}_address")
-    if canonical and str(canonical).strip() not in ("", "None", "—"):
-        return str(canonical).strip()
-        
-    # 2. Look for fragments (address_line1, city, etc.)
-    fragments = []
-    # Try both snake_case and Title Case
-    keys = ["address_line1", "address_line2", "address_line3", "city", "state", "pincode", "zip_code", "country"]
-    
-    # Also handle some variations without 'address_' prefix
-    short_keys = ["line1", "line2", "city", "state", "pincode"]
-    
-    header = data.get("header", {})
-    if not isinstance(header, dict): header = {}
-    
-    # Search order: header then top-level
-    sources = [header, data]
-    
-    search_keys = []
-    for k in keys:
-        search_keys.extend([f"{prefix}_{k}", k, f"{prefix} {k}".replace("_", " ").title(), k.title()])
-    for k in short_keys:
-        search_keys.extend([f"{prefix}_{k}", k])
-
-    seen_vals = set()
-    for k in search_keys:
-        for src in sources:
-            val = src.get(k)
-            if val and str(val).strip() and str(val).strip().lower() not in seen_vals:
-                v_str = str(val).strip()
-                fragments.append(v_str)
-                seen_vals.add(v_str.lower())
-                break # Move to next base key
-                
-    if fragments:
-        res = ", ".join(fragments)
-        logger.info(f"ADDRESS_AGGREGATOR ({prefix}): Built from {len(fragments)} fragments: {res[:50]}...")
-        return res
-        
-    return None
-
-def gst_state_lookup(gstin: str) -> str:
-    if not gstin or len(gstin) < 2:
-        return ""
-    state_code = str(gstin)[:2]
-    gst_state_codes = {
-        "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab",
-        "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana",
-        "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
-        "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh",
-        "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
-        "16": "Tripura", "17": "Meghalaya", "18": "Assam",
-        "19": "West Bengal", "20": "Jharkhand", "21": "Odisha",
-        "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
-        "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra",
-        "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
-        "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
-        "34": "Puducherry", "35": "Andaman and Nicobar Islands",
-        "36": "Telangana", "37": "Andhra Pradesh (New)"
+    STATE_MAP = {
+        "TN": "Tamil Nadu", "TAMIL NADU": "Tamil Nadu", "TAMILNADU": "Tamil Nadu",
+        "KA": "Karnataka", "KARNATAKA": "Karnataka",
+        "KL": "Kerala", "KERALA": "Kerala",
+        "AP": "Andhra Pradesh", "ANDHRA PRADESH": "Andhra Pradesh",
+        "TS": "Telangana", "TELANGANA": "Telangana",
+        "MH": "Maharashtra", "MAHARASHTRA": "Maharashtra",
+        "DL": "Delhi", "DELHI": "Delhi", "NEW DELHI": "Delhi",
+        "GJ": "Gujarat", "GUJARAT": "Gujarat",
+        "HR": "Haryana", "HARYANA": "Haryana",
+        "PB": "Punjab", "PUNJAB": "Punjab",
+        "RJ": "Rajasthan", "RAJASTHAN": "Rajasthan",
+        "UP": "Uttar Pradesh", "UTTAR PRADESH": "Uttar Pradesh",
+        "WB": "West Bengal", "WEST BENGAL": "West Bengal",
     }
-    return gst_state_codes.get(state_code, "")
+    
+    for kw, canonical in STATE_MAP.items():
+        if raw == kw or raw == canonical.upper():
+            return canonical
+            
+    return raw.title()
 
-def normalize(data_in: Dict[str, Any]) -> Dict[str, Any]:
+def fix_encoding_corruption(val: Any) -> str:
     """
-    Step 2: Correct Hierarchical Normalization (Lossless Adapter).
-    Directly produces the nested structure expected by the UI.
+    [PHASE 11.9] Heuristic to fix common UTF-8 -> Latin-1 double-encoding corruption.
+    Example: "Zoho â€“ Invoice" -> "Zoho – Invoice"
     """
-    # ── RAW BACKUP (Lossless) ──────────────────────────────────
-    # Always work on the rawest data available (original OCR output)
-    data = data_in.get("_raw_source") or data_in.copy()
-    raw_source = data.copy()
-
-    # Define likely rate check here for reuse
-    def is_likely_rate(val): return 0 < val <= 28
-
-    # ── HEURISTIC HEADER DETECTION ──
-    # Aggressively find header amounts to drive reconciliation
-    hdr_taxable = normalize_amount(resolve_key(data, "taxable_value"))
+    if not isinstance(val, str) or not val:
+        return val
     
-    # Try multiple common keys for taxes if resolve_key missed some
-    hdr_cgst_amt = normalize_amount(resolve_key(data, "total_cgst") or data.get("cgst"))
-    hdr_sgst_amt = normalize_amount(resolve_key(data, "total_sgst") or data.get("sgst"))
-    hdr_igst_amt = normalize_amount(resolve_key(data, "total_igst") or data.get("igst"))
-    hdr_cess_amt = normalize_amount(resolve_key(data, "total_cess") or data.get("cess"))
-    
-    # Fallback for structured data where resolve_key might have skipped subsections
-    if "sections" in data:
-        sec = data["sections"].get("supply_details", {})
-        if not hdr_cgst_amt: hdr_cgst_amt = normalize_amount(sec.get("total_cgst") or sec.get("cgst"))
-        if not hdr_sgst_amt: hdr_sgst_amt = normalize_amount(sec.get("total_sgst") or sec.get("sgst"))
-        if not hdr_igst_amt: hdr_igst_amt = normalize_amount(sec.get("total_igst") or sec.get("igst"))
-        if not hdr_cess_amt: hdr_cess_amt = normalize_amount(sec.get("total_cess") or sec.get("cess"))
-        if not hdr_taxable: hdr_taxable = normalize_amount(sec.get("total_taxable_value") or sec.get("taxable_value"))
+    # Common corruption sequences for en-dash, em-dash, smart quotes
+    corrupt_chars = ["\u00e2", "\u0080", "\u0093", "\u0094", "\u0099", "\u0082", "\u00ac"]
+    if any(c in val for c in corrupt_chars):
+        try:
+            # Re-encode as Latin-1 then decode as UTF-8
+            fixed = val.encode('latin-1').decode('utf-8')
+            logger.info(f"[ENCODING_RECOVERY] Fixed corrupted string: '{val[:20]}...' -> '{fixed[:20]}...'")
+            return fixed
+        except Exception:
+            pass
+    return val
 
-    # Header-level tax rates for fallback distribution
-    header_igst_r = normalize_amount(resolve_key(data, "igst_rate") or data.get("igst_percent"))
-    header_cgst_r = normalize_amount(resolve_key(data, "cgst_rate") or data.get("cgst_percent"))
-    header_sgst_r = normalize_amount(resolve_key(data, "sgst_rate") or data.get("sgst_percent"))
-    header_cess_r = normalize_amount(resolve_key(data, "cess_rate") or data.get("cess_percent"))
+def sanitize_description(desc: Any) -> str:
+    """Isolates item descriptions from HSN/SAC codes and OCR table noise."""
+    if is_empty(desc): return ""
+    raw = fix_encoding_corruption(str(desc).strip())
+    # Remove SAC/HSN codes and labels
+    raw = re.sub(r'(?i)\b(HSN|SAC|HSN/SAC)(\s*CODE)?\s*[:/-]?\s*\d+', '', raw)
+    # Remove common meta-noise
+    raw = re.sub(r'(?i)\bGST\s*\d+\s*%', '', raw)
+    raw = re.sub(r'[|]', '', raw)
+    res = re.sub(r'\s+', ' ', raw).strip()
+    return res
 
-    # ── Line Items ──────────────────────────────────────────────
-    # Try multiple places: top-level, inside sections (standard UI format), or via aliases
-    raw_items = data.get("items")
-    if not raw_items and "sections" in data:
-        raw_items = data["sections"].get("items")
+def merge_item_continuations(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Structurally merges multiline descriptions that were split into separate rows."""
+    if not items: return []
+    logger.info(f"[FORENSIC_MERGE_START] items_in={len(items)}")
+    merged = []
+    for item in items:
+        # Support both snake_case and Title Case
+        desc = item.get("description") or item.get("Item Name") or ""
+        qty = item.get("qty") or item.get("Qty") or 0
+        taxable = item.get("taxable_value") or item.get("Taxable Value") or 0
+        rate = item.get("rate") or item.get("Item Rate") or 0
+        
+        # A continuation row typically has a description but no financial participation
+        is_continuation = False
+        if not is_empty(desc) and is_empty(qty) and is_empty(taxable) and is_empty(rate):
+            is_continuation = True
+            
+        if is_continuation and merged:
+            prev_desc = merged[-1].get("description") or merged[-1].get("Item Name") or ""
+            new_desc = prev_desc + " " + desc
+            # Update whichever key exists
+            if "description" in merged[-1]: merged[-1]["description"] = new_desc
+            if "Item Name" in merged[-1]: merged[-1]["Item Name"] = new_desc
+            logger.info(f"[FORENSIC_MERGE_HIT] Merged continuation: '{desc[:15]}...' into '{prev_desc[:15]}...'")
+        else:
+            merged.append(item)
+            
+    # Post-merge cleanup
+    for item in merged:
+        if "description" in item: item["description"] = sanitize_description(item["description"])
+        if "Item Name" in item: item["Item Name"] = sanitize_description(item["Item Name"])
+        
+    logger.info(f"[FORENSIC_MERGE_END] items_out={len(merged)}")
+    return merged
+
+def lossless_preserve(existing: Any, incoming: Any, field_name: str = "") -> Any:
+    """
+    STRICT preservation logic: Valid values must NEVER be replaced by empty defaults.
+    If both are present, prioritizes 'existing' unless 'incoming' is significantly better.
+    """
+    if is_empty(existing):
+        return incoming
+    if is_empty(incoming):
+        return existing
     
-    if not raw_items:
-        raw_items = resolve_key(data, "line_items") or []
+    # If both are non-empty, prefer the one with more content (for strings)
+    if isinstance(existing, str) and isinstance(incoming, str):
+        if len(incoming.strip()) > len(existing.strip()):
+            return incoming
     
-    if not isinstance(raw_items, list): raw_items = []
+    return existing
+
+def sanitize_address(addr: str) -> str:
+    """
+    CRITICAL ADDRESS SANITIZATION (Requirement #4 & #5)
+    Preserves locality, city, state while removing regulatory noise.
+    Converts multiline to comma-separated preserving order.
+    """
+    if is_empty(addr): return ""
+    raw_lines = re.split(r'[\n\r]', str(addr))
+    
+    # [PHASE 11.9] FORENSIC: Log raw address before sanitization
+    logger.debug(f"[ADDRESS_SANITIZE_INPUT] lines={len(raw_lines)} first_line='{raw_lines[0][:30] if raw_lines else ''}'")
+
+    REJECT_PATTERNS = [
+        r'(?i)\b(Phone|Mobile|Mob|Ph|Tel|Fax|Email|E-mail|Mail|PAN|URL|WWW|Website)\s*[:/-]?\s*.*',
+        r'[\w.-]+@[\w.-]+\.\w+',
+        r'[A-Z]{5}\d{4}[A-Z]{1}',
+    ]
+    # Keep GSTIN if it's the only thing there, but strip the label
+    GSTIN_REJECT = r'(?i)\bGSTIN\s*[:/-]?\s*'
+    
+    cleaned_lines = []
+    for line in raw_lines:
+        line = line.strip()
+        if not line: continue
+        
+        # Strip GSTIN label but keep the value
+        line = re.sub(GSTIN_REJECT, '', line).strip()
+        
+        is_rejected = False
+        for pattern in REJECT_PATTERNS:
+            if re.search(pattern, line):
+                # Try to remove the pattern but keep the rest of the line
+                new_line = re.sub(pattern, '', line).strip()
+                if not new_line:
+                    is_rejected = True
+                    break
+                else:
+                    line = new_line
+        
+        if is_rejected: continue
+        
+        line = line.strip().strip(',').strip()
+        if line:
+            cleaned_lines.append(line)
+    
+    final_addr = ", ".join(cleaned_lines)
+    # Ensure no leading/trailing commas or extra spaces
+    final_addr = re.sub(r',\s*,', ',', final_addr).strip().strip(',')
+    
+    # ── [PHASE 3] SANITIZATION SAFETY (Root Cause #1) ──
+    if is_empty(final_addr) and not is_empty(addr):
+        logger.warning(f"[ADDRESS_RECOVERY] Sanitization wiped address. Preserving raw. original='{str(addr)[:30]}...'")
+        return str(addr).strip()
+    
+    logger.info(f"[ADDRESS_SANITIZED] original_len={len(str(addr))} final_len={len(final_addr)}")
+    return final_addr
+
+def derive_branch_from_address(addr: str) -> str:
+    """Infers branch from known location keywords."""
+    if is_empty(addr): return ""
+    upper_addr = str(addr).upper()
+    BRANCH_MAP = {
+        "ANNUR": "ANNUR",
+        "COIMBATORE": "COIMBATORE",
+        "CHENNAI": "CHENNAI",
+        "HOSUR": "HOSUR",
+        "POLLACHI": "POLLACHI"
+    }
+    for kw, branch in BRANCH_MAP.items():
+        if kw in upper_addr:
+            logger.info(f"[BRANCH_DERIVED] Found '{kw}' in address -> '{branch}'")
+            return branch
+    return ""
+
+def get_normalized_export_record(invoice: Any) -> Dict[str, Any]:
+    """
+    STRICT CANONICAL NORMALIZER.
+    Provides ONE authoritative snake_case record.
+    """
+    def get_strict(keys, default=""):
+        if isinstance(invoice, dict):
+            # 1. Root level
+            for k in keys:
+                if not is_empty(invoice.get(k)): return invoice.get(k), f"root.{k}"
+            # 2. Header level
+            header = invoice.get('header', {})
+            if isinstance(header, dict):
+                for k in keys:
+                    if not is_empty(header.get(k)): return header.get(k), f"header.{k}"
+            # 3. Sections level
+            sections = invoice.get('sections', {})
+            if isinstance(sections, dict):
+                sub = sections.get('supplier_details', {})
+                if isinstance(sub, dict):
+                    for k in keys:
+                        mapped_k = "supplier_invoice_no" if k == "invoice_no" else k
+                        if not is_empty(sub.get(mapped_k)): return sub.get(mapped_k), f"sections.supplier.{k}"
+                        if not is_empty(sub.get(k)): return sub.get(k), f"sections.supplier.{k}"
+            # 4. Check Title Case Aliases (Idempotency)
+            TITLE_ALIASES = {
+                "invoice_no": "Invoice No", "invoice_date": "Date", "vendor_name": "Name",
+                "gstin": "GSTIN", "branch": "Branch", "place_of_supply": "Place of Supply",
+                "total_taxable_value": "Total Taxable Value", "invoice_total": "Total Invoice Value",
+                "total_igst": "Total IGST", "total_cgst": "Total CGST", "total_sgst": "Total SGST/UTGST",
+                "irn": "IRN", "ack_no": "Ack. No.", "ack_date": "Ack. Date", "hsn_sac": "HSN/SAC"
+            }
+            for k in keys:
+                alias = TITLE_ALIASES.get(k)
+                if alias and not is_empty(invoice.get(alias)):
+                    return invoice.get(alias), f"alias.{alias}"
+            
+            # 5. Item Level Promotion (Last Resort Fallback)
+            items = invoice.get('items') or invoice.get('sections', {}).get('items') or []
+            if items and isinstance(items, list) and len(items) > 0:
+                primary = items[0]
+                if isinstance(primary, dict):
+                    for k in keys:
+                        if not is_empty(primary.get(k)): return primary.get(k), f"items[0].{k}"
+                        # Check Title Case as well
+                        alias = TITLE_ALIASES.get(k)
+                        if alias and not is_empty(primary.get(alias)):
+                            return primary.get(alias), f"items[0].alias.{alias}"
+
+        return default, "NONE"
+
+    raw_from, _ = get_strict(["bill_address_from", "bill_from", "vendor_address", "billing_address", "supplier_address"])
+    raw_to, _ = get_strict(["bill_address_to", "bill_to", "customer_address", "billing_address_to", "billing_address"])
+    
+    # ── [PHASE 11.9] WINDOW_SLICER FALLBACK (HARDENED) ──
+    if is_empty(raw_from) or is_empty(raw_to):
+        ocr_text = invoice.get("_pdf_ocr_text") if isinstance(invoice, dict) else ""
+        if ocr_text:
+            if is_empty(raw_from):
+                logger.info("[BILL_FROM_WINDOW_ATTEMPT]")
+                # Consignee (Ship to) -> Buyer (Bill to)
+                match = re.search(r"Consignee\s*\(Ship\s*to\)(.*?)Buyer\s*\(Bill\s*to\)", ocr_text, re.DOTALL | re.IGNORECASE)
+                if match: 
+                    raw_from = match.group(1).strip()
+                    logger.info(f"[BILL_FROM_WINDOW_HIT] len={len(raw_from)}")
+
+            if is_empty(raw_to):
+                logger.info("[BILL_TO_WINDOW_ATTEMPT]")
+                # Buyer (Bill to) -> Stop Tokens
+                # Expanded end tokens to handle multiline/collapsed OCR better
+                stop_tokens = r"(?:Place\s*of\s*Supply|Dated|Delivery\s*Note|Invoice\s*No|Voucher\s*No|Total|Description|Sl\s*No)"
+                match = re.search(fr"Buyer\s*\(Bill\s*to\)(.*?){stop_tokens}", ocr_text, re.DOTALL | re.IGNORECASE)
+                if match: 
+                    raw_to = match.group(1).strip()
+                    logger.info(f"[BILL_TO_WINDOW_HIT] len={len(raw_to)}")
+                else:
+                    # Try a more desperate match if the above failed
+                    match = re.search(r"Buyer\s*\(Bill\s*to\)(.{1,500}?)", ocr_text, re.DOTALL | re.IGNORECASE)
+                    if match:
+                        raw_to = match.group(1).strip()
+                        logger.info(f"[BILL_TO_WINDOW_DESPERATE_HIT] len={len(raw_to)}")
+    bill_from = sanitize_address(raw_from)
+    bill_to = sanitize_address(raw_to)
+    
+    branch = get_strict(["branch"])[0] or derive_branch_from_address(bill_to) or derive_branch_from_address(bill_from)
+
+    record = {
+        "invoice_no": fix_encoding_corruption(str(get_strict(["invoice_no", "invoice_number", "bill_no", "supplier_invoice_no"])[0])),
+        "invoice_date": normalize_date(get_strict(["invoice_date", "date", "bill_date", "supplier_invoice_date"])[0]),
+        "vendor_name": fix_encoding_corruption(str(get_strict(["vendor_name", "supplier_name", "name"])[0])),
+        "gstin": normalize_gstin_safe(get_strict(["gstin", "vendor_gstin", "supplier_gstin"])[0]),
+        "branch": fix_encoding_corruption(str(branch)),
+        "bill_from": fix_encoding_corruption(str(bill_from)),
+        "bill_to": fix_encoding_corruption(str(bill_to)),
+        "place_of_supply": normalize_state(get_strict(["place_of_supply", "vendor_state", "state"])[0]),
+        "total_taxable_value": normalize_amount(get_strict(["total_taxable_value", "taxable_value", "subtotal"])[0]),
+        "total_igst": normalize_amount(get_strict(["total_igst", "igst"])[0]),
+        "total_cgst": normalize_amount(get_strict(["total_cgst", "cgst"])[0]),
+        "total_sgst": normalize_amount(get_strict(["total_sgst", "sgst", "utgst"])[0]),
+        "total_invoice_value": normalize_amount(get_strict(["total_invoice_value", "invoice_total", "total_amount", "grand_total"])[0]),
+        "irn": str(get_strict(["irn"])[0]).strip(),
+        "ack_no": str(get_strict(["ack_no"])[0]).strip(),
+        "ack_date": normalize_date(get_strict(["ack_date"])[0]),
+        "hsn_sac": str(get_strict(["hsn_sac", "hsn", "sac"])[0]).strip(),
+    }
+
+    # ── [TOTALS & POS OCR REGION EXTRACTION FALLBACK] (Requirement D) ──
+    if isinstance(invoice, dict):
+        ocr_text = invoice.get("_pdf_ocr_text") or invoice.get("_raw_text") or ""
+        if ocr_text:
+            # 1. Place of Supply / State
+            if is_empty(record.get("place_of_supply")):
+                # Check different variations
+                pos_match = re.search(r'(?i)Place\s*of\s*(?:Supply|Su|S)?\s*[:/-]?\s*([0-9a-zA-Z\s-]+)', ocr_text)
+                if pos_match:
+                    pos_val = pos_match.group(1).strip()
+                    record["place_of_supply"] = normalize_state(pos_val)
+                    logger.info(f"[REGION_FALLBACK_EXTRACTED] Place of Supply='{record['place_of_supply']}' (source='{pos_val}')")
+                
+                # State Name fallback
+                if is_empty(record.get("place_of_supply")):
+                    # Search for known states in the billing address first
+                    bill_to_str = str(record.get("bill_to", "")).upper()
+                    found_state = None
+                    states = [
+                        "Tamil Nadu", "Karnataka", "Kerala", "Andhra Pradesh", "Telangana",
+                        "Maharashtra", "Delhi", "Gujarat", "Haryana", "Punjab", "Rajasthan",
+                        "Uttar Pradesh", "West Bengal"
+                    ]
+                    for st in states:
+                        if st.upper() in bill_to_str:
+                            found_state = st
+                            break
+                    if found_state:
+                        record["place_of_supply"] = found_state
+                        logger.info(f"[STATE_FALLBACK_BILL_TO] Place of Supply derived from billing address: '{found_state}'")
+                    else:
+                        # Search for explicit State: Tamil Nadu or State Code: Tamil Nadu or similar in ocr_text
+                        state_match = re.search(r'(?i)(?:State|State\s*Name|State\s*Code|POS)\s*[:/-]?\s*([0-9a-zA-Z\s-]+)', ocr_text)
+                        if state_match:
+                            pos_val = state_match.group(1).strip()
+                            record["place_of_supply"] = normalize_state(pos_val)
+                            logger.info(f"[STATE_FALLBACK_STATE_MATCH] Place of Supply='{record['place_of_supply']}' (source='{pos_val}')")
+            
+            # 2. Total Taxable Value
+            if normalize_amount(record.get("total_taxable_value")) == 0.0:
+                taxable_match = re.search(r'(?i)(?:Total\s*Taxable\s*Value|Taxable\s*Amt|Taxable\s*Value|Subtotal|Sub\s*Total)\s*[:/-]?\s*([0-9,.]+)', ocr_text)
+                if taxable_match:
+                    record["total_taxable_value"] = normalize_amount(taxable_match.group(1))
+                    logger.info(f"[REGION_FALLBACK_EXTRACTED] Total Taxable Value={record['total_taxable_value']}")
+            
+            # 3. Total CGST
+            if normalize_amount(record.get("total_cgst")) == 0.0:
+                cgst_match = re.search(r'(?i)(?:CGST\s*Total|Total\s*CGST|CGST)\s*[:/-]?\s*([0-9,.]+)', ocr_text)
+                if cgst_match:
+                    record["total_cgst"] = normalize_amount(cgst_match.group(1))
+                    logger.info(f"[REGION_FALLBACK_EXTRACTED] Total CGST={record['total_cgst']}")
+            
+            # 4. Total SGST
+            if normalize_amount(record.get("total_sgst")) == 0.0:
+                sgst_match = re.search(r'(?i)(?:SGST\s*Total|Total\s*SGST|SGST|UTGST)\s*[:/-]?\s*([0-9,.]+)', ocr_text)
+                if sgst_match:
+                    record["total_sgst"] = normalize_amount(sgst_match.group(1))
+                    logger.info(f"[REGION_FALLBACK_EXTRACTED] Total SGST={record['total_sgst']}")
+            
+            # 5. Total IGST
+            if normalize_amount(record.get("total_igst")) == 0.0:
+                igst_match = re.search(r'(?i)(?:IGST\s*Total|Total\s*IGST|IGST)\s*[:/-]?\s*([0-9,.]+)', ocr_text)
+                if igst_match:
+                    record["total_igst"] = normalize_amount(igst_match.group(1))
+                    logger.info(f"[REGION_FALLBACK_EXTRACTED] Total IGST={record['total_igst']}")
+            
+            # 6. Total Invoice Value
+            if normalize_amount(record.get("total_invoice_value")) == 0.0:
+                total_match = re.search(r'(?i)(?:Total\s*Invoice\s*Value|Total\s*Amount|Grand\s*Total|Total|Amount\s*Chargeable)\s*[:/-]?\s*([0-9,.]+)', ocr_text)
+                if total_match:
+                    record["total_invoice_value"] = normalize_amount(total_match.group(1))
+                    logger.info(f"[REGION_FALLBACK_EXTRACTED] Total Invoice Value={record['total_invoice_value']}")
+
+    # Preserve underscores
+    if isinstance(invoice, dict):
+        for k, v in invoice.items():
+            if k.startswith("_"): record[k] = v
+            
+    # [PHASE 11.9] FORENSIC EXPORT LOG
+    logger.info(f"[HSN_EXPORT_READY] inv={record.get('invoice_no')} hsn_sac='{record.get('hsn_sac')}'")
+    logger.info(f"[EXPORT_FINAL_ROW] inv={record.get('invoice_no')} name={record.get('vendor_name')} total={record.get('total_invoice_value')}")
+    
+    return record
+
+def get_normalized_items(invoice: Any) -> List[Dict[str, Any]]:
+    """
+    CANONICAL ITEM NORMALIZER.
+    """
+    items_source = []
+    if isinstance(invoice, dict):
+        items_source = invoice.get('items') or invoice.get('sections', {}).get('items') or []
     
     normalized_items = []
-    item_sum_cgst = 0
-    item_sum_sgst = 0
-    item_sum_igst = 0
-
-    for i, item in enumerate(raw_items):
-        qty = normalize_amount(item.get("quantity") or item.get("qty"))
-        rate = normalize_amount(item.get("rate") or item.get("item_rate"))
-        item_taxable = normalize_amount(item.get("taxable_value") or item.get("taxable_amount") or item.get("amount") or item.get("net_amount"))
+    for item in items_source:
+        if not isinstance(item, dict): continue
         
-        if item_taxable == 0 and qty > 0 and rate > 0:
-            item_taxable = qty * rate
-            
-        igst_r = normalize_amount(item.get("igst_rate") or item.get("igst_percent") or item.get("igst_tax_rate"))
-        cgst_r = normalize_amount(item.get("cgst_rate") or item.get("cgst_percent") or item.get("cgst_tax_rate"))
-        sgst_r = normalize_amount(item.get("sgst_rate") or item.get("sgst_percent") or item.get("sgst_tax_rate"))
-        cess_r = normalize_amount(item.get("cess_rate") or item.get("cess_percent"))
-
-        igst_a = normalize_amount(item.get("igst_amount") or item.get("igst"))
-        cgst_a = normalize_amount(item.get("cgst_amount") or item.get("cgst"))
-        sgst_a = normalize_amount(item.get("sgst_amount") or item.get("sgst"))
-
-        item_sum_cgst += cgst_a
-        item_sum_sgst += sgst_a
-        item_sum_igst += igst_a
-
+        desc = (item.get("description") or item.get("desc") or item.get("particulars") or item.get("item_name") or item.get("Item Name") or "")
+        if not desc: continue
+        
         normalized_items.append({
-            "si_no": str(item.get("si_no") or item.get("s_no") or item.get("S.No") or (i+1)),
-            "description": str(item.get("description") or item.get("item_name") or item.get("Item Name") or item.get("itemName") or item.get("Description") or "").strip(),
-            "hsn_sac": str(item.get("hsn_code") or item.get("hsn_sac") or item.get("HSN/SAC") or item.get("HSN") or "").strip(),
-            "quantity": qty,
-            "uom": str(item.get("uom") or item.get("unit") or item.get("Unit") or item.get("UOM") or "").strip(),
-            "rate": rate,
-            "discount_percent": normalize_amount(item.get("discount_percent") or item.get("disc") or item.get("Discount %")),
-            "taxable_value": item_taxable,
-            "igst_rate": igst_r,
-            "igst_amount": igst_a,
-            "cgst_rate": cgst_r,
-            "cgst_amount": cgst_a,
-            "sgst_rate": sgst_r,
-            "sgst_amount": sgst_a,
-            "cess_rate": cess_r,
-            "cess_amount": normalize_amount(item.get("cess_amount") or item.get("cess") or item.get("Cess Amount")),
-            "amount": normalize_amount(item.get("amount") or item.get("total") or item.get("line_total") or item.get("invoice_value") or item.get("Invoice Value") or item.get("Amount"))
+            "description": desc,
+            "hsn_sac": str(item.get("hsn_sac") or item.get("hsn_code") or item.get("HSN/SAC") or item.get("hsn") or item.get("sac") or ""),
+            "qty": normalize_amount(item.get("qty") or item.get("quantity") or item.get("Qty")),
+            "uom": str(item.get("uom") or item.get("unit") or item.get("UOM") or ""),
+            "rate": normalize_amount(item.get("rate") or item.get("unit_price") or item.get("Item Rate")),
+            "taxable_value": normalize_amount(item.get("taxable_value") or item.get("amount") or item.get("Taxable Value")),
+            "igst": normalize_amount(item.get("igst") or item.get("igst_amount") or item.get("IGST")),
+            "cgst": normalize_amount(item.get("cgst") or item.get("cgst_amount") or item.get("CGST")),
+            "sgst": normalize_amount(item.get("sgst") or item.get("sgst_amount") or item.get("SGST/UTGST")),
+            "total_amount": normalize_amount(item.get("total_amount") or item.get("Invoice Value"))
         })
-
-    # ── STEP 4 & 5: DERIVE GST RATE & TAX TYPE DETECTION ──
-    # DO NOT trust OCR percentage. Derive from amounts.
-    for item in normalized_items:
-        taxable = item["taxable_value"]
-        cgst_a = item["cgst_amount"]
-        sgst_a = item["sgst_amount"]
-        igst_a = item["igst_amount"]
         
-        if taxable > 0:
-            # Step 4: Derive Rates
-            if igst_a > 0:
-                item["igst_rate"] = round((igst_a / taxable) * 100, 2)
-                item["cgst_rate"] = 0
-                item["sgst_rate"] = 0
-            elif (cgst_a + sgst_a) > 0:
-                item["cgst_rate"] = round((cgst_a / taxable) * 100, 2)
-                item["sgst_rate"] = round((sgst_a / taxable) * 100, 2)
-                item["igst_rate"] = 0
-        
-        # Step 5: Tax Type Detection & Final Rate Enforcing
-        # Standardize rates to common GST tiers (5, 12, 18, 28) if close
-        def snap_to_gst_tier(rate):
-            tiers = [0, 5, 12, 18, 28]
-            for t in tiers:
-                if abs(rate - t) < 0.5: return float(t)
-                # Also handle split rates (2.5, 6, 9, 14)
-                if abs(rate - t/2) < 0.25: return float(t/2)
-            return rate
+    return merge_item_continuations(normalized_items)
 
-        item["cgst_rate"] = snap_to_gst_tier(item["cgst_rate"])
-        item["sgst_rate"] = snap_to_gst_tier(item["sgst_rate"])
-        item["igst_rate"] = snap_to_gst_tier(item["igst_rate"])
-
-        # Final Amount Re-calculation to enforce mathematical integrity
-        if item["igst_rate"] > 0: 
-            item["igst_amount"] = round((item["taxable_value"] * item["igst_rate"]) / 100, 2)
-        else:
-            if item["cgst_rate"] > 0: item["cgst_amount"] = round((item["taxable_value"] * item["cgst_rate"]) / 100, 2)
-            if item["sgst_rate"] > 0: item["sgst_amount"] = round((item["taxable_value"] * item["sgst_rate"]) / 100, 2)
-        
-        item["amount"] = round(item["taxable_value"] + item["igst_amount"] + item["cgst_amount"] + item["sgst_amount"] + item["cess_amount"], 2)
-
-    vendor_address = resolve_address(data, "vendor") or ""
-    billing_address = resolve_address(data, "billing") or ""
+def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
+    """
+    PHASE 4: CANONICAL SCHEMA STABILIZATION
+    Provides ONE authoritative normalized export record using CanonicalInvoiceSchema.
+    DOWNSTREAM SYSTEMS MUST ONLY USE THIS.
+    """
+    # ── [DEFENSIVE UNWRAPPING] ──
+    if isinstance(invoice, str):
+        try:
+            invoice = json.loads(invoice)
+        except: pass
     
-    if not vendor_address:
-        logger.warning("ADDRESS_RESOLUTION: vendor_address is EMPTY after aggregation attempts.")
-    else:
-        print(f"INFO VENDOR_ADDRESS_RAW: {vendor_address}")
-        print(f"INFO VENDOR_ADDRESS_NORMALIZED: {vendor_address}")
+    if isinstance(invoice, dict):
+        unwrapped = invoice.get('reply_json') or invoice.get('data') or invoice.get('reply')
+        if unwrapped:
+            if isinstance(unwrapped, str):
+                try:
+                    parsed = json.loads(unwrapped)
+                    if isinstance(parsed, dict):
+                        for k, v in invoice.items():
+                            if k not in ['reply_json', 'data', 'reply'] and k not in parsed:
+                                parsed[k] = v
+                        invoice = parsed
+                except: pass
+            elif isinstance(unwrapped, dict):
+                for k, v in invoice.items():
+                    if k not in ['reply_json', 'data', 'reply'] and k not in unwrapped:
+                        unwrapped[k] = v
+                invoice = unwrapped
 
+    # ── [PHASE 11.9] FORENSIC DTO AUDIT ──
+    logger.info(f"[DTO_PRE_VALIDATION] record_id={invoice.get('record_id')} keys={list(invoice.keys())}")
 
-
-    # ── Branch Derivation ──────────────────────────────────────
-    vendor_city = str(data.get("vendor_city") or "").strip()
-    manual_branch = str(data.get("branch") or data.get("Branch") or "").strip()
+    raw_header = get_normalized_export_record(invoice)
+    raw_items = get_normalized_items(invoice)
     
-    if manual_branch:
-        branch = manual_branch
-    elif vendor_city:
-        branch = vendor_city
-    else:
-        branch = derive_city_from_address(vendor_address)
-
-    # ── Robust Field Resolution (Aliases Applied) ─────────────
-    name  = str(resolve_key(data, "vendor_name") or "").strip()
-    gstin = str(resolve_key(data, "gstin")       or "").replace(" ", "").upper()
-
-    # ── PRIORITY-BASED INVOICE NUMBER SELECTION ────────────────
-    # Trust Order:
-    #   P1 → AI-extracted field (resolve_key: covers header, top-level, sections)
-    #   P2 → Label-anchored regex (near recognised label tokens)
-    #   P3 → Looser regex (doc-wide scan, validated only)
-    # If all tiers fail → None (MISSING). Never guess.
-    inv_no         = None
-    invoice_status = "MISSING"   # surfaced to UI when invoice number is absent
-
-    # ── P1: AI-extracted field ──
-    raw_inv_no = str(resolve_key(data, "invoice_no") or "").strip()
-    if raw_inv_no:
-        if is_valid_invoice_no(raw_inv_no, _source="AI_EXTRACTED"):
-            inv_no = raw_inv_no
-            invoice_status = "FOUND"
-        else:
-            logger.info(
-                f"[INV_SELECT] P1 REJECTED AI value '{raw_inv_no}' "
-                f"— does not pass strict validation."
+    canonical_items = []
+    for item in raw_items:
+        # Map to CanonicalInvoiceItem using snake_case keys from raw_items
+        try:
+            c_item = CanonicalInvoiceItem(
+                description=str(item.get("description", "")),
+                hsn_sac=str(item.get("hsn_sac", "")),
+                qty=normalize_amount(item.get("qty", 0.0)),
+                uom=str(item.get("uom", "")),
+                rate=normalize_amount(item.get("rate", 0.0)),
+                taxable_value=normalize_amount(item.get("taxable_value", 0.0)),
+                igst=normalize_amount(item.get("igst", 0.0)),
+                cgst=normalize_amount(item.get("cgst", 0.0)),
+                sgst=normalize_amount(item.get("sgst", 0.0)),
+                total_amount=normalize_amount(item.get("total_amount", 0.0))
             )
+            canonical_items.append(c_item)
+        except Exception as ie:
+            logger.error(f"[DTO_ITEM_COERCION_FAIL] item={item} error={ie}")
 
-    # ── Fallback Regex (for missing headers in unstructured responses) ─────
-    full_text = str(data.get("_raw_text") or data.get("ocr_raw_text") or str(data)).upper()
-
-    if not gstin:
-        gst_match = re.search(r"\b\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}\b", full_text)
-        if gst_match:
-            gstin = gst_match.group(0)
-            logger.info(f"FALLBACK: Found GSTIN via regex: {gstin}")
-
-    if not inv_no:
-        # ── P2 / P3: Label-anchored regex tiers ──
-        # P2: tightly anchored to a recognised label — highest structural confidence
-        # P3: looser anchor (REF/DOC) — lower structural confidence
-        inv_patterns_p2 = [
-            # Label-anchored (P2) — ordered by label specificity
-            (r"(?:TAX\s*)?INVOICE\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",  "REGEX_P2_TAX_INVOICE"),
-            (r"(?:SALES\s*)?INVOICE\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})", "REGEX_P2_SALES_INVOICE"),
-            (r"BILL\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",                 "REGEX_P2_BILL_NO"),
-            (r"INV\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",                  "REGEX_P2_INV_NO"),
-            (r"SI\s*(?:NO|NUMBER|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",                   "REGEX_P2_SI_NO"),
-        ]
-        inv_patterns_p3 = [
-            # Loose anchors (P3) — only used if P2 fails
-            (r"REF\s*(?:NO|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",  "REGEX_P3_REF"),
-            (r"DOC\s*(?:NO|#|NUM|:)[\s.:]*([A-Z0-9][A-Z0-9\-/._]{2,24})",  "REGEX_P3_DOC"),
-        ]
-
-        def _try_patterns(patterns):
-            """Returns the first validated candidate from a pattern list, or None."""
-            for pattern, source_tag in patterns:
-                m = re.search(pattern, full_text)
-                if not m:
-                    continue
-                candidate = m.group(1).strip()
-                if is_valid_invoice_no(candidate, _source=source_tag):
-                    logger.info(
-                        f"[INV_SELECT] {source_tag} ACCEPTED '{candidate}' "
-                        f"— passed strict validation."
-                    )
-                    return candidate, source_tag
-                else:
-                    logger.info(
-                        f"[INV_SELECT] {source_tag} REJECTED candidate '{candidate}' "
-                        f"— failed strict validation. NOT used."
-                    )
-            return None, None
-
-        result_p2, tag_p2 = _try_patterns(inv_patterns_p2)
-        if result_p2:
-            inv_no = result_p2
-            invoice_status = "FOUND_VIA_REGEX"
-        else:
-            result_p3, tag_p3 = _try_patterns(inv_patterns_p3)
-            if result_p3:
-                inv_no = result_p3
-                invoice_status = "FOUND_VIA_FALLBACK"
-
-    # ── SAFE DEFAULT: prefer NULL over a wrong value ──
-    if not inv_no:
-        inv_no = None
-        invoice_status = "MISSING"
-        logger.warning(
-            "[INV_SELECT] All tiers exhausted. No valid invoice number found. "
-            "Setting invoice_number=NULL, invoice_status=MISSING."
-        )
-
-    inv_date = normalize_date(resolve_key(data, "invoice_date"))
-    total_amt = normalize_amount(resolve_key(data, "total_amount"))
-    tax_amt = normalize_amount(resolve_key(data, "taxable_value"))
-    state_name = str(resolve_key(data, "vendor_state") or "").strip()
-    if state_name:
-        pos = state_name
-    elif gstin:
-        pos = gst_state_lookup(gstin)
-    else:
-        pos = ""
-
-    state = state_name
-
-    # ── Hierarchical structure for UI sections ──────────────────
-    result = {
-        "sections": {
-            "supplier_details": {
-                "vendor_name": name,
-                "billing_address": billing_address,
-                "bill_from": vendor_address,
-                "ship_from": vendor_address,
-                "vendor_city": vendor_city,
-                "vendor_state": state,
-                "vendor_country": str(data.get("vendor_country") or "India").strip(),
-                "registration_type": str(data.get("registration_type") or ("Regular" if gstin else "")).strip(),
-                "gst_taxability_type": str(data.get("gst_taxability_type") or "Taxable").strip(),
-                "gst_nature_of_transaction": str(data.get("gst_nature_of_transaction") or "").strip(),
-                "gst_classification": str(data.get("gst_classification") or "").strip(),
-                "gstin": gstin,
-                "supplier_invoice_no": inv_no,
-                "invoice_date": inv_date,
-                "place_of_supply": pos,
-                "branch": branch or None
-            },
-            "supply_details": {
-                "total_invoice_value": total_amt,
-                "total_taxable_value": tax_amt,
-                "total_cgst": normalize_amount(resolve_key(data, "total_cgst")),
-                "total_sgst": normalize_amount(resolve_key(data, "total_sgst")),
-                "total_igst": normalize_amount(resolve_key(data, "total_igst")),
-                "ack_no": str(data.get("ack_number") or "").strip(),
-                "ack_date": normalize_date(data.get("ack_date"))
-            },
-            "due_details": {
-                "due_date": normalize_date(data.get("due_date")),
-                "payment_terms": str(data.get("payment_terms") or "").strip()
-            },
-            "transit_details": {
-                "transporter_name": str(data.get("transporter_name") or "").strip(),
-                "vehicle_no": str(data.get("vehicle_number") or "").strip(),
-                "lr_gr_consignment": str(data.get("lr_number") or "").strip()
-            },
-            "items": normalized_items
-        },
-        # Top-level aliases for table display (Consistency with UI)
-        "vendor_name": name,
-        "bill_from": vendor_address,
-        "billing_address": billing_address,
-        "gstin": gstin,
-        # invoice_number is None when no valid number was found.
-        # Consumers MUST check invoice_status == 'MISSING' before displaying.
-        "invoice_number":     inv_no,
-        "invoice_status":     invoice_status,
-        "supplier_invoice_no": inv_no,
-        "sales_invoice_no":   inv_no,   # Sales UI compatibility
-        "bill_no":            inv_no,   # Generic UI compatibility
-        "invoice_date":       inv_date,
-        "total_invoice_value": total_amt,
-        "place_of_supply":    pos,
-        "currency": str(data.get("currency") or "INR").upper(),
-        # Lossless backup
-        "_raw_source": raw_source
+    # Create Canonical Schema Instance
+    schema_data = {
+        "invoice_no": str(raw_header.get("invoice_no", "")),
+        "invoice_date": str(raw_header.get("invoice_date", "")),
+        "vendor_name": str(raw_header.get("vendor_name", "")),
+        "gstin": str(raw_header.get("gstin", "")),
+        "branch": str(raw_header.get("branch", "")),
+        "bill_from": str(raw_header.get("bill_from", "")),
+        "bill_to": str(raw_header.get("bill_to", "")),
+        "place_of_supply": str(raw_header.get("place_of_supply", "")),
+        "total_taxable_value": normalize_amount(raw_header.get("total_taxable_value", 0)),
+        "total_igst": normalize_amount(raw_header.get("total_igst", 0)),
+        "total_cgst": normalize_amount(raw_header.get("total_cgst", 0)),
+        "total_sgst": normalize_amount(raw_header.get("total_sgst", 0)),
+        "total_invoice_value": normalize_amount(raw_header.get("total_invoice_value", 0)),
+        "irn": str(raw_header.get("irn", "")),
+        "ack_no": str(raw_header.get("ack_no", "")),
+        "ack_date": str(raw_header.get("ack_date", "")),
+        "items": canonical_items,
+        "warnings": invoice.get("_warning_flags", []) if isinstance(invoice, dict) else []
     }
+    
+    # ── [PHASE 11.9] HSN/SAC HYDRATION GATE ──
+    # Promote HSN/SAC from the first item if missing in header
+    primary_item = raw_items[0] if raw_items else {}
+    logger.info(f"[HSN_TRACE_INPUT] primary_item_keys={list(primary_item.keys())}")
+    
+    if is_empty(schema_data.get("hsn_sac")):
+        schema_data["hsn_sac"] = (
+            primary_item.get("hsn_sac")
+            or primary_item.get("hsn")
+            or primary_item.get("sac")
+            or ""
+        )
+        logger.info(f"[HSN_CANONICALIZED] value='{schema_data['hsn_sac']}' source=primary_item")
+    else:
+        logger.info(f"[HSN_CANONICALIZED] value='{schema_data['hsn_sac']}' source=header")
+    
+    try:
+        canonical_obj = CanonicalInvoiceSchema(**schema_data)
+        logger.info(f"[DTO_POST_VALIDATION] record_id={invoice.get('record_id')} status=VALID")
+    except Exception as se:
+        logger.error(f"[DTO_VALIDATION_ERROR] record_id={invoice.get('record_id')} error={se} payload={json.dumps(schema_data, default=str)[:1000]}")
+        # Fallback to dictionary if Pydantic fails, but don't wipe data
+        canonical_obj = type('Obj', (object,), {"dict": lambda: schema_data, "invoice_no": schema_data.get("invoice_no")})
+    
+    # Forensic Log
+    log_canonical_schema_locked(canonical_obj.invoice_no)
 
-    logger.info(
-        f"NORMALIZATION COMPLETE: GSTIN={gstin[:4] if gstin else 'NONE'}... "
-        f"INV={inv_no!r} STATUS={invoice_status}"
-    )
+    # Convert back to dict for pipeline compatibility but ensure it's frozen
+    canonical_record = canonical_obj.dict()
+
+    # Preserve internal lifecycle fields (underscore fields)
+    if isinstance(invoice, dict):
+        for k, v in invoice.items():
+            if k.startswith("_") and k not in canonical_record:
+                canonical_record[k] = v
+
+    return canonical_record
+
+def get_ui_payload(invoice: Any) -> Dict[str, Any]:
+    """
+    UI EGRESS MAPPING.
+    STRICT CANONICAL PASSTHROUGH.
+    [PHASE 11.9] Removed Title Case conversion. Frontend now expects canonical keys.
+    """
+    ui_payload = get_canonical_export_record(invoice)
+    
+    # Forensic Row Audit
+    logger.debug(f"[CANONICAL_ROW_KEYS] keys={list(ui_payload.keys())}")
+    logger.debug(f"[TABLE_RENDER_VALUE] invoice_no='{ui_payload.get('invoice_no')}' total='{ui_payload.get('total_invoice_value')}'")
+                
+    return ui_payload
+
+# ── CORE NORMALIZATION (RETAINED FOR PIPELINE) ───────────────────────────────
+
+def normalize(payload: Any) -> Dict[str, Any]:
+    """
+    Retained for backward compatibility in the async pipeline.
+    Uses the new centralized normalization where applicable.
+    """
+    if not isinstance(payload, dict):
+        return {"_status": "AI_FAILED", "_error": "Payload is not a dictionary"}
+
+    # 1. Deserialize if needed
+    if "reply" in payload and isinstance(payload["reply"], str):
+        try:
+            parsed = json.loads(payload["reply"])
+            if isinstance(parsed, dict):
+                logger.info(f"[NORMALIZE_PARSE] merging keys from payload: {list(payload.keys())}")
+                for k, v in payload.items():
+                    if k != "reply" and k not in parsed: 
+                        parsed[k] = v
+                payload = parsed
+                logger.info(f"[NORMALIZE_PARSE_DONE] keys now: {list(payload.keys())}")
+        except Exception as pe:
+            logger.error(f"[NORMALIZE_PARSE_ERROR] {str(pe)}")
+
+    # 2. Multi-page result stability
+    # The real stabilization happens in the export functions
+    result = payload.copy()
+    
+    # ── [ROOT-CAUSE FIX] Preserve Both Title Case & Snake Case for UI Mapping ──
+    norm_rec = get_normalized_export_record(payload)
+    # 1. First merge the full record to preserve Title Case keys (e.g., "Total Invoice Value")
+    result.update(norm_rec)
+    
+    # 2. Then ensure snake_case aliases exist for backward compatibility and internal logic
+    for k, v in norm_rec.items():
+        internal_key = k.lower().replace(" ", "_").replace(".", "")
+        existing = result.get(internal_key)
+        
+        # Never overwrite populated field with empty
+        if not is_empty(v):
+            if is_empty(existing):
+                result[internal_key] = v
+            elif str(v) != str(existing):
+                 logger.info(f"[PAYLOAD_OVERWRITE_DETECTED] field={internal_key} existing='{str(existing)[:20]}' incoming='{str(v)[:20]}'")
+                 if isinstance(v, str) and len(str(v)) > len(str(existing)):
+                     result[internal_key] = v
+    # 3. Normalize items if present
+    items = result.get("items") or result.get("sections", {}).get("items")
+    if items:
+        result["items"] = get_normalized_items(result)
+        
+    # [ROOT-CASE FIX] Ensure underscore fields are preserved
+    for k, v in payload.items():
+        if k.startswith("_") and k not in result:
+            result[k] = v
+
+    # [NORMALIZE_STAGE_DONE] (Requirement #3)
+    logger.info(f"[NORMALIZE_STAGE_DONE] item_count={len(result.get('items', []))}")
     return result
 
+print("[NORMALIZE_EXPORT_CHECK]", "lossless_preserve" in globals())

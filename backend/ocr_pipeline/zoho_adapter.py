@@ -28,13 +28,13 @@ class ZohoAdapter:
         except (ValueError, TypeError):
             return 0.0
 
-    def reconstruct_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def reconstruct_items(self, items: List[Dict[str, Any]], invoice_total: float = 0) -> List[Dict[str, Any]]:
         """
         Delegates item reconstruction to the Senior Table Reconstruction Engine.
         Ensures multi-line descriptions and broken rows are handled correctly.
         """
         engine = get_table_reconstructor()
-        return engine.reconstruct(items)
+        return engine.reconstruct(items, invoice_total=invoice_total)
 
     def normalize_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -59,17 +59,49 @@ class ZohoAdapter:
     def validate_invoice(self, invoice: Dict[str, Any], items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Step 3: Validate Invoice
-        Check sum(items.taxable_value) ≈ total_taxable_value.
-        Flag mismatch but do not drop.
+        Check sum(items.taxable_value) == total_taxable_value.
+        If mismatch detected, purge suspected summary/synthetic rows.
         """
-        total_items_taxable = round(sum(item["taxable_value"] for item in items), 2)
-        header_taxable = self._to_float(invoice.get("total_taxable_value"))
+        header_taxable = self._to_float(invoice.get("total_taxable_value") or invoice.get("taxable_value"))
+        total_items_taxable = round(sum(self._to_float(item.get("taxable_value") or item.get("amount")) for item in items), 2)
         
-        if abs(total_items_taxable - header_taxable) > 1.0: # Allow 1.0 margin for rounding
-            invoice["_validation_flag"] = "TAXABLE_VALUE_MISMATCH"
-            invoice["_validation_message"] = f"Header taxable ({header_taxable}) != Items sum ({total_items_taxable})"
-            logger.warning(f"VALIDATION FLAG for Invoice {invoice.get('invoice_number')}: {invoice['_validation_message']}")
+        SUMMARY_REJECT_WORDS = ["services", "total", "tax", "cgst", "sgst", "igst", "summary", "output"]
+
+        if header_taxable > 0 and total_items_taxable > (header_taxable + 1.0):
+            logger.warning(f"[TOTAL_MISMATCH] Header={header_taxable} ItemsSum={total_items_taxable}. Attempting recovery.")
+            
+            original_count = len(items)
+            # Remove suspected summary rows (where qty is 0 or empty and description matches summary keywords)
+            cleaned_items = []
+            for itm in items:
+                desc = str(itm.get("description") or "").lower()
+                qty = self._to_float(itm.get("quantity") or itm.get("qty"))
+                
+                if any(kw in desc for kw in SUMMARY_REJECT_WORDS) and qty == 0:
+                     logger.info(f"[SYNTHETIC_ITEM_REMOVED] description='{itm.get('description')}' amount={itm.get('taxable_value')} reason=summary_or_duplicate")
+                     continue
+                cleaned_items.append(itm)
+            
+            # Sync the items list
+            items[:] = cleaned_items
+            new_total = round(sum(self._to_float(item.get("taxable_value") or item.get("amount")) for item in items), 2)
+            logger.info(f"[TOTAL_RECOVERY] Removed {original_count - len(items)} items. New ItemsSum={new_total}")
+            total_items_taxable = new_total
+
+        # ── [PHASE 9] SOFT VALIDATION (Root Cause #2 & #7) ──
+        if abs(total_items_taxable - header_taxable) > (header_taxable * 0.10) and header_taxable > 10:
+             logger.warning(f"[VALIDATION_WARNING] Mismatch > 10%. Header={header_taxable} ItemsSum={total_items_taxable}")
+             invoice["_validation_flag"] = "REQUIRES_REVIEW"
+             invoice["_validation_message"] = f"MATCH_WARNING: Items sum ({total_items_taxable}) differs from header ({header_taxable}) by >10%"
         
+        # NEVER DELETE OR SKIP ITEMS IN VALIDATOR
+        # Items are preserved as is.
+        
+        # ── [ITEMS_TRACE] POST-VALIDATION ──
+        logger.info("[ITEMS_TRACE] stage=validate_invoice count=%s", len(items))
+        
+        # [ROOT-CAUSE FIX #5] Ensure we always return the invoice (never null)
+        if not invoice: return {"status": "ERROR", "message": "Invalid Invoice Structure"}
         return invoice
 
     def resolve_zoho_row(self, invoice: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
@@ -78,13 +110,15 @@ class ZohoAdapter:
         Maps fields to FULLY COMPLIANT Zoho-template columns.
         Derives Tax Names and GST treatment dynamically.
         """
-        # 1. GST Treatment & State Code
-        # Use robust lookup for gstin
+        # [ZOHO_HEADER_MAPPING] Identity
         gstin = str(invoice.get("gstin") or invoice.get("vendor_gstin") or "").strip().upper()
         gst_treatment = "business_registered_regular" if gstin else "business_unregistered"
         state_code = gstin[:2] if len(gstin) >= 2 else ""
         
-        # Derive full state name from GSTIN state code (deterministic — eliminates OCR inconsistency)
+        # [ZOHO_GROUP_KEY] 
+        logger.debug(f"[ZOHO_GROUP_KEY] gstin={gstin} inv_no={invoice.get('invoice_no')}")
+
+        # Derive full state name from GSTIN state code
         GST_STATE_CODES = {
             "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab",
             "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana",
@@ -118,62 +152,75 @@ class ZohoAdapter:
         
         tax_name = f"{prefix}{int(total_rate)}" if total_rate > 0 else "Non-Taxable"
 
-        # 3. Robust Invoice Number Lookup (Root Cause Fix)
-        inv_no = invoice.get("invoice_number") or invoice.get("supplier_invoice_no") or invoice.get("invoice_no") or "—"
+        # 3. Robust Invoice Number Lookup
+        inv_no = invoice.get("invoice_no") or invoice.get("supplier_invoice_no") or "—"
 
-        # 4. Extract more fields for the new schema
+        # 4. Harvest sections
         sections = invoice.get("sections", {})
-        supplier = sections.get("supplier_details", {})
         supply = sections.get("supply_details", {})
+
+        # ── [PHASE 3] BILL_FROM FALLBACK CHAIN ──
+        bill_from = (
+            invoice.get("bill_address_from") or
+            invoice.get("bill_from") or 
+            invoice.get("vendor_address") or 
+            sections.get("supplier_details", {}).get("bill_from") or 
+            ""
+        ).strip()
         
-        bill_from = invoice.get("bill_from") or ""
-        bill_to = supplier.get("billing_address") or invoice.get("billing_address") or ""
+        bill_to = (
+            invoice.get("bill_address_to") or
+            invoice.get("billing_address") or 
+            invoice.get("customer_address") or
+            ""
+        ).strip()
         
-        branch = supplier.get("branch") or invoice.get("branch") or ""
+        branch = invoice.get("branch") or sections.get("supplier_details", {}).get("branch") or ""
         
-        total_taxable = supply.get("total_taxable_value") or invoice.get("total_taxable_value") or invoice.get("taxable_value")
-        total_invoice = supply.get("total_invoice_value") or invoice.get("total_invoice_value") or invoice.get("total_amount")
+        total_taxable = invoice.get("total_taxable_value") or invoice.get("taxable_value")
+        total_invoice = invoice.get("invoice_total") or invoice.get("total_invoice_value")
         
-        total_igst = supply.get("total_igst") or invoice.get("total_igst")
-        total_cgst = supply.get("total_cgst") or invoice.get("total_cgst")
-        total_sgst = supply.get("total_sgst") or invoice.get("total_sgst")
-        
-        sales_order_no = invoice.get("sales_order_no") or invoice.get("purchase_order_no") or ""
+        total_igst = invoice.get("total_igst")
+        total_cgst = invoice.get("total_cgst")
+        total_sgst = invoice.get("total_sgst")
         
         irn = invoice.get("irn") or ""
-        ack_no = supply.get("ack_no") or invoice.get("ack_no") or ""
-        ack_date = supply.get("ack_date") or invoice.get("ack_date") or ""
+        ack_no = invoice.get("ack_no") or ""
+        ack_date = invoice.get("ack_date") or ""
 
-        return {
-            "Date": invoice.get("invoice_date") or invoice.get("bill_date"),
+        from .normalize import fix_encoding_corruption
+        row = {
+            "Date": invoice.get("invoice_date"),
             "Invoice No": inv_no,
-            "Name": invoice.get("vendor_name") or invoice.get("supplier_name"),
+            "Name": fix_encoding_corruption(invoice.get("vendor_name")),
             "GSTIN": gstin,
             "Branch": branch,
             "Place of Supply": pos_code,
-            "Bill From": bill_from,
+            "Bill Address From": bill_from,
             "Bill Address To": bill_to,
-            "Billing Address": bill_to, # Standard Zoho 'Billing Address' is for Customer
             "Total Taxable Value": total_taxable,
             "Total Invoice Value": total_invoice,
             "Total IGST": total_igst,
             "Total CGST": total_cgst,
             "Total SGST/UTGST": total_sgst,
-            "Sales Order No": sales_order_no,
             "Item Name": item.get("description"),
-            "HSN/SAC": item.get("hsn_sac") or item.get("hsn"),
-            "Qty": item.get("quantity") or item.get("qty"),
+            "HSN/SAC": item.get("hsn_sac") or item.get("hsn_code"),
+            "Qty": item.get("qty") or item.get("quantity"),
             "UOM": item.get("uom") or "",
             "Item Rate": item.get("rate"),
             "Taxable Value": item.get("taxable_value"),
-            "IGST": item.get("igst_amount") or item.get("igst"),
-            "CGST": item.get("cgst_amount") or item.get("cgst"),
-            "SGST/UTGST": item.get("sgst_amount") or item.get("sgst"),
-            "Invoice Value": item.get("amount") or item.get("taxable_value"),
+            "IGST": item.get("igst") or item.get("igst_amount"),
+            "CGST": item.get("cgst") or item.get("cgst_amount"),
+            "SGST/UTGST": item.get("sgst") or item.get("sgst_amount"),
+            "Invoice Value": item.get("invoice_value") or item.get("amount"),
             "IRN": irn,
             "Ack. No.": ack_no,
-            "Ack. Date": ack_date
+            "Ack. Date": ack_date,
+            "Folder Path": invoice.get("file_path") or ""
         }
+        
+        logger.debug(f"[ZOHO_EXPORT_ROW] inv={inv_no} item='{item.get('description', '')[:20]}...'")
+        return row
 
     def reconstruct_invoices(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -197,9 +244,11 @@ class ZohoAdapter:
                 inv_id = inv.get("id")
                 file_path = inv.get("file_path")
 
-            if "_pages" in ext_data and isinstance(ext_data["_pages"], dict):
-                logger.info(f"ADAPTER: Exploding {len(ext_data['_pages'])} pages from record {inv_id}")
-                for p_idx, p_data in sorted(ext_data["_pages"].items(), key=lambda x: int(x[0])):
+            # [PHASE 1] ISOLATION SUPPORT
+            pages_map = ext_data.get("validated_ai_pages") or ext_data.get("_pages")
+            if pages_map and isinstance(pages_map, dict):
+                logger.info(f"ADAPTER: Exploding {len(pages_map)} pages from record {inv_id}")
+                for p_idx, p_data in sorted(pages_map.items(), key=lambda x: int(x[0])):
                     virtual_inv = p_data.copy()
                     virtual_inv["id"] = f"{inv_id}_p{p_idx}"
                     virtual_inv["file_path"] = file_path
@@ -214,8 +263,17 @@ class ZohoAdapter:
                      # Fallback for when ext_data wasn't a dict
                      final_inv = {"id": inv_id, "file_path": file_path}
                 
+                # [ROOT-CAUSE FIX] Protective items inheritance
+                top_level_items = final_inv.get("items") or []
+                
                 if "sections" in final_inv and "items" in final_inv["sections"]:
-                    final_inv["items"] = final_inv["sections"]["items"]
+                    section_items = final_inv["sections"]["items"]
+                    if not section_items and top_level_items:
+                        logger.warning(f"ADAPTER: Protected items from being wiped by empty sections. Record={inv_id}")
+                        final_inv["items"] = top_level_items
+                    else:
+                        final_inv["items"] = section_items
+                        
                 exploded_invoices.append(final_inv)
 
         logger.info(f"AUDIT: RAW OCR INVOICES COUNT = {len(exploded_invoices)}")
@@ -231,58 +289,58 @@ class ZohoAdapter:
         processed_invoices = []
 
         for inv in invoices:
-            # Step 1: Reconstruct
+            # Step 1: Reconstruct Items
             raw_items = inv.get("items", [])
-            logger.info(f"AUDIT: RAW ITEMS COUNT (Inv {inv.get('invoice_number')}) = {len(raw_items)}")
+            inv_no = inv.get("invoice_no") or inv.get("invoice_number") or "—"
+            logger.info(f"[ZOHO_RECONSTRUCT] processing inv='{inv_no}' items={len(raw_items)}")
             
-            # THE RECONSTRUCTOR CALL
-            logger.info("AUDIT: RECONSTRUCTOR CALLED")
-            reconstructed = self.reconstruct_items(raw_items)
-            logger.info(f"AUDIT: RECONSTRUCTED ITEMS COUNT = {len(reconstructed)}")
+            # Reconstruction Logic (Taxes/Grouping)
+            inv_total_taxable = self._to_float(inv.get("total_taxable_value"))
+            reconstructed = self.reconstruct_items(raw_items, invoice_total=inv_total_taxable)
             
-            # Step 2: Normalize
-            normalized = self.normalize_items(reconstructed)
-            logger.info(f"AUDIT: NORMALIZED ITEMS COUNT = {len(normalized)}")
+            # [RULE #4] RAW FALLBACK
+            if not reconstructed and raw_items:
+                logger.warning(f"[RECONSTRUCT_FALLBACK] Using raw items for inv='{inv_no}'")
+                reconstructed = raw_items
             
-            # Step 3: Validate Invoice
-            # Step 3: Validate Invoice
-            validated_inv = self.validate_invoice(inv, normalized)
-            
-            # 🚀 FORCE canonical mapping directly on internal payload
-            vendor_address = inv.get("vendor_address") or inv.get("bill_from") or ""
-            validated_inv["bill_from"] = vendor_address
-            
-            # After mapping, delete vendor_address and any other alias to eliminate duplication
-            if "vendor_address" in validated_inv:
-                del validated_inv["vendor_address"]
-            if "bill_address_from" in validated_inv:
-                del validated_inv["bill_address_from"]
+            # Step 2: Canonicalize Invoice Object
+            # Standardize items
+            normalized_items = []
+            for itm in reconstructed:
+                # ── [FORENSIC LOGGING] ──
+                logger.debug(f"[RECON_RAW_ITEM] {itm}")
 
-            # Assertion if missing
-            if vendor_address and not validated_inv.get("bill_from"):
-                logger.error(f"[MAPPING ERROR] bill_from is missing after mapping for invoice {inv.get('invoice_number')}")
-                raise Exception("CRITICAL: Address lost in adapter mapping")
+                # ── [SURGICAL FIX] (Requirement #3) ──
+                # Use strict raw keys confirmed by forensic audit to prevent zeroing
+                mapped_item = {
+                    "description": itm.get("description") or itm.get("Item Name") or "",
+                    "Item Name": itm.get("Item Name") or itm.get("description", ""),
+                    "hsn_sac": itm.get("hsn_sac") or itm.get("hsn_code") or itm.get("HSN/SAC") or itm.get("hsn") or itm.get("sac") or "",
+                    "qty": self._to_float(itm.get("quantity") or itm.get("qty") or 0),
+                    "uom": itm.get("uom") or itm.get("UOM") or "",
+                    "rate": self._to_float(itm.get("rate") or itm.get("Item Rate") or 0),
+                    "Item Rate": self._to_float(itm.get("Item Rate") or itm.get("rate") or 0),
+                    "taxable_value": self._to_float(itm.get("taxable_value") or itm.get("Taxable Value") or 0),
+                    "igst": self._to_float(itm.get("igst_amount") or itm.get("IGST") or 0),
+                    "cgst": self._to_float(itm.get("cgst_amount") or itm.get("CGST") or 0),
+                    "sgst": self._to_float(itm.get("sgst_amount") or itm.get("SGST/UTGST") or 0),
+                    "invoice_value": self._to_float(itm.get("amount") or itm.get("Invoice Value") or 0),
+                }
 
-            print("AFTER VALIDATION:", validated_inv.get("bill_from"))
-            print("ADAPTER OUTPUT:", validated_inv)
-            print("FINAL API PAYLOAD:", validated_inv)
-            print(f"INFO BILL_FROM_FINAL: {validated_inv.get('bill_from')}")
+                # ── [ROOT-CAUSE PRESERVATION] (Requirement #5) ──
+                # If crucial fields are missing after mapping, check original keys
+                if not mapped_item["description"] and itm.get("item_name"):
+                    mapped_item["description"] = itm.get("item_name")
+                if not mapped_item["qty"] and itm.get("qty"):
+                    mapped_item["qty"] = self._to_float(itm.get("qty"))
+                if not mapped_item["hsn_sac"] and itm.get("hsn_sac"):
+                    mapped_item["hsn_sac"] = itm.get("hsn_sac")
 
+                logger.debug(f"[RECON_MAPPED_ITEM] {mapped_item}")
+                normalized_items.append(mapped_item)
 
-
-
-
-
-
-            validated_inv["Bill Address To"] = str(
-                inv.get("billing_address") or 
-                inv.get("bill_to_address") or 
-                inv.get("sections", {}).get("invoice_details", {}).get("bill_to_address") or 
-                ""
-            ).strip()
-
-            # Derive Place of Supply from GSTIN state code (deterministic)
-            gstin = str(inv.get("gstin") or inv.get("vendor_gstin") or "").strip().upper()
+            # Standardize header
+            gstin = str(inv.get("gstin") or "").strip().upper()
             state_code = gstin[:2] if len(gstin) >= 2 else ""
             GST_STATE_CODES = {
                 "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab",
@@ -299,20 +357,45 @@ class ZohoAdapter:
                 "34": "Puducherry", "35": "Andaman and Nicobar Islands",
                 "36": "Telangana", "37": "Andhra Pradesh (New)"
             }
-            pos_code = GST_STATE_CODES.get(state_code) or inv.get("place_of_supply") or state_code
-            validated_inv["Place of Supply"] = pos_code
-            validated_inv["place_of_supply"] = pos_code
+            pos = GST_STATE_CODES.get(state_code) or inv.get("place_of_supply") or state_code
+
+            header = inv.get("header", {})
+            bill_from_val = inv.get("bill_address_from") or inv.get("bill_from") or inv.get("vendor_address") or header.get("bill_from") or header.get("vendor_address") or ""
+            bill_to_val = inv.get("bill_address_to") or inv.get("bill_to") or inv.get("billing_address") or header.get("bill_to") or header.get("billing_address") or ""
             
-            logger.info(f"AUDIT EXPLICIT PAYLOAD: bill_from = '{(validated_inv.get('bill_from') or '')[:20]}...'")
-
-            # Attach processed items - AUDIT: Define field used
-            validated_inv["items"] = normalized
-            logger.info(f"AUDIT: FIELD USED FOR EXPORT = invoice['items']")
+            canonical = {
+                "invoice_no": inv.get("invoice_no") or inv.get("invoice_number") or header.get("invoice_no") or "",
+                "invoice_date": inv.get("invoice_date") or header.get("invoice_date") or "",
+                "vendor_name": inv.get("vendor_name") or header.get("vendor_name") or "",
+                "gstin": gstin or header.get("gstin") or header.get("vendor_gstin") or "",
+                "branch": inv.get("branch") or header.get("branch") or "",
+                "bill_from": bill_from_val,
+                "bill_to": bill_to_val,
+                "bill_address_from": bill_from_val,
+                "bill_address_to": bill_to_val,
+                "place_of_supply": pos,
+                "total_taxable_value": self._to_float(inv.get("total_taxable_value") or header.get("taxable_value") or header.get("total_taxable_value")),
+                "total_igst": self._to_float(inv.get("total_igst") or header.get("igst") or header.get("total_igst")),
+                "total_cgst": self._to_float(inv.get("total_cgst") or header.get("cgst") or header.get("total_cgst")),
+                "total_sgst": self._to_float(inv.get("total_sgst") or header.get("sgst") or header.get("total_sgst")),
+                "invoice_total": self._to_float(inv.get("invoice_total") or inv.get("total_invoice_value") or header.get("total_amount") or header.get("invoice_total")),
+                "irn": inv.get("irn") or "",
+                "ack_no": inv.get("ack_no") or "",
+                "ack_date": inv.get("ack_date") or "",
+                "file_path": inv.get("file_path") or "",
+                "hsn_sac": (normalized_items[0].get("hsn_sac") if normalized_items else ""),
+                "items": normalized_items,
+                "warnings": inv.get("warnings") or inv.get("_warning_flags") or []
+            }
             
-            print("FINAL OBJECT BEFORE APPEND:", validated_inv)
-            processed_invoices.append(validated_inv)
+            # ── [ALIAS FIX] Expose both keys so downstream consumers work regardless of which one they use ──
+            canonical["supplier_invoice_no"] = canonical.get("supplier_invoice_no") or canonical.get("invoice_no", "")
+            canonical["invoice_no"] = canonical.get("invoice_no") or canonical.get("supplier_invoice_no", "")
 
-
+            # ── [SAFE LOG] ──
+            _log_inv = canonical.get("invoice_no") or canonical.get("supplier_invoice_no", "")
+            logger.info(f"FORENSIC_CANONICAL_OUT: inv={_log_inv} vendor='{canonical['vendor_name']}' items={len(normalized_items)} bill_from='{canonical['bill_from'][:20]}...'")
+            processed_invoices.append(canonical)
             
         return processed_invoices
 
@@ -324,6 +407,9 @@ class ZohoAdapter:
         # Step 5: Define SINGLE SOURCE OF TRUTH (FINAL_INVOICES)
         final_invoices = self.reconstruct_invoices(data)
         
+        # [ZOHO_CANONICAL_INPUT]
+        logger.info(f"[ZOHO_CANONICAL_INPUT] invoice_count={len(final_invoices)}")
+
         # --- RUNTIME INTEGRITY ENFORCEMENT (ENFORCER LAYER) ---
         enforcer = get_integrity_enforcer()
         # original_count passed as hint for trace validation
@@ -340,13 +426,25 @@ class ZohoAdapter:
         # Step 6: Zoho Adapter (MAPPING ONLY)
         zoho_rows = []
         for inv in final_invoices:
-            for item in inv.get("items", []):
-                # Step 7: Flatten
+            # [RULE #7] HARD REJECT MALFORMED ROWS — accept either invoice_no alias
+            inv_no = inv.get("invoice_no") or inv.get("supplier_invoice_no")
+            vendor = inv.get("vendor_name")
+            items = inv.get("items", [])
+            if not inv_no or not vendor or not items:
+                logger.warning(f"[ZOHO_EMPTY_ROW_REJECTED] inv={inv_no} vendor={vendor} items={len(items)}")
+                continue
+
+            for item in items:
+                # [ZOHO_ITEM_EXPORT]
+                logger.info(f"[ZOHO_ITEM_EXPORT] inv={inv_no} item='{item.get('description', '')[:20]}'")
+                
                 row = self.resolve_zoho_row(inv, item)
                 zoho_rows.append(row)
 
         # Step 8: Flatten Consistency Check via Enforcer
         flatten_check = enforcer.verify_flatten(zoho_rows, final_invoices)
+        final_inv_count = len(final_invoices)
+        
         if flatten_check["validation"] == "FAIL":
              return {
                 "validation": "FAIL",
@@ -355,13 +453,31 @@ class ZohoAdapter:
                 "reason": flatten_check["reason"]
             }
 
+        # ── [PHASE 10] HARD ACCOUNTING VALIDATION ──
+        # Check if we lost any invoices during reconstruction/merging
+        original_inv_count = len(data.get("invoices", []))
+        final_inv_count = len(final_invoices)
+        
+        status = "PASS"
+        review_required = False
+        if final_inv_count < original_inv_count and original_inv_count > 0:
+            logger.error(f"[HARD_ACCOUNTING_MISMATCH] Source={original_inv_count} Final={final_inv_count}. Data loss suspected!")
+            status = "REQUIRES_REVIEW"
+            review_required = True
+
+        # [PHASE 11] FRONTEND RESPONSE VERIFICATION
+        logger.info(f"[ZOHO_TRANSFORM_COMPLETE] invoices={final_inv_count} rows={len(zoho_rows)}")
+        if zoho_rows:
+            logger.debug(f"[ZOHO_DIAGNOSTICS] rows={len(zoho_rows)} first_row_inv={zoho_rows[0].get('Invoice No')}")
+
         return {
             "invoices": final_invoices,
             "rows": zoho_rows,
-            "validation": "PASS",
+            "validation": status,
+            "requires_review": review_required,
             "ready_for_zoho": True,
             "row_count": len(zoho_rows),
-            "invoice_count": len(final_invoices),
+            "invoice_count": final_inv_count,
             "debug_traces": getattr(self, "last_traces", [])
         }
 

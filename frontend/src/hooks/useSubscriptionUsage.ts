@@ -12,61 +12,97 @@ export interface SubscriptionUsage {
     cycle_start: string;
 }
 
+// [PHASE 6 FIX] GLOBAL STATE FOR SUBSCRIPTION USAGE DEDUPLICATION
+let globalUsageCache: SubscriptionUsage | null = null;
+let lastFetchTime = 0;
+const FETCH_THRESHOLD = 5000; // 5s gate to prevent storms
+
+let isFetching = false;
+let fetchPromise: Promise<SubscriptionUsage> | null = null;
+
 export const useSubscriptionUsage = () => {
-    const [subscriptionUsage, setSubscriptionUsage] = useState<SubscriptionUsage | null>(null);
+    const [subscriptionUsage, setSubscriptionUsage] = useState<SubscriptionUsage | null>(globalUsageCache);
     const [isLoading, setIsLoading] = useState(false);
 
     const fetchUsage = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const usage = await apiService.getSubscriptionUsage();
+        const now = Date.now();
+        
+        // 1. Return cache if fresh
+        if (now - lastFetchTime < FETCH_THRESHOLD && globalUsageCache) {
+            setSubscriptionUsage(globalUsageCache);
+            return globalUsageCache;
+        }
+
+        // 2. Coalesce concurrent requests (API Storm Protection)
+        if (isFetching && fetchPromise) {
+            const usage = await fetchPromise;
             setSubscriptionUsage(usage);
+            return usage;
+        }
+
+        setIsLoading(true);
+        isFetching = true;
+        
+        fetchPromise = apiService.getSubscriptionUsage()
+            .then(usage => {
+                globalUsageCache = usage;
+                lastFetchTime = Date.now();
+                return usage;
+            })
+            .finally(() => {
+                isFetching = false;
+                fetchPromise = null;
+            });
+
+        try {
+            const usage = await fetchPromise;
+            setSubscriptionUsage(usage);
+            return usage;
         } catch (e) {
             console.error("Failed to fetch subscription usage");
-            // Fallback default for disconnected state
-            setSubscriptionUsage({
-                plan: 'FREE',
-                used: 0,
-                limit: 5,
-                remaining: 5,
-                cycle_start: new Date().toISOString()
-            } as SubscriptionUsage);
+            if (!globalUsageCache) {
+                setSubscriptionUsage({
+                    plan: 'FREE',
+                    used: 0,
+                    limit: 5,
+                    remaining: 5,
+                    cycle_start: new Date().toISOString()
+                } as SubscriptionUsage);
+            }
+            return globalUsageCache;
         } finally {
             setIsLoading(false);
         }
     }, []);
 
     const incrementUsage = useCallback((amount: number = 1) => {
-        // Optimistically update the UI while waiting for the next poll
-        // The backend handles the actual increment during the API call.
         if (subscriptionUsage) {
             setSubscriptionUsage(prev => {
                 if (!prev) return null;
                 const newUsed = (prev.used || 0) + amount;
                 const limitNum = typeof prev.limit === 'string' ? parseFloat(prev.limit) : prev.limit;
-                return {
+                const updated = {
                     ...prev,
                     used: newUsed,
                     remaining: typeof limitNum === 'number' ? limitNum - newUsed : prev.remaining
                 };
+                globalUsageCache = updated;
+                return updated;
             });
         }
     }, [subscriptionUsage]);
 
     useEffect(() => {
-        // Only fetch if we have a session (refresh token exists)
-        // Note: httpClient.get will handle automatic access token refresh if needed.
         const hasSession = hasStoredSession();
         if (!hasSession) return;
 
-        // Skip subscription usage check for Master Admin — it's a company-only feature
-        // and calling it with a Master token triggers a 401 auto-logout.
         const token = httpClient.getToken();
         const userType = getUserTypeFromToken(token);
         if (userType === 'master') return;
 
         fetchUsage();
-        // Poll every minute to stay in sync with backend
+        
+        // [PHASE 6 FIX] Conservative 1-minute interval for global sync
         const interval = setInterval(() => {
             if (hasStoredSession()) {
                 fetchUsage();

@@ -6,8 +6,8 @@ from .auth_views import (
 )
 from .views import (
     health_check, check_status, check_phone,
-    AgentMessageView, AIProxyView, ai_job_status,
-    ai_metrics, health_with_metrics, AdminPaymentsView,
+    AgentMessageView, AIProxyView,
+    health_with_metrics, AdminPaymentsView,
     extraction_average_time, OCRCacheUpdateView,
     BranchViewSet
 )
@@ -50,8 +50,7 @@ urlpatterns = [
     path('ai/<str:action>/', AIProxyView.as_view(), name='ai-proxy'),
     path('ai/ocr-cache/<int:record_id>/update/', OCRCacheUpdateView.as_view(), name='ocr-cache-update'),
     path('agent/message/', AgentMessageView.as_view()),  # Legacy endpoint, uses AI proxy internally
-    path('metrics/ai/', ai_metrics, name='ai-metrics'),
-    path('ai/job-status/<str:job_id>/', ai_job_status, name='ai-job-status'),
+    # ai_metrics and ai_job_status removed — Redis-based polling decommissioned
     path('extraction-average-time/', extraction_average_time, name='extraction-average-time'),
     
     path('', include(router.urls)),

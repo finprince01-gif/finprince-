@@ -1,73 +1,147 @@
-# GST System Blueprint & Technical Review
+Perform a STRICT forensic migration of Purchase Scan onto the existing distributed cluster architecture while creating COMPLETELY SEPARATE Purchase Scan persistence tables.
 
-## 1. Overview
-The GST (Goods and Services Tax) module in **AI-accounting-0.03** is designed to automate the generation of statutory tax returns from operational accounting data. Currently, the system provides comprehensive support for **GSTR-1 (Outward Supplies)**, while GSTR-2 and GSTR-3B are planned for future releases.
+IMPORTANT:
+Use the SAME distributed cluster engine:
 
----
+* ingestion queue
+* AI worker
+* assembly worker
+* finalize worker
+* QueueService
+* Redis orchestration
+* DTO normalization
+* extraction engine
 
-## 2. Core Functional Flow
+BUT store Purchase Scan results in NEW dedicated Purchase Scan tables ONLY.
 
-### A. Data Capture
-GST data is not entered separately; it is derived automatically from the **Sales Voucher Pipeline**:
-1. **Sales Invoice Creation**: When a Sales Voucher is created, the system captures:
-   - Customer GSTIN (Registered vs. Unregistered classification).
-   - Place of Supply (POS) derived from GSTIN or State Type.
-   - Item-level taxes (CGST, SGST, IGST, Cess).
-   - HSN/SAC codes for each line item.
-2. **Tax Computation**: The system calculates taxes based on the `state_type` ('within' for CGST/SGST, 'other' for IGST, and 'export' for Export Zero-rated/WPAY).
+DO NOT use:
 
-### B. GSTR-1 Engine (Outward Supplies)
-The GSTR-1 engine classifies sales into government-mandated categories:
+* Zoho reconstruction tables
+* FinalizedSnapshot
+* Zoho export tables
+* Zoho hydration records
 
-| Category | Logical Condition | Aggregation Level |
-| :--- | :--- | :--- |
-| **B2B** | Customer has a valid GSTIN | Invoice Level |
-| **B2CL (B2C Large)** | No GSTIN + Interstate Supply + Value > ₹2.5L | Invoice Level |
-| **B2C Small (B2CS)** | No GSTIN + (Intrastate OR Interstate < ₹2.5L) | Aggregated by POS |
-| **Export (EXP)** | `state_type` = 'export' | Invoice Level |
-| **HSN Summary** | All sales items | Aggregated by HSN + UOM + Rate |
-| **DOC Details** | Sequence range of vouchers | Summary (Start/End No) |
+DO NOT change:
 
----
+* existing Purchase Scan UI
+* existing Purchase mapping headers
+* existing Purchase rendering logic
+* existing Purchase frontend behavior
+* existing Purchase column names
 
-## 3. Technical Architecture
+OBJECTIVE:
+Purchase Scan should behave exactly the same visually,
+but internally use:
+distributed workers + separate Purchase Scan tables.
 
-### Backend implementation (`views_gst.py`)
-- **Controller**: `GSTR1ViewSet` (Django Rest Framework).
-- **Data Access**: Directly queries `VoucherSalesInvoiceDetails` and `VoucherSalesItems`.
-- **Date Logic**: Implements Indian Financial Year logic (April to March).
-- **Pandas Integration**: Uses the **Pandas** library for complex HSN aggregations to avoid database-level performance bottlenecks and ensure precision.
+CREATE NEW TABLES:
+Example:
 
-### Frontend implementation (`GSTR1.tsx`)
-- **React State Management**: Tracks data for over 30 sub-tabs covering all GST schedules.
-- **Dynamic Stats**: Real-time counter on tabs showing the number of records in each category.
-- **Export Drivers**: 
-  - `handleDownloadExcel`: Generates a multi-sheet .xlsx file compatible with the GST Offline Utility.
-  - `handleDownloadJson`: Generates a .json file ready for direct upload to the GST Portal.
+```python id="6j8gv1"
+PurchaseScanJob
+PurchaseScanSnapshot
+PurchaseScanLineItem
+PurchaseScanResult
+```
 
----
+RULES:
 
-## 4. Current Implementation Status
+1. Purchase Scan uploads MUST enqueue into:
 
-### ✅ Completed (GSTR-1)
-- [x] B2B, B2CL, B2CS classification logic.
-- [x] Export (EXP) data extraction.
-- [x] HSN/SAC Summary (Split by B2B/B2C).
-- [x] Document sequence tracking.
-- [x] Advance Tax Adjustment (ATADJ) basic tracking.
-- [x] Government-compliant Excel template generation.
-- [x] GST Portal compatible JSON export.
+```python id="t9d6bb"
+queue_type="ingestion"
+task_type="INGESTION"
+pipeline_source="PURCHASE_SCAN"
+```
 
-### ⏳ In Progress / Future Scope
-- **GSTR-2 (Inward Supplies)**: Planned for Purchase/Input Tax Credit (ITC) reconciliation.
-- **GSTR-3B (Monthly Summary)**: Planned for auto-computation of liabilities and ITC set-off.
-- **Amendments (B2BA, B2CLA, etc.)**: Shells are ready in the UI; backend logic for historical amendments is pending.
-- **E-commerce (ECO)**: Shells for e-commerce supplies are included in the UI.
+2. Distributed workers must process Purchase jobs using:
 
----
+* same extraction engine
+* same OCR
+* same AI extraction
+* same assembly
+* same concurrency system
 
-## 5. Summary Recommendation
-The GST flow is robustly integrated into the sales cycle. To maximize the value of this module, users should ensure that:
-1. **GSTINs** are correctly entered in the Customer Master.
-2. **HSN codes** are mandatory for all products in the Inventory/Item Master.
-3. **State Type** (Within/Other/Export) is accurately set during invoice creation.
+3. Finalize worker must branch by:
+
+```python id="r3g79p"
+pipeline_source
+```
+
+Example:
+
+```python id="zncv9t"
+if pipeline_source == "PURCHASE_SCAN":
+    save_to_purchase_tables()
+
+elif pipeline_source == "ZOHO":
+    save_to_zoho_tables()
+```
+
+4. Purchase Scan frontend must hydrate ONLY from:
+
+```python id="m9frqn"
+PurchaseScanSnapshot
+PurchaseScanResult
+```
+
+5. Keep ALL Purchase headers EXACTLY unchanged:
+
+```python id="p93j6r"
+HSN/SAC
+Bill Address To
+GSTIN
+Branch
+Invoice Value
+IRN
+Ack No
+Ack Date
+```
+
+6. Preserve current Purchase rendering logic.
+   ONLY replace backend persistence source.
+
+7. Add forensic markers:
+
+```text id="lf9msv"
+[PURCHASE_SCAN_QUEUE_PUSH]
+[PURCHASE_SCAN_AI]
+[PURCHASE_SCAN_ASSEMBLY]
+[PURCHASE_SCAN_FINALIZE]
+[PURCHASE_SCAN_DB_WRITE]
+```
+
+8. Remove any legacy sync OCR execution paths used ONLY by Purchase Scan.
+
+9. Verify Purchase Scan now produces:
+
+```text id="ib2j1x"
+[QUEUE_PUSH_SUCCESS]
+[SQS_MESSAGE_RECEIVED]
+[AI_PAGE_SUCCESS]
+[ASSEMBLY_PAGE_MERGED]
+[PURCHASE_SCAN_FINALIZE]
+```
+
+VALIDATION:
+
+1. Upload invoices through Purchase Scan.
+
+2. Verify:
+
+* distributed queues active
+* workers processing
+* assembly executing
+* finalize executing
+
+3. Verify DB isolation:
+
+* Purchase Scan data ONLY in PurchaseScan tables
+* Zoho data ONLY in Zoho tables
+
+4. Verify frontend remains visually identical.
+
+IMPORTANT:
+There must still be ONLY ONE distributed cluster system.
+
+The separation happens ONLY at final persistence/storage level.

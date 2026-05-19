@@ -801,6 +801,33 @@ class ApiService {
         return httpClient.delete<{ success: boolean }>(`/api/ocr-staging/${fileHash}/`);
     }
 
+    // ============================================================================
+    // S3 DIRECT UPLOADS (PHASE 4)
+    // ============================================================================
+
+    /**
+     * Generate S3 pre-signed POST policy for direct browser upload.
+     */
+    async getS3UploadPolicy(fileName: string) {
+        return httpClient.post<any>('/api/s3-upload-policy/', { file_name: fileName });
+    }
+
+    /**
+     * Upload file directly to S3 using a pre-signed policy.
+     */
+    async uploadToS3(url: string, fields: Record<string, string>, file: File) {
+        const formData = new FormData();
+        Object.entries(fields).forEach(([key, value]) => {
+            formData.append(key, value);
+        });
+        formData.append('file', file);
+        
+        // Use postExternal to avoid sending local auth headers to AWS
+        return httpClient.postExternal<any>(url, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+    }
+
     /**
      * Finalize: upload all valid (vendor-found) staged invoices as purchase vouchers.
      * Invoices with missing vendors remain in staging.

@@ -1,13 +1,14 @@
 """
-Bulk Invoice Upload API – Direct Version
+Bulk Invoice Upload API – SQS/DB Version
 ==========================================
-Uploads are processed directly via synchronous/thread-pool based workers.
-No Redis or Kafka infrastructure required.
+Eliminated Redis dependency. Concurrency and progress are tracked via the database.
 """
 import os
 import time
 import hashlib
 import logging
+import uuid
+from typing import Dict, Any
 
 from django.conf import settings
 from rest_framework.views import APIView
@@ -16,19 +17,19 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny
 
 from .models import BulkInvoiceJob, InvoiceProcessingItem
+from ocr_pipeline.models import InvoiceTempOCR
 from .pipeline import storage
-from .pipeline.health import SystemHealth, IdempotencyLock, MAX_PAGES_PER_JOB
-from core.redis_client import redis_client
+from .pipeline.health import SystemHealth, IdempotencyLock
+from core.constants import JobStatus, ItemStatus
+from core.sqs import queue_service
 
 logger = logging.getLogger(__name__)
 
-# Retry-after hints per rejection reason (seconds)
 RETRY_AFTER = {
     'infrastructure': 30,
     'lag':            15,
     'tenant_limit':   60,
 }
-
 
 class BulkUploadAPIView(APIView):
     permission_classes = [AllowAny]
@@ -39,285 +40,334 @@ class BulkUploadAPIView(APIView):
         if not files:
             return Response({'error': 'No files uploaded'}, status=400)
 
-        tenant_id = str(getattr(request.user, 'tenant_id', '88fe4389-58a9-4244-9878-8a4e646898bd'))
+        tenant_id = getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None) or '88fe4389-58a9-4244-9878-8a4e646898bd'
+        tenant_id = str(tenant_id)
         received_session = request.data.get('upload_session_id')
+        
+        logger.info(f"[PIPELINE_STAGE_ENTER] stage='UPLOAD' session_id='{received_session}' tenant_id='{tenant_id}' files={len(files)}")
+        logger.info(f"[PIPELINE_MODE] mode='DISTRIBUTED_QUEUE' session_id='{received_session}'")
         logger.info(f"[UPLOAD API] Received request | files={len(files)} | session={received_session} | tenant={tenant_id}")
 
-        # ── GATE 1: System health ────────────────────────────────────────────
+        # 1. System Health (AI/DB only, Redis removed)
         ready, reason = SystemHealth.is_ready()
         if not ready:
-            logger.critical(f"[UPLOAD] BLOCKED – {reason}")
             return self._busy(reason, 'infrastructure')
 
-
-        # ── GATE 3: Branch active job limit ──────────────────────────────────
+        # 2. Tenant Job Limit (DB-backed)
         max_jobs = getattr(settings, 'BULK_MAX_ACTIVE_JOBS_PER_TENANT', 5)
         active = BulkInvoiceJob.objects.filter(
-            tenant_id=tenant_id, status__in=['pending', 'processing']
+            tenant_id=tenant_id, status__in=['PENDING', 'PROCESSING', 'QUEUED', 'FINALIZING']
         ).count()
         if active >= max_jobs:
-            msg = f"Too many active jobs ({active}/{max_jobs}). Wait for current batch to complete."
-            logger.warning(f"[UPLOAD] TENANT LIMIT for {tenant_id}: {active} active")
-            return self._busy(msg, 'tenant_limit')
+            logger.warning(f"[TENANT_LIMIT_EXCEEDED] tenant={tenant_id} active={active}")
+            return self._busy(f"Too many active jobs ({active}/{max_jobs})", 'tenant_limit')
 
-        # ── GATE 4: Batch idempotency (Streaming SHA256) ──────────────────
+        # 3. File size check
+        MAX_FILE_SIZE_MB = getattr(settings, 'MAX_FILE_SIZE_MB', 50)
+        for f in files:
+            if f.size > MAX_FILE_SIZE_MB * 1024 * 1024:
+                return Response({'error': f"File {f.name} too large"}, status=413)
+
+        # 4. Batch Fingerprint (Idempotency)
         all_file_hashes = []
         for f in files:
-            sha256 = hashlib.sha256()
-            for chunk in f.chunks():
-                sha256.update(chunk)
-            fh = sha256.hexdigest()
-            logger.info(f"FILE HASH: {fh} | {f.name}")
-            all_file_hashes.append(fh)
+            sha = hashlib.sha256()
+            for chunk in f.chunks(): sha.update(chunk)
+            all_file_hashes.append(sha.hexdigest())
         
-        # Sort hashes to ensure order-independence for the batch fingerprint
-        new_session = request.data.get('upload_session_id', 'legacy')
-        batch_fingerprint = hashlib.sha256(f'{"".join(all_file_hashes)}_{new_session}'.encode()).hexdigest()
-        print(f"DEBUG: BATCH FINGERPRINT: {batch_fingerprint}")
-
-        lock = IdempotencyLock(batch_fingerprint, ttl=300)
-
-        done_job_id = lock.is_done()
-        new_session = request.data.get('upload_session_id')
-
-        if done_job_id:
-            logger.info(f"[IDEMPOTENCY] Batch done → Job {done_job_id}")
-            if new_session:
-                from .models import InvoiceProcessingItem
-                from ocr_pipeline.repository import InvoiceTempOCR
-                job = BulkInvoiceJob.objects.filter(id=done_job_id).first()
-                if job:
-                   job.upload_session_id = new_session
-                   job.save()
-            return Response({'status': 'already_completed', 'job_id': done_job_id})
-
-        existing = BulkInvoiceJob.objects.filter(
-            file_hash=batch_fingerprint,
-            status__in=['pending', 'processing'],
-            tenant_id=tenant_id
-        ).first()
+        batch_fingerprint = hashlib.sha256(f'{"".join(sorted(all_file_hashes))}_{received_session}'.encode()).hexdigest()
+        
+        # Reset file pointers after fingerprinting consumes streams
+        for f in files:
+            f.seek(0)
+        
+        # 5. Check Existing (Hardenend Logic)
+        logger.info(f"[DUPLICATE_CHECK_START] session={received_session} fingerprint={batch_fingerprint[:8]}...")
+        existing = BulkInvoiceJob.objects.filter(file_hash=batch_fingerprint, tenant_id=tenant_id).first()
         
         if existing:
-            logger.info(f"[IDEMPOTENCY] In-progress → Job {existing.id}")
-            if new_session:
-                existing.upload_session_id = new_session
-                existing.save()
-                   
-            if existing.status == 'pending':
-                # Re-trigger enqueuing if stuck in pending
-                logger.info(f"Re-enqueuing pending job {existing.id}")
-                self._enqueue_to_redis(existing, request.data.get('voucher_type', 'Purchase'), tenant_id)
-
+            # [PHASE 11.9] Retry Support: Only block if the job is actually healthy/running
+            # Ignore FAILED, CANCELLED, or PARTIAL jobs for re-upload purposes
+            blocking_statuses = ['PENDING', 'QUEUED', 'PROCESSING', 'FINALIZING', 'COMPLETED']
+            is_blocking = existing.status in blocking_statuses and not existing.is_cancelled
             
-            return Response({'status': 'already_processing', 'job_id': existing.id,
-                             'total_files': existing.total_files})
+            logger.info(f"[DUPLICATE_MATCH_FOUND] job_id={existing.id} status={existing.status} blocking={is_blocking}")
+            
+            if is_blocking:
+                 logger.warning(f"[DUPLICATE_REJECT_REASON] Active job exists for this fingerprint. hash={batch_fingerprint}")
+                 # Return 200 with existing job info (standard idempotency)
+                 return Response({
+                    'status': existing.status.lower(), 
+                    'job_id': existing.id,
+                    'total_files': existing.total_files,
+                    'message': 'Job already exists and is in progress or completed'
+                })
+            else:
+                 logger.info(f"[UPLOAD_ACCEPTED] Allowing retry of failed/cancelled job {existing.id}")
 
-        # ── GATE 5: Distributed lock (race condition) ─────────────────────────
-        if not lock.acquire():
-            return Response({'status': 'already_processing',
-                             'message': 'Duplicate request received'})
+        logger.info(f"[UPLOAD_ACCEPTED] New batch creation started. session={received_session}")
 
-        # ── GATE 6: Instant Extraction (No Persistence) ──────────────────
-        # no_persist is deprecated for direct API calls, all must be persistent for async stability.
-        pass
-
-
-        try:
-            return self._create_and_enqueue(request, tenant_id, files, batch_fingerprint, lock)
-        except Exception as e:
-            lock.release()
-            logger.error(f"[UPLOAD] Job creation failed: {e}")
-            return Response({'error': 'Internal error. Please retry.'}, status=500)
-
-    def _create_and_enqueue(self, request, tenant_id, files, fingerprint, lock):
-        # ── GATE 6: Large job protection ─────────────────────────────────────
-        if len(files) > MAX_PAGES_PER_JOB:
-            logger.warning(f"[UPLOAD] Large batch ({len(files)} files > {MAX_PAGES_PER_JOB}). "
-                           "Processing first chunk only; re-upload remaining files.")
-            files = list(files)[:MAX_PAGES_PER_JOB]
-
+        # 6. Create Job & Items
         job = BulkInvoiceJob.objects.create(
             tenant_id=tenant_id,
-            upload_session_id=request.data.get('upload_session_id'),
-            file_hash=fingerprint,
+            upload_session_id=received_session,
+            file_hash=batch_fingerprint,
             total_files=len(files),
-            status='pending',
-            segmentation_done=False
+            status='PENDING'
         )
-        logger.info(f"[UPLOAD] Created Job {job.id} | session={job.upload_session_id} | files={len(files)}")
 
-        # ── STAGE 1: SAVE TO TEMP (STREAMING) ──
-        # This is fast and doesn't load files into RAM
-        import os
-        temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp_ingestion', str(job.id))
-        os.makedirs(temp_dir, exist_ok=True)
-        
         file_info = []
-        for f in files:
-            t_path = os.path.join(temp_dir, f.name)
-            # Use chunks() to avoid loading full file into memory
-            with open(t_path, 'wb+') as destination:
-                for chunk in f.chunks():
-                    destination.write(chunk)
+        seen_hashes_in_batch = set()
+        
+        for i, f in enumerate(files):
+            f_hash = all_file_hashes[i]
             
-            # Pre-register item as 'pending_ingestion'
-            item = InvoiceProcessingItem.objects.create(
-                job=job,
+            # [PHASE 11.9] Prevent Batch Self-Collision (Requirement #2)
+            if f_hash in seen_hashes_in_batch:
+                logger.warning(f"[BATCH_SELF_COLLISION_SKIPPED] file={f.name} hash={f_hash[:8]}")
+                continue
+            seen_hashes_in_batch.add(f_hash)
+            
+            ext = os.path.splitext(f.name)[1].lower() or '.pdf'
+            storage_key = f"jobs/{job.id}/{uuid.uuid4().hex[:8]}---{f.name}"
+            
+            # [PHASE 11.9] Duplicate Check Against Finalized Records (Requirement #3, #6)
+            # We ONLY block if a finalized successful record exists for this hash
+            existing_finalized = InvoiceTempOCR.objects.filter(
+                file_hash=f_hash, 
                 tenant_id=tenant_id,
-                file_path=t_path, # Temporary local path
-                status='pending',
-                page_count=1
+                processed=True
+            ).first()
+            
+            if existing_finalized:
+                logger.info(f"[DUPLICATE_MATCH_FOUND] finalized_id={existing_finalized.id} inv={existing_finalized.supplier_invoice_no}")
+                # Log exact collision fields as requested (Requirement #4)
+                logger.info(f"[COLLISION_DETAILS] {{'invoice_no': '{existing_finalized.supplier_invoice_no}', 'gstin': '{existing_finalized.gstin}', 'tenant': '{tenant_id}', 'filename': '{f.name}', 'hash': '{f_hash}'}}")
+                
+                # However, requirement #5 says "Do NOT reject uploads simply because same PDF uploaded again"
+                # So we ALLOW the upload but log the warning.
+                logger.info(f"[UPLOAD_ACCEPTED] Allowing re-upload of previously finalized PDF. hash={f_hash[:8]}")
+
+            try:
+                f.seek(0)
+                storage.upload_bytes(f.read(), storage_key)
+                
+                item = InvoiceProcessingItem.objects.create(
+                    job=job,
+                    tenant_id=tenant_id,
+                    file_path=storage_key,
+                    file_hash=f_hash,
+                    status='PENDING'
+                )
+                
+                # [PHASE 11.9] PROTECTIVE RECORD CREATION (Retry Support)
+                # If we are retrying the same session, some records might already exist.
+                # We reuse them to avoid 409 IntegrityErrors.
+                record = InvoiceTempOCR.objects.filter(
+                    tenant_id=tenant_id,
+                    file_hash=f_hash,
+                    upload_session_id=received_session
+                ).first()
+                
+                if record:
+                    logger.info(f"[REUSING_RECORD] id={record.id} session={received_session} hash={f_hash[:8]}...")
+                    record.status = 'PENDING'
+                    record.file_path = storage_key # Update path to newest upload
+                    record.save(update_fields=['status', 'file_path'])
+                else:
+                    # [FIX] Critical: Must pass file_hash to prevent (tenant, hash, session) collision
+                    record = InvoiceTempOCR.objects.create(
+                        tenant_id=tenant_id,
+                        upload_session_id=received_session,
+                        file_path=storage_key,
+                        file_hash=f_hash,
+                        status='PENDING',
+                        voucher_type=request.data.get('voucher_type', 'Purchase')
+                    )
+                    logger.info(f"[RECORD_CREATED] id={record.id} job={job.id} hash={f_hash[:8]}...")
+
+                item.staging_record_id = record.id
+                item.save(update_fields=['staging_record_id'])
+                
+                file_info.append({'id': item.id, 'record_id': record.id, 'original_name': f.name})
+            
+            except Exception as e:
+                # Forensic Collision Reporting (Requirement #4)
+                logger.error(f"[DATABASE_CONFLICT] Integrity failure during record creation: {e}")
+                
+                # Attempt to find what it collided with
+                collision = InvoiceTempOCR.objects.filter(
+                    tenant_id=tenant_id, 
+                    file_hash=f_hash, 
+                    upload_session_id=received_session
+                ).first()
+                
+                collision_data = {
+                    "tenant": tenant_id,
+                    "filename": f.name,
+                    "hash": f_hash,
+                    "session": received_session
+                }
+                if collision:
+                    collision_data.update({
+                        "existing_id": collision.id,
+                        "existing_status": collision.status,
+                        "invoice_no": getattr(collision, 'supplier_invoice_no', None),
+                    })
+                
+                logger.error(f"[COLLISION_DETAILS] {collision_data}")
+                
+                # If it's a multi-file upload and one file is a duplicate, 
+                # we can either fail the whole batch or skip the duplicate.
+                # User says "Prevent batch uploads from colliding with themselves", 
+                # so we should probably raise a clear error if it's a real conflict.
+                # However, with file_hash now passed, self-collision only happens if user 
+                # actually uploaded the exact same file twice in the same multi-select batch.
+                raise e
+
+        # 7. Enqueue to SQS (Unified Processing via Message Factory)
+        logger.info(f"[REDIS_ENQUEUE] session_id='{received_session}' job_id='{job.id}' status='PENDING'")
+        logger.info(f"[SQS_DISPATCH] Dispatching job_id='{job.id}' session_id='{received_session}' items={len(file_info)}")
+        logger.info(f"[QUEUE_DISPATCH] queue='ingestion' count={len(file_info)}")
+        
+        from vouchers.message_factory import message_factory
+        for item_data in file_info:
+            ingestion_payload = {
+                'job_id': job.id,
+                'item_id': item_data['id'],
+                'record_id': item_data['record_id'],
+                'voucher_type': request.data.get('voucher_type', 'Purchase')
+            }
+            
+            msg = message_factory.create_message(
+                task_type="INGESTION",
+                tenant_id=tenant_id,
+                session_id=received_session,
+                payload=ingestion_payload
             )
-            file_info.append({'id': item.id, 'temp_path': t_path, 'original_name': f.name})
+            
+            from copy import deepcopy
+            msg_copy = deepcopy(msg)
+            
+            try:
+                queue_service.push(msg_copy, queue_type='ingestion')
+                logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=ingestion msg_id={msg_copy['id']}")
+            except Exception as e:
+                logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=ingestion error={e}")
+                raise
 
-        # ── PUSH TO INGESTION QUEUE ──
-        voucher_type = request.data.get('voucher_type', 'Purchase')
-        task = {
-            'id': f"ingest_{job.id}",
-            'job_id': job.id,
-            'tenant_id': tenant_id,
-            'voucher_type': voucher_type,
-            'file_info': file_info,
-            'upload_session_id': job.upload_session_id,
-            'enqueued_at': time.time()
-        }
-        
-        pushed = redis_client.push_to_queue('ingestion_queue', task)
-        if not pushed:
-            logger.error("[REDIS ERROR] Ingestion push failed for Job %s", job.id)
-            return Response({'error': 'System Error: Failed to start ingestion.'}, status=500)
-
-        return Response({
-            'status':   'processing',
-            'job_id':   job.id,
-            'total_files': len(files),
-            'message': 'Upload successful. Processing started.'
-        })
-
-    def _enqueue_to_redis(self, job, voucher_type, tenant_id, paths=None):
-        if not redis_client.available:
-            logger.error("[REDIS DOWN] Cannot process job %s. System requires Redis for async execution.", job.id)
-            return Response({'error': 'Infrastructure Error: Redis is unavailable. Please try again later.'}, status=503)
-
-        # Admission Control: Reject if total queue size exceeds threshold
-        TOTAL_LIMIT = 20000
-        priority_queues = ['bulk_jobs_high', 'bulk_jobs_normal', 'bulk_jobs_low']
-        q_len = redis_client.get_queue_length(priority_queues)
-        
-        if q_len > TOTAL_LIMIT:
-             logger.critical(f"[ADMISSION CONTROL] Rejecting Job {job.id}. Total queue length {q_len}")
-             return Response({'error': 'System is busy (Admission Control). Please try again later.'}, status=503)
-
-        # ── PRIORITY ROUTING ──
-        # High: 1-3 pages, Normal: 4-15 pages, Low: 16+ pages
-        file_count = job.total_files
-        if file_count <= 3:
-            p_queue = 'bulk_jobs_high'
-        elif file_count <= 15:
-            p_queue = 'bulk_jobs_normal'
-        else:
-            p_queue = 'bulk_jobs_low'
-
-        task = {
-            'id': f"bulk_{job.id}",
-            'job_id': job.id,
-            'voucher_type': voucher_type,
-            'tenant_id': tenant_id,
-            'file_count': file_count,
-            'enqueued_at': time.time(),
-            'upload_session_id': job.upload_session_id
-        }
-        
-        # ── GATE 7: Consumer Health Verification ─────────────────────────────
-        logger.info(f"[UPLOAD] Checking consumer health for Job {job.id}...")
-        is_active = redis_client.verify_consumer_active(max_age=120)
-        if not is_active:
-            logger.critical(f"[INFRASTRUCTURE FAILURE] No active workers detected for Job {job.id}. Rejecting upload.")
-            return Response({
-                'error': 'OCR Infrastructure is currently offline. Please contact support or try again later.'
-            }, status=503)
-        
-        logger.info(f"[UPLOAD] Consumer health OK for Job {job.id}.")
-
-        pushed = redis_client.push_to_queue(p_queue, task)
-        if not pushed:
-            logger.error("[REDIS ERROR] Push failed for Job %s", job.id)
-            return Response({'error': 'System Error: Failed to enqueue job. Please try again.'}, status=500)
-
-        redis_client.record_metric('bulk_queue_length', q_len + 1)
-        logger.info(f"[UPLOAD] Enqueued Bulk Job {job.id} to {p_queue} | session={task['upload_session_id']}")
-
-        return Response({
-            'status':   'processing',
-            'job_id':   job.id,
-            'total_files': file_count,
-            'file_paths': paths or []
-        })
-
+        logger.info(f"[PIPELINE_STAGE_EXIT] stage='UPLOAD' session_id='{received_session}' job_id='{job.id}' total_files={len(files)}")
+        return Response({'status': 'processing', 'job_id': job.id, 'total_files': len(files)})
 
     @staticmethod
     def _busy(reason: str, reason_key: str) -> Response:
-        """Return 503 with Retry-After header and retry_after field in body."""
         after = RETRY_AFTER.get(reason_key, 30)
-        resp = Response(
-            {'error': reason, 'retry_after': after},
-            status=503
-        )
+        resp = Response({'error': reason, 'retry_after': after}, status=503)
         resp['Retry-After'] = str(after)
         return resp
 
-
 class HealthCheckAPIView(APIView):
-    """Monitor system health (Redis, Workers, etc.)"""
+    """Simplified health check for LB/Monitoring."""
     authentication_classes = []
-    permission_classes = []
-
+    permission_classes = [AllowAny]
     def get(self, request):
-        redis_status = "connected" if redis_client.is_healthy() else "down"
-        metrics = {}
-        if redis_status == "connected":
-            try:
-                metrics = redis_client.get_client().hgetall("metrics")
-            except:
-                pass
-
+        ready, _ = SystemHealth.is_ready()
         return Response({
-            "status": "healthy" if redis_status == "connected" else "degraded",
-            "redis": redis_status,
-            "timestamp": time.time(),
-            "metrics": metrics
-        })
+            "status": "healthy" if ready else "degraded",
+            "redis": "removed",
+            "timestamp": time.time()
+        }, status=200 if ready else 503)
 
 class BulkStatusAPIView(APIView):
+    """Poll DB for job status. Redis polling removed."""
     permission_classes = [AllowAny]
     def get(self, request, job_id, *args, **kwargs):
-        try:
-            job     = BulkInvoiceJob.objects.get(id=job_id)
-            masters = job.items.filter(parent_item_id=None)
-            total   = masters.count() or job.total_files
-            success = masters.filter(status__in=['success', 'partial']).count()
-            failed  = masters.filter(status='failed').count()
-            pending = masters.filter(status__in=['pending', 'processing']).count()
-
-            if job.status == 'completed' and job.file_hash:
-                IdempotencyLock(job.file_hash).mark_done(job.id)
-
-            # Optimization: Calculate progress
-            progress = 0
-            if total > 0:
-                progress = int((success + failed) / total * 100)
-
-            return Response({
-                'status':    job.status,
-                'progress':  progress,
-                'total':     total,
-                'processed': success,
-                'failed':    failed,
-                'pending':   pending,
-                'completed': job.status in ['completed', 'failed', 'success']
-            })
-
-        except BulkInvoiceJob.DoesNotExist:
+        # [PHASE 11.9] FORCE DB REFRESH & PREFETCH
+        from django.db import models
+        
+        job = BulkInvoiceJob.objects.filter(id=job_id).prefetch_related('items').first()
+        if not job: 
             return Response({'error': 'Job not found'}, status=404)
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
+        
+        # ── [PHASE 11.9] DYNAMIC AGGREGATION (Source of Truth: InvoiceTempOCR) ──
+        items = job.items.all()
+        total_files = job.total_files or items.count() or 1
+        
+        # Pull live statuses from ALL actual extraction records for this session (includes siblings)
+        from ocr_pipeline.models import InvoiceTempOCR
+        staging_records = InvoiceTempOCR.objects.filter(upload_session_id=job.upload_session_id).values('status')
+        
+        success = 0
+        failed = 0
+        processing = 0
+        
+        for r in staging_records:
+            live_status = r['status'].upper()
+            if live_status in ['FINALIZED', 'COMPLETED', 'SUCCESS', 'VOUCHER_CREATED']:
+                success += 1
+            elif live_status in ['FAILED', 'ERROR']:
+                failed += 1
+            else:
+                processing += 1
+                
+        # Handle cases where splits make total > original files
+        total = max(total_files, success + failed + processing)
+        
+        # Determine status dynamically (Rules from User)
+        from ocr_pipeline.models import FinalizedSnapshot
+        
+        # 6. Before emitting SNAPSHOT_READY: perform validation query using SAME upload_session_id, tenant_id, job_id
+        tenant_id = job.tenant_id or getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None) or '88fe4389-58a9-4244-9878-8a4e646898bd'
+        val_query = FinalizedSnapshot.objects.filter(
+            session_id=job.upload_session_id,
+            tenant_id=tenant_id
+        )
+        if job_id:
+            val_query = val_query.filter(models.Q(job_id=str(job_id)) | models.Q(job_id=job_id) | models.Q(job_id__isnull=True))
+            
+        snapshot_count = val_query.count()
+        has_snapshot = (snapshot_count > 0)
+        
+        # Authoritative completion check
+        # [REQUIREMENT FIX] If success == 0, we don't expect a snapshot (total failure)
+        items_terminal = (processing == 0) and ((success + failed) >= total_files)
+        is_completed = items_terminal and (has_snapshot or success == 0)
+        
+        if is_completed:
+            if success > 0 and failed == 0:
+                status_str = 'FINALIZED'
+            elif success > 0 and failed > 0:
+                status_str = 'PARTIAL_FAILED'
+            else:
+                status_str = 'FAILED'
+                
+            progress = 100
+            if has_snapshot:
+                logger.info(f"[SNAPSHOT_QUERY_VALIDATED] Validation query returned {snapshot_count} rows for job={job_id} session={job.upload_session_id}")
+                logger.info(f"[SNAPSHOT_READY_EMIT] Emitting SNAPSHOT_READY for job={job_id}")
+                logger.info(f"[SNAPSHOT_READY] job={job_id} session={job.upload_session_id}")
+            else:
+                logger.info(f"[SNAPSHOT_READY_EMIT_SKIP] success=0 (Total failure, no snapshot expected)")
+        else:
+            status_str = 'PROCESSING'
+            # Weighted progress: success(1.0) + processing(0.5)
+            progress = int(((success + failed + (processing * 0.5)) / total) * 100) if total > 0 else 0
+            progress = min(progress, 99)
+
+
+        response_data = {
+            'status': status_str,
+            'progress': min(progress, 100),
+            'total': total,
+            'processed': success,
+            'failed': failed,
+            'completed': is_completed
+        }
+        
+        logger.debug(f"[BULK_STATUS_RESPONSE] job_id={job_id} status={status_str} progress={progress}%")
+        
+        resp = Response(response_data)
+        resp['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        resp['Pragma'] = 'no-cache'
+        resp['Expires'] = '0'
+        return resp

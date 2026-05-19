@@ -4,7 +4,12 @@ from django.conf import settings
 from django.conf.urls.static import static
 from vouchers.schema_config import get_voucher_schema_view
 # REMOVED LEGACY OCR IMPORTS
-from ocr_pipeline.views import CleanOCRStagingView, OCRStagingFinalizeView, OCRStagingRescanView, OCRStagingRescanUploadView, ZohoAdapterView, ZohoReconstructView, OCRJobStatusView # NEW IMPORT
+from ocr_pipeline.views import (
+    CleanOCRStagingView, OCRStagingFinalizeView, OCRStagingRescanView, 
+    OCRStagingRescanUploadView, ZohoAdapterView, ZohoReconstructView, 
+    OCRJobStatusView, S3UploadPolicyView, PipelineStatusSSEView,
+    OperationalDashboardView
+)
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
 from core.views import AdminSubscriptionsView, AdminPaymentsView
@@ -21,6 +26,7 @@ import threading
 import sys
 
 urlpatterns = [
+    path('api/ocr-status-stream/<str:session_id>/', PipelineStatusSSEView.as_view(), name='ocr-status-stream'),
     path('admin/', admin.site.urls),
     
     # Pendings POs for Vendor
@@ -88,6 +94,7 @@ urlpatterns = [
     path('api/', include('accounting.urls')),
 
     # OCR Staging Workflow (CONSOLIDATED TO NEW MODULE)
+    path('api/ocr-upload-policy/', S3UploadPolicyView.as_view(), name='ocr-upload-policy'),
     path('api/ocr-staging/', CleanOCRStagingView.as_view(), name='ocr-staging-list-upload'),
     path('api/ocr-job-status/<uuid:job_id>/', OCRJobStatusView.as_view(), name='ocr-job-status'),
     path('api/ocr-staging/<str:file_hash>/', CleanOCRStagingView.as_view(), name='ocr-staging-remove'),
@@ -96,6 +103,7 @@ urlpatterns = [
     path('api/ocr-staging-rescan-upload/', OCRStagingRescanUploadView.as_view(), name='ocr-staging-rescan-upload'),
     path('api/zoho-adapter/', ZohoAdapterView.as_view(), name='zoho-adapter'),
     path('api/zoho-reconstruct/', ZohoReconstructView.as_view(), name='zoho-reconstruct'),
+    path('api/ops-dashboard/', OperationalDashboardView.as_view(), name='ops-dashboard'),
 
     # Voucher Schema Dynamic API
     path('api/voucher-schema/', get_voucher_schema_view, name='voucher-schema-dynamic'),
@@ -114,4 +122,9 @@ urlpatterns = [
 
     # Bank Statement Upload & Staging Module
     path('api/bank-upload/', include('bank_upload.urls')),
+
+    # Local S3 Simulator (Dev only)
+    path('api/local-upload-simulator/', include([
+        path('', include('core.upload_simulator_urls')),
+    ])),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

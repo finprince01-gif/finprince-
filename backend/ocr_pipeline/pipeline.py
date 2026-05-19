@@ -1,11 +1,24 @@
 import logging
+import json
+import copy
+import os
+from typing import Dict, Any, List
 from django.db import transaction
 from django.utils import timezone
 from google import genai
 from core.ai_proxy import api_key_manager
 from ocr_pipeline.extraction import extract_invoice
-from .normalize import normalize
-from .repository import InvoiceTempOCR
+from .normalize import (
+    normalize, 
+    lossless_preserve, 
+    is_empty, 
+    get_canonical_export_record,
+    get_ui_payload,
+    normalize_amount
+)
+import django
+from django.conf import settings
+from .models import InvoiceTempOCR, InvoicePageResult, PipelineStatus, SessionFinalizationState, FinalizedSnapshot
 from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails
 from accounting.models_voucher_purchase import (
     VoucherPurchaseSupplierDetails,
@@ -15,25 +28,434 @@ from accounting.models_voucher_purchase import (
 from accounting.models import Voucher, MasterLedger
 from core.models import Branch
 import time
+import traceback
+from datetime import datetime
 from google.genai import types
+from core.sqs import queue_service
+from .forensic_merger import get_forensic_merger
+from .validation_gates import validate_payload_integrity, enforce_state_transition, PipelineStage
 
 logger = logging.getLogger(__name__)
 
-def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR, wait_for_ai: bool = True, item_id: int = None) -> dict:
+def coalesce(*values):
+    """Returns the first non-empty value from a list of candidates."""
+    for val in values:
+        if val is not None:
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+            if isinstance(val, (int, float)) and val != 0:
+                return val
+            if isinstance(val, list) and len(val) > 0:
+                return val
+    return None
+
+def resolve_identity(page):
+    """
+    STRICT PRIORITY IDENTITY RESOLVER.
+    Preserves root canonical fields first, fallbacks to nested only if root is empty.
+    """
+    if not isinstance(page, dict):
+        logger.error(f"[IDENTITY_CRITICAL_FAILURE] page is not a dict: {type(page)}")
+        return {"invoice_no": "", "gstin": "", "vendor_name": "", "invoice_total": 0.0, "items": []}
+
+    # 1. ROOT CANONICAL (Priority 1)
+    root_inv = page.get("invoice_no")
+    root_vendor = page.get("vendor_name")
+    root_gstin = page.get("gstin")
+    root_total = page.get("invoice_total") or page.get("total_invoice_value")
+    root_items = page.get("items")
+
+    logger.debug(f"[IDENTITY_ROOT_VALUES] inv='{root_inv}' gstin='{root_gstin}' vendor='{root_vendor}' total={root_total}")
+
+    # 2. NESTED FALLBACKS (Priority 2)
+    header = page.get("header", {}) or {}
+    sections = page.get("sections", {}) or {}
+    summary = page.get("summary", {}) or {}
+    
+    nested_inv = header.get("invoice_no") or header.get("invoice_number") or sections.get("supplier_details", {}).get("supplier_invoice_no")
+    nested_vendor = header.get("vendor_name") or sections.get("supplier_details", {}).get("name")
+    nested_gstin = header.get("gstin") or header.get("vendor_gstin") or sections.get("supplier_details", {}).get("gstin")
+    nested_total = header.get("invoice_total") or summary.get("total_amount")
+    nested_items = sections.get("items", []) or page.get("items_data", [])
+
+    if any([nested_inv, nested_gstin]):
+        logger.debug(f"[IDENTITY_HEADER_VALUES] inv='{nested_inv}' gstin='{nested_gstin}'")
+
+    # 3. FINAL COALESCE (Strict Preservation)
+    def _safe_str(val):
+        return str(val).strip().upper() if val else ""
+
+    final_inv = _safe_str(root_inv)
+    if not final_inv and nested_inv:
+        final_inv = _safe_str(nested_inv)
+    elif root_inv and nested_inv and _safe_str(root_inv) != _safe_str(nested_inv):
+        logger.debug(f"[IDENTITY_OVERWRITE_BLOCKED] inv: kept root='{root_inv}' over nested='{nested_inv}'")
+
+    final_gstin = _safe_str(root_gstin)
+    if not final_gstin and nested_gstin:
+        final_gstin = _safe_str(nested_gstin)
+    elif root_gstin and nested_gstin and _safe_str(root_gstin) != _safe_str(nested_gstin):
+        logger.debug(f"[IDENTITY_OVERWRITE_BLOCKED] gstin: kept root='{root_gstin}' over nested='{nested_gstin}'")
+
+    final_vendor = _safe_str(root_vendor)
+    if not final_vendor and nested_vendor:
+        final_vendor = _safe_str(nested_vendor)
+
+    final_total = normalize_amount(root_total if root_total is not None and root_total != 0 else nested_total)
+    final_items = root_items if root_items else nested_items
+
+    # 4. IDENTITY CORRUPTION ASSERTION
+    if root_inv and not final_inv:
+        logger.error(f"[IDENTITY_CORRUPTION_DETECTED] Root invoice_no='{root_inv}' was lost during resolution!")
+    
+    identity = {
+        "invoice_no": final_inv,
+        "gstin": final_gstin,
+        "vendor_name": final_vendor,
+        "invoice_total": final_total,
+        "items": final_items or []
+    }
+
+    logger.info(
+        f"[IDENTITY_FINAL] inv='{identity['invoice_no']}' "
+        f"gstin='{identity['gstin']}' vendor='{identity['vendor_name']}' total={identity['invoice_total']}"
+    )
+    return identity
+
+# ── CORRUPTED GSTIN / UNICODE PLACEHOLDER SENTINEL SET ──────────────────────
+# These values appear when OCR returns encoding artifacts instead of real data.
+_POISON_GSTIN_VALUES = frozenset([
+    "\u2019",   # RIGHT SINGLE QUOTATION MARK
+    "\u2018",   # LEFT SINGLE QUOTATION MARK
+    "\u2014",   # EM DASH
+    "\u2013",   # EN DASH
+    "\u201c",   # LEFT DOUBLE QUOTATION MARK
+    "\u201d",   # RIGHT DOUBLE QUOTATION MARK
+    "\u2026",   # HORIZONTAL ELLIPSIS
+    "\u00e2",   # Latin small letter a with circumflex (encoding artifact)
+    "\u0093",   # Encoding artifact
+    "\u0094",   # Encoding artifact
+    "\u0080",   # Encoding artifact
+    "\u0099",   # Encoding artifact
+    "\u0096",   # Encoding artifact
+    "\u0097",   # Encoding artifact
+    "\ufffd",   # REPLACEMENT CHARACTER
+    "\u2019",   # RIGHT SINGLE QUOTATION MARK (duplicate for safety)
+    "\u2018",
+    "\u201a",
+    "\u201b",
+    "\u2032",
+    "\u2033",
+    "\u0060",   # Backtick artifact
+    "\u00b4",   # Acute accent artifact
+    # Literal multi-char artifacts seen in logs
+    "\u0393\u00c7\u00d6",
+    "\u0393\u00c7",
+    "\u00c7\u00d6",
+    # Ascii placeholders
+    "\u2014",  # em dash
+    "—",
+    "–",
+    "\u2014",
+    "’",
+])
+
+_MIN_PAYLOAD_BYTES = 200  # Any real extraction must be > 200 bytes when serialized
+
+
+def validate_dedup_source(record: InvoiceTempOCR) -> Dict[str, Any]:
+    """
+    PHASE 4 — DEDUP REPLAY SOURCE VALIDATION
+    ============================================
+    Validates that a cached extracted_data blob is fit for replay.
+    Returns a dict with:
+        valid       : bool   — True only if ALL rules pass
+        failures    : list   — list of failed rule names
+        details     : dict   — per-field diagnostic info
+    """
+    data = record.extracted_data or {}
+    failures = []
+    details = {}
+
+    # Pull canonical view once to avoid repeated unwrapping
+    try:
+        canonical = get_canonical_export_record(data)
+    except Exception as e:
+        logger.error(f"[DEDUP_VALIDATION_ERROR] record={record.id} canonical_parse_failed={e}")
+        return {"valid": False, "failures": ["CANONICAL_PARSE_FAILURE"], "details": {"error": str(e)}}
+
+    # ── Rule 1: invoice_no must exist and be non-empty ──
+    inv_no = (canonical.get("invoice_no") or canonical.get("supplier_invoice_no") or "").strip()
+    details["invoice_no"] = inv_no
+    if not inv_no:
+        failures.append("MISSING_INVOICE_NO")
+
+    # ── Rule 2 & 3: gstin must exist and not be a corrupted placeholder ──
+    gstin_raw = canonical.get("gstin") or ""
+    gstin_stripped = str(gstin_raw).strip()
+    details["gstin"] = gstin_stripped
+    if not gstin_stripped:
+        failures.append("MISSING_GSTIN")
+    elif gstin_stripped in _POISON_GSTIN_VALUES:
+        failures.append("POISONED_GSTIN_PLACEHOLDER")
+    elif any(c in gstin_stripped for c in ["\ufffd", "\u00e2", "\u0093", "\u0094", "\u0080", "\u0099"]):
+        failures.append("CORRUPTED_GSTIN_ENCODING")
+    elif gstin_stripped in ("—", "–", "—", "–", "’", "’"):
+        failures.append("UNICODE_ARTIFACT_GSTIN")
+
+    # ── Rule 4: extracted_data must be non-empty ──
+    if not data:
+        failures.append("EMPTY_EXTRACTED_DATA")
+    details["extracted_data_keys"] = list(data.keys())[:10] if data else []
+
+    # ── Rule 5: items array must exist and be non-empty ──
+    items = canonical.get("items", [])
+    details["items_count"] = len(items)
+    if not isinstance(items, list) or len(items) == 0:
+        failures.append("EMPTY_ITEMS")
+
+    # ── Rule 6: payload size must be above minimum threshold ──
+    try:
+        payload_size = len(json.dumps(data, ensure_ascii=False))
+    except Exception:
+        payload_size = 0
+    details["payload_bytes"] = payload_size
+    if payload_size < _MIN_PAYLOAD_BYTES:
+        failures.append("PAYLOAD_TOO_SMALL")
+
+    # ── Rule 7: bill_address_from OR bill_from must exist ──
+    bill_from = (
+        canonical.get("bill_from") or
+        canonical.get("bill_address_from") or
+        data.get("bill_from") or
+        data.get("vendor_address") or
+        (data.get("sections") or {}).get("supplier_details", {}).get("bill_from") or
+        ""
+    ).strip()
+    details["bill_address_from"] = bill_from
+    if not bill_from:
+        failures.append("MISSING_BILL_ADDRESS")
+
+    # ── Rule 8: invoice_total > 0 ──
+    inv_total = float(canonical.get("invoice_total") or canonical.get("total_invoice_value") or 0)
+    details["invoice_total"] = inv_total
+    if inv_total <= 0:
+        failures.append("ZERO_INVOICE_TOTAL")
+
+    # ── Rule 9: OCR payload must not be structurally empty ──
+    # Detect payloads that are just a wrapper with no real content
+    meaningful_keys = [
+        k for k in data.keys()
+        if not k.startswith("_") and k not in ("total_pages", "_forensics")
+    ]
+    logger.debug(f"[DEDUP_VALIDATION] record={record.id} failures={failures} keys={meaningful_keys}")
+    if len(meaningful_keys) < 3:
+        failures.append("PAYLOAD_STRUCTURALLY_EMPTY")
+
+    # ── Rule 10: no malformed unicode placeholders in the full serialized payload ──
+    # Check top-level string fields for encoding artifacts
+    UNICODE_POISON_PATTERNS = [
+        "\u0393\u00c7\u00d6",  # The exact artifact seen in logs: ΓÇÖ
+        "\u0393\u00c7",
+        "\u00c7\u00d6",
+        "\ufffd",
+    ]
+    for field in ("gstin", "invoice_no", "supplier_invoice_no", "vendor_name", "branch"):
+        val = str(canonical.get(field) or "").strip()
+        if any(pat in val for pat in UNICODE_POISON_PATTERNS):
+            failures.append(f"UNICODE_ARTIFACT_IN_{field.upper()}")
+            details[f"corrupted_{field}"] = val
+            break  # One hit is enough to fail
+
+    is_valid = len(failures) == 0
+    return {"valid": is_valid, "failures": failures, "details": details}
+
+
+def sync_record_flattened_fields(record: InvoiceTempOCR, data: Dict[str, Any], commit: bool = True):
+    """
+    [PHASE 5] CENTRALIZED FLATTENING CONTRACT.
+    Ensures that top-level model fields are always in sync with extracted_data.
+    Validates field existence dynamically to prevent contract-mismatch crashes.
+    """
+    if not data: return
+    
+    # 1. Use canonical normalizer to get consistent names (Target for Unification)
+    from ocr_pipeline.normalize import get_canonical_export_record
+    canonical = get_canonical_export_record(data)
+    
+    # 2. Audit Model Schema (Root Cause #1 - Dynamic Contract)
+    # We use _meta.get_fields() to ensure we only save concrete DB columns.
+    valid_fields = {
+        f.name for f in record._meta.get_fields()
+        if getattr(f, "concrete", False)
+    }
+    
+    # 3. Define flattened mapping (Mirror existing InvoiceTempOCR schema)
+    mapping = {
+        'supplier_invoice_no': canonical.get("supplier_invoice_no") or canonical.get("invoice_no"),
+        'gstin': canonical.get("gstin"),
+        'branch': canonical.get("branch"),
+        'irn': canonical.get("irn"),
+        'ack_no': canonical.get("ack_no"),
+        'ack_date': canonical.get("ack_date"),
+    }
+    
+    update_fields = []
+    for field_name, value in mapping.items():
+        if field_name in valid_fields:
+            setattr(record, field_name, value)
+            update_fields.append(field_name)
+        else:
+            # Trace missing field without crashing - allows schema evolution
+            logger.debug(f"[CONTRACT_MISMATCH] Field '{field_name}' not found in {record.__class__.__name__}. Skipping flattening.")
+
+    # 4. Preserve full data (Source of Truth for UI Modal)
+    record.extracted_data = data
+    if 'extracted_data' in valid_fields:
+        update_fields.append('extracted_data')
+    
+    # 5. Save with specific fields to avoid race conditions with status updates
+    if update_fields and commit:
+        logger.info(f"[FLATTENING_EXECUTE] record={record.id} fields={update_fields}")
+        record.save(update_fields=update_fields)
+        logger.info(f"[FLATTENING_COMPLETE] record={record.id}")
+
+def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wait_for_ai: bool = True, item_id: int = None, job_id=None, chaos_mode: str = None, file_path: str = None) -> dict:
     """
     SINGLE ENTRY POINT for OCR extraction and immediate validation.
     """
-    print("NEW OCR PIPELINE ACTIVE (ASYNC SUPPORT)")
-    logger.info(f"Processing record {record.id} | item={item_id} | wait_for_ai={wait_for_ai}")
+    from core.observability import metrics
+    import time
+    t_pipeline_start = time.time()
+    logger.info(f"[PIPELINE_STAGE_ENTER] stage=START record={record.id} item={item_id} job={job_id}")
     
+    logger.info("OCR Pipeline initialization: ASYNC_SQS_ACTIVE")
+    logger.info(f"Processing record {record.id} | item={item_id} | job={job_id} | wait_for_ai={wait_for_ai} | chaos={chaos_mode}")
+    
+    if chaos_mode == 'CRASH_IN_PIPELINE':
+        logger.critical("[CHAOS] Simulating pipeline crash")
+        os._exit(1)
+        
     try:
-        # STEP 0: DEDUPE BYPASS
+        # STEP 0: DEDUPE BYPASS — PHASE 4 SOURCE VALIDATION GATE
+        # -----------------------------------------------------------
+        # Before reusing ANY cached extraction, validate the source
+        # record integrity.  Corrupted sources bypass dedup and force
+        # fresh OCR extraction instead of propagating bad data.
+        is_reusable = False
         if record.extracted_data:
-            logger.info(f"[PIPELINE BYPASS] Reusing existing extraction data for record {record.id}")
-            normalized = record.extracted_data
+            logger.info(f"[PIPELINE_BYPASS_ENTER] record_id={record.id}")
+
+            # ── [PHASE 4] RUN REPLAY SOURCE INTEGRITY VALIDATION ──
+            dedup_check = validate_dedup_source(record)
+
+            if dedup_check["valid"]:
+                # Source is healthy — safe to replay
+                logger.info(
+                    f"[DEDUP_SOURCE_VALID] record_id={record.id} "
+                    f"payload_bytes={dedup_check['details'].get('payload_bytes')} "
+                    f"items={dedup_check['details'].get('items_count')} "
+                    f"inv_no='{dedup_check['details'].get('invoice_no')}'"
+                )
+                data = record.extracted_data
+                normalized = data
+                is_reusable = True
+                logger.info(f"[PIPELINE_BYPASS_SUCCESS] record_id={record.id} Replay source validated. Reusing payload.")
+            else:
+                # Source is corrupted — do NOT replay
+                failed_rules = dedup_check["failures"]
+                details     = dedup_check["details"]
+
+                logger.error(
+                    f"[DEDUP_SOURCE_INVALID] record_id={record.id} "
+                    f"source_record='{record.id}' "
+                    f"failed_rules={failed_rules} "
+                    f"invoice_no='{details.get('invoice_no', '')}' "
+                    f"gstin='{details.get('gstin', '')}' "
+                    f"items={details.get('items_count', 0)} "
+                    f"bill_address_from='{details.get('bill_address_from', '')}' "
+                    f"payload_bytes={details.get('payload_bytes', 0)} "
+                    f"meaningful_keys={details.get('meaningful_keys_count', 0)}"
+                )
+                logger.warning(
+                    f"[DEDUP_REPLAY_BYPASSED] record_id={record.id} "
+                    f"reason='Corrupted replay source. Rules failed: {failed_rules}'. "
+                    f"Triggering fresh OCR extraction."
+                )
+
+                # Quarantine: wipe poisoned extracted_data so fresh extraction stores cleanly
+                record.extracted_data = None
+                record.status = 'PENDING'
+                record.save(update_fields=['extracted_data', 'status'])
+
+                logger.info(
+                    f"[DEDUP_REPROCESS_TRIGGERED] record_id={record.id} "
+                    f"corrupted_fields={[k for k in details if k.startswith('corrupted_')]} "
+                    f"fresh_extraction=True"
+                )
+                is_reusable = False
+
+        # STEP 0.5: Page Count calculation for Phase 3 Barrier
+        import fitz
+        if file_path:
+            # Handle Local Protocol (Phase 11 fix for stress tests)
+            actual_path = file_path
+            if file_path.startswith("LOCAL://"):
+                from core.storage import StorageService
+                storage = StorageService()
+                key = file_path.split("://", 1)[1]
+                actual_path = os.path.normpath(os.path.join(storage.local_root, key.replace('/', os.sep)))
+                logger.info(f"[LOCAL_PATH_RESOLVED] virtual={file_path} actual={actual_path}")
+            
+            doc = fitz.open(actual_path)
+            file_path = actual_path # Update for downstream usage
         else:
-            # STEP 1: Process Extraction
-            # Phase 1: High-Precision Extraction (Gemini via central Proxy)
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+        total_pages = len(doc)
+        doc.close()
+        logger.info(f"[PIPELINE_TOTAL_PAGES] record={record.id} pages={total_pages}")
+        metrics.set_gauge("pipeline:pages_count", total_pages)
+
+        # ── [FORENSIC] STEP 1: TRACE PAGE ACCOUNTING ──
+        for p in range(1, total_pages + 1):
+            logger.info(
+                f"[PAGE_CREATED] record_id={record.id} page_number={p} "
+                f"expected_total_pages={total_pages} session={record.upload_session_id}"
+            )
+        
+        # ── [PHASE 18] BARRIER INITIALIZATION ──
+        # Initialize the deterministic assembly barrier for this record.
+        # This ensures that even if AI tasks finish extremely fast, the barrier knows how many to expect.
+        SessionFinalizationState.objects.update_or_create(
+            id=str(record.id),
+            defaults={
+                'expected_pages': total_pages,
+                'total_pages_expected': total_pages, # Legacy
+                'completed_pages': 0,
+                'failed_pages': 0,
+                'ai_completed_pages': 0,
+                'snapshot_created': False
+            }
+        )
+        logger.info(f"[ASSEMBLY_BARRIER_CREATED] record={record.id} expected={total_pages}")
+        
+        if not record.extracted_data:
+            # ── [RECOVERY_IDEMPOTENCY_FIX] ──
+            # If the record is already past OCR stage, do NOT re-enqueue AI tasks.
+            in_flight_statuses = [
+                PipelineStatus.EXTRACTING, 
+                PipelineStatus.ASSEMBLING, 
+                PipelineStatus.FINALIZING, 
+                PipelineStatus.FINALIZED
+            ]
+            if record.status in in_flight_statuses and not is_reusable:
+                 logger.info(f"[PIPELINE_RECOVERY_SKIP] record={record.id} already in stage {record.status}. Bypassing re-extraction.")
+                 return {"status": "ENQUEUED"}
+
+            # PHASE 3: Transition to EXTRACTING
+            record.status = PipelineStatus.EXTRACTING
+            record.save(update_fields=['status'])
+
             extracted = extract_invoice(
                 client=None, 
                 file_bytes=file_bytes, 
@@ -43,43 +465,146 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR, wait_for_ai: boo
                 tenant_id=str(record.tenant_id or 'system'),
                 wait_for_result=wait_for_ai,
                 record_id=record.id,
-                item_id=item_id
+                item_id=item_id,
+                upload_session_id=record.upload_session_id,
+                job_id=job_id,
+                file_path=file_path
             )
             
             if not wait_for_ai:
+                # ── [PHASE 10: ASYNC INTEGRITY GATE] ──
+                # For batches, we check top-level errors before fanout
+                if "_error" in extracted and not extracted.get("_pages"):
+                    logger.error(f"[PIPELINE_TERMINAL_FAILURE] record={record.id} error={extracted.get('_error')}")
+                    record.status = 'FAILED'
+                    record.save(update_fields=['status'])
+                    return {"status": "FAILED", "error": extracted.get('_error')}
+
+                # ── [ASYNC_CACHE_BYPASS_FIX] ──
+                # If any pages were CACHED, they won't go through the AIWorker.
+                # We must manually enqueue them to the finalization queue so 
+                # the barrier correctly increments to 100%.
+                for i in range(total_pages):
+                    res = extracted.get("_pages", {}).get(str(i+1))
+                    
+                    # ── [PHASE 10: CACHE INTEGRITY CHECK] ──
+                    if isinstance(res, dict) and (res.get('status') == 'OCR_FAILED' or '_integrity_blocked' in res):
+                        logger.warning(f"[CACHE_INTEGRITY_BLOCKED] record={record.id} page={i+1} reason='Failed OCR in cache'")
+                        continue # TERMINATE PROPAGATION for this page
+
+                    # If it's a dict but NOT a "queued" status, it's a real result (cache hit, mock, or failure)
+                    if isinstance(res, dict) and res.get('status') != 'queued':
+                        logger.info(f"[ASYNC_CACHE_HIT] record={record.id} page={i+1}. Forwarding to finalization.")
+                        fin_task = {
+                            'record_id': record.id,
+                            'page_index': i + 1,
+                            'item_id': item_id,
+                            'job_id': job_id,
+                            'result': res
+                        }
+                        
+                        # [PHASE 11.5] Push to SQS via Canonical Message Factory
+                        from vouchers.message_factory import message_factory
+                        
+                        assembly_msg = message_factory.create_message(
+                            task_type="ASSEMBLY",
+                            tenant_id=str(record.tenant_id),
+                            session_id=record.upload_session_id,
+                            payload=fin_task,
+                            correlation_id=fin_task.get('correlation_id'),
+                            page_number=i + 1
+                        )
+                        
+                        from copy import deepcopy
+                        assembly_msg_copy = deepcopy(assembly_msg)
+                        
+                        try:
+                            queue_service.push(assembly_msg_copy, queue_type='assembly')
+                            logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=assembly msg_id={assembly_msg_copy['id']}")
+                        except Exception as e:
+                            logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=assembly error={e}")
+                            raise
+                        
+                        logger.info(
+                            f"[PAGE_QUEUED] record_id={record.id} page_number={i+1} "
+                            f"expected_total_pages={total_pages} type=CACHED session={record.upload_session_id}"
+                        )
+                        logger.info(f"[FINALIZATION_ENQUEUE] record={record.id} page={i+1} (via CachePath)")
+
                 logger.info(f"[PIPELINE ASYNC] Extraction enqueued for record {record.id}. Returning early.")
                 return {"status": "ENQUEUED"}
 
             if "_error" in extracted:
-                raise RuntimeError(f"Extraction Error: {extracted.get('_error')} - {extracted.get('_raw', '')[:100]}...")
+                logger.error(f"[PIPELINE_ERROR] record={record.id} error={extracted.get('_error')}")
+                record.status = 'FAILED'
+                record.save(update_fields=['status'])
+                return {"status": "FAILED", "error": extracted.get('_error')}
+
+            # ── [PHASE 10: SYNC INTEGRITY GATE] ──
+            # Validate full payload before normalization
+            enforce_state_transition(str(record.id), extracted, PipelineStage.OCR)
 
             # Phase 2: Hierarchical Normalization
-            normalized = normalize(extracted)
-            if not normalized:
-                raise RuntimeError("Normalization produced empty result")
+            normalized = extracted
             
-        # Inject folder path for UI visibility (especially for folder-based batch uploads)
-        normalized['folder_path'] = record.file_path
-        
-        # STEP 2: Save extracted data immediately
-        record.extracted_data = normalized
-        record.status = 'EXTRACTED'
-        
-        # Flatten critical headers to top-level model fields for easier querying/UI display
-        sections = normalized.get("sections", {})
-        supplier = sections.get("supplier_details", {})
-        
-        record.supplier_invoice_no = normalized.get("supplier_invoice_no") or supplier.get("supplier_invoice_no")
-        record.gstin = normalized.get("gstin") or supplier.get("gstin")
-        record.branch = normalized.get("branch") or supplier.get("branch")
-        
-        logger.error(f"[TRACE] run_ocr_pipeline.before_save | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
-        record.save(update_fields=[
-            'extracted_data', 'status', 'supplier_invoice_no', 
-            'gstin', 'branch'
-        ])
-        logger.error(f"[TRACE] run_ocr_pipeline.after_save | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
-        logger.info(f"[STAGING SAVE SUCCESS] Record {record.id} saved (excluding session_id to prevent race)")
+            # ── [PHASE 10: NORMALIZATION INTEGRITY GATE] ──
+            # Validate after mapping/normalization
+            enforce_state_transition(str(record.id), normalized, PipelineStage.NORMALIZATION)
+            
+            # ── [PHASE 10] FORENSIC SNAPSHOT ──
+            # Use a shallow copy to avoid circular reference if we store 'extracted' inside itself
+            normalized["_forensics"] = {
+                "raw_extraction": copy.deepcopy(extracted) if isinstance(extracted, dict) else extracted,
+                "normalized_at": datetime.now().isoformat(),
+                "pipeline_version": "2.1-flattened"
+            }
+            # Remove the circular link from the deep copy to be safe
+            if isinstance(normalized["_forensics"]["raw_extraction"], dict):
+                normalized["_forensics"]["raw_extraction"].pop("_forensics", None)
+
+            # ── [S3_MIGRATION_PERSISTENCE] ──
+            # In the sync path (UnifiedWorker), we MUST persist each page to InvoicePageResult
+            # so that assemble_multi_page_record can find them without Redis.
+            if "_pages" in extracted:
+                for p_no, p_data in extracted["_pages"].items():
+                    p_items = (p_data.get("items") or p_data.get("sections", {}).get("items") or []) if isinstance(p_data, dict) else []
+                    InvoicePageResult.objects.update_or_create(
+                        record_id=record.id,
+                        page_number=int(p_no),
+                        defaults={
+                            'session_id': record.upload_session_id or 'sync',
+                            'canonical_payload': p_data
+                        }
+                    )
+                    logger.info(f"[PERSIST_ITEM_COUNT] record={record.id} page={p_no} items={len(p_items)}")
+                logger.info(f"[PERSIST_PAGES_SUCCESS] record={record.id} count={len(extracted['_pages'])}")
+
+        # ── [PHASE 5] SYNC FLATTENED FIELDS ──
+        with transaction.atomic():
+            sync_record_flattened_fields(record, normalized)
+            
+            # Inject folder path for UI
+            normalized['folder_path'] = record.file_path
+            
+            # Determine status
+            record.status = PipelineStatus.ASSEMBLING
+            
+            # PERSIST RAW TEXT
+            raw_text = normalized.get("_pdf_ocr_text") or normalized.get("_raw_text")
+            if raw_text:
+                record.ocr_raw_text = raw_text
+            
+            # ── [RULE #2] DETERMINISTIC TRACE ──
+            logger.info(
+                f"[PIPELINE_TRACE] stage='ASSEMBLING' "
+                f"session={record.upload_session_id} record={record.id} "
+                f"inv_no='{record.supplier_invoice_no}' gstin='{record.gstin}' status={record.status}"
+            )
+            record.save(update_fields=[
+                'extracted_data', 'status', 'supplier_invoice_no', 
+                'gstin', 'branch', 'ocr_raw_text'
+            ])
+            logger.info(f"[STAGING SAVE SUCCESS] Record {record.id} saved. Transitioned to ASSEMBLING.")
             
         # STEP 3: IMMEDIATELY call validation and processing
         logger.info(f"PIPELINE: Extraction complete for record {record.id}. Starting immediate validation...")
@@ -97,167 +622,696 @@ def run_ocr_pipeline(file_bytes: bytes, record: InvoiceTempOCR, wait_for_ai: boo
         logger.error(f"PIPELINE CRITICAL FAILURE for record {record.id}: {str(e)}")
         record.status = 'FAILED'
         record.validation_status = 'ERROR'
-        record.validation_message = f"Extraction Error: {str(e)}"
-        record.save()
+        record.validation_message = str(e)
+        record.save(update_fields=['status', 'validation_status', 'validation_message'])
         return {
             "data": {},
             "validation": {"status": "ERROR", "error": str(e)}
         }
 
-def finalize_merged_records(records, auto_save: bool = True):
+def is_page_valid(payload: dict) -> (bool, list):
     """
-    Groups and merges multi-page invoices into a single voucher.
+    PHASE 14: WARNING-FIRST VALIDATION (NON-DESTRUCTIVE)
+    We no longer REJECT invoices. We FLAG them.
+    A page is "CLEAN" only if it has both invoice_no and items.
     """
-    if not records:
-        return {"status": "ERROR", "error": "No records to merge"}
+    warnings = []
+    if not payload or not isinstance(payload, dict):
+        return False, ["Empty payload"]
     
-    if len(records) == 1:
-        return validate_and_process(records[0], auto_save=auto_save)
+    # [FORENSIC] Deep payload audit
+    logger.info(f"[VALIDATOR_INTERNAL] id={id(payload)} keys={list(payload.keys())}")
     
-    print(f"MERGING {len(records)} records for multi-page processing...")
+    # Handle both nested and flattened structures (Requirement #1)
+    header = payload.get('header', {}) or {}
+    items = payload.get('items', []) or []
     
-    # ── Phase 1: Aggregation (Strict Rules per user request) ──
-    primary = records[0] # FIRST record
-    last_record = records[-1] # LAST record
+    # Fallback to top-level if header is empty (Normalization Drift Fix)
+    inv_no = header.get('invoice_no') or payload.get('invoice_no')
+    vendor = header.get('vendor_name') or payload.get('vendor_name')
+    gstin = header.get('vendor_gstin') or payload.get('gstin') or header.get('gstin')
     
-    all_items = []
-    for r in records:
-        if not r.extracted_data:
-            logger.warning(f"Record {r.id} has no extracted data, skipping in merge.")
-            continue
-        data = r.extracted_data
-        sections = data.get("sections", {})
-        all_items.extend(sections.get("items", []))
-            
-    # ── Phase 2: Create a virtual merged state ──
-    if not primary.extracted_data:
-        return {"status": "ERROR", "error": "Primary record has no extracted data"}
+    # ── [PHASE 14] IDENTITY CHECKS ──
+    if not inv_no:
+        warnings.append("MISSING_INVOICE_NUMBER")
+    
+    if not items:
+        warnings.append("MISSING_LINE_ITEMS")
         
-    merged_data = primary.extracted_data.copy()
-    if "sections" not in merged_data: merged_data["sections"] = {}
-    
-    # 1. Header: already from primary (records[0])
-    
-    # 2. Line Items: Aggregate
-    merged_data["sections"]["items"] = all_items
-    
-    # 3. Totals / Taxes / Charges: From LAST record
-    last_extracted = last_record.extracted_data or {}
-    last_sections = last_extracted.get("sections", {})
-    merged_data["sections"]["supply_details"] = last_sections.get("supply_details", {})
-    merged_data["sections"]["due_details"] = last_sections.get("due_details", {})
-    merged_data["sections"]["transit_details"] = last_sections.get("transit_details", {})
-    
-    # ── Phase 2.5: Re-Normalize ──
-    # Important: Clear _raw_source so normalize() uses the newly merged items and totals
-    if "_raw_source" in merged_data:
-        del merged_data["_raw_source"]
-    
-    # Re-run normalization to trigger tax type reconciliation across the combined items
-    print("RE-NORMALIZING merged multi-page record to reconcile tax types...")
-    merged_data = normalize(merged_data)
-    
-    # Update top-level field for consistency
-    if last_record.extracted_data:
-        merged_data["total_invoice_value"] = last_record.extracted_data.get("total_invoice_value")
+    if not gstin and not vendor:
+        warnings.append("MISSING_VENDOR_IDENTITY")
+
+    # A page is considered "Technically Valid" for assembly if it has ANY data
+    # [ROOT-CAUSE FIX] Ensure "Empty payload" is only returned for truly empty objects
+    if not inv_no and not items and not gstin and not vendor:
+        logger.error(f"[VALIDATOR_REJECT] Total data void. id={id(payload)}")
+        return False, ["Empty payload"]
+
+    is_clean = len(warnings) == 0
+    return is_clean, warnings
+
+def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
+    from core.observability import metrics
+    import time
+    t_assembly_start = time.time()
+    logger.info(f"[PIPELINE_STAGE_ENTER] stage=ASSEMBLY record={record.id} session={record.upload_session_id}")
+
+    try:
+
+        from vouchers.models import InvoiceProcessingItem, update_job_progress
+        from core.constants import ItemStatus
         
-    primary.extracted_data = merged_data
-    # We save temporarily to allow validate_and_process to work with DB data
-    primary.save()
-    
-    # ── Phase 3: Process the merged record ──
-    res = validate_and_process(primary, auto_save=auto_save)
-    
-    # ── Phase 4: Sync status to other pages ──
-    if res.get("status") == "VOUCHER_CREATED":
-        v_id = res.get("voucher_id")
-        for r in records[1:]:
-            r.processed = True
-            r.validation_status = "VOUCHER_CREATED"
-            r.status = "VOUCHER_CREATED"
-            r.voucher_id = v_id
-            r.save()
+        # 1. ATOMIC LOCK & READINESS CHECK
+        barrier_id = str(record.id)
+        with transaction.atomic():
+            session_lock = SessionFinalizationState.objects.select_for_update().get(id=barrier_id)
             
-    return res
+            if session_lock.snapshot_created:
+                logger.info(f"[ASSEMBLY_IDEMPOTENT_EXIT] record={record.id}")
+                return {"status": "FINALIZED"}
+
+            # Update status to FINALIZING within the same lock trip
+            record.status = PipelineStatus.FINALIZING
+            record.save(update_fields=['status'])
+            logger.info(f"[DB_WRITE] table=InvoiceTempOCR action=STATUS_FINALIZING id={record.id}")
+
+            total_expected = session_lock.expected_pages
+            
+        # 2. FETCH DURABLE RESULTS (Optimized with .values())
+        t_db_fetch_start = time.time()
+        db_results = InvoicePageResult.objects.filter(record_id=record.id).values('page_number', 'canonical_payload')
+        db_page_map = {res['page_number']: res['canonical_payload'] for res in db_results}
+        db_fetch_latency = time.time() - t_db_fetch_start
+        metrics.record_latency("assembly:db_fetch_latency", db_fetch_latency)
+            
+        # ── [PHASE 10: FAILURE CONTAINMENT] ──
+        # Check for explicitly failed pages in the barrier
+        failed_indices = [
+            p_no for p_no, res in db_page_map.items() 
+            if isinstance(res, dict) and (res.get('status') == 'OCR_FAILED' or '_integrity_blocked' in res)
+        ]
+        if failed_indices:
+            logger.warning(f"[FAILURE_CONTAINMENT] record={record.id} pages={failed_indices} marked as TERMINAL_FAILURE. Excluding from assembly.")
+            
+        # Filter out failed pages from mapping
+        raw_pages = {
+            str(p): db_page_map[p] for p in db_page_map 
+            if p not in failed_indices
+        }
+        
+        # ── [RAW_PAGE_EXTRACT] Trace (Requirement E) ──
+        for p_idx, raw_p in raw_pages.items():
+            logger.info(f"[RAW_PAGE_EXTRACT] record_id={record.id} page={p_idx} keys={list(raw_p.keys()) if isinstance(raw_p, dict) else []}")
+        
+        # Readiness check
+        missing_pages = [p for p in range(1, total_expected + 1) if str(p) not in raw_pages and p not in failed_indices]
+        if missing_pages and not kwargs.get('force'):
+            logger.debug(f"[ASSEMBLY_WAIT] record={record.id} missing={missing_pages}. Barrier not yet reached.")
+            return {"status": "FAILED_MISSING_PAGES", "missing": missing_pages}
+
+        # 3. SEMANTIC ASSEMBLY (Memory Only)
+        merger = get_forensic_merger()
+        pages_list = []
+        for k in sorted(raw_pages.keys(), key=int):
+            p = normalize(raw_pages[k])
+            p["_page_no"] = int(k)
+            pages_list.append(p)
+
+        groups_dict = merger.group_invoices(pages_list)
+        logger.info(f"[GROUPED_INVOICE_COUNT] count={len(groups_dict)}")
+        
+        assembled_exports = []
+        for group_list in groups_dict.values():
+            assembled_exports.append(merger.merge_group(group_list))
+        
+        # Apply DTO Quality Gate filtering (Requirement C & E)
+        final_invoices = []
+        from ocr_pipeline.normalize import normalize_amount
+        for idx, inv in enumerate(assembled_exports):
+            ui_pay = get_ui_payload(inv)
+            invoice_no = ui_pay.get("invoice_no")
+            vendor_name = ui_pay.get("vendor_name")
+            items = ui_pay.get("items", [])
+            
+            totals_empty = (
+                normalize_amount(ui_pay.get("total_taxable_value")) == 0.0 and
+                normalize_amount(ui_pay.get("total_invoice_value")) == 0.0 and
+                normalize_amount(ui_pay.get("total_igst")) == 0.0 and
+                normalize_amount(ui_pay.get("total_cgst")) == 0.0 and
+                normalize_amount(ui_pay.get("total_sgst")) == 0.0
+            )
+            
+            # Confidence Heuristic: Check if OCR text is extremely sparse or missing
+            ocr_text = str(inv.get("_pdf_ocr_text") or inv.get("_raw_text") or "")
+            ocr_quality_metric = len(ocr_text.strip())
+            low_confidence = ocr_quality_metric < 30 or "OCR_FAILED" in ocr_text or "BATCH_PARSE_FAIL" in ocr_text
+            
+            # 1. Exact low_confidence_ocr scoring logic
+            vendor_score = 1.0 if vendor_name else 0.0
+            invoice_no_score = 1.0 if invoice_no else 0.0
+            gstin_score = 1.0 if ui_pay.get("gstin") else 0.0
+            totals_score = 0.0 if totals_empty else 1.0
+            item_count = len(items)
+            
+            missing_fields = []
+            invalid_fields = []
+            if not vendor_name: missing_fields.append("vendor_name")
+            if not invoice_no: missing_fields.append("invoice_no")
+            if not ui_pay.get("gstin"): missing_fields.append("gstin")
+            if totals_empty: missing_fields.append("totals")
+            if not items: missing_fields.append("items")
+            
+            # Simple calculated confidence score out of 100
+            score_components = [
+                vendor_score * 20,
+                invoice_no_score * 20,
+                gstin_score * 20,
+                totals_score * 20,
+                (1.0 if item_count > 0 else 0.0) * 20
+            ]
+            confidence_score = sum(score_components)
+            if ocr_quality_metric < 30:
+                confidence_score -= 10
+            confidence_score = max(0, min(100, confidence_score))
+            
+            rejection_threshold = 50
+            
+            # 2 & 3. Forensic logging
+            logger.info(f"[LOW_CONFIDENCE_SCORE_BREAKDOWN] idx={idx} confidence_score={confidence_score} vendor_score={vendor_score} invoice_no_score={invoice_no_score} gstin_score={gstin_score} totals_score={totals_score}")
+            logger.info(f"[LOW_CONFIDENCE_THRESHOLD] threshold={rejection_threshold}")
+            logger.info(f"[LOW_CONFIDENCE_TRIGGER_FIELDS] missing={missing_fields} invalid={invalid_fields} item_count={item_count} ocr_quality={ocr_quality_metric}")
+            
+            # Truly empty condition: absolutely no text extracted AND no vendor/invoice number/gstin/items/totals
+            ocr_text = str(inv.get("_pdf_ocr_text") or inv.get("_raw_text") or "").strip()
+            
+            def is_meaningful(val):
+                if not val:
+                    return False
+                v = str(val).strip().upper()
+                return v not in ("", "—", "MISSING", "N/A", "NULL", "NONE")
+
+            is_completely_empty = (
+                len(ocr_text) < 15
+            ) and (
+                not is_meaningful(invoice_no)
+            ) and (
+                not is_meaningful(vendor_name)
+            ) and (
+                not is_meaningful(ui_pay.get("gstin"))
+            ) and (
+                not items
+            ) and totals_empty
+            
+            if is_completely_empty:
+                logger.error(f"[DTO_VALIDATION_REJECT] idx={idx} reason='completely_empty_void' -> Discarding invoice.")
+                logger.error(f"[DTO_REJECTION_REASON] reason='completely_empty_void_all_fields_missing'")
+                logger.error(f"[EXPORT_REJECTED] invoice_no='{invoice_no}' reason='completely_empty_void_all_fields_missing'")
+                continue
+                
+            # Otherwise, we warn but preserve the DTO (Convert hard failures into warnings)
+            validation_warnings = []
+            if not invoice_no:
+                validation_warnings.append("invoice_no_missing")
+            if not vendor_name:
+                validation_warnings.append("vendor_name_missing")
+            if not items:
+                validation_warnings.append("items_empty")
+            if totals_empty:
+                validation_warnings.append("totals_all_empty")
+            if not ui_pay.get("irn"):
+                validation_warnings.append("irn_missing")
+            if not ui_pay.get("ack_no"):
+                validation_warnings.append("ack_no_missing")
+            if not ui_pay.get("branch"):
+                validation_warnings.append("branch_missing")
+            if not ui_pay.get("place_of_supply"):
+                validation_warnings.append("place_of_supply_missing")
+            if confidence_score < rejection_threshold:
+                validation_warnings.append(f"low_confidence_score_{confidence_score}")
+            
+            # Add warnings list to DTO payload
+            ui_pay["validation_warnings"] = validation_warnings
+            ui_pay["low_confidence"] = True if (validation_warnings or low_confidence) else False
+            
+            # Logs required by the user
+            if validation_warnings:
+                logger.warning(f"[DTO_VALIDATION_WARNING] invoice_no='{invoice_no}' vendor_name='{vendor_name}' warnings={validation_warnings}")
+                logger.warning(f"[EXPORT_WARNING_ONLY] invoice_no='{invoice_no}' warnings={validation_warnings}")
+            else:
+                logger.info(f"[DTO_VALIDATION_ACCEPT] invoice_no='{invoice_no}' vendor_name='{vendor_name}' status=VALID")
+                logger.info(f"[EXPORT_ACCEPTED] invoice_no='{invoice_no}'")
+
+            logger.info(f"[DTO_VALIDATION_BYPASS] invoice_no='{invoice_no}' bypassing_hard_rejections=True")
+            final_invoices.append(ui_pay)
+            logger.info(f"[EXPORT_FINAL_ROW] invoice_no='{invoice_no}' upload_session_id='{record.upload_session_id}' tenant_id='{record.tenant_id}' job_id='{kwargs.get('job_id')}'")
+            logger.info(f"[PIPELINE_EXPORT_APPEND] invoice_no='{invoice_no}'")
+
+        logger.info(f"[FINAL_EXPORT_COUNT] count={len(final_invoices)}")
+        
+        from .integrity_enforcer import get_integrity_enforcer
+        report = get_integrity_enforcer().verify(final_invoices)
+        if report.get("validation") == "FAIL":
+            logger.warning(f"[ASSEMBLY_INTEGRITY_WARNING] Semantic checks failed: {report.get('failures')} but proceeding in tolerant mode.")
+        
+        logger.info(f"[ASSEMBLY_PAGE_MERGED] record={record.id} invoices={len(final_invoices)}")
+
+        # Snapshot persistence must use len(final_invoices) (Root Cause #3)
+        export_rows_count = len(final_invoices)
+        logger.info(f"[SNAPSHOT_ROW_COUNT] count={export_rows_count}")
+        
+        if export_rows_count > 0:
+            logger.info(f"[SNAPSHOT_PERSIST_ALLOWED] allowed=True row_count={export_rows_count}")
+        else:
+            logger.warning(f"[SNAPSHOT_SKIP_REASON] session_id='{record.upload_session_id}' reason='validated_export_count/export_rows_count is 0' success=0")
+            record.status = PipelineStatus.FAILED
+            record.save(update_fields=['status'])
+            return {"status": "FAILED_EMPTY_EXPORT", "error": "validated_export_count/export_rows_count is 0"}
+
+        # 4. JSON SERIALIZATION (Outside Lock)
+        final_json = {
+            "data": final_invoices,
+            "metadata": {
+                "total_pages": total_expected,
+                "assembled_at": datetime.now().isoformat(),
+                "original_record_id": record.id
+            }
+        }
+        # ── [PHASE 10: SNAPSHOT INTEGRITY GATE] ──
+        # Prevent empty or corrupted snapshots from entering finalization
+        enforce_state_transition(str(record.id), final_json, PipelineStage.SNAPSHOT)
+
+        json_payload = json.dumps(final_json).encode()
+        
+        # 5. S3 OFFLOADING (Outside Lock)
+        s3_key = f"snapshots/{record.tenant_id}/{record.upload_session_id}_{int(time.time())}.json"
+        from core.storage import StorageService
+        StorageService().upload_file(json_payload, s3_key, content_type='application/json')
+        logger.info(f"[SNAPSHOT_OFFLOADED] session={record.upload_session_id} key={s3_key}")
+
+        # 6. ATOMIC PERSISTENCE (Final Transaction)
+        logger.info(f"[SNAPSHOT_PERSIST_START] session={record.upload_session_id} tenant={record.tenant_id}")
+        logger.info(f"[STAGING_PERSIST_START] session={record.upload_session_id} tenant={record.tenant_id}")
+        logger.info(f"[STAGING_ROW_COUNT] count={len(final_invoices)}")
+        
+        with transaction.atomic():
+            # Verify no one else finished it while we were S3-ing
+            session_lock = SessionFinalizationState.objects.select_for_update().get(id=barrier_id)
+            if session_lock.snapshot_created:
+                logger.info(f"[SNAPSHOT_SKIP_REASON] session_id='{record.upload_session_id}' reason='snapshot_already_created_by_another_thread' success=0")
+                logger.info(f"[STAGING_PERSIST_COMPLETE] session={record.upload_session_id} status=ALREADY_FINALIZED")
+                return {"status": "FINALIZED"}
+
+            # A. Explosion (Bulk Create)
+            siblings = []
+            import hashlib
+            for idx, inv_ui in enumerate(final_invoices):
+                if idx == 0:
+                    sync_record_flattened_fields(record, inv_ui, commit=False)
+                    logger.info(f"[STAGING_ROW_CREATED] primary=True index={idx} invoice_no={inv_ui.get('invoice_no')}")
+                else:
+                    split_hash = hashlib.sha256(f"{record.file_hash}_split_{idx}".encode()).hexdigest()
+                    sibling = InvoiceTempOCR(
+                        tenant_id=record.tenant_id,
+                        upload_session_id=record.upload_session_id,
+                        file_path=record.file_path,
+                        file_hash=split_hash,
+                        group_id=record.group_id,
+                        status=PipelineStatus.FINALIZED,
+                        is_primary=True,
+                        processed=False,
+                        voucher_type=record.voucher_type
+                    )
+                    sync_record_flattened_fields(sibling, inv_ui, commit=False)
+                    siblings.append(sibling)
+                    logger.info(f"[STAGING_ROW_CREATED] primary=False index={idx} invoice_no={inv_ui.get('invoice_no')} hash={split_hash[:8]}")
+            
+            if siblings:
+                InvoiceTempOCR.objects.bulk_create(siblings)
+                logger.info(f"[DB_WRITE_BULK] count={len(siblings)}")
+
+            # B. Snapshot & Barrier State
+            logger.info(f"[SNAPSHOT_DB_WRITE] session={record.upload_session_id} tenant={record.tenant_id}")
+            snapshot = FinalizedSnapshot.objects.create(
+                session_id=record.upload_session_id,
+                tenant_id=record.tenant_id,
+                job_id=kwargs.get('job_id'),
+                s3_key=s3_key,
+                invoice_count=len(final_invoices),
+                finalized_at=timezone.now()
+            )
+            logger.info(f"[SNAPSHOT_DB_FLUSH] session={record.upload_session_id} tenant={record.tenant_id}")
+            
+            session_lock.snapshot_created = True
+            session_lock.finalized_at = timezone.now()
+            session_lock.save(update_fields=['snapshot_created', 'finalized_at'])
+            
+            # C. Parent Finalization
+            record.status = PipelineStatus.FINALIZED
+            if not record.extracted_data: record.extracted_data = {}
+            record.extracted_data["_forensics"] = {"snapshot_id": str(snapshot.id), "pages": total_expected}
+            record.save(update_fields=['status', 'extracted_data'])
+            logger.debug(f"[DB_WRITE_FINALIZED] record={record.id}")
+
+            def on_commit_callback():
+                try:
+                    logger.info(f"[SNAPSHOT_CALLBACK_ENTER] session={record.upload_session_id} tenant={record.tenant_id} job={kwargs.get('job_id')} record={record.id}")
+                    logger.info(f"[SNAPSHOT_DB_COMMIT] session={record.upload_session_id} tenant={record.tenant_id}")
+                    logger.info(f"[SNAPSHOT_QUERY_START] session={record.upload_session_id}")
+                    
+                    # Perform validation query using the SAME upload_session_id, tenant_id, job_id
+                    val_query = FinalizedSnapshot.objects.filter(
+                        session_id=record.upload_session_id,
+                        tenant_id=record.tenant_id
+                    )
+                    job_id_val = kwargs.get('job_id')
+                    if job_id_val:
+                        val_query = val_query.filter(models.Q(job_id=str(job_id_val)) | models.Q(job_id=job_id_val) | models.Q(job_id__isnull=True))
+                        
+                    snapshot_count = val_query.count()
+                    if snapshot_count > 0:
+                        logger.info(f"[SNAPSHOT_QUERY_SUCCESS] Validation query returned {snapshot_count} rows for session={record.upload_session_id}")
+                        logger.info(f"[SNAPSHOT_READY_EMIT] Emitting SNAPSHOT_READY for session={record.upload_session_id}")
+                        logger.info(f"[FINALIZE_STATE_TRANSITION] Status transitioned to FINALIZED for session={record.upload_session_id}")
+                    else:
+                        logger.error(f"[SNAPSHOT_VALIDATION_FAILED] Validation query returned 0 rows for session={record.upload_session_id}!")
+
+                    # PIPELINE PARITY VALIDATION
+                    job_total = record.job.total_files if (record.job and record.job.total_files) else 1
+                    db_rows = InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).count()
+                    snapshot_obj = val_query.first()
+                    snapshot_rows = snapshot_obj.invoice_count if snapshot_obj else 0
+                    
+                    if db_rows > 0:
+                        logger.info(f"[HYDRATION_ROWS_FOUND] db_rows={db_rows} session={record.upload_session_id}")
+                        logger.info(f"[HYDRATION_ROWS_RETURNED] expected_rows={len(final_invoices)} session={record.upload_session_id}")
+                        logger.info(f"[MULTI_PDF_EXPORT_COMPLETE] session={record.upload_session_id} job_total={job_total}")
+                    
+                    logger.info(f"[PIPELINE_PARITY_CHECK] session_id='{record.upload_session_id}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} exported_dtos={len(final_invoices)} snapshot_rows={snapshot_rows} hydrated_rows={db_rows}")
+                    
+                    if not (job_total == db_rows == len(final_invoices) == snapshot_rows == db_rows):
+                        disappearance_stage = "UNKNOWN"
+                        if db_rows < job_total:
+                            disappearance_stage = "INGESTION_OR_AI_OCR"
+                        elif len(final_invoices) < db_rows:
+                            disappearance_stage = "DTO_QUALITY_GATE_FILTERING"
+                        elif snapshot_rows < len(final_invoices):
+                            disappearance_stage = "SNAPSHOT_PERSISTENCE"
+                            
+                        logger.error(f"[PIPELINE_PARITY_FAILURE] session_id='{record.upload_session_id}' mismatch detected! Stage of disappearance='{disappearance_stage}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} exported_dtos={len(final_invoices)} snapshot_rows={snapshot_rows} hydrated_rows={db_rows}")
+                except Exception as ex:
+                    logger.error(f"[SNAPSHOT_CALLBACK_FATAL] Exception in on_commit_callback: {ex} trace={traceback.format_exc()} session_id={record.upload_session_id} tenant_id={record.tenant_id} job_id={kwargs.get('job_id')} record_id={record.id}")
+
+            transaction.on_commit(on_commit_callback)
+
+        logger.info(f"[STAGING_PERSIST_COMPLETE] session={record.upload_session_id} status=SUCCESS")
+
+        total_duration = time.time() - t_assembly_start
+        metrics.record_latency("assembly:total_duration", total_duration)
+        logger.info(f"[ASSEMBLY_FINALIZED] record={record.id} pages={total_expected} duration={total_duration:.2f}s")
+        
+        logger.info(f"[PIPELINE_ROW_COUNT] count={len(final_invoices)}")
+        logger.info(f"[PIPELINE_FINAL_ROW_COUNT] count={len(final_invoices)}")
+        logger.info(f"[FINAL_SNAPSHOT_COUNT] count={len(final_invoices)}")
+        for inv in final_invoices:
+            logger.info(f"[PIPELINE_SNAPSHOT_APPEND] invoice_no='{inv.get('invoice_no')}'")
+        logger.info(f"[PIPELINE_STAGE_EXIT] stage=ASSEMBLY record={record.id} session={record.upload_session_id}")
+                
+        return {
+            "status": "SUCCESS",
+            "snapshot_id": snapshot.id,
+            "invoice_count": len(final_invoices)
+        }
+
+    except Exception as e:
+        logger.error(f"[ASSEMBLY_FATAL_ERROR] record={record.id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"status": "ERROR", "error": str(e)}
+
+def trigger_next_fanout(record_id):
+    """
+    PHASE 10: BOUNDED AI FANOUT GOVERNOR.
+    Enqueues the next batch/page of a multi-page record ONLY if 
+    the current in-flight count is below the window (MAX_AI_INFLIGHT_PER_RECORD = 5).
+    Uses total_pages_completed as a 'high-water mark' for enqueued pages.
+    """
+    try:
+        from ocr_pipeline.models import InvoiceTempOCR, SessionFinalizationState
+        from ocr_pipeline.extraction import extract_invoice
+        from django.db import transaction
+        
+        with transaction.atomic():
+            barrier = SessionFinalizationState.objects.select_for_update().get(id=str(record_id))
+            
+            # [PHASE 11.9: FANOUT_GOVERNOR_HARDENING]
+            # 1. High-water mark check: Don't enqueue beyond expected pages.
+            if barrier.total_pages_completed >= barrier.expected_pages:
+                logger.debug(f"[FANOUT_COMPLETE] record={record_id} reached limit {barrier.expected_pages}")
+                return
+
+            # 2. Sliding Window Calculation
+            # inflight = enqueued_count - completed_count
+            inflight = barrier.total_pages_completed - barrier.ai_completed_pages
+            
+            # [PHASE 11.9] Adaptive Window: Max 5 in-flight per record.
+            MAX_WINDOW = 5
+            if inflight < MAX_WINDOW:
+                # Determine how many to enqueue to fill the window
+                to_enqueue = MAX_WINDOW - inflight
+                next_start = barrier.total_pages_completed
+                remaining = barrier.expected_pages - next_start
+                batch_size = min(to_enqueue, remaining)
+                
+                if batch_size <= 0:
+                    return
+
+                logger.debug(f"[FANOUT_FILL] record={record_id} inflight={inflight} filling={batch_size} next={next_start+1}")
+                
+                record = InvoiceTempOCR.objects.get(id=record_id)
+                
+                # Enqueue the batch (usually 1 but support multiple)
+                for i in range(batch_size):
+                    page_idx = next_start + i
+                    logger.debug(f"[SLIDING_WINDOW_ENQUEUE] record={record_id} page={page_idx + 1}")
+                    
+                    extract_invoice(
+                        None, 
+                        record_id=record.id,
+                        file_path=record.file_path,
+                        wait_for_result=False,
+                        tenant_id=record.tenant_id,
+                        upload_session_id=record.upload_session_id,
+                        start_page=page_idx,
+                        limit=1 
+                    )
+            else:
+                logger.debug(f"[FANOUT_STALLED] record={record_id} window_full={inflight}")
+    except Exception as e:
+        logger.error(f"[FANOUT_GOVERNOR_ERROR] record={record_id}: {e}")
+
+
+def force_reconcile_stale_barriers():
+    """
+    [PHASE B] WATCHDOG RECONCILIATION
+    Scans for documents stuck in PROCESSING for > 20 mins and forces assembly 
+    if they have at least one terminal page.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from .models import PipelineStatus
+    
+    threshold = timezone.now() - timedelta(minutes=20)
+    stuck_records = InvoiceTempOCR.objects.filter(
+        status=PipelineStatus.PROCESSING,
+        created_at__lt=threshold
+    )
+    
+    if not stuck_records.exists():
+        return
+        
+    logger.warning(f"[WATCHDOG_SCAN] Found {stuck_records.count()} stale documents. Attempting force-reconciliation...")
+    
+    for record in stuck_records:
+        try:
+            data = record.extracted_data or {}
+            total = data.get('total_pages', 1)
+            
+            # Authoritative DB Check (Redis removed)
+            effective_count = InvoicePageResult.objects.filter(record_id=record.id).count()
+            
+            if effective_count > 0:
+                logger.critical(f"[WATCHDOG_FORCE_TRIGGER] record={record.id} terminal={effective_count}/{total}. Forcing assembly after timeout.")
+                assemble_multi_page_record(record, force=True)
+            else:
+                logger.error(f"[WATCHDOG_RECOVERY_FAIL] record={record.id} has 0 pages. Marking FAILED.")
+                record.status = PipelineStatus.FAILED
+                record.save(update_fields=['status'])
+        except Exception as e:
+            logger.error(f"[WATCHDOG_ERR] record={record.id}: {e}")
+
+
 
 def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwargs):
     """
     CORE VALIDATION FUNCTION: 
     Checks for Vendor, Duplicates, and optionally creates Voucher.
     """
-    logger.error(f"[TRACE] validate_and_process.entry | record_id={record.id} | session={record.upload_session_id} | py_id={id(record)}")
-    print("VALIDATION START:", record.id)
+    # ── [PHASE 1] SAFE INITIALIZATION ──
+    supplier = {}
+    vendor = None
+    header = {}
+    items = []
+    gstin = ""
+    invoice_no = ""
+    vendor_name = ""
+    branch_name = ""
+    
+    # [ROOT-CAUSE FIX #1] Safe Page Index Access
+    p_idx = getattr(record, "page_index", "AGGREGATE")
+    logger.error(f"[TRACE] validate_and_process.entry | record_id={record.id} | session={record.upload_session_id} | page_index={p_idx}")
+    
+    # ── [PHASE 10] FORENSIC SNAPSHOT PRESERVATION ──
+    data = record.extracted_data or {}
+    if "_forensics" not in data:
+        data["_forensics"] = {"stage": "validate_entry", "timestamp": datetime.now().isoformat()}
+    
+    record.status = 'VALIDATING'
     
     try:
         data = record.extracted_data or {}
         
         # ── MULTI-INVOICE SPLITTING ──
-        # If record contains preserved pages, we use the ZohoAdapter grouping 
-        # logic to determine if we should split this into multiple vouchers.
-        if "_pages" in data and not kwargs.get('_is_child'):
-            from .zoho_adapter import get_zoho_adapter
-            adapter = get_zoho_adapter()
-            split_invoices = adapter.reconstruct_invoices({"invoices": [record]})
+        # PHASE 6: UI STABILIZATION
+        # Only proceed with splitting if we have assembled exports and status is COMPLETED
+        if ("assembled_exports" in data or "_pages_assembled" in data) and not kwargs.get('_is_child'):
+            split_invoices = data.get("assembled_exports") or data.get("_pages_assembled")
+            
+            if not split_invoices:
+                logger.warning(f"[ASSEMBLY_NOT_READY] Record {record.id} reached split gate without exports.")
+                return {"status": "WAITING_FOR_ASSEMBLY"}
             
             if len(split_invoices) > 1:
-                logger.info(f"[PIPELINE SPLIT] Record {record.id} contains {len(split_invoices)} invoices. Creating separate vouchers.")
+                logger.info(f"[DB_SPLIT_START] Record {record.id} contains {len(split_invoices)} independent invoices. Exploding into separate records.")
                 results = []
+                original_hash = record.file_hash
+                session_id = record.upload_session_id
+                tenant_id = record.tenant_id
+                
                 for i, inv_data in enumerate(split_invoices):
-                    # For each split invoice, we must update the top-level DB columns 
-                    # (gstin, invoice_no, etc.) so the staging UI reflects the correct data.
-                    sections = inv_data.get('sections', {})
-                    supplier = sections.get('supplier_details', {})
+                    header = inv_data.get('header', {}) or inv_data.get('sections', {}).get('supplier_details', {}) or {}
+                    inv_no = header.get('invoice_no') or header.get('supplier_invoice_no') or inv_data.get('invoice_no')
+                    gstin = header.get('vendor_gstin') or header.get('gstin') or inv_data.get('gstin')
+                    branch = header.get('branch') or inv_data.get('branch')
+                    
+                    # ── [PHASE 4] SPLIT CHILD ISOLATION ──
+                    inv_data = copy.deepcopy(inv_data)
+                    if "_pages" in inv_data: del inv_data["_pages"]
                     
                     if i == 0:
-                        # Update the original record as the first invoice
+                        logger.info(f"[DB_PARENT_UPDATE] record={record.id} inv_no='{inv_no}'")
                         record.extracted_data = inv_data
-                        record.supplier_invoice_no = supplier.get('supplier_invoice_no')
-                        record.gstin = supplier.get('gstin')
-                        record.branch = supplier.get('branch')
+                        record.supplier_invoice_no = inv_no
+                        record.gstin = gstin
+                        record.branch = branch
+                        record.is_primary = True 
+                        
+                        # ── [SESSION_FORENSIC] ──
+                        logger.info(f"[SESSION_FORENSIC] stage='split_parent_sync' record={record.id} session={session_id}")
+                        assert str(record.upload_session_id) == str(session_id), "CRITICAL: Parent session mismatch during split"
+                        
                         record.save()
+                        
                         results.append(validate_and_process(record, auto_save=auto_save, _is_child=True))
                     else:
-                        # Create a new sibling record for subsequent invoices
                         import hashlib
                         # Generate a unique hash for the child to avoid DB unique constraints
-                        # while keeping the original hash as a reference if needed.
-                        child_hash = hashlib.sha256(f"{record.file_hash}_split_{i}_{record.upload_session_id}".encode()).hexdigest()
+                        child_hash = hashlib.sha256(f"{original_hash}_split_{i}_{session_id}".encode()).hexdigest()
                         
-                        child = InvoiceTempOCR.objects.create(
-                            tenant_id=record.tenant_id,
-                            upload_session_id=record.upload_session_id,
-                            file_path=record.file_path,
-                            file_hash=child_hash, # MUST BE UNIQUE for DB constraint
-                            voucher_type=record.voucher_type,
-                            extracted_data=inv_data,
-                            supplier_invoice_no=supplier.get('supplier_invoice_no'),
-                            gstin=supplier.get('gstin'),
-                            branch=supplier.get('branch'),
-                            status='EXTRACTED'
-                        )
-                        results.append(validate_and_process(child, auto_save=auto_save, _is_child=True))
-                return results[0]
+                        logger.info(f"[DB_CHILD_PERSIST] record={record.id} i={i} inv_no='{inv_no}' hash={child_hash[:8]}...")
+                        try:
+                            child, created = InvoiceTempOCR.objects.update_or_create(
+                                file_hash=child_hash,
+                                tenant_id=tenant_id,
+                                defaults={
+                                    'upload_session_id': session_id,
+                                    'file_path': record.file_path,
+                                    'voucher_type': record.voucher_type,
+                                    'extracted_data': inv_data,
+                                    'supplier_invoice_no': inv_no,
+                                    'gstin': gstin,
+                                    'branch': branch,
+                                    'is_primary': True, # MUST be primary to show in UI independently
+                                    'status': 'EXTRACTED'
+                                }
+                            )
+                            
+                            logger.info(
+                                f"[SESSION_TRACE_SIBLING] id={child.id} created={created} "
+                                f"parent={record.id} session={session_id} inv_no='{inv_no}'"
+                            )
+                            # ── [SESSION_FORENSIC] ──
+                            logger.info(f"[SESSION_FORENSIC] stage='split_child_sync' record={child.id} session={session_id}")
+                            assert str(child.upload_session_id) == str(session_id), f"CRITICAL: Child session mismatch {child.upload_session_id} != {session_id}"
+                            
+                            # ── [PHASE 6] VALIDATION SAFETY WRAPPER ──
+                            try:
+                                results.append(validate_and_process(child, auto_save=auto_save, _is_child=True))
+                            except Exception as child_err:
+                                logger.exception(f"[CHILD_VALIDATION_CRASH] id={child.id} error={child_err}")
+                                child.status = 'ERROR'
+                                child.validation_status = 'ERROR'
+                                child.validation_message = f"Validation Crash: {str(child_err)}"
+                                child.save()
+                                continue
+                        except Exception as e:
+                            logger.error(f"[DB_CHILD_PERSIST_FAILED] i={i} error={str(e)}")
+                            continue
+                
+                # FINAL DB VERIFICATION QUERY
+                final_queryset = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id)
+                final_ids = list(final_queryset.values_list('id', flat=True))
+                logger.info(f"[DB_FINAL_QUERYSET] session={session_id} total_count={len(final_ids)} ids={final_ids}")
+                
+                logger.info(f"[PIPELINE SPLIT COMPLETE] Record {record.id} successfully exploded into {len(results)} sibling records.")
+                record.status = 'SPLIT_COMPLETE'
+                record.save(update_fields=['status'])
+                return results[0] if results else {"status": "SUCCESS"}
 
+        # ── CANONICAL FIELD ACCESS (Fix 1 & 2) ──
         sections = data.get("sections", {})
         supplier = sections.get("supplier_details", {})
         supply = sections.get("supply_details", {})
         due = sections.get("due_details", {})
-        items = sections.get("items", [])
-
-        gstin = (supplier.get("gstin") or "").strip().upper()
-        invoice_no = (supplier.get("supplier_invoice_no") or "").strip()
-        vendor_name = (supplier.get("vendor_name") or "").strip()
+        
+        canonical = get_canonical_export_record(data)
+        gstin = (canonical.get("gstin") or "").strip().upper()
+        invoice_no = (canonical.get("supplier_invoice_no") or canonical.get("invoice_no") or "").strip()
+        vendor_name = (canonical.get("vendor_name") or "").strip()
+        branch_name = (canonical.get("branch") or record.branch or "").strip()
         tenant_id = str(record.tenant_id)
 
-        print("GSTIN:", gstin)
-        print("INVOICE:", invoice_no)
+        logger.debug(f"[VALIDATION_IDENTITY] gstin={gstin} invoice={invoice_no}")
+
+        # ── [PHASE 3] STAGING PERSISTENCE SAFETY ──
+        items = canonical.get("items", [])
+        if not items:
+            # [ROOT-CAUSE FIX #6] Never Drop Invoices
+            logger.warning(f"[INVOICE_WARNING_EMPTY_ITEMS] invoice={invoice_no} record={record.id}. Proceeding with warning state.")
+            record.validation_status = "REQUIRES_REVIEW"
+            record.validation_message = "Warning: No line items detected. Please verify OCR data."
+        else:
+            logger.info(f"[INVOICE_VISIBLE_TO_UI] record_id={record.id} inv_no='{invoice_no}' items={len(items)} status={record.status}")
 
         if not gstin or not invoice_no:
+            # [ROOT-CAUSE FIX #2 & #5] Never Drop Invoices
+            logger.warning(f"[INVOICE_WARNING_MISSING_HEADERS] invoice={invoice_no} record={record.id}. Missing GSTIN or Invoice No.")
             record.validation_status = "ERROR"
-            record.validation_message = "Missing GSTIN or Invoice Number"
-            record.save()
-            print("FINAL STATUS: ERROR (Missing headers)")
-            return {"status": "ERROR"}
+            record.validation_message = "Warning: Missing GSTIN or Invoice Number. Please verify OCR data."
+            # Proceed anyway so it shows in UI
+        
+        # Save record now to ensure visibility even if vendor matching fails
+        record.save()
+        logger.info(f"[INVOICE_VISIBLE_TO_UI] record_id={record.id} inv_no='{invoice_no}' status={record.status}")
 
         # 🔹 FAST PATH: If vendor was already matched (vendor_id stored from PATCH re-validation)
         # and the status confirms it, skip the full GSTIN+branch lookup to avoid false NEED_VENDOR
@@ -266,7 +1320,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         if record.vendor_id and record.validation_status in ['FOUND', 'READY', 'RESOLVED', 'MATCHED_VENDOR', 'EXISTING_VENDOR']:
             try:
                 vendor = VendorMasterBasicDetail.objects.get(id=record.vendor_id, tenant_id=tenant_id)
-                print(f"FAST PATH: Using stored vendor_id={record.vendor_id} for {vendor.vendor_name}")
+                logger.debug(f"[VOUCHER_FAST_PATH] vendor_id={record.vendor_id} name={vendor.vendor_name}")
             except VendorMasterBasicDetail.DoesNotExist:
                 vendor = None
         else:
@@ -280,7 +1334,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                     record.vendor_id = vendor.id
                     record.validation_status = 'FOUND' # Maintain compatibility with existing UI
                     record.save()
-                print(f"STRICT MATCH FOUND: {vendor.vendor_name if vendor else 'Unknown'}")
+                logger.info(f"[VENDOR_STRICT_MATCH] {vendor.vendor_name if vendor else 'Unknown'}")
             else:
                 vendor = None
 
@@ -293,12 +1347,12 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             vendor_name__iexact=vendor_name,
             tenant_id=tenant_id
         ).exists()
-        print("DUPLICATE CHECK:", is_duplicate)
+        logger.debug(f"[DUPLICATE_AUDIT] is_duplicate={is_duplicate}")
 
         if is_duplicate:
             record.validation_status = "DUPLICATE"
             record.save()
-            print("FINAL STATUS: DUPLICATE")
+            logger.warning(f"[FINAL_STATUS] DUPLICATE id={record.id}")
             # We still want to check if the vendor exists to show correct 'Vendor Status' in UI
             # But the primary pipeline status for the row becomes DUPLICATE
             from vendors.vendor_validation_logic import validate_vendor
@@ -332,7 +1386,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         if not auto_save:
             record.validation_status = "READY"
             record.save()
-            print("FINAL STATUS: READY (Waiting for manual finalization)")
+            logger.info(f"[FINAL_STATUS] READY record={record.id}")
             return {"status": "READY"}
 
         # Using the Pipeline 2 logic refined earlier
@@ -450,9 +1504,10 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             record.voucher_id = voucher_main.id
             record.processed = True
             logger.info(f"Saving record {record.id}: status={record.status}, validation_status={record.validation_status}, vendor_id={record.vendor_id}, voucher_id={record.voucher_id}, processed={record.processed}")
-            record.save(update_fields=['status', 'validation_status', 'vendor_id', 'voucher_id', 'processed'])
+            # Ensure all split fields (invoice_no, gstin, etc) are persisted
+            record.save()
             
-            print(f"FINAL STATUS: VOUCHER_CREATED (Voucher={voucher_main.id})")
+            logger.info(f"[FINAL_STATUS] VOUCHER_CREATED id={record.id} voucher={voucher_main.id}")
             return {"status": "VOUCHER_CREATED", "voucher_id": voucher_main.id}
 
     except Exception as e:
@@ -460,5 +1515,122 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         record.validation_status = "ERROR"
         record.validation_message = str(e)
         record.save()
-        print("FINAL STATUS: ERROR (Exception)")
+        logger.error(f"[FINAL_STATUS] ERROR record={record.id} exc={str(e)[:200]}")
         return {"status": "ERROR"}
+
+def resolve_storage_path(record) -> str:
+    """
+    [PHASE 11.9] Filesystem Path Resolution Hardening
+    Ensures storage keys are deterministically converted to absolute filesystem paths.
+    """
+    from core.storage import StorageService
+    from django.conf import settings
+    import uuid
+    
+    storage = StorageService()
+    storage_key = record.file_path
+    logger.info(f"[FILE_RESOLVE_START] record={record.id} key={storage_key}")
+    
+    if storage.s3 and storage.bucket:
+        temp_dir = os.path.join(settings.BASE_DIR, 'scratch')
+        os.makedirs(temp_dir, exist_ok=True)
+        abs_path = os.path.abspath(os.path.join(temp_dir, f'temp_{uuid.uuid4().hex[:8]}.pdf'))
+        try:
+            storage.download_to_file(storage_key, abs_path)
+        except Exception as e:
+            logger.error(f"[FILE_RESOLVE_FAIL] record={record.id} key={storage_key} error={e}")
+            raise FileNotFoundError(f"S3 download failed for {storage_key}: {e}")
+    else:
+        clean_key = storage_key
+        if "://" in storage_key:
+            clean_key = storage_key.split("://", 1)[1]
+            
+        prefixes = ["/media/ocr_storage/", "/media/bulk_pipeline/", "media/ocr_storage/", "media/bulk_pipeline/"]
+        for p in prefixes:
+            if clean_key.startswith(p):
+                clean_key = clean_key[len(p):]
+                break
+                
+        # Try all known local storage roots
+        possible_paths = [
+            os.path.abspath(os.path.join(settings.MEDIA_ROOT, clean_key.replace('/', os.sep))),
+            os.path.abspath(os.path.join(settings.MEDIA_ROOT, 'bulk_pipeline', clean_key.replace('/', os.sep))),
+            os.path.abspath(os.path.join(storage.local_root, clean_key.replace('/', os.sep)))
+        ]
+        
+        abs_path = None
+        for p in possible_paths:
+            if os.path.exists(p):
+                abs_path = p
+                break
+                
+        if not abs_path:
+            # If all fail, use the primary MEDIA_ROOT for the error log
+            abs_path = possible_paths[0]
+
+    if not os.path.exists(abs_path):
+        logger.error(f"[FILE_RESOLVE_FAIL] record={record.id} key={storage_key} resolved_to={abs_path}")
+        logger.error(f"[MEDIA_ROOT_DEBUG] MEDIA_ROOT={settings.MEDIA_ROOT} CWD={os.getcwd()}")
+        raise FileNotFoundError(f"no such file: '{storage_key}' (resolved to {abs_path})")
+
+    logger.info(f"[FILE_RESOLVE_SUCCESS] record={record.id}")
+    logger.info(f"[OCR_INPUT_PATH] record={record.id} path={abs_path}")
+    return abs_path
+
+def process_invoice_upload_sync(task: dict):
+    """
+    Synchronous bridge for IngestionWorker.
+    Fetches record and initiates the unified pipeline with wait_for_ai=False.
+    """
+    # [PHASE 11.5] Unwrap canonical payload if present
+    payload = task.get('payload', task)
+    record_id = payload.get('record_id')
+    logger.info(f"[SYNC_INGESTION_START] record={record_id}")
+    
+    try:
+        if not record_id:
+            logger.error("[INGESTION_RECORD_MISSING] No record_id provided in task payload.")
+            return False
+
+        record = InvoiceTempOCR.objects.get(id=record_id)
+        
+        if not record.file_path:
+            logger.error(f"[INGESTION_FAIL] No file_path for record={record_id}")
+            record.status = 'FAILED'
+            record.save(update_fields=['status'])
+            return False
+            
+        # [PHASE 11.9] Harden File Resolution
+        try:
+            abs_file_path = resolve_storage_path(record)
+        except FileNotFoundError as e:
+            logger.error(f"[PIPELINE_TERMINAL_FAILURE] {e}")
+            record.status = 'FAILED'
+            record.save(update_fields=['status'])
+            return False
+            
+        # Call the unified pipeline
+        result = run_ocr_pipeline(
+            record=record,
+            wait_for_ai=False, # Trigger async fanout
+            job_id=task.get('job_id'),
+            file_path=abs_file_path
+        )
+        
+        # [PHASE 11.9] Check for Terminal Pipeline Failures
+        if result.get("validation", {}).get("status") == "ERROR":
+             logger.error(f"[INGESTION_FAIL] run_ocr_pipeline returned ERROR for record={record.id}")
+             return False
+             
+        return True
+        
+    except InvoiceTempOCR.DoesNotExist:
+        logger.error(f"[INGESTION_FAIL] Record {record_id} not found.")
+        return False
+    except Exception as e:
+        logger.error(f"[INGESTION_EXCEPTION] record={record_id} error={e}", exc_info=True)
+        if 'record' in locals():
+            record.status = 'FAILED'
+            record.save(update_fields=['status'])
+        return False
+

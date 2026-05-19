@@ -206,6 +206,17 @@ class HttpClient {
         });
     }
 
+    /** 
+     * Post to external URL (like S3) without adding Authorization headers 
+     * PHASE 4: DIRECT S3 UPLOAD.
+     */
+    public async postExternal<T>(url: string, data: any, config?: AxiosRequestConfig): Promise<T> {
+        // Create a clean axios instance for external calls
+        const externalClient = axios.create();
+        const response = await externalClient.post<T>(url, data, config);
+        return response.data;
+    }
+
     // --- MANAGEMENT ---
     public logout() {
         clearTokens();

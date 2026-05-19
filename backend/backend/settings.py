@@ -60,6 +60,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'core.middleware.CorrelationIDMiddleware', # FIRST for tracing
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware', # Add Whitenoise
@@ -139,8 +140,11 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+
+# Authoritative root for the OCR pipeline storage (Phase 4 Unification)
+OCR_STORAGE_ROOT = str(MEDIA_ROOT / 'bulk_pipeline')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -272,7 +276,9 @@ SPECTACULAR_SETTINGS = {
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Cache Configuration - Cleaned (Redis removed)
+# Redis decommissioned (Phase 4)
+
+# Cache Configuration - Pure DB/Local Memory (Redis Decommissioned)
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -280,15 +286,18 @@ CACHES = {
     }
 }
 
-# Celery Configuration
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+# Celery Broker (Decommissioned or moved to SQS)
+# CELERY_BROKER_URL = os.getenv('SQS_BROKER_URL')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+# Production: Ensure queue durability
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
 
 # ============================================================================
 # BULK PROCESSING PIPELINE SETTINGS
@@ -376,19 +385,15 @@ LOGGING = {
         },
         'file_error': {
             'level': 'ERROR',
-            'class': 'logging.handlers.RotatingFileHandler',
+            'class': 'logging.FileHandler',
             'filename': os.path.join(LOGS_DIR, 'error.log'),
-            'maxBytes': 1024 * 1024 * 50,  # 50 MB
-            'backupCount': 5,
             'formatter': 'verbose',
             'encoding': 'utf-8',
         },
         'file_debug': {
             'level': 'DEBUG',
-            'class': 'logging.handlers.RotatingFileHandler',
+            'class': 'logging.FileHandler',
             'filename': os.path.join(LOGS_DIR, 'debug.log'),
-            'maxBytes': 1024 * 1024 * 50,  # 50 MB
-            'backupCount': 5,
             'formatter': 'verbose',
             'encoding': 'utf-8',
         },
@@ -446,3 +451,9 @@ MIGRATION_MODULES = {}
 # BANK RECONCILIATION SETTINGS
 # ============================================================================
 BANK_MATCH_TOLERANCE = 1
+
+# ============================================================================
+# MEDIA FILES (Local storage for dev when S3 is not configured)
+# ============================================================================
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'

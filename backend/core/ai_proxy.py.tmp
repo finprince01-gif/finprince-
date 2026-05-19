@@ -1,0 +1,248 @@
+import os
+import json
+import re
+import base64
+import time
+import hashlib
+import logging
+import threading
+import queue
+from typing import Dict, Any, Optional
+from django.core.cache import cache
+from django.conf import settings
+from google.api_core import exceptions
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
+
+# Ensure environment variables are loaded (especially for GEMINI_API_KEY)
+load_dotenv(override=True)
+
+logger = logging.getLogger(__name__)
+
+def safe_extract_json(text: str) -> Optional[str]:
+    """
+    Production-grade JSON extractor.
+    - Handles ```json ... ``` blocks
+    - Handles ``` ... ``` blocks
+    - Handles plain JSON text
+    - Locates boundaries by brace counting
+    - Sanitizes control characters
+    """
+    if not text:
+        return None
+        
+    # Remove potentially dangerous control characters except common whitespace
+    text = "".join(ch for ch in text if ch >= " " or ch in "\n\r\t")
+    
+    clean_text = text.strip()
+    
+    # 1. Standard markdown extract
+    if "```json" in clean_text:
+        try:
+            clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+        except IndexError:
+            pass
+    elif "```" in clean_text:
+        try:
+            clean_text = clean_text.split("```")[1].split("```")[0].strip()
+        except IndexError:
+            pass
+            
+    # 2. Brace-based boundary detection (if it's not already just a JSON string)
+    if not (clean_text.startswith('{') and (clean_text.endswith('}') or clean_text.endswith(']'))):
+        start = clean_text.find('{')
+        if start == -1:
+            start = clean_text.find('[')
+            
+        if start != -1:
+            brace_count = 0
+            bracket_count = 0
+            for i in range(start, len(clean_text)):
+                char = clean_text[i]
+                if char == '{': brace_count += 1
+                elif char == '}': brace_count -= 1
+                elif char == '[': bracket_count += 1
+                elif char == ']': bracket_count -= 1
+                
+                if brace_count == 0 and bracket_count == 0:
+                    return clean_text[start:i+1].strip()
+    
+    return clean_text if (clean_text.startswith('{') or clean_text.startswith('[')) else None
+
+def repair_json(text: str) -> str:
+    """
+    Emergency JSON repair layer for common LLM hallucinations.
+    Handles:
+    - Smart quotes
+    - Trailing commas
+    - Missing closing braces/brackets
+    - Unquoted keys (basic)
+    - Unicode/Control character cleanup
+    """
+    if not text: return ""
+    
+    # 1. Replace smart quotes and common unicode noise
+    repaired = text.replace('“', '"').replace('”', '"').replace('‘', "'").replace('’', "'")
+    repaired = repaired.replace('\u201c', '"').replace('\u201d', '"') # Unicode smart quotes
+    
+    # 2. Fix trailing commas in objects and arrays
+    repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+    
+    # 3. Fix potential single quotes used as double quotes for keys
+    if re.search(r"'\w+'\s*:", repaired):
+        repaired = re.sub(r"'(\w+)'\s*:", r'"\1":', repaired)
+    
+    # 4. Brace/Bracket balancing (Level 3 Repair)
+    brace_diff = repaired.count('{') - repaired.count('}')
+    if brace_diff > 0:
+        logger.info(f"[PARSER_REPAIR] Adding {brace_diff} missing closing braces")
+        repaired += ('}' * brace_diff)
+        
+    bracket_diff = repaired.count('[') - repaired.count(']')
+    if bracket_diff > 0:
+        logger.info(f"[PARSER_REPAIR] Adding {bracket_diff} missing closing brackets")
+        repaired += (']' * bracket_diff)
+        
+    return repaired
+
+class APIKeyManager:
+    """Rotates through multiple Gemini API keys and tracks health"""
+
+    def __init__(self):
+        self.api_keys = []
+        self.unhealthy_keys = set()
+        self.rotation_counter = 0
+        self.recheck_interval = 600  # 10 minutes
+        self._sync_keys()
+
+    def _sync_keys(self):
+        """Read keys from environment"""
+        raw_keys = os.getenv('GEMINI_API_KEY', '')
+        if not raw_keys:
+            self.api_keys = []
+            return
+
+        # Support comma-separated keys
+        self.api_keys = [k.strip() for k in raw_keys.split(',') if k.strip()]
+        logger.info(f"Initialized API Key Manager with {len(self.api_keys)} keys")
+
+    def get_healthy_key(self) -> Optional[str]:
+        """Get next healthy API key with round-robin rotation"""
+        self._sync_keys()
+        if not self.api_keys:
+            return None
+
+        # Skip unhealthy keys
+        healthy_keys = [k for k in self.api_keys if k not in self.unhealthy_keys]
+
+        keys_to_use = healthy_keys if healthy_keys else self.api_keys  # Fall back to unhealthy if no healthy available
+
+        if healthy_keys:
+            # Use in-memory counter for round-robin
+            self.rotation_counter += 1
+            key_index = self.rotation_counter % len(healthy_keys)
+            selected_key = healthy_keys[key_index]
+            return selected_key
+
+        # Fallback when no healthy keys
+        return keys_to_use[0] if keys_to_use else None
+
+    def mark_key_unhealthy(self, api_key: str):
+        """Mark a key as unhealthy"""
+        self.unhealthy_keys.add(api_key)
+        logger.warning(f"Marked API key {api_key[:10]}... as unhealthy")
+
+        # Schedule recheck
+        threading.Timer(self.recheck_interval, lambda: self._recheck_key(api_key)).start()
+
+    def _recheck_key(self, api_key: str):
+        """Recheck if an unhealthy key is now healthy"""
+        # Try a simple request to see if key works
+        client = genai.Client(api_key=api_key)
+        try:
+            # Try 2.0-flash as current stable check
+            client.models.generate_content(model='gemini-2.0-flash', contents="test")
+            self.unhealthy_keys.discard(api_key)
+            logger.info(f"Rechecked API key {api_key[:10]}... - now healthy")
+        except Exception:
+            logger.warning(f"API key {api_key[:10]}... still unhealthy")
+
+
+class CircuitBreaker:
+    """Circuit breaker to stop requests when provider is failing"""
+
+    def __init__(self):
+        self.failure_threshold = 5  # Failures per minute
+        self.reset_timeout = 300  # 5 minutes
+
+        # In-memory state
+        self.failures = 0
+        self.last_failure = 0
+
+    def is_open(self) -> bool:
+        """Check if circuit breaker is open (blocking requests)"""
+        now = time.time()
+        if self.failures >= self.failure_threshold:
+            if now - self.last_failure < self.reset_timeout:
+                return True
+            else:
+                # Reset failures
+                self.failures = 0
+                self.last_failure = 0
+        return False
+
+    def record_failure(self):
+        """Record a failure"""
+        self.failures += 1
+        self.last_failure = time.time()
+
+    def record_success(self):
+        """Record a success to potentially close circuit"""
+        if self.failures > 0:
+            self.failures -= 1
+
+
+class RateLimiter:
+    """No-op rate limiter (Redis dependency removed)."""
+    def __init__(self, max_rps=5):
+        pass
+
+    def check_rate_limit(self, key: str, limit: int = None, window: float = 1.0) -> Dict[str, Any]:
+        return {'allowed': True, 'retry_after': 0}
+
+class DistributedConcurrencyManager:
+    """
+    Local-only concurrency manager (Redis dependency removed).
+    Enforces concurrency per process.
+    """
+    def __init__(self, max_concurrent=20):
+        self.max_concurrent = max_concurrent
+        self._current = 0
+
+    def acquire_permit(self, tenant_id: str = "global") -> bool:
+        if self._current >= self.max_concurrent:
+            return False
+        self._current += 1
+        return True
+
+    def release_permit(self, tenant_id: str = "global"):
+        if self._current > 0:
+            self._current -= 1
+
+# Global instances
+api_key_manager = APIKeyManager()
+circuit_breaker = CircuitBreaker()
+rate_limiter = RateLimiter()
+concurrency_governor = DistributedConcurrencyManager(max_concurrent=int(os.getenv('AI_GLOBAL_CONCURRENCY', '20')))
+
+# AIRequestQueue is DEPRECATED and removed to eliminate Redis dependency.
+
+def validate_ai_on_startup() -> bool:
+    """Verify AI model availability. Resilience: Does NOT block on temporary cooldown."""
+    api_key_manager._sync_keys()
+    if not api_key_manager.api_keys:
+        logger.error("AI Startup check failed: No Gemini API keys found in environment.")
+        return False
+    
+    return True

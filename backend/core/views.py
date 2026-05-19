@@ -98,66 +98,16 @@ class AgentMessageView(views.APIView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def ai_metrics(request):
-    """Get comprehensive AI service metrics for monitoring"""
+    """Get AI service metrics (Redis removed)"""
     stats = ai_service.get_stats()
-
-    # Add additional metrics
-    import redis  # type: ignore
-    redis_client = redis.from_url(os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0'))
-
-    # Calculate real-time metrics
-    now = timezone.now().timestamp()
-    five_min_ago = now - 300
-
-    total_requests_5min = redis_client.zcount('ai_requests', five_min_ago, now)
-    successful_requests_5min = redis_client.zcount('ai_successes', five_min_ago, now)
-    failed_requests_5min = redis_client.zcount('ai_failures', five_min_ago, now)
-    rate_limited_requests_5min = redis_client.zcount('rate_limited', five_min_ago, now)
-    provider_429_5min = redis_client.zcount('provider_429', five_min_ago, now)
-
-    # Cost tracking (simulated)
-    cost_per_request = 0.0001  # $0.0001 per request (adjust based on actual Gemini pricing)
-    estimated_cost_5min = successful_requests_5min * cost_per_request
-
-    enhanced_stats = {
+    return Response({
         **stats,
         'metrics_5min': {
-            'total_requests': total_requests_5min,
-            'successful_requests': successful_requests_5min,
-            'failed_requests': failed_requests_5min,
-            'rate_limited_requests': rate_limited_requests_5min,
-            'provider_429_errors': provider_429_5min,
-            'success_rate_percent': (successful_requests_5min / max(total_requests_5min, 1)) * 100,
-            'estimated_cost_usd': estimated_cost_5min
-        },
-        'alerts': {
-            'high_429_rate': provider_429_5min > 50,  # More than 50 429s in 5 min
-            'queue_too_deep': stats.get('queue_size', 0) > 20,
-            'low_success_rate': ((successful_requests_5min / max(total_requests_5min, 1)) * 100) < 95
+            'status': 'Redis metrics removed - check observability logs'
         }
-    }
-
-    return Response(enhanced_stats)
+    })
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def ai_job_status(request, job_id):
-    """Poll for the result of an asynchronous AI task"""
-    from core.redis_client import redis_client
-    import json
-    
-    result_key = f"ai_result:{job_id}"
-    res = redis_client.get_client().get(result_key)
-    
-    if res:
-        # Task completed
-        data = json.loads(res)
-        # We can delete the key now that it's consumed
-        redis_client.get_client().delete(result_key)
-        return Response(data)
-        
-    return Response({'status': 'processing'}, status=202)
 
 
 @api_view(['GET'])

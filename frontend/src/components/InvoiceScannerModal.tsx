@@ -10,8 +10,8 @@ import {
     validateStructuralIntegrity,
     coerceRow,
     saveVendorTemplate,
-    // Official Tally Voucher headers — isolated in tallyVoucherSchema.ts
-    // SCOPE: Upload Invoices → Tally → Voucher ONLY
+    // Official Tally Voucher headers â€” isolated in tallyVoucherSchema.ts
+    // SCOPE: Upload Invoices â†’ Tally â†’ Voucher ONLY
     OFFICIAL_TALLY_VOUCHER_HEADERS,
     VOUCHER_COLUMN_SCHEMAS,
     type IngestionReport,
@@ -20,12 +20,13 @@ import {
 } from '../services/mappingEngine';
 import { getVoucherSchema, getVoucherFlatHeaders, type VoucherSchema, type SchemaField } from '../configs/schemaConfig';
 import CreateVendorModal from './CreateVendorModal';
+import Icon from './Icon';
 
 import { getXLSX } from '../utils/xlsx';
 
-// ────────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Types
-// ────────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface LineItem {
     [key: string]: string;
@@ -37,7 +38,7 @@ interface InvoiceResult {
     headerMapping: Record<string, string>;
     itemMapping: Record<string, string>;
     report?: IngestionReport;
-    /** id column from invoice_ocr_temp — present when result was served from cache or freshly saved */
+    /** id column from invoice_ocr_temp â€” present when result was served from cache or freshly saved */
     cacheRecordId?: number | null;
     /** hash to track and deduplicate bulk results */
     file_hash?: string;
@@ -53,9 +54,9 @@ interface InvoiceScannerModalProps {
     onExtractionSuccess?: (extractedData: any) => void;
 }
 
-// ────────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Local coercion helper (used in CSV/Excel path; heavy logic lives in mappingEngine.ts)
-// ────────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const coerceNumber = (val: any): string => {
     if (val === undefined || val === null) return '';
@@ -64,7 +65,7 @@ const coerceNumber = (val: any): string => {
     return isNaN(num) ? '' : String(num);
 };
 
-// ─── Risk Dashboard Component ──────────────────────────────────────────────────
+// â”€â”€â”€ Risk Dashboard Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const RiskBadge: React.FC<{ level: 'Low' | 'Medium' | 'High' }> = ({ level }) => {
     const styles = {
@@ -72,7 +73,7 @@ const RiskBadge: React.FC<{ level: 'Low' | 'Medium' | 'High' }> = ({ level }) =>
         Medium: 'bg-amber-100 text-amber-800 border border-amber-300',
         High: 'bg-red-100 text-red-800 border border-red-300',
     };
-    const icons = { Low: '✅', Medium: '⚠️', High: '🚨' };
+    const icons = { Low: 'âœ…', Medium: 'âš ï¸', High: 'ðŸš¨' };
     return (
         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${styles[level]}`}>
             {icons[level]} {level} Risk
@@ -96,10 +97,10 @@ const IngestionDashboard: React.FC<{
                 {/* Header */}
                 <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
                     <div className="flex items-center gap-3">
-                        <span className="text-2xl">📊</span>
+                        <span className="text-2xl">ðŸ“Š</span>
                         <div>
                             <h2 className="text-lg font-bold text-gray-900">Ingestion Risk Report</h2>
-                            <p className="text-xs text-gray-500">Schema v{report.schemaVersion} · {new Date(report.timestamp).toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">Schema v{report.schemaVersion} Â· {new Date(report.timestamp).toLocaleString()}</p>
                         </div>
                     </div>
                     <RiskBadge level={report.riskLevel} />
@@ -121,11 +122,11 @@ const IngestionDashboard: React.FC<{
                     {/* Block Reasons */}
                     {report.blockSubmission && (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                            <h3 className="font-semibold text-red-800 mb-2">🚫 Submission Blocked</h3>
+                            <h3 className="font-semibold text-red-800 mb-2">ðŸš« Submission Blocked</h3>
                             <ul className="space-y-1">
                                 {report.blockReasons.map((r, i) => (
                                     <li key={i} className="text-sm text-red-700 flex items-start gap-2">
-                                        <span className="mt-0.5">•</span> {r}
+                                        <span className="mt-0.5">â€¢</span> {r}
                                     </li>
                                 ))}
                             </ul>
@@ -135,16 +136,16 @@ const IngestionDashboard: React.FC<{
                     {/* Financial Validation */}
                     {(errors.length > 0 || warnings.length > 0) && (
                         <div>
-                            <h3 className="font-semibold text-gray-800 mb-2">💰 Financial Integrity</h3>
+                            <h3 className="font-semibold text-gray-800 mb-2">ðŸ’° Financial Integrity</h3>
                             <div className="space-y-1.5">
                                 {[...errors, ...warnings].map((v, i) => (
                                     <div key={i} className={`flex items-start gap-2 text-xs px-3 py-2 rounded border
                                         ${v.severity === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                                        <span>{v.severity === 'error' ? '❌' : '⚠️'}</span>
+                                        <span>{v.severity === 'error' ? 'âŒ' : 'âš ï¸'}</span>
                                         <div>
                                             <span className="font-medium">{v.rule}</span>
                                             {v.expected !== undefined && (
-                                                <span className="ml-2">Expected {v.expected?.toFixed(2)} · Got {v.actual?.toFixed(2)} · Δ {v.discrepancy?.toFixed(2)}</span>
+                                                <span className="ml-2">Expected {v.expected?.toFixed(2)} Â· Got {v.actual?.toFixed(2)} Â· Î” {v.discrepancy?.toFixed(2)}</span>
                                             )}
                                         </div>
                                     </div>
@@ -155,7 +156,7 @@ const IngestionDashboard: React.FC<{
 
                     {/* Mapping Table */}
                     <details className="border rounded-lg overflow-hidden" open>
-                        <summary className="px-4 py-2 bg-gray-50 font-semibold text-sm cursor-pointer">🗺️ Mapping Decisions ({report.mappedFields.length})</summary>
+                        <summary className="px-4 py-2 bg-gray-50 font-semibold text-sm cursor-pointer">ðŸ—ºï¸ Mapping Decisions ({report.mappedFields.length})</summary>
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-xs divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
@@ -189,7 +190,7 @@ const IngestionDashboard: React.FC<{
                     {report.unmappedFields.length > 0 && (
                         <details className="border border-amber-200 rounded-lg overflow-hidden bg-amber-50/30">
                             <summary className="px-4 py-2 bg-amber-50 font-semibold text-sm text-amber-800 cursor-pointer">
-                                ⚠️ Unmapped Fields ({report.unmappedFields.length})
+                                âš ï¸ Unmapped Fields ({report.unmappedFields.length})
                             </summary>
                             <div className="px-4 py-3 flex flex-wrap gap-2">
                                 {report.unmappedFields.map(f => (
@@ -206,7 +207,7 @@ const IngestionDashboard: React.FC<{
                             <div className="px-4 py-3 space-y-1">
                                 {report.collisionsRejected.map((c, i) => (
                                     <p key={i} className="text-xs text-gray-600">
-                                        <span className="text-red-500 font-medium">[REJECTED]</span> {c.source} → {c.target} (score {c.score})
+                                        <span className="text-red-500 font-medium">[REJECTED]</span> {c.source} â†’ {c.target} (score {c.score})
                                     </p>
                                 ))}
                             </div>
@@ -242,7 +243,7 @@ const IngestionDashboard: React.FC<{
                                 ${(confirmRequired && !agreed)
                                     ? 'bg-gray-400 cursor-not-allowed'
                                     : 'bg-emerald-600 hover:bg-emerald-700'}`}>
-                            ✅ Confirm & Upload
+                            âœ… Confirm & Upload
                         </button>
                     )}
                 </div>
@@ -280,27 +281,13 @@ const MethodBadge: React.FC<{ method: MappingDecision['method'] }> = ({ method }
 };
 
 
-const Icon: React.FC<{ name: string; className?: string }> = ({ name, className = '' }) => {
-    const icons: Record<string, string> = {
-        upload: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12',
-        download: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
-        x: 'M6 18L18 6M6 6l12 12',
-        file: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-        spinner: 'M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z',
-        'check-circle': 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
-    };
-    return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons[name] || icons.file} />
-        </svg>
-    );
-};
 
-// ────────────────────────────────────────────────────────────────────────────────
+
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Component
-// ────────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Tally Item Columns helper
-// ────────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TALLY_ITEM_HEADERS = [
     'Item Name', 'Item Description', 'Actual Quantity', 'Billed Quantity',
     'Quantity UOM', 'Item Rate', 'Item Rate per', 'Disc%', 'Item Amount',
@@ -309,18 +296,18 @@ const TALLY_ITEM_HEADERS = [
 ];
 
 const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'ai_native', scanType = 'single', onExtractionSuccess }) => {
-    // ── Columns definitions based on extractionMode & voucherType ──
+    // â”€â”€ Columns definitions based on extractionMode & voucherType â”€â”€
     const schema = getVoucherSchema(voucherType) as VoucherSchema;
-    // ── Zoho Specific Columns ──
+    // â”€â”€ Zoho Specific Columns â”€â”€
     const ZOHO_COLUMNS = [
-        'Date', 'Invoice No', 'Name', 'GSTIN', 'Branch', 'Place of Supply', 'Bill Address From', 'Bill Address To', 
-        'Total Taxable Value', 'Total Invoice Value', 'Total IGST', 'Total CGST', 'Total SGST/UTGST', 
-        'Item Name', 'HSN/SAC', 'Qty', 'UOM', 'Item Rate', 'Taxable Value', 
+        'Date', 'Invoice No', 'Name', 'GSTIN', 'Branch', 'Place of Supply', 'Bill Address From', 'Bill Address To',
+        'Total Taxable Value', 'Total Invoice Value', 'Total IGST', 'Total CGST', 'Total SGST/UTGST',
+        'Item Name', 'HSN/SAC', 'Qty', 'UOM', 'Item Rate', 'Taxable Value',
         'IGST', 'CGST', 'SGST/UTGST', 'Invoice Value', 'IRN', 'Ack. No.', 'Ack. Date', 'Folder Path'
     ];
 
     const ALL_COLUMNS = extractionMode === 'tally'
-        ? [...OFFICIAL_TALLY_VOUCHER_HEADERS]          // ✔ Official Tally Voucher headers only
+        ? [...OFFICIAL_TALLY_VOUCHER_HEADERS]          // âœ” Official Tally Voucher headers only
         : (extractionMode === 'zoho' ? ZOHO_COLUMNS : getVoucherFlatHeaders(voucherType));
 
     const LINE_ITEM_FIELDS = (schema.sections.items as SchemaField[] | undefined)?.map(f => f.label) || [];
@@ -332,10 +319,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         return LINE_ITEM_FIELDS.includes(col) || (extractionMode === 'tally' && TALLY_ITEM_HEADERS.includes(col));
     };
 
-    // ── Centralized Zoho Mapping Resolver ──
+    // â”€â”€ Centralized Zoho Mapping Resolver â”€â”€
     const resolveZohoValue = (header: any, item: any, col: string): string => {
         const isItem = isItemField(col);
-        
+
         // Rule: Address resolution (Ensure From/To distinction)
         if (col === "Bill Address From" || col === "Bill From Address" || col === "Bill From") {
             console.log("bill_from:", header.bill_from);
@@ -344,12 +331,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
 
         if (col === "Bill Address To") {
-            const val = getCellValue(header, "Bill Address To") || 
-                        getCellValue(header, "billing_address") || 
-                        getCellValue(header, "bill_to_address") ||
-                        getCellValue(item, "billing_address") ||
-                        getCellValue(item, "bill_to_address") ||
-                        '';
+            const val = getCellValue(header, "Bill Address To") ||
+                getCellValue(header, "billing_address") ||
+                getCellValue(header, "bill_to_address") ||
+                getCellValue(item, "billing_address") ||
+                getCellValue(item, "bill_to_address") ||
+                '';
             return val;
         }
 
@@ -357,7 +344,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         if (col === "Folder Path") {
             return header.folder_path || header.file_path || "";
         }
-        
+
         return isItem ? getCellValue(item, col) : getCellValue(header, col);
     };
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -390,7 +377,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         return () => clearInterval(timer);
     }, [isExtracting]);
 
-    // ── Auto-Validate Vendor for Purchase Vouchers ───────────────────────────────
+    // â”€â”€ Auto-Validate Vendor for Purchase Vouchers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const [vendorValidation, setVendorValidation] = useState<'IDLE' | 'VALIDATING' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT'>('IDLE');
     const [vendorValidationMessage, setVendorValidationMessage] = useState<string>('');
     const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
@@ -398,9 +385,37 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     // -- Bulk Job State --
     const [bulkJobId, setBulkJobId] = useState<number | null>(null);
-    const [bulkStatus, setBulkStatus] = useState<{ total: number; processed: number; failed: number; pending: number; status: string } | null>(null);
+    const [bulkStatus, setBulkStatus] = useState<{ total: number; processed: number; failed: number; pending: number; status: string; progress: number; completed: boolean } | null>(null);
     const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const startTimeRef = useRef<number | null>(null);
+    // Cancellation flag â€” set to true to abort an in-progress polling loop
+    const cancelExtractionRef = useRef<boolean>(false);
+
+    const activePollIdRef = useRef<number>(0);
+    // Guard: once FINALIZED, prevent any fetchStagingData from clearing invoiceResults
+    const isFinalizedRef = useRef<boolean>(false);
+
+    const handleCancelExtraction = () => {
+        // 1. Signal the polling loop to stop immediately
+        activePollIdRef.current += 1; // Monotonic increment to invalidate current loop
+        cancelExtractionRef.current = true;
+        // 2. Clear any pending setTimeout
+        if (pollingIntervalRef.current) {
+            clearTimeout(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+        // 3. Reset all extraction UI state
+        setIsExtracting(false);
+        setBulkStatus(null);
+        setBulkJobId(null);
+        setCountdownSeconds(null);
+        startTimeRef.current = null;
+        // 4. Rotate the session ID so the NEXT upload starts with a clean session
+        const newId = String(Date.now());
+        uploadSessionIdRef.current = newId;
+        console.log(`[CANCEL] Extraction cancelled. New session allocated: ${newId}`);
+    };
+
 
     const firstInvoiceVendorStr = invoiceResults.length > 0 && !isExtracting && voucherType === 'Purchase'
         ? String(invoiceResults[0].invoice['Vendor Name'] || '') + '|' + String(invoiceResults[0].invoice['GSTIN'] || '') + '|' + String(invoiceResults[0].invoice['Branch'] || '')
@@ -495,7 +510,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             'file_name': ['File Name', 'Source File', 'Uploaded File'],
             'voucher_series': ['Voucher Number Series Name', 'Voucher Series'],
             'narration': ['Voucher Narration', 'Narration', 'Remarks', 'Notes'],
-            'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type', 'Buyer/Supplier - State', 'Buyer/Supplier - Place of Supply'],
+            'branch': ['Branch', 'Branch Name', 'branch', 'Branch '],
+            'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type', 'Buyer/Supplier - State', 'Buyer/Supplier - Place of Supply', 'place_of_supply'],
             'sales_order_no': ['Sales Order No', 'Purchase Order No', 'PO No', 'Order No'],
 
             // Items / Ledgers
@@ -549,6 +565,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const processFiles = async (files: FileList | File[]) => {
         if (isExtracting) return;
         setIsExtracting(true);
+        // Reset cancellation flag for this new extraction run
+        cancelExtractionRef.current = false;
+        // ALWAYS rotate session ID on each new upload.
+        // This prevents fetchStagingData from accidentally reading data from a
+        // previous (potentially cancelled) session when the new job completes.
+        const newId = String(Date.now());
+        uploadSessionIdRef.current = newId;
+        console.log(`[SESSION ROTATED] New session for upload: ${newId}`);
+        // Clear any results from a previous extraction so the UI is clean
+        setInvoiceResults([]);
+        setBulkStatus(null);
+        setBulkJobId(null);
 
         const newFiles: File[] = [];
         const newNames: string[] = [];
@@ -563,7 +591,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
         setUploadedFileNames(prev => [...prev, ...newNames]);
 
-        // ── "File Analysis" Estimation Logic (Replicated from Purchase Scan) ──
+        // â”€â”€ "File Analysis" Estimation Logic (Replicated from Purchase Scan) â”€â”€
         let estimatedTasks = 0;
         newFiles.forEach(f => {
             if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
@@ -588,33 +616,63 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         const batchCount = Math.ceil(estimatedTasks / 2);
         const zohoBuffer = extractionMode === 'zoho' ? 15 : 0;
         const initialEstimate = Math.round(batchCount * avgTime) + 5 + zohoBuffer;
-        
+
         setEstimatedExtractionTime(initialEstimate);
         setCountdownSeconds(initialEstimate);
 
         try {
-            if (!uploadSessionIdRef.current) {
-                const newId = String(Date.now());
-                uploadSessionIdRef.current = newId;
-                console.log(`[SESSION GENERATED] ${newId}`);
-            }
-            const currentSessionId = uploadSessionIdRef.current;
+            // uploadSessionIdRef is already set to a fresh ID at the top of processFiles.
+            // We just read it here â€” no conditional generation needed.
+            const currentSessionId = uploadSessionIdRef.current!; // guaranteed non-null (set above)
             console.log(`[SESSION USED FOR UPLOAD] ${currentSessionId}`);
 
-            const formData = new FormData();
-            newFiles.forEach(f => {
-                formData.append('files', f);
-                // Capture original folder structure if present (e.g. from handleFolderChange)
-                const relPath = (f as any).webkitRelativePath || '';
-                if (relPath) {
-                    formData.append('file_paths', relPath);
+            const isOthersMode = extractionMode !== 'ai_native';
+            
+            // â”€â”€ [PHASE 4] DIRECT S3 UPLOAD FLOW â”€â”€
+            // Decouples API from byte-stream handling to prevent memory exhaustion
+            const sessionIds: string[] = [];
+            const filePaths: string[] = [];
+            
+            if (!isOthersMode) {
+                showInfo(`ðŸ“¤ Preparing direct S3 upload for ${newFiles.length} files...`);
+                for (let i = 0; i < newFiles.length; i++) {
+                    const f = newFiles[i];
+                    try {
+                        // 1. Request Presigned Policy
+                        const policyRes = await apiService.getS3UploadPolicy(f.name);
+                        // 2. Direct Upload to S3 (Bypass Django)
+                        await apiService.uploadToS3(policyRes.policy.url, policyRes.policy.fields, f);
+                        // 3. Collect metadata reference
+                        sessionIds.push(policyRes.session_id);
+                        filePaths.push((f as any).webkitRelativePath || f.name);
+                        console.log(`[S3_DIRECT_SUCCESS] ${f.name} -> ${policyRes.session_id}`);
+                    } catch (err) {
+                        console.error(`[S3_DIRECT_FAILED] ${f.name}:`, err);
+                        throw new Error(`Failed to upload ${f.name} to S3.`);
+                    }
                 }
-            });
+            }
+
+            const formData = new FormData();
+            
+            if (sessionIds.length > 0) {
+                // Metadata-only upload (Hardened Path)
+                sessionIds.forEach(id => formData.append('session_ids', id));
+                filePaths.forEach(p => formData.append('file_paths', p));
+            } else {
+                // Legacy Fallback / Others Mode
+                newFiles.forEach(f => {
+                    formData.append('files', f);
+                    const relPath = (f as any).webkitRelativePath || '';
+                    if (relPath) {
+                        formData.append('file_paths', relPath);
+                    }
+                });
+            }
+
             formData.append('upload_session_id', currentSessionId);
             formData.append('voucher_type', voucherType);
 
-            // ── OTHERS Mode: No Persistence (Instant Extraction) ──
-            const isOthersMode = extractionMode !== 'ai_native';
             if (isOthersMode) {
                 formData.append('no_persist', 'true');
             }
@@ -626,7 +684,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 // Map results immediately (they are already extracted and deleted from DB)
                 handleInstantResults(response.results);
                 setIsExtracting(false);
-                showSuccess(`✅ ${response.results.length} files extracted instantly (non-persistent).`);
+                showSuccess(`âœ… ${response.results.length} files extracted instantly (non-persistent).`);
                 return;
             }
 
@@ -644,28 +702,29 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     failed: 0,
                     pending: response.total_files,
                     status: 'processing',
+                    progress: 0,
                     completed: false
                 });
                 startTimeRef.current = Date.now();
-                
+
                 // Refine estimate based on actual total and analysis
-                const jobBatchCount = Math.ceil(response.total_files / 2); 
+                const jobBatchCount = Math.ceil(response.total_files / 2);
                 const jobZohoBuffer = extractionMode === 'zoho' ? 15 : 0;
                 const jobEstimate = Math.round(jobBatchCount * avgTime) + 5 + jobZohoBuffer;
-                
+
                 setEstimatedExtractionTime(jobEstimate);
-                setCountdownSeconds(prev => Math.max(prev || 0, jobEstimate)); 
+                setCountdownSeconds(prev => Math.max(prev || 0, jobEstimate));
                 startPolling(response.job_id);
             }
         } catch (error) {
-            showError(`❌ Upload Failed: ${(error as Error).message}`);
+            showError(`âŒ Upload Failed: ${(error as Error).message}`);
             setIsExtracting(false);
         } finally {
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
-    // ── Helper to map instant results without DB fetching ──
+    // â”€â”€ Helper to map instant results without DB fetching â”€â”€
     const handleInstantResults = (results: any[]) => {
         const mappedResults: InvoiceResult[] = results.map((item: any) => {
             const extData = item.data || {};
@@ -677,7 +736,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 ...(resData.data || resData)
             };
 
-            // ── DEFINITIVE ADDRESS INJECTION ─────────────────────────────
+            // â”€â”€ DEFINITIVE ADDRESS INJECTION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             const _vendorAddr: string = (
                 resData['bill_from'] ||
                 resData['Bill From'] ||
@@ -693,7 +752,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             flattenedHeader['bill_address_from'] = _vendorAddr;
             flattenedHeader['Bill From'] = _vendorAddr;
 
-            // ── IRN, ACK NO, ACK DATE INJECTION ───────────────────────────
+            // IRN, ACK NO, ACK DATE INJECTION
             const _irn: string = resData['irn'] || resData['IRN'] || resData.sections?.irn || '';
             flattenedHeader['irn'] = _irn;
             flattenedHeader['IRN'] = _irn;
@@ -749,83 +808,148 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             const params: Record<string, string> = {};
             if (uploadSessionIdRef.current) {
                 params.upload_session_id = uploadSessionIdRef.current;
-                console.log(`[SESSION USED FOR STAGING FETCH] ${uploadSessionIdRef.current}`);
             }
 
             const response: any = await httpClient.get('/api/ocr-staging/', params);
-            console.log("[RAW API RESPONSE]", response); // Forensic Log 1
+            
+            // --- [PHASE 6] DETERMINISTIC HYDRATION BARRIER ---
+            console.log(`[HYDRATION_RECEIVED] status=${response?.status} mode=${extractionMode}`);
+            if (response?.status === 'PROCESSING') {
+                console.log('[HYDRATION_WAIT] Backend still processing. Deferring hydration.');
+                return;
+            }
+
             let stagedResults = Array.isArray(response) ? response : (response?.data || []);
-
-            // ── Step 3.6: Apply Zoho Reconstruction (Step 1-3) ──
-            if (extractionMode === 'zoho' && stagedResults.length > 0) {
-                try {
-                    const invoicesForAdapter = stagedResults.map((r: any) => ({
-                        invoice_number: r.supplier_invoice_no || r.extracted_data?.supplier_invoice_no || r.extracted_data?.invoice_no,
-                        invoice_date: r.extracted_data?.invoice_date,
-                        vendor_name: r.extracted_data?.vendor_name || r.extracted_data?.sections?.supplier_details?.vendor_name,
-                        vendor_address: r.extracted_data?.bill_from || r.extracted_data?.vendor_address || r.extracted_data?.sections?.supplier_details?.vendor_address,
-                        bill_from: r.extracted_data?.bill_from || r.extracted_data?.sections?.supplier_details?.bill_from,
-                        gstin: r.gstin,
-                        total_taxable_value: r.extracted_data?.total_taxable_value || r.extracted_data?.sections?.supply_details?.total_taxable_value,
-                        total_invoice_value: r.extracted_data?.total_invoice_value || r.extracted_data?.sections?.supply_details?.total_invoice_value,
-                        items: r.extracted_data?.sections?.items || r.extracted_data?.line_items || r.extracted_data?.items || []
-                    }));
-
-                    console.log("[TRACE L1] invoicesForAdapter[0].bill_from:", invoicesForAdapter[0]?.bill_from);
-
-                    const adapterRes = await apiService.reconstructZohoInvoices({ invoices: invoicesForAdapter });
-                    console.log("bill_from:", adapterRes?.invoices?.[0]?.bill_from);
-                    
-                    if (adapterRes?.invoices) {
-                        if (!adapterRes.invoices[0]?.bill_from) {
-                            console.error("FRONTEND ERROR: bill_from missing in data");
-                        }
-
-                        // Map reconstructed results back to staged format for the UI mapper below
-                        stagedResults = stagedResults.map((original: any, idx: number) => {
-                            const reconstructed = adapterRes.invoices[idx];
-                            if (!reconstructed) return original;
-                            const merged = {
-                                ...original,
-                                extracted_data: {
-                                    ...original.extracted_data,
-                                    sections: {
-                                        ...original.extracted_data?.sections,
-                                        items: reconstructed.items,
-                                        supply_details: {
-                                            ...original.extracted_data?.sections?.supply_details,
-                                            total_taxable_value: reconstructed.total_taxable_value,
-                                            total_invoice_value: reconstructed.total_invoice_value
-                                        }
-                                    },
-                                    ...reconstructed
-                                }
-                            };
-                            console.log("[TRACE L3] merged.extracted_data['bill_from']:", merged.extracted_data?.['bill_from']);
-                            return merged;
-                        });
-                    }
-                } catch (adapterErr) {
-                    console.error("Zoho Reconstruction failed, falling back to raw data:", adapterErr);
+            
+            console.log(`[HYDRATION_RAW] rows=${stagedResults.length}`);
+            if (!stagedResults || stagedResults.length === 0) {
+                if (isFinalizedRef.current) {
+                    console.warn('[HYDRATION_EMPTY_GUARDED] Empty response ignored — results already finalized.');
+                    return;
                 }
+                console.warn('[HYDRATION_EMPTY] No rows returned from /api/ocr-staging/');
+                return;
+            }
+
+            // --- [REQUIREMENT 4: FRONTEND DEFENSIVE NORMALIZATION] ---
+            stagedResults = stagedResults.map((row: any) => {
+                let resolvedItems = [];
+                if (Array.isArray(row.items) && row.items.length > 0) {
+                    resolvedItems = row.items;
+                } else if (Array.isArray(row.extracted_data?.sections?.items) && row.extracted_data.sections.items.length > 0) {
+                    resolvedItems = row.extracted_data.sections.items;
+                } else if (Array.isArray(row.extracted_data?.items)) {
+                    resolvedItems = row.extracted_data.items;
+                }
+
+                return {
+                    ...row,
+                    invoice_no: row.invoice_no || row.invoice_number || "",
+                    items: resolvedItems
+                };
+            });
+
+            // --- [REQUIREMENT 5: DO NOT AUTO-RECONSTRUCT INVALID RECORDS] ---
+            // Block empty hydration records completely from entering UI mapping
+            stagedResults = stagedResults.filter((r: any) => r.invoice_no || (r.items && r.items.length > 0));
+            
+            console.log(`[HYDRATION_FILTERED] validRows=${stagedResults.length}`);
+            if (stagedResults.length === 0) {
+                if (isFinalizedRef.current) {
+                    console.warn('[HYDRATION_FILTERED_GUARDED] Filtered to 0 but results already finalized — ignoring.');
+                    return;
+                }
+                console.warn('[HYDRATION_BLOCKED] All rows rejected — missing invoice_no and items.');
+                return;
+            }
+
+            // ═══════════════════════════════════════════════════════════════════════
+            // ZOHO PATH — Distributed FinalizedSnapshot Architecture (New)
+            // FinalizedSnapshot rows are FLAT: { invoice_no, vendor_name, gstin, items, totals, ... }
+            // No extracted_data.sections. No reconstructZohoInvoices. Direct field mapping only.
+            // ═══════════════════════════════════════════════════════════════════════
+            if (extractionMode === 'zoho') {
+                const isFinalized = response?.status === 'FINALIZED' || response?.status === 'COMPLETED';
+                if (!isFinalized) {
+                    console.log(`[ZOHO_GATE] Not finalized (status=${response?.status}). Holding hydration.`);
+                    return;
+                }
+
+                console.log(`[ZOHO_SNAPSHOT_HYDRATION] Processing ${stagedResults.length} flat snapshot rows.`);
+
+                const snapshotMapped: InvoiceResult[] = stagedResults.map((row: any, idx: number) => {
+                    const rawItems: any[] = Array.isArray(row.items) ? row.items : [];
+
+                    // Build header directly from flat FinalizedSnapshot top-level fields
+                    const normalizedHeader: Record<string, string> = {};
+                    normalizedHeader['Invoice No']          = row.invoice_no || '';
+                    normalizedHeader['Date']                = row.invoice_date || '';
+                    normalizedHeader['Name']                = row.vendor_name || '';
+                    normalizedHeader['GSTIN']               = row.gstin || row.vendor_gstin || '';
+                    normalizedHeader['Branch']              = row.branch || '';
+                    normalizedHeader['Place of Supply']     = row.place_of_supply || '';
+                    normalizedHeader['Bill Address From']   = row.bill_from || '';
+                    normalizedHeader['Bill Address To']     = row.bill_to || row.billing_address || '';
+                    normalizedHeader['Total Invoice Value'] = row.totals || row.total_amount || '';
+                    normalizedHeader['Total Taxable Value'] = row.total_taxable_value || '';
+                    normalizedHeader['Total IGST']          = row.total_igst || '';
+                    normalizedHeader['Total CGST']          = row.total_cgst || '';
+                    normalizedHeader['Total SGST/UTGST']    = row.total_sgst || '';
+                    normalizedHeader['IRN']                 = row.irn || '';
+                    normalizedHeader['Ack. No.']            = row.ack_no || '';
+                    normalizedHeader['Ack. Date']           = row.ack_date || '';
+                    normalizedHeader['Folder Path']         = row.file_path || '';
+                    const fileName = (row.file_path || 'Invoice.pdf').split(/[\/\\]/).pop() || 'Invoice.pdf';
+                    normalizedHeader['Voucher Type Name']   = fileName;
+                    normalizedHeader['File Name']           = fileName;
+
+                    // Fill remaining ZOHO_COLUMNS via alias resolution on the flat row
+                    ALL_COLUMNS.forEach(col => {
+                        if (!normalizedHeader[col]) normalizedHeader[col] = getCellValue(row, col);
+                    });
+
+                    const normalizedItems = rawItems.map((ritem: any) => {
+                        const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
+                        const ni: any = { ...flatItem };
+                        ALL_COLUMNS.filter(c => isItemField(c)).forEach(f => { ni[f] = getCellValue(flatItem, f); });
+                        return ni;
+                    });
+
+                    const valid = normalizedItems.length > 0 || Object.values(normalizedHeader).some(v => !!v);
+                    console.log(`[ZOHO_ROW_${idx}] inv="${row.invoice_no}" vendor="${row.vendor_name}" items=${normalizedItems.length} valid=${valid}`);
+
+                    return { invoice: normalizedHeader, items: normalizedItems, headerMapping: {}, itemMapping: {}, file_hash: row.file_hash, cacheRecordId: row.id };
+                }).filter((res: any) => res.items.length > 0 || Object.values(res.invoice).some(v => !!v));
+
+                console.log(`[ZOHO_SNAPSHOT_RESULT] rendered=${snapshotMapped.length} / received=${stagedResults.length}`);
+
+                if (snapshotMapped.length > 0) {
+                    isFinalizedRef.current = true;
+                    console.log(`[ZOHO_FINALIZED_LOCKED] isFinalizedRef=true. invoiceResults will be protected from overwrite.`);
+                    setInvoiceResults(snapshotMapped);
+                    if (onExtractionSuccess) {
+                        const fr = snapshotMapped[0].invoice;
+                        onExtractionSuccess({ vendor_name: fr['Name'] || fr['Vendor Name'] || '', gstin: fr['GSTIN'] || '', branch: fr['Branch'] || '', state: fr['Place of Supply'] || '' });
+                    }
+                } else {
+                    console.warn('[ZOHO_SNAPSHOT_EMPTY] Mapping produced 0 valid rows. Sample:', JSON.stringify(stagedResults[0] || {}).substring(0, 300));
+                }
+                return;
             }
 
             const mappedResults: InvoiceResult[] = stagedResults.map((item: any) => {
-                console.log("AUDIT: DATA USED FOR TABLE:", item.extracted_data);
-                console.log("AUDIT: SOURCE IS RECONSTRUCTED:", !!item.extracted_data?.sections?.items);
-                console.log("FORM SOURCE (DB Batch):", item.extracted_data);
                 const extData = item.extracted_data || {};
-                // The new structure has a 'sections' key or flattened top-level
                 const resData = extData;
 
                 // FLATTEN nested sections for the mapping engine (supplier_details, supply_details)
                 const flattenedHeader: Record<string, any> = {
                     ...(resData.sections?.supplier_details || {}),
                     ...(resData.sections?.supply_details || {}),
-                    ...resData  // NOTE: spread resData directly, NOT resData.data
+                    ...(resData.header || {}),
+                    ...resData
                 };
 
-                // ── DEFINITIVE ADDRESS INJECTION ─────────────────────────────
+                // --- DEFINITIVE ADDRESS INJECTION ---
                 const _vendorAddr: string = (
                     resData['bill_from'] ||
                     resData['Bill From'] ||
@@ -841,7 +965,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 flattenedHeader['bill_address_from'] = _vendorAddr;
                 flattenedHeader['Bill From'] = _vendorAddr;
 
-                // ── IRN, ACK NO, ACK DATE INJECTION ───────────────────────────
+                // IRN, ACK NO, ACK DATE INJECTION
                 const _irn: string = resData['irn'] || resData['IRN'] || resData.sections?.irn || '';
                 flattenedHeader['irn'] = _irn;
                 flattenedHeader['IRN'] = _irn;
@@ -856,7 +980,6 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 flattenedHeader['Ack. Date'] = _ackDate;
                 flattenedHeader['Ack Date.'] = _ackDate;
 
-
                 const _billingAddr: string = (
                     resData['Bill Address To'] ||
                     resData['billing_address'] ||
@@ -867,11 +990,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 );
                 flattenedHeader['Bill Address To'] = _billingAddr;
                 flattenedHeader['billing_address'] = _billingAddr;
-                // ─────────────────────────────────────────────────────────────
 
-                // ── PLACE OF SUPPLY INJECTION ──────────────────────────────────
-                // Derive Place of Supply deterministically from GSTIN state code first.
-                // Fall back to adapter or DB value only if GSTIN is not available.
+                // PLACE OF SUPPLY INJECTION
                 const _gstin = (resData.gstin || resData.vendor_gstin || resData.sections?.supplier_details?.gstin || item.gstin || '').trim().toUpperCase();
                 const _stateCode = _gstin.substring(0, 2);
                 const GST_STATE_CODES: Record<string, string> = {
@@ -897,13 +1017,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     '';
                 flattenedHeader['Place of Supply'] = _pos;
                 flattenedHeader['place_of_supply'] = _pos;
-                // ────────────────────────────────────────────────────────────────
 
                 const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
-                console.log("[RAW INVOICE ITEMS]", rawItems); // Forensic Log 3
 
                 const normalizedHeader: Record<string, string> = {};
-                // Fix: ALL_COLUMNS already handles the extractionMode logic correctly (tally, zoho, or default)
                 const colsToMap = ALL_COLUMNS;
 
                 colsToMap.forEach(field => {
@@ -911,7 +1028,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 });
 
                 if (!normalizedHeader['Bill Address To']) {
-                    normalizedHeader['Bill Address To'] = 
+                    normalizedHeader['Bill Address To'] =
                         flattenedHeader['Bill Address To'] ||
                         flattenedHeader['billing_address'] ||
                         flattenedHeader['bill_to_address'] ||
@@ -924,20 +1041,20 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 normalizedHeader['Voucher Type Name'] = fileName;
                 normalizedHeader['File Name'] = fileName;
 
-                    const normalizedItems = rawItems.map((ritem: any) => {
-                        // Items are usually already flat, but check if there's an 'item' wrapper
-                        const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
-                        // FIX: Preserve original data to prevent blank cells (Requirement 1/2)
-                        const ni: any = { ...flatItem }; 
-                        // Fix: Use ALL_COLUMNS for Zoho mode as well
-                        const itemColsToMap = (extractionMode === 'tally' || extractionMode === 'zoho') ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
+                const normalizedItems = rawItems.map((ritem: any) => {
+                    // Items are usually already flat, but check if there's an 'item' wrapper
+                    const flatItem = ritem.item ? { ...ritem.item, ...ritem } : ritem;
+                    // FIX: Preserve original data to prevent blank cells (Requirement 1/2)
+                    const ni: any = { ...flatItem };
+                    // Fix: Use ALL_COLUMNS for Zoho mode as well
+                    const itemColsToMap = (extractionMode === 'tally') ? ALL_COLUMNS.filter(c => isItemField(c)) : LINE_ITEM_FIELDS;
 
-                        itemColsToMap.forEach(f => {
-                            ni[f] = getCellValue(flatItem, f);
-                        });
-                        return ni;
+                    itemColsToMap.forEach(f => {
+                        ni[f] = getCellValue(flatItem, f);
                     });
-                    console.log("[NORMALIZED ITEMS]", normalizedItems); // Forensic Log 4
+                    return ni;
+                });
+                console.log("[NORMALIZED ITEMS]", normalizedItems); // Forensic Log 4
 
                 return {
                     invoice: normalizedHeader,
@@ -949,7 +1066,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 };
             }).filter((res: any) => res.items.length > 0 || Object.keys(res.invoice).length > 0);
 
-            console.log("[SETTING OCR DATA]", mappedResults); // Forensic Log 2
+            console.log('[HYDRATION_RESULT] mappedResults count:', mappedResults.length);
             setInvoiceResults(mappedResults);
 
             if (mappedResults.length > 0 && onExtractionSuccess) {
@@ -961,86 +1078,114 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     state: firstRow['State'] || ''
                 });
             }
+
         } catch (err) {
             console.error("Failed to fetch staging data:", err);
         }
     };
 
     const startPolling = (jobId: number) => {
-        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-        console.log(`[POLLING STARTED] Monitoring Job: ${jobId}`);
-        
+        if (pollingIntervalRef.current) clearTimeout(pollingIntervalRef.current);
+        const pollId = ++activePollIdRef.current;
+        console.log(`[POLLING_STARTED] Job: ${jobId} | PollID: ${pollId}`);
+
         let consecutiveNoChange = 0;
         let lastProcessed = -1;
-        let currentInterval = 2000; // 2s as requested
-        let isPollingActive = true;
+        let currentInterval = 2000; // [PHASE 6 FIX] Conservative base interval to prevent API storms
 
         const poll = async () => {
-            if (!isPollingActive) return;
-            
+            if (pollId !== activePollIdRef.current) {
+                console.log(`[POLL_CANCEL_REASON] Stale Poll ID: ${pollId} vs ${activePollIdRef.current}`);
+                return;
+            }
+            if (cancelExtractionRef.current) {
+                console.log(`[POLL_CANCEL_REASON] User Cancelled`);
+                return;
+            }
+
             try {
-                const status = await httpClient.get<any>(`/api/bulk-status/${jobId}/`);
-                console.log(`[POLLING RESPONSE] Job: ${jobId} | Progress: ${status.progress}% | Completed: ${status.completed}`);
-                setBulkStatus(status);
+                const url = `/api/bulk-status/${jobId}/`;
+                console.log(`[POLL_REQUEST_SENT] ${url} | PollID: ${pollId}`);
+                const status = await httpClient.get<any>(url);
                 
-                const currentProcessed = (status.processed || 0) + (status.failed || 0);
-                
-                // Adaptive Interval Logic
-                if (currentProcessed > lastProcessed) {
-                    consecutiveNoChange = 0;
-                    currentInterval = 2000; 
-                } else {
-                    consecutiveNoChange++;
-                    if (consecutiveNoChange > 5) {
-                        currentInterval = Math.min(currentInterval + 2000, 10000);
-                    }
+                if (pollId !== activePollIdRef.current) {
+                    console.log(`[POLL_RACE_CONDITION] Ignoring response for Job ${jobId} (PollID ${pollId} is now stale)`);
+                    return;
                 }
-                lastProcessed = currentProcessed;
 
-                // ── SYNC FIX: ONLY FETCH STAGING WHEN FULLY COMPLETED ──
-                if (status.completed) {
-                    console.log(`[OCR COMPLETED] Job: ${jobId}. Fetching results...`);
-                    isPollingActive = false;
-                    setIsExtracting(false);
+                console.log(`[POLL_RESPONSE_RAW] Job: ${jobId} Payload:`, status);
+
+                const normalizedStatus = String(status.status || '').toUpperCase();
+                // [FIX] Requirement #6: Stop polling ONLY on terminal states
+                const isTerminal = status.completed === true || 
+                    ['FINALIZED', 'FAILED', 'PARTIAL_FAILURE', 'PARTIAL_FAILED', 'COMPLETED'].includes(normalizedStatus);
+
+                console.log(`[POLLING_RESPONSE] Job: ${jobId} | Status: ${normalizedStatus} | Progress: ${status.progress}% | Terminal: ${isTerminal}`);
+
+                // Monotonic progress guard
+                setBulkStatus(prev => {
+                    console.log(`[POLL_STATE_BEFORE] Job: ${jobId} Prev:`, prev);
+                    if (prev && (prev.progress || 0) > (status.progress || 0) && !isTerminal) {
+                        console.warn(`[POLL_MONOTONIC_BLOCK] Prev: ${prev.progress} > Current: ${status.progress}`);
+                        return prev;
+                    }
+                    const next = { ...status, status: normalizedStatus, completed: isTerminal, progress: status.progress || 0 };
+                    console.log(`[POLL_STATE_AFTER] Job: ${jobId} Next:`, next);
+                    return next;
+                });
+
+                if (isTerminal) {
+                    console.log(`[POLL_TERMINAL_DETECTED] Job: ${jobId} status=${normalizedStatus}. Starting hydration before clearing processing state.`);
                     startTimeRef.current = null;
-                    
-                    console.log(`[STAGING FETCH START] Session: ${uploadSessionIdRef.current}`);
-                    await fetchStagingData();
-                    console.log(`[STAGING FETCH COMPLETED]`);
+                    setCountdownSeconds(null);
 
-                    if (status.status !== 'failed') {
-                        showSuccess(`✅ Processing completed! ${status.processed} processed, ${status.failed} failed.`);
+                    // CRITICAL ORDER: Hydrate FIRST, then clear isExtracting.
+                    // If setIsExtracting(false) runs before setInvoiceResults(), React commits
+                    // a render with isExtracting=false + invoiceResults=[] which shows the
+                    // upload buttons and hides the table — the classic "modal reset" bug.
+                    console.log(`[POLL_HYDRATION_START] Job: ${jobId}`);
+                    await fetchStagingData();
+                    console.log(`[POLL_HYDRATION_DONE] Job: ${jobId} invoiceResults will now persist.`);
+
+                    // Clear processing state AFTER data is in React state
+                    setIsExtracting(false);
+
+                    if (normalizedStatus !== 'FAILED') {
+                        showSuccess(`Extraction Complete: ${status.processed} processed.`);
                     }
                     return;
                 }
 
-                // ── Accurate Time Remaining Calculation ──
+                // Adaptive backoff
+                const currentProcessed = (status.processed || 0) + (status.failed || 0);
+                if (currentProcessed > lastProcessed) {
+                    consecutiveNoChange = 0;
+                    currentInterval = 500;
+                } else {
+                    consecutiveNoChange++;
+                    if (consecutiveNoChange > 4) {
+                        // Aggressive backoff for slow jobs
+                        currentInterval = Math.min(currentInterval + 1000, 10000);
+                    }
+                }
+                lastProcessed = currentProcessed;
+
+                // Time estimation
                 if (startTimeRef.current && status.total > 0) {
                     const elapsedMs = Date.now() - startTimeRef.current;
-                    const remainingCount = status.total - currentProcessed;
-
                     if (currentProcessed > 0) {
                         const msPerFile = elapsedMs / currentProcessed;
-                        const remainingBatches = Math.ceil(remainingCount / 10);
-                        const zohoBuffer = extractionMode === 'zoho' ? 5 : 0;
-                        const newEstimateSeconds = Math.max(1, Math.round((remainingBatches * msPerFile) / 1000) + zohoBuffer);
-                        
-                        setCountdownSeconds(prev => {
-                            if (prev === null) return newEstimateSeconds;
-                            if (Math.abs(prev - newEstimateSeconds) > 3) {
-                                return newEstimateSeconds > prev ? prev + 1 : prev - 1;
-                            }
-                            return prev;
-                        });
+                        const remainingCount = status.total - currentProcessed;
+                        const estimate = Math.round((remainingCount * msPerFile) / 1000);
+                        setCountdownSeconds(estimate);
                     }
                 }
             } catch (err) {
-                console.error("[POLLING ERROR]", err);
-                currentInterval = 10000; 
+                console.error("[POLLING_ERROR]", err);
+                currentInterval = 2000;
             }
 
-            if (isPollingActive) {
-                // @ts-ignore
+            if (pollId === activePollIdRef.current && !cancelExtractionRef.current) {
                 pollingIntervalRef.current = setTimeout(poll, currentInterval);
             }
         };
@@ -1050,12 +1195,14 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
 
     useEffect(() => {
+
         return () => {
-            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+            // pollingIntervalRef stores a setTimeout handle, not setInterval.
+            if (pollingIntervalRef.current) clearTimeout(pollingIntervalRef.current);
         };
     }, []);
 
-    // ── Upload directly (no risk dashboard) ──────────────────────────────────────
+    // â”€â”€ Upload directly (no risk dashboard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const handleUploadToAI = () => {
         if (!onUpload) return;
         if (invoiceResults.length === 0) { showError('No data extracted.'); return; }
@@ -1066,9 +1213,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             return;
         }
 
-        // ── Auto-compute Invoice Value if missing (sum of Item Amount across all items) ──
+        // â”€â”€ Auto-compute Invoice Value if missing (sum of Item Amount across all items) â”€â”€
         // Sales & Purchase use "Invoice Value"; Credit/Debit Notes use "Total Invoice Value"
-        // ── Auto-compute "Invoice Value" per item if missing ──────────────────
+        // â”€â”€ Auto-compute "Invoice Value" per item if missing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // "Invoice Value" is a LINE_ITEM field in Sales/Purchase schema.
         // If the AI did not extract it directly, derive it from Taxable Value + taxes.
         // For Credit/Debit Notes, the legacy "Total Invoice Value" header field is used.
@@ -1107,7 +1254,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             return res;
         });
 
-        // ── Validation: Block if truly non-derivable required fields are missing ──
+        // â”€â”€ Validation: Block if truly non-derivable required fields are missing â”€â”€
         // "Invoice Value" is intentionally NOT in the mandatory list for Sales/Purchase
         // because it is always auto-computed above from Taxable Value + tax columns.
         const mandatoryForType: Record<string, string[]> = {
@@ -1161,7 +1308,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         });
 
         onUpload(allFlatRows);
-        showSuccess(`✅ ${allFlatRows.length} rows uploaded successfully.`);
+        showSuccess(`âœ… ${allFlatRows.length} rows uploaded successfully.`);
         setUploadedFileNames([]);
         setEstimatedExtractionTime(null);
         onClose();
@@ -1316,7 +1463,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         processFiles(newFiles);
     };
 
-    // ── Handle cell change ──────────────────────────────────────────────────────
+    // â”€â”€ Handle cell change â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const handleCellChange = (invoiceIdx: number, itemIdx: number, col: string, value: string) => {
         setInvoiceResults(prev => {
             const next = [...prev];
@@ -1337,7 +1484,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
             next[invoiceIdx] = res;
 
-            // ── Persist edit to OCR cache / Staging table ─────
+            // â”€â”€ Persist edit to OCR cache / Staging table â”€â”€â”€â”€â”€
             const extractedData = {
                 invoice: res.invoice,
                 items: res.items,
@@ -1345,8 +1492,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
             if (res.file_hash) {
                 // Bulk flow: Use staging API (triggers re-validation)
+                // GUARD: In Zoho mode after finalization, do NOT re-fetch staging data.
+                // A re-fetch returns an empty/different response that would wipe the finalized
+                // invoiceResults table. Edits are applied locally via setInvoiceResults above.
+                const shouldRefetch = extractionMode !== 'zoho' || !isFinalizedRef.current;
                 apiService.saveStagingEdit(res.file_hash, extractedData)
-                    .then(() => fetchStagingData()) // Refresh validation status (READY, etc.)
+                    .then(() => { if (shouldRefetch) fetchStagingData(); })
                     .catch(err => console.warn('[Staging] Edit failed', err));
             } else if (res.cacheRecordId) {
                 // Single scan fallback
@@ -1359,10 +1510,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         });
     };
 
-    // ── Columns shown in the table (Include all for zero shifting) ─────────────
+    // â”€â”€ Columns shown in the table (Include all for zero shifting) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const visibleColumns = ALL_COLUMNS;
 
-    // ── Build flat display rows ─────────────────────────────────────────────────
+    // â”€â”€ Build flat display rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let globalSerial = 0;
     const displayRows: Array<{
         key: string;
@@ -1408,13 +1559,13 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
 
 
-    // ────────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const isSingleScan = scanType === 'single';
     const modePrefix = extractionMode === 'tally' ? 'Tally' :
         (extractionMode === 'ai_native' ? 'AI Native' :
             (extractionMode.charAt(0).toUpperCase() + extractionMode.slice(1)));
 
-    const modalTitle = `${modePrefix} ${isSingleScan ? 'Single' : 'Bulk'} Scan – Invoice Scanner`;
+    const modalTitle = `${modePrefix} ${isSingleScan ? 'Single' : 'Bulk'} Scan â€“ Invoice Scanner`;
     const modalHint = isSingleScan
         ? 'Upload a single invoice for fast AI extraction.'
         : 'Upload multiple invoices for batch AI processing.';
@@ -1480,7 +1631,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                         onClick={() => folderInputRef.current?.click()}
                                         className="inline-flex items-center px-6 py-3 border border-slate-200 text-sm font-medium rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 shadow-sm"
                                     >
-                                        <Icon name="folder" className="w-5 h-5 mr-2 text-amber-500" />
+                                        <Icon name="document" className="w-5 h-5 mr-2 text-amber-500" />
                                         Select Folder
                                     </button>
                                 </div>
@@ -1493,11 +1644,21 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                             <Icon name="spinner" className="w-5 h-5 animate-spin" />
                                             <span>{scanType === 'bulk' ? 'Processing Bulk Job...' : 'Processing invoices...'}</span>
                                         </div>
-                                        {bulkStatus && (
-                                            <span className="text-xs font-bold text-indigo-600">
-                                                {Math.round(((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100)}%
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {bulkStatus && (
+                                                <span className="text-xs font-bold text-indigo-600">
+                                                    {Math.round(((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100)}%
+                                                </span>
+                                            )}
+                                            {/* Cancel Extraction Button */}
+                                            <button
+                                                onClick={handleCancelExtraction}
+                                                title="Cancel extraction"
+                                                className="text-xs font-semibold text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-2 py-0.5 transition-colors bg-red-50 hover:bg-red-100"
+                                            >
+                                                âœ• Cancel
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {bulkStatus ? (
@@ -1516,7 +1677,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                                 </div>
                                                 {countdownSeconds !== null && (
                                                     <div className="flex items-center gap-1 text-indigo-600 font-bold tabular-nums">
-                                                        <span>⏱</span>
+                                                        <span>â±</span>
                                                         <span>{Math.floor(countdownSeconds / 60)}:{(countdownSeconds % 60).toString().padStart(2, '0')}</span>
                                                     </div>
                                                 )}
@@ -1525,7 +1686,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                     ) : (
                                         countdownSeconds !== null && (
                                             <div className="flex items-center gap-1.5 ml-7 mt-1">
-                                                <span style={{ fontSize: '15px', lineHeight: 1 }}>⏱</span>
+                                                <span style={{ fontSize: '15px', lineHeight: 1 }}>â±</span>
                                                 <span className="text-xs font-semibold text-indigo-600 tabular-nums">
                                                     {countdownSeconds > 0
                                                         ? (() => {
@@ -1588,7 +1749,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                             {voucherType === 'Purchase' && vendorValidation === 'GSTIN_CONFLICT' && (
                                                 <div className="flex items-center gap-2 ml-4 animate-fade-in-up max-w-[350px]">
                                                     <div className="text-[11px] leading-tight text-amber-700 flex items-start gap-1.5 bg-amber-50 px-2.5 py-1.5 rounded border border-amber-200 shadow-sm overflow-hidden">
-                                                        <Icon name="alert-triangle" className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                                                        <Icon name="warning" className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
                                                         <span className="line-clamp-2">{vendorValidationMessage}</span>
                                                     </div>
                                                     <button
@@ -1624,8 +1785,6 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     {/* Data Table */}
                     {displayRows.length > 0 && (
                         <div className="flex-1 flex flex-col min-h-0 border rounded-[4px] mt-2">
-                            {/* Forensic Trace before Table */}
-                            {(() => { console.log("[TABLE DATA SOURCE]", displayRows); return null; })()}
                             {/* Single wrapper for both horizontal and vertical scrolling */}
                             <div className="overflow-auto max-h-[65vh]">
                                 <table className="min-w-[1500px] w-full divide-y divide-gray-200 border-collapse">
@@ -1646,27 +1805,6 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                     </thead>
                                     <tbody className="bg-white">
                                         {displayRows.map((row) => {
-                                            // ── MANDATORY FORENSIC TRACING (Requirement: Mission) ──
-                                            console.log("[FULL TABLE ROW]", row);
-                                            console.log("[ROW KEYS]", Object.keys(row));
-                                            console.log("[ROW.ITEM]", row.item);
-                                            console.log("[ROW.ORIGINAL]", (row as any).original);
-
-                                            // ── MANDATORY ITEM NORMALIZATION (Requirement 1) ──
-                                            const item = row.item;
-                                            const normalizedItem = {
-                                                description: item.description || item.item_name || item['Item Name'] || item['Description'] || item.item_description || "",
-                                                hsn: item.hsn || item.hsn_sac || item['HSN/SAC'] || item['HSN'] || item['hsn_sac'] || "",
-                                                qty: item.qty || item.quantity || item['Qty'] || item['Quantity'] || item['billed_quantity'] || 0,
-                                                rate: item.rate || item.item_rate || item['Item Rate'] || item['Rate'] || item['item_rate'] || 0,
-                                                taxable_value: item.taxable_value || item['Taxable Value'] || item['taxable_amount'] || 0,
-                                                uom: item.uom || item['UOM'] || item['unit'] || "",
-                                            };
-
-                                            // ── FORENSIC LOGS (Requirement 3 & 6) ──
-                                            console.log("[ROW ITEM IDENTITY TRACE]", item);
-                                            console.log("[NORMALIZED ITEM]", normalizedItem);
-
                                             return (
                                                 <tr
                                                     key={row.key}
@@ -1676,12 +1814,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                                         } hover:bg-gray-50`}
                                                 >
                                                     {visibleColumns.map((col) => {
-                                                        // ── RAW BACKEND KEY MAPPING (Requirement 1) ──
                                                         const COLUMN_TO_KEY: Record<string, string> = {
                                                             'item name': 'description',
                                                             'item description': 'description',
-                                                            'hsn/sac': 'hsn',
-                                                            'hsn': 'hsn',
+                                                            'hsn/sac': 'hsn_sac',
+                                                            'hsn': 'hsn_sac',
                                                             'qty': 'qty',
                                                             'quantity': 'qty',
                                                             'actual quantity': 'qty',
@@ -1689,55 +1826,58 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                                             'item rate': 'rate',
                                                             'rate': 'rate',
                                                             'taxable value': 'taxable_value',
-                                                            'total taxable value': 'total_taxable_value',
+                                                            'total taxable value': 'total_tax_value',
                                                             'invoice value': 'total_invoice_value',
                                                             'total invoice value': 'total_invoice_value',
-                                                            'voucher number': 'invoice_number',
-                                                            'invoice number': 'invoice_number',
+                                                            'voucher number': 'invoice_no',
+                                                            'invoice number': 'invoice_no',
+                                                            'invoice no': 'invoice_no',
+                                                            'bill no': 'invoice_no',
                                                             'voucher date': 'invoice_date',
                                                             'invoice date': 'invoice_date',
                                                             'date': 'invoice_date',
+                                                            'vendor name': 'vendor_name',
+                                                            'name': 'vendor_name',
                                                             'gstin': 'gstin',
                                                             'vendor gstin': 'gstin',
                                                             'uom': 'uom',
-                                                            'quantity uom': 'uom'
+                                                            'quantity uom': 'uom',
+                                                            'branch': 'branch',
+                                                            'irn': 'irn',
+                                                            'ack no': 'ack_no',
+                                                            'ack. no.': 'ack_no',
+                                                            'ack date': 'ack_date',
+                                                            'ack. date': 'ack_date',
+                                                            'bill address from': 'bill_from',
+                                                            'bill from': 'bill_from',
+                                                            'bill address to': 'bill_to',
+                                                            'bill to': 'bill_to',
+                                                            'place of supply': 'place_of_supply',
+                                                            'sac': 'hsn_sac'
                                                         };
 
                                                         const backendKey = COLUMN_TO_KEY[col.toLowerCase()] || col;
                                                         const isItem = isItemField(col);
-                                                        
+
                                                         let cellValue: any = isItem ? row.item[backendKey] : row.header[backendKey];
 
-                                                        // ── CELL DEBUG LOG (Requirement: Mandatory) ──
-                                                        if (isItem) {
-                                                            console.log("[CELL DEBUG]", {
-                                                                col,
-                                                                backendKey,
-                                                                row,
-                                                                item: row.item,
-                                                                description: (row.item as any)?.description,
-                                                                qty: (row.item as any)?.qty,
-                                                                hsn: (row.item as any)?.hsn,
-                                                                resolvedValue: cellValue
-                                                            });
+                                                        // [PHASE 11.9] FORENSIC LOGS
+                                                        if (row.itemIdx === 0 && col === visibleColumns[0]) {
+                                                            console.log("[CANONICAL_ROW_KEYS]", Object.keys(isItem ? row.item : row.header));
+                                                            console.log("[FRONTEND_ROW_KEYS]", visibleColumns);
                                                         }
-                                                        
+
                                                         // Fallback to aliased resolver if direct backend key is missing
                                                         if (cellValue === undefined || cellValue === null || cellValue === '') {
                                                             cellValue = resolveZohoValue(row.header, row.item, col);
                                                         }
 
-                                                        console.log("[CELL ACCESS]", col, "->", backendKey, ":", cellValue);
-
-                                                        // TRACE: Log rendering value for address
-                                                        if (col === 'Bill Address From' && row.isFirstOfInvoice && row.itemIdx === 0) {
-                                                            console.log("TRACE_UI_RENDER - row.header:", row.header);
-                                                            console.log("TRACE_UI_RENDER - cellValue for Bill Address From:", cellValue);
+                                                        if (cellValue) {
+                                                            console.log("[TABLE_RENDER_VALUE]", col, "->", cellValue);
                                                         }
-                                                        
-                                                        // Check if field was mapped confidently
+
                                                         const isAddressCol = col.toLowerCase().includes('address') || col.toLowerCase().includes('from') || col.toLowerCase().includes('to');
-                                                        
+
                                                         return (
                                                             <td
                                                                 key={col}
@@ -1770,7 +1910,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             </div>
                             <div className="bg-gray-50 px-4 py-3 border-t mt-auto">
                                 <p className="text-sm text-gray-700">
-                                    📊 {displayRows.length} line item row{displayRows.length !== 1 ? 's' : ''} extracted.
+                                    ðŸ“Š {displayRows.length} line item row{displayRows.length !== 1 ? 's' : ''} extracted.
                                     Each printed invoice row appears as a separate table row.
                                 </p>
                             </div>

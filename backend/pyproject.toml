@@ -21,8 +21,6 @@ dependencies = [
     "mysqlclient",
     "PyMySQL",
     "celery",
-    "redis",
-    "django-redis",
     "whitenoise",
     "drf-spectacular",
     "PyMuPDF",

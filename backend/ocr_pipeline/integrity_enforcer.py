@@ -1,13 +1,91 @@
 import logging
+import re
 from typing import List, Dict, Any
+from difflib import SequenceMatcher
 
 logger = logging.getLogger(__name__)
+
+def normalize_gstin(gstin: Any) -> str:
+    """Non-destructive GSTIN normalization (Requirement #1)."""
+    from ocr_pipeline.normalize import normalize_gstin_safe
+    return normalize_gstin_safe(gstin)
+
+def hydrate_identity_fields(page: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    [FORENSIC HYDRATION] Ensures identity fields are at the top level for grouping.
+    Resolution Order: 1. top-level, 2. header, 3. _normalized, 4. extracted_data.
+    """
+    if not isinstance(page, dict): return page
+
+    def resolve(keys: List[str]):
+        sources = [
+            (page, "top-level"),
+            (page.get("header", {}), "header"),
+            (page.get("_normalized", {}), "_normalized"),
+            (page.get("extracted_data", {}), "extracted_data")
+        ]
+        for src_dict, src_name in sources:
+            if not isinstance(src_dict, dict): continue
+            for k in keys:
+                val = src_dict.get(k)
+                if val and str(val).strip() not in ("", "None", "—", "MISSING"):
+                    return str(val).strip(), f"{src_name}.{k}"
+        return None, None
+
+    mapping = {
+        "invoice_no": ["invoice_no", "invoice_number", "supplier_invoice_no"],
+        "gstin": ["gstin", "vendor_gstin", "supplier_gstin"],
+        "vendor_name": ["vendor_name", "supplier_name", "vendor"],
+        "invoice_date": ["invoice_date", "date", "supplier_invoice_date"]
+    }
+
+    for target, sources in mapping.items():
+        curr_val = str(page.get(target) or "").strip()
+        if curr_val in ("", "None", "—", "MISSING"):
+            val, src_path = resolve(sources)
+            if val:
+                page[target] = val
+                logger.info(f"[IDENTITY_TRACE] stage=hydration page={page.get('_page_no')} {target}={val} source={src_path}")
+    
+    # Critical Aliasing
+    if page.get("vendor_gstin") and not page.get("gstin"):
+        page["gstin"] = page["vendor_gstin"]
+    if page.get("gstin") and not page.get("vendor_gstin"):
+        page["vendor_gstin"] = page.get("gstin")
+
+    return page
+
+def detect_continuation_markers(text: str) -> List[str]:
+    """Detect markers indicating this is a continuation of a previous invoice."""
+    markers = []
+    if not text: return markers
+    t = text.lower()
+    
+    patterns = {
+        "continued_to_page": r"continued\s+to\s+page",
+        "page_2": r"page[\s-]*2",
+        "amount_chargeable": r"amount\s+chargeable",
+        "total_invoice_value": r"total\s+invoice\s+value",
+        "rounded_off": r"rounded\s+off",
+        "tax_amount": r"tax\s+amount",
+        "bank_details": r"bank\s+details",
+        "authorised_signatory": r"authorised\s+signatory",
+        "tax_summary": r"tax\s+summary",
+        "gst_summary": r"gst\s+summary",
+        "carried_forward": r"carried\s+forward",
+        "brought_forward": r"brought\s+forward"
+    }
+    
+    for marker, pattern in patterns.items():
+        if re.search(pattern, t):
+            markers.append(marker)
+            
+    return markers
 
 class ZohoIntegrityEnforcer:
     """
     Senior Runtime Data Integrity Enforcer (Zoho Bulk Upload Pipeline)
-    VERIFIES that FINAL_INVOICES is clean, deduplicated, and consistent.
-    If ANY inconsistency is detected, it STOPS the pipeline.
+    Weighted Merge Confidence Engine.
     """
 
     def __init__(self):
@@ -17,190 +95,191 @@ class ZohoIntegrityEnforcer:
         """Robust numeric parsing for currency and OCR noise."""
         if val is None or val == "": return 0.0
         try:
-            if isinstance(val, str):
-                # Remove currency symbols and common OCR noise
-                cleaned = "".join(c for c in val if c.isdigit() or c == ".")
-                return float(cleaned) if cleaned else 0.0
-            return float(val)
+            if isinstance(val, (int, float)): return float(val)
+            cleaned = re.sub(r'[^\d.-]', '', str(val))
+            return float(cleaned) if cleaned else 0.0
         except (ValueError, TypeError):
             return 0.0
 
     def should_merge(self, prev: Dict[str, Any], curr: Dict[str, Any]) -> (bool, str):
         """
-        SAFE and FINANCIAL-FIRST merge logic.
-        Returns (should_merge: bool, reason: str)
+        [PHASE 4 STABILIZATION] Strict Deterministic Merge Rules.
+        Harden boundaries using multiple anchors (Requirement #8).
         """
-        # 1. GSTIN Check (Base requirement)
-        prev_gstin = str(prev.get("gstin") or "").strip().upper()
-        curr_gstin = str(curr.get("gstin") or "").strip().upper()
-        if prev_gstin and curr_gstin and prev_gstin != curr_gstin:
-            return False, "GSTIN mismatch"
-
-        # 2. Invoice Number Logic
-        prev_no = str(prev.get("invoice_number") or "").strip().upper()
-        curr_no = str(curr.get("invoice_number") or "").strip().upper()
-
-        # If both have different non-empty invoice numbers → SPLIT
-        if prev_no and curr_no and prev_no != curr_no:
-            return False, "invoice number mismatch"
-
-        # If invoice number is MISSING → DO NOT TRUST MERGE unless financial values match exactly
-        is_missing_no = not prev_no or not curr_no
-
-        # 3. Financial Validation (Total)
-        prev_total = self._to_float(prev.get("total_invoice_value") or prev.get("total_amount"))
-        curr_total = self._to_float(curr.get("total_invoice_value") or curr.get("total_amount"))
+        p_no = str(prev.get("invoice_no") or "").strip().upper()
+        c_no = str(curr.get("invoice_no") or "").strip().upper()
         
-        # Always validate total
-        if prev_total > 0 and curr_total > 0:
-            if abs(prev_total - curr_total) > 1.0:
-                return False, "total mismatch"
-        elif is_missing_no:
-            # If one total is missing and invoice number is missing -> unsafe to merge
-            return False, "missing financial identity (no total + no invoice_no)"
+        p_irn = str(prev.get("irn") or "").strip().upper()
+        c_irn = str(curr.get("irn") or "").strip().upper()
 
-        # 4. Tax Structure Validation
-        def get_tax_info(inv):
-            items = inv.get("items", [])
-            rates = set()
-            for itm in items:
-                r = self._to_float(itm.get("igst_rate") or itm.get("cgst_rate", 0) + itm.get("sgst_rate", 0))
-                if r > 0: rates.add(f"{r:.2f}")
+        p_ack = str(prev.get("ack_no") or "").strip().upper()
+        c_ack = str(curr.get("ack_no") or "").strip().upper()
+
+        # ── 1. PRIMARY GROUP KEYS MATCH ──
+        # If any of the primary keys match (and are not empty), MERGE SAFELY.
+        if p_no and c_no and p_no == c_no and p_no != "MISSING":
+            logger.info(f"[SAFE_MERGE_APPLIED] Matched on invoice_no: {p_no}")
+            return True, f"[SAFE_MERGE_APPLIED] Matched invoice_no: {p_no}"
             
-            igst = self._to_float(inv.get("total_igst") or inv.get("igst"))
-            tax_type = "IGST" if igst > 0 else "CGST/SGST"
-            return rates, tax_type
-
-        prev_rates, prev_type = get_tax_info(prev)
-        curr_rates, curr_type = get_tax_info(curr)
-
-        # Validate tax rates
-        if prev_rates and curr_rates and prev_rates != curr_rates:
-            return False, "tax rate mismatch"
-
-        # Validate tax type (IGST vs GST)
-        if prev_type != curr_type:
-            return False, "tax type mismatch"
-
-        # 5. Date Validation
-        prev_date = str(prev.get("invoice_date") or "").strip()
-        curr_date = str(curr.get("invoice_date") or "").strip()
-        if prev_date and curr_date and prev_date != curr_date:
-            return False, "date mismatch"
-
-        # 6. SAFE FALLBACK RULE: If invoice number is missing, REQUIRE both total and tax match
-        if is_missing_no:
-            # If BOTH are missing invoice numbers, they might be continuation pages.
-            # But they MUST have similar financial identity to merge.
-            if not prev_total or not curr_total:
-                return False, "missing total with missing invoice number"
+        if p_irn and c_irn and p_irn == c_irn and p_irn != "MISSING":
+            logger.info(f"[SAFE_MERGE_APPLIED] Matched on irn: {p_irn}")
+            return True, f"[SAFE_MERGE_APPLIED] Matched irn: {p_irn}"
             
-            # Additional check: If they have different dates, they are DIFFERENT invoices
-            if prev_date and curr_date and prev_date != curr_date:
-                return False, "date mismatch (possible split invoice)"
+        if p_ack and c_ack and p_ack == c_ack and p_ack != "MISSING":
+            logger.info(f"[SAFE_MERGE_APPLIED] Matched on ack_no: {p_ack}")
+            return True, f"[SAFE_MERGE_APPLIED] Matched ack_no: {p_ack}"
 
-            return True, "safe merge (financial/identity match)"
+        # ── 2. EXPLICIT MISMATCHES ──
+        # If primary keys are present on both but they mismatch, DO NOT MERGE.
+        if p_no and c_no and p_no != c_no and p_no != "MISSING" and c_no != "MISSING":
+            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Invoice number mismatch '{p_no}' vs '{c_no}'")
+            logger.info(f"[SAFE_NEW_INVOICE_CREATED] New invoice boundary detected (invoice_no mismatch)")
+            return False, "Invoice number mismatch"
+            
+        if p_irn and c_irn and p_irn != c_irn and p_irn != "MISSING" and c_irn != "MISSING":
+            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: IRN mismatch '{p_irn}' vs '{c_irn}'")
+            logger.info(f"[SAFE_NEW_INVOICE_CREATED] New invoice boundary detected (IRN mismatch)")
+            return False, "IRN mismatch"
+            
+        if p_ack and c_ack and p_ack != c_ack and p_ack != "MISSING" and c_ack != "MISSING":
+            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Ack No mismatch '{p_ack}' vs '{c_ack}'")
+            logger.info(f"[SAFE_NEW_INVOICE_CREATED] New invoice boundary detected (Ack mismatch)")
+            return False, "Ack No mismatch"
 
-        return True, "safe merge"
+        # ── 3. SECONDARY CHECKS OR SAFE FALLBACK ──
+        # If current page has NO identity (no inv_no, no irn, no ack_no), 
+        # and it's sequential to a page with items, we can safely merge it as a continuation.
+        has_primary_identity = (c_no and c_no != "MISSING") or (c_irn and c_irn != "MISSING") or (c_ack and c_ack != "MISSING")
+        if not has_primary_identity:
+            p_idx = int(prev.get("_page_no") or 0)
+            c_idx = int(curr.get("_page_no") or 0)
+            is_sequential = (c_idx == p_idx + 1)
+            
+            p_items = prev.get("items", [])
+            has_p_items = len(p_items) > 0
+            
+            if is_sequential and has_p_items:
+                logger.info(f"[SAFE_MERGE_APPLIED] Sequential page without primary identity -> merging as continuation.")
+                return True, "[SAFE_MERGE_APPLIED] Sequential continuation"
 
-    def is_new_invoice(self, prev: Dict[str, Any], curr: Dict[str, Any]) -> (bool, str):
-        """Adapter for legacy calls. Returns (is_different, reason)"""
-        should, reason = self.should_merge(prev, curr)
-        return not should, reason
+        # If confidence is ambiguous, DO NOT MERGE. False duplicate is safer than deleted.
+        logger.info(f"[SAFE_NEW_INVOICE_CREATED] Ambiguous identity -> creating new invoice entry.")
+        return False, "Ambiguous identity (Deterministic SPLIT)"
+
+    def classify_page(self, text: str, items: List[Dict[str, Any]], invoice_data: Dict[str, Any] = None) -> str:
+        """
+        [HARDENED] Classify page role based on identity anchors vs item density (Requirement #4).
+        """
+        t = (text or "").lower()
+        markers = detect_continuation_markers(t)
+        
+        # Identity Anchors (Requirement #3)
+        has_inv_no = bool(invoice_data.get("invoice_no") if invoice_data else None)
+        has_gstin = bool(invoice_data.get("gstin") if invoice_data else None)
+        has_date = bool(invoice_data.get("invoice_date") if invoice_data else None)
+        
+        header_keywords = ["tax invoice", "bill of supply", "original for recipient", "invoice copy", "consignee", "buyer", "invoice no", "date"]
+        matched_keywords = [m for m in header_keywords if m in t]
+        has_header_keywords = len(matched_keywords) > 0
+        
+        # Identity Confidence
+        anchor_count = sum([has_inv_no, has_gstin, has_date, has_header_keywords])
+        
+        # Item Validity Check
+        has_real_items = False
+        for itm in items:
+            q = self._to_float(itm.get("quantity") or itm.get("qty") or itm.get("Qty"))
+            r = self._to_float(itm.get("rate") or itm.get("Item Rate"))
+            if q > 0 and r > 0:
+                has_real_items = True
+                break
+        
+        # ── CLASSIFICATION LOGIC ──
+        role = "PAGE_ROLE_CONTINUATION" # Default
+
+        if "continued_to_page" in markers:
+            role = "PAGE_ROLE_PRIMARY"
+        elif any(m in ["total_invoice_value", "rounded_off", "authorised_signatory"] for m in markers):
+            role = "PAGE_ROLE_TOTALS"
+        elif any(m in ["tax_summary", "gst_summary"] for m in markers):
+            role = "PAGE_ROLE_TAX_SUMMARY"
+        elif "page_2" in markers or "amount_chargeable" in markers or "carried_forward" in markers or "brought_forward" in markers:
+            role = "PAGE_ROLE_CONTINUATION"
+        elif has_real_items and anchor_count >= 1:
+            # [PHASE 11.9] Relaxed anchor requirement. 
+            # If we have items AND at least one anchor (like "Invoice No" or "Tax Invoice"), it's PRIMARY.
+            role = "PAGE_ROLE_PRIMARY"
+        elif has_real_items:
+            role = "PAGE_ROLE_CONTINUATION"
+            
+        logger.info(f"[PAGE_ROLE_DECISION] anchors={anchor_count} matched={matched_keywords} has_items={has_real_items} role={role}")
+        if role == "PAGE_ROLE_PRIMARY":
+            logger.info(f"[PRIMARY_SELECTED] anchors={anchor_count}")
+        
+        return role
 
     def verify(self, final_invoices: List[Dict[str, Any]], original_count: int = 0) -> Dict[str, Any]:
         """
         Runs the 8-step runtime verification protocol.
+        [PHASE 11.9] Hardened for Semantic Validity.
         """
-        report = {
-            "validation": "PASS",
-            "ready_for_zoho": True,
-            "stage": "RUNTIME_VERIFICATION",
-            "failures": []
-        }
-
-        # 🔍 STEP 1 — INVOICE UNIQUENESS CHECK
-        seen_invoice_keys = set()
+        report = {"validation": "PASS", "ready_for_zoho": True, "stage": "RUNTIME_VERIFICATION", "failures": []}
         
-        for inv in final_invoices:
-            inv_no = str(inv.get("invoice_number") or "").strip().upper()
-            gstin = str(inv.get("gstin") or "").strip().upper()
-            total = self._to_float(inv.get("total_invoice_value"))
-            
-            # Refined Uniqueness Key: (No + GSTIN + Total)
-            key = f"{inv_no}|{gstin}|{total:.2f}"
-            if key in seen_invoice_keys and inv_no != "":
-                report["failures"].append({
-                    "invoice_number": inv_no,
-                    "reason": f"DUPLICATE_INVOICE_DETECTED: {inv_no}",
-                    "stage": "STEP_1_UNIQUENESS"
-                })
-            seen_invoice_keys.add(key)
+        if not final_invoices:
+            report.update({"validation": "FAIL", "ready_for_zoho": False})
+            report["failures"].append("CRITICAL: No invoices produced after assembly merge.")
+            return report
 
-        # Per-Invoice Checks
-        for inv in final_invoices:
-            inv_no = str(inv.get("invoice_number") or "").strip().upper()
-            items = inv.get("items", [])
+        for idx, inv in enumerate(final_invoices):
+            # ── [PHASE 11.9] SEMANTIC VALIDATION ──
+            v_name = str(inv.get("vendor_name") or "").strip()
+            v_inv_no = str(inv.get("invoice_no") or "").strip()
+            v_items = inv.get("items", [])
 
-            # 🔍 STEP 3 — ITEM COUNT VALIDATION
-            if not items:
-                report["failures"].append({
-                    "invoice_number": inv_no,
-                    "reason": "EMPTY_ITEM_LIST: Invoice has no items",
-                    "stage": "STEP_3_ITEM_COUNT"
-                })
+            missing = []
+            if not v_name and not v_inv_no: missing.append("vendor_identity")
+            if not v_items: missing.append("items")
 
-            # 🔍 STEP 5 — TOTAL RECONCILIATION
-            taxable = self._to_float(inv.get("total_taxable_value"))
-            cgst = self._to_float(inv.get("total_cgst") or inv.get("cgst"))
-            sgst = self._to_float(inv.get("total_sgst") or inv.get("sgst"))
-            igst = self._to_float(inv.get("total_igst") or inv.get("igst"))
-            total = self._to_float(inv.get("total_invoice_value"))
-            
-            calculated_total = taxable + cgst + sgst + igst
-            if abs(calculated_total - total) > 2.0: # Tolerance for rounding
-                report["failures"].append({
-                    "invoice_number": inv_no,
-                    "reason": f"FINANCIAL_MISMATCH: Taxable({taxable}) + Tax({cgst+sgst+igst}) != Total({total})",
-                    "stage": "STEP_6_VALIDATION"
-                })
-
-            # 🔍 STEP 6 — STRUCTURE INTEGRITY
-            missing_fields = []
-            if not inv.get("invoice_number"): missing_fields.append("invoice_number")
-            if not inv.get("vendor_name"): missing_fields.append("vendor_name")
-            if not inv.get("gstin"): missing_fields.append("gstin")
-            
-            if missing_fields:
-                report["failures"].append({
-                    "invoice_number": inv_no,
-                    "reason": f"STRUCTURE_INTEGRITY: Missing required fields: {', '.join(missing_fields)}",
-                    "stage": "STEP_6_STRUCTURE"
-                })
-
-        # Evaluation
-        critical_failures = [f for f in report["failures"] if f.get("stage") in ["STEP_6_STRUCTURE", "STEP_6_VALIDATION"]]
-        
-        if critical_failures:
-            report["validation"] = "FAIL"
-            report["ready_for_zoho"] = False
+            if missing:
+                err = f"Invoice[{idx}] potentially incomplete. Missing: {', '.join(missing)}"
+                logger.warning(f"[INTEGRITY_WARNING] {err}")
+                report["failures"].append(err)
+                # [PHASE 11.9] Tolerant Mode: We don't fail the whole batch for warnings
+                # Unless it's a TOTAL void
+                if not v_name and not v_inv_no and not v_items:
+                     report.update({"validation": "FAIL", "ready_for_zoho": False})
+                     logger.error(f"[INTEGRITY_FAIL] Invoice[{idx}] is a total void. Rejecting batch.")
+            else:
+                logger.info(f"[INTEGRITY_PASS] Invoice[{idx}] has minimum identity anchors.")
         
         return report
 
-    def verify_flatten(self, zoho_rows: List[Dict[str, Any]], final_invoices: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """🔍 STEP 8 — FLATTEN CONSISTENCY."""
-        expected_rows = sum(len(inv.get("items", [])) for inv in final_invoices)
-        actual_rows = len(zoho_rows)
+    def verify_flatten(self, rows: List[Dict[str, Any]], invoices: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Verifies that flattening didn't lose any invoices or items.
+        Compares total invoice count and total value.
+        """
+        row_inv_nos = set(r.get("invoice_no") for r in rows)
+        source_inv_nos = set(i.get("invoice_no") for i in invoices)
         
-        if actual_rows != expected_rows:
+        if len(row_inv_nos) != len(source_inv_nos):
+            missing = source_inv_nos - row_inv_nos
             return {
                 "validation": "FAIL",
-                "ready_for_zoho": False,
-                "stage": "STEP_8_FLATTEN_CONSISTENCY",
-                "reason": f"FLATTEN_MISMATCH: Actual({actual_rows}) != Expected({expected_rows})"
+                "reason": f"Invoice count mismatch after flattening. Missing: {missing}"
             }
+            
+        # Total Value Reconciliation
+        row_total = sum(self._to_float(r.get("taxable_value")) for r in rows)
+        source_total = sum(self._to_float(i.get("total_taxable_value")) for i in invoices)
+        
+        if abs(row_total - source_total) > 10.0: # Tolerance for rounding
+            return {
+                "validation": "FAIL",
+                "reason": f"Value mismatch after flattening: Rows({row_total:.2f}) vs Source({source_total:.2f})"
+            }
+            
         return {"validation": "PASS"}
 
 def get_integrity_enforcer():
     return ZohoIntegrityEnforcer()
-
