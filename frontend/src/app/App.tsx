@@ -415,6 +415,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleLocationChange = () => {
       setCurrentPath(window.location.pathname);
+      const params = new URLSearchParams(window.location.search);
+      const pageParam = params.get('page');
+      if (pageParam) {
+        setCurrentPage(pageParam as Page);
+      } else if (window.location.pathname === '/dashboard') {
+        setCurrentPage('Dashboard');
+      }
     };
 
     // Listen for browser back/forward buttons
@@ -430,6 +437,29 @@ const App: React.FC = () => {
 
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
+
+  // Synchronize currentPage state to URL query parameter
+  useEffect(() => {
+    const isMasterPath = currentPath.startsWith('/master');
+    const isAuthPath =
+      currentPath === '/login' ||
+      currentPath === '/signup' ||
+      currentPath === '/forgot-password' ||
+      currentPath === '/master/login' ||
+      currentPath === '/master/register' ||
+      currentPath === '/auth' ||
+      currentPath === '/login/business' ||
+      currentPath === '/register';
+
+    if (isLoggedIn && !isMasterPath && !isAuthPath) {
+      const url = new URL(window.location.href);
+      const currentPageInUrl = url.searchParams.get('page');
+      if (currentPageInUrl !== currentPage) {
+        url.searchParams.set('page', currentPage);
+        window.history.pushState({}, '', url.pathname + url.search);
+      }
+    }
+  }, [currentPage, isLoggedIn, currentPath]);
 
 
 
