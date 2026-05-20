@@ -553,6 +553,14 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 instance.vouch_amount = total
                 instance.save()
 
+            # Delete existing journal entries before re-posting to avoid duplicates
+            from .models import JournalEntry as JE
+            JE.objects.filter(
+                tenant_id=instance.tenant_id,
+                voucher_type='RECEIPT',
+                voucher_number=instance.voucher_number
+            ).delete()
+
             gv = self._mirror_to_generic_voucher(instance)
             self._mirror_to_customer_portal(instance)
             self._mirror_to_vendor_portal(instance)

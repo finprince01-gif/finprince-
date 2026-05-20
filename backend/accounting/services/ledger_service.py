@@ -65,12 +65,22 @@ def post_transaction(voucher_type, voucher_id, tenant_id, entries, transaction_d
         raise ValueError(f"Accounting mismatch: Sum(debit)={total_debit} != Sum(credit)={total_credit}")
 
     with transaction.atomic():
-        # Phase 3.1: Add SAFE CLEANUP before insert
+        # Phase 3.1: Add SAFE CLEANUP before insert.
+        # Delete by voucher_id (primary cleanup path).
         JournalEntry.objects.filter(
-            tenant_id=tenant_id, 
-            voucher_type=voucher_type, 
+            tenant_id=tenant_id,
+            voucher_type=voucher_type,
             voucher_id=voucher_id
         ).delete()
+        # Safety net: also delete by voucher_number to catch entries that may have been
+        # created with a different voucher_id (e.g., PaymentVoucher.id vs generic Voucher.id).
+        # This prevents duplicate ledger entries after editing a voucher.
+        if voucher_number:
+            JournalEntry.objects.filter(
+                tenant_id=tenant_id,
+                voucher_type=voucher_type,
+                voucher_number=voucher_number
+            ).delete()
 
         # Phase 3.2: Create JournalEntry rows with STRICT ledger_id usage
         journal_objects = []

@@ -692,6 +692,17 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 instance.vouch_amount = total
                 instance.save()
 
+                # ── FIX: Delete ALL existing journal entries for this voucher BEFORE re-posting ──
+                # During create(), journal entries may have been saved with voucher_id = instance.id
+                # (PaymentVoucher ID) OR with the generic Voucher ID. We must wipe both to prevent
+                # duplicate entries appearing in ledger reports after an edit.
+                from .models import JournalEntry as JE
+                JE.objects.filter(
+                    tenant_id=instance.tenant_id,
+                    voucher_type='PAYMENT',
+                    voucher_number=instance.voucher_number
+                ).delete()
+
                 self._mirror_to_vendor_portal(instance)
                 self._mirror_to_customer_portal(instance)
                 gv = self._mirror_to_generic_voucher(instance)
