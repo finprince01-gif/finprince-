@@ -23,6 +23,24 @@ import { getUserTypeFromToken } from './jwtUtils';
 // Environment configuration
 export const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '';
 
+/** Helper to identify public/anonymous authentication endpoints */
+const isAnonymousEndpoint = (url: string): boolean => {
+    return (
+        url.includes('/auth/login/') ||
+        url.includes('/auth/register/') ||
+        url.includes('/auth/refresh/') ||
+        url.includes('/auth/forgot-userid/') ||
+        url.includes('/auth/forgot-password/') ||
+        url.includes('/auth/request-reset-otp/') ||
+        url.includes('/auth/verify-otp-only/') ||
+        url.includes('/auth/verify-reset-otp/') ||
+        url.includes('/auth/request-otp/') ||
+        url.includes('/auth/reset-password/') ||
+        url.includes('/auth/check-phone/') ||
+        url.includes('/auth/create-account/')
+    );
+};
+
 class HttpClient {
     private client: AxiosInstance;
     private isRefreshing = false;
@@ -63,7 +81,7 @@ class HttpClient {
                 // Prioritize domain-specific access tokens
                 const token = isMasterAPI ? getMasterAccessToken() : getCompanyAccessToken();
                 
-                if (token && !endpoint.includes('/auth/')) {
+                if (token && !isAnonymousEndpoint(endpoint)) {
                     config.headers.Authorization = `Bearer ${token}`;
                 }
                 return config;
@@ -96,7 +114,7 @@ class HttpClient {
                 }
 
                 // 2. Handle Token Refresh (401 only, and not on auth endpoints)
-                if (status === 401 && !originalRequest._retry && !endpoint.includes('/auth/')) {
+                if (status === 401 && !originalRequest._retry && !isAnonymousEndpoint(endpoint)) {
                     if (this.isRefreshing) {
                         return new Promise((resolve, reject) => {
                             this.failedQueue.push({ resolve, reject });
