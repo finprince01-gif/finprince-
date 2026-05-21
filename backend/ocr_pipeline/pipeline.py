@@ -9,7 +9,6 @@ from google import genai
 from core.ai_proxy import api_key_manager
 from ocr_pipeline.extraction import extract_invoice
 from .normalize import (
-    normalize, 
     lossless_preserve, 
     is_empty, 
     get_canonical_export_record,
@@ -690,10 +689,10 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                 logger.info(f"[ASSEMBLY_IDEMPOTENT_EXIT] record={record.id}")
                 return {"status": "FINALIZED"}
 
-            # Update status to FINALIZING within the same lock trip
-            record.status = PipelineStatus.FINALIZING
-            record.save(update_fields=['status'])
-            logger.info(f"[DB_WRITE] table=InvoiceTempOCR action=STATUS_FINALIZING id={record.id}")
+            # ── [PHASE 10: APPEND-ONLY EVENT LOGGING] ──
+            from ocr_pipeline.models import log_pipeline_event, PipelineStatus
+            log_pipeline_event(record.id, PipelineStatus.FINALIZING, session_id=record.upload_session_id)
+            logger.info(f"[DB_WRITE] table=PipelineEvent action=STATUS_FINALIZING id={record.id}")
 
             total_expected = session_lock.expected_pages
             
@@ -733,7 +732,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         merger = get_forensic_merger()
         pages_list = []
         for k in sorted(raw_pages.keys(), key=int):
-            p = normalize(raw_pages[k])
+            p = get_canonical_export_record(raw_pages[k])
             p["_page_no"] = int(k)
             pages_list.append(p)
 
@@ -887,7 +886,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             record.save(update_fields=['status'])
             return {"status": "FAILED_EMPTY_EXPORT", "error": "validated_export_count/export_rows_count is 0"}
 
-        # 4. JSON SERIALIZATION (Outside Lock)
+        # 4. JSON SERIALIZATION & COMPRESSION (Phase 8: Snapshot Storage Hardening)
         final_json = {
             "data": final_invoices,
             "metadata": {
@@ -900,13 +899,16 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         # Prevent empty or corrupted snapshots from entering finalization
         enforce_state_transition(str(record.id), final_json, PipelineStage.SNAPSHOT)
 
-        json_payload = json.dumps(final_json).encode()
+        import gzip
+        json_payload = json.dumps(final_json).encode('utf-8')
+        compressed_payload = gzip.compress(json_payload)
         
         # 5. S3 OFFLOADING (Outside Lock)
-        s3_key = f"snapshots/{record.tenant_id}/{record.upload_session_id}_{int(time.time())}.json"
+        s3_key = f"snapshots/{record.tenant_id}/{record.upload_session_id}_{int(time.time())}.json.gz"
         from core.storage import StorageService
-        StorageService().upload_file(json_payload, s3_key, content_type='application/json')
-        logger.info(f"[SNAPSHOT_OFFLOADED] session={record.upload_session_id} key={s3_key}")
+        # Pass the compressed bytes directly
+        StorageService().upload_file(compressed_payload, s3_key, content_type='application/json')
+        logger.info(f"[SNAPSHOT_OFFLOADED_COMPRESSED] session={record.upload_session_id} key={s3_key} original_bytes={len(json_payload)} compressed_bytes={len(compressed_payload)}")
 
         # 6. ATOMIC PERSISTENCE (Final Transaction)
         logger.info(f"[SNAPSHOT_PERSIST_START] session={record.upload_session_id} tenant={record.tenant_id}")
@@ -925,16 +927,29 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             siblings = []
             import hashlib
             for idx, inv_ui in enumerate(final_invoices):
+                # ── [PHASE 13: STABLE IDENTITY HASH (EXPANDED)] ──
+                # Replaces fuzzy deduplication with semantic deterministic hash
+                # Expanded to include tenant, session, date, and page to prevent cross-tenant collisions, 
+                # recurring invoice collisions, and legitimate intra-session duplicate copies.
+                inv_no = str(inv_ui.get('invoice_no') or '').strip().upper()
+                gstin = str(inv_ui.get('gstin') or '').strip().upper()
+                total_val = str(inv_ui.get('total_invoice_value') or inv_ui.get('total_amount') or '0').strip()
+                inv_date = str(inv_ui.get('invoice_date') or '').strip().upper()
+                page_no = str(inv_ui.get('_page_no') or idx).strip()
+                
+                identity_string = f"{record.tenant_id}::{record.upload_session_id}::{record.id}::{inv_no}::{gstin}::{total_val}::{inv_date}::{page_no}"
+                stable_hash = hashlib.sha256(identity_string.encode('utf-8')).hexdigest()
+                
                 if idx == 0:
+                    record.file_hash = stable_hash
                     sync_record_flattened_fields(record, inv_ui, commit=False)
-                    logger.info(f"[STAGING_ROW_CREATED] primary=True index={idx} invoice_no={inv_ui.get('invoice_no')}")
+                    logger.info(f"[STAGING_ROW_CREATED] primary=True index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
                 else:
-                    split_hash = hashlib.sha256(f"{record.file_hash}_split_{idx}".encode()).hexdigest()
                     sibling = InvoiceTempOCR(
                         tenant_id=record.tenant_id,
                         upload_session_id=record.upload_session_id,
                         file_path=record.file_path,
-                        file_hash=split_hash,
+                        file_hash=stable_hash,
                         group_id=record.group_id,
                         status=PipelineStatus.FINALIZED,
                         is_primary=True,
@@ -943,7 +958,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                     )
                     sync_record_flattened_fields(sibling, inv_ui, commit=False)
                     siblings.append(sibling)
-                    logger.info(f"[STAGING_ROW_CREATED] primary=False index={idx} invoice_no={inv_ui.get('invoice_no')} hash={split_hash[:8]}")
+                    logger.info(f"[STAGING_ROW_CREATED] primary=False index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
             
             if siblings:
                 InvoiceTempOCR.objects.bulk_create(siblings)
@@ -996,7 +1011,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                         logger.error(f"[SNAPSHOT_VALIDATION_FAILED] Validation query returned 0 rows for session={record.upload_session_id}!")
 
                     # PIPELINE PARITY VALIDATION
-                    job_total = record.job.total_files if (record.job and record.job.total_files) else 1
+                    job_total = record.job.total_files if (hasattr(record, 'job') and record.job and hasattr(record.job, 'total_files')) else 1
                     db_rows = InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).count()
                     snapshot_obj = val_query.first()
                     snapshot_rows = snapshot_obj.invoice_count if snapshot_obj else 0
@@ -1019,6 +1034,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                             
                         logger.error(f"[PIPELINE_PARITY_FAILURE] session_id='{record.upload_session_id}' mismatch detected! Stage of disappearance='{disappearance_stage}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} exported_dtos={len(final_invoices)} snapshot_rows={snapshot_rows} hydrated_rows={db_rows}")
                 except Exception as ex:
+                    import traceback
                     logger.error(f"[SNAPSHOT_CALLBACK_FATAL] Exception in on_commit_callback: {ex} trace={traceback.format_exc()} session_id={record.upload_session_id} tenant_id={record.tenant_id} job_id={kwargs.get('job_id')} record_id={record.id}")
 
             transaction.on_commit(on_commit_callback)

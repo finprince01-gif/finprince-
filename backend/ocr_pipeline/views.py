@@ -679,6 +679,9 @@ class CleanOCRStagingView(views.APIView):
             try:
                 logger.debug(f"[S3_SNAPSHOT_FETCH] session={snapshot.session_id} key={snapshot.s3_key}")
                 data = StorageService().get_file(snapshot.s3_key)
+                if snapshot.s3_key.endswith('.gz'):
+                    import gzip
+                    data = gzip.decompress(data)
                 return json.loads(data)
             except Exception as e:
                 logger.error(f"[S3_FETCH_FAILED] {e}")

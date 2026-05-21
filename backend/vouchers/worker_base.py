@@ -150,7 +150,22 @@ class BaseWorker(ABC):
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, close_old_connections)
 
-                if len(self.active_tasks) >= CONCURRENCY_LIMIT:
+                # [PHASE 3: DYNAMIC BACKPRESSURE]
+                # If we are the ingestion worker, check AI queue depth
+                current_limit = CONCURRENCY_LIMIT
+                if self.role == "INGESTION":
+                    try:
+                        ai_depth = queue_service.get_queue_depth('ai')
+                        if ai_depth > 5000:
+                            current_limit = max(1, CONCURRENCY_LIMIT // 4)
+                            logger.warning(f"[DYNAMIC_BACKPRESSURE] AI queue depth = {ai_depth}. Throttling INGESTION concurrency to {current_limit}")
+                        elif ai_depth > 2000:
+                            current_limit = max(5, CONCURRENCY_LIMIT // 2)
+                            logger.info(f"[DYNAMIC_BACKPRESSURE] AI queue depth = {ai_depth}. Throttling INGESTION concurrency to {current_limit}")
+                    except Exception as e:
+                        logger.error(f"[BACKPRESSURE_CHECK_FAIL] {e}")
+
+                if len(self.active_tasks) >= current_limit:
                     await asyncio.sleep(0.5)
                     continue
 
@@ -162,7 +177,7 @@ class BaseWorker(ABC):
                     self.executor,
                     lambda: queue_service.receive(
                         queue_type=self.queue_type,
-                        max_messages=min(10, CONCURRENCY_LIMIT - len(self.active_tasks)),
+                        max_messages=min(10, current_limit - len(self.active_tasks)),
                         wait_time=20
                     )
                 )
@@ -488,6 +503,16 @@ class BaseWorker(ABC):
                     
                     logger.error(f"[WORKER_STAGE_FAILURE] correlation_id={correlation_id} upload_session_id={session_id} tenant_id={tenant_id} job_id={job_id} record_id={record_id} invoice_no={invoice_no} queue_name={queue_name} worker_id={worker_id} worker_pid={worker_pid} hostname={hostname} retry_count={retry_count} visibility_timeout={visibility_timeout} processing_duration_ms={duration_ms} dto_status=FAILED exception_class={exc_class} exception_message='{str(e)}'")
 
+                    # [PHASE 4: STRICT ACK & TERMINAL ERROR ROUTING]
+                    if exc_class == 'TerminalTaskError':
+                        logger.error(f"[TERMINAL_FAILURE_DETECTED] id={task_id} queue={queue_name} error='{str(e)}' - Routing direct to DLQ (No Retries).")
+                        await self._quarantine_poison_document(task, f"TERMINAL_ERROR: {str(e)}")
+                        if handle:
+                            loop = asyncio.get_running_loop()
+                            await asyncio.shield(loop.run_in_executor(None, lambda: queue_service.delete(handle, queue_type=self.queue_type)))
+                            logger.info(f"[QUEUE_MESSAGE_DELETE] id={msg_id} queue={queue_name}")
+                            logger.info(f"[MESSAGE_ACK] id={task_id} queue={queue_name} (Terminal Failure)")
+                        return
                     # [PHASE 5: POISON DOCUMENT FORENSICS]
                     # Logic to move to PoisonDocument model if retry count exceeded
                     receive_count = int(task.get('_sqs_receive_count', 1))
@@ -504,9 +529,10 @@ class BaseWorker(ABC):
                         logger.info(f"[WORKER_RETRY] correlation_id={correlation_id} upload_session_id={session_id} retry_count={receive_count} - Will retry.")
                         if handle:
                             try:
+                                backoff_seconds = min(900, (2 ** receive_count) * 10) # 20s, 40s, 80s... max 15m
                                 loop = asyncio.get_running_loop()
-                                await loop.run_in_executor(None, lambda: queue_service.change_visibility(handle, 0, queue_type=self.queue_type))
-                                logger.info(f"[MESSAGE_NACK] id={task_id} queue={queue_name} reason=FAILED")
+                                await loop.run_in_executor(None, lambda: queue_service.change_visibility(handle, backoff_seconds, queue_type=self.queue_type))
+                                logger.info(f"[MESSAGE_NACK] id={task_id} queue={queue_name} reason=FAILED backoff={backoff_seconds}s")
                             except Exception as ce:
                                 logger.error(f"[NACK_ERR] {ce}")
         except Exception as e:
@@ -524,8 +550,11 @@ class BaseWorker(ABC):
             logger.critical(f"[WORKER_UNHANDLED_EXCEPTION] correlation_id={correlation_id} upload_session_id={session_id} queue_name={queue_name} exception_class={exc_class} exception_message='{str(e)}'")
             if handle:
                 try:
-                    queue_service.change_visibility(handle, 0, queue_type=self.queue_type)
-                    logger.info(f"[MESSAGE_NACK] id={msg_id} queue={queue_name} reason=UNHANDLED_EXCEPTION")
+                    # Exponential backoff for unhandled exceptions too
+                    receive_count = int(raw_task.get('_sqs_receive_count', 1))
+                    backoff_seconds = min(900, (2 ** receive_count) * 10)
+                    queue_service.change_visibility(handle, backoff_seconds, queue_type=self.queue_type)
+                    logger.info(f"[MESSAGE_NACK] id={msg_id} queue={queue_name} reason=UNHANDLED_EXCEPTION backoff={backoff_seconds}s")
                     logger.info(f"[WORKER_VISIBILITY_RECYCLE] msg_id={msg_id} queue={queue_name}")
                 except Exception as ce:
                     logger.error(f"[VISIBILITY_RECYCLE_FAIL] {ce}")

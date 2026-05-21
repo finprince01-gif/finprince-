@@ -70,7 +70,7 @@ except Exception as e:
 # 3. DISPATCHER LOGIC
 def main():
     parser = argparse.ArgumentParser(description="OCR Pipeline Specialized Worker")
-    parser.add_argument('--role', required=True, choices=['ingestion', 'ai', 'assembly', 'finalize', 'export'],
+    parser.add_argument('--role', required=True, choices=['ingestion', 'ai', 'assembly', 'finalize', 'export', 'materialization'],
                         help="The specialized role this worker instance will perform.")
     args = parser.parse_args()
 
@@ -80,13 +80,15 @@ def main():
     from vouchers.assembly_worker import AssemblyWorker
     from vouchers.finalize_worker import FinalizeWorker
     from vouchers.export_worker import ExportWorker
+    from vouchers.materialize_worker import MaterializeWorker
 
     role_map = {
         'ingestion': IngestionWorker,
         'ai': AIWorker,
         'assembly': AssemblyWorker,
         'finalize': FinalizeWorker,
-        'export': ExportWorker
+        'export': ExportWorker,
+        'materialization': MaterializeWorker
     }
 
     worker_class = role_map.get(args.role)

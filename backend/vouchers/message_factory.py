@@ -54,9 +54,23 @@ class MessageFactory:
         if not correlation_id:
             correlation_id = str(uuid.uuid4())
 
+        # Generate Deterministic Dedupe Key (Phase 2 - Dedupe & Idempotency)
+        import hashlib
+        import json
+        record_id = payload.get('record_id', 'unknown')
+        invoice_no = payload.get('invoice_no', '')
+        # Dedupe key incorporates task type, tenant, session, record, page, and core identifiers
+        dedupe_string = f"{task_type}:{tenant_id}:{session_id}:{record_id}:{page_number}:{invoice_no}"
+        dedupe_key = hashlib.sha256(dedupe_string.encode('utf-8')).hexdigest()
+
+        # Distributed Tracing ID
+        trace_id = f"trace-{uuid.uuid4().hex[:12]}-{int(time.time())}"
+
         message = {
             "id": str(uuid.uuid4()), # Message Instance ID
             "correlation_id": correlation_id,
+            "trace_id": trace_id,
+            "dedupe_key": dedupe_key,
             "session_id": session_id,
             "tenant_id": str(tenant_id),
             "task_type": task_type,
@@ -64,15 +78,22 @@ class MessageFactory:
             "page_number": page_number,
             "expected_pages": expected_pages,
             "payload_version": payload_version,
-            "retry_count": retry_count,
+            "retry_metadata": {
+                "retry_count": retry_count,
+                "first_attempt_at": time.time(),
+                "last_attempt_at": time.time(),
+                "dlq_routed": False,
+                "failure_reasons": []
+            },
             "timestamp": time.time(),
             "payload": payload
         }
 
-        # [PHASE 11.9] Forensic Producer Logging
+        # [PHASE 11.9 / Phase 2] Forensic Producer Logging
         logger.info(
             f"[CANONICAL_MESSAGE_EMITTED] task_type={task_type} "
             f"ver={payload_version} corr={correlation_id} "
+            f"trace_id={trace_id} dedupe_key={dedupe_key} "
             f"session={session_id} tenant={tenant_id}"
         )
         return message

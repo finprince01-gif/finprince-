@@ -54,7 +54,7 @@ def validate_dependencies():
     # C. SQS (Role-Specific Queues)
     try:
         from core.sqs import queue_service
-        roles = ['ingestion', 'ai', 'assembly', 'finalize', 'export']
+        roles = ['ingestion', 'ai', 'assembly', 'finalize', 'export', 'materialization']
         for role in roles:
             # [PHASE 11.8] Ensure every role has a unique URL and is reachable
             url = queue_service._get_queue_url(role)
@@ -75,7 +75,7 @@ def validate_dependencies():
     return True
 
 # 3. WORKER ORCHESTRATION
-WORKER_ROLES = ['ingestion', 'ai', 'assembly', 'finalize', 'export']
+WORKER_ROLES = ['ingestion', 'ai', 'assembly', 'finalize', 'export', 'materialization']
 processes: Dict[str, subprocess.Popen] = {}
 
 def start_worker(role: str):

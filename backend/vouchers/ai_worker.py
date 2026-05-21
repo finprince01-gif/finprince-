@@ -145,6 +145,22 @@ class AIWorker(BaseWorker):
 
         logger.info(f"[AI_PAGE_START] record={record_id} page={page_idx} session={session_id} correlation_id={correlation_id} worker_role=AI")
 
+        # ── [PHASE 13: IDEMPOTENCY CHECK] ──
+        try:
+            from ocr_pipeline.models import InvoicePageResult
+            loop = asyncio.get_running_loop()
+            already_processed = await loop.run_in_executor(
+                None, 
+                lambda: InvoicePageResult.objects.filter(record_id=record_id, page_number=page_idx, is_failed=False).exists()
+            )
+            if already_processed:
+                logger.info(f"[IDEMPOTENCY_SKIP] record={record_id} page={page_idx} already successfully processed. Skipping AI call.")
+                # We still need to ensure assembly gets the message
+                await self._process_result({**task, 'payload': payload}, {"status": "SKIPPED_DUPLICATE"})
+                return
+        except Exception as e:
+            logger.error(f"[IDEMPOTENCY_CHECK_FAIL] {e}")
+
         try:
             async with GLOBAL_AI_SEMAPHORE:
                 from core.ai_proxy import process_ai_request
@@ -304,66 +320,71 @@ class AIWorker(BaseWorker):
         session_id = task.get('session_id') or payload.get('session_id', 'unknown')
         tenant_id = task.get('tenant_id') or payload.get('tenant_id', 'unknown')
         correlation_id = task.get('correlation_id')
-
-        from ocr_pipeline.normalize import get_canonical_export_record
-        from ocr_pipeline.extraction import _repair_json
-
-        raw_reply = result.get('reply', '') if result else ''
-        canonical_payload = {}
+        
         is_failed = False
-
-        if result and result.get('status') != 'OCR_FAILED' and raw_reply:
-            try:
-                loop = asyncio.get_running_loop()
-                repaired_text, _, _ = await loop.run_in_executor(
-                    None,
-                    lambda: _repair_json(raw_reply, record_id=record_id, page=page_idx)
-                )
-                logger.info(f"[AI_PARSE_START] record={record_id} page={page_idx}")
-                parsed = json.loads(repaired_text)
-                canonical_payload = get_canonical_export_record(parsed)
-                is_failed = not self._is_dto_valid(canonical_payload)
-                if not is_failed:
-                    logger.info(f"[AI_PAGE_SUCCESS] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI")
-                else:
-                    logger.error(f"[AI_PAGE_FAIL] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI reason=invalid_dto")
-            except Exception as e:
-                logger.error(f"[AI_PARSE_ERR] {e} trace={traceback.format_exc()}")
-                canonical_payload = {"_error": str(e)}
-                is_failed = True
-                logger.error(f"[AI_PAGE_FAIL] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI reason=parse_err")
+        
+        # [PHASE 13] If skipped due to idempotency, DO NOT overwrite the DB, just push to assembly
+        if result and result.get('status') == 'SKIPPED_DUPLICATE':
+            logger.info(f"[IDEMPOTENCY_FORWARDING] record={record_id} page={page_idx}")
         else:
-            is_failed = True
-            canonical_payload = {"_error": result.get('error') if result else "TIMEOUT_OR_NULL"}
-            logger.error(f"[AI_PAGE_FAIL] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI reason=ocr_failed")
+            from ocr_pipeline.normalize import get_canonical_export_record
+            from ocr_pipeline.extraction import _repair_json
 
-        def _persist():
-            from core.redis_orchestrator import orchestrator
-            with transaction.atomic():
-                res_obj, created = InvoicePageResult.objects.update_or_create(
-                    record_id=record_id,
-                    page_number=page_idx,
-                    defaults={
-                        'canonical_payload': canonical_payload,
-                        'is_failed': is_failed,
-                        'session_id': task.get('upload_session_id', 'unknown')
-                    }
-                )
-                if not res_obj.counted_in_barrier:
-                    SessionFinalizationState.objects.filter(id=str(record_id)).update(
-                        ai_completed_pages=models.F('ai_completed_pages') + 1,
-                        failed_pages=models.F('failed_pages') + (1 if is_failed else 0)
+            raw_reply = result.get('reply', '') if result else ''
+            canonical_payload = {}
+
+            if result and result.get('status') != 'OCR_FAILED' and raw_reply:
+                try:
+                    loop = asyncio.get_running_loop()
+                    repaired_text, _, _ = await loop.run_in_executor(
+                        None,
+                        lambda: _repair_json(raw_reply, record_id=record_id, page=page_idx)
                     )
-                    res_obj.counted_in_barrier = True
-                    res_obj.save(update_fields=['counted_in_barrier'])
-            orchestrator.update_session_status(record_id, "PROCESSING", progress=0.0)
-            from ocr_pipeline.pipeline import trigger_next_fanout
-            trigger_next_fanout(record_id)
+                    logger.info(f"[AI_PARSE_START] record={record_id} page={page_idx}")
+                    parsed = json.loads(repaired_text)
+                    canonical_payload = get_canonical_export_record(parsed)
+                    is_failed = not self._is_dto_valid(canonical_payload)
+                    if not is_failed:
+                        logger.info(f"[AI_PAGE_SUCCESS] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI")
+                    else:
+                        logger.error(f"[AI_PAGE_FAIL] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI reason=invalid_dto")
+                except Exception as e:
+                    logger.error(f"[AI_PARSE_ERR] {e} trace={traceback.format_exc()}")
+                    canonical_payload = {"_error": str(e)}
+                    is_failed = True
+                    logger.error(f"[AI_PAGE_FAIL] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI reason=parse_err")
+            else:
+                is_failed = True
+                canonical_payload = {"_error": result.get('error') if result else "TIMEOUT_OR_NULL"}
+                logger.error(f"[AI_PAGE_FAIL] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI reason=ocr_failed")
 
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(self.executor, _persist)
+            def _persist():
+                from core.redis_orchestrator import orchestrator
+                with transaction.atomic():
+                    res_obj, created = InvoicePageResult.objects.update_or_create(
+                        record_id=record_id,
+                        page_number=page_idx,
+                        defaults={
+                            'canonical_payload': canonical_payload,
+                            'is_failed': is_failed,
+                            'session_id': task.get('upload_session_id', 'unknown')
+                        }
+                    )
+                    if not res_obj.counted_in_barrier:
+                        SessionFinalizationState.objects.filter(id=str(record_id)).update(
+                            ai_completed_pages=models.F('ai_completed_pages') + 1,
+                            failed_pages=models.F('failed_pages') + (1 if is_failed else 0)
+                        )
+                        res_obj.counted_in_barrier = True
+                        res_obj.save(update_fields=['counted_in_barrier'])
+                orchestrator.update_session_status(record_id, "PROCESSING", progress=0.0)
+                from ocr_pipeline.pipeline import trigger_next_fanout
+                trigger_next_fanout(record_id)
 
-        await self._update_task_status(task, is_failed)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(self.executor, _persist)
+
+            await self._update_task_status(task, is_failed)
 
         # Push to Assembly — ALWAYS forward so assembly barrier can complete
         from .message_factory import message_factory

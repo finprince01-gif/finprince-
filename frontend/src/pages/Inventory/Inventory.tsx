@@ -3077,16 +3077,16 @@ const InventoryPage: React.FC = () => {
             total_value: item.total_value || 0
           })),
 
-        // Transit Details
-        dispatch_from: grnTransitReceivedIn,
-        mode_of_transport: grnTransitMode,
-        dispatch_date: grnTransitReceiptDate,
-        dispatch_time: grnTransitReceiptTime,
-        delivery_type: grnTransitDeliveryType,
-        transporter_id: grnTransitTransporterId,
-        transporter_name: grnTransitTransporterName,
-        vehicle_no: grnTransitVehicleNo,
-        lr_gr_consignment: grnTransitLrGrConsignment
+        // Transit Details — convert empty strings to null for Django date/time fields
+        dispatch_from: grnTransitReceivedIn || null,
+        mode_of_transport: grnTransitMode || null,
+        dispatch_date: grnTransitReceiptDate || null,
+        dispatch_time: grnTransitReceiptTime || null,
+        delivery_type: grnTransitDeliveryType || null,
+        transporter_id: grnTransitTransporterId || null,
+        transporter_name: grnTransitTransporterName || null,
+        vehicle_no: grnTransitVehicleNo || null,
+        lr_gr_consignment: grnTransitLrGrConsignment || null
       };
 
       await httpClient.post('/api/inventory/operations/new-grn/', payload);

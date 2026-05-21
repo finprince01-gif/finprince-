@@ -72,6 +72,7 @@ class BulkInvoiceJob(models.Model):
     tenant_id = models.CharField(max_length=100)
     upload_session_id = models.CharField(max_length=255, null=True)
     file_hash = models.CharField(max_length=64, null=True, db_index=True)
+    upload_type = models.CharField(max_length=50, default='ZOHO')
     total_files = models.IntegerField(default=0)
     processed_count = models.IntegerField(default=0)
     failed_count = models.IntegerField(default=0)

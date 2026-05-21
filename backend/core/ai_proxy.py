@@ -337,10 +337,17 @@ def _call_gemini_single(prompt: Any, request_data: dict, api_key: str, model_nam
 
     return response.text
 
+class TerminalTaskError(Exception):
+    """Raised for non-retryable AI orchestration errors (Phase 4)."""
+    pass
+
 def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     """
     Production-grade retry logic with exponential backoff and jitter.
     Specifically targets Phase 8 requirement: Gemini Retry Storm protection.
+    STRICT RETRY RULE (Phase 4):
+    - Do NOT retry: auth failures, IP restriction, invalid API keys, quota-disabled, malformed requests.
+    - Retry ONLY: transient network failures, rate limits, 5xx provider failures.
     """
     import random
     MAX_ATTEMPTS = 5
@@ -354,12 +361,19 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
             last_error = e
             err_str = str(e).lower()
             
-            # Non-retryable errors
-            if "invalid_argument" in err_str or "permission_denied" in err_str:
-                logger.error(f"[AI_TERMINAL_ERROR] {e}")
-                raise e
+            # Non-retryable errors (Terminal Auth, IP, Quota Disabled, Malformed)
+            terminal_keywords = [
+                "invalid_argument", "permission_denied", "unauthenticated", 
+                "invalid api key", "api key not valid", "quota_disabled",
+                "billing not enabled", "ip space", "malformed"
+            ]
             
-            # Retryable errors (429, 500, 503, etc)
+            if any(k in err_str for k in terminal_keywords):
+                logger.error(f"[AI_TERMINAL_ERROR] {e} - Matching keyword: {next((k for k in terminal_keywords if k in err_str), 'unknown')}")
+                raise TerminalTaskError(str(e))
+            
+            # Retryable errors (429 Rate Limits, 5xx, timeouts)
+            # Default fallback for unhandled exceptions is to assume transient network issue
             if attempt < MAX_ATTEMPTS - 1:
                 delay = (base_delay * (2 ** attempt)) + (random.random() * 0.5)
                 logger.warning(f"[AI_RETRY] Attempt {attempt+1} failed: {e}. Retrying in {delay:.2f}s...")

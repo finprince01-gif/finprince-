@@ -25,7 +25,8 @@ class QueueService:
                 'ai': os.getenv('SQS_AI_QUEUE_URL'),
                 'assembly': os.getenv('SQS_ASSEMBLY_QUEUE_URL'),
                 'finalize': os.getenv('SQS_FINALIZE_QUEUE_URL'),
-                'export': os.getenv('SQS_EXPORT_QUEUE_URL')
+                'export': os.getenv('SQS_EXPORT_QUEUE_URL'),
+                'materialization': os.getenv('SQS_MATERIALIZATION_QUEUE_URL')
             }
              # Forensic Logging
              unique_urls = {v for v in self._queue_mapping.values() if v}
@@ -125,20 +126,6 @@ class QueueService:
         if not sqs or not queue_url:
             return []
             
-        if self.sqs and self.queue_url:
-            try:
-                response = self.sqs.receive_message(
-                    QueueUrl=self.queue_url,
-                    MaxNumberOfMessages=max_messages,
-                    WaitTimeSeconds=wait_time,
-                    AttributeNames=['All']
-                )
-                return response.get('Messages', [])
-            except Exception as e:
-                logger.error(f"SQS Receive Failed: {str(e)}")
-                return []
-        return []
-
         # [PHASE 11.9] Forensic Receive Trace (DEBUG only to reduce noise)
         logger.debug(f"[RECEIVE_MESSAGE_CALL] queue={queue_type} url={queue_url} wait={wait_time}")
         

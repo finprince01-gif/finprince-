@@ -3,6 +3,7 @@ from django.db import models
 from django.utils import timezone
 from datetime import datetime
 from enum import Enum
+import uuid
 
 class PipelineStatus(models.TextChoices):
     QUEUED = 'QUEUED', 'Queued'
@@ -12,6 +13,206 @@ class PipelineStatus(models.TextChoices):
     FINALIZING = 'FINALIZING', 'Finalizing'
     FINALIZED = 'FINALIZED', 'Finalized'
     FAILED = 'FAILED', 'Failed'
+
+class WorkflowSequence(models.Model):
+    """
+    PHASE 7: EVENT SEQUENCE CONTENTION FIX
+    Dedicated table for sequence generation to prevent InnoDB gap-lock deadlocks
+    caused by MAX(event_sequence) + 1 over the main PipelineEvent table.
+    """
+    workflow_id = models.CharField(max_length=255, primary_key=True)
+    current_sequence = models.BigIntegerField(default=0)
+    current_version = models.BigIntegerField(default=0)
+    last_event_id = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'workflow_sequences'
+
+class PipelineEvent(models.Model):
+    """
+    PHASE 10: DB Hardening (Append-only Event Table).
+    Immutable state transitions to prevent row-lock contention on InvoiceTempOCR.
+    """
+    id = models.BigAutoField(primary_key=True)
+    record_id = models.CharField(max_length=255, db_index=True)
+    session_id = models.CharField(max_length=255, db_index=True, null=True, blank=True)
+    status = models.CharField(max_length=50)
+    worker_node = models.CharField(max_length=255, null=True, blank=True)
+    metadata = models.JSONField(null=True, blank=True)
+    
+    # ── [PHASE 2 & 3: EVENT VERSIONING & CAUSAL ORDERING] ──
+    workflow_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    workflow_version = models.BigIntegerField(default=1)
+    event_sequence = models.BigIntegerField(default=1)
+    causation_id = models.CharField(max_length=255, null=True, blank=True)
+    correlation_id = models.CharField(max_length=255, null=True, blank=True)
+    parent_event_id = models.BigIntegerField(null=True, blank=True)
+    
+    # ── [PHASE 3 & 6: SCHEMA VERSIONING & EVENT INTEGRITY] ──
+    event_schema_version = models.IntegerField(default=1)
+    event_checksum = models.CharField(max_length=64, null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'pipeline_events'
+        unique_together = (('workflow_id', 'event_sequence'),)
+        indexes = [
+            models.Index(fields=['record_id', 'created_at']),
+            models.Index(fields=['session_id', 'status']),
+            models.Index(fields=['workflow_id', 'workflow_version']),
+        ]
+
+    def is_valid(self):
+        """Phase 6: Verifies the cryptographic integrity of the event."""
+        import hashlib
+        import json
+        payload = f"{self.workflow_id}:{self.event_sequence}:{self.status}:{self.workflow_version}:{json.dumps(self.metadata or {}, sort_keys=True)}"
+        expected = hashlib.sha256(payload.encode('utf-8')).hexdigest()
+        return self.event_checksum == expected
+
+    def save(self, *args, **kwargs):
+        """Phase 6: Enforce Strict Immutability and Checksum Generation."""
+        if self.pk is not None:
+            raise ValueError("[EVENT_INTEGRITY] PipelineEvent is strictly append-only. Mutations are forbidden.")
+        
+        if not self.event_checksum:
+            import hashlib
+            import json
+            payload = f"{self.workflow_id}:{self.event_sequence}:{self.status}:{self.workflow_version}:{json.dumps(self.metadata or {}, sort_keys=True)}"
+            self.event_checksum = hashlib.sha256(payload.encode('utf-8')).hexdigest()
+            
+        super().save(*args, **kwargs)
+
+def log_pipeline_event(record_id: str, status: str, session_id: str = None, metadata: dict = None, 
+                       workflow_id: str = None, causation_id: str = None, correlation_id: str = None):
+    try:
+        from django.db import transaction, IntegrityError
+        from core.middleware import get_correlation_id
+        
+        actual_workflow_id = workflow_id or session_id or str(record_id)
+        actual_correlation_id = correlation_id or get_correlation_id()
+        
+        # ── [PHASE 7: EVENT SEQUENCE CONTENTION FIX] ──
+        # Use dedicated sequence table to avoid InnoDB gap-lock deadlocks!
+        max_retries = 3
+        event = None
+        for attempt in range(max_retries):
+            try:
+                # 1. Deadlock-Safe Check-and-Get Sequence (Avoids get_or_create shared lock upgrades)
+                try:
+                    WorkflowSequence.objects.create(
+                        workflow_id=actual_workflow_id,
+                        current_sequence=0,
+                        current_version=0
+                    )
+                except IntegrityError:
+                    pass  # Row already exists, which is fine
+                    
+                with transaction.atomic():
+                    # 2. Row-level Lock (Primary Key Match) - No Gap Locks!
+                    seq = WorkflowSequence.objects.select_for_update().get(workflow_id=actual_workflow_id)
+                    
+                    next_seq = seq.current_sequence + 1
+                    next_version = seq.current_version + 1
+                    parent_id = seq.last_event_id
+                        
+                    event = PipelineEvent.objects.create(
+                        record_id=str(record_id),
+                        session_id=session_id,
+                        status=status,
+                        metadata=metadata or {},
+                        workflow_id=actual_workflow_id,
+                        workflow_version=next_version,
+                        event_sequence=next_seq,
+                        causation_id=causation_id,
+                        correlation_id=actual_correlation_id,
+                        parent_event_id=parent_id
+                    )
+                    
+                    # 3. Commit Sequence Advancement
+                    seq.current_sequence = next_seq
+                    seq.current_version = next_version
+                    seq.last_event_id = event.id
+                    seq.save(update_fields=['current_sequence', 'current_version', 'last_event_id'])
+                    
+                break # Success!
+            except IntegrityError:
+                if attempt == max_retries - 1:
+                    raise
+                continue
+            
+        # ── [PHASE 1: DEDICATED QUEUE-DRIVEN PROJECTION] ──
+        from core.sqs import queue_service
+        
+        message = {
+            "task_type": "MATERIALIZE",
+            "tenant_id": "system",
+            "id": f"mat_event_{event.id}",
+            "payload": {
+                "event_id": event.id,
+                "record_id": str(record_id),
+                "status": status,
+                "workflow_id": event.workflow_id,
+                "workflow_version": event.workflow_version,
+                "correlation_id": actual_correlation_id
+            }
+        }
+        queue_service.push(message=message, queue_type='materialization')
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"[EVENT_LOG_FAIL] record={record_id} status={status}: {e}")
+
+def rebuild_projection(record_id: str):
+    """
+    PHASE 6 & 8: REPLAY-SAFE RECONSTRUCTION WITH OBSERVABILITY
+    Rebuilds the current projection state purely from the immutable event log.
+    Provides determinism during crash recovery or late-arrival reconciliation.
+    """
+    from django.db import transaction
+    from .models import InvoiceTempOCR
+    import logging
+    import time
+    from core.observability import observability, metrics
+    logger = logging.getLogger(__name__)
+
+    t_start = time.time()
+    try:
+        with transaction.atomic():
+            events = PipelineEvent.objects.filter(record_id=str(record_id)).order_by('event_sequence')
+            if not events.exists():
+                logger.warning(f"[REBUILD_SKIPPED] record={record_id} has no events.")
+                return False
+
+            # Phase 6: Validate Cryptographic Integrity of Event Stream
+            for event in events:
+                if event.event_checksum and not event.is_valid():
+                    logger.critical(f"[EVENT_CORRUPTION] Event {event.id} failed checksum validation!")
+                    observability.alert(event="EVENT_CORRUPTION_DETECTED", record_id=record_id, event_id=event.id)
+                    raise ValueError(f"Cryptographic corruption detected in event stream for {record_id}")
+
+            last_event = events.last()
+            
+            # Deterministic projection update
+            updated = InvoiceTempOCR.objects.filter(
+                id=record_id,
+                workflow_version__lt=last_event.workflow_version
+            ).update(
+                status=last_event.status,
+                workflow_version=last_event.workflow_version
+            )
+            
+            latency = time.time() - t_start
+            metrics.record_latency("projection:rebuild_latency", latency, tags={"status": last_event.status})
+            metrics.increment_counter("projection:rebuild_count", 1)
+            observability.db_metric(event="PROJECTION_REBUILD", record_id=record_id, latency=latency, updated=updated, version=last_event.workflow_version)
+            
+            logger.info(f"[PROJECTION_REBUILT] record={record_id} to status={last_event.status} version={last_event.workflow_version} updated={updated} latency={latency:.3f}s")
+            return updated > 0
+    except Exception as e:
+        logger.error(f"[REBUILD_FAIL] record={record_id}: {e}")
+        metrics.increment_counter("projection:rebuild_error_count", 1)
+        return False
 
 
 class OCRJob(models.Model):
@@ -220,6 +421,9 @@ class InvoiceTempOCR(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=50, default='PROCESSING')
     processed = models.BooleanField(default=False)
+    
+    # ── [PHASE 4: VERSION-AWARE PROJECTION SAFETY] ──
+    workflow_version = models.BigIntegerField(default=0)
     
     validation_status = models.CharField(max_length=50, default='PENDING')
     vendor_status = models.CharField(max_length=50, default='PENDING')
