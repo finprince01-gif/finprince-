@@ -43,8 +43,10 @@ class AssemblyWorker(BaseWorker):
         session_id = task.get('session_id') or task.get('upload_session_id') or payload.get('session_id') or "system"
         tenant_id = task.get('tenant_id') or payload.get('tenant_id') or "system"
         correlation_id = task.get('correlation_id', 'unknown')
-        job_id = payload.get('job_id') or task.get('job_id')
+        job_id = payload.get('job_id') or task.get('job_id', 'unknown')
         item_id = payload.get('item_id') or task.get('item_id')
+
+        logger.info(f"[CONTEXT_TRACE_ASSEMBLY_RECEIVE] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={task.get('trace_id')} page={page_idx}")
 
         logger.info(f"[ASSEMBLY_TASK_ENTER] record={record_id} page={page_idx} correlation_id={correlation_id} session={session_id} tenant={tenant_id}")
 
@@ -63,8 +65,40 @@ class AssemblyWorker(BaseWorker):
             raise
 
         if not res_obj:
-            logger.error(f"[ASSEMBLY_MISSING_DATA] record={record_id} page={page_idx} correlation_id={correlation_id} — no InvoicePageResult found. Page will not be counted.")
-            return
+            logger.error(
+                f"[ASSEMBLY_MISSING_DATA] record={record_id} page={page_idx} correlation_id={correlation_id} "
+                f"— no InvoicePageResult found. Registering as FAILED so barrier can complete."
+            )
+            # [FIX] Register this page as failed in both DB and Redis barrier so the barrier
+            # count still reaches expected_pages and finalize is not permanently blocked.
+            def _register_missing_page():
+                from django.db import transaction as _tx
+                with _tx.atomic():
+                    InvoicePageResult.objects.get_or_create(
+                        record_id=record_id,
+                        page_number=page_idx,
+                        defaults={
+                            'is_failed': True,
+                            'canonical_payload': {'error': 'ASSEMBLY_NO_PAGE_RESULT'},
+                            'session_id': session_id,
+                        }
+                    )
+            await asyncio.shield(loop.run_in_executor(None, _register_missing_page))
+            from core.redis_orchestrator import orchestrator
+            await asyncio.shield(loop.run_in_executor(
+                None,
+                lambda: orchestrator.register_page_completion(record_id, page_idx, is_failed=True)
+            ))
+            logger.info(f"[ASSEMBLY_MISSING_PAGE_REGISTERED] record={record_id} page={page_idx} as FAILED")
+            # Re-read res_obj as failed so downstream barrier logic proceeds correctly
+            res_obj = await asyncio.shield(loop.run_in_executor(
+                None,
+                lambda: InvoicePageResult.objects.filter(record_id=record_id, page_number=page_idx).first()
+            ))
+            if not res_obj:
+                logger.critical(f"[ASSEMBLY_UNRECOVERABLE] record={record_id} page={page_idx} — cannot register missing page. Aborting.")
+                return
+
 
         # 2. Redis Barrier increment — ASSEMBLY is sole owner
         from core.redis_orchestrator import orchestrator
@@ -94,14 +128,15 @@ class AssemblyWorker(BaseWorker):
         logger.info(f"[ASSEMBLY_RECEIVED_PAGES] record={record_id} received={state['total']}")
 
         # 4. Hard Barrier Timeout Check (PHASE 2 — deadlock prevention)
-        # If the barrier has not completed within ASSEMBLY_BARRIER_TIMEOUT_SECONDS,
-        # force-fail all missing pages, release the barrier, and proceed to finalize.
+        # Prevent premature finalization: dynamic timeout based on page count
+        timeout_seconds = max(1800, expected_pages * 60)
         duration = (timezone.now() - barrier.created_at).total_seconds()
-        if not state["is_ready"] and duration > ASSEMBLY_BARRIER_TIMEOUT_SECONDS:
+        
+        if not state["is_ready"] and duration > timeout_seconds:
             logger.warning(
                 f"[ASSEMBLY_TIMEOUT_RELEASE] record={record_id} duration_seconds={int(duration)} "
                 f"expected_pages={expected_pages} completed_pages={state['total']} "
-                f"— forcing partial release"
+                f"— forcing partial release (timeout={timeout_seconds}s)"
             )
 
             # Identify missing pages
@@ -178,30 +213,55 @@ class AssemblyWorker(BaseWorker):
             lambda: InvoiceTempOCR.objects.get(id=record_id)
         ))
 
-        # 7. Run assembly merge
+        # 7. Run assembly merge (force=True to prevent deadlock if DB rows are missing)
         logger.info(f"[ASSEMBLY_EXECUTOR_START] role=ASSEMBLY action=MERGE record={record_id}")
         result = await asyncio.shield(loop.run_in_executor(
             self.executor,
-            lambda: assemble_multi_page_record(record, job_id=job_id, item_id=item_id)
+            lambda: assemble_multi_page_record(record, job_id=job_id, item_id=item_id, force=True)
         ))
         logger.info(f"[ASSEMBLY_EXECUTOR_DONE] role=ASSEMBLY action=MERGE record={record_id}")
 
         res_status = result.get('status') if isinstance(result, dict) else None
         logger.info(f"[ASSEMBLY_COMPLETE] record={record_id} status={res_status}")
 
+        # [PHASE 16] Persist barrier completion to DB for orchestrator aggregation
+        try:
+            barrier_state = SessionFinalizationState.objects.get(id=str(record_id))
+            barrier_state.completed_pages = state.get('completed', 0)
+            barrier_state.failed_pages = state.get('failed', 0)
+            barrier_state.save(update_fields=['completed_pages', 'failed_pages'])
+            logger.info(f"[BARRIER_STATE_WRITE] record={record_id} completed={barrier_state.completed_pages} failed={barrier_state.failed_pages}")
+            logger.info(f"[BARRIER_STATE_COMMIT] record={record_id}")
+        except Exception as e:
+            logger.error(f"[BARRIER_STATE_WRITE_ERROR] record={record_id} error={e}")
+
         # 8. Determine terminal state
-        is_failed_assembly = res_status not in ['FINALIZED', 'SUCCESS']
+        SUCCESS_STATUSES = {'FINALIZED', 'SUCCESS', 'SUCCESS_EMPTY_EXPORT'}
+        
+        # If it somehow still returns FAILED_MISSING_PAGES, treat it as a partial failure 
+        # so the pipeline can still finish and show what it extracted.
+        if res_status == 'FAILED_MISSING_PAGES':
+            logger.warning(f"[ASSEMBLY_MISSING_PAGES_FALLBACK] record={record_id} proceeding as PARTIAL_FAILED")
+            final_status = "PARTIAL_FAILED"
+            is_failed_assembly = False
+        elif res_status not in SUCCESS_STATUSES:
+            final_status = "FAILED"
+            is_failed_assembly = True
+        elif state["failed"] > 0:
+            final_status = "PARTIAL_FAILED"
+            is_failed_assembly = False
+        else:
+            final_status = res_status or "SUCCESS"
+            is_failed_assembly = False
 
         if not is_failed_assembly:
-            if state["failed"] > 0:
-                final_status = "PARTIAL_FAILED"
-            else:
-                final_status = "FINALIZED"
-            logger.info(f"[ASSEMBLY_SUCCESS] record={record_id} status={final_status}")
+            logger.info(f"[ASSEMBLY_SUCCESS] record={record_id} status={final_status} res_status={res_status}")
             logger.info(f"[FILE_TERMINAL_SUCCESS] record={record_id} status={final_status}")
             orchestrator.update_session_status(record_id, final_status, progress=100.0)
         else:
             logger.error(f"[ASSEMBLY_TERMINAL_FAILURE] record={record_id} status={res_status}")
+            logger.error(f"[FAILED_STATE_SOURCE] record={record_id} source=ASSEMBLY_WORKER res_status={res_status} — will emit failed=True to FINALIZE")
+            logger.error(f"[FAILED_STATE_REASON] record={record_id} reason=assembly_returned_non_success res_status={res_status}")
             logger.error(f"[FILE_TERMINAL_FAILED] record={record_id} status=FAILED reason={res_status}")
             record.status = PipelineStatus.FAILED
             await asyncio.shield(loop.run_in_executor(
@@ -231,6 +291,7 @@ class AssemblyWorker(BaseWorker):
         )
         finalize_msg_copy = deepcopy(finalize_msg)
         logger.info(f"[FINALIZE_TRIGGER] record={record_id} session={session_id} failed={is_failed_assembly}")
+        logger.info(f"[CONTEXT_TRACE_FINALIZE] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={finalize_msg_copy['trace_id']}")
 
         try:
             queue_service.push(finalize_msg_copy, queue_type='finalize')

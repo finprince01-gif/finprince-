@@ -24,6 +24,13 @@ class MaterializeWorker(BaseWorker):
         Materializes status to InvoiceTempOCR ONLY IF incoming_version > stored_version.
         """
         payload = task.get('payload', {})
+        
+        # [FORENSIC] Log Schema Acceptance
+        logger.info(f"[MATERIALIZE_SCHEMA_ACCEPTED] task_id={task.get('id')} type={task.get('task_type')}")
+        logger.info(f"[MATERIALIZE_CONTEXT_CONSUMED] job_id={task.get('payload', {}).get('job_id') or task.get('job_id', 'unknown')} record_id={task.get('payload', {}).get('record_id')}")
+        logger.info(f"[MATERIALIZE_WORKER_ENTER] task_id={task.get('id')}")
+        logger.info(f"[MATERIALIZE_WORKER_FETCH] task_id={task.get('id')}")
+        
         if not payload:
             logger.warning("[MATERIALIZE_EMPTY_PAYLOAD] Dropping message")
             return
@@ -31,6 +38,11 @@ class MaterializeWorker(BaseWorker):
         record_id = payload.get('record_id')
         status = payload.get('status')
         workflow_version = payload.get('workflow_version', 1)
+        job_id = payload.get('job_id', task.get('job_id', 'unknown'))
+        session_id = task.get('session_id', 'unknown')
+        tenant_id = task.get('tenant_id', 'unknown')
+        
+        logger.info(f"[CONTEXT_TRACE_MATERIALIZE_RECEIVE] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={task.get('trace_id')}")
         
         if not record_id or not status:
             logger.error("[MATERIALIZE_INVALID_PAYLOAD] Missing record_id or status")
@@ -53,6 +65,9 @@ class MaterializeWorker(BaseWorker):
             metrics.record_latency("projection:materialize_latency", latency, tags={"status": status})
             
             logger.info(f"[MATERIALIZE_SUCCESS] record={record_id} version={workflow_version} status={status} latency={latency:.3f}s")
+            logger.info(f"[MATERIALIZATION_COMPLETE] record={record_id} status={status}")
+            logger.info(f"[MATERIALIZE_WORKER_EXIT] record={record_id} task_id={task.get('id')}")
+            logger.info(f"[MATERIALIZE_ACK] record={record_id} task_id={task.get('id')}")
         except Exception as e:
             logger.error(f"[MATERIALIZE_FAIL] record={record_id} error={e}")
             metrics.increment_counter("projection:materialize_errors", 1)
@@ -85,6 +100,19 @@ class MaterializeWorker(BaseWorker):
                         observability.info(event="STALE_EVENT_SUPPRESSED", record_id=record_id, version=workflow_version)
                     else:
                         logger.error(f"[MATERIALIZE_ORPHAN_EVENT] record={record_id} not found in InvoiceTempOCR")
+                else:
+                    logger.info(f"[MATERIALIZE_WORKER_DB_WRITE] record={record_id} updated_rows={updated_rows}")
+                    from ocr_pipeline.models import SessionFinalizationState
+                    state = SessionFinalizationState.objects.filter(id=str(record_id)).first()
+                    if state:
+                        logger.info(f"[MATERIALIZE_COMPLETE_WRITE] record={record_id}")
+                        state.materialization_complete = True
+                        state.save(update_fields=['materialization_complete'])
+                        logger.info(f"[MATERIALIZE_COMPLETE_COMMIT] record={record_id}")
+                        logger.info(f"[MATERIALIZATION_STATE_PERSISTED] record={record_id}")
+                    
+                    from core.redis_orchestrator import orchestrator
+                    orchestrator.update_session_status(record_id, "MATERIALIZED" if status == "FINALIZED" else status)
         finally:
             connection.close()
 

@@ -228,11 +228,38 @@ class BulkUploadAPIView(APIView):
                 # actually uploaded the exact same file twice in the same multi-select batch.
                 raise e
 
-        # 7. Enqueue to SQS (Unified Processing via Message Factory)
-        logger.info(f"[REDIS_ENQUEUE] session_id='{received_session}' job_id='{job.id}' status='PENDING'")
+        # 7. ATOMIC SESSION INITIALIZATION — write DB anchors BEFORE SQS dispatch
+        # [FIX] Without this, get_authoritative_session_state() sees states=[] or expected=0
+        # during the window between upload and ingestion worker execution.
+        # The orchestrator then returns BARRIER_INCOMPLETE which the frontend shows as stuck PROCESSING.
+        # By writing stub rows now (expected_pages=0), the orchestrator can distinguish
+        # ORCHESTRATION_BOOTSTRAPPING (expected=0) from a real BARRIER_INCOMPLETE (expected>0).
+        logger.info(f"[SESSION_INIT_START] session={received_session} job={job.id} records={len(file_info)}")
+        from ocr_pipeline.models import SessionFinalizationState
+        for item_data in file_info:
+            try:
+                SessionFinalizationState.objects.get_or_create(
+                    id=str(item_data['record_id']),
+                    defaults={
+                        'expected_pages': 0,   # Will be updated by ingestion worker after page count
+                        'completed_pages': 0,
+                        'failed_pages': 0,
+                        'ai_completed_pages': 0,
+                        'snapshot_created': False,
+                        'export_complete': False,
+                        'materialization_complete': False,
+                    }
+                )
+                logger.info(f"[SESSION_INIT_COMMIT] record={item_data['record_id']} stub_row_created session={received_session}")
+            except Exception as e:
+                # Non-fatal — ingestion worker will create it if missing
+                logger.warning(f"[SESSION_INIT_STUB_FAIL] record={item_data['record_id']} error={e}")
+        logger.info(f"[ORCHESTRATION_BOOTSTRAP] session={received_session} stub_rows={len(file_info)} — safe to poll")
+
+        # 8. Enqueue to SQS — AFTER stub rows committed
+        logger.info(f"[QUEUE_DISPATCH_AFTER_COMMIT] session_id='{received_session}' job_id='{job.id}' count={len(file_info)}")
         logger.info(f"[SQS_DISPATCH] Dispatching job_id='{job.id}' session_id='{received_session}' items={len(file_info)}")
-        logger.info(f"[QUEUE_DISPATCH] queue='ingestion' count={len(file_info)}")
-        
+
         from vouchers.message_factory import message_factory
         for item_data in file_info:
             ingestion_payload = {
@@ -241,17 +268,17 @@ class BulkUploadAPIView(APIView):
                 'record_id': item_data['record_id'],
                 'voucher_type': request.data.get('voucher_type', 'Purchase')
             }
-            
+
             msg = message_factory.create_message(
                 task_type="INGESTION",
                 tenant_id=tenant_id,
                 session_id=received_session,
                 payload=ingestion_payload
             )
-            
+
             from copy import deepcopy
             msg_copy = deepcopy(msg)
-            
+
             try:
                 queue_service.push(msg_copy, queue_type='ingestion')
                 logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=ingestion msg_id={msg_copy['id']}")
@@ -299,66 +326,60 @@ class BulkStatusAPIView(APIView):
         items = job.items.all()
         total_files = job.total_files or items.count() or 1
         
-        # Pull live statuses from ALL actual extraction records for this session (includes siblings)
-        from ocr_pipeline.models import InvoiceTempOCR
-        staging_records = InvoiceTempOCR.objects.filter(upload_session_id=job.upload_session_id).values('status')
+        # ── [PHASE 15] AUTHORITATIVE ORCHESTRATOR INFERENCE ──
+        from core.redis_orchestrator import orchestrator
+        auth_state = orchestrator.get_authoritative_session_state(job.upload_session_id)
         
-        success = 0
-        failed = 0
-        processing = 0
+        is_completed = auth_state.get('terminal', False)
+        status_str = "PROCESSING"
         
-        for r in staging_records:
-            live_status = r['status'].upper()
-            if live_status in ['FINALIZED', 'COMPLETED', 'SUCCESS', 'VOUCHER_CREATED']:
-                success += 1
-            elif live_status in ['FAILED', 'ERROR']:
-                failed += 1
-            else:
-                processing += 1
-                
-        # Handle cases where splits make total > original files
-        total = max(total_files, success + failed + processing)
-        
-        # Determine status dynamically (Rules from User)
-        from ocr_pipeline.models import FinalizedSnapshot
-        
-        # 6. Before emitting SNAPSHOT_READY: perform validation query using SAME upload_session_id, tenant_id, job_id
-        tenant_id = job.tenant_id or getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None) or '88fe4389-58a9-4244-9878-8a4e646898bd'
-        val_query = FinalizedSnapshot.objects.filter(
-            session_id=job.upload_session_id,
-            tenant_id=tenant_id
-        )
-        if job_id:
-            val_query = val_query.filter(models.Q(job_id=str(job_id)) | models.Q(job_id=job_id) | models.Q(job_id__isnull=True))
-            
-        snapshot_count = val_query.count()
-        has_snapshot = (snapshot_count > 0)
-        
-        # Authoritative completion check
-        # [REQUIREMENT FIX] If success == 0, we don't expect a snapshot (total failure)
-        items_terminal = (processing == 0) and ((success + failed) >= total_files)
-        is_completed = items_terminal and (has_snapshot or success == 0)
+        success = auth_state.get('completed_pages', 0)
+        failed = auth_state.get('failed_pages', 0)
         
         if is_completed:
-            if success > 0 and failed == 0:
-                status_str = 'FINALIZED'
-            elif success > 0 and failed > 0:
-                status_str = 'PARTIAL_FAILED'
+            term_reason = auth_state.get('terminal_reason', 'FAILED')
+            if term_reason == "COMPLETED":
+                # Ensure compatibility with frontend mapping
+                status_str = "FINALIZED" if failed == 0 else "PARTIAL_FAILED"
             else:
-                status_str = 'FAILED'
-                
-            progress = 100
-            if has_snapshot:
-                logger.info(f"[SNAPSHOT_QUERY_VALIDATED] Validation query returned {snapshot_count} rows for job={job_id} session={job.upload_session_id}")
-                logger.info(f"[SNAPSHOT_READY_EMIT] Emitting SNAPSHOT_READY for job={job_id}")
-                logger.info(f"[SNAPSHOT_READY] job={job_id} session={job.upload_session_id}")
-            else:
-                logger.info(f"[SNAPSHOT_READY_EMIT_SKIP] success=0 (Total failure, no snapshot expected)")
+                status_str = "FAILED"
+            
+        # Use orchestrator's expected_pages (pages) if available, otherwise fallback to files
+        expected_pages = auth_state.get('expected_pages', 0)
+        if expected_pages > 0:
+            total = expected_pages
+            processing = max(0, total - success - failed)
         else:
-            status_str = 'PROCESSING'
-            # Weighted progress: success(1.0) + processing(0.5)
-            progress = int(((success + failed + (processing * 0.5)) / total) * 100) if total > 0 else 0
-            progress = min(progress, 99)
+            processing = max(0, total_files - success - failed)
+            if not is_completed:
+                processing = max(1, processing) # force processing
+            total = max(total_files, success + failed + processing)
+        
+        progress = 100 if is_completed else int(((success + failed + (processing * 0.5)) / total) * 100) if total > 0 else 0
+        progress = min(progress, 99) if not is_completed else 100
+
+        logger.info(f"[ORCHESTRATOR_STATE_EMITTED] session={job.upload_session_id} terminal={is_completed} reason={auth_state.get('terminal_reason')}")
+
+        if is_completed and auth_state.get('snapshot_complete', False):
+            logger.info(f"[SNAPSHOT_READY_EMIT] Emitting SNAPSHOT_READY for job={job_id}")
+            logger.info(f"[SNAPSHOT_READY] job={job_id} session={job.upload_session_id}")
+        elif is_completed and success == 0 and failed > 0:
+            logger.info(f"[SNAPSHOT_READY_EMIT_SKIP] session={job.upload_session_id} reason=total_failure")
+        elif not is_completed:
+            logger.debug(f"[ORCHESTRATOR_TERMINAL_CHECK] session={job.upload_session_id} terminal=false reason={auth_state.get('terminal_reason')}")
+            
+            # If the legacy logic would have called it completed (success+failed >= total), log the prevention
+            if (success + failed) >= total_files:
+                logger.info(f"[PREMATURE_TERMINALIZATION_PREVENTED] session={job.upload_session_id} reason={auth_state.get('terminal_reason')}")
+                
+            if auth_state.get('terminal_reason') == 'SNAPSHOT_PENDING':
+                logger.info(f"[SNAPSHOT_PENDING_DISTRIBUTED_WORK] session={job.upload_session_id}")
+            elif auth_state.get('terminal_reason') == 'QUEUE_ACTIVITY':
+                logger.info(f"[TERMINALIZATION_BLOCKED_QUEUE_ACTIVITY] session={job.upload_session_id}")
+            elif auth_state.get('terminal_reason') == 'ACTIVE_WORKERS':
+                logger.info(f"[TERMINALIZATION_BLOCKED_ACTIVE_WORKERS] session={job.upload_session_id}")
+            elif auth_state.get('terminal_reason') == 'BARRIER_INCOMPLETE':
+                logger.info(f"[TERMINALIZATION_BLOCKED_BARRIER] session={job.upload_session_id}")
 
 
         response_data = {

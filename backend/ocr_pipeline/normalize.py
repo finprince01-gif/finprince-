@@ -386,7 +386,10 @@ def get_normalized_export_record(invoice: Any) -> Dict[str, Any]:
 
         return default, "NONE"
 
-    raw_from, _ = get_strict(["bill_address_from", "bill_from", "vendor_address", "billing_address", "supplier_address"])
+    # ── [SEMANTIC OWNERSHIP FIX] ──
+    # 'billing_address' means 'Customer Billing Address' (Bill To). 
+    # It must NEVER be used to populate the Vendor/Supplier Address (Bill From).
+    raw_from, _ = get_strict(["bill_address_from", "bill_from", "vendor_address", "supplier_address", "seller_address"])
     raw_to, _ = get_strict(["bill_address_to", "bill_to", "customer_address", "billing_address_to", "billing_address"])
     
     # ── [PHASE 11.9] WINDOW_SLICER FALLBACK (HARDENED) ──
@@ -394,12 +397,7 @@ def get_normalized_export_record(invoice: Any) -> Dict[str, Any]:
         ocr_text = invoice.get("_pdf_ocr_text") if isinstance(invoice, dict) else ""
         if ocr_text:
             if is_empty(raw_from):
-                logger.info("[BILL_FROM_WINDOW_ATTEMPT]")
-                # Consignee (Ship to) -> Buyer (Bill to)
-                match = re.search(r"Consignee\s*\(Ship\s*to\)(.*?)Buyer\s*\(Bill\s*to\)", ocr_text, re.DOTALL | re.IGNORECASE)
-                if match: 
-                    raw_from = match.group(1).strip()
-                    logger.info(f"[BILL_FROM_WINDOW_HIT] len={len(raw_from)}")
+                logger.info("[ADDRESS_ROLE_CLASSIFIED] target='bill_from' status='missing' — skipping destructive fallback to prevent customer contamination")
 
             if is_empty(raw_to):
                 logger.info("[BILL_TO_WINDOW_ATTEMPT]")
@@ -608,6 +606,12 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
                         unwrapped[k] = v
                 invoice = unwrapped
 
+    # ── [FORENSIC NORMALIZATION LOGS] ──
+    import hashlib
+    input_hash = hashlib.md5(json.dumps(invoice, sort_keys=True, default=str).encode()).hexdigest()
+    logger.info(f"[NORMALIZATION_START] record_id={invoice.get('record_id')} invoice_no={invoice.get('invoice_no')}")
+    logger.info(f"[NORMALIZATION_INPUT_HASH] {input_hash}")
+
     # ── [PHASE 11.9] FORENSIC DTO AUDIT ──
     logger.info(f"[DTO_PRE_VALIDATION] record_id={invoice.get('record_id')} keys={list(invoice.keys())}")
 
@@ -677,20 +681,40 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
         logger.info(f"[DTO_POST_VALIDATION] record_id={invoice.get('record_id')} status=VALID")
     except Exception as se:
         logger.error(f"[DTO_VALIDATION_ERROR] record_id={invoice.get('record_id')} error={se} payload={json.dumps(schema_data, default=str)[:1000]}")
+        # [FIX] Ensure Pydantic items are converted back to dicts so they serialize correctly
+        if "items" in schema_data:
+            schema_data["items"] = [
+                i.dict() if hasattr(i, "dict") else (i.model_dump() if hasattr(i, "model_dump") else i)
+                for i in schema_data["items"]
+            ]
         # Fallback to dictionary if Pydantic fails, but don't wipe data
-        canonical_obj = type('Obj', (object,), {"dict": lambda: schema_data, "invoice_no": schema_data.get("invoice_no")})
+        canonical_obj = type('Obj', (object,), {
+            "dict": lambda self: schema_data, 
+            "model_dump": lambda self: schema_data,
+            "invoice_no": schema_data.get("invoice_no")
+        })()
     
     # Forensic Log
     log_canonical_schema_locked(canonical_obj.invoice_no)
 
     # Convert back to dict for pipeline compatibility but ensure it's frozen
-    canonical_record = canonical_obj.dict()
+    try:
+        if hasattr(canonical_obj, "dict"):
+            canonical_record = canonical_obj.dict()
+        else:
+            canonical_record = canonical_obj.model_dump()
+    except Exception as e_dict:
+        logger.error(f"[NORMALIZATION_DICT_FAIL] error={e_dict}")
+        canonical_record = schema_data
 
     # Preserve internal lifecycle fields (underscore fields)
     if isinstance(invoice, dict):
         for k, v in invoice.items():
             if k.startswith("_") and k not in canonical_record:
                 canonical_record[k] = v
+                
+    output_hash = hashlib.md5(json.dumps(canonical_record, sort_keys=True, default=str).encode()).hexdigest()
+    logger.info(f"[NORMALIZATION_OUTPUT_HASH] {output_hash}")
 
     return canonical_record
 

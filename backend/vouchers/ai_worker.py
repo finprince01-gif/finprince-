@@ -142,7 +142,9 @@ class AIWorker(BaseWorker):
         tenant_id = task['tenant_id']
         correlation_id = task['correlation_id']
         page_idx = payload.get('page_number') or payload.get('page_index') or task.get('page_number')
+        job_id = payload.get('job_id', task.get('job_id', 'unknown'))
 
+        logger.info(f"[CONTEXT_TRACE_AI_RECEIVE] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={task.get('trace_id')} page={page_idx}")
         logger.info(f"[AI_PAGE_START] record={record_id} page={page_idx} session={session_id} correlation_id={correlation_id} worker_role=AI")
 
         # ── [PHASE 13: IDEMPOTENCY CHECK] ──
@@ -155,8 +157,7 @@ class AIWorker(BaseWorker):
             )
             if already_processed:
                 logger.info(f"[IDEMPOTENCY_SKIP] record={record_id} page={page_idx} already successfully processed. Skipping AI call.")
-                # We still need to ensure assembly gets the message
-                await self._process_result({**task, 'payload': payload}, {"status": "SKIPPED_DUPLICATE"})
+                # We already forwarded to assembly during the successful run, so just ack this message.
                 return
         except Exception as e:
             logger.error(f"[IDEMPOTENCY_CHECK_FAIL] {e}")
@@ -237,6 +238,9 @@ class AIWorker(BaseWorker):
                             logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=parse_error error={e}")
                     else:
                         logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=ocr_failed_or_empty_reply")
+                        
+                    if not success and pass_idx < MAX_IMAGE_PASSES - 1:
+                        logger.warning(f"[PAGE_FAILED_RETRYABLE] record_id={record_id} page={page_idx} pass={pass_idx+1}/{MAX_IMAGE_PASSES}")
 
                     # Save failed artifact for this pass (forensic)
                     await loop.run_in_executor(
@@ -246,6 +250,7 @@ class AIWorker(BaseWorker):
 
                 if not success:
                     logger.error(f"[OCR_RETRY_CHAIN_EXHAUSTED] record={record_id} page={page_idx} all_passes_failed=True")
+                    logger.error(f"[PAGE_FAILED_TERMINAL] record_id={record_id} page={page_idx}")
                     metrics.increment_counter("ocr:page_failed")
                     if final_result is None:
                         final_result = result  # may be None
@@ -265,7 +270,7 @@ class AIWorker(BaseWorker):
                     from ocr_pipeline.models import SessionFinalizationState, InvoicePageResult
 
                     def _fail_db():
-                        InvoicePageResult.objects.update_or_create(
+                        res_obj, created = InvoicePageResult.objects.update_or_create(
                             record_id=record_id,
                             page_number=page_idx,
                             defaults={
@@ -274,10 +279,18 @@ class AIWorker(BaseWorker):
                                 'is_failed': True,
                             }
                         )
-                        SessionFinalizationState.objects.filter(id=str(record_id)).update(
-                            failed_pages=models.F('failed_pages') + 1,
-                            updated_at=timezone.now()
-                        )
+                        if not res_obj.counted_in_barrier:
+                            SessionFinalizationState.objects.filter(id=str(record_id)).update(
+                                ai_completed_pages=models.F('ai_completed_pages') + 1,
+                                failed_pages=models.F('failed_pages') + 1,
+                                updated_at=timezone.now()
+                            )
+                            res_obj.counted_in_barrier = True
+                            res_obj.save(update_fields=['counted_in_barrier'])
+                            
+                        # Also trigger next fanout so we don't stall the window
+                        from ocr_pipeline.pipeline import trigger_next_fanout
+                        trigger_next_fanout(record_id)
 
                     loop = asyncio.get_running_loop()
                     await loop.run_in_executor(self.executor, _fail_db)
@@ -305,6 +318,7 @@ class AIWorker(BaseWorker):
                     correlation_id=correlation_id,
                     page_number=page_idx
                 )
+                logger.info(f"[CONTEXT_TRACE_ASSEMBLY] job_id={assembly_payload['job_id']} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={assembly_msg['trace_id']}")
                 queue_service.push(deepcopy(assembly_msg), queue_type='assembly')
                 logger.info(f"[DOWNSTREAM_ENQUEUE_SUCCESS] target_queue=assembly msg_id={assembly_msg['id']} is_failed=True")
             except Exception as q_err:
@@ -342,7 +356,25 @@ class AIWorker(BaseWorker):
                     )
                     logger.info(f"[AI_PARSE_START] record={record_id} page={page_idx}")
                     parsed = json.loads(repaired_text)
+                    
+                    # [PHASE 5: DTO CONTEXT PROPAGATION]
+                    # Ensure canonical context survives the async boundary.
+                    # The AI model will never generate these, so we inject them.
+                    parsed['record_id'] = str(record_id)
+                    if job_id != 'unknown':
+                        parsed['job_id'] = str(job_id)
+                    parsed['upload_session_id'] = str(session_id)
+                    parsed['tenant_id'] = str(tenant_id)
+                    
                     canonical_payload = get_canonical_export_record(parsed)
+                    
+                    # Double-ensure they are in the final payload
+                    canonical_payload['record_id'] = str(record_id)
+                    if job_id != 'unknown':
+                        canonical_payload['job_id'] = str(job_id)
+                    canonical_payload['upload_session_id'] = str(session_id)
+                    canonical_payload['tenant_id'] = str(tenant_id)
+                    
                     is_failed = not self._is_dto_valid(canonical_payload)
                     if not is_failed:
                         logger.info(f"[AI_PAGE_SUCCESS] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI")
@@ -367,7 +399,8 @@ class AIWorker(BaseWorker):
                         defaults={
                             'canonical_payload': canonical_payload,
                             'is_failed': is_failed,
-                            'session_id': task.get('upload_session_id', 'unknown')
+                            # [FIX] task is a normalized message — session_id is at root, NOT upload_session_id
+                            'session_id': task.get('session_id') or task.get('upload_session_id') or 'unknown'
                         }
                     )
                     if not res_obj.counted_in_barrier:
@@ -377,7 +410,26 @@ class AIWorker(BaseWorker):
                         )
                         res_obj.counted_in_barrier = True
                         res_obj.save(update_fields=['counted_in_barrier'])
-                orchestrator.update_session_status(record_id, "PROCESSING", progress=0.0)
+
+                # [FIX] Do NOT call update_session_status(PROCESSING, 0.0) here.
+                # That overwrites legitimate progress set by assembly_worker back to 0%.
+                # Progress is managed exclusively by assembly_worker once all pages are in.
+                # We only push a proportional progress hint — never regress to 0.
+                try:
+                    barrier_state = SessionFinalizationState.objects.filter(id=str(record_id)).values(
+                        'ai_completed_pages', 'expected_pages'
+                    ).first()
+                    if barrier_state and barrier_state['expected_pages'] > 0:
+                        ai_done = barrier_state['ai_completed_pages']
+                        expected = barrier_state['expected_pages']
+                        # AI stage spans 20% - 70% of total progress
+                        pct = 20.0 + (ai_done / expected) * 50.0
+                        pct = min(pct, 70.0)  # never exceed 70% until assembly confirms
+                        logger.info(f"[AI_PAGE_PROGRESS] record={record_id} page={page_idx} ai_done={ai_done}/{expected} progress={pct:.1f}%")
+                        orchestrator.update_session_status(str(record_id), "PROCESSING", progress=pct)
+                except Exception as _prog_err:
+                    logger.warning(f"[AI_PROGRESS_HINT_FAIL] {_prog_err}")
+
                 from ocr_pipeline.pipeline import trigger_next_fanout
                 trigger_next_fanout(record_id)
 
@@ -408,6 +460,7 @@ class AIWorker(BaseWorker):
         assembly_msg_copy = deepcopy(assembly_msg)
 
         logger.info(f"[ASSEMBLY_MESSAGE_EMITTED] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI is_failed={is_failed}")
+        logger.info(f"[CONTEXT_TRACE_ASSEMBLY] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={assembly_msg_copy['trace_id']}")
         try:
             queue_service.push(assembly_msg_copy, queue_type='assembly')
             logger.info(f"[DOWNSTREAM_ENQUEUE_SUCCESS] target_queue=assembly msg_id={assembly_msg_copy['id']}")

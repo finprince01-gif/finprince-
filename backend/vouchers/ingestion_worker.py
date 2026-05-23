@@ -23,6 +23,9 @@ class IngestionWorker(BaseWorker):
         record_id = payload.get('record_id')
         session_id = task.get('session_id', 'unknown')
         tenant_id = task.get('tenant_id', 'unknown')
+        job_id = payload.get('job_id', task.get('job_id', 'unknown'))
+        
+        logger.info(f"[CONTEXT_TRACE_INGESTION] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={task.get('trace_id')}")
         
         logger.info(f"[INGESTION_TASK_START] id={task.get('id')} record={record_id} session={session_id}")
         

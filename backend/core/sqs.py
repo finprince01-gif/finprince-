@@ -4,9 +4,22 @@ import os
 import logging
 import uuid
 import time
+import platform
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# [FORENSIC] Environment identity — MUST differ between local dev and EC2 production.
+# If this is unset, local and production workers compete for the same SQS messages.
+_CLUSTER_ENV  = os.getenv('CLUSTER_ENV', 'UNSET')
+_HOSTNAME     = platform.node()
+
+if _CLUSTER_ENV == 'UNSET':
+    logger.warning(
+        "[CLUSTER_ENV_MISSING] CLUSTER_ENV is not set in .env. "
+        "If local and EC2 share the same queue URLs, local workers WILL consume production messages. "
+        "Set CLUSTER_ENV=local (dev) or CLUSTER_ENV=production (EC2) to identify competing consumers in logs."
+    )
 
 class QueueService:
     """
@@ -20,13 +33,20 @@ class QueueService:
 
     def _get_queue_mapping(self):
         if self._queue_mapping is None:
+             def get_url(base):
+                 if not base:
+                     return base
+                 if _CLUSTER_ENV == 'local' and not base.endswith('-local'):
+                     return base + '-local'
+                 return base
+
              self._queue_mapping = {
-                'ingestion': os.getenv('SQS_INGESTION_QUEUE_URL'),
-                'ai': os.getenv('SQS_AI_QUEUE_URL'),
-                'assembly': os.getenv('SQS_ASSEMBLY_QUEUE_URL'),
-                'finalize': os.getenv('SQS_FINALIZE_QUEUE_URL'),
-                'export': os.getenv('SQS_EXPORT_QUEUE_URL'),
-                'materialization': os.getenv('SQS_MATERIALIZATION_QUEUE_URL')
+                'ingestion': get_url(os.getenv('SQS_INGESTION_QUEUE_URL')),
+                'ai': get_url(os.getenv('SQS_AI_QUEUE_URL')),
+                'assembly': get_url(os.getenv('SQS_ASSEMBLY_QUEUE_URL')),
+                'finalize': get_url(os.getenv('SQS_FINALIZE_QUEUE_URL')),
+                'export': get_url(os.getenv('SQS_EXPORT_QUEUE_URL')),
+                'materialization': get_url(os.getenv('SQS_MATERIALIZATION_QUEUE_URL'))
             }
              # Forensic Logging
              unique_urls = {v for v in self._queue_mapping.values() if v}
@@ -95,20 +115,38 @@ class QueueService:
             if effective_delay > 0:
                 args['DelaySeconds'] = min(effective_delay, 900)
 
-            sqs.send_message(
+            # Add ownership metadata
+            message['_ownership'] = {
+                'cluster_env': _CLUSTER_ENV,
+                'cluster_id': os.getenv('CLUSTER_ID', 'default-cluster'),
+                'origin_host': _HOSTNAME,
+                'producer_role': 'system'
+            }
+
+            result = sqs.send_message(
                 QueueUrl=queue_url,
                 MessageBody=json.dumps(message),
                 MessageAttributes={'TenantID': {'StringValue': tenant_id, 'DataType': 'String'}},
                 **args
             )
-            
+            sqs_message_id = result.get('MessageId', 'unknown')
+
             latency = time.time() - t_start
             observability.queue_metric(event="PUSH", queue=queue_type, tenant_id=tenant_id, delay=delay_seconds, latency=latency)
             metrics.increment_counter("queue:push_total", tags={"queue": queue_type, "tenant": tenant_id})
-            
-            # [PHASE 11.9] Forensic Push Marker
-            logger.info(f"[QUEUE_PUSH_SUCCESS] id={message.get('id')} queue={queue_type} url={queue_url} tenant={tenant_id}")
-            logger.info(f"[SQS_MESSAGE_ENQUEUED] id={message.get('id')} queue={queue_type} physical_url={queue_url} tenant={tenant_id} delay={effective_delay}s type={message.get('task_type', 'unknown')}")
+
+            # [FORENSIC] Log producer identity so we can detect cross-environment message theft
+            logger.info(
+                f"[QUEUE_PUSH_SUCCESS] id={message.get('id')} sqs_id={sqs_message_id} "
+                f"queue={queue_type} url={queue_url} tenant={tenant_id} "
+                f"cluster_env={_CLUSTER_ENV} host={_HOSTNAME}"
+            )
+            logger.info(
+                f"[SQS_MESSAGE_ENQUEUED] id={message.get('id')} sqs_id={sqs_message_id} "
+                f"queue={queue_type} physical_url={queue_url} tenant={tenant_id} "
+                f"delay={effective_delay}s type={message.get('task_type', 'unknown')} "
+                f"cluster_env={_CLUSTER_ENV} host={_HOSTNAME}"
+            )
             return True
         except Exception as e:
             logger.error(f"[SQS_PUSH_ERR] {e}")
@@ -141,13 +179,19 @@ class QueueService:
 
             messages = response.get('Messages', [])
             if not messages:
-                 # [PHASE 11.9] Empty Poll
-                 logger.debug(f"[RECEIVE_MESSAGE_EMPTY] queue={queue_type}")
-                 return []
+                # [FORENSIC] Include url + env in empty-poll log — helps verify worker is polling correct queue
+                logger.debug(
+                    f"[RECEIVE_MESSAGE_EMPTY] queue={queue_type} url={queue_url} "
+                    f"cluster_env={_CLUSTER_ENV} host={_HOSTNAME}"
+                )
+                return []
             
-            # [PHASE 11.9] Success
-            logger.info(f"[RECEIVE_MESSAGE_SUCCESS] queue={queue_type} count={len(messages)}")
-            
+            # [FORENSIC] Log consumer identity — if cluster_env=local appears in EC2 logs, a local worker stole the message
+            logger.info(
+                f"[RECEIVE_MESSAGE_SUCCESS] queue={queue_type} url={queue_url} count={len(messages)} "
+                f"cluster_env={_CLUSTER_ENV} host={_HOSTNAME}"
+            )
+
             # Record Receive Metric
             metrics.increment_counter("queue:receive_total", value=len(messages), tags={"queue": queue_type})
             observability.queue_metric(event="RECEIVE", queue=queue_type, count=len(messages))
@@ -179,6 +223,10 @@ class QueueService:
         return False
 
     def get_queue_depth(self, queue_type: str) -> int:
+        visible, invisible = self.get_queue_stats(queue_type)
+        return visible + invisible
+
+    def get_queue_stats(self, queue_type: str) -> tuple[int, int]:
         queue_url = self._get_queue_url(queue_type)
         sqs = self._get_sqs_client()
         if sqs and queue_url:
@@ -192,10 +240,10 @@ class QueueService:
                 
                 # [PHASE 11.9] Forensic Snapshot (DEBUG to reduce noise)
                 logger.debug(f"[QUEUE_DEPTH_SNAPSHOT] queue={queue_type} physical_url={queue_url} visible={visible} invisible={invisible}")
-                return visible + invisible
+                return visible, invisible
             except Exception as e:
-                logger.error(f"Failed to get queue depth for {queue_type}: {e}")
-        return 0
+                logger.error(f"Failed to get queue stats for {queue_type}: {e}")
+        return 0, 0
 
     def extend_visibility(self, receipt_handle: str, additional_seconds: int, queue_type: str) -> bool:
         queue_url = self._get_queue_url(queue_type)

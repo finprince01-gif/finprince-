@@ -235,6 +235,9 @@ class ForensicMerger:
 
         logger.info(f"[FORENSIC GROUP] Starting grouping for {len(invoices)} invoice pages")
 
+        # Deterministic groups map: merge_key -> list of invoices
+        deterministic_groups = {}
+        
         for curr_idx, curr in enumerate(invoices):
             # [MANDATORY HYDRATION] (Requirement #1)
             hydrate_identity_fields(curr)
@@ -244,16 +247,33 @@ class ForensicMerger:
                 continue
 
             curr_inv = str(curr.get("invoice_no") or "").strip() or "MISSING"
-            curr_gstin = str(curr.get("gstin") or "").strip().upper() or "MISSING"
+            curr_gstin = str(curr.get("gstin") or curr.get("vendor_gstin") or "").strip().upper() or "MISSING"
             curr_vendor = str(curr.get("vendor_name") or "").strip().upper() or "MISSING"
+            curr_date = str(curr.get("invoice_date") or "").strip() or "MISSING"
+            curr_tenant = str(curr.get("tenant_id") or "").strip() or "MISSING"
+            
+            # ── DETERMINISTIC MERGE KEY (Requirement #11) ──
+            merge_key = f"{curr_tenant}_{curr_gstin}_{curr_inv}_{curr_date}"
+            is_deterministic = (curr_inv != "MISSING")
             
             # [IDENTITY_TRACE] stage=grouping_input (Requirement #10)
-            logger.info(f"[IDENTITY_TRACE] stage=grouping_input page={curr_page_no} inv={curr_inv} gstin={curr_gstin} vendor={curr_vendor}")
+            logger.info(f"[IDENTITY_TRACE] stage=grouping_input page={curr_page_no} inv={curr_inv} gstin={curr_gstin} vendor={curr_vendor} merge_key={merge_key}")
             
             # [GROUP_PRECHECK] (Requirement #7)
             logger.info(f"[GROUP_PRECHECK] page={curr_page_no} inv={curr_inv} gstin={curr_gstin} vendor={curr_vendor} hydrated={bool(curr_inv != 'MISSING' or curr_gstin != 'MISSING')}")
 
             matched = False
+            
+            # 1. Deterministic Key Match
+            if is_deterministic and merge_key in deterministic_groups:
+                logger.info(f"[MERGE_DECISION] candidate_page={curr_page_no} decision='MERGE' reason='Deterministic key match ({merge_key})'")
+                deterministic_groups[merge_key].append(curr)
+                consumed_page_indices.add(curr_page_no)
+                self.log_trace(deterministic_groups[merge_key][0], curr, "merge", "Deterministic key match")
+                matched = True
+                continue
+
+            # 2. Sequential / Semantic Fallback (if key matching fails or lacks identity)
             for group_idx, group in enumerate(final_groups):
                 prev = group[0]
                 
@@ -286,12 +306,17 @@ class ForensicMerger:
                     logger.info(f"[MULTIPAGE_GROUP_CONFIRMED] inv={curr_inv} pages={len(group)} reason='{reason}'")
                 
                 self.log_trace(prev, curr, "merge", reason)
+                
+                # If this group was previously tracked deterministically, ensure the new page doesn't corrupt it
                 break
 
             if not matched:
                 logger.info(f"[NEW_INVOICE_CREATED] inv='{curr_inv}' gstin={curr_gstin} page={curr_page_no}")
-                final_groups.append([curr])
+                new_group = [curr]
+                final_groups.append(new_group)
                 consumed_page_indices.add(curr_page_no)
+                if is_deterministic:
+                    deterministic_groups[merge_key] = new_group
 
         logger.info(f"[FORENSIC GROUP DONE] {len(invoices)} pages -> {len(final_groups)} distinct groups")
 
@@ -403,8 +428,8 @@ class ForensicMerger:
 
     def deduplicate_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        [PHASE 5] Strict Page-Aware Deduplication.
-        Only dedupes if (page_no, description, amount) are identical.
+        [FORENSIC] Deterministic Item Deduplication.
+        Dedupes if (description, amount, rate) are identical, regardless of page_no.
         """
         if not items:
             return []
@@ -413,18 +438,18 @@ class ForensicMerger:
         unique_items = []
         
         for itm in items:
-            page_no = itm.get("_page_no", 0)
             desc = str(itm.get("description") or "").strip().lower()
             amt = self._to_float(itm.get("taxable_value") or itm.get("amount"))
+            rate = self._to_float(itm.get("rate") or 0.0)
             
-            # [PHASE 5 RULE] same page AND same description AND same amount
-            key = (page_no, desc, amt)
+            # Cross-page deduplication key
+            key = (desc, amt, rate)
             
             if key not in seen_keys:
                 seen_keys.add(key)
                 unique_items.append(itm)
             else:
-                logger.info(f"[ITEM_DEDUPE_GUARD] Dropping duplicate item: page={page_no} desc='{desc[:20]}' amt={amt}")
+                logger.info(f"[ITEM_DEDUPE_GUARD] Dropping cross-page duplicate item: desc='{desc[:20]}' amt={amt} rate={rate}")
                 
         return unique_items
 

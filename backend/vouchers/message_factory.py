@@ -18,7 +18,8 @@ class MessageFactory:
         'AI_EXTRACTION',
         'ASSEMBLY',
         'FINALIZE',
-        'EXPORT'
+        'EXPORT',
+        'MATERIALIZE'
     }
 
     @staticmethod
@@ -57,8 +58,14 @@ class MessageFactory:
         # Generate Deterministic Dedupe Key (Phase 2 - Dedupe & Idempotency)
         import hashlib
         import json
-        record_id = payload.get('record_id', 'unknown')
+        record_id = payload.get('record_id')
+        job_id = payload.get('job_id')
         invoice_no = payload.get('invoice_no', '')
+        
+        if not record_id:
+            raise ValueError(f"MessageFactory MUST receive 'record_id' in payload for task_type={task_type}")
+        if not job_id:
+            raise ValueError(f"MessageFactory MUST receive 'job_id' in payload for task_type={task_type}")
         # Dedupe key incorporates task type, tenant, session, record, page, and core identifiers
         dedupe_string = f"{task_type}:{tenant_id}:{session_id}:{record_id}:{page_number}:{invoice_no}"
         dedupe_key = hashlib.sha256(dedupe_string.encode('utf-8')).hexdigest()
@@ -94,8 +101,10 @@ class MessageFactory:
             f"[CANONICAL_MESSAGE_EMITTED] task_type={task_type} "
             f"ver={payload_version} corr={correlation_id} "
             f"trace_id={trace_id} dedupe_key={dedupe_key} "
-            f"session={session_id} tenant={tenant_id}"
+            f"session={session_id} tenant={tenant_id} "
+            f"job_id={job_id} record_id={record_id}"
         )
+        logger.info(f"[JOB_CONTEXT_PROPAGATED] task_type={task_type} job_id={job_id} record_id={record_id}")
         return message
 
 message_factory = MessageFactory()

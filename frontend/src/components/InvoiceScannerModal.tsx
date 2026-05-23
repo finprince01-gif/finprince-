@@ -802,7 +802,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         setInvoiceResults(mappedResults);
     };
 
-    const fetchStagingData = async () => {
+    const fetchStagingData = async (retryCount = 0) => {
         try {
             // STEP 3: Fetch using session_id to get ALL relevant processed records safely
             const params: Record<string, string> = {};
@@ -815,7 +815,13 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             // --- [PHASE 6] DETERMINISTIC HYDRATION BARRIER ---
             console.log(`[HYDRATION_RECEIVED] status=${response?.status} mode=${extractionMode}`);
             if (response?.status === 'PROCESSING') {
-                console.log('[HYDRATION_WAIT] Backend still processing. Deferring hydration.');
+                console.log(`[HYDRATION_WAIT] Backend still processing. Deferring hydration. retryCount=${retryCount}`);
+                if (retryCount < 5) {
+                    const backoffMs = Math.pow(2, retryCount) * 1000;
+                    console.log(`[FRONTEND_HYDRATION_BLOCKED] Retrying hydration in ${backoffMs}ms due to PROCESSING status...`);
+                    await new Promise(resolve => setTimeout(resolve, backoffMs));
+                    return fetchStagingData(retryCount + 1);
+                }
                 return;
             }
 
@@ -827,7 +833,15 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     console.warn('[HYDRATION_EMPTY_GUARDED] Empty response ignored — results already finalized.');
                     return;
                 }
-                console.warn('[HYDRATION_EMPTY] No rows returned from /api/ocr-staging/');
+                console.warn(`[HYDRATION_EMPTY] No rows returned from /api/ocr-staging/ retryCount=${retryCount}`);
+                
+                // Add hydration retry guard
+                if (retryCount < 5) {
+                    const backoffMs = Math.pow(2, retryCount) * 1000;
+                    console.log(`[FRONTEND_HYDRATION_BLOCKED] Retrying hydration in ${backoffMs}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, backoffMs));
+                    return fetchStagingData(retryCount + 1);
+                }
                 return;
             }
 
