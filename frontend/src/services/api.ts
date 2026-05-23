@@ -693,7 +693,13 @@ class ApiService {
                     // fully-paid invoices must still load their complete data in the drill-down view.
                     detailEndpoint = `/api/vouchers/purchase/${referenceId}/?show_all=true`;
                 } else if (actualSource === 'sales_voucher' || actualSource === 'sales_invoice' || base.type === 'Sales') {
-                    detailEndpoint = `/api/vouchers/sales/${referenceId}/`;
+                    // reference_id on the generic Voucher table points to VoucherSalesInvoiceDetails.id
+                    // Use the VoucherSalesViewSet endpoint (/api/voucher-sales-new/) NOT the old /api/vouchers/sales/
+                    if (actualSource === 'sales_invoice') {
+                        detailEndpoint = `/api/voucher-sales-new/${referenceId}/?show_all=true`;
+                    } else {
+                        detailEndpoint = `/api/vouchers/sales/${referenceId}/`;
+                    }
                 } else if (base.type === 'Receipt') {
                     // Fetch the actual ReceiptVoucher model to get voucher_type (series), receive_in, ref_no
                     detailEndpoint = `/api/vouchers/receipts/${referenceId}/`;
@@ -737,18 +743,40 @@ class ApiService {
 
                     const isPurchase = (actualSource === 'purchase_voucher' || base.type === 'Purchase');
 
-                    // ── Address mapping ───────────────────────────────────────────────────
-                    // For Purchase vouchers:
-                    //   • bill_from (DB field) = buyer's BILL TO address  (confusingly named in model)
-                    //   • ship_from (DB field) = buyer's SHIP TO address
-                    // For Sales vouchers:
-                    //   • bill_to / ship_to are the customer delivery addresses
-                    const billToAddr = isPurchase
+                    // ── Parse JSON address strings for sales vouchers ─────────────────
+                    let billToAddrRaw = isPurchase
                         ? (detail.bill_from || '')
                         : (detail.bill_to || detail.bill_from || '');
-                    const shipToAddr = isPurchase
+                    let shipToAddrRaw = isPurchase
                         ? (detail.ship_from || '')
                         : (detail.ship_to || detail.ship_from || '');
+
+                    // bill_to / ship_to for Sales vouchers is stored as JSON string
+                    let billToObj: any = {};
+                    let shipToObj: any = {};
+                    if (!isPurchase) {
+                        try {
+                            if (typeof billToAddrRaw === 'string' && billToAddrRaw.startsWith('{')) {
+                                billToObj = JSON.parse(billToAddrRaw);
+                            } else if (typeof billToAddrRaw === 'object' && billToAddrRaw !== null) {
+                                billToObj = billToAddrRaw;
+                            }
+                        } catch { billToObj = {}; }
+                        try {
+                            if (typeof shipToAddrRaw === 'string' && shipToAddrRaw.startsWith('{')) {
+                                shipToObj = JSON.parse(shipToAddrRaw);
+                            } else if (typeof shipToAddrRaw === 'object' && shipToAddrRaw !== null) {
+                                shipToObj = shipToAddrRaw;
+                            }
+                        } catch { shipToObj = {}; }
+                    }
+
+                    const billToAddr = isPurchase
+                        ? billToAddrRaw
+                        : (billToObj.address_line_1 || billToAddrRaw || '');
+                    const shipToAddr = isPurchase
+                        ? shipToAddrRaw
+                        : (shipToObj.address_line_1 || shipToAddrRaw || '');
 
                     // ── Invoice/voucher number ─────────────────────────────────────────────
                     // For Purchase: the user-facing voucher number is purchase_voucher_no (e.g. sedrfgt000012351)
@@ -783,7 +811,19 @@ class ApiService {
                         branch: detail.branch || base.branch || '',
                         // ── Addresses (BILL TO / SHIP TO as shown in the UI) ──────────
                         bill_to_address_1: billToAddr,
+                        bill_to_address_2: billToObj.address_line_2 || '',
+                        bill_to_address_3: billToObj.address_line_3 || '',
+                        bill_to_city: billToObj.city || '',
+                        bill_to_state: billToObj.state || '',
+                        bill_to_pincode: billToObj.pincode || '',
+                        bill_to_country: billToObj.country || '',
                         ship_to_address_1: shipToAddr,
+                        ship_to_address_2: shipToObj.address_line_2 || '',
+                        ship_to_address_3: shipToObj.address_line_3 || '',
+                        ship_to_city: shipToObj.city || '',
+                        ship_to_state: shipToObj.state || '',
+                        ship_to_pincode: shipToObj.pincode || '',
+                        ship_to_country: shipToObj.country || '',
                         // ── Supplier-specific header fields ───────────────────────────
                         supplier_invoice_no: detail.supplier_invoice_no || base.invoice_no || '',
                         supplier_invoice_date: detail.supplier_invoice_date || base.date || '',
@@ -832,9 +872,10 @@ class ApiService {
                             salesLedger: item.sales_ledger || item.salesLedger || '',
                             sales_ledger: item.sales_ledger || item.salesLedger || '',
                             hsnSac: item.hsn_sac || item.hsnSac || '',
-                            qty: parseFloat(item.quantity || item.qty || '0'),
+                            qty: parseFloat(item.qty || item.quantity || '0'),
                             uom: item.uom || '',
-                            itemRate: parseFloat(item.rate || item.itemRate || '0'),
+                            // item_rate is the actual DB column name returned by VoucherSalesItemsSerializer
+                            itemRate: parseFloat(item.item_rate || item.rate || item.itemRate || '0'),
                             taxableValue: parseFloat(item.taxable_value || item.taxableValue || '0'),
                             igst: parseFloat(item.igst_amount || item.igst || '0'),
                             cgst: parseFloat(item.cgst_amount || item.cgst || '0'),

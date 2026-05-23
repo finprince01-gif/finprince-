@@ -209,14 +209,30 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             const vNameFromPrefill = (prefilledData as any).voucher_name || (prefilledData as any).voucher_series || '';
             if (vNameFromPrefill) {
                 setVoucherName(vNameFromPrefill);
+                // If configs are already loaded, resolve the series ID immediately
+                const matchedConfig = salesVoucherConfigsRef.current.find((c: any) => c.voucher_name === vNameFromPrefill);
+                if (matchedConfig) {
+                    setSelectedSeriesId(matchedConfig.id);
+                }
             }
 
             if (prefilledData.billToAddress1) setBillToAddress1(prefilledData.billToAddress1);
             if (prefilledData.billToAddress2) setBillToAddress2(prefilledData.billToAddress2);
+            if ((prefilledData as any).billToAddress3) setBillToAddress3((prefilledData as any).billToAddress3);
             if (prefilledData.billToCity) setBillToCity(prefilledData.billToCity);
             if (prefilledData.billToState) setBillToState(prefilledData.billToState);
             if (prefilledData.billToPincode) setBillToPincode(prefilledData.billToPincode);
             if (prefilledData.billToCountry) setBillToCountry(prefilledData.billToCountry);
+
+            // Ship To address
+            if ((prefilledData as any).shipToAddress1) setShipToAddress1((prefilledData as any).shipToAddress1);
+            if ((prefilledData as any).shipToAddress2) setShipToAddress2((prefilledData as any).shipToAddress2);
+            if ((prefilledData as any).shipToAddress3) setShipToAddress3((prefilledData as any).shipToAddress3);
+            if ((prefilledData as any).shipToCity) setShipToCity((prefilledData as any).shipToCity);
+            if ((prefilledData as any).shipToState) setShipToState((prefilledData as any).shipToState);
+            if ((prefilledData as any).shipToPincode) setShipToPincode((prefilledData as any).shipToPincode);
+            if ((prefilledData as any).shipToCountry) setShipToCountry((prefilledData as any).shipToCountry);
+
 
             // Summary mapping
             if (prefilledData.stateCess) setPaymentStateCess(prefilledData.stateCess);
@@ -430,46 +446,48 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [selectedSeriesId, isReadOnlyMode]);
 
 
+    // Ref to track the current voucherName to avoid stale closures in async effects
+    const voucherNameRef = React.useRef(voucherName);
+    React.useEffect(() => {
+        voucherNameRef.current = voucherName;
+    }, [voucherName]);
+
     React.useEffect(() => {
         const fetchSalesConfigs = async () => {
             try {
                 const data = await httpClient.get<any[]>('/api/masters/master-voucher-sales/').catch(() => []);
                 if (Array.isArray(data) && data.length > 0) {
                     setSalesVoucherConfigs(data);
-                    if (!voucherName) {
-                        if (data.length === 1) {
-                            const first = data[0];
-                            setVoucherName(first.voucher_name);
-                            setSelectedSeriesId(first.id);
-                            // Get accurate next number from backend
-                            if (first.enable_auto_numbering) {
-                                try {
-                                    const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${first.id}/next-number/`);
-                                    if (res?.invoice_number) setSalesInvoiceNo(res.invoice_number);
-                                } catch {
-                                    setSalesInvoiceNo(formatInvoiceNo(first));
-                                }
+                    salesVoucherConfigsRef.current = data;
+                    // Read current voucherName via ref (not stale closure)
+                    const currentVoucherName = voucherNameRef.current;
+                    if (currentVoucherName) {
+                        // Edit mode: series was already set from prefilledData — resolve its ID
+                        const matchedConfig = data.find((c: any) => c.voucher_name === currentVoucherName);
+                        if (matchedConfig) {
+                            setSelectedSeriesId(matchedConfig.id);
+                        }
+                        // Don't overwrite salesInvoiceNo in edit mode
+                    } else if (data.length === 1) {
+                        const first = data[0];
+                        setVoucherName(first.voucher_name);
+                        setSelectedSeriesId(first.id);
+                        // Get accurate next number from backend
+                        if (first.enable_auto_numbering) {
+                            try {
+                                const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${first.id}/next-number/`);
+                                if (res?.invoice_number) setSalesInvoiceNo(res.invoice_number);
+                            } catch {
+                                setSalesInvoiceNo(formatInvoiceNo(first));
                             }
-                        } else {
-                            // Empty selection when there are multiple choices
-                            setVoucherName('');
-                            setSelectedSeriesId(null);
-                            setSalesInvoiceNo('');
                         }
                     }
+                    // If there are multiple series and no current selection: leave empty for user to pick
                 } else {
                     setSalesVoucherConfigs([]);
-                    if (!voucherName) {
-                        setVoucherName('');
-                        setSalesInvoiceNo('');
-                    }
                 }
             } catch (e) {
                 setSalesVoucherConfigs([]);
-                if (!voucherName) {
-                    setVoucherName('');
-                    setSalesInvoiceNo('');
-                }
             }
         };
         fetchSalesConfigs();

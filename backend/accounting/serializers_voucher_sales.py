@@ -328,6 +328,18 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             request = self.context.get('request')
             tenant_id = request.user.tenant_id if request and hasattr(request, 'user') else invoice.tenant_id
             payment_obj = getattr(invoice, 'payment_details', None)
+
+            # Resolve Voucher ID
+            v_id = getattr(invoice, 'voucher_id', None) or invoice.id
+
+            # PRE-CLEANUP: If updating, clean up all related sales journal entries so removing a tax/TCS cleanly deletes the old entry
+            from accounting.models import JournalEntry
+            if v_id:
+                JournalEntry.objects.filter(
+                    tenant_id=tenant_id,
+                    voucher_id=v_id,
+                    voucher_type__in=["SALES", "SALES_GST_DETAIL", "SALES_TCS_DETAIL"]
+                ).delete()
             if not payment_obj:
                 print("[SalesSerializer] Skipped posting: No payment details found on instance")
                 return
@@ -603,7 +615,6 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
 
         # --- Record Advance Allocation Maps Update (Phase 4C) ---
         if instance.voucher_id:
-            from accounting.models_voucher_sales import VoucherSalesPaymentDetails
             payment_obj = VoucherSalesPaymentDetails.objects.filter(invoice=instance).first()
             if payment_obj and payment_obj.advance_references:
                 from accounting.services.advance_service import write_allocations
@@ -627,8 +638,9 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         mirror_sales_to_portal(instance)
 
         
-        # Refresh double-entry posting
-        self._post_journal_entries(instance)
+        # Refresh double-entry posting using a fresh instance to avoid stale prefetched relations
+        fresh_instance = VoucherSalesInvoiceDetails.objects.get(id=instance.id)
+        self._post_journal_entries(fresh_instance)
 
         # Recalculate status centrally
         try:
