@@ -10359,21 +10359,23 @@ const InventoryPage: React.FC = () => {
   };
 
   const renderMaster = () => (
-    <div className="space-y-6">
-      <div className="erp-tab-container mb-0">
-        {masterSubTabs.map((subTab) => (
-          <button
-            key={subTab}
-            onClick={() => setActiveMasterSubTab(subTab)}
-            className={`erp-tab ${activeMasterSubTab === subTab ? 'active' : ''}`}
-          >
-            {subTab}
-          </button>
-        ))}
+    <div className="erp-card p-0 overflow-hidden">
+      <div className="erp-tab-container !mb-0 px-6 pt-4">
+        <nav className="flex space-x-2">
+          {masterSubTabs.map((subTab) => (
+            <button
+              key={subTab}
+              onClick={() => setActiveMasterSubTab(subTab)}
+              className={`erp-tab ${activeMasterSubTab === subTab ? 'active' : ''}`}
+            >
+              {subTab}
+            </button>
+          ))}
+        </nav>
       </div>
-      <div className="p-0 animate-in fade-in duration-300">
+      <div className="border-t border-slate-200 p-0 animate-in fade-in duration-300">
         {activeMasterSubTab === 'Category' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[500px]">
+          <div className="min-h-[500px]">
             <InventoryCategoryWizard
               onCreateCategory={handleCreateCategory}
               onEditCategory={handleEditCategory}
