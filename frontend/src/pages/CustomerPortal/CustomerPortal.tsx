@@ -234,29 +234,26 @@ const CustomerPortalPage: React.FC<CustomerPortalProps> = ({ onNavigate, setPref
             </div>
 
             {/* Content Area */}
-            <div className="px-8 py-6">
+            <div>
                 {activeTab === 'Master' && (
-                    <div>
+                    <div className="erp-card p-0 overflow-hidden">
                         {/* Sub-tabs for Master */}
-                        <div className="mb-6">
-                            <div className="flex gap-8 border-b border-gray-200 pb-1">
+                        <div className="erp-tab-container !mb-0 px-6 pt-4">
+                            <nav className="flex space-x-2">
                                 {['Category', 'Sales Quotation & Order', 'Customer', 'Long-term Contracts'].filter(t => isSuperuser || hasTabAccess('Customer Portal', t)).map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
-                                        className={`pb-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeMasterSubTab === subTab
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                                            }`}
+                                        className={`erp-tab ${activeMasterSubTab === subTab ? 'active' : ''}`}
                                     >
-                                        {subTab.toUpperCase()}
+                                        {subTab}
                                     </button>
                                 ))}
-                            </div>
+                            </nav>
                         </div>
 
                         {/* Masters Content */}
-                        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 min-h-[500px]">
+                        <div className="min-h-[500px] border-t border-slate-200">
                             {activeMasterSubTab === 'Category' && <CategoryContent />}
                             {activeMasterSubTab === 'Customer' && <CustomerContent onNavigate={onNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />}
                             {activeMasterSubTab === 'Sales Quotation & Order' && <SalesOrderContent />}
@@ -266,27 +263,24 @@ const CustomerPortalPage: React.FC<CustomerPortalProps> = ({ onNavigate, setPref
                 )}
 
                 {activeTab === 'Transaction' && (
-                    <div>
+                    <div className="erp-card p-0 overflow-hidden">
                         {/* Sub-tabs for Transaction */}
-                        <div className="mb-6">
-                            <div className="flex gap-8 border-b border-gray-200 pb-1">
+                        <div className="erp-tab-container !mb-0 px-6 pt-4">
+                            <nav className="flex space-x-2">
                                 {['Sales Quotation', 'Sales Order', 'Sales', 'Receipt'].filter(t => isSuperuser || hasTabAccess('Customer Portal', t)).map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
-                                        className={`pb-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTransactionSubTab === subTab
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                                            }`}
+                                        className={`erp-tab ${activeTransactionSubTab === subTab ? 'active' : ''}`}
                                     >
-                                        {subTab.toUpperCase()}
+                                        {subTab}
                                     </button>
                                 ))}
-                            </div>
+                            </nav>
                         </div>
 
                         {/* Transactions Content */}
-                        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-8 text-center min-h-[500px]">
+                        <div className="border-t border-slate-200 p-8 text-center min-h-[500px]">
                             {activeTransactionSubTab === 'Sales Quotation' && (
                                 showCreateQuotation ? (
                                     <CreateSalesQuotation

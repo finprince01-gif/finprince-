@@ -82,9 +82,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
 
                 {/* Compact Brand Header */}
                 <div className="text-center mb-6 w-full flex flex-col items-center">
-                    <div className="flex items-center justify-center gap-2.5 mb-2.5 scale-[0.9]">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#4B3CFF] to-[#6A5CFF] flex items-center justify-center shadow-lg relative overflow-hidden">
-                            <div className="w-6 h-6 rounded-lg bg-white/20 animate-pulse"></div>
+                    <div className="flex items-center justify-center gap-3 mb-2.5 scale-[0.9]">
+                        <div className="w-12 h-12 rounded-[14px] bg-[#101828] border border-white/70 shadow-[0_12px_28px_rgba(75,60,255,0.22)] flex items-center justify-center overflow-hidden">
+                            <img
+                                src="/finpixe-logo.png"
+                                alt="Finpixe logo"
+                                className="w-11 h-11 object-contain drop-shadow-[0_3px_8px_rgba(99,102,241,0.35)]"
+                            />
                         </div>
                         <h1 className="text-4xl font-black text-[#1a1a2e] tracking-widest">
                             FINPIXE
