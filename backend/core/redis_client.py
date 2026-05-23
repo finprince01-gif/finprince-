@@ -76,8 +76,19 @@ class RedisClient:
                 try: self.state.connection_pool.disconnect()
                 except: pass
 
-            broker_url = getattr(settings, 'REDIS_BROKER_URL', 'redis://localhost:6379/0')
-            state_url = getattr(settings, 'REDIS_STATE_URL', 'redis://localhost:6379/0')
+            import os
+            cluster_env = os.getenv('CLUSTER_ENV', 'local')
+            # [REDIS ISOLATION] Use DB 1 for local, DB 0 for production by default to prevent cross-contamination
+            default_db = '1' if cluster_env == 'local' else '0'
+            redis_host = os.getenv('REDIS_HOST', 'localhost')
+            redis_port = os.getenv('REDIS_PORT', '6379')
+            redis_password = os.getenv('REDIS_PASSWORD', '')
+            
+            auth_str = f":{redis_password}@" if redis_password else ""
+            default_url = f"redis://{auth_str}{redis_host}:{redis_port}/{default_db}"
+
+            broker_url = getattr(settings, 'REDIS_BROKER_URL', default_url)
+            state_url = getattr(settings, 'REDIS_STATE_URL', default_url)
             pool_size = int(os.getenv('REDIS_POOL_SIZE', '50')) # Bounded pool
 
             # 1. Initialize Broker (Queues)

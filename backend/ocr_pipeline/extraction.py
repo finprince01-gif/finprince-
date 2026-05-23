@@ -225,10 +225,11 @@ def extract_invoice(client, file_bytes=None, voucher_type='Purchase', public_ip=
 
     # ── [PHASE 9] DYNAMIC BATCHING STRATEGY ──
     # Reduce AI requests by grouping pages.
-    # 1-page document: batch_size=1
-    # 2-10 pages: batch_size=5
-    # 11+ pages: batch_size=10
-    if page_count == 1:
+    # If wait_for_result is False (async SQS pipeline), NEVER batch. 
+    # Let SQS fanout each page to individual workers for maximum parallelization.
+    if not wait_for_result:
+        batch_size = 1
+    elif page_count == 1:
         batch_size = 1
     elif page_count <= 10:
         batch_size = 5

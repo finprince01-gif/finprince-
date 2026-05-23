@@ -19,6 +19,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ClusterBootstrap")
 
+from dotenv import load_dotenv
+load_dotenv()
+
+# [FORENSIC] Emit environment identity at startup
+import platform as _platform
+_CLUSTER_ENV = os.getenv('CLUSTER_ENV', 'UNSET')
+_HOSTNAME    = _platform.node()
+
+if _CLUSTER_ENV == 'UNSET':
+    raise RuntimeError("CLUSTER_ENV required")
+
 # 2. DEPENDENCY VALIDATION
 def validate_dependencies():
     logger.info("[CLUSTER_PRECHECK_START] Validating infrastructure...")
@@ -101,6 +112,12 @@ if __name__ == "__main__":
     logger.info("=========================================================")
     logger.info("PHASE 11.7 — TRANSITIONAL TOPOLOGY HARDENING")
     logger.info("=========================================================")
+    logger.info(f"[CLUSTER_IDENTITY] hostname={_HOSTNAME} cluster_env={_CLUSTER_ENV}")
+    logger.info(f"[CLUSTER_QUEUE_BINDING] ingestion={os.getenv('SQS_INGESTION_QUEUE_URL')}")
+    logger.info(f"[CLUSTER_QUEUE_BINDING] ai={os.getenv('SQS_AI_QUEUE_URL')}")
+    logger.info(f"[CLUSTER_QUEUE_BINDING] assembly={os.getenv('SQS_ASSEMBLY_QUEUE_URL')}")
+    logger.info(f"[CLUSTER_QUEUE_BINDING] finalize={os.getenv('SQS_FINALIZE_QUEUE_URL')}")
+    logger.info(f"[CLUSTER_QUEUE_BINDING] materialization={os.getenv('SQS_MATERIALIZATION_QUEUE_URL')}")
     
     is_autoreload = (
         os.environ.get('RUN_MAIN') == 'true' or

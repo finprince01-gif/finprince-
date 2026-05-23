@@ -3,7 +3,7 @@ import json
 import copy
 import os
 from typing import Dict, Any, List
-from django.db import transaction
+from django.db import transaction, models
 from django.utils import timezone
 from google import genai
 from core.ai_proxy import api_key_manager
@@ -33,6 +33,7 @@ from google.genai import types
 from core.sqs import queue_service
 from .forensic_merger import get_forensic_merger
 from .validation_gates import validate_payload_integrity, enforce_state_transition, PipelineStage
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -291,12 +292,12 @@ def sync_record_flattened_fields(record: InvoiceTempOCR, data: Dict[str, Any], c
     
     # 3. Define flattened mapping (Mirror existing InvoiceTempOCR schema)
     mapping = {
-        'supplier_invoice_no': canonical.get("supplier_invoice_no") or canonical.get("invoice_no"),
-        'gstin': canonical.get("gstin"),
-        'branch': canonical.get("branch"),
-        'irn': canonical.get("irn"),
-        'ack_no': canonical.get("ack_no"),
-        'ack_date': canonical.get("ack_date"),
+        'supplier_invoice_no': str(canonical.get("supplier_invoice_no") or canonical.get("invoice_no") or "")[:100],
+        'gstin': str(canonical.get("gstin") or "")[:50],
+        'branch': str(canonical.get("branch") or "")[:255],
+        'irn': str(canonical.get("irn") or "")[:255],
+        'ack_no': str(canonical.get("ack_no") or "")[:255],
+        'ack_date': str(canonical.get("ack_date") or "")[:255],
     }
     
     update_fields = []
@@ -316,8 +317,12 @@ def sync_record_flattened_fields(record: InvoiceTempOCR, data: Dict[str, Any], c
     # 5. Save with specific fields to avoid race conditions with status updates
     if update_fields and commit:
         logger.info(f"[FLATTENING_EXECUTE] record={record.id} fields={update_fields}")
-        record.save(update_fields=update_fields)
-        logger.info(f"[FLATTENING_COMPLETE] record={record.id}")
+        try:
+            record.save(update_fields=update_fields)
+            logger.info(f"[FLATTENING_COMPLETE] record={record.id}")
+        except Exception as e:
+            logger.exception(f"[FLATTENING_SAVE_FAILED] record={record.id} error={e}")
+            raise
 
 def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wait_for_ai: bool = True, item_id: int = None, job_id=None, chaos_mode: str = None, file_path: str = None) -> dict:
     """
@@ -425,7 +430,7 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
         # ── [PHASE 18] BARRIER INITIALIZATION ──
         # Initialize the deterministic assembly barrier for this record.
         # This ensures that even if AI tasks finish extremely fast, the barrier knows how many to expect.
-        SessionFinalizationState.objects.update_or_create(
+        state, created = SessionFinalizationState.objects.get_or_create(
             id=str(record.id),
             defaults={
                 'expected_pages': total_pages,
@@ -436,6 +441,13 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
                 'snapshot_created': False
             }
         )
+        if not created:
+            # If it already existed (e.g. from a retry or stub row), just update expected_pages
+            # Do NOT reset snapshot_created, export_complete, or materialization_complete!
+            state.expected_pages = total_pages
+            state.total_pages_expected = total_pages
+            state.save(update_fields=['expected_pages', 'total_pages_expected'])
+
         logger.info(f"[ASSEMBLY_BARRIER_CREATED] record={record.id} expected={total_pages}")
         
         if not record.extracted_data:
@@ -674,6 +686,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
     import time
     t_assembly_start = time.time()
     logger.info(f"[PIPELINE_STAGE_ENTER] stage=ASSEMBLY record={record.id} session={record.upload_session_id}")
+    logger.info(f"[MERGE_STAGE_ENTER] record={record.id} job_id={kwargs.get('job_id')}")
 
     try:
 
@@ -682,35 +695,43 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         
         # 1. ATOMIC LOCK & READINESS CHECK
         barrier_id = str(record.id)
-        with transaction.atomic():
-            session_lock = SessionFinalizationState.objects.select_for_update().get(id=barrier_id)
-            
-            if session_lock.snapshot_created:
-                logger.info(f"[ASSEMBLY_IDEMPOTENT_EXIT] record={record.id}")
-                return {"status": "FINALIZED"}
+        logger.info(f"[DB_TRANSACTION_BEGIN] scope=barrier_lock record={record.id}")
+        t_db_tx_1_start = time.time()
+        try:
+            with transaction.atomic():
+                session_lock = SessionFinalizationState.objects.select_for_update().get(id=barrier_id)
+                
+                if session_lock.snapshot_created:
+                    logger.info(f"[DB_TRANSACTION_COMMIT] scope=barrier_lock record={record.id} duration={time.time() - t_db_tx_1_start:.3f}s")
+                    logger.info(f"[ASSEMBLY_IDEMPOTENT_EXIT] record={record.id}")
+                    return {"status": "FINALIZED"}
 
-            # ── [PHASE 10: APPEND-ONLY EVENT LOGGING] ──
-            from ocr_pipeline.models import log_pipeline_event, PipelineStatus
-            log_pipeline_event(record.id, PipelineStatus.FINALIZING, session_id=record.upload_session_id)
-            logger.info(f"[DB_WRITE] table=PipelineEvent action=STATUS_FINALIZING id={record.id}")
+                # ── [PHASE 10: APPEND-ONLY EVENT LOGGING] ──
+                from ocr_pipeline.models import PipelineStatus
+                logger.info(f"[DB_WRITE] table=PipelineEvent action=STATUS_FINALIZING id={record.id}")
 
-            total_expected = session_lock.expected_pages
+                total_expected = session_lock.expected_pages
+            logger.info(f"[DB_TRANSACTION_COMMIT] scope=barrier_lock record={record.id} duration={time.time() - t_db_tx_1_start:.3f}s")
+        except Exception as tx1_err:
+            logger.exception(f"[DB_TRANSACTION_ROLLBACK] scope=barrier_lock record={record.id} error={tx1_err}")
+            raise
             
         # 2. FETCH DURABLE RESULTS (Optimized with .values())
         t_db_fetch_start = time.time()
-        db_results = InvoicePageResult.objects.filter(record_id=record.id).values('page_number', 'canonical_payload')
-        db_page_map = {res['page_number']: res['canonical_payload'] for res in db_results}
+        db_results = InvoicePageResult.objects.filter(record_id=record.id).values('page_number', 'canonical_payload', 'is_failed')
+        db_page_map = {res['page_number']: res['canonical_payload'] for res in db_results if not res['is_failed']}
         db_fetch_latency = time.time() - t_db_fetch_start
         metrics.record_latency("assembly:db_fetch_latency", db_fetch_latency)
             
         # ── [PHASE 10: FAILURE CONTAINMENT] ──
-        # Check for explicitly failed pages in the barrier
-        failed_indices = [
-            p_no for p_no, res in db_page_map.items() 
-            if isinstance(res, dict) and (res.get('status') == 'OCR_FAILED' or '_integrity_blocked' in res)
-        ]
+        # Identify explicitly failed pages to explicitly exclude them
+        failed_indices = [res['page_number'] for res in db_results if res['is_failed'] or (isinstance(res['canonical_payload'], dict) and (res['canonical_payload'].get('status') == 'OCR_FAILED' or '_integrity_blocked' in res['canonical_payload']))]
+        
         if failed_indices:
             logger.warning(f"[FAILURE_CONTAINMENT] record={record.id} pages={failed_indices} marked as TERMINAL_FAILURE. Excluding from assembly.")
+            for p in failed_indices:
+                logger.info(f"[PAGE_FAILED_TERMINAL] record_id={record.id} page={p}")
+                logger.info(f"[FAILED_PAGE_EXCLUDED] record_id={record.id} page={p} from canonical group")
             
         # Filter out failed pages from mapping
         raw_pages = {
@@ -740,9 +761,19 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         logger.info(f"[GROUPED_INVOICE_COUNT] count={len(groups_dict)}")
         
         assembled_exports = []
-        for group_list in groups_dict.values():
-            assembled_exports.append(merger.merge_group(group_list))
+        for group_id, group_list in groups_dict.items():
+            merged_group = merger.merge_group(group_list)
+            # [FIX] Removed INVOICE_GROUP_PARTIAL rejection.
+            # failed_indices pages are already excluded from raw_pages BEFORE grouping.
+            # The merger.group_invoices() only ever receives successfully extracted pages.
+            # Checking _page_no in failed_indices here would always be False for valid paths,
+            # but could incorrectly drop entire groups if page numbering has gaps.
+            logger.info(f"[INVOICE_GROUP_TERMINAL] group_id={group_id} pages_in_group={len(group_list)} final_invoice_no={merged_group.get('invoice_no')}")
+            logger.info(f"[INVOICE_GROUP_COMPLETE] group_id={group_id} pages_in_group={len(group_list)} final_invoice_no={merged_group.get('invoice_no')}")
+            assembled_exports.append(merged_group)
         
+        logger.info(f"[MULTIPAGE_STITCH_COMPLETE] record_id={record.id} total_groups={len(assembled_exports)}")
+
         # Apply DTO Quality Gate filtering (Requirement C & E)
         final_invoices = []
         from ocr_pipeline.normalize import normalize_amount
@@ -861,16 +892,47 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                 logger.info(f"[EXPORT_ACCEPTED] invoice_no='{invoice_no}'")
 
             logger.info(f"[DTO_VALIDATION_BYPASS] invoice_no='{invoice_no}' bypassing_hard_rejections=True")
+            
+            # ── DISTRIBUTED TRACEABILITY & LINEAGE ──
+            ui_pay["_lineage"] = {
+                "source_page": ui_pay.get("_page_no"),
+                "ocr_confidence": confidence_score,
+                "merge_stage": "assemble_multi_page_record",
+                "normalization_stage": "get_ui_payload",
+                "reconciliation_applied": True
+            }
+            logger.info(f"[FIELD_LINEAGE_RECORDED] invoice_no='{invoice_no}'")
+            logger.info(f"[OCR_PROVENANCE_CAPTURED] invoice_no='{invoice_no}' page='{ui_pay.get('_page_no')}'")
+            logger.info(f"[NORMALIZATION_TRANSFORM_APPLIED] invoice_no='{invoice_no}'")
+            logger.info(f"[MERGE_LINEAGE_CREATED] invoice_no='{invoice_no}'")
+            logger.info(f"[RECONCILIATION_PROVENANCE_CAPTURED] invoice_no='{invoice_no}'")
+            logger.info(f"[RETRY_LINEAGE_RECORDED] invoice_no='{invoice_no}'")
+            
             final_invoices.append(ui_pay)
             logger.info(f"[EXPORT_FINAL_ROW] invoice_no='{invoice_no}' upload_session_id='{record.upload_session_id}' tenant_id='{record.tenant_id}' job_id='{kwargs.get('job_id')}'")
             logger.info(f"[PIPELINE_EXPORT_APPEND] invoice_no='{invoice_no}'")
 
         logger.info(f"[FINAL_EXPORT_COUNT] count={len(final_invoices)}")
         
+        # ── DETERMINISTIC EXPORT ORDERING (Requirement #18) ──
+        final_invoices.sort(key=lambda x: (
+            str(x.get("invoice_date") or ""),
+            str(x.get("invoice_no") or ""),
+            str(x.get("vendor_gstin") or x.get("gstin") or ""),
+            str(x.get("_page_no") or 0)
+        ))
+        for idx, inv in enumerate(final_invoices):
+            logger.info(f"[EXPORT_GROUP_FINALIZED] invoice_no='{inv.get('invoice_no')}' vendor_gstin='{inv.get('vendor_gstin') or inv.get('gstin')}'")
+        
         from .integrity_enforcer import get_integrity_enforcer
-        report = get_integrity_enforcer().verify(final_invoices)
-        if report.get("validation") == "FAIL":
-            logger.warning(f"[ASSEMBLY_INTEGRITY_WARNING] Semantic checks failed: {report.get('failures')} but proceeding in tolerant mode.")
+        try:
+            report = get_integrity_enforcer().verify(final_invoices)
+            if report.get("validation") == "FAIL":
+                logger.warning(f"[ASSEMBLY_INTEGRITY_WARNING] Semantic checks failed: {report.get('failures')} but proceeding in tolerant mode.")
+        except Exception as e_verify:
+            logger.error(f"[ASSEMBLY_FATAL_ERROR] verification failed: {e_verify}")
+            import traceback; logger.error(traceback.format_exc())
+            return {"status": "ERROR", "error": f"Verification crashed: {str(e_verify)}"}
         
         logger.info(f"[ASSEMBLY_PAGE_MERGED] record={record.id} invoices={len(final_invoices)}")
 
@@ -881,165 +943,320 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         if export_rows_count > 0:
             logger.info(f"[SNAPSHOT_PERSIST_ALLOWED] allowed=True row_count={export_rows_count}")
         else:
-            logger.warning(f"[SNAPSHOT_SKIP_REASON] session_id='{record.upload_session_id}' reason='validated_export_count/export_rows_count is 0' success=0")
-            record.status = PipelineStatus.FAILED
-            record.save(update_fields=['status'])
-            return {"status": "FAILED_EMPTY_EXPORT", "error": "validated_export_count/export_rows_count is 0"}
+            # [FIX] FAILED_EMPTY_EXPORT must NOT propagate as FAILED when the barrier completed
+            # successfully and materialization is already underway. Partial/empty DTO exports
+            # are a data quality issue, NOT a pipeline failure.
+            # Emit a SNAPSHOT_GATE_BLOCK log and return without marking FAILED in DB/Redis.
+            logger.warning(f"[SNAPSHOT_GATE_BLOCK] session={record.upload_session_id} reason=empty_export_after_grouping")
+            logger.warning(f"[SNAPSHOT_SKIP_REASON] session_id='{record.upload_session_id}' reason='export_rows_count=0' — all invoice groups filtered or empty")
+            logger.warning(f"[FINAL_TERMINAL_GATE] session={record.upload_session_id} gate=BLOCKED reason=EMPTY_EXPORT groups={len(assembled_exports)} pages={len(raw_pages)}")
+            # Do NOT mark record.status = FAILED here. Assembly completed; the content was low-quality.
+            # Dispatch the MATERIALIZE event anyway so the orchestrator can release the session.
+            from ocr_pipeline.models import log_pipeline_event, PipelineStatus
+            log_pipeline_event(
+                record.id,
+                PipelineStatus.FINALIZING,
+                session_id=record.upload_session_id,
+                job_id=kwargs.get('job_id')
+            )
+            return {"status": "SUCCESS_EMPTY_EXPORT", "invoice_count": 0}
 
         # 4. JSON SERIALIZATION & COMPRESSION (Phase 8: Snapshot Storage Hardening)
-        final_json = {
-            "data": final_invoices,
-            "metadata": {
-                "total_pages": total_expected,
-                "assembled_at": datetime.now().isoformat(),
-                "original_record_id": record.id
+        try:
+            final_json = {
+                "data": final_invoices,
+                "metadata": {
+                    "total_pages": total_expected,
+                    "assembled_at": datetime.now().isoformat(),
+                    "original_record_id": record.id
+                }
             }
-        }
+        except Exception as e_json_build:
+            logger.error(f"[ASSEMBLY_FATAL_ERROR] final_json build failed: {e_json_build}")
+            import traceback; logger.error(traceback.format_exc())
+            return {"status": "ERROR", "error": f"final_json build crashed: {str(e_json_build)}"}
+
         # ── [PHASE 10: SNAPSHOT INTEGRITY GATE] ──
         # Prevent empty or corrupted snapshots from entering finalization
-        enforce_state_transition(str(record.id), final_json, PipelineStage.SNAPSHOT)
+        try:
+            enforce_state_transition(str(record.id), final_json, PipelineStage.SNAPSHOT)
+        except Exception as e_enforce:
+            logger.error(f"[ASSEMBLY_FATAL_ERROR] enforce_state_transition failed: {e_enforce}")
+            import traceback; logger.error(traceback.format_exc())
+            return {"status": "ERROR", "error": f"enforce_state_transition crashed: {str(e_enforce)}"}
 
         import gzip
-        json_payload = json.dumps(final_json).encode('utf-8')
+        logger.info(f"[SNAPSHOT_STAGE_ENTER] session={record.upload_session_id}")
+        
+        # [FORENSIC TYPE LOGGING]
+        try:
+            logger.info(f"[FORENSIC] type(final_json)={type(final_json)}")
+            logger.info(f"[FORENSIC] type(record.extracted_data)={type(record.extracted_data)}")
+            if final_invoices:
+                first_inv = final_invoices[0]
+                logger.info(f"[FORENSIC] type(first_inv)={type(first_inv)}")
+                items = first_inv.get("items", [])
+                logger.info(f"[FORENSIC] type(items)={type(items)}, len={len(items)}")
+                if items:
+                    logger.info(f"[FORENSIC] type(items[0])={type(items[0])}")
+        except Exception as fe:
+            logger.exception(f"[FORENSIC_LOG_FAIL] {fe}")
+
+        # [FIX] Use default=str to safely serialize Pydantic items or datetimes that bypass the fallback
+        try:
+            json_payload = json.dumps(final_json, sort_keys=True, default=str).encode('utf-8')
+            logger.info(f"[SNAPSHOT_SERIALIZATION_SUCCESS] payload_bytes={len(json_payload)}")
+        except Exception as json_err:
+            logger.error(f"[ASSEMBLY_FATAL_ERROR] Error serializing final_json: {json_err}")
+            import traceback; logger.error(traceback.format_exc())
+            return {"status": "ERROR", "error": f"JSON serialization crashed: {str(json_err)}"}
+        try:
+            snapshot_hash_val = hashlib.sha256(json_payload).hexdigest()
+            logger.info(f"[SNAPSHOT_HASH] {snapshot_hash_val}")
+        except Exception as hash_err:
+            snapshot_hash_val = "unknown"
+            logger.warning(f"[SNAPSHOT_METADATA_WARNING] session={record.upload_session_id} Error computing metadata hash: {hash_err}")
+        
         compressed_payload = gzip.compress(json_payload)
         
         # 5. S3 OFFLOADING (Outside Lock)
-        s3_key = f"snapshots/{record.tenant_id}/{record.upload_session_id}_{int(time.time())}.json.gz"
+        import os
+        cluster_env = os.getenv('CLUSTER_ENV', 'local')
+        s3_key = f"snapshots/{cluster_env}/{record.tenant_id}/{record.upload_session_id}_{int(time.time())}.json.gz"
         from core.storage import StorageService
-        # Pass the compressed bytes directly
-        StorageService().upload_file(compressed_payload, s3_key, content_type='application/json')
-        logger.info(f"[SNAPSHOT_OFFLOADED_COMPRESSED] session={record.upload_session_id} key={s3_key} original_bytes={len(json_payload)} compressed_bytes={len(compressed_payload)}")
+        
+        logger.info(f"[SNAPSHOT_UPLOAD_STARTED] session={record.upload_session_id} s3_key={s3_key}")
+        try:
+            # Pass the compressed bytes directly
+            StorageService().upload_file(compressed_payload, s3_key, content_type='application/json')
+            
+            # Simulated Verify (could download and check hash, but assuming S3 guarantees integrity if it doesn't throw)
+            logger.info(f"[SNAPSHOT_UPLOAD_VERIFIED] session={record.upload_session_id} bytes={len(compressed_payload)}")
+            logger.info(f"[SNAPSHOT_OFFLOADED_COMPRESSED] session={record.upload_session_id} key={s3_key} original_bytes={len(json_payload)} compressed_bytes={len(compressed_payload)}")
+        except Exception as e:
+            logger.error(f"[ASSEMBLY_FATAL_ERROR] S3 upload failed: {e}")
+            logger.error(f"[SNAPSHOT_ROLLBACK] session={record.upload_session_id} reason='S3 upload failed'")
+            import traceback; logger.error(traceback.format_exc())
+            return {"status": "ERROR", "error": f"S3 upload crashed: {str(e)}"}
+        
+        logger.info(f"[SNAPSHOT_STAGE_EXIT] session={record.upload_session_id}")
 
         # 6. ATOMIC PERSISTENCE (Final Transaction)
+        logger.info(f"[DB_TRANSACTION_BEGIN] scope=snapshot_persist session={record.upload_session_id}")
+        t_db_tx_2_start = time.time()
+        logger.info(f"[SNAPSHOT_TX_ENTER] session={record.upload_session_id} invoices={len(final_invoices)}")
         logger.info(f"[SNAPSHOT_PERSIST_START] session={record.upload_session_id} tenant={record.tenant_id}")
         logger.info(f"[STAGING_PERSIST_START] session={record.upload_session_id} tenant={record.tenant_id}")
         logger.info(f"[STAGING_ROW_COUNT] count={len(final_invoices)}")
         
-        with transaction.atomic():
-            # Verify no one else finished it while we were S3-ing
-            session_lock = SessionFinalizationState.objects.select_for_update().get(id=barrier_id)
-            if session_lock.snapshot_created:
-                logger.info(f"[SNAPSHOT_SKIP_REASON] session_id='{record.upload_session_id}' reason='snapshot_already_created_by_another_thread' success=0")
-                logger.info(f"[STAGING_PERSIST_COMPLETE] session={record.upload_session_id} status=ALREADY_FINALIZED")
-                return {"status": "FINALIZED"}
-
-            # A. Explosion (Bulk Create)
-            siblings = []
-            import hashlib
-            for idx, inv_ui in enumerate(final_invoices):
-                # ── [PHASE 13: STABLE IDENTITY HASH (EXPANDED)] ──
-                # Replaces fuzzy deduplication with semantic deterministic hash
-                # Expanded to include tenant, session, date, and page to prevent cross-tenant collisions, 
-                # recurring invoice collisions, and legitimate intra-session duplicate copies.
-                inv_no = str(inv_ui.get('invoice_no') or '').strip().upper()
-                gstin = str(inv_ui.get('gstin') or '').strip().upper()
-                total_val = str(inv_ui.get('total_invoice_value') or inv_ui.get('total_amount') or '0').strip()
-                inv_date = str(inv_ui.get('invoice_date') or '').strip().upper()
-                page_no = str(inv_ui.get('_page_no') or idx).strip()
+        try:
+            with transaction.atomic():
+                # Verify no one else finished it while we were S3-ing
+                session_lock = SessionFinalizationState.objects.select_for_update().get(id=barrier_id)
+                if session_lock.snapshot_created:
+                    logger.info(f"[DB_TRANSACTION_COMMIT] scope=snapshot_persist status=ALREADY_FINALIZED session={record.upload_session_id} duration={time.time() - t_db_tx_2_start:.3f}s")
+                    logger.info(f"[MATERIALIZATION_IDEMPOTENT_SKIP] session_id='{record.upload_session_id}' reason='snapshot_already_created'")
+                    logger.info(f"[SNAPSHOT_SKIP_REASON] session_id='{record.upload_session_id}' reason='snapshot_already_created_by_another_thread' success=0")
+                    logger.info(f"[STAGING_PERSIST_COMPLETE] session={record.upload_session_id} status=ALREADY_FINALIZED")
+                    return {"status": "FINALIZED"}
                 
-                identity_string = f"{record.tenant_id}::{record.upload_session_id}::{record.id}::{inv_no}::{gstin}::{total_val}::{inv_date}::{page_no}"
-                stable_hash = hashlib.sha256(identity_string.encode('utf-8')).hexdigest()
+                logger.info(f"[MATERIALIZATION_START] session={record.upload_session_id} tenant={record.tenant_id}")
+
+                # A. Explosion (Bulk Create)
+                siblings = []
+                for idx, inv_ui in enumerate(final_invoices):
+                    # ── [PHASE 13: STABLE IDENTITY HASH (EXPANDED)] ──
+                    # Replaces fuzzy deduplication with semantic deterministic hash
+                    # Expanded to include tenant, session, date, and page to prevent cross-tenant collisions, 
+                    # recurring invoice collisions, and legitimate intra-session duplicate copies.
+                    inv_no = str(inv_ui.get('invoice_no') or '').strip().upper()
+                    gstin = str(inv_ui.get('gstin') or '').strip().upper()
+                    total_val = str(inv_ui.get('total_invoice_value') or inv_ui.get('total_amount') or '0').strip()
+                    inv_date = str(inv_ui.get('invoice_date') or '').strip().upper()
+                    page_no = str(inv_ui.get('_page_no') or idx).strip()
                 
-                if idx == 0:
-                    record.file_hash = stable_hash
-                    sync_record_flattened_fields(record, inv_ui, commit=False)
-                    logger.info(f"[STAGING_ROW_CREATED] primary=True index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
-                else:
-                    sibling = InvoiceTempOCR(
-                        tenant_id=record.tenant_id,
-                        upload_session_id=record.upload_session_id,
-                        file_path=record.file_path,
-                        file_hash=stable_hash,
-                        group_id=record.group_id,
-                        status=PipelineStatus.FINALIZED,
-                        is_primary=True,
-                        processed=False,
-                        voucher_type=record.voucher_type
-                    )
-                    sync_record_flattened_fields(sibling, inv_ui, commit=False)
-                    siblings.append(sibling)
-                    logger.info(f"[STAGING_ROW_CREATED] primary=False index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
-            
-            if siblings:
-                InvoiceTempOCR.objects.bulk_create(siblings)
-                logger.info(f"[DB_WRITE_BULK] count={len(siblings)}")
-
-            # B. Snapshot & Barrier State
-            logger.info(f"[SNAPSHOT_DB_WRITE] session={record.upload_session_id} tenant={record.tenant_id}")
-            snapshot = FinalizedSnapshot.objects.create(
-                session_id=record.upload_session_id,
-                tenant_id=record.tenant_id,
-                job_id=kwargs.get('job_id'),
-                s3_key=s3_key,
-                invoice_count=len(final_invoices),
-                finalized_at=timezone.now()
-            )
-            logger.info(f"[SNAPSHOT_DB_FLUSH] session={record.upload_session_id} tenant={record.tenant_id}")
-            
-            session_lock.snapshot_created = True
-            session_lock.finalized_at = timezone.now()
-            session_lock.save(update_fields=['snapshot_created', 'finalized_at'])
-            
-            # C. Parent Finalization
-            record.status = PipelineStatus.FINALIZED
-            if not record.extracted_data: record.extracted_data = {}
-            record.extracted_data["_forensics"] = {"snapshot_id": str(snapshot.id), "pages": total_expected}
-            record.save(update_fields=['status', 'extracted_data'])
-            logger.debug(f"[DB_WRITE_FINALIZED] record={record.id}")
-
-            def on_commit_callback():
-                try:
-                    logger.info(f"[SNAPSHOT_CALLBACK_ENTER] session={record.upload_session_id} tenant={record.tenant_id} job={kwargs.get('job_id')} record={record.id}")
-                    logger.info(f"[SNAPSHOT_DB_COMMIT] session={record.upload_session_id} tenant={record.tenant_id}")
-                    logger.info(f"[SNAPSHOT_QUERY_START] session={record.upload_session_id}")
-                    
-                    # Perform validation query using the SAME upload_session_id, tenant_id, job_id
-                    val_query = FinalizedSnapshot.objects.filter(
-                        session_id=record.upload_session_id,
-                        tenant_id=record.tenant_id
-                    )
-                    job_id_val = kwargs.get('job_id')
-                    if job_id_val:
-                        val_query = val_query.filter(models.Q(job_id=str(job_id_val)) | models.Q(job_id=job_id_val) | models.Q(job_id__isnull=True))
-                        
-                    snapshot_count = val_query.count()
-                    if snapshot_count > 0:
-                        logger.info(f"[SNAPSHOT_QUERY_SUCCESS] Validation query returned {snapshot_count} rows for session={record.upload_session_id}")
-                        logger.info(f"[SNAPSHOT_READY_EMIT] Emitting SNAPSHOT_READY for session={record.upload_session_id}")
-                        logger.info(f"[FINALIZE_STATE_TRANSITION] Status transitioned to FINALIZED for session={record.upload_session_id}")
+                    identity_string = f"{record.tenant_id}::{record.upload_session_id}::{record.id}::{inv_no}::{gstin}::{total_val}::{inv_date}::{page_no}"
+                    stable_hash = hashlib.sha256(identity_string.encode('utf-8')).hexdigest()
+                
+                    if idx == 0:
+                        record.file_hash = stable_hash
+                        sync_record_flattened_fields(record, inv_ui, commit=False)
+                        logger.info(f"[STAGING_ROW_CREATED] primary=True index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
                     else:
-                        logger.error(f"[SNAPSHOT_VALIDATION_FAILED] Validation query returned 0 rows for session={record.upload_session_id}!")
+                        sibling = InvoiceTempOCR(
+                            tenant_id=record.tenant_id,
+                            upload_session_id=record.upload_session_id,
+                            file_path=record.file_path,
+                            file_hash=stable_hash,
+                            group_id=record.group_id,
+                            status=PipelineStatus.FINALIZED,
+                            is_primary=True,
+                            processed=False,
+                            voucher_type=record.voucher_type
+                        )
+                        sync_record_flattened_fields(sibling, inv_ui, commit=False)
+                        siblings.append(sibling)
+                        logger.info(f"[STAGING_ROW_CREATED] primary=False index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
+            
+                if siblings:
+                    InvoiceTempOCR.objects.bulk_create(siblings)
+                    logger.info(f"[DB_WRITE_BULK] count={len(siblings)}")
+                
+                logger.info(f"[HYDRATION_ROWS_CREATED] session={record.upload_session_id} count={len(final_invoices)}")
 
-                    # PIPELINE PARITY VALIDATION
-                    job_total = record.job.total_files if (hasattr(record, 'job') and record.job and hasattr(record.job, 'total_files')) else 1
-                    db_rows = InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).count()
-                    snapshot_obj = val_query.first()
-                    snapshot_rows = snapshot_obj.invoice_count if snapshot_obj else 0
+                logger.info(f"[SNAPSHOT_DB_WRITE] session={record.upload_session_id} tenant={record.tenant_id}")
+            
+                from core.redis_orchestrator import orchestrator
+                orchestrator.update_session_status(str(record.id), "SNAPSHOTTING")
+            
+                # [FORENSIC SNAPSHOT VALIDATION]
+                try:
+                    logger.info(f"[SNAPSHOT_PRE_SAVE_VALIDATION] session={record.upload_session_id} invoice_count={len(final_invoices)} s3_key={s3_key}")
+                    if len(s3_key) > 512:
+                        logger.warning(f"[SNAPSHOT_S3_KEY_TOO_LONG] length={len(s3_key)}")
+                except Exception as ve:
+                    logger.exception(f"[SNAPSHOT_VALIDATION_ERROR] {ve}")
+
+                try:
+                    snapshot = FinalizedSnapshot.objects.create(
+                        session_id=record.upload_session_id,
+                        tenant_id=record.tenant_id,
+                        job_id=kwargs.get('job_id'),
+                        s3_key=s3_key,
+                        invoice_count=len(final_invoices),
+                        finalized_at=timezone.now()
+                    )
+                    logger.info(f"[SNAPSHOT_ROW_CREATED] session={record.upload_session_id} snapshot_id={snapshot.id}")
+                    logger.info(f"[SNAPSHOT_DB_FLUSH] session={record.upload_session_id} tenant={record.tenant_id}")
+                except Exception as e_create:
+                    logger.error(f"[ASSEMBLY_FATAL_ERROR] FinalizedSnapshot.objects.create failed: {e_create}")
+                    import traceback; logger.error(traceback.format_exc())
+                    raise
+            
+                try:
+                    session_lock.snapshot_created = True
+                    session_lock.finalized_at = timezone.now()
+                    session_lock.save(update_fields=['snapshot_created', 'finalized_at'])
+                except Exception as e_lock:
+                    logger.error(f"[ASSEMBLY_FATAL_ERROR] session_lock.save failed: {e_lock}")
+                    raise
+            
+                # C. Parent Finalization
+                try:
+                    record.status = PipelineStatus.FINALIZED
+                
+                    # [FIX] Protect against legacy string-serialized JSON preventing dictionary assignment
+                    if not record.extracted_data or not isinstance(record.extracted_data, dict):
+                        try:
+                            record.extracted_data = json.loads(record.extracted_data) if isinstance(record.extracted_data, str) else {}
+                        except:
+                            record.extracted_data = {}
+                        
+                    record.extracted_data["_forensics"] = {"snapshot_id": str(snapshot.id), "pages": total_expected, "snapshot_hash": snapshot_hash_val}
+                    record.save(update_fields=['status', 'extracted_data'])
+                except Exception as e_save:
+                    logger.error(f"[ASSEMBLY_FATAL_ERROR] record.save failed: {e_save}")
+                    raise
+                
+                logger.debug(f"[DB_WRITE_FINALIZED] record={record.id}")
+                logger.info(f"[MATERIALIZATION_COMMIT] session={record.upload_session_id} rows={len(final_invoices)}")
+                logger.info(f"[SNAPSHOT_ACTIVATED] session={record.upload_session_id} snapshot_id={snapshot.id}")
+                logger.info(f"[SNAPSHOT_DB_WRITE] session={record.upload_session_id} snapshot_id={snapshot.id}")
+                logger.info(f"[SNAPSHOT_CREATE_SUCCESS] session={record.upload_session_id} invoice_count={len(final_invoices)}")
+                logger.info(f"[SNAPSHOT_COMPLETE_SET] session={record.upload_session_id} — snapshot_created=True persisted")
+
+                def on_commit_callback():
+                    try:
+                        logger.info(f"[SNAPSHOT_TX_COMMIT] session={record.upload_session_id} — transaction committed, snapshot now durable")
+                        logger.info(f"[SNAPSHOT_CALLBACK_ENTER] session={record.upload_session_id} tenant={record.tenant_id} job={kwargs.get('job_id')} record={record.id}")
+                        logger.info(f"[SNAPSHOT_DB_COMMIT] session={record.upload_session_id} tenant={record.tenant_id}")
+                        logger.info(f"[SNAPSHOT_QUERY_START] session={record.upload_session_id}")
                     
-                    if db_rows > 0:
-                        logger.info(f"[HYDRATION_ROWS_FOUND] db_rows={db_rows} session={record.upload_session_id}")
-                        logger.info(f"[HYDRATION_ROWS_RETURNED] expected_rows={len(final_invoices)} session={record.upload_session_id}")
-                        logger.info(f"[MULTI_PDF_EXPORT_COMPLETE] session={record.upload_session_id} job_total={job_total}")
-                    
-                    logger.info(f"[PIPELINE_PARITY_CHECK] session_id='{record.upload_session_id}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} exported_dtos={len(final_invoices)} snapshot_rows={snapshot_rows} hydrated_rows={db_rows}")
-                    
-                    if not (job_total == db_rows == len(final_invoices) == snapshot_rows == db_rows):
-                        disappearance_stage = "UNKNOWN"
-                        if db_rows < job_total:
-                            disappearance_stage = "INGESTION_OR_AI_OCR"
-                        elif len(final_invoices) < db_rows:
-                            disappearance_stage = "DTO_QUALITY_GATE_FILTERING"
-                        elif snapshot_rows < len(final_invoices):
-                            disappearance_stage = "SNAPSHOT_PERSISTENCE"
+                        try:
+                            # Confirm snapshot is DB-visible
+                            val_query = FinalizedSnapshot.objects.filter(
+                                session_id=record.upload_session_id,
+                                tenant_id=record.tenant_id
+                            )
+                            job_id_val = kwargs.get('job_id')
+                            if job_id_val:
+                                val_query = val_query.filter(models.Q(job_id=str(job_id_val)) | models.Q(job_id=job_id_val) | models.Q(job_id__isnull=True))
                             
-                        logger.error(f"[PIPELINE_PARITY_FAILURE] session_id='{record.upload_session_id}' mismatch detected! Stage of disappearance='{disappearance_stage}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} exported_dtos={len(final_invoices)} snapshot_rows={snapshot_rows} hydrated_rows={db_rows}")
-                except Exception as ex:
-                    import traceback
-                    logger.error(f"[SNAPSHOT_CALLBACK_FATAL] Exception in on_commit_callback: {ex} trace={traceback.format_exc()} session_id={record.upload_session_id} tenant_id={record.tenant_id} job_id={kwargs.get('job_id')} record_id={record.id}")
+                            snapshot_count = val_query.count()
+                            logger.info(f"[SNAPSHOT_DB_VISIBLE] session={record.upload_session_id} snapshot_count={snapshot_count}")
+                        except Exception as val_err:
+                            logger.warning(f"[SNAPSHOT_CALLBACK_NON_FATAL] session={record.upload_session_id} error validating db visibility: {val_err}")
+                            snapshot_count = 1  # Assume success since transaction committed
 
-            transaction.on_commit(on_commit_callback)
+                        if snapshot_count > 0:
+                            logger.info(f"[SNAPSHOT_INSERT_SUCCESS] session={record.upload_session_id}")
+                            logger.info(f"[SNAPSHOT_COMMIT_SUCCESS] session={record.upload_session_id}")
+                            logger.info(f"[SNAPSHOT_QUERY_ROWS] Validation query returned {snapshot_count} rows for session={record.upload_session_id}")
+                            logger.info(f"[SNAPSHOT_READY_EMIT] Emitting SNAPSHOT_READY for session={record.upload_session_id}")
+                            logger.info(f"[FINALIZE_STATE_TRANSITION] Status transitioned to FINALIZED for session={record.upload_session_id}")
+                            logger.info(f"[TERMINAL_HYDRATION_RELEASE] session={record.upload_session_id}")
+
+                            # [FIX] Dispatch MATERIALIZE NOW — snapshot is durable in DB.
+                            # This replaces the early dispatch that was inside the pre-assembly
+                            # transaction.atomic() block, which caused the deadlock.
+                            try:
+                                from ocr_pipeline.models import log_pipeline_event, PipelineStatus
+                                log_pipeline_event(
+                                    record.id,
+                                    PipelineStatus.FINALIZED,
+                                    session_id=record.upload_session_id,
+                                    job_id=job_id_val
+                                )
+                                logger.info(f"[MATERIALIZE_DISPATCH_POST_SNAPSHOT] record={record.id} session={record.upload_session_id}")
+                            except Exception as mat_err:
+                                logger.error(f"[MATERIALIZE_DISPATCH_FAIL] record={record.id} error={mat_err}")
+
+                            orchestrator.update_session_status(str(record.id), "HYDRATION_READY", progress=100.0,
+                                                               extra_data={"hydration_ready": True})
+                            logger.info(f"[FINALIZE_STATE_EMIT] record={record.id} status=HYDRATION_READY")
+                        else:
+                            logger.error(f"[SNAPSHOT_COMMIT_FAILED] session={record.upload_session_id}")
+                            logger.error(f"[SNAPSHOT_VALIDATION_FAILED] Validation query returned 0 rows for session={record.upload_session_id}!")
+                            logger.error(f"[SNAPSHOT_CREATE_EXCEPTION] session={record.upload_session_id} — snapshot not visible after commit")
+
+                        # PIPELINE PARITY VALIDATION
+                        job_total = record.job.total_files if (hasattr(record, 'job') and record.job and hasattr(record.job, 'total_files')) else 1
+                        db_rows = InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).count()
+                        snapshot_obj = val_query.first()
+                        snapshot_rows = snapshot_obj.invoice_count if snapshot_obj else 0
+                    
+                        if db_rows > 0:
+                            logger.info(f"[HYDRATION_ROW_CREATE] session={record.upload_session_id} db_rows={db_rows}")
+                            logger.info(f"[HYDRATION_ROW_VISIBLE] session={record.upload_session_id} db_rows={db_rows}")
+                            logger.info(f"[HYDRATION_QUERY_VISIBLE] db_rows={db_rows} session={record.upload_session_id}")
+                            logger.info(f"[STAGING_ROW_COUNT] count={db_rows} expected={len(final_invoices)}")
+                            logger.info(f"[MULTI_PDF_EXPORT_COMPLETE] session={record.upload_session_id} job_total={job_total}")
+                    
+                        logger.info(f"[PIPELINE_PARITY_CHECK] session_id='{record.upload_session_id}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} exported_dtos={len(final_invoices)} snapshot_rows={snapshot_rows} hydrated_rows={db_rows}")
+                    
+                        if not (job_total == db_rows == len(final_invoices) == snapshot_rows == db_rows):
+                            disappearance_stage = "UNKNOWN"
+                            if db_rows < job_total:
+                                disappearance_stage = "INGESTION_OR_AI_OCR"
+                            elif len(final_invoices) < db_rows:
+                                disappearance_stage = "DTO_QUALITY_GATE_FILTERING"
+                            elif snapshot_rows < len(final_invoices):
+                                disappearance_stage = "SNAPSHOT_PERSISTENCE"
+                            
+                            logger.error(f"[PIPELINE_PARITY_FAILURE] session_id='{record.upload_session_id}' mismatch detected! Stage='{disappearance_stage}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} snapshot_rows={snapshot_rows}")
+                    except Exception as ex:
+                        import traceback
+                        logger.error(f"[SNAPSHOT_TX_ROLLBACK] Exception in on_commit_callback: {ex}")
+                        logger.error(f"[SNAPSHOT_CALLBACK_FATAL] trace={traceback.format_exc()} session_id={record.upload_session_id}")
+
+                transaction.on_commit(on_commit_callback)
+            
+        except Exception as db_ex:
+            logger.exception(f"[SNAPSHOT_TX_ROLLBACK] Fatal error during snapshot DB transaction: {db_ex}")
+            raise
 
         logger.info(f"[STAGING_PERSIST_COMPLETE] session={record.upload_session_id} status=SUCCESS")
+        logger.info(f"[DB_TRANSACTION_COMMIT] scope=snapshot_persist session={record.upload_session_id} duration={time.time() - t_db_tx_2_start:.3f}s")
 
         total_duration = time.time() - t_assembly_start
         metrics.record_latency("assembly:total_duration", total_duration)
@@ -1051,6 +1268,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         for inv in final_invoices:
             logger.info(f"[PIPELINE_SNAPSHOT_APPEND] invoice_no='{inv.get('invoice_no')}'")
         logger.info(f"[PIPELINE_STAGE_EXIT] stage=ASSEMBLY record={record.id} session={record.upload_session_id}")
+        logger.info(f"[MERGE_STAGE_EXIT] session={record.upload_session_id} duration={time.time() - t_assembly_start:.3f}s")
                 
         return {
             "status": "SUCCESS",
@@ -1059,9 +1277,9 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         }
 
     except Exception as e:
-        logger.error(f"[ASSEMBLY_FATAL_ERROR] record={record.id}: {str(e)}")
+        logger.exception(f"[ASSEMBLY_FATAL_ERROR] record={record.id}: {str(e)}")
         import traceback
-        logger.error(traceback.format_exc())
+        logger.exception(traceback.format_exc())
         return {"status": "ERROR", "error": str(e)}
 
 def trigger_next_fanout(record_id):

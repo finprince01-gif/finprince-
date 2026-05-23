@@ -41,7 +41,13 @@ while True:
         time.sleep(backoff)
             
     except KeyboardInterrupt:
-        logger.info(f"[WATCHDOG_STOP] role={role} - Received interrupt.")
+        logger.info(f"[WATCHDOG_STOP] role={role} - Received interrupt. Terminating worker.")
+        if 'process' in locals() and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
         break
     except Exception as e:
         tb = traceback.format_exc()

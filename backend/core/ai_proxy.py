@@ -394,12 +394,18 @@ class AIServiceProxy:
         if metadata:
             request_data['metadata'] = metadata
             
-        # [PHASE 5E] ASYNC OFFLOADING
-            # [PHASE 11.5] Use Canonical Message Factory
+        # Check if we should offload to SQS
+        wait_for_result = request_data.get('wait_for_result', True)
+        
+        if not wait_for_result:
+            # [PHASE 5E] ASYNC OFFLOADING
             from vouchers.message_factory import message_factory
             
             # Note: request_data here is the payload
-            session_id = metadata.get('upload_session_id') if metadata else 'unknown'
+            session_id = request_data.get('upload_session_id') or (metadata.get('upload_session_id') if metadata else 'unknown')
+            job_id = request_data.get('job_id') or (metadata.get('job_id') if metadata else 'unknown')
+            record_id = request_data.get('record_id') or 'unknown'
+            
             from copy import deepcopy
             msg = message_factory.create_message(
                 task_type="AI_EXTRACTION",
@@ -413,7 +419,7 @@ class AIServiceProxy:
             from core.sqs import queue_service
             try:
                 queue_service.push(msg_copy, queue_type='ai', delay_seconds=delay_seconds)
-                logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=ai msg_id={msg_copy['id']}")
+                logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=ai msg_id={msg_copy['id']} record={record_id} job={job_id}")
             except Exception as e:
                 logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=ai error={e}")
                 raise

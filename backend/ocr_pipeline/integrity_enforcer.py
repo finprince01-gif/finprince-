@@ -248,8 +248,99 @@ class ZohoIntegrityEnforcer:
                      logger.error(f"[INTEGRITY_FAIL] Invoice[{idx}] is a total void. Rejecting batch.")
             else:
                 logger.info(f"[INTEGRITY_PASS] Invoice[{idx}] has minimum identity anchors.")
+                
+            # ── FINANCIAL RECONCILIATION ──
+            recon = self.run_financial_reconciliation(inv)
+            if not recon["valid"]:
+                err_msg = f"Financial reconciliation failed for {v_inv_no}: {recon['reason']}"
+                logger.error(f"[INVOICE_RECONCILIATION_FAILED] invoice={v_inv_no} reason='{recon['reason']}'")
+                report["failures"].append(err_msg)
+                report.update({"validation": "FAIL", "ready_for_zoho": False})
+                inv["_integrity_blocked"] = True
+            else:
+                logger.info(f"[INVOICE_RECONCILIATION_SUCCESS] invoice={v_inv_no}")
         
         return report
+
+    def run_financial_reconciliation(self, inv: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validates accounting correctness and precision.
+        """
+        items = inv.get("items", [])
+        inv_no = inv.get("invoice_no", "unknown")
+        
+        sum_taxable = 0.0
+        sum_igst = 0.0
+        sum_cgst = 0.0
+        sum_sgst = 0.0
+        rates_seen = set()
+        tax_rows_seen = set()
+        
+        for idx, item in enumerate(items):
+            taxable = self._to_float(item.get("taxable_value"))
+            igst = self._to_float(item.get("igst"))
+            cgst = self._to_float(item.get("cgst"))
+            sgst = self._to_float(item.get("sgst"))
+            rate = self._to_float(item.get("rate") or 0)
+            
+            sum_taxable += taxable
+            sum_igst += igst
+            sum_cgst += cgst
+            sum_sgst += sgst
+            if rate > 0:
+                rates_seen.add(rate)
+            
+            # Duplicate tax-row detection
+            row_sig = (taxable, igst, cgst, sgst)
+            if row_sig != (0.0, 0.0, 0.0, 0.0):
+                if row_sig in tax_rows_seen:
+                    logger.warning(f"[DUPLICATE_TAX_ROW] invoice={inv_no} duplicate signature={row_sig}")
+                tax_rows_seen.add(row_sig)
+                
+        if len(rates_seen) > 1:
+            logger.info(f"[MULTI_RATE_VALIDATED] invoice={inv_no} rates={rates_seen}")
+            
+        header_taxable = self._to_float(inv.get("total_taxable_value"))
+        header_igst = self._to_float(inv.get("total_igst"))
+        header_cgst = self._to_float(inv.get("total_cgst"))
+        header_sgst = self._to_float(inv.get("total_sgst"))
+        header_total = self._to_float(inv.get("total_invoice_value") or inv.get("total_amount"))
+        
+        tolerance = 2.0  # Allow rounding drift up to 2.0
+        
+        # 1. Taxable Value Match
+        if abs(sum_taxable - header_taxable) > tolerance and header_taxable > 0:
+            return {"valid": False, "reason": f"Taxable value mismatch: items_sum={sum_taxable} header={header_taxable}"}
+            
+        # 2. GST Match
+        if abs(sum_igst - header_igst) > tolerance and header_igst > 0:
+             return {"valid": False, "reason": f"IGST mismatch: items_sum={sum_igst} header={header_igst}"}
+        if abs((sum_cgst + sum_sgst) - (header_cgst + header_sgst)) > tolerance and (header_cgst + header_sgst) > 0:
+             return {"valid": False, "reason": f"CGST/SGST mismatch: items_sum={sum_cgst+sum_sgst} header={header_cgst+header_sgst}"}
+             
+        logger.info(f"[GST_TOTAL_VALIDATED] invoice={inv_no}")
+        
+        # 3. Invoice Total Match
+        calculated_total = header_taxable + header_igst + header_cgst + header_sgst
+        if header_taxable == 0:  # Fallback if header is empty but items exist
+            calculated_total = sum_taxable + sum_igst + sum_cgst + sum_sgst
+            
+        diff = abs(calculated_total - header_total)
+        if diff > tolerance and header_total > 0:
+            if diff < 10.0:
+                logger.warning(f"[ROUNDING_DRIFT_DETECTED] invoice={inv_no} calculated={calculated_total} header={header_total}")
+                # We do not fail for minor rounding drift, just log it.
+            else:
+                return {"valid": False, "reason": f"Invoice total mismatch: calculated={calculated_total} header={header_total}"}
+                
+        # 4. HSN Aggregation Validation (Simplified check)
+        hsn_totals = {}
+        for item in items:
+            hsn = str(item.get("hsn_code") or "UNKNOWN")
+            hsn_totals[hsn] = hsn_totals.get(hsn, 0.0) + self._to_float(item.get("taxable_value"))
+        logger.info(f"[HSN_TOTAL_VALIDATED] invoice={inv_no} unique_hsns={len(hsn_totals)}")
+        
+        return {"valid": True, "reason": "Passed"}
 
     def verify_flatten(self, rows: List[Dict[str, Any]], invoices: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

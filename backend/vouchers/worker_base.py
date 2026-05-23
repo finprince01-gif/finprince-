@@ -20,15 +20,18 @@ CONCURRENCY_LIMIT = int(os.getenv('WORKER_CONCURRENCY', '50'))
 LEASE_EXTENSION_INTERVAL = int(os.getenv('SQS_LEASE_EXTEND_INTERVAL', '60'))
 
 class SqsLeaseExtender:
-    def __init__(self, handle: str, queue_type: str, interval: int = 60):
+    def __init__(self, handle: str, queue_type: str, interval: int = 60, max_duration: int = 900):
         self.handle = handle
         self.queue_type = queue_type
         self.interval = interval
+        self.max_duration = max_duration
+        self.start_time = time.time()
         self.running = True
         self._task = None
 
     async def __aenter__(self):
         if self.handle:
+            logger.info(f"[VISIBILITY_EXTENDER_START] role={self.queue_type} handle={self.handle[:10]}...")
             logger.debug(f"[SQS_VISIBILITY_START] handle={self.handle[:10]}... queue={self.queue_type}")
             # Ensure the extender task itself is shielded from cancellation 
             # if the outer task is cancelled but we are in the middle of a heartbeat.
@@ -43,11 +46,24 @@ class SqsLeaseExtender:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        if self.handle:
+            logger.info(f"[VISIBILITY_EXTENDER_STOP] role={self.queue_type} handle={self.handle[:10]}...")
 
     async def _extend_loop(self):
         while self.running:
             try:
                 await asyncio.sleep(self.interval)
+                
+                if time.time() - self.start_time > self.max_duration:
+                    logger.critical(f"[STUCK_MESSAGE_DETECTED] role={self.queue_type} handle={self.handle[:10]}... releasing visibility")
+                    loop = asyncio.get_running_loop()
+                    await asyncio.shield(loop.run_in_executor(
+                        None,
+                        lambda: queue_service.change_visibility(self.handle, 0, queue_type=self.queue_type)
+                    ))
+                    self.running = False
+                    break
+
                 if self.running:
                     loop = asyncio.get_running_loop()
                     # Shield the heartbeat itself
@@ -116,6 +132,51 @@ class BaseWorker(ABC):
     async def handle_task(self, task: Dict[str, Any]):
         pass
 
+    async def _resource_monitor(self):
+        """
+        [PHASE 12.1] Large PDF Governance & Memory Telemetry.
+        Monitors worker RSS memory and initiates a safe recycle if limits are breached.
+        """
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        MAX_RSS_MB = 600.0  # Safe threshold before OOM
+        SUSTAINED_SECONDS = 60
+        CHECK_INTERVAL = 15
+        
+        sustained_count = 0
+        threshold_hits_required = max(1, SUSTAINED_SECONDS // CHECK_INTERVAL)
+        
+        while self.running:
+            try:
+                await asyncio.sleep(CHECK_INTERVAL)
+                if not self.running: break
+                
+                rss_bytes = process.memory_info().rss
+                rss_mb = rss_bytes / (1024 * 1024)
+                logger.info(f"[WORKER_MEMORY_USAGE] role={self.role} pid={os.getpid()} rss_mb={rss_mb:.2f} active_tasks={len(self.active_tasks)}")
+                
+                if rss_mb > MAX_RSS_MB:
+                    sustained_count += 1
+                    logger.warning(f"[WORKER_SUSTAINED_MEMORY_PRESSURE] role={self.role} rss_mb={rss_mb:.2f} limit={MAX_RSS_MB} sustained={sustained_count}/{threshold_hits_required}")
+                    if sustained_count >= threshold_hits_required:
+                        logger.critical(f"[WORKER_RECYCLE_TRIGGERED] role={self.role} rss_mb={rss_mb:.2f} limit={MAX_RSS_MB}. Initiating graceful exit.")
+                        logger.info(f"[WORKER_RECYCLE_STARTED] role={self.role} active_tasks={len(self.active_tasks)}")
+                        # Graceful exit: Stop accepting new tasks, wait for current ones to finish
+                        self.running = False
+                        if self.active_tasks:
+                            logger.info(f"[WORKER_GRACEFUL_DRAIN] Waiting for {len(self.active_tasks)} active tasks to finish before exit...")
+                            await asyncio.gather(*self.active_tasks.values(), return_exceptions=True)
+                        logger.info(f"[WORKER_RECYCLE_COMPLETED] role={self.role} pid={os.getpid()}")
+                        self.shutdown(signum=signal.SIGTERM, frame=None)
+                        break
+                else:
+                    if sustained_count > 0:
+                        logger.info(f"[WORKER_RECYCLE_ABORTED] role={self.role} RSS recovered to {rss_mb:.2f}MB")
+                    sustained_count = 0
+            except Exception as e:
+                logger.error(f"[RESOURCE_MONITOR_ERROR] {e}")
+
     async def run(self):
         # Autoreload protection (Phase 4)
         # Workers must NEVER run under Django's StatReloader / dev autoreload.
@@ -135,9 +196,107 @@ class BaseWorker(ABC):
 
         logger.info(f"[WORKER_BOOT_START] role={self.role} queue={self.queue_type} concurrency={CONCURRENCY_LIMIT}")
         self._register_signals()
+
+        # [PHASE 11.9] SINGLETON WORKER LOCK
+        import redis
+        cluster_env = os.getenv('CLUSTER_ENV', 'local')
+        # [FIX] Use same DB as redis_orchestrator so heartbeats are visible to terminalization check.
+        redis_db = int(os.getenv('REDIS_DB', '0'))
+        redis_url = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/{redis_db}"
+        try:
+            r = redis.Redis.from_url(redis_url, decode_responses=True)
+            self._lock_key = f"worker_lock_{self.role}_{cluster_env}"
+            self._heartbeat_key = f"worker_hb_{self.role}_{cluster_env}"
+
+            # [PHASE 2: DETERMINISTIC OWNERSHIP RECONCILIATION]
+            # Workers MUST NOT immediately self-terminate on ROLE_ALREADY_OWNED.
+            # Instead, validate: owner PID exists, process alive, heartbeat freshness.
+            import psutil
+            
+            # Initial attempt to acquire
+            acquired = r.set(self._lock_key, str(os.getpid()), nx=True, ex=90)
+            
+            if not acquired:
+                current_owner = r.get(self._lock_key)
+                ttl = r.ttl(self._lock_key)
+                logger.critical(f"[ROLE_ALREADY_OWNED] role={self.role} pid={os.getpid()} lock_key={self._lock_key} owner_pid={current_owner} ttl={ttl}s")
+                
+                can_reclaim = False
+                reclaim_reason = ""
+                
+                if current_owner:
+                    logger.info(f"[WORKER_PID_VALIDATION] Validating owner_pid={current_owner}")
+                    try:
+                        owner_pid = int(current_owner)
+                        # Check if process is actually alive
+                        if not psutil.pid_exists(owner_pid):
+                            can_reclaim = True
+                            reclaim_reason = "OWNER_PID_DEAD"
+                        else:
+                            # Process exists, check heartbeat freshness
+                            last_hb = r.hget("worker_heartbeats", f"{self.role}_{cluster_env}")
+                            if last_hb:
+                                hb_age = time.time() - float(last_hb)
+                                if hb_age > 90:
+                                    can_reclaim = True
+                                    reclaim_reason = "HEARTBEAT_EXPIRED"
+                                    logger.warning(f"[WORKER_HEARTBEAT_EXPIRED] owner_pid={current_owner} hb_age={hb_age}s")
+                            else:
+                                can_reclaim = True
+                                reclaim_reason = "NO_HEARTBEAT_FOUND"
+                    except ValueError:
+                        can_reclaim = True
+                        reclaim_reason = "INVALID_PID_FORMAT"
+                else:
+                     can_reclaim = True
+                     reclaim_reason = "NO_OWNER_DATA"
+                     
+                if ttl <= 0 or ttl == -1:
+                    can_reclaim = True
+                    reclaim_reason = "STALE_LOCK_NO_TTL"
+                    logger.warning(f"[WORKER_LOCK_STALE_DETECTED] role={self.role} lock has no TTL ({ttl}).")
+
+                if can_reclaim:
+                    logger.warning(f"[LOCK_RECLAIM_INITIATED] role={self.role} reason={reclaim_reason} force-clearing stale lock.")
+                    r.delete(self._lock_key)
+                    acquired = r.set(self._lock_key, str(os.getpid()), nx=True, ex=90)
+                    
+                if not acquired:
+                    logger.critical(f"[WATCHDOG_RESTART_REASON] role={self.role} — lock owner={current_owner} still active. Exiting to prevent split-brain.")
+                    return
+
+            logger.info(f"[WORKER_LOCK_ACQUIRE] role={self.role} pid={os.getpid()} key={self._lock_key}")
+            logger.info(f"[WORKER_SINGLETON_ACQUIRED] role={self.role} pid={os.getpid()}")
+
+            # [FIX] Write a per-role heartbeat key WITH TTL so dead workers auto-expire.
+            # The legacy 'worker_heartbeats' hash has no per-field TTL so stale entries
+            # persist after crashes and block the orchestrator's terminalization check.
+            r.set(self._heartbeat_key, str(os.getpid()), ex=90)
+            r.hset("worker_heartbeats", f"{self.role}_{cluster_env}", time.time())
+            logger.info(f"[WORKER_HEARTBEAT_WRITE] role={self.role} initial heartbeat created")
+
+            # Keep renewing lock and heartbeat in background
+            async def renew_lock():
+                while self.running:
+                    await asyncio.sleep(10)
+                    if self.running:
+                        try:
+                            r.expire(self._lock_key, 90)
+                            r.expire(self._heartbeat_key, 90)
+                            r.hset("worker_heartbeats", f"{self.role}_{cluster_env}", time.time())
+                            logger.debug(f"[WORKER_LOCK_REFRESH] role={self.role} pid={os.getpid()}")
+                        except Exception as e:
+                            logger.error(f"[LOCK_RENEW_ERROR] {e}")
+
+            self._lock_task = asyncio.create_task(renew_lock())
+
+        except Exception as e:
+            logger.error(f"[WORKER_LOCK_ERROR] {e}")
+            pass
         
         # Start resource monitor
-        self._monitor_task = asyncio.create_task(self._resource_monitor())
+        if hasattr(self, '_resource_monitor'):
+            self._monitor_task = asyncio.create_task(self._resource_monitor())
         
         logger.info(f"[POLL_LOOP_ENTER] role={self.role}")
         logger.info(f"[WORKER_LOOP_STARTED] role={self.role}")
@@ -182,6 +341,16 @@ class BaseWorker(ABC):
                     )
                 )
 
+                # [PHASE 1] Update actual polling timestamp
+                try:
+                    import redis
+                    redis_db = int(os.getenv('REDIS_DB', '0'))
+                    redis_url = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/{redis_db}"
+                    r_poll = redis.Redis.from_url(redis_url, decode_responses=True)
+                    r_poll.hset("worker_polling_activity", f"{self.role}_{cluster_env}", time.time())
+                except Exception as e:
+                    logger.error(f"[POLL_TIMESTAMP_ERR] {e}")
+
                 if not messages:
                     logger.info(f"[WORKER_IDLE_WAIT] role={self.role} queue={self.queue_type} status=EMPTY")
                     logger.info(f"[POLL_EMPTY_TICK] role={self.role} active={len(self.active_tasks)} running={self.running}")
@@ -197,6 +366,11 @@ class BaseWorker(ABC):
                             logger.info(f"[WORKER_RECOVERED] role={self.role} id={msg.get('id')}")
 
                         logger.info(f"[EXECUTOR_SUBMIT] id={msg.get('id', 'unknown')} msg_id={msg_id}")
+                        
+                        # [PHASE 1] Record consume start timestamp
+                        try:
+                            r_poll.hset("worker_processing_activity", f"{self.role}_{cluster_env}", time.time())
+                        except: pass
                         
                         task_obj = asyncio.create_task(self._safe_handle_task(msg))
                         self.active_tasks[msg_id] = task_obj
@@ -247,6 +421,28 @@ class BaseWorker(ABC):
         if self._monitor_task:
             self._monitor_task.cancel()
             
+        # Cleanup singleton lock
+        try:
+            if hasattr(self, '_lock_task'):
+                self._lock_task.cancel()
+            import redis
+            redis_db = int(os.getenv('REDIS_DB', '0'))
+            r = redis.Redis.from_url(f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/{redis_db}",
+                                     decode_responses=True)
+            if hasattr(self, '_lock_key'):
+                current_owner = r.get(self._lock_key)
+                if current_owner and current_owner == str(os.getpid()):
+                    r.delete(self._lock_key)
+                    logger.info(f"[LOCK_RELEASE] role={self.role} pid={os.getpid()} key={self._lock_key}")
+                    logger.info(f"[WORKER_SINGLETON_RELEASED] role={self.role} pid={os.getpid()}")
+            if hasattr(self, '_heartbeat_key'):
+                r.delete(self._heartbeat_key)
+                cluster_env = os.getenv('CLUSTER_ENV', 'local')
+                r.hdel("worker_heartbeats", f"{self.role}_{cluster_env}")
+                logger.info(f"[LOCK_EXPIRED] role={self.role} heartbeat key cleared")
+        except Exception as e:
+            logger.error(f"[LOCK_CLEANUP_ERROR] {e}")
+
         logger.info(f"[WORKER_FINAL_EXIT] role={self.role}")
 
     async def _resource_monitor(self):
@@ -338,6 +534,17 @@ class BaseWorker(ABC):
                     loop = asyncio.get_running_loop()
                     await loop.run_in_executor(None, lambda: queue_service.delete(handle, queue_type=self.queue_type))
                     logger.info(f"[QUEUE_MESSAGE_DELETE] id={msg_id} queue={queue_name}")
+                return
+
+            # [PHASE 11.9] OWNERSHIP VALIDATION
+            ownership = raw_task.get('_ownership', {})
+            msg_cluster_env = ownership.get('cluster_env')
+            if msg_cluster_env and msg_cluster_env != os.getenv('CLUSTER_ENV', 'local'):
+                logger.critical(f"[FOREIGN_MESSAGE_REJECTED] id={msg_id} msg_env={msg_cluster_env} local_env={os.getenv('CLUSTER_ENV', 'local')}")
+                if handle:
+                    # Do not delete, let it return to queue for the correct consumer
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, lambda: queue_service.change_visibility(handle, 0, queue_type=self.queue_type))
                 return
 
             correlation_id = task.get('correlation_id') or task.get('payload', {}).get('correlation_id') or 'unknown'
@@ -584,6 +791,7 @@ class BaseWorker(ABC):
                 retry_count=int(task.get('_sqs_receive_count', task.get('retry_count', 0)))
             ))
             logger.error(f"[INVALID_MESSAGE_QUARANTINED] id={task.get('id')} role={self.role} error={error_msg}")
+            logger.error(f"[DLQ_MESSAGE_ROUTED] id={task.get('id')} queue={self.queue_type} correlation_id={corr_id}")
         except Exception as e:
             logger.error(f"[QUARANTINE_FAILED] {e}")
 

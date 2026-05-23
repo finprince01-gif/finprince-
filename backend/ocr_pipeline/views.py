@@ -90,7 +90,10 @@ class CleanOCRStagingView(views.APIView):
             return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
         storage = StorageService()
-        queue = QueueService()
+        # [FORENSIC FIX] Always use the module-level singleton — never instantiate a new QueueService()
+        # A new instance resolves env vars lazily at construction time; on EC2 this can yield None URLs
+        # and push() silently returns False, causing message loss before ingestion begins.
+        from core.sqs import queue_service as queue
 
         # ΓöÇΓöÇ Step 1: Create Job Record ΓöÇΓöÇ
         job = OCRJob.objects.create(
@@ -390,8 +393,15 @@ class CleanOCRStagingView(views.APIView):
                     PipelineStatus.ASSEMBLING, PipelineStatus.FINALIZING
                 ]).exists()
 
+        # [PHASE 16] CHECK TERMINAL STATE DIRECTLY FROM REDIS BEFORE BLOCKING ON is_processing
+        terminal_from_redis = False
+        if session_id:
+            from core.redis_orchestrator import orchestrator
+            auth_state = orchestrator.get_authoritative_session_state(session_id)
+            terminal_from_redis = auth_state.get('terminal', False)
+
         # ── 1. CHECK FOR IMMUTABLE SNAPSHOT (PHASE 4) ──
-        if session_id and not is_processing and records_exist:
+        if session_id and (not is_processing or terminal_from_redis) and records_exist:
             from .models import FinalizedSnapshot
             snapshots = FinalizedSnapshot.objects.filter(session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
             
@@ -472,15 +482,33 @@ class CleanOCRStagingView(views.APIView):
             from core.redis_orchestrator import orchestrator
             redis_status = orchestrator.get_session_status(session_id)
             if redis_status:
-                if redis_status['status'] == "PROCESSING" or redis_status['status'] == "INGESTING":
-                    logger.info(f"[STAGING_QUERY_RESULT_COUNT] count=0 (Redis status={redis_status['status']})")
-                    logger.info(f"[STAGING_QUERY_EMPTY_REASON] Redis state is still processing: {redis_status['status']}.")
-                    return Response({
-                        "status": "PROCESSING",
-                        "data": [],
-                        "progress_percent": redis_status['progress'],
-                        "source": "redis"
-                    })
+                redis_st = redis_status.get('status', '')
+                if redis_st in ("PROCESSING", "INGESTING", "INGESTED"):
+                    # Check for stale state regression
+                    has_snapshots = False
+                    try:
+                        from .models import FinalizedSnapshot
+                        has_snapshots = FinalizedSnapshot.objects.filter(session_id=session_id).exists()
+                    except:
+                        pass
+                        
+                    if has_snapshots:
+                        logger.warning(f"[STALE_STATE_DETECTED] session={session_id} redis={redis_st} but snapshots exist! Overriding.")
+                        # Fall through to snapshot hydration
+                    else:
+                        logger.info(f"[STAGING_QUERY_RESULT_COUNT] count=0 (Redis status={redis_st})")
+                        logger.info(f"[STAGING_QUERY_EMPTY_REASON] Redis state is still processing: {redis_st}.")
+                        return Response({
+                            "status": "PROCESSING",
+                            "data": [],
+                            "progress_percent": redis_status['progress'],
+                            "source": "redis"
+                        })
+                elif redis_st in ("FINALIZED", "PARTIAL_FAILED", "FAILED", "EXPORTED"):
+                    # [FIX] Terminal status written by finalize_worker must break polling immediately.
+                    # Previously only PROCESSING was handled — FINALIZED was silently ignored.
+                    logger.info(f"[STAGING_REDIS_TERMINAL] session={session_id} status={redis_st} — proceeding to snapshot/DB hydration")
+                    # Fall through to snapshot + DB hydration below (do not return early)
 
         # ── 3. STATE MACHINE BARRIER (PHASE 3) ──
         if session_id:
@@ -533,8 +561,10 @@ class CleanOCRStagingView(views.APIView):
         data = []
         for r in records:
             mapped = self._map_record_to_ui_row(r)
-            if mapped.get('status') == 'FAILED' or mapped.get('validationStatus') == 'EXTRACTION_FAILED':
-                continue
+            # [FIX] Do NOT filter out FAILED rows. The UI must see them so the user can manually review 
+            # instead of hanging in a blank screen.
+            # if mapped.get('status') == 'FAILED' or mapped.get('validationStatus') == 'EXTRACTION_FAILED':
+            #     continue
                 
             # --- NEW MALFORMED ROW SANITIZATION ---
             norm = getattr(r, 'extracted_data', {}) or {}
@@ -542,16 +572,23 @@ class CleanOCRStagingView(views.APIView):
             vendor = mapped.get('vendor_name', '')
             page_role = norm.get('_page_role', '') or norm.get('page_role', '')
             
+            # Log warnings instead of strictly dropping, to prevent hydration from returning rows=0
+            # for documents with poor OCR but valid pipeline completion.
             if not inv_no or str(inv_no).strip().upper() == 'MISSING' or str(inv_no).strip() == '—':
-                continue
+                logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='missing_invoice_no_warning'")
             if not vendor or str(vendor).strip().upper() == 'MISSING' or str(vendor).strip() == '—':
-                continue
+                logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='missing_vendor_warning'")
             if page_role == 'PAGE_ROLE_CONTINUATION':
+                # We do drop continuation pages from the primary staging view to prevent UI clutter
                 continue
             # --------------------------------------
 
             if not mapped.get('invoice_no') and not mapped.get('items'):
-                continue
+                logger.warning(f"[ROW_FILTER_WARNING] reason='completely_empty_record' record={rid}")
+                mapped['_pipeline_warning'] = 'completely_empty_record'
+                # DO NOT drop the row! The frontend needs to know it processed and yielded nothing,
+                # otherwise the frontend assumes the row is still "in-flight" and retries forever.
+            
             data.append(mapped)
         
         poll_duration = time.time() - t_poll_start
@@ -561,25 +598,50 @@ class CleanOCRStagingView(views.APIView):
         if len(data) == 0:
             logger.info("[STAGING_QUERY_EMPTY_REASON] No staging rows returned because records were empty or filtered out.")
 
-        # ── PIPELINE-LEVEL STATUS (controls frontend polling) ──
-        # 'completed' → frontend stops polling. Use ONLY when ALL records are terminal.
-        # 'processing' → frontend keeps polling.
-        # A record with FAILED/EXTRACTION_FAILED is terminal — but the pipeline is
-        # only "done" when every single record has exited the async pipeline.
-        all_terminal = records.exists() and all(
-            getattr(r, 'status', None) in TERMINAL_STATUSES for r in records
-        )
-        pipeline_status = 'completed' if all_terminal else 'processing'
-
+        # ── [PHASE 15] AUTHORITATIVE ORCHESTRATOR INFERENCE ──
+        # 'completed' → frontend stops polling. Use ONLY when Orchestrator explicitly grants it.
+        from core.redis_orchestrator import orchestrator
+        session_to_check = request.query_params.get('upload_session_id') or session_id
+        
+        pipeline_status = 'processing'
+        terminal = False
+        hydration_pending = True
+        
+        if session_to_check:
+            auth_state = orchestrator.get_authoritative_session_state(session_to_check)
+            terminal = auth_state.get('terminal', False)
+            snapshot_complete = auth_state.get('snapshot_complete', False)
+            terminal_reason = auth_state.get('reason', '')
+            
+            if terminal:
+                # If terminal, it's either COMPLETED or FAILED
+                if terminal_reason == 'FAILED' or (not snapshot_complete and len(data) == 0):
+                    pipeline_status = 'failed'
+                else:
+                    pipeline_status = 'completed'
+                hydration_pending = False
+            else:
+                pipeline_status = 'processing'
+                hydration_pending = True
+                logger.info(f"[FRONTEND_HYDRATION_WAIT] session={session_to_check} waiting for authoritative terminal state")
+                
+        if terminal and snapshot_complete and len(data) == 0:
+            logger.error(f"[EMPTY_HYDRATION_ILLEGAL_STATE] session={session_to_check} terminal=True snapshot_complete=True but returning 0 rows!")
+            
         logger.info(
-            f"[STAGING POLL] session={request.query_params.get('upload_session_id')} "
-            f"records={len(data)} terminal={sum(1 for r in records if getattr(r,'status',None) in TERMINAL_STATUSES)} "
-            f"pipeline_status={pipeline_status}"
+            f"[STAGING_POLL] session={session_to_check} "
+            f"records={len(data)} terminal={terminal} "
+            f"pipeline_status={pipeline_status} hydration_pending={hydration_pending}"
         )
+        logger.info(f"[STAGING_ROWS_RETURNED] count={len(data)} session={session_to_check}")
+        logger.info(f"[FRONTEND_ROWS_RECEIVED] count={len(data)} session={session_to_check}")
 
         return Response({
-            "status": "COMPLETED" if session_id else "OK",
+            "status": pipeline_status.upper() if pipeline_status else "PROCESSING",
             "data": data,
+            "pipeline_status": pipeline_status,
+            "terminal": terminal,
+            "hydration_pending": hydration_pending,
             "poll_latency": round(poll_duration, 3)
         })
 

@@ -85,7 +85,8 @@ class PipelineEvent(models.Model):
         super().save(*args, **kwargs)
 
 def log_pipeline_event(record_id: str, status: str, session_id: str = None, metadata: dict = None, 
-                       workflow_id: str = None, causation_id: str = None, correlation_id: str = None):
+                       workflow_id: str = None, causation_id: str = None, correlation_id: str = None,
+                       tenant_id: str = None, job_id: str = None):
     try:
         from django.db import transaction, IntegrityError
         from core.middleware import get_correlation_id
@@ -143,22 +144,55 @@ def log_pipeline_event(record_id: str, status: str, session_id: str = None, meta
                 continue
             
         # ── [PHASE 1: DEDICATED QUEUE-DRIVEN PROJECTION] ──
+        # ── [PHASE 1: DEDICATED QUEUE-DRIVEN PROJECTION] ──
         from core.sqs import queue_service
+        from vouchers.message_factory import message_factory
         
-        message = {
-            "task_type": "MATERIALIZE",
-            "tenant_id": "system",
-            "id": f"mat_event_{event.id}",
-            "payload": {
+        # Hydrate missing identity fields for Canonical Schema
+        actual_session_id = session_id
+        actual_tenant_id = tenant_id or "system"
+        actual_job_id = str(job_id) if job_id else "unknown"
+        try:
+            record = InvoiceTempOCR.objects.get(id=record_id)
+            actual_session_id = actual_session_id or record.upload_session_id
+            actual_tenant_id = record.tenant_id or "system"
+            
+            # Fetch job_id via OCRTask mapping if missing
+            from .models import OCRTask
+            task = OCRTask.objects.filter(result_id=record_id).first()
+            if task and task.job_id:
+                actual_job_id = str(task.job_id)
+            else:
+                from vouchers.models import InvoiceProcessingItem
+                item = InvoiceProcessingItem.objects.filter(staging_record_id=record_id).first()
+                if item and item.job_id:
+                    actual_job_id = str(item.job_id)
+        except Exception:
+            actual_session_id = actual_session_id or str(record_id)
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[MESSAGE_TYPE_REGISTERED] type=MATERIALIZE event_id={event.id}")
+
+        message = message_factory.create_message(
+            task_type="MATERIALIZE",
+            tenant_id=actual_tenant_id,
+            session_id=actual_session_id,
+            correlation_id=actual_correlation_id,
+            payload={
                 "event_id": event.id,
                 "record_id": str(record_id),
                 "status": status,
                 "workflow_id": event.workflow_id,
                 "workflow_version": event.workflow_version,
-                "correlation_id": actual_correlation_id
+                "job_id": actual_job_id
             }
-        }
+        )
+        
+        logger.info(f"[MATERIALIZE_DISPATCH_START] event_id={event.id} record={record_id}")
+        logger.info(f"[CONTEXT_TRACE_MATERIALIZE_EMIT] job_id={actual_job_id} record_id={record_id} session_id={actual_session_id} tenant_id={actual_tenant_id} trace_id={message['trace_id']}")
         queue_service.push(message=message, queue_type='materialization')
+        logger.info(f"[MATERIALIZE_DISPATCH_SUCCESS] event_id={event.id} record={record_id}")
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"[EVENT_LOG_FAIL] record={record_id} status={status}: {e}")
@@ -376,6 +410,21 @@ class SessionFinalizationState(models.Model):
     finalized_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Phase 14: Batch Success/Quorum Tracking
+    status = models.CharField(max_length=50, default='UPLOADED')
+    
+    expected_records = models.IntegerField(default=0)
+    processed_records = models.IntegerField(default=0)
+    exported_records = models.IntegerField(default=0)
+    materialized_records = models.IntegerField(default=0)
+    failed_records = models.IntegerField(default=0)
+    
+    ingestion_complete = models.BooleanField(default=False)
+    ai_complete = models.BooleanField(default=False)
+    export_complete = models.BooleanField(default=False)
+    materialization_complete = models.BooleanField(default=False)
+    snapshot_complete = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'session_finalization_states'
