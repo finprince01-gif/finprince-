@@ -4322,7 +4322,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setPurchaseActiveTab('supplier');
         } else if (mappedType === 'Sales') {
           setLocalPrefilledData({
-            voucherId: voucherId,
+            voucherId: details.reference_id || details.id || voucherId,
             invoiceNumber: details.voucher_number || details.voucher_no || '',
             // ── Sales Series ─────────────────────────────────────────────
             voucher_name: details.voucher_name || details.voucher_series || details.sales_series || details.sales_voucher_series || '',
@@ -4341,7 +4341,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             
             // ── Addresses ──
             billToAddress1: details.bill_to_address_1 || details.bill_to_address || '',
+            billToAddress2: details.bill_to_address_2 || '',
+            billToAddress3: details.bill_to_address_3 || '',
+            billToCity: details.bill_to_city || '',
+            billToState: details.bill_to_state || '',
+            billToPincode: details.bill_to_pincode || '',
+            billToCountry: details.bill_to_country || '',
             shipToAddress1: details.ship_to_address_1 || details.ship_to_address || '',
+            shipToAddress2: details.ship_to_address_2 || '',
+            shipToAddress3: details.ship_to_address_3 || '',
+            shipToCity: details.ship_to_city || '',
+            shipToState: details.ship_to_state || '',
+            shipToPincode: details.ship_to_pincode || '',
+            shipToCountry: details.ship_to_country || '',
             
             // ── Extracted payment details ──
             stateCess: details.payment_details?.payment_state_cess || '0',

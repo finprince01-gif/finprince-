@@ -70,38 +70,11 @@ class MasterLedgerSerializer(BranchModelSerializerMixin, serializers.ModelSerial
         }
     
     def get_balance(self, obj):
-        """Calculate balance from transaction files, amount_transactions, or journal entries"""
+        """Calculate balance directly from journal entries (the single source of truth)"""
         try:
             logger.debug(f"Looking for ledger: '{obj.name}' with tenant_id: '{obj.tenant_id}'")
             
-            # Try AmountTransaction first (for Cash/Bank ledgers)
-            try:
-                from accounting.models import AmountTransaction
-                latest_txn = AmountTransaction.objects.filter(
-                    tenant_id=obj.tenant_id,
-                    ledger=obj
-                ).order_by('-transaction_date', '-created_at').first()
-                
-                if latest_txn:
-                    logger.debug(f"Found balance in AmountTransaction: {latest_txn.balance}")
-                    return latest_txn.balance
-            except Exception as e:
-                logger.debug(f"AmountTransaction lookup failed: {e}")
-            
-            # Try TransactionFile
-            from accounting.models import TransactionFile
-            transaction_file = TransactionFile.objects.filter(
-                tenant_id=obj.tenant_id,
-                ledger_name=obj.name
-            ).first()
-            
-            logger.debug(f"TransactionFile query result: {transaction_file}")
-            
-            if transaction_file and transaction_file.transactions:
-                print("FOUND TRANSACTION_FILE BALANCE:", transaction_file.transactions.get('balance', 0))
-                return transaction_file.transactions.get('balance', 0)
-            
-            # Fallback to journal entries (if table exists)
+            # Use Journal entries exclusively
             try:
                 logger.debug("Trying journal entries")
                 from django.db.models import Sum

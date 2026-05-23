@@ -789,7 +789,14 @@ const App: React.FC = () => {
 
     }
 
-    setVouchers(prev => [...prev, ...newVouchers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    setVouchers(prev => {
+      const updatedMap = new Map(prev.map(v => [v.id, v]));
+      newVouchers.forEach(nv => {
+        updatedMap.set(nv.id, nv);
+      });
+      return Array.from(updatedMap.values())
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    });
   }, [companyDetails]);
 
   const handleUpdateVoucher = useCallback(async (updatedVoucher: Voucher) => {
