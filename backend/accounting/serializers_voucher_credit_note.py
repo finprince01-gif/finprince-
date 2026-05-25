@@ -154,6 +154,28 @@ class VoucherCreditNoteInvoiceDetailsSerializer(serializers.ModelSerializer):
                 # Mirror to Customer Portal (Updates existing record using update_or_create)
                 self._mirror_to_customer_portal(instance)
 
+                # Update global Voucher
+                from .models import Voucher
+                try:
+                    voucher = Voucher.objects.get(
+                        type="credit_note",
+                        reference_id=instance.id,
+                        tenant_id=instance.tenant_id,
+                    )
+                    cn_number = instance.credit_note_no or f"CN-{instance.id}"
+                    voucher.voucher_number = cn_number
+                    voucher.date = instance.date
+                    voucher.party = instance.customer_name
+                    if item_data is not None:
+                        voucher.total_taxable_amount = Decimal(str(item_instance.total_taxable_value or 0))
+                        voucher.total_cgst = Decimal(str(item_instance.total_cgst or 0))
+                        voucher.total_sgst = Decimal(str(item_instance.total_sgst or 0))
+                        voucher.total_igst = Decimal(str(item_instance.total_igst or 0))
+                        voucher.total = Decimal(str(item_instance.total_invoice_value or 0))
+                    voucher.save()
+                except Voucher.DoesNotExist:
+                    pass
+
                 return instance
         except Exception as e:
             raise serializers.ValidationError(f"Failed to update Credit Note: {str(e)}")

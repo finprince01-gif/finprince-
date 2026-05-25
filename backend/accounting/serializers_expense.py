@@ -136,6 +136,12 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
         validated_data.update(totals)
         expense = super().create(validated_data)
 
+        party_name = 'N/A'
+        if rows and isinstance(rows, list) and len(rows) > 0 and isinstance(rows[0], dict):
+            post_to_val = rows[0].get('postTo')
+            if post_to_val:
+                party_name = str(post_to_val)
+
         voucher = Voucher.objects.create(
             tenant_id=expense.tenant_id,
             type='expense',
@@ -145,6 +151,7 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
             narration=expense.posting_note,
             source='expense_voucher',
             reference_id=expense.id,
+            party=party_name,
         )
 
         setattr(expense, '_accounting_voucher_id', voucher.id)
@@ -213,6 +220,22 @@ class VoucherExpenseSerializer(serializers.ModelSerializer):
             instance.total_igst = totals['total_igst']
             instance.total_cess = totals['total_cess']
             instance.save()
+            
+            party_name = 'N/A'
+            if rows and isinstance(rows, list) and len(rows) > 0 and isinstance(rows[0], dict):
+                post_to_val = rows[0].get('postTo')
+                if post_to_val:
+                    party_name = str(post_to_val)
+
+            voucher = Voucher.objects.filter(source='expense_voucher', reference_id=instance.id).first()
+            if voucher:
+                voucher.date = instance.date
+                voucher.voucher_number = instance.voucher_number
+                voucher.total = totals['total_amount']
+                voucher.narration = instance.posting_note
+                voucher.party = party_name
+                voucher.save()
+
             self._sync_expense_items(instance, rows)
             self._post_journal_entries(instance)
             
