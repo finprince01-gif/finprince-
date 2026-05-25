@@ -61,6 +61,7 @@ import AuthPortalPage from '../pages/AuthPortal/AuthPortal';
 import Sidebar from '../components/Sidebar';  // Left navigation sidebar
 import Modal from '../components/Modal';                  // Reusable modal dialog
 import AIAgent from '../components/AIAgent';              // AI Agent (Kiki)
+import FloatingCalculator from '../components/FloatingCalculator';
 import Icon from '../components/Icon';                    // Icon component
 import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrapper
 import { showError, showSuccess } from '../utils/toast';
@@ -1498,6 +1499,7 @@ const App: React.FC = () => {
         </div>
       </Modal>
 
+      <FloatingCalculator />
 
       <button
         onClick={() => setIsAgentOpen(true)}
