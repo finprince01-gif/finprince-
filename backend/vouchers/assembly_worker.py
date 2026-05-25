@@ -129,7 +129,7 @@ class AssemblyWorker(BaseWorker):
 
         # 4. Hard Barrier Timeout Check (PHASE 2 — deadlock prevention)
         # Prevent premature finalization: dynamic timeout based on page count
-        timeout_seconds = max(1800, expected_pages * 60)
+        timeout_seconds = max(120, expected_pages * 30)
         duration = (timezone.now() - barrier.created_at).total_seconds()
         
         if not state["is_ready"] and duration > timeout_seconds:

@@ -267,6 +267,8 @@ class OCRJob(models.Model):
     total_pages = models.IntegerField(default=0)
     processed_pages = models.IntegerField(default=0)
     failed_pages = models.IntegerField(default=0)
+    is_cancelled = models.BooleanField(default=False)
+    upload_type = models.CharField(max_length=50, default='UNKNOWN')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -462,6 +464,7 @@ class InvoiceTempOCR(models.Model):
     file_path = models.CharField(max_length=512)
     upload_session_id = models.CharField(max_length=255, null=True, blank=True)
     voucher_type = models.CharField(max_length=50, null=True, blank=True)
+    upload_type = models.CharField(max_length=50, default='UNKNOWN')
     
     ocr_raw_text = models.TextField(null=True, blank=True)
     extracted_data = models.JSONField(null=True, blank=True) # Source of truth for UI modal

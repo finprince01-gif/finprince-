@@ -1092,7 +1092,8 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                             status=PipelineStatus.FINALIZED,
                             is_primary=True,
                             processed=False,
-                            voucher_type=record.voucher_type
+                            voucher_type=record.voucher_type,
+                            upload_type=record.upload_type  # [UPLOAD_TYPE ISOLATION FIX]
                         )
                         sync_record_flattened_fields(sibling, inv_ui, commit=False)
                         siblings.append(sibling)
@@ -1322,22 +1323,49 @@ def trigger_next_fanout(record_id):
                 logger.debug(f"[FANOUT_FILL] record={record_id} inflight={inflight} filling={batch_size} next={next_start+1}")
                 
                 record = InvoiceTempOCR.objects.get(id=record_id)
+                actual_path = resolve_storage_path(record)
+                
+                # [FIX] MessageFactory MUST receive 'job_id' in payload for task_type=AI_EXTRACTION
+                from ocr_pipeline.models import OCRJob
+                job = OCRJob.objects.filter(upload_session_id=record.upload_session_id).first()
+                job_id = job.id if job else record.upload_session_id
                 
                 # Enqueue the batch (usually 1 but support multiple)
                 for i in range(batch_size):
                     page_idx = next_start + i
                     logger.debug(f"[SLIDING_WINDOW_ENQUEUE] record={record_id} page={page_idx + 1}")
                     
-                    extract_invoice(
-                        None, 
-                        record_id=record.id,
-                        file_path=record.file_path,
-                        wait_for_result=False,
-                        tenant_id=record.tenant_id,
-                        upload_session_id=record.upload_session_id,
-                        start_page=page_idx,
-                        limit=1 
-                    )
+                    try:
+                        extract_invoice(
+                            None, 
+                            record_id=record.id,
+                            file_path=actual_path,
+                            wait_for_result=False,
+                            tenant_id=record.tenant_id,
+                            upload_session_id=record.upload_session_id,
+                            job_id=job_id,
+                            start_page=page_idx,
+                            limit=1 
+                        )
+                    except Exception as e:
+                        logger.error(f"[SLIDING_WINDOW_ENQUEUE_FAIL] record={record_id} page={page_idx + 1} error={e}")
+                        # [FIX] Reconcile failure so barrier does not deadlock
+                        from core.redis_orchestrator import orchestrator
+                        orchestrator.register_page_completion(str(record_id), page_idx + 1, is_failed=True)
+                        # Also increment the high-water mark so it moves on
+                        SessionFinalizationState.objects.filter(id=str(record_id)).update(
+                            total_pages_completed=models.F('total_pages_completed') + 1,
+                            failed_pages=models.F('failed_pages') + 1
+                        )
+                        from ocr_pipeline.models import InvoicePageResult
+                        InvoicePageResult.objects.update_or_create(
+                            record_id=record_id, page_number=page_idx + 1,
+                            defaults={
+                                'session_id': record.upload_session_id,
+                                'is_failed': True,
+                                'canonical_payload': {'status': 'OCR_FAILED', 'error': f"Enqueue Failed: {e}"}
+                            }
+                        )
             else:
                 logger.debug(f"[FANOUT_STALLED] record={record_id} window_full={inflight}")
     except Exception as e:
@@ -1475,7 +1503,8 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                                     'gstin': gstin,
                                     'branch': branch,
                                     'is_primary': True, # MUST be primary to show in UI independently
-                                    'status': 'EXTRACTED'
+                                    'status': 'EXTRACTED',
+                                    'upload_type': record.upload_type  # [UPLOAD_TYPE ISOLATION FIX]
                                 }
                             )
                             
@@ -1594,6 +1623,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         logger.debug(f"[DUPLICATE_AUDIT] is_duplicate={is_duplicate}")
 
         if is_duplicate:
+            record.status = "EXTRACTED"
             record.validation_status = "DUPLICATE"
             record.save()
             logger.warning(f"[FINAL_STATUS] DUPLICATE id={record.id}")
@@ -1618,6 +1648,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                     record.validation_status = 'FOUND'
                     record.save()
             else:
+                record.status = "EXTRACTED"
                 record.validation_status = "NEED_VENDOR"
                 record.save()
                 return {"status": "NEED_VENDOR"}
@@ -1628,6 +1659,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
 
         # 🔹 CREATE PURCHASE VOUCHER (ONLY IF auto_save IS TRUE)
         if not auto_save:
+            record.status = "EXTRACTED"
             record.validation_status = "READY"
             record.save()
             logger.info(f"[FINAL_STATUS] READY record={record.id}")

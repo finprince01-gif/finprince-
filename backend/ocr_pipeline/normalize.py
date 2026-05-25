@@ -414,6 +414,16 @@ def get_normalized_export_record(invoice: Any) -> Dict[str, Any]:
                     if match:
                         raw_to = match.group(1).strip()
                         logger.info(f"[BILL_TO_WINDOW_DESPERATE_HIT] len={len(raw_to)}")
+    # ── [ADDRESS_DUPLICATION_GUARD] ──
+    # If the AI accidentally cloned the buyer address into the vendor address, wipe the vendor address
+    # so we don't contaminate the 'bill_from' field with a customer address.
+    if raw_from and raw_to:
+        clean_from = sanitize_address(raw_from)
+        clean_to = sanitize_address(raw_to)
+        if clean_from and clean_from == clean_to:
+            logger.warning(f"[ADDRESS_DUPLICATION_BLOCKED] bill_from and bill_to are identical. Clearing bill_from to prevent customer address contamination.")
+            raw_from = ""
+
     bill_from = sanitize_address(raw_from)
     bill_to = sanitize_address(raw_to)
     
@@ -432,6 +442,8 @@ def get_normalized_export_record(invoice: Any) -> Dict[str, Any]:
         "total_igst": normalize_amount(get_strict(["total_igst", "igst"])[0]),
         "total_cgst": normalize_amount(get_strict(["total_cgst", "cgst"])[0]),
         "total_sgst": normalize_amount(get_strict(["total_sgst", "sgst", "utgst"])[0]),
+        "total_cess": normalize_amount(get_strict(["total_cess", "cess", "cess_amount"])[0]),
+        "round_off": normalize_amount(get_strict(["round_off", "rounding", "adjustment", "rounding_adjustment"])[0]),
         "total_invoice_value": normalize_amount(get_strict(["total_invoice_value", "invoice_total", "total_amount", "grand_total"])[0]),
         "irn": str(get_strict(["irn"])[0]).strip(),
         "ack_no": str(get_strict(["ack_no"])[0]).strip(),
@@ -582,6 +594,8 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
     Provides ONE authoritative normalized export record using CanonicalInvoiceSchema.
     DOWNSTREAM SYSTEMS MUST ONLY USE THIS.
     """
+    import copy
+    
     # ── [DEFENSIVE UNWRAPPING] ──
     if isinstance(invoice, str):
         try:
@@ -589,6 +603,7 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
         except: pass
     
     if isinstance(invoice, dict):
+        invoice = copy.deepcopy(invoice) # Prevent DTO leakage by copying at the boundary
         unwrapped = invoice.get('reply_json') or invoice.get('data') or invoice.get('reply')
         if unwrapped:
             if isinstance(unwrapped, str):
@@ -652,6 +667,8 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
         "total_igst": normalize_amount(raw_header.get("total_igst", 0)),
         "total_cgst": normalize_amount(raw_header.get("total_cgst", 0)),
         "total_sgst": normalize_amount(raw_header.get("total_sgst", 0)),
+        "total_cess": normalize_amount(raw_header.get("total_cess", 0)),
+        "round_off": normalize_amount(raw_header.get("round_off", 0)),
         "total_invoice_value": normalize_amount(raw_header.get("total_invoice_value", 0)),
         "irn": str(raw_header.get("irn", "")),
         "ack_no": str(raw_header.get("ack_no", "")),

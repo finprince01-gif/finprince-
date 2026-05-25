@@ -366,10 +366,15 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         # Update custom mapped fields from frontend
         if 'party' in self.initial_data:
             instance.vendor_name = self.initial_data.get('party', '')
-        if 'bill_to_address_1' in self.initial_data:
-            instance.bill_from = self.initial_data.get('bill_to_address_1', '')
-        if 'ship_to_address_1' in self.initial_data:
-            instance.ship_from = self.initial_data.get('ship_to_address_1', '')
+        if 'bill_from' in self.initial_data:
+            instance.bill_from = self.initial_data.get('bill_from', '')
+        elif 'bill_from_address_1' in self.initial_data:
+            instance.bill_from = self.initial_data.get('bill_from_address_1', '')
+            
+        if 'ship_from' in self.initial_data:
+            instance.ship_from = self.initial_data.get('ship_from', '')
+        elif 'ship_from_address_1' in self.initial_data:
+            instance.ship_from = self.initial_data.get('ship_from_address_1', '')
         if 'supplier_invoice_date' in self.initial_data:
             instance.supplier_invoice_date = self.initial_data.get('supplier_invoice_date', '')
         elif 'date' in self.initial_data:
