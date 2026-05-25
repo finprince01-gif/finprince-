@@ -39,6 +39,8 @@ class CanonicalInvoiceSchema(BaseModel):
     total_igst: float = 0.0
     total_cgst: float = 0.0
     total_sgst: float = 0.0
+    total_cess: float = 0.0
+    round_off: float = 0.0
     total_invoice_value: float = 0.0
     
     # E-Invoicing (GST compliance)

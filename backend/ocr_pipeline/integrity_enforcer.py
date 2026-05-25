@@ -142,6 +142,18 @@ class ZohoIntegrityEnforcer:
             logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Ack No mismatch '{p_ack}' vs '{c_ack}'")
             logger.info(f"[SAFE_NEW_INVOICE_CREATED] New invoice boundary detected (Ack mismatch)")
             return False, "Ack No mismatch"
+            
+        p_vendor = str(prev.get("vendor_name") or "").strip().upper()
+        c_vendor = str(curr.get("vendor_name") or "").strip().upper()
+        if p_vendor and c_vendor and p_vendor != c_vendor and p_vendor != "MISSING" and c_vendor != "MISSING":
+            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Vendor mismatch '{p_vendor}' vs '{c_vendor}'")
+            return False, "Vendor mismatch"
+
+        p_date = str(prev.get("invoice_date") or "").strip().upper()
+        c_date = str(curr.get("invoice_date") or "").strip().upper()
+        if p_date and c_date and p_date != c_date and p_date != "MISSING" and c_date != "MISSING":
+            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Date mismatch '{p_date}' vs '{c_date}'")
+            return False, "Date mismatch"
 
         # ── 3. SECONDARY CHECKS OR SAFE FALLBACK ──
         # If current page has NO identity (no inv_no, no irn, no ack_no), 

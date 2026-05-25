@@ -156,8 +156,30 @@ class AIWorker(BaseWorker):
                 lambda: InvoicePageResult.objects.filter(record_id=record_id, page_number=page_idx, is_failed=False).exists()
             )
             if already_processed:
-                logger.info(f"[IDEMPOTENCY_SKIP] record={record_id} page={page_idx} already successfully processed. Skipping AI call.")
-                # We already forwarded to assembly during the successful run, so just ack this message.
+                logger.info(f"[IDEMPOTENCY_SKIP] record={record_id} page={page_idx} already successfully processed. Forwarding to assembly to prevent barrier deadlock.")
+                
+                # We MUST push to assembly queue so the barrier state advances
+                from .message_factory import message_factory
+                from core.sqs import queue_service
+                from copy import deepcopy
+
+                assembly_payload = {
+                    "record_id": record_id,
+                    "page_index": page_idx,
+                    "item_id": payload.get('item_id') or task.get('item_id'),
+                    "job_id": job_id,
+                    "result": {"status": "SKIPPED_DUPLICATE", "_db_persisted": True, "is_failed": False}
+                }
+                assembly_msg = message_factory.create_message(
+                    task_type="ASSEMBLY",
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    payload=assembly_payload,
+                    correlation_id=correlation_id,
+                    page_number=page_idx
+                )
+                logger.info(f"[IDEMPOTENCY_FORWARD] record_id={record_id} msg_id={assembly_msg['id']}")
+                queue_service.push(deepcopy(assembly_msg), queue_type='assembly')
                 return
         except Exception as e:
             logger.error(f"[IDEMPOTENCY_CHECK_FAIL] {e}")

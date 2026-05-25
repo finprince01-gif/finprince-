@@ -50,6 +50,11 @@ class BulkUploadAPIView(APIView):
         logger.info(f"[PIPELINE_MODE] mode='DISTRIBUTED_QUEUE' session_id='{received_session}'")
         logger.info(f"[UPLOAD API] Received request | files={len(files)} | session={received_session} | tenant={tenant_id}")
 
+        # [UPLOAD_TYPE PROPAGATION FIX] Read upload source from frontend
+        voucher_type = request.data.get('voucher_type', 'Purchase')
+        upload_type = request.data.get('upload_type', '').strip().upper() or 'UNKNOWN'
+        logger.info(f"[UPLOAD_TYPE_RESOLVED] upload_type={upload_type} voucher_type={voucher_type}")
+
         # 1. System Health (AI/DB only, Redis removed)
         ready, reason = SystemHealth.is_ready()
         if not ready:
@@ -116,6 +121,7 @@ class BulkUploadAPIView(APIView):
             upload_session_id=received_session,
             file_hash=batch_fingerprint,
             total_files=len(files),
+            upload_type=upload_type,
             status='PENDING'
         )
 
@@ -179,15 +185,21 @@ class BulkUploadAPIView(APIView):
                     record.save(update_fields=['status', 'file_path'])
                 else:
                     # [FIX] Critical: Must pass file_hash to prevent (tenant, hash, session) collision
-                    record = InvoiceTempOCR.objects.create(
+                    record, created = InvoiceTempOCR.objects.get_or_create(
                         tenant_id=tenant_id,
                         upload_session_id=received_session,
-                        file_path=storage_key,
                         file_hash=f_hash,
-                        status='PENDING',
-                        voucher_type=request.data.get('voucher_type', 'Purchase')
+                        defaults={
+                            'file_path': storage_key,
+                            'status': 'PENDING',
+                            'voucher_type': request.data.get('voucher_type', 'Purchase'),
+                            'upload_type': upload_type
+                        }
                     )
-                    logger.info(f"[RECORD_CREATED] id={record.id} job={job.id} hash={f_hash[:8]}...")
+                    if created:
+                        logger.info(f"[RECORD_CREATED] id={record.id} job={job.id} hash={f_hash[:8]}...")
+                    else:
+                        logger.info(f"[RECORD_REUSED_IN_BATCH] id={record.id} job={job.id} hash={f_hash[:8]}...")
 
                 item.staging_record_id = record.id
                 item.save(update_fields=['staging_record_id'])
@@ -195,16 +207,19 @@ class BulkUploadAPIView(APIView):
                 file_info.append({'id': item.id, 'record_id': record.id, 'original_name': f.name})
             
             except Exception as e:
-                # Forensic Collision Reporting (Requirement #4)
+                # Forensic Collision Reporting
+                from django.db import IntegrityError
+                is_duplicate = isinstance(e, IntegrityError) and 'Duplicate entry' in str(e)
+
                 logger.error(f"[DATABASE_CONFLICT] Integrity failure during record creation: {e}")
-                
+
                 # Attempt to find what it collided with
                 collision = InvoiceTempOCR.objects.filter(
-                    tenant_id=tenant_id, 
-                    file_hash=f_hash, 
+                    tenant_id=tenant_id,
+                    file_hash=f_hash,
                     upload_session_id=received_session
                 ).first()
-                
+
                 collision_data = {
                     "tenant": tenant_id,
                     "filename": f.name,
@@ -217,15 +232,43 @@ class BulkUploadAPIView(APIView):
                         "existing_status": collision.status,
                         "invoice_no": getattr(collision, 'supplier_invoice_no', None),
                     })
-                
+
                 logger.error(f"[COLLISION_DETAILS] {collision_data}")
-                
-                # If it's a multi-file upload and one file is a duplicate, 
-                # we can either fail the whole batch or skip the duplicate.
-                # User says "Prevent batch uploads from colliding with themselves", 
-                # so we should probably raise a clear error if it's a real conflict.
-                # However, with file_hash now passed, self-collision only happens if user 
-                # actually uploaded the exact same file twice in the same multi-select batch.
+
+                if is_duplicate:
+                    # ── [SURGICAL FIX] DUPLICATE HASH TERMINAL HANDLER ──
+                    # The session is now stuck: DB record couldn't be created, SQS will never
+                    # be dispatched, expected=0 completed=0 → orchestrator loops PROCESSING forever.
+                    # We must immediately terminalize the job + session to unblock the frontend.
+                    logger.warning(f"[DUPLICATE_HASH_TERMINAL] session={received_session} file={f.name} — marking job FAILED_DUPLICATE to prevent infinite PROCESSING state")
+
+                    try:
+                        job.status = 'FAILED'
+                        job.save(update_fields=['status'])
+                    except Exception as je:
+                        logger.error(f"[DUPLICATE_TERMINAL_JOB_SAVE_FAIL] {je}")
+
+                    # Write terminal FAILED state to Redis so orchestrator barrier unblocks
+                    try:
+                        from core.redis_orchestrator import orchestrator
+                        orchestrator.set_terminal_status(
+                            session_id=received_session,
+                            status="FAILED",
+                            reason="FAILED_DUPLICATE"
+                        )
+                        logger.info(f"[DUPLICATE_TERMINAL_REDIS_SET] session={received_session}")
+                    except Exception as re:
+                        logger.error(f"[DUPLICATE_TERMINAL_REDIS_FAIL] {re}")
+
+                    return Response({
+                        'error': f"Duplicate file: '{f.name}' has already been uploaded in this session or a prior session. Please upload a different file.",
+                        'status': 'FAILED_DUPLICATE',
+                        'file': f.name,
+                        'file_hash': f_hash,
+                        'existing_record': collision_data,
+                    }, status=409)
+
+                # Non-duplicate integrity error — propagate as before
                 raise e
 
         # 7. ATOMIC SESSION INITIALIZATION — write DB anchors BEFORE SQS dispatch
@@ -266,7 +309,8 @@ class BulkUploadAPIView(APIView):
                 'job_id': job.id,
                 'item_id': item_data['id'],
                 'record_id': item_data['record_id'],
-                'voucher_type': request.data.get('voucher_type', 'Purchase')
+                'voucher_type': request.data.get('voucher_type', 'Purchase'),
+                'upload_type': upload_type,  # [UPLOAD_TYPE PROPAGATION FIX]
             }
 
             msg = message_factory.create_message(
