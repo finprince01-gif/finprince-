@@ -3391,6 +3391,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const handleSaveVoucher = async (shouldPrint = false) => {
     let voucher: Voucher | null = null;
+    const isEditing = !!viewVoucherData;
+    // reference_id on the fetched drillDownDetails is the actual VoucherContra/Journal/Expenses record ID.
+    // viewVoucherData.id is the generic Voucher table ID — NOT the right one for type-specific PUT endpoints.
+    const genericVoucherId = isEditing ? (viewVoucherData.rawVoucher?.voucher_id || viewVoucherData.voucherId || viewVoucherData.id || viewVoucherData.rawVoucher?.id) : null;
+    const referenceId = drillDownDetails?.reference_id || viewVoucherData?.rawVoucher?.reference_id || viewVoucherData?.reference_id || null;
+    // Use referenceId (specific model ID) for Contra/Journal/Expenses/CreditNote PUT calls
+    const voucherId = referenceId || genericVoucherId;
 
     if (voucherType === 'Purchase') {
       let currentVendorId = vendorId;
@@ -3486,8 +3493,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       // alert('Debug: Sending Payload. Check Console.');
 
       try {
-        const isEditing = !!viewVoucherData;
-        const voucherId = isEditing ? (viewVoucherData.rawVoucher?.voucher_id || viewVoucherData.voucherId || viewVoucherData.id || viewVoucherData.rawVoucher?.id) : null;
 
         let response;
         if (isEditing && voucherId) {
@@ -3622,8 +3627,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           }
         };
 
-        const response: any = await httpClient.post('/api/vouchers/credit-note/', creditNoteData);
-        showSuccess('Credit Note Saved Successfully!');
+        let response: any;
+        if (isEditing && voucherId) {
+          response = await httpClient.put(`/api/vouchers/credit-note/${voucherId}/`, creditNoteData);
+          showSuccess('Credit Note Updated Successfully!');
+        } else {
+          response = await httpClient.post('/api/vouchers/credit-note/', creditNoteData);
+          showSuccess('Credit Note Saved Successfully!');
+        }
 
         // Instantly propagate to application cache so reports reveal update immediately
         if (onAddVouchers) {
@@ -3751,15 +3762,70 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         break;
     }
 
-    if (voucher) {
+    if (voucher && ['Contra', 'Journal', 'Expenses'].includes(voucherType)) {
+      try {
+        let response: any;
+        // Map voucherType to correct API path
+        const typeToPath: Record<string, string> = {
+          'Contra': 'contra',
+          'Journal': 'journal',
+          'Expenses': 'expenses'
+        };
+        const apiPath = typeToPath[voucherType] || voucherType.toLowerCase();
+        // DEBUG: log IDs to identify the correct one
+        console.log('[Save Voucher] isEditing:', isEditing, '| voucherId:', voucherId, '| referenceId:', referenceId, '| genericVoucherId:', genericVoucherId, '| drillDownDetails.reference_id:', drillDownDetails?.reference_id, '| viewVoucherData:', viewVoucherData);
+        if (isEditing && voucherId) {
+          response = await httpClient.put(`/api/vouchers/${apiPath}/${voucherId}/`, voucher);
+          showSuccess(`${voucherType} Voucher Updated Successfully!`);
+        } else {
+          response = await httpClient.post(`/api/vouchers/${apiPath}/`, voucher);
+          showSuccess(`${voucherType} Voucher Saved Successfully!`);
+        }
+        
+        let party = 'N/A';
+        if (voucherType === 'Expenses') {
+          party = expenses.find(e => e.postToLedger)?.postToLedger?.split(' - ')[0] || 'N/A';
+        } else if (voucherType === 'Journal') {
+          party = entries.find(e => e.ledger)?.ledger?.split(' - ')[0] || 'N/A';
+        } else if (voucherType === 'Contra') {
+          party = contraForm.toAccount?.split(' - ')[0] || 'N/A';
+        }
+
+        const sourceMap: Record<string, string> = {
+          'Expenses': 'expense_voucher',
+          'Journal': 'journal_voucher',
+          'Contra': 'contra_voucher'
+        };
+
+        const savedVoucher = { 
+          ...voucher, 
+          ...response, 
+          id: genericVoucherId || response?.id || voucherId || Date.now().toString(),
+          type: voucherType,
+          party: party,
+          source: sourceMap[voucherType] || voucher?.source,
+          total: response?.total_amount || response?.total_debit || response?.amount || voucher?.amount || 0
+        };
+        onAddVouchers([savedVoucher], false);
+
+        resetForm();
+        refetch(); // Refresh usage statistics
+
+        if (voucherType === 'Contra') fetchContraConfigs();
+        if (voucherType === 'Journal') fetchJournalConfigs();
+        if (voucherType === 'Expenses') fetchExpensesConfigs();
+
+      } catch (error: any) {
+        console.error(`Error saving ${voucherType}:`, error);
+        const serverError = error.response?.data;
+        const errorMessage = serverError ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError) : error.message;
+        showError(`Failed to save ${voucherType}.\n${errorMessage}`);
+      }
+    } else if (voucher) {
       onAddVouchers([voucher]);
       showSuccess(`${voucherType} Voucher Saved Successfully!`);
       resetForm();
       refetch(); // Refresh usage statistics
-
-      if (voucherType === 'Contra') fetchContraConfigs();
-      if (voucherType === 'Journal') fetchJournalConfigs();
-      if (voucherType === 'Expenses') fetchExpensesConfigs();
     }
   };
 
@@ -4253,12 +4319,24 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setIsReadOnlyMode(true);
     setDrillDownDetails(null);
 
-    const voucherId = viewVoucherData.sourceId || viewVoucherData.source_id
-      || rawVoucher.sourceId || rawVoucher.source_id
-      || rawVoucher.voucher_id || rawVoucher.voucherId || rawVoucher.id
-      || viewVoucherData.voucher_id || viewVoucherData.voucherId || viewVoucherData.id;
-    
     const source = viewVoucherData.source || rawVoucher.source || mappedType.toLowerCase();
+
+    // For type-specific models (Expenses, Contra, Journal), prefer reference_id (specific model PK)
+    // over the generic voucher_id UUID — reference_id is now enriched by the backend report endpoint.
+    const referenceIdFromReport = viewVoucherData.reference_id || rawVoucher.reference_id;
+    const genericVoucherPk = viewVoucherData.voucher_pk || rawVoucher.voucher_pk;
+
+    let voucherId: any;
+    if (referenceIdFromReport && ['Expenses', 'Contra', 'Journal', 'Credit Note', 'Debit Note'].includes(mappedType)) {
+      // Use the specific model ID directly — avoids the wrong-ID 404
+      voucherId = referenceIdFromReport;
+    } else {
+      voucherId = viewVoucherData.sourceId || viewVoucherData.source_id
+        || rawVoucher.sourceId || rawVoucher.source_id
+        || genericVoucherPk
+        || rawVoucher.voucher_id || rawVoucher.voucherId || rawVoucher.id
+        || viewVoucherData.voucher_id || viewVoucherData.voucherId || viewVoucherData.id;
+    }
 
     if (!voucherId) {
       // Fallback: use raw data directly
@@ -4412,6 +4490,160 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             voucher_type: details.voucher_type || details.type || '',
           } as any);
         }
+        else if (mappedType === 'Contra') {
+          setFromAccount(details.fromAccount || details.from_account || '');
+          setToAccount(details.toAccount || details.to_account || '');
+          setSimpleAmount(parseFloat(String(details.amount || details.total_amount || 0)));
+          setVoucherNumber(details.voucher_number || details.voucher_no || '');
+          setSelectedContraConfig(details.voucher_series || details.contra_series || '');
+          setNarration(details.narration || '');
+
+          // Forex / charges fields — all are number|'' state type, must parse
+          const parseNum = (v: any): number | '' => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '' : n; };
+          setContraConversionRate(parseNum(details.contraConversionRate ?? details.conversion_rate));
+          setContraPaymentAmtForeign(parseNum(details.contraPaymentAmtForeign ?? details.payment_amt_foreign));
+          setContraPaymentRate(parseFloat(String(details.contraPaymentRate || details.payment_rate || 0)));
+          setContraPaymentAmtINR(parseNum(details.contraPaymentAmtINR ?? details.payment_amt_inr));
+          setContraReceiptAmtForeign(parseNum(details.contraReceiptAmtForeign ?? details.receipt_amt_foreign));
+          setContraReceiptRate(parseFloat(String(details.contraReceiptRate || details.receipt_rate || 0)));
+          setContraReceiptAmtINR(parseNum(details.contraReceiptAmtINR ?? details.receipt_amt_inr));
+          setContraForexGainLoss(parseFloat(String(details.contraForexGainLoss || details.forex_gain_loss || 0)));
+          setContraDeductChargesFrom(details.contraDeductChargesFrom || details.deduct_charges_from || '');
+          setContraConversionCharges(parseNum(details.contraConversionCharges ?? details.conversion_charges));
+          setContraFemaPurposeCode(details.contraFemaPurposeCode || details.fema_purpose_code || '');
+        }
+        else if (mappedType === 'Journal') {
+          if (details.voucher_number || details.voucher_no) setVoucherNumber(details.voucher_number || details.voucher_no);
+          if (details.voucher_series || details.journal_series) setSelectedJournalConfig(details.voucher_series || details.journal_series);
+          if (details.entries || details.journal_entries) {
+            const rawEntries = details.entries || details.journal_entries;
+            if (Array.isArray(rawEntries) && rawEntries.length > 0) {
+              setEntries(rawEntries.map((e: any) => ({
+                ledger: e.ledger || e.account || '',
+                note: e.note || e.narration || '',
+                refNo: e.refNo || e.ref_no || '',
+                debit: parseFloat(e.debit || '0'),
+                credit: parseFloat(e.credit || '0')
+              })));
+            }
+          }
+        }
+        else if (mappedType === 'Expenses') {
+          if (details.voucher_number || details.voucher_no) setVoucherNumber(details.voucher_number || details.voucher_no);
+          if (details.voucher_series || details.expenses_series) setSelectedExpensesConfig(details.voucher_series || details.expenses_series);
+          if (details.posting_note || details.narration) setNarration(details.posting_note || details.narration || '');
+          // Backend returns 'line_items' (ExpenseLineItemSerializer) with snake_case fields
+          const rawRows = details.line_items || details.expense_rows || details.expenses;
+          if (Array.isArray(rawRows) && rawRows.length > 0) {
+            setExpenseRows(rawRows.map((r: any, idx: number) => ({
+              id: r.id ? String(r.id) : String(idx + 1),
+              expense: r.expense_ledger_name || r.expense || r.account || '',
+              postTo: r.post_to_ledger_name || r.postTo || r.post_to || '',
+              billRefNo: r.bill_ref_no || r.billRefNo || '',
+              entryNote: r.entry_note || r.entryNote || '',
+              totalAmount: parseFloat(r.total_amount || r.totalAmount || r.amount || '0'),
+              gstRate: parseFloat(r.gst_rate || r.gstRate || '0'),
+              taxableValue: parseFloat(r.taxable_value || r.taxableValue || '0'),
+              igst: parseFloat(r.igst || '0'),
+              cgst: parseFloat(r.cgst || '0'),
+              sgst: parseFloat(r.sgst || '0'),
+              cess: parseFloat(r.cess || '0'),
+              showTax: r.show_tax || r.showTax || false
+            })));
+          }
+        }
+        else if (mappedType === 'Credit Note') {
+          if (details.credit_note_no || details.voucher_number || details.voucher_no) setCnVoucherNumber(details.credit_note_no || details.voucher_number || details.voucher_no);
+          if (details.credit_note_series || details.voucher_series) setSelectedCnConfig(details.credit_note_series || details.voucher_series);
+          if (details.customer_name || details.party) setCnCustomer(details.customer_name || details.party);
+          if (details.branch) setCnBranch(details.branch);
+          if (details.sales_invoice_nos) {
+            const nos = typeof details.sales_invoice_nos === 'string' ? details.sales_invoice_nos.split(',').map((s: string) => s.trim()) : details.sales_invoice_nos;
+            if (Array.isArray(nos)) setCnSelectedSalesInvoices(nos);
+          }
+          if (details.sales_invoice_dates) setCnSalesInvoiceDate(details.sales_invoice_dates);
+          if (details.customer_debit_note_no) setCnCustomerDebitNoteNo(details.customer_debit_note_no);
+          if (details.customer_debit_note_date) setCnCustomerDebitNoteDate(details.customer_debit_note_date);
+          if (details.gstin) setCnGstin(details.gstin);
+          if (details.grn_ref_no) setCnGrnRefNo(details.grn_ref_no);
+          if (details.bill_from) setCnBillFrom(details.bill_from);
+          if (details.ship_from) {
+             setCnShipFrom(details.ship_from);
+             if (details.ship_from === details.bill_from) setCnSameAsBillFrom(true);
+          }
+          if (details.input_type) setCnInputType(typeof details.input_type === 'string' ? details.input_type.split(',').map((s:string) => s.trim()) : details.input_type);
+          if (details.in_foreign_currency) setCnInForeignCurrency(details.in_foreign_currency);
+          if (details.narration || details.posting_note) setCnPostingNote(details.narration || details.posting_note);
+
+          if (details.item_details?.items) {
+             setCnItems(details.item_details.items.map((item: any, idx: number) => ({
+                id: item.id || String(idx + 1),
+                itemCode: item.itemCode || item.item_code || '',
+                itemName: item.itemName || item.item_name || '',
+                hsnSac: item.hsnSac || item.hsn_sac || '',
+                qty: parseFloat(item.qty || item.quantity || '0'),
+                uom: item.uom || '',
+                rate: parseFloat(item.rate || item.itemRate || '0'),
+                taxableValue: parseFloat(item.taxableValue || item.taxable_value || '0'),
+                foreignRate: parseFloat(item.foreignRate || item.foreign_rate || '0'),
+                foreignAmount: parseFloat(item.foreignAmount || item.foreign_amount || '0'),
+                igst: parseFloat(item.igst || item.igst_amount || '0'),
+                cgst: parseFloat(item.cgst || item.cgst_amount || '0'),
+                sgst: parseFloat(item.sgst || item.sgst_amount || '0'),
+                cess: parseFloat(item.cess || item.cess_amount || '0'),
+                invoiceValue: parseFloat(item.invoiceValue || item.invoice_value || '0'),
+                description: item.description || '',
+                salesLedger: item.salesLedger || item.sales_ledger || '',
+                poRate: item.poRate || null,
+                invoiceRate: item.invoiceRate || null,
+                rateMismatch: item.rateMismatch || false,
+                poQty: item.poQty || null,
+                invoiceQty: item.invoiceQty || null,
+                qtyMismatch: item.qtyMismatch || false,
+                grnQty: item.grnQty || null,
+                sourcePoNo: item.sourcePoNo || null,
+                salesInvoiceNo: item.salesInvoiceNo || item.sales_invoice_no || null,
+                financialAmount: parseFloat(item.financialAmount || item.financial_amount || '0')
+             })));
+          }
+
+          if (details.due_details) {
+             setCnReverseGstTcs(details.due_details.reverse_gst_tcs || 'No');
+             setCnReverseGstTds(details.due_details.reverse_gst_tds || 'No');
+             setCnReverseIncomeTaxTcs(details.due_details.reverse_income_tax_tcs || 'No');
+             setCnReverseIncomeTaxTds(details.due_details.reverse_income_tax_tds || 'No');
+             setCnIncomeTaxTdsTcsAmount(details.due_details.income_tax_tds_tcs_amount?.toString() || '0');
+             setCnGstTdsTcsAmount(details.due_details.gst_tds_tcs_amount?.toString() || '0');
+             setCnAdvanceAmount(details.due_details.advance_amount?.toString() || '0');
+             setCnPayableAmount(details.due_details.payable_amount?.toString() || '0');
+             setCnTermsConditions(details.due_details.terms_conditions || '');
+          }
+
+          if (details.transit_details) {
+             setCnTransitReceivedIn(details.transit_details.received_in || '');
+             setCnTransitMode(details.transit_details.mode_of_transport || 'Road');
+             if (details.transit_details.receipt_date) setCnTransitReceiptDate(details.transit_details.receipt_date);
+             setCnTransitReceiptTime(details.transit_details.receipt_time || '');
+             setCnTransitDeliveryType(details.transit_details.delivery_type || 'Self');
+             setCnTransitTransporterId(details.transit_details.transporter_id_gstin || '');
+             setCnTransitTransporterName(details.transit_details.transporter_name || '');
+             setCnTransitVehicleNo(details.transit_details.vehicle_no || '');
+             setCnTransitLrGrConsignment(details.transit_details.lr_gr_consignment_no || '');
+          }
+        }
+        else if (mappedType === 'Debit Note') {
+          setLocalPrefilledData({
+            voucherId: voucherId,
+            invoiceNumber: details.voucher_number || details.debit_note_no || details.voucher_no || '',
+            voucher_name: details.voucher_series || details.debit_note_series || '',
+            invoiceDate: details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate(),
+            sellerName: details.party || details.vendor_name || '',
+            totalAmount: parseFloat(details.total_amount || details.amount || details.item_details?.total_invoice_value || 0),
+            narration: details.narration || details.posting_note || '',
+            voucher_type: details.voucher_type || details.type || 'Debit Note',
+            ...details
+          } as any);
+        }
       }
     }).catch(err => {
       console.error('[VouchersPage] drill-down fetch failed:', err);
@@ -4449,6 +4681,32 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           narration: rawVoucher.narration || viewVoucherData.narration || '',
           reference_number: rawVoucher.ref_no || '',
           voucher_type: rawVoucher.voucher_type || rawVoucher.type || '',
+        } as any);
+      } else if (mappedType === 'Contra') {
+        if (rawVoucher.fromAccount || rawVoucher.from_account) setFromAccount(rawVoucher.fromAccount || rawVoucher.from_account);
+        if (rawVoucher.toAccount || rawVoucher.to_account) setToAccount(rawVoucher.toAccount || rawVoucher.to_account);
+        if (rawVoucher.amount || viewVoucherData.debit || viewVoucherData.credit) setSimpleAmount(parseFloat(rawVoucher.amount || viewVoucherData.debit || viewVoucherData.credit || 0));
+        if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
+      }
+      else if (mappedType === 'Journal') {
+         if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
+      }
+      else if (mappedType === 'Expenses') {
+         if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
+      }
+      else if (mappedType === 'Credit Note') {
+         if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setCnVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
+         if (fallbackParty) setCnCustomer(fallbackParty);
+      }
+      else if (mappedType === 'Debit Note') {
+        setLocalPrefilledData({
+          voucherId: voucherId,
+          invoiceNumber: rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '',
+          invoiceDate: fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate(),
+          sellerName: rawVoucher.party || fallbackParty,
+          totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
+          narration: rawVoucher.narration || viewVoucherData.narration || '',
+          voucher_type: rawVoucher.voucher_type || rawVoucher.type || 'Debit Note',
         } as any);
       }
     }).finally(() => setDrillDownLoading(false));

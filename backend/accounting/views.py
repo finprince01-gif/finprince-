@@ -392,6 +392,25 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         data = []
         running_balance = 0.0  # Positive = Dr balance, Negative = Cr balance
 
+        # Build a map: journal_entry_voucher_id (UUID) -> generic Voucher row data
+        # This lets us pass the correct integer PK and reference_id to the frontend
+        voucher_meta_map = {}
+        if voucher_ids:
+            try:
+                voucher_rows = Voucher.objects.filter(
+                    tenant_id=tenant_id,
+                    id__in=voucher_ids
+                ).values('id', 'source', 'reference_id', 'type')
+                for vrow in voucher_rows:
+                    voucher_meta_map[vrow['id']] = {
+                        'voucher_pk': vrow['id'],
+                        'source': vrow['source'] or '',
+                        'reference_id': vrow['reference_id'],
+                        'voucher_type_generic': vrow['type'] or '',
+                    }
+            except Exception:
+                pass  # Fail silently; just won't enrich the response
+
         for e in queryset:
             dr = float(e.debit)
             cr = float(e.credit)
@@ -445,6 +464,10 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 'referenceNo': getattr(e, 'reference_number', None),
                 'allocation_status': getattr(e, 'allocation_status', 'Unutilized'),
                 'allocationStatus': getattr(e, 'allocation_status', 'Unutilized'),
+                # Enriched fields from generic Voucher table
+                'source': voucher_meta_map.get(vid, {}).get('source', ''),
+                'reference_id': voucher_meta_map.get(vid, {}).get('reference_id'),
+                'voucher_pk': voucher_meta_map.get(vid, {}).get('voucher_pk'),
             }
 
             # Attach full legs to power the journal breakdown UI

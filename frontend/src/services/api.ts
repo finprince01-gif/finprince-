@@ -621,6 +621,19 @@ class ApiService {
             } else if (normalizedSource === 'purchase_voucher') {
                 response = await httpClient.get<any>(`/api/vouchers/purchase/${id}/?show_all=true`, undefined, options);
                 response.type = response.type || 'Purchase';
+            } else if (normalizedSource === 'expense_voucher' || normalizedSource === 'expense' || normalizedSource === 'expenses') {
+                // Go directly to type-specific endpoint — avoids returning a wrong voucher from generic table
+                response = await httpClient.get<any>(`/api/vouchers/expenses/${id}/`, undefined, options);
+                response.type = 'Expenses';
+                fetchedAsDetail = true;
+            } else if (normalizedSource === 'contra_voucher' || normalizedSource === 'contra') {
+                response = await httpClient.get<any>(`/api/vouchers/contra/${id}/`, undefined, options);
+                response.type = 'Contra';
+                fetchedAsDetail = true;
+            } else if (normalizedSource === 'journal_voucher' || normalizedSource === 'journal') {
+                response = await httpClient.get<any>(`/api/vouchers/journal/${id}/`, undefined, options);
+                response.type = 'Journal';
+                fetchedAsDetail = true;
             } else {
                 response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
             }
@@ -634,6 +647,26 @@ class ApiService {
                 } else if (normalizedSource === 'payment') {
                     response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, options);
                     response.type = 'Payment';
+                    fetchedAsDetail = true;
+                } else if (normalizedSource === 'expense' || normalizedSource === 'expenses' || normalizedSource === 'expense_voucher') {
+                    response = await httpClient.get<any>(`/api/vouchers/expenses/${id}/`, undefined, options);
+                    response.type = 'Expenses';
+                    fetchedAsDetail = true;
+                } else if (normalizedSource === 'contra') {
+                    response = await httpClient.get<any>(`/api/vouchers/contra/${id}/`, undefined, options);
+                    response.type = 'Contra';
+                    fetchedAsDetail = true;
+                } else if (normalizedSource === 'journal') {
+                    response = await httpClient.get<any>(`/api/vouchers/journal/${id}/`, undefined, options);
+                    response.type = 'Journal';
+                    fetchedAsDetail = true;
+                } else if (normalizedSource === 'credit note' || normalizedSource === 'credit_note') {
+                    response = await httpClient.get<any>(`/api/vouchers/credit-note/${id}/`, undefined, options);
+                    response.type = 'Credit Note';
+                    fetchedAsDetail = true;
+                } else if (normalizedSource === 'debit note' || normalizedSource === 'debit_note') {
+                    response = await httpClient.get<any>(`/api/vouchers/debit-note/${id}/`, undefined, options);
+                    response.type = 'Debit Note';
                     fetchedAsDetail = true;
                 } else if (source) {
                     response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
@@ -652,7 +685,11 @@ class ApiService {
             'receipt': 'Receipt',
             'contra': 'Contra',
             'journal': 'Journal',
-            'expense': 'Expense',
+            'expense': 'Expenses',
+            'expenses': 'Expenses',
+            'expense_voucher': 'Expenses',
+            'credit note': 'Credit Note',
+            'debit note': 'Debit Note',
         };
 
         const base = {
@@ -676,6 +713,40 @@ class ApiService {
                     narration: detail.narration || base.narration || '',
                     voucher_number: detail.voucher_number || base.voucher_number || '',
                     items: detail.items || [],
+                };
+            }
+            if (['Contra', 'Journal', 'Expenses', 'Expense', 'Credit Note', 'Debit Note'].includes(base.type)) {
+                return {
+                    ...base,
+                    ...detail,
+                    // Ensure reference_id is always present for edit PUT calls
+                    reference_id: detail.id || base.reference_id,
+                    // Preserve camelCase fields from VoucherContraSerializer
+                    fromAccount: detail.fromAccount || detail.from_account || base.from_account || '',
+                    toAccount: detail.toAccount || detail.to_account || base.to_account || '',
+                    from_account: detail.from_account || detail.fromAccount || base.from_account || '',
+                    to_account: detail.to_account || detail.toAccount || base.to_account || '',
+                    amount: detail.amount || base.amount || 0,
+                    narration: detail.narration || base.narration || '',
+                    voucher_number: detail.voucher_number || base.voucher_number || '',
+                    voucher_series: detail.voucher_series || base.voucher_series || '',
+                    // Contra forex fields (camelCase from serializer)
+                    contraDeductChargesFrom: detail.contraDeductChargesFrom || detail.deduct_charges_from || '',
+                    contraConversionCharges: detail.contraConversionCharges || detail.conversion_charges || 0,
+                    contraFemaPurposeCode: detail.contraFemaPurposeCode || detail.fema_purpose_code || '',
+                    contraConversionRate: detail.contraConversionRate || detail.conversion_rate || 0,
+                    contraPaymentAmtForeign: detail.contraPaymentAmtForeign || detail.payment_amt_foreign || 0,
+                    contraPaymentRate: detail.contraPaymentRate || detail.payment_rate || 0,
+                    contraPaymentAmtINR: detail.contraPaymentAmtINR || detail.payment_amt_inr || 0,
+                    contraReceiptAmtForeign: detail.contraReceiptAmtForeign || detail.receipt_amt_foreign || 0,
+                    contraReceiptRate: detail.contraReceiptRate || detail.receipt_rate || 0,
+                    contraReceiptAmtINR: detail.contraReceiptAmtINR || detail.receipt_amt_inr || 0,
+                    contraForexGainLoss: detail.contraForexGainLoss || detail.forex_gain_loss || 0,
+                    // Journal entry lines
+                    entry_lines: detail.entry_lines || detail.entries || [],
+                    entries: detail.entry_lines || detail.entries || [],
+                    totalDebit: detail.totalDebit || detail.total_debit || 0,
+                    totalCredit: detail.totalCredit || detail.total_credit || 0,
                 };
             }
         }
@@ -706,6 +777,16 @@ class ApiService {
                 } else if (base.type === 'Payment') {
                     // Fetch the actual PaymentVoucher model to get voucher_type (series), pay_from, ref_no
                     detailEndpoint = `/api/vouchers/payment/${referenceId}/`;
+                } else if (base.type === 'Contra') {
+                    detailEndpoint = `/api/vouchers/contra/${referenceId}/`;
+                } else if (base.type === 'Journal') {
+                    detailEndpoint = `/api/vouchers/journal/${referenceId}/`;
+                } else if (base.type === 'Expenses' || base.type === 'Expense') {
+                    detailEndpoint = `/api/vouchers/expenses/${referenceId}/`;
+                } else if (base.type === 'Credit Note') {
+                    detailEndpoint = `/api/vouchers/credit-note/${referenceId}/`;
+                } else if (base.type === 'Debit Note') {
+                    detailEndpoint = `/api/vouchers/debit-note/${referenceId}/`;
                 }
 
                 if (detailEndpoint) {
@@ -740,6 +821,45 @@ class ApiService {
                             items: detail.items || [],
                         };
                     }
+
+                    // ── Early return for Contra / Journal / Expenses / Credit Note / Debit Note ──
+                    // These are simple flat models — just merge base + detail and keep all
+                    // camelCase fields from the serializer as-is.
+                    if (['Contra', 'Journal', 'Expenses', 'Expense', 'Credit Note', 'Debit Note'].includes(base.type)) {
+                        return {
+                            ...base,
+                            ...detail,
+                            // Ensure reference_id is always present for edit PUT calls
+                            reference_id: detail.id || base.reference_id,
+                            // Preserve camelCase fields from VoucherContraSerializer
+                            fromAccount: detail.fromAccount || detail.from_account || base.from_account || '',
+                            toAccount: detail.toAccount || detail.to_account || base.to_account || '',
+                            from_account: detail.from_account || detail.fromAccount || base.from_account || '',
+                            to_account: detail.to_account || detail.toAccount || base.to_account || '',
+                            amount: detail.amount || base.amount || 0,
+                            narration: detail.narration || base.narration || '',
+                            voucher_number: detail.voucher_number || base.voucher_number || '',
+                            voucher_series: detail.voucher_series || base.voucher_series || '',
+                            // Contra forex fields (camelCase from serializer)
+                            contraDeductChargesFrom: detail.contraDeductChargesFrom || detail.deduct_charges_from || '',
+                            contraConversionCharges: detail.contraConversionCharges || detail.conversion_charges || 0,
+                            contraFemaPurposeCode: detail.contraFemaPurposeCode || detail.fema_purpose_code || '',
+                            contraConversionRate: detail.contraConversionRate || detail.conversion_rate || 0,
+                            contraPaymentAmtForeign: detail.contraPaymentAmtForeign || detail.payment_amt_foreign || 0,
+                            contraPaymentRate: detail.contraPaymentRate || detail.payment_rate || 0,
+                            contraPaymentAmtINR: detail.contraPaymentAmtINR || detail.payment_amt_inr || 0,
+                            contraReceiptAmtForeign: detail.contraReceiptAmtForeign || detail.receipt_amt_foreign || 0,
+                            contraReceiptRate: detail.contraReceiptRate || detail.receipt_rate || 0,
+                            contraReceiptAmtINR: detail.contraReceiptAmtINR || detail.receipt_amt_inr || 0,
+                            contraForexGainLoss: detail.contraForexGainLoss || detail.forex_gain_loss || 0,
+                            // Journal entry lines
+                            entry_lines: detail.entry_lines || detail.entries || [],
+                            entries: detail.entry_lines || detail.entries || [],
+                            totalDebit: detail.totalDebit || detail.total_debit || 0,
+                            totalCredit: detail.totalCredit || detail.total_credit || 0,
+                        };
+                    }
+
 
                     const isPurchase = (actualSource === 'purchase_voucher' || base.type === 'Purchase');
 

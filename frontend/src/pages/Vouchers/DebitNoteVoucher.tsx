@@ -1001,12 +1001,18 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             formData.append('transit_details', JSON.stringify(transitDetails));
 
             // Send request
-            const response = await httpClient.postFormData<any>('/api/accounting/vouchers/debit-note/', formData);
-
-            showSuccess('Debit Note Saved Successfully!');
+            let response: any;
+            if (prefilledData && prefilledData.voucherId) {
+                response = await httpClient.patchFormData<any>(`/api/vouchers/debit-note/${prefilledData.voucherId}/`, formData);
+                showSuccess('Debit Note Updated Successfully!');
+            } else {
+                response = await httpClient.postFormData<any>('/api/vouchers/debit-note/', formData);
+                showSuccess('Debit Note Saved Successfully!');
+            }
 
             if (onAddVouchers) {
-                onAddVouchers([response]);
+                const savedVoucher = { ...response, id: response?.id || prefilledData?.voucherId || Date.now().toString() };
+                onAddVouchers([savedVoucher], false);
             }
             handleCancel();
         } catch (error: any) {

@@ -99,6 +99,8 @@ class VoucherContraSerializer(serializers.ModelSerializer):
 
         contra = super().create(validated_data)
 
+        party_name = contra.to_account if contra.to_account else 'N/A'
+
         voucher = Voucher.objects.create(
             tenant_id=contra.tenant_id,
             type='contra',
@@ -109,6 +111,7 @@ class VoucherContraSerializer(serializers.ModelSerializer):
             narration=contra.narration,
             from_account=contra.from_account,
             to_account=contra.to_account,
+            party=party_name,
             source='contra_voucher',
             reference_id=contra.id,
         )
@@ -121,6 +124,28 @@ class VoucherContraSerializer(serializers.ModelSerializer):
         # --- Double-Entry Posting for Contra (entries table) ---
         self._post_contra_journal_entries(contra)
 
+        return contra
+
+    def update(self, instance, validated_data):
+        contra = super().update(instance, validated_data)
+        
+        party_name = contra.to_account if contra.to_account else 'N/A'
+        
+        voucher = Voucher.objects.filter(source='contra_voucher', reference_id=contra.id).first()
+        if voucher:
+            voucher.date = contra.date
+            voucher.voucher_number = contra.voucher_number
+            voucher.amount = contra.amount
+            voucher.total = contra.amount
+            voucher.narration = contra.narration
+            voucher.from_account = contra.from_account
+            voucher.to_account = contra.to_account
+            voucher.party = party_name
+            voucher.save()
+
+        # Update Journal Entries
+        self._post_contra_journal_entries(contra)
+        
         return contra
 
     def _post_contra_journal_entries(self, contra):
@@ -210,6 +235,12 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
         journal = super().create(validated_data)
         total_amount = journal.total_debit or journal.total_credit
 
+        party_name = 'N/A'
+        if entries_data and isinstance(entries_data, list) and len(entries_data) > 0 and isinstance(entries_data[0], dict):
+            led_val = entries_data[0].get('ledger')
+            if led_val:
+                party_name = str(led_val)
+
         voucher = Voucher.objects.create(
             tenant_id=journal.tenant_id,
             type='journal',
@@ -221,6 +252,7 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
             narration=journal.narration,
             source='journal_voucher',
             reference_id=journal.id,
+            party=party_name,
         )
 
         setattr(journal, '_accounting_voucher_id', voucher.id)
@@ -240,7 +272,7 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
         """Post double-entry journal records for journal voucher."""
         try:
             tenant_id = journal.tenant_id
-            rows = journal.get_items()
+            rows = journal.entry_lines.all()
             entries_to_post = []
             
             for row in rows:
@@ -272,6 +304,24 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
         entries_data = validated_data.pop('entries', None)
         instance = super().update(instance, validated_data)
         
+        voucher = Voucher.objects.filter(source='journal_voucher', reference_id=instance.id).first()
+        if voucher:
+            total_amount = instance.total_debit or instance.total_credit
+            party_name = 'N/A'
+            if entries_data and isinstance(entries_data, list) and len(entries_data) > 0 and isinstance(entries_data[0], dict):
+                led_val = entries_data[0].get('ledger')
+                if led_val:
+                    party_name = str(led_val)
+                    
+            voucher.date = instance.date
+            voucher.voucher_number = instance.voucher_number
+            voucher.total = total_amount
+            voucher.total_debit = instance.total_debit
+            voucher.total_credit = instance.total_credit
+            voucher.narration = instance.narration
+            voucher.party = party_name
+            voucher.save()
+
         if entries_data is not None:
             self._sync_journal_entries(instance, entries_data)
             self._post_journal_voucher_entries(instance)
