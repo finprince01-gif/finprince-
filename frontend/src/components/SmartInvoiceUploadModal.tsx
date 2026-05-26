@@ -1600,23 +1600,30 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 );
 
                 if (patchRes.success) {
+                    let newStatus: ValidationStatus = 'READY';
+                    const s = patchRes.status || '';
+                    if (s === 'DUPLICATE' || s === 'duplicate') {
+                        newStatus = 'DUPLICATE';
+                    } else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') {
+                        newStatus = 'GSTIN_CONFLICT';
+                    } else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR' || s === 'NEED_VENDOR') {
+                        newStatus = 'NEED_VENDOR';
+                    }
+
                     // Update ONLY the specific row that was just resolved (strict per-row update)
-                    // We set it to 'processing' (SCANNING) and let fetchStagedInvoices settle the final state
                     setScanResults(prev => prev.map(r =>
                         r.file_hash === resolvingRow.file_hash
                             ? {
                                 ...r,
-                                extracted_data: updatedExtracted,
-                                validationStatus: 'processing' as ValidationStatus,
+                                extracted_data: patchRes.extracted_data || updatedExtracted,
+                                validationStatus: newStatus,
                                 vendor_id: patchRes.vendor_id || res.vendor_id,
-                                vendor_name: patchRes.vendor_name || patchRes.vendor_name || vendorData.vendor_name,
+                                vendor_name: patchRes.vendor_name || vendorData.vendor_name,
                                 vendor_gstin: vendorData.gstin,
-                                vendor_status: 'EXISTS' as VendorStatus,
+                                vendor_status: (patchRes.vendor_status === 'EXISTS' || patchRes.vendor_status === 'MATCHED' || patchRes.vendor_status === 'FOUND' || patchRes.vendor_id || res.vendor_id) ? 'FOUND' as VendorStatus : 'NEW' as VendorStatus,
                             }
                             : r
                     ));
-                    // Refresh all staged invoices to sync any other rows with same vendor from backend
-                    await fetchStagedInvoices(undefined, false, vFilterRef.current);
                     fetchResumeCounts();
                 }
                 setResolvingRow(null);

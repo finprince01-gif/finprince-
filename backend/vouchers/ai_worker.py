@@ -145,6 +145,7 @@ class AIWorker(BaseWorker):
         job_id = payload.get('job_id', task.get('job_id', 'unknown'))
 
         logger.info(f"[CONTEXT_TRACE_AI_RECEIVE] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={task.get('trace_id')} page={page_idx}")
+        logger.info(f"[SESSION_FORENSIC] stage='ai_worker_receive' record={record_id} session={session_id} tenant={tenant_id} page={page_idx}")
         logger.info(f"[AI_PAGE_START] record={record_id} page={page_idx} session={session_id} correlation_id={correlation_id} worker_role=AI")
 
         # ── [PHASE 13: IDEMPOTENCY CHECK] ──
@@ -229,7 +230,7 @@ class AIWorker(BaseWorker):
                                 lambda rr=raw_reply: _repair_json(rr, record_id=record_id, page=page_idx)
                             )
                             parsed = json.loads(repaired_text)
-                            canonical_payload = get_canonical_export_record(parsed)
+                            canonical_payload = get_canonical_export_record(parsed, tenant_id=tenant_id)
 
                             if self._is_dto_valid(canonical_payload):
                                 text_str = json.dumps(canonical_payload)
@@ -388,7 +389,7 @@ class AIWorker(BaseWorker):
                     parsed['upload_session_id'] = str(session_id)
                     parsed['tenant_id'] = str(tenant_id)
                     
-                    canonical_payload = get_canonical_export_record(parsed)
+                    canonical_payload = get_canonical_export_record(parsed, tenant_id=tenant_id)
                     
                     # Double-ensure they are in the final payload
                     canonical_payload['record_id'] = str(record_id)
@@ -400,8 +401,10 @@ class AIWorker(BaseWorker):
                     is_failed = not self._is_dto_valid(canonical_payload)
                     if not is_failed:
                         logger.info(f"[AI_PAGE_SUCCESS] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI")
+                        logger.info(f"[SESSION_FORENSIC] stage='ai_page_success' record={record_id} session={session_id} tenant={tenant_id} page={page_idx}")
                     else:
                         logger.error(f"[AI_PAGE_FAIL] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI reason=invalid_dto")
+                        logger.info(f"[SESSION_FORENSIC] stage='ai_page_fail' record={record_id} session={session_id} tenant={tenant_id} page={page_idx} reason='invalid_dto'")
                 except Exception as e:
                     logger.error(f"[AI_PARSE_ERR] {e} trace={traceback.format_exc()}")
                     canonical_payload = {"_error": str(e)}
