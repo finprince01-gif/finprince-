@@ -265,6 +265,46 @@ class CleanOCRStagingView(views.APIView):
         v_id = getattr(r, 'vendor_id', None)
         v_status_record = getattr(r, 'status', "PROCESSING")
         
+        sections = norm.get("sections", {})
+        supplier = sections.get("supplier_details", {})
+        header = norm.get("header", {})
+        
+        # Real-time strict vendor matching gate
+        tenant_id = getattr(r, 'tenant_id', None)
+        if not v_id and tenant_id:
+            gstin_val = (getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or norm.get("vendor_gstin") or "")
+            if isinstance(gstin_val, str):
+                gstin_val = gstin_val.strip()
+                if gstin_val in ["", "—", "None", "null"]:
+                    gstin_val = ""
+            else:
+                gstin_val = ""
+                
+            branch_val = (getattr(r, 'branch', None) or header.get("branch") or supplier.get("branch") or norm.get("branch") or "")
+            if isinstance(branch_val, str):
+                branch_val = branch_val.strip()
+                if branch_val in ["", "—", "None", "null"]:
+                    branch_val = ""
+            else:
+                branch_val = ""
+
+            if gstin_val:
+                from vendors.vendor_validation_logic import validate_vendor_strict
+                try:
+                    val_res = validate_vendor_strict(tenant_id, gstin_val, branch_val)
+                    if val_res.get('status') == 'EXISTING_VENDOR':
+                        v_id = val_res.get('vendor_id')
+                        if v_status in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
+                            v_status = 'READY'
+                        # Update database record in place so we don't need to re-validate in future
+                        if hasattr(r, 'save') and getattr(r, 'id', None):
+                            r.vendor_id = v_id
+                            if getattr(r, 'validation_status', None) in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
+                                r.validation_status = 'READY'
+                            r.save(update_fields=['vendor_id', 'validation_status'])
+                except Exception as db_err:
+                    logger.error(f"[REALTIME_VENDOR_SAVE_FAILED] id={getattr(r, 'id', None)} error={db_err}")
+
         # --- [PHASE 11.9] DETERMINISTIC STATE ENFORCEMENT ---
         # Requirement #2: Enforce PROCESSING, FINALIZED, FAILED, PARTIAL_FAILED
         # Requirement #3: Block hydration for incomplete records
@@ -290,7 +330,14 @@ class CleanOCRStagingView(views.APIView):
         if is_failed: 
             ui_status = 'EXTRACTION_FAILED'
         elif is_finalized:
-            ui_status = 'READY' if v_status == 'READY' else 'VOUCHER_CREATED'
+            if v_status == 'VOUCHER_CREATED' or v_status_record == 'VOUCHER_CREATED':
+                ui_status = 'VOUCHER_CREATED'
+            elif v_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'] or v_id:
+                ui_status = 'READY'
+            elif v_status in ['GSTIN_CONFLICT', 'DUPLICATE']:
+                ui_status = v_status
+            else:
+                ui_status = 'NEED_VENDOR'
 
         # Map to final deterministic status
         final_status = "PROCESSING"
@@ -695,6 +742,100 @@ class CleanOCRStagingView(views.APIView):
             "poll_latency": round(poll_duration, 3)
         })
 
+    def patch(self, request, file_hash=None):
+        """
+        Step 3: Fix normalization on manual edits.
+        """
+        from vendors.vendor_validation_logic import validate_vendor
+        from .normalize import get_canonical_export_record
+        from .grouping import run_grouping_logic
+        
+        if not file_hash:
+            return Response({'error': 'Id or file_hash required'}, status=400)
+            
+        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).first()
+        if not record:
+            record = InvoiceTempOCR.objects.filter(id=int(file_hash) if str(file_hash).isdigit() else None).first()
+            
+        if not record:
+            return Response({'error': 'File not found'}, status=404)
+            
+        updated_data = request.data.get('extracted_data')
+        if not updated_data:
+            return Response({'error': 'extracted_data required'}, status=400)
+            
+        try:
+            sections = updated_data.get('sections', {})
+            raw_target = {
+                **{k: v for k, v in updated_data.items() if k != 'sections'},
+                **(sections.get('supplier_details', {})),
+                **(sections.get('supply_details', {})),
+                **(sections.get('due_details', {})),
+                **(sections.get('transit_details', {})),
+                "line_items": sections.get('items', [])
+            }
+            
+            # Instead of calling old validate_vendor(), run the full pipeline validate_and_process
+            # so the status, vendor_id and branch matching all stay in sync.
+            
+            # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
+            normalized_patch = get_canonical_export_record(updated_data, tenant_id=record.tenant_id)
+            record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
+            record.status = PipelineStatus.FINALIZED
+            record.supplier_invoice_no = (
+                sections.get('supplier_details', {}).get('supplier_invoice_no') or 
+                raw_target.get('supplier_invoice_no')
+            )
+            record.gstin = (
+                sections.get('supplier_details', {}).get('gstin') or 
+                raw_target.get('gstin')
+            )
+            record.branch = sections.get('supplier_details', {}).get('branch') or ''
+            record.save()
+            
+            # Run the authoritative pipeline validation
+            from .pipeline import validate_and_process
+            v_res = validate_and_process(record)
+
+            # Re-run grouping after manual edit
+            try:
+                run_grouping_logic(record.tenant_id, record.upload_session_id)
+            except Exception as ge:
+                logger.error(f"Post-patch grouping failed: {str(ge)}")
+            
+            # Re-read the saved record to get accurate status
+            record.refresh_from_db()
+            mapped = self._map_record_to_ui_row(record)
+            
+            return Response({
+                "success": True, 
+                "status": mapped.get("validationStatus") or record.validation_status,
+                "vendor_id": mapped.get("vendor_id") or record.vendor_id,
+                "vendor_name": mapped.get("vendor_name") or (
+                    sections.get('supplier_details', {}).get('vendor_name') or
+                    updated_data.get('vendor_name') or ''
+                ),
+                "vendor_status": mapped.get("vendor_status") or ("EXISTS" if record.vendor_id else "NEW"),
+                "extracted_data": mapped.get("extracted_data") or {
+                    "sections": record.extracted_data.get("sections", {}) if isinstance(record.extracted_data, dict) else {},
+                    **(record.extracted_data if isinstance(record.extracted_data, dict) else {})
+                }
+            })
+        except Exception as e:
+            logger.error(f"PATCH failure: {str(e)}")
+            return Response({'error': str(e)}, status=400)
+
+    def delete(self, request, file_hash=None):
+        if not file_hash:
+            return Response({'error': 'Id or file_hash required'}, status=400)
+            
+        if str(file_hash).isdigit():
+            deleted, _ = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=request.user.branch_id).delete()
+        else:
+            deleted, _ = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).delete()
+            
+        return Response({'success': bool(deleted)})
+
     def _handle_session_metadata_upload(self, request, session_ids, tenant_id):
         """Processes metadata for files already uploaded to S3 via pre-signed URLs."""
         from core.sqs import QueueService
@@ -1003,96 +1144,6 @@ class OCRJobStatusView(views.APIView):
             })
         except OCRJob.DoesNotExist:
             return Response({"error": "Job not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    def patch(self, request, file_hash=None):
-        """
-        Step 3: Fix normalization on manual edits.
-        """
-        from vendors.vendor_validation_logic import validate_vendor
-        
-        if not file_hash:
-            return Response({'error': 'Id or file_hash required'}, status=400)
-            
-        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).first()
-        if not record:
-            record = InvoiceTempOCR.objects.filter(id=int(file_hash) if str(file_hash).isdigit() else None).first()
-            
-        if not record:
-            return Response({'error': 'File not found'}, status=404)
-            
-        updated_data = request.data.get('extracted_data')
-        if not updated_data:
-            return Response({'error': 'extracted_data required'}, status=400)
-            
-        try:
-            sections = updated_data.get('sections', {})
-            raw_target = {
-                **{k: v for k, v in updated_data.items() if k != 'sections'},
-                **(sections.get('supplier_details', {})),
-                **(sections.get('supply_details', {})),
-                **(sections.get('due_details', {})),
-                **(sections.get('transit_details', {})),
-                "line_items": sections.get('items', [])
-            }
-            
-            # Instead of calling old validate_vendor(), run the full pipeline validate_and_process
-            # so the status, vendor_id and branch matching all stay in sync.
-            
-            # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
-            normalized_patch = normalize(updated_data)
-            record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
-            record.status = PipelineStatus.FINALIZED
-            record.supplier_invoice_no = (
-                sections.get('supplier_details', {}).get('supplier_invoice_no') or 
-                raw_target.get('supplier_invoice_no')
-            )
-            record.gstin = (
-                sections.get('supplier_details', {}).get('gstin') or 
-                raw_target.get('gstin')
-            )
-            record.branch = sections.get('supplier_details', {}).get('branch') or ''
-            record.save()
-            
-            # Run the authoritative pipeline validation
-            from .pipeline import validate_and_process
-            v_res = validate_and_process(record)
-
-            # Re-run grouping after manual edit
-            try:
-                run_grouping_logic(record.tenant_id, record.upload_session_id)
-            except Exception as ge:
-                logger.error(f"Post-patch grouping failed: {str(ge)}")
-            
-            # Re-read the saved record to get accurate status
-            record.refresh_from_db()
-            
-            return Response({
-                "success": True, 
-                "status": record.validation_status,
-                "vendor_id": record.vendor_id,
-                "vendor_name": (
-                    sections.get('supplier_details', {}).get('vendor_name') or
-                    updated_data.get('vendor_name') or ''
-                ),
-                "extracted_data": {
-                    "sections": record.extracted_data.get("sections", {}) if isinstance(record.extracted_data, dict) else {},
-                    **(record.extracted_data if isinstance(record.extracted_data, dict) else {})
-                }
-            })
-        except Exception as e:
-            logger.error(f"PATCH failure: {str(e)}")
-            return Response({'error': str(e)}, status=400)
-
-    def delete(self, request, file_hash=None):
-        if not file_hash:
-            return Response({'error': 'Id or file_hash required'}, status=400)
-            
-        if str(file_hash).isdigit():
-            deleted, _ = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=request.user.branch_id).delete()
-        else:
-            deleted, _ = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).delete()
-            
-        return Response({'success': bool(deleted)})
 
 class OCRStagingFinalizeView(views.APIView):
     """

@@ -179,7 +179,7 @@ def validate_dedup_source(record: InvoiceTempOCR) -> Dict[str, Any]:
 
     # Pull canonical view once to avoid repeated unwrapping
     try:
-        canonical = get_canonical_export_record(data)
+        canonical = get_canonical_export_record(data, tenant_id=record.tenant_id)
     except Exception as e:
         logger.error(f"[DEDUP_VALIDATION_ERROR] record={record.id} canonical_parse_failed={e}")
         return {"valid": False, "failures": ["CANONICAL_PARSE_FAILURE"], "details": {"error": str(e)}}
@@ -281,7 +281,7 @@ def sync_record_flattened_fields(record: InvoiceTempOCR, data: Dict[str, Any], c
     
     # 1. Use canonical normalizer to get consistent names (Target for Unification)
     from ocr_pipeline.normalize import get_canonical_export_record
-    canonical = get_canonical_export_record(data)
+    canonical = get_canonical_export_record(data, tenant_id=record.tenant_id)
     
     # 2. Audit Model Schema (Root Cause #1 - Dynamic Contract)
     # We use _meta.get_fields() to ensure we only save concrete DB columns.
@@ -753,7 +753,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         merger = get_forensic_merger()
         pages_list = []
         for k in sorted(raw_pages.keys(), key=int):
-            p = get_canonical_export_record(raw_pages[k])
+            p = get_canonical_export_record(raw_pages[k], tenant_id=record.tenant_id)
             p["_page_no"] = int(k)
             pages_list.append(p)
 
@@ -1413,11 +1413,22 @@ def force_reconcile_stale_barriers():
 
 
 
+@transaction.atomic
 def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwargs):
     """
     CORE VALIDATION FUNCTION: 
     Checks for Vendor, Duplicates, and optionally creates Voucher.
     """
+    try:
+        record = InvoiceTempOCR.objects.select_for_update().get(id=record.id)
+    except InvoiceTempOCR.DoesNotExist:
+        logger.error(f"[VALIDATION_ABORT] Record {record.id} not found in database.")
+        return {"status": "ERROR"}
+
+    if record.status in ['COMPLETED', 'SPLIT_COMPLETE'] and not kwargs.get('force'):
+        logger.info(f"[VALIDATION_ABORT] Record {record.id} is already in terminal state '{record.status}'. Skipping processing.")
+        return {"status": record.validation_status or "SUCCESS"}
+
     # ── [PHASE 1] SAFE INITIALIZATION ──
     supplier = {}
     vendor = None
@@ -1546,7 +1557,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         supply = sections.get("supply_details", {})
         due = sections.get("due_details", {})
         
-        canonical = get_canonical_export_record(data)
+        canonical = get_canonical_export_record(data, tenant_id=record.tenant_id)
         gstin = (canonical.get("gstin") or "").strip().upper()
         invoice_no = (canonical.get("supplier_invoice_no") or canonical.get("invoice_no") or "").strip()
         vendor_name = (canonical.get("vendor_name") or "").strip()
@@ -1667,6 +1678,22 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
 
         # Using the Pipeline 2 logic refined earlier
         with transaction.atomic():
+            # Double-check inside transaction to avoid race-condition duplicate voucher creation
+            existing_voucher = VoucherPurchaseSupplierDetails.objects.filter(
+                supplier_invoice_no__iexact=invoice_no,
+                gstin__iexact=gstin,
+                branch__iexact=branch_name,
+                vendor_name__iexact=vendor_name,
+                tenant_id=tenant_id
+            ).first()
+            
+            if existing_voucher:
+                logger.warning(f"[RACE_PREVENTED] Voucher already exists for invoice={invoice_no} gstin={gstin}. Skipping creation.")
+                record.status = "EXTRACTED"
+                record.validation_status = "DUPLICATE"
+                record.save()
+                return {"status": "DUPLICATE"}
+
             branch_record = Branch.objects.filter(id=tenant_id).first()
             company_gstin = branch_record.gstin if branch_record else None
             is_interstate = gstin[:2] != company_gstin[:2] if company_gstin and len(gstin)>=2 and len(company_gstin)>=2 else False

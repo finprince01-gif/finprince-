@@ -290,6 +290,23 @@ def check_session_completion(record_id, total_pages, page_idx, item_id=None):
             
             final_status = JobStatus.COMPLETED if res.get('status') != 'ERROR' else JobStatus.FAILED
             
+            # [BARRIER_FIX] Update Redis Orchestrator to ensure terminal status is visible to frontend polling
+            try:
+                from core.redis_orchestrator import orchestrator
+                final_redis_status = "HYDRATION_READY" if final_status == JobStatus.COMPLETED else "FAILED"
+                orchestrator.update_session_status(
+                    str(record_id), final_redis_status, progress=100.0,
+                    extra_data={"hydration_ready": (final_status == JobStatus.COMPLETED)}
+                )
+                if session_id and session_id not in ('unknown', 'system'):
+                    orchestrator.update_session_status(
+                        str(session_id), final_redis_status, progress=100.0,
+                        extra_data={"hydration_ready": (final_status == JobStatus.COMPLETED)}
+                    )
+                    logger.info(f"[SESSION_TERMINAL_STATUS] session={session_id} status={final_redis_status}")
+            except Exception as e:
+                logger.error(f"[BARRIER_ORCHESTRATOR_ERR] {e}")
+
             if item_id:
                 InvoiceProcessingItem.objects.filter(id=item_id).update(status=final_status)
                 if final_status in [JobStatus.COMPLETED, JobStatus.FAILED]:
@@ -437,6 +454,8 @@ class FinalizationWorker(BaseWorker):
         total_pages = metadata.get('total_pages', 1)
         session_id = metadata.get('upload_session_id')
         
+        logger.info(f"[SESSION_FORENSIC] stage='finalization_worker_receive' record={record_id} session={session_id} tenant={task.get('tenant_id')} page={page_idx}")
+        
         finalized_key = f"finalized_pages_set:{session_id}_{record_id}"
         terminal_key = f"terminal_pages_set:{session_id}_{record_id}"
 
@@ -448,7 +467,8 @@ class FinalizationWorker(BaseWorker):
                 return
 
             result = task.get('result', {})
-            canonical = get_canonical_export_record(result)
+            tenant_id = task.get('tenant_id')
+            canonical = get_canonical_export_record(result, tenant_id=tenant_id)
             
             if not is_page_valid(canonical)[0]:
                 logger.warning(f"[PAGE_INVALID] record={record_id} page={page_idx}")
@@ -470,6 +490,7 @@ class FinalizationWorker(BaseWorker):
 
             logger.info(f"[PAGE_LIFECYCLE] record={record_id} page={page_idx} STAGE='FINALIZED'")
             check_session_completion(record_id, total_pages, page_idx, metadata.get('item_id'))
+            logger.info(f"[SESSION_FORENSIC] stage='finalization_worker_page_complete' record={record_id} session={session_id} tenant={tenant_id} page={page_idx}")
 
         except Exception as e:
             logger.exception(f"[FINALIZATION_ERR] {e}")
