@@ -60,12 +60,16 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
   const validateStep = () => {
     setError('');
     if (step === 1) {
-      if (!name || !pan || !phone) {
+      if (!name || !pan) {
         setError('Please complete all identification fields.');
         return false;
       }
       if (pan.length !== 10) {
         setError('Invalid PAN number. Must be 10 characters.');
+        return false;
+      }
+      if (phone && (phone.length !== 10 || !/^\d+$/.test(phone))) {
+        setError('Contact Phone must be 10 digits.');
         return false;
       }
     } else if (step === 2) {
@@ -242,7 +246,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1" htmlFor="phone">Contact Phone</label>
-                        <input id="phone" type="tel" required className="reg-input-v2 h-14" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => handleEnter(e, undefined, true)} />
+                        <input id="phone" type="tel" className="reg-input-v2 h-14" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => handleEnter(e, undefined, true)} />
                       </div>
                     </div>
                   </div>

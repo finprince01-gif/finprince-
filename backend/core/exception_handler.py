@@ -56,13 +56,14 @@ def custom_exception_handler(exc, context):
                     else:
                         error_payload["message"] = msg
                 
-                # If there is exactly one field error, set the 'field' property for the frontend
+                # If there are field errors, set the 'field' property and error message based on the first field error for the frontend
                 # Exclude non_field_errors from being the "field"
                 field_errors = {k: v for k, v in details.items() if k not in ['non_field_errors', 'detail']}
-                if len(field_errors) == 1:
-                    error_payload["field"] = list(field_errors.keys())[0]
+                if len(field_errors) >= 1:
+                    first_field = list(field_errors.keys())[0]
+                    error_payload["field"] = first_field
                     # If it's a list, use the first message as the primary message
-                    val = field_errors[error_payload["field"]]
+                    val = field_errors[first_field]
                     if isinstance(val, list) and len(val) > 0:
                         error_payload["message"] = str(val[0])
                     elif isinstance(val, str):
