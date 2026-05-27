@@ -49,8 +49,8 @@ def get_vouchers_for_ledger(tenant_id, ledger_name, start_date=None, end_date=No
     # Use Exists subquery instead of large IN clause values_list
     from django.db.models import Exists, OuterRef
     journal_vouchers = JournalEntry.objects.filter(
+        Q(ledger_name=ledger_name) | Q(ledger__name=ledger_name),
         tenant_id=tenant_id,
-        ledger=ledger_name,
         voucher_id=OuterRef('id')
     )
     

@@ -48,6 +48,7 @@ interface ReportsPageProps {
   stockItems: StockItem[];
   onNavigate?: (page: Page, params?: any) => void;
   setViewVoucherData?: (data: any) => void;
+  navParams?: any;
 }
 
 
@@ -78,7 +79,7 @@ const formatToDMY = (dateVal: any) => {
   return str;
 };
 
-const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [], onNavigate, setViewVoucherData }) => {
+const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [], onNavigate, setViewVoucherData, navParams }) => {
   // Report Options Mapping
   const { hasTabAccess, isSuperuser } = usePermissions();
 
@@ -113,7 +114,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       return hasTabAccess('Reports', permissionTabName);
     });
 
-  const defaultReport = availableReports.length > 0 ? availableReports[0].id : ('DayBook' as ReportType);
+  const defaultReport = navParams?.reportType || (availableReports.length > 0 ? availableReports[0].id : ('DayBook' as ReportType));
 
   const [reportType, setReportType] = useState<ReportType>(defaultReport);
 
@@ -128,7 +129,18 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   // Drill-down: null = summary view (all ledgers list), string = detail view for that ledger
-  const [drillDownLedger, setDrillDownLedger] = useState<string | null>(null);
+  const [drillDownLedger, setDrillDownLedger] = useState<string | null>(navParams?.drillDownLedger || null);
+
+  useEffect(() => {
+    if (navParams) {
+      if (navParams.reportType) setReportType(navParams.reportType);
+      if (navParams.drillDownLedger !== undefined) setDrillDownLedger(navParams.drillDownLedger);
+    } else {
+      setReportType(availableReports.length > 0 ? availableReports[0].id : ('DayBook' as ReportType));
+      setDrillDownLedger(null);
+    }
+  }, [navParams]);
+
   const [selectedSession, setSelectedSession] = useState<string>('all');
   const [selectedSection, setSelectedSection] = useState<string>('all');
   const isTdsTcsLedger = drillDownLedger ? (drillDownLedger.toLowerCase().includes('tds') || drillDownLedger.toLowerCase().includes('tcs')) : false;

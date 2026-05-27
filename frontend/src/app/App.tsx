@@ -275,11 +275,16 @@ const App: React.FC = () => {
    * Handle page navigation
    * Called when user clicks on sidebar menu items
    */
+  const [reportsNavParams, setReportsNavParams] = useState<any>(null);
+
   const handleNavigate = (page: Page, params?: any) => {
     if (page === 'Vouchers' && params?.viewVoucher) {
       setViewVoucherData(params.viewVoucher);
     } else if (page !== 'Vouchers') {
       setViewVoucherData(null);
+    }
+    if (page === 'Reports') {
+      setReportsNavParams(params);
     }
     setCurrentPage(page);
   };
@@ -1252,6 +1257,7 @@ const App: React.FC = () => {
         clearViewVoucherData={handleClearViewVoucherData}
       />;
       case 'Reports': return <ErrorBoundary><ReportsPage
+        navParams={reportsNavParams}
         vouchers={vouchers}
         entries={journalEntries}
         ledgers={ledgers}
