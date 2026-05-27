@@ -27,6 +27,30 @@ class MasterRegisterSerializer(serializers.ModelSerializer):
             'address_line1', 'address_line2', 'address_line3', 'city', 
             'district', 'state', 'country', 'pincode', 'phone'
         ]
+        extra_kwargs = {
+            'email': {
+                'validators': [],
+            }
+        }
+
+    def validate(self, attrs):
+        pan_number = attrs.get('pan_number')
+        email = attrs.get('email')
+        phone = attrs.get('phone')
+
+        if pan_number:
+            if MasterUser.objects.filter(pan_number__iexact=pan_number).exists():
+                raise serializers.ValidationError({"pan_number": ["PAN number is already existing"]})
+
+        if email:
+            if MasterUser.objects.filter(email__iexact=email).exists():
+                raise serializers.ValidationError({"email": ["Admin Email is already existing"]})
+
+        if phone:
+            if len(phone) != 10 or not phone.isdigit():
+                raise serializers.ValidationError({"phone": ["Contact Phone must be 10 digits"]})
+                
+        return attrs
 
     def create(self, validated_data):
         from django.contrib.auth.hashers import make_password
