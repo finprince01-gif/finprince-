@@ -48,23 +48,6 @@ class AIWorker(BaseWorker):
         super().__init__(role="AI", queue_type=os.getenv('SQS_AI_QUEUE_TYPE', 'ai'))
         self.allowed_task_types = ['AI_EXTRACTION']
 
-    def _save_failed_artifact(self, payload: Dict[str, Any], record_id: str, page_idx: int, pass_idx: int):
-        """Save failed page images for forensic inspection."""
-        import base64
-        from django.conf import settings
-        try:
-            artifact_dir = os.path.join(settings.BASE_DIR, "failed_pages")
-            os.makedirs(artifact_dir, exist_ok=True)
-            img_b64 = payload.get('image_data') or (
-                payload.get('batch_images') and payload['batch_images'][0].get('data')
-            )
-            if img_b64:
-                img_bytes = base64.b64decode(img_b64)
-                file_path = os.path.join(artifact_dir, f"{record_id}_page{page_idx}_pass{pass_idx}.jpg")
-                with open(file_path, "wb") as f:
-                    f.write(img_bytes)
-        except Exception as e:
-            logger.error(f"[ARTIFACT_SAVE_ERROR] {e}")
 
     def _apply_image_transformation(self, payload: Dict[str, Any], pass_idx: int) -> Dict[str, Any]:
         """
@@ -274,11 +257,6 @@ class AIWorker(BaseWorker):
                     if not success and pass_idx < MAX_IMAGE_PASSES - 1:
                         logger.warning(f"[PAGE_FAILED_RETRYABLE] record_id={record_id} page={page_idx} pass={pass_idx+1}/{MAX_IMAGE_PASSES}")
 
-                    # Save failed artifact for this pass (forensic)
-                    await loop.run_in_executor(
-                        None,
-                        lambda cp=current_payload, pi=pass_idx: self._save_failed_artifact(cp, record_id, page_idx, pi + 1)
-                    )
 
                 if not success:
                     logger.error(f"[OCR_RETRY_CHAIN_EXHAUSTED] record={record_id} page={page_idx} all_passes_failed=True")
