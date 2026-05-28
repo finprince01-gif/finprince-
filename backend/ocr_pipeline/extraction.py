@@ -856,6 +856,16 @@ Failure to extract ANY field that is visible on the document is unacceptable.
                 results_map[idx] = res
                 if not wait_for_result:
                      logger.info(f"[FANOUT_QUEUED] record_id={record_id} page_number={idx+1} session={upload_session_id}")
+                     if record_id:
+                         try:
+                             rec_id_str = str(record_id)
+                             page_num_str = str(idx + 1)
+                             from core.redis_orchestrator import orchestrator
+                             orchestrator.redis.set(f"assembly:{rec_id_str}:page:{page_num_str}:enqueued", "true", ex=86400)
+                             orchestrator.redis.sadd(f"assembly:{rec_id_str}:enqueued_success_pages", page_num_str)
+                             orchestrator.redis.expire(f"assembly:{rec_id_str}:enqueued_success_pages", 86400)
+                         except Exception as redis_err:
+                             logger.error(f"[REDIS_BACKEND_ENQUEUE_ERR] {redis_err}")
     
     # ── [PHASE 10: BARRIER STATE SYNC] ──
     if not wait_for_result and record_id:
@@ -880,7 +890,8 @@ Failure to extract ANY field that is visible on the document is unacceptable.
     # [ROOT-CAUSE FIX] Return first page as primary, but NEVER merge unrelated pages here.
     # The assembly/splitting logic in pipeline.py handles multi-invoice PDFs.
     if results_map:
-        final_result = results_map[0].copy()
+        first_key = next(iter(sorted(results_map.keys())))
+        final_result = results_map[first_key].copy()
     else:
         final_result = {"status": "OCR_FAILED", "_error": "NO_PAGES_PROCESSED"}
 

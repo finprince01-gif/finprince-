@@ -57,17 +57,32 @@ def validate_vendor_strict(tenant_id, gstin, branch):
         if normalize_branch(db_branch_raw) == v_branch:
             match_found = record
             break
-            
+
     if match_found:
         logger.info("Match result: EXISTING_VENDOR")
         return {
             "status": "EXISTING_VENDOR",
-            "vendor_id": match_found.vendor_basic_detail.id
+            "vendor_id": match_found.vendor_basic_detail.id,
+            "vendor_name": match_found.vendor_basic_detail.vendor_name,
+            "matched_by": "GSTIN_AND_BRANCH",
+            "message": f"Existing vendor found: {match_found.vendor_basic_detail.vendor_name} ({v_gstin})"
         }
     
+    if gst_records.exists():
+        first_rec = gst_records.first()
+        logger.info("Match result: GSTIN_CONFLICT")
+        return {
+            "status": "GSTIN_CONFLICT",
+            "vendor_id": first_rec.vendor_basic_detail.id,
+            "vendor_name": first_rec.vendor_basic_detail.vendor_name,
+            "matched_by": "GSTIN_ONLY",
+            "message": f"GSTIN conflict: GSTIN {v_gstin} already exists under vendor name: {first_rec.vendor_basic_detail.vendor_name}"
+        }
+
     logger.info("Match result: CREATE_VENDOR")
     return {
-        "status": "CREATE_VENDOR"
+        "status": "CREATE_VENDOR",
+        "message": "Vendor not found in master records."
     }
 
 def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state='', supplier_invoice_no=''):

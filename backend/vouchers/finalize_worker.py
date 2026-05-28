@@ -122,6 +122,8 @@ class FinalizeWorker(BaseWorker):
                             logger.warning(f"[TERMINAL_STATE_BLOCKED] session={canonical_session_id} reason=hydration_visibility_pending")
                             raise ValueError(f"HYDRATION_VISIBILITY_PENDING: session={canonical_session_id} record={record_id}")
                     logger.info(f"[HYDRATION_VISIBILITY_CONFIRMED] session={canonical_session_id} snapshot_exists={snapshot_exists}")
+                    logger.info(f"[SNAPSHOT_COMPLETE] record={record_id} session={canonical_session_id}")
+                    logger.info(f"[MATERIALIZATION_COMPLETE] record={record_id} session={canonical_session_id}")
                     logger.info(f"[MATERIALIZATION_DB_COMMITTED] session={canonical_session_id}")
 
                 # 1. Mark the record terminal
@@ -184,6 +186,7 @@ class FinalizeWorker(BaseWorker):
                     )
                     logger.info(f"[SESSION_TERMINAL_STATUS] session={canonical_session_id} status={final_redis_status}")
                     logger.info(f"[HYDRATION_READY_EMITTED] session={canonical_session_id}")
+                    logger.info(f"[TERMINAL_RELEASE_SUCCESS] record={record_id} session={canonical_session_id}")
 
                 # 5. Mark SessionFinalizationState export_complete + materialization_complete
                 # These are monotonic — once True they MUST NOT regress

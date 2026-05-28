@@ -9,12 +9,69 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+
+class SQSEncoder(json.JSONEncoder):
+    """
+    [FIX] Custom JSON encoder that safely serialises any DynamicClusterEnv
+    instance (or similar lazy-eval objects) to a plain string, preventing the
+    'Object of type DynamicClusterEnv is not JSON serializable' push failure
+    that silently drops AI/Assembly messages and stalls the barrier.
+    """
+    def default(self, obj):
+        # DynamicClusterEnv defines __str__, use it.
+        if hasattr(obj, '__class__') and obj.__class__.__name__ == 'DynamicClusterEnv':
+            return str(obj)
+        if isinstance(obj, uuid.UUID):
+            # [UUID_COERCION_APPLIED] Forensic log/trace as requested
+            logger.info(f"[UUID_COERCION_APPLIED] SQSEncoder converting UUID obj '{obj}' to string.")
+            return str(obj)
+        return super().default(obj)
+
+
+def deep_coerce_uuids(obj):
+    """
+    Recursively coerces any UUID objects in dict keys, dict values, lists,
+    tuples, or metadata structures into plain strings to ensure complete
+    JSON serializability.
+    """
+    if isinstance(obj, dict):
+        new_dict = {}
+        for k, v in obj.items():
+            new_key = str(k) if isinstance(k, uuid.UUID) else k
+            if isinstance(k, uuid.UUID):
+                logger.info(f"[UUID_COERCION_APPLIED] Coerced dictionary key UUID '{k}' to string.")
+            new_dict[new_key] = deep_coerce_uuids(v)
+        return new_dict
+    elif isinstance(obj, list):
+        return [deep_coerce_uuids(x) for x in obj]
+    elif isinstance(obj, tuple):
+        return tuple(deep_coerce_uuids(x) for x in obj)
+    elif isinstance(obj, uuid.UUID):
+        val_str = str(obj)
+        logger.info(f"[UUID_COERCION_APPLIED] Coerced value UUID '{obj}' to string.")
+        return val_str
+    return obj
+
 # [FORENSIC] Environment identity — MUST differ between local dev and EC2 production.
 # If this is unset, local and production workers compete for the same SQS messages.
-_CLUSTER_ENV  = os.getenv('CLUSTER_ENV', 'UNSET')
+class DynamicClusterEnv:
+    def __str__(self):
+        return os.getenv('CLUSTER_ENV', 'UNSET')
+    def __repr__(self):
+        return os.getenv('CLUSTER_ENV', 'UNSET')
+    def __eq__(self, other):
+        return os.getenv('CLUSTER_ENV', 'UNSET') == other
+    def __ne__(self, other):
+        return os.getenv('CLUSTER_ENV', 'UNSET') != other
+    def __add__(self, other):
+        return os.getenv('CLUSTER_ENV', 'UNSET') + other
+    def __radd__(self, other):
+        return other + os.getenv('CLUSTER_ENV', 'UNSET')
+
+_CLUSTER_ENV  = DynamicClusterEnv()
 _HOSTNAME     = platform.node()
 
-if _CLUSTER_ENV == 'UNSET':
+if os.getenv('CLUSTER_ENV', 'UNSET') == 'UNSET':
     logger.warning(
         "[CLUSTER_ENV_MISSING] CLUSTER_ENV is not set in .env. "
         "If local and EC2 share the same queue URLs, local workers WILL consume production messages. "
@@ -32,11 +89,13 @@ class QueueService:
         self._queue_mapping = None
 
     def _get_queue_mapping(self):
-        if self._queue_mapping is None:
+        current_env = os.getenv('CLUSTER_ENV', 'UNSET')
+        if self._queue_mapping is None or getattr(self, '_cached_env', None) != current_env:
+             self._cached_env = current_env
              def get_url(base):
                  if not base:
                      return base
-                 if _CLUSTER_ENV == 'local' and not base.endswith('-local'):
+                 if current_env == 'local' and not base.endswith('-local'):
                      return base + '-local'
                  return base
 
@@ -51,9 +110,9 @@ class QueueService:
              # Forensic Logging
              unique_urls = {v for v in self._queue_mapping.values() if v}
              if unique_urls:
-                 logger.info(f"[SQS_MAPPING_LOADED] roles={list(self._queue_mapping.keys())} count={len(unique_urls)}")
+                 logger.info(f"[SQS_MAPPING_LOADED] roles={list(self._queue_mapping.keys())} count={len(unique_urls)} cluster_env={current_env}")
              else:
-                 logger.warning("[SQS_MAPPING_EMPTY] No physical SQS URLs resolved from environment.")
+                 logger.warning(f"[SQS_MAPPING_EMPTY] No physical SQS URLs resolved from environment. cluster_env={current_env}")
         return self._queue_mapping
 
     def _get_sqs_client(self):
@@ -108,7 +167,13 @@ class QueueService:
 
         tenant_id = str(message.get('tenant_id', 'unknown'))
         
+        # [SQS_SERIALIZATION_PAYLOAD] Log payload structure
+        logger.info(f"[SQS_SERIALIZATION_PAYLOAD] queue={queue_type} message_id={message.get('id')} keys={list(message.keys())}")
+
         try:
+            # Apply recursive UUID coercion
+            coerced_message = deep_coerce_uuids(message)
+
             # Phase 6G: SQS Fair Queuing Logic
             effective_delay = delay_seconds
             args = {}
@@ -116,16 +181,23 @@ class QueueService:
                 args['DelaySeconds'] = min(effective_delay, 900)
 
             # Add ownership metadata
-            message['_ownership'] = {
-                'cluster_env': _CLUSTER_ENV,
+            coerced_message['_ownership'] = {
+                'cluster_env': str(_CLUSTER_ENV),
                 'cluster_id': os.getenv('CLUSTER_ID', 'default-cluster'),
                 'origin_host': _HOSTNAME,
                 'producer_role': 'system'
             }
 
+            try:
+                serialized_body = json.dumps(coerced_message, cls=SQSEncoder)
+                logger.info(f"[SQS_SERIALIZATION_SUCCESS] queue={queue_type} message_id={coerced_message.get('id')}")
+            except Exception as ser_err:
+                logger.error(f"[SQS_SERIALIZATION_FAILURE] Failed to serialize message body: {ser_err}")
+                raise
+
             result = sqs.send_message(
                 QueueUrl=queue_url,
-                MessageBody=json.dumps(message),
+                MessageBody=serialized_body,
                 MessageAttributes={'TenantID': {'StringValue': tenant_id, 'DataType': 'String'}},
                 **args
             )
@@ -137,14 +209,14 @@ class QueueService:
 
             # [FORENSIC] Log producer identity so we can detect cross-environment message theft
             logger.info(
-                f"[QUEUE_PUSH_SUCCESS] id={message.get('id')} sqs_id={sqs_message_id} "
+                f"[QUEUE_PUSH_SUCCESS] id={coerced_message.get('id')} sqs_id={sqs_message_id} "
                 f"queue={queue_type} url={queue_url} tenant={tenant_id} "
                 f"cluster_env={_CLUSTER_ENV} host={_HOSTNAME}"
             )
             logger.info(
-                f"[SQS_MESSAGE_ENQUEUED] id={message.get('id')} sqs_id={sqs_message_id} "
+                f"[SQS_MESSAGE_ENQUEUED] id={coerced_message.get('id')} sqs_id={sqs_message_id} "
                 f"queue={queue_type} physical_url={queue_url} tenant={tenant_id} "
-                f"delay={effective_delay}s type={message.get('task_type', 'unknown')} "
+                f"delay={effective_delay}s type={coerced_message.get('task_type', 'unknown')} "
                 f"cluster_env={_CLUSTER_ENV} host={_HOSTNAME}"
             )
             return True

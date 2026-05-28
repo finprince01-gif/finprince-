@@ -345,8 +345,19 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
     tenant_address_keywords = set()
     if tenant_id:
         try:
-            from core.models import Tenant
-            tenant = Tenant.objects.filter(id=str(tenant_id)).first()
+            from asgiref.sync import async_to_sync, sync_to_async
+            
+            @sync_to_async
+            def get_tenant_threadsafe():
+                from core.models import Tenant
+                return Tenant.objects.filter(id=str(tenant_id)).first()
+                
+            try:
+                tenant = async_to_sync(get_tenant_threadsafe)()
+            except Exception:
+                from core.models import Tenant
+                tenant = Tenant.objects.filter(id=str(tenant_id)).first()
+                
             if tenant:
                 tenant_gstin = (tenant.gstin or "").strip().upper()
                 tenant_name = (tenant.name or "").strip().lower()

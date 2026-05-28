@@ -202,6 +202,7 @@ class AssemblyWorker(BaseWorker):
         # 6. Barrier is ready — acquire finalize lock and proceed
         logger.info(f"[ASSEMBLY_BARRIER_RELEASE] record={record_id} expected_pages={expected_pages} total_received={state['total']} failed={state['failed']}")
         logger.info(f"[BARRIER_TERMINAL_REACHED] record={record_id} correlation_id={correlation_id}")
+        logger.info(f"[BARRIER_COMPLETE] record={record_id}")
 
         if not orchestrator.acquire_finalize_lock(record_id):
             logger.warning(f"[FINALIZE_ALREADY_SENT] record={record_id} — lock already held, skipping duplicate finalize")
