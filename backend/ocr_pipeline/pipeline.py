@@ -1288,30 +1288,31 @@ def trigger_next_fanout(record_id):
     PHASE 10: BOUNDED AI FANOUT GOVERNOR.
     Enqueues the next batch/page of a multi-page record ONLY if 
     the current in-flight count is below the window (MAX_AI_INFLIGHT_PER_RECORD = 5).
-    Uses total_pages_completed as a 'high-water mark' for enqueued pages.
+    Uses active_slots in Redis as the source of truth for adaptive windowing.
     """
     try:
         from ocr_pipeline.models import InvoiceTempOCR, SessionFinalizationState
         from ocr_pipeline.extraction import extract_invoice
         from django.db import transaction
+        from core.redis_orchestrator import orchestrator
+        
+        # 0. Clean stale/timed-out slots first to avoid deadlock
+        record = InvoiceTempOCR.objects.get(id=record_id)
+        orchestrator.clean_stale_slots(str(record_id), session_id=str(record.upload_session_id))
         
         with transaction.atomic():
             barrier = SessionFinalizationState.objects.select_for_update().get(id=str(record_id))
             
-            # [PHASE 11.9: FANOUT_GOVERNOR_HARDENING]
-            # 1. High-water mark check: Don't enqueue beyond expected pages.
+            # Check expected pages
             if barrier.total_pages_completed >= barrier.expected_pages:
                 logger.debug(f"[FANOUT_COMPLETE] record={record_id} reached limit {barrier.expected_pages}")
                 return
 
-            # 2. Sliding Window Calculation
-            # inflight = enqueued_count - completed_count
-            inflight = barrier.total_pages_completed - barrier.ai_completed_pages
+            # Fetch actual inflight count from Redis
+            inflight = orchestrator.get_active_slots_count(str(record_id))
             
-            # [PHASE 11.9] Adaptive Window: Max 5 in-flight per record.
             MAX_WINDOW = 5
             if inflight < MAX_WINDOW:
-                # Determine how many to enqueue to fill the window
                 to_enqueue = MAX_WINDOW - inflight
                 next_start = barrier.total_pages_completed
                 remaining = barrier.expected_pages - next_start
@@ -1322,20 +1323,26 @@ def trigger_next_fanout(record_id):
 
                 logger.debug(f"[FANOUT_FILL] record={record_id} inflight={inflight} filling={batch_size} next={next_start+1}")
                 
-                record = InvoiceTempOCR.objects.get(id=record_id)
                 actual_path = resolve_storage_path(record)
                 
-                # [FIX] MessageFactory MUST receive 'job_id' in payload for task_type=AI_EXTRACTION
-                from ocr_pipeline.models import OCRJob
-                job = OCRJob.objects.filter(upload_session_id=record.upload_session_id).first()
-                job_id = job.id if job else record.upload_session_id
+                from ocr_pipeline.models import OCRTask
+                _ocr_task = OCRTask.objects.filter(result_id=record.id).first()
+                job_id = _ocr_task.job_id if _ocr_task and _ocr_task.job_id else record.upload_session_id
+                logger.debug(f"[FANOUT_JOB_RESOLVED] record={record_id} job_id={job_id} via={'OCRTask' if _ocr_task else 'session_fallback'}")
                 
-                # Enqueue the batch (usually 1 but support multiple)
                 for i in range(batch_size):
                     page_idx = next_start + i
-                    logger.debug(f"[SLIDING_WINDOW_ENQUEUE] record={record_id} page={page_idx + 1}")
+                    page_num = page_idx + 1
+                    
+                    # Try to acquire AI slot atomically in Redis
+                    slot_acquired = orchestrator.acquire_ai_slot(str(record_id), page_num, session_id=str(record.upload_session_id))
+                    
+                    if not slot_acquired:
+                        logger.warning(f"[SLOT_ACQUIRE_FAILED] record={record_id} page={page_num} — failed to acquire slot")
+                        break
                     
                     try:
+                        logger.debug(f"[SLIDING_WINDOW_ENQUEUE] record={record_id} page={page_num}")
                         extract_invoice(
                             None, 
                             record_id=record.id,
@@ -1347,27 +1354,53 @@ def trigger_next_fanout(record_id):
                             start_page=page_idx,
                             limit=1 
                         )
+                        # Redundant success register upon successful call
+                        try:
+                            rec_id_str = str(record_id)
+                            page_num_str = str(page_num)
+                            orchestrator.redis.set(f"assembly:{rec_id_str}:page:{page_num_str}:enqueued", "true", ex=86400)
+                            orchestrator.redis.sadd(f"assembly:{rec_id_str}:enqueued_success_pages", page_num_str)
+                            orchestrator.redis.expire(f"assembly:{rec_id_str}:enqueued_success_pages", 86400)
+                        except Exception as redis_ok_err:
+                            logger.error(f"[REDIS_OK_ERR] {redis_ok_err}")
                     except Exception as e:
-                        logger.error(f"[SLIDING_WINDOW_ENQUEUE_FAIL] record={record_id} page={page_idx + 1} error={e}")
-                        # [FIX] Reconcile failure so barrier does not deadlock
-                        from core.redis_orchestrator import orchestrator
-                        orchestrator.register_page_completion(str(record_id), page_idx + 1, is_failed=True)
-                        # Also increment the high-water mark so it moves on
-                        SessionFinalizationState.objects.filter(id=str(record_id)).update(
-                            total_pages_completed=models.F('total_pages_completed') + 1,
-                            failed_pages=models.F('failed_pages') + 1
-                        )
-                        from ocr_pipeline.models import InvoicePageResult
-                        InvoicePageResult.objects.update_or_create(
-                            record_id=record_id, page_number=page_idx + 1,
-                            defaults={
-                                'session_id': record.upload_session_id,
-                                'is_failed': True,
-                                'canonical_payload': {'status': 'OCR_FAILED', 'error': f"Enqueue Failed: {e}"}
-                            }
-                        )
+                        # Hard assertion: Did SQS push succeed?
+                        already_pushed = False
+                        try:
+                            rec_id_str = str(record_id)
+                            page_num_str = str(page_num)
+                            already_pushed = (
+                                orchestrator.redis.get(f"assembly:{rec_id_str}:page:{page_num_str}:enqueued") == "true"
+                                or orchestrator.redis.sismember(f"assembly:{rec_id_str}:enqueued_success_pages", page_num_str)
+                            )
+                        except Exception as redis_err:
+                            logger.error(f"[REDIS_CHECK_ERR] {redis_err}")
+                        
+                        if already_pushed:
+                            logger.warning(f"[SLIDING_WINDOW_ENQUEUE_BYPASS] record={record_id} page={page_num} caught exception {e} but SQS push was already successful. Bypassing enqueue failure.")
+                        else:
+                            logger.error(f"[SLIDING_WINDOW_ENQUEUE_FAIL] record={record_id} page={page_num} error={e}")
+                            logger.error(f"[BARRIER_FAILED_INCREMENT] record={record_id} page={page_num}")
+                            # Reconcile failure
+                            orchestrator.register_page_completion(str(record_id), page_num, is_failed=True)
+                            orchestrator.release_ai_slot(str(record_id), page_num, session_id=str(record.upload_session_id), release_reason="ENQUEUE_FAIL")
+                            
+                            SessionFinalizationState.objects.filter(id=str(record_id)).update(
+                                total_pages_completed=models.F('total_pages_completed') + 1,
+                                failed_pages=models.F('failed_pages') + 1
+                            )
+                            from ocr_pipeline.models import InvoicePageResult
+                            InvoicePageResult.objects.update_or_create(
+                                record_id=record_id, page_number=page_num,
+                                defaults={
+                                    'session_id': record.upload_session_id,
+                                    'is_failed': True,
+                                    'canonical_payload': {'status': 'OCR_FAILED', 'error': f"Enqueue Failed: {e}"}
+                                }
+                            )
             else:
                 logger.debug(f"[FANOUT_STALLED] record={record_id} window_full={inflight}")
+                logger.info(f"[FANOUT_WINDOW_STATUS] record={record_id} current={inflight}")
     except Exception as e:
         logger.error(f"[FANOUT_GOVERNOR_ERROR] record={record_id}: {e}")
 
@@ -1610,13 +1643,17 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         else:
             # 🔹 STRICT VENDOR VALIDATION (GSTIN + BRANCH)
             from vendors.vendor_validation_logic import validate_vendor
+            logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={record.id} tenant_id={tenant_id} validation_status={record.validation_status}")
+            logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
             val_res = validate_vendor(tenant_id, vendor_name, gstin, branch=branch_name)
+            logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
             
             if val_res['status'] == 'EXISTING_VENDOR':
                 vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
                 if vendor:
                     record.vendor_id = vendor.id
                     record.validation_status = 'FOUND' # Maintain compatibility with existing UI
+                    logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=FOUND vendor_id={vendor.id}")
                     record.save()
                 logger.info(f"[VENDOR_STRICT_MATCH] {vendor.vendor_name if vendor else 'Unknown'}")
             else:
@@ -1650,17 +1687,21 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         if not vendor:
             # Re-check if it's there (duplicate check might have used OCR name, this uses master)
             from vendors.vendor_validation_logic import validate_vendor
+            logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
             val_res = validate_vendor(tenant_id, vendor_name, gstin, branch=branch_name)
+            logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
             
             if val_res['status'] == 'EXISTING_VENDOR':
                 vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
                 if vendor:
                     record.vendor_id = vendor.id
                     record.validation_status = 'FOUND'
+                    logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=FOUND vendor_id={vendor.id}")
                     record.save()
             else:
                 record.status = "EXTRACTED"
                 record.validation_status = "NEED_VENDOR"
+                logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_VENDOR")
                 record.save()
                 return {"status": "NEED_VENDOR"}
 
@@ -1677,141 +1718,196 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             return {"status": "READY"}
 
         # Using the Pipeline 2 logic refined earlier
-        with transaction.atomic():
-            # Double-check inside transaction to avoid race-condition duplicate voucher creation
-            existing_voucher = VoucherPurchaseSupplierDetails.objects.filter(
-                supplier_invoice_no__iexact=invoice_no,
-                gstin__iexact=gstin,
-                branch__iexact=branch_name,
-                vendor_name__iexact=vendor_name,
-                tenant_id=tenant_id
-            ).first()
-            
-            if existing_voucher:
-                logger.warning(f"[RACE_PREVENTED] Voucher already exists for invoice={invoice_no} gstin={gstin}. Skipping creation.")
-                record.status = "EXTRACTED"
-                record.validation_status = "DUPLICATE"
-                record.save()
-                return {"status": "DUPLICATE"}
+        try:
+            with transaction.atomic():
+                # Double-check inside transaction to avoid race-condition duplicate voucher creation
+                existing_voucher = VoucherPurchaseSupplierDetails.objects.filter(
+                    supplier_invoice_no__iexact=invoice_no,
+                    gstin__iexact=gstin,
+                    branch__iexact=branch_name,
+                    vendor_name__iexact=vendor_name,
+                    tenant_id=tenant_id
+                ).first()
+                
+                if existing_voucher:
+                    logger.warning(f"[RACE_PREVENTED] Voucher already exists for invoice={invoice_no} gstin={gstin}. Skipping creation.")
+                    record.status = "EXTRACTED"
+                    record.validation_status = "DUPLICATE"
+                    record.save()
+                    return {"status": "DUPLICATE"}
 
-            branch_record = Branch.objects.filter(id=tenant_id).first()
-            company_gstin = branch_record.gstin if branch_record else None
-            is_interstate = gstin[:2] != company_gstin[:2] if company_gstin and len(gstin)>=2 and len(company_gstin)>=2 else False
-            
-            invoice_date = supplier.get('invoice_date')
-            branch = supplier.get('branch') or 'Main Branch'
-            address = supplier.get('vendor_address') or ''
+                # ── [PURCHASE_SCAN_SAVE_START] ──
+                logger.info(f"[PURCHASE_SCAN_SAVE_START] record_id={record.id} tenant_id={tenant_id} invoice_no={invoice_no}")
 
-            voucher_main = VoucherPurchaseSupplierDetails.objects.create(
-                tenant_id=tenant_id,
-                date=invoice_date or timezone.now().date(),
-                supplier_invoice_no=invoice_no,
-                supplier_invoice_date=invoice_date,
-                vendor_name=vendor_name,
-                vendor_basic_detail=vendor,
-                gstin=gstin,
-                branch=branch,
-                bill_from=address,
-                input_type='Interstate' if is_interstate else 'Intrastate'
-            )
+                branch_record = Branch.objects.filter(id=tenant_id).first()
+                company_gstin = branch_record.gstin if branch_record else None
+                is_interstate = gstin[:2] != company_gstin[:2] if company_gstin and len(gstin)>=2 and len(company_gstin)>=2 else False
+                
+                invoice_date_raw = supplier.get('invoice_date')
+                invoice_date = None
+                if invoice_date_raw:
+                    from datetime import date as _date
+                    if isinstance(invoice_date_raw, _date):
+                        invoice_date = invoice_date_raw
+                    else:
+                        # Try common Indian formats: DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD
+                        from datetime import datetime as _dt
+                        for fmt in ('%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%d-%b-%Y'):
+                            try:
+                                invoice_date = _dt.strptime(str(invoice_date_raw).strip(), fmt).date()
+                                break
+                            except ValueError:
+                                continue
+                if not invoice_date:
+                    invoice_date = timezone.now().date()
 
-            # Map items
-            mapped_items = []
-            for item in items:
-                # Helper to safely convert to decimal
+                branch = supplier.get('branch') or 'Main Branch'
+                address = supplier.get('vendor_address') or ''
+
                 def to_dec(val):
                     try:
-                        if not val or str(val).strip() == "": return 0
-                        # Clean currency symbols and commas
+                        if not val or str(val).strip() == "": return 0.0
                         clean_val = str(val).replace('₹', '').replace(',', '').strip()
                         return float(clean_val)
                     except:
-                        return 0
+                        return 0.0
 
-                mapped_items.append({
-                    "itemCode": "",
-                    "itemName": item.get('description') or "—",
-                    "hsnSac": item.get('hsn_sac') or "",
-                    "qty": to_dec(item.get('quantity')),
-                    "uom": item.get('uom') or "",
-                    "rate": to_dec(item.get('rate')),
-                    "taxableValue": to_dec(item.get('taxable_value') or item.get('amount')),
-                    "cgst": to_dec(item.get('cgst_amount') or item.get('cgst')),
-                    "sgst": to_dec(item.get('sgst_amount') or item.get('sgst')),
-                    "igst": to_dec(item.get('igst_amount') or item.get('igst')),
-                    "invoiceValue": to_dec(item.get('amount') or item.get('line_total'))
-                })
+                total_taxable_val = to_dec(supply.get('total_taxable_value'))
+                total_igst_val = to_dec(supply.get('total_igst'))
+                total_cgst_val = to_dec(supply.get('total_cgst'))
+                total_sgst_val = to_dec(supply.get('total_sgst'))
+                total_cess_val = to_dec(supply.get('total_cess'))
+                total_inv_val = to_dec(supply.get('total_invoice_value'))
 
-            # Create INR supply details (without items field which doesn't exist on this model)
-            VoucherPurchaseSupplyINRDetails.objects.create(
-                tenant_id=tenant_id,
-                supplier_details=voucher_main,
-                description=f"Auto-validated via OCR Pipeline: {record.file_path}"
-            )
+                if total_inv_val == 0.0:
+                    total_inv_val = total_taxable_val + total_igst_val + total_cgst_val + total_sgst_val + total_cess_val
 
-            # Create line items in the correct table
-            from accounting.models_voucher_purchase import VoucherPurchaseItem
-            for m_item in mapped_items:
-                VoucherPurchaseItem.objects.create(
-                    tenant_id=tenant_id,
-                    supplier_details=voucher_main,
-                    item_name=m_item['itemName'],
-                    hsn_sac=m_item['hsnSac'],
-                    quantity=m_item['qty'],
-                    uom=m_item['uom'],
-                    rate=m_item['rate'],
-                    taxable_value=m_item['taxableValue'],
-                    cgst_amount=m_item['cgst'],
-                    sgst_amount=m_item['sgst'],
-                    igst_amount=m_item['igst'],
-                    invoice_value=m_item['invoiceValue'],
-                    item_code="" # To be matched later if needed
-                )
+                # Map items to the format expected by the serializer's supply_inr_details/supply_foreign_details items
+                serializer_items = []
+                for item in items:
+                    tx_val = to_dec(item.get('taxable_value') or item.get('amount'))
+                    cgst = to_dec(item.get('cgst_amount') or item.get('cgst'))
+                    sgst = to_dec(item.get('sgst_amount') or item.get('sgst'))
+                    igst = to_dec(item.get('igst_amount') or item.get('igst'))
+                    cess = to_dec(item.get('cess_amount') or item.get('cess'))
+                    qty = to_dec(item.get('quantity'))
+                    rate = to_dec(item.get('rate'))
+                    inv_val = to_dec(item.get('amount') or item.get('line_total'))
+                    if inv_val == 0.0:
+                        inv_val = tx_val + cgst + sgst + igst + cess
 
-            # Re-fetch total values from supply details if needed
-            total_inv_val = to_dec(supply.get('total_invoice_value'))
-            VoucherPurchaseDueDetails.objects.create(
-                tenant_id=tenant_id,
-                supplier_details=voucher_main,
-                to_pay=total_inv_val,
-                terms=due.get('payment_terms', '')
-            )
+                    serializer_items.append({
+                        "itemCode": item.get('item_code') or "",
+                        "itemName": item.get('description') or "—",
+                        "hsnSac": item.get('hsn_sac') or "",
+                        "qty": qty,
+                        "uom": item.get('uom') or "",
+                        "itemRate": rate,
+                        "taxableValue": tx_val,
+                        "cgst": cgst,
+                        "sgst": sgst,
+                        "igst": igst,
+                        "cess": cess,
+                        "gstRate": to_dec(item.get('gst_rate') or item.get('tax_rate')),
+                        "invoiceValue": inv_val
+                    })
 
-            # Unified Voucher
-            v_num = invoice_no
-            # Check for existing voucher with same ID and party to decide on series suffix
-            if Voucher.objects.filter(voucher_number=v_num, party=vendor_name, tenant_id=tenant_id, type='purchase').exists():
-                 v_num = f"{v_num}-{voucher_main.id}"
-            
-            Voucher.objects.create(
-                tenant_id=tenant_id,
-                type='purchase',
-                date=voucher_main.date,
-                voucher_number=v_num,
-                invoice_no=invoice_no,
-                party=vendor_name,
-                total=total_inv_val,
-                source='ocr_pipeline',
-                reference_id=voucher_main.id,
-                total_taxable_amount=to_dec(supply.get('total_taxable_value')),
-                total_cgst=to_dec(supply.get('total_cgst')),
-                total_sgst=to_dec(supply.get('total_sgst')),
-                total_igst=to_dec(supply.get('total_igst'))
-                # items_data removed as it has no setter
-            )
+                serializer_data = {
+                    'date': invoice_date or timezone.now().date(),
+                    'supplier_invoice_no': invoice_no,
+                    'supplier_invoice_date': invoice_date,
+                    'vendor_id': vendor.id,
+                    'vendor_name': vendor_name,
+                    'gstin': gstin,
+                    'branch': branch,
+                    'bill_from': address,
+                    'input_type': 'Interstate' if is_interstate else 'Intrastate',
+                    'invoice_in_foreign_currency': 'No',
+                    'supply_inr_details': {
+                        'purchase_order_no': '',
+                        'purchase_ledger': 'Purchase Account',
+                        'description': f"Auto-validated via OCR Pipeline: {record.file_path}",
+                        'items': serializer_items
+                    },
+                    'due_details': {
+                        'tds_gst': 0.0,
+                        'tds_it': 0.0,
+                        'advance_paid': 0.0,
+                        'to_pay': total_inv_val,
+                        'posting_note': '',
+                        'terms': due.get('payment_terms', '')
+                    }
+                }
 
-            # 🔹 FINAL STATUS UPDATE
-            record.status = "VOUCHER_CREATED"
-            record.validation_status = "VOUCHER_CREATED"
-            record.vendor_id = vendor.id
-            record.voucher_id = voucher_main.id
-            record.processed = True
-            logger.info(f"Saving record {record.id}: status={record.status}, validation_status={record.validation_status}, vendor_id={record.vendor_id}, voucher_id={record.voucher_id}, processed={record.processed}")
-            # Ensure all split fields (invoice_no, gstin, etc) are persisted
-            record.save()
-            
-            logger.info(f"[FINAL_STATUS] VOUCHER_CREATED id={record.id} voucher={voucher_main.id}")
-            return {"status": "VOUCHER_CREATED", "voucher_id": voucher_main.id}
+                # ── [PURCHASE_SCAN_SAVE_PAYLOAD] ──
+                logger.info(f"[PURCHASE_SCAN_SAVE_PAYLOAD] record_id={record.id} payload={serializer_data}")
+
+                # ── [PURCHASE_VOUCHER_SERVICE_CALL] ──
+                logger.info(f"[PURCHASE_VOUCHER_SERVICE_CALL] Calling VoucherPurchaseSupplierDetailsSerializer for record_id={record.id}")
+
+                from accounting.serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer
+                serializer = VoucherPurchaseSupplierDetailsSerializer(data=serializer_data)
+                serializer.is_valid(raise_exception=True)
+                
+                # Save the voucher utilizing the canonical serializer which runs full posting, syncs inventory and vendor portal
+                voucher_main = serializer.save(tenant_id=tenant_id)
+
+                # ── [PURCHASE_HEADER_INSERT] ──
+                logger.info(f"[PURCHASE_HEADER_INSERT] inserted table='voucher_purchase_supplier_details' row_count=1 tenant_id={tenant_id} voucher_id={voucher_main.id}")
+
+                # ── [PURCHASE_ITEM_INSERT] ──
+                from accounting.models_voucher_purchase import VoucherPurchaseItem
+                item_count = VoucherPurchaseItem.objects.filter(supplier_details=voucher_main).count()
+                logger.info(f"[PURCHASE_ITEM_INSERT] inserted table='voucher_purchase_items' row_count={item_count} tenant_id={tenant_id} voucher_id={voucher_main.id}")
+
+                # Fetch master voucher to obtain generic voucher_id for journal entry linking
+                from accounting.models import Voucher
+                v_master = Voucher.objects.filter(tenant_id=tenant_id, reference_id=voucher_main.id, type='purchase').first()
+                v_master_id = v_master.id if v_master else None
+
+                # ── [LEDGER_POSTING_START] ──
+                logger.info(f"[LEDGER_POSTING_START] ledger posting started for record_id={record.id} voucher_id={voucher_main.id} master_voucher_id={v_master_id}")
+
+                # Verify ledger postings exist
+                from accounting.models import JournalEntry
+                je_count = JournalEntry.objects.filter(tenant_id=tenant_id, voucher_id=v_master_id).count() if v_master_id else 0
+                
+                # ── [LEDGER_POSTING_COMPLETE] ──
+                logger.info(f"[LEDGER_POSTING_COMPLETE] ledger posting completed. inserted rows={je_count} record_id={record.id} voucher_id={voucher_main.id} master_voucher_id={v_master_id}")
+
+                # ── [INVENTORY_POSTING_START] ──
+                logger.info(f"[INVENTORY_POSTING_START] inventory sync started for record_id={record.id} voucher_id={voucher_main.id}")
+
+                # Verify GRN entries
+                from inventory.models import InventoryOperationNewGRN
+                grn_count = InventoryOperationNewGRN.objects.filter(tenant_id=tenant_id, reference_no=invoice_no).count()
+
+                # ── [INVENTORY_POSTING_COMPLETE] ──
+                logger.info(f"[INVENTORY_POSTING_COMPLETE] inventory sync completed. inserted rows={grn_count} record_id={record.id} voucher_id={voucher_main.id}")
+
+                # ── [VOUCHER_TRANSACTION_COMMIT] ──
+                logger.info(f"[VOUCHER_TRANSACTION_COMMIT] full persistence committed successfully for record_id={record.id} voucher_id={voucher_main.id}")
+
+                # 🔹 FINAL STATUS UPDATE
+                record.status = "VOUCHER_CREATED"
+                record.validation_status = "VOUCHER_CREATED"
+                record.vendor_id = vendor.id
+                record.voucher_id = voucher_main.id
+                record.processed = True
+                logger.info(f"Saving record {record.id}: status={record.status}, validation_status={record.validation_status}, vendor_id={record.vendor_id}, voucher_id={record.voucher_id}, processed={record.processed}")
+                # Ensure all split fields (invoice_no, gstin, etc) are persisted
+                record.save()
+                
+                logger.info(f"[FINAL_STATUS] VOUCHER_CREATED id={record.id} voucher={voucher_main.id}")
+                
+                # ── [SUCCESS_RESPONSE_SENT] ──
+                logger.info(f"[SUCCESS_RESPONSE_SENT] success toast response ready for record_id={record.id}")
+
+                return {"status": "VOUCHER_CREATED", "voucher_id": voucher_main.id}
+        except Exception as ex_atomic:
+            logger.error(f"[VOUCHER_TRANSACTION_ROLLBACK] rollback reason={str(ex_atomic)}")
+            logger.error(f"[PARTIAL_SAVE_DETECTED] Partial save detected for record {record.id} tenant_id={tenant_id}")
+            raise ex_atomic
 
     except Exception as e:
         logger.error(f"AUTO-VALIDATION FAILED for record {record.id}: {str(e)}")
