@@ -538,21 +538,21 @@ class PurchaseVendorCreateView(APIView):
             branch=branch
         )
 
-        if val_result['status'] in ['FOUND', 'EXISTING_VENDOR']:
+        if val_result.get('status') in ['FOUND', 'EXISTING_VENDOR']:
             # Rule 1: Exact Duplicate (Name + GSTIN + Branch match)
             # We treat this as "CREATED" to maintain idempotency in the creation flow
             return Response({
                 "status": "CREATED",
-                "vendor_id": val_result['vendor_id'],
-                "message": val_result['message']
+                "vendor_id": val_result.get('vendor_id'),
+                "message": val_result.get('message', 'Vendor already exists')
             }, status=status.HTTP_200_OK)
             
-        elif val_result['status'] == 'GSTIN_CONFLICT':
+        elif val_result.get('status') == 'GSTIN_CONFLICT':
             # Rule 4: GSTIN matches but Name is different
             return Response({
                 "status": "VALIDATION_WARNING",
-                "message": val_result['message'],
-                "vendor_id": val_result['vendor_id']
+                "message": val_result.get('message', 'GSTIN matches but Name is different'),
+                "vendor_id": val_result.get('vendor_id')
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Rule 2 & 3: Allowed to continue (val_result['status'] == 'NOT_FOUND')
@@ -694,10 +694,10 @@ class PurchaseVendorValidateView(APIView):
             state=state
         )
         
-        if result['status'] in ['FOUND', 'EXISTING_VENDOR']:
-            print(f"Found vendor by {result['matched_by']} match: {result['vendor_name']}")
-        elif result['status'] == 'GSTIN_CONFLICT':
-            print(f"GSTIN {gstin} found but name mismatch: {result['message']}")
+        if result.get('status') in ['FOUND', 'EXISTING_VENDOR']:
+            print(f"Found vendor by {result.get('matched_by', 'GSTIN_AND_BRANCH')} match: {result.get('vendor_name', 'Unknown')}")
+        elif result.get('status') == 'GSTIN_CONFLICT':
+            print(f"GSTIN {gstin} found but name mismatch: {result.get('message', 'GSTIN conflict')}")
         else:
             print(f"No match found for Vendor: {vendor_name}, GSTIN: {gstin}")
             

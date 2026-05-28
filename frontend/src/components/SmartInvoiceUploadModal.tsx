@@ -1102,8 +1102,24 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             } else if (res && (res.data !== undefined || res.status === 'PROCESSING')) {
                 // ── Update Progress (Fix #6) ──
                 if (res.progress_percent !== undefined) {
-                    setScanProgress(res.progress_percent);
-                    if (res.progress_percent >= 100) {
+                    const pct = Math.round(res.progress_percent);
+                    setScanProgress(pct);
+                    // ── [SCAN_STATUS_TEXT_FIX] Update scanCurrentFile dynamically based on real progress ──
+                    // Previously stuck at "Queued for AI extraction..." throughout entire polling lifecycle.
+                    if (pct <= 0) {
+                        setScanCurrentFile('Queued for AI extraction…');
+                    } else if (pct < 25) {
+                        setScanCurrentFile(`Processing pages… (${pct}%)`);
+                    } else if (pct < 60) {
+                        setScanCurrentFile(`AI extracting invoice data… (${pct}%)`);
+                    } else if (pct < 90) {
+                        setScanCurrentFile(`Assembling multi-page results… (${pct}%)`);
+                    } else if (pct < 100) {
+                        setScanCurrentFile(`Finalizing extracted data… (${pct}%)`);
+                    } else {
+                        setScanCurrentFile('Almost done — building review…');
+                    }
+                    if (pct >= 100) {
                         if (!stalledAt100Ref.current) stalledAt100Ref.current = Date.now();
                     } else {
                         stalledAt100Ref.current = null;
@@ -1111,32 +1127,17 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 }
 
                 // ── [PHASE 6] DETERMINISTIC HYDRATION BARRIER ──
-                // If the backend reports it's still processing, we ignore partial rows.
+                // Block full review transition while backend is still processing AND data is empty.
+                // BUT: if progress > 0, at least the status text has updated — keep polling.
                 if (res.status === 'PROCESSING' && (!res.data || res.data.length === 0)) {
-                    console.log("[STAGING_FETCH] Session still in flight. Blocking hydration.");
+                    console.log(`[STAGING_FETCH] Session in flight. progress=${res.progress_percent ?? 0}% Blocking hydration, continuing poll.`);
                     return false; // Continue polling
                 }
 
                 rows = res.data || [];
                 pipelineStatus = res.status || 'processing';
 
-                // ── Update Progress (Fix #6) ──
-                if (res.progress_percent !== undefined) {
-                    setScanProgress(res.progress_percent);
-
-                    // ── Stall Escape (Fix #10) ──
-                    if (res.progress_percent >= 100) {
-                        if (!stalledAt100Ref.current) stalledAt100Ref.current = Date.now();
-                        const stallDuration = (Date.now() - stalledAt100Ref.current) / 1000;
-                        if (stallDuration > 10) {
-                            console.warn(`[STALL_ESCAPE] Progress at 100% for ${stallDuration}s. Forcing snapshot check...`);
-                            // We don't need to do anything special here as the next poll will hit the same endpoint,
-                            // but the log confirms we've noticed the stall.
-                        }
-                    } else {
-                        stalledAt100Ref.current = null;
-                    }
-                }
+                // (progress + status text already updated in the block above, before the hydration barrier check)
             } else {
                 console.error("Unexpected API response format:", res);
                 setScanResults([]);
@@ -1197,7 +1198,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     'AI_QUEUED', 'AI_PROCESSING', 'UPLOADING', 'EXTRACTING', 'UPLOADED',
                 ]);
                 const ASYNC_TERMINAL = new Set([
-                    'EXTRACTED', 'FAILED', 'VOUCHER_CREATED', 'OCR_FAILED',
+                    'EXTRACTED', 'FAILED', 'VOUCHER_CREATED', 'OCR_FAILED', 'FINALIZED', 'SUCCESS', 'COMPLETED',
                 ]);
 
                 let vStatus: ValidationStatus = 'PENDING';
@@ -1244,7 +1245,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 // GUARDED: Only convert PENDING→NEEDS_ATTENTION when the record is
                 // genuinely terminal (db_status is a done state), not mid-pipeline.
                 // This prevents premature NEEDS_ATTENTION during async AI processing.
-                if (vStatus === 'PENDING' && r.status === 'SUCCESS' && ASYNC_TERMINAL.has(dbStatus)) {
+                if (vStatus === 'PENDING' && (r.status === 'SUCCESS' || r.status === 'FINALIZED') && ASYNC_TERMINAL.has(dbStatus)) {
                     vStatus = 'NEEDS_ATTENTION';
                 }
 
@@ -1319,15 +1320,18 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             console.log("API count:", rows.length);
             console.log("UI count:", seeded.length);
 
-            // [ISSUE 1 FIX] Transition to review only when the first hydrated row exists
-            const hasHydratedRows = seeded.some(r => r.validationStatus !== 'processing' && r.status !== 'processing');
-            if ((hasHydratedRows || pipelineStatus === 'completed') && isMounted.current) {
+            // [BUG 2 FIX: PROGRESSIVE REVIEW UNLOCK] 
+            // Unlock the review step progressively as soon as records exist in the session,
+            // rather than waiting for complete processing or terminal completion!
+            const lowerStatus = pipelineStatus.toLowerCase();
+            if ((seeded.length > 0 || lowerStatus === 'completed' || lowerStatus === 'finalized' || lowerStatus === 'failed') && isMounted.current) {
+                console.log(`[PURCHASE_SCAN_REVIEW_UNLOCK] progressive unlock: count=${seeded.length} pipelineStatus=${pipelineStatus}`);
                 setStep(prev => prev === 'scanning' ? 'review' : prev);
             }
 
             // ── Stop polling if backend says completed or all rows settled ──
-            if (pipelineStatus === 'completed') {
-                console.log('✅ Backend reported completed — stopping poll.');
+            if (lowerStatus === 'completed' || lowerStatus === 'finalized' || lowerStatus === 'failed') {
+                console.log(`✅ Backend reported ${pipelineStatus} — stopping poll.`);
                 return true; // Signal caller to stop
             }
 
@@ -1526,10 +1530,13 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             const res: any = await httpClient.postFormData('/api/ocr-staging/', formData);
             clearInterval(progressInterval);
 
-            setScanProgress(95);
-            setScanCurrentFile(`Finalizing items...`);
+            setScanCurrentFile(`Queued for AI extraction...`);
 
-            setScanProgress(100);
+            // [PURCHASE_SCAN_PROGRESS_FIX] Do NOT set scanProgress=100 here.
+            // Previously this prematurely set progress to 100 before backend polling started,
+            // causing the bar to jump to 100 then reset to 0 when the backend returned real progress.
+            // Instead, hold at a low value so backend polling drives the progress bar correctly.
+            setScanProgress(5); // Reset to base — backend will drive from here via polling
 
             // Show info about recovered results (excluding those hidden by filter, e.g. hard duplicates)
             const actionableFound = (res.results || []).filter((r: any) =>
@@ -1539,6 +1546,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             if (actionableFound > 0) {
                 showInfo(`✨ ${actionableFound} results loaded instantly from previous scans.`);
             }
+
+            console.log(`[PURCHASE_SCAN_UPLOAD_DONE] session=${uploadSessionId} starting polling for backend progress`);
 
             // MANDATORY: Always fetch from DB after upload. No shortcut.
             // This ensures invoice_ocr_temp is the SINGLE SOURCE OF TRUTH.

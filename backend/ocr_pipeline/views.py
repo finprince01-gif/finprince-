@@ -271,6 +271,7 @@ class CleanOCRStagingView(views.APIView):
         
         # Real-time strict vendor matching gate
         tenant_id = getattr(r, 'tenant_id', None)
+        logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={getattr(r, 'id', None)} tenant_id={tenant_id} validation_status={v_status}")
         if not v_id and tenant_id:
             gstin_val = (getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or norm.get("vendor_gstin") or "")
             if isinstance(gstin_val, str):
@@ -291,7 +292,9 @@ class CleanOCRStagingView(views.APIView):
             if gstin_val:
                 from vendors.vendor_validation_logic import validate_vendor_strict
                 try:
+                    logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} gstin={gstin_val} branch={branch_val}")
                     val_res = validate_vendor_strict(tenant_id, gstin_val, branch_val)
+                    logger.info(f"[VENDOR_VALIDATION_RESULT] id={getattr(r, 'id', None)} result={val_res}")
                     if val_res.get('status') == 'EXISTING_VENDOR':
                         v_id = val_res.get('vendor_id')
                         if v_status in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
@@ -313,17 +316,25 @@ class CleanOCRStagingView(views.APIView):
         is_failed = v_status_record in ['FAILED', 'ERROR']
         
         if not is_finalized and not is_failed:
-             # [FORENSIC] Return placeholder to block premature hydration
-             return {
-                 "processing": True, 
-                 "id": getattr(r, 'id', None),
-                 "file_path": getattr(r, 'file_path', '') or '',
-                 "file_hash": getattr(r, 'file_hash', '') or '',
-                 "invoice": {},
-                 "items": [],
-                 "status": "PROCESSING",
-                 "validationStatus": "PROCESSING"
-             }
+             # Check if we have absolutely no extracted data yet
+             has_extracted_data = False
+             if norm:
+                 useful_keys = [k for k in norm if k not in ['_page_role', 'page_role', 'file_hash', 'file_path', 'session_id', 'tenant_id']]
+                 if useful_keys:
+                     has_extracted_data = True
+
+             if not has_extracted_data:
+                 # [FORENSIC] Return placeholder to block premature hydration only for completely empty records
+                 return {
+                     "processing": True, 
+                     "id": getattr(r, 'id', None),
+                     "file_path": getattr(r, 'file_path', '') or '',
+                     "file_hash": getattr(r, 'file_hash', '') or '',
+                     "invoice": {},
+                     "items": [],
+                     "status": "PROCESSING",
+                     "validationStatus": "PROCESSING"
+                 }
 
         # Determine terminal validation status
         ui_status = v_status or "PENDING"
@@ -419,6 +430,8 @@ class CleanOCRStagingView(views.APIView):
         
         # [PHASE 11.9] FORENSIC HSN HYDRATION LOG
         logger.info(f"[HSN_UI_HYDRATED] inv={inv_no} hsn_sac='{res.get('hsn_sac')}'")
+        logger.info(f"[VENDOR_STATUS_MAPPING] id={getattr(r, 'id', None)} v_status={v_status} v_id={v_id} ui_status={ui_status}")
+        logger.info(f"[FRONTEND_VENDOR_STATUS] id={getattr(r, 'id', None)} vendor_status={res.get('vendor_status')} validationStatus={res.get('validationStatus')}")
         
         res["extracted_data"] = {
                 "sections": sections,
@@ -504,21 +517,54 @@ class CleanOCRStagingView(views.APIView):
                     
                     # [PHASE 11.9] Re-map snapshot rows to ensure UI key consistency
                     for row in raw_rows:
-                        # Create a dummy record object for the mapper
-                        from types import SimpleNamespace
-                        dummy = SimpleNamespace(**{
-                            'id': row.get('id'),
-                            'status': 'FINALIZED',
-                            'processed': True,
-                            'validation_status': 'READY',
-                            'supplier_invoice_no': row.get('invoice_no'),
-                            'gstin': row.get('gstin'),
-                            'irn': row.get('irn'),
-                            'ack_no': row.get('ack_no'),
-                            'ack_date': row.get('ack_date'),
-                            'created_at': row.get('created_at'),
-                            'voucher_type': row.get('voucher_type')
-                        })
+                        # Try to resolve actual database record from InvoiceTempOCR to preserve live edits & valid statuses
+                        inv_no = row.get('invoice_no')
+                        gstin_val = row.get('gstin')
+                        
+                        db_record = None
+                        if session_id:
+                            # Strict match by session, invoice_no and gstin
+                            db_record = InvoiceTempOCR.objects.filter(
+                                upload_session_id=session_id,
+                                supplier_invoice_no=inv_no,
+                                gstin=gstin_val
+                            ).first()
+                            
+                            # Fallback match by session and invoice_no
+                            if not db_record and inv_no:
+                                db_record = InvoiceTempOCR.objects.filter(
+                                    upload_session_id=session_id,
+                                    supplier_invoice_no=inv_no
+                                ).first()
+                        
+                        if not db_record and row.get('id'):
+                            db_record = InvoiceTempOCR.objects.filter(id=row.get('id')).first()
+                            
+                        if db_record:
+                            # Ensure the DB record has tenant_id if it's somehow missing (defensive)
+                            if not getattr(db_record, 'tenant_id', None) and tenant_id:
+                                db_record.tenant_id = tenant_id
+                            dummy = db_record
+                        else:
+                            # Create a dummy record object for the mapper
+                            from types import SimpleNamespace
+                            dummy = SimpleNamespace(**{
+                                'id': row.get('id'),
+                                'tenant_id': tenant_id,
+                                'status': 'FINALIZED',
+                                'processed': True,
+                                'validation_status': row.get('validation_status') or 'NEED_VENDOR',
+                                'vendor_id': row.get('vendor_id'),
+                                'supplier_invoice_no': inv_no,
+                                'gstin': gstin_val,
+                                'irn': row.get('irn'),
+                                'ack_no': row.get('ack_no'),
+                                'ack_date': row.get('ack_date'),
+                                'created_at': row.get('created_at'),
+                                'voucher_type': row.get('voucher_type'),
+                                'branch': row.get('branch')
+                            })
+                            
                         mapped = self._map_record_to_ui_row(dummy, norm_data=row)
                         
                         inv_no = mapped.get('invoice_no', '')
@@ -552,12 +598,80 @@ class CleanOCRStagingView(views.APIView):
                 logger.info(f"[STAGING_QUERY_EMPTY_REASON] Snapshot not found for session_id={session_id}")
 
         # ── 2. REDIS-BACKED ORCHESTRATION STATUS (PHASE 3D) ──
+        # [PROGRESS_PROPAGATION_FIX] Workers write Redis status under session:{record_id},
+        # NOT under session:{upload_session_id}. We must resolve record IDs for this session
+        # and aggregate their Redis statuses to get the real progress.
         if session_id:
             from core.redis_orchestrator import orchestrator
-            redis_status = orchestrator.get_session_status(session_id)
+
+            def _get_aggregated_redis_status_for_session(sess_id):
+                """
+                [FORENSIC_FIX] Aggregate Redis status across all record_ids in this session.
+                Workers write to session:{record_id}. The upload_session_id key is never written.
+                """
+                try:
+                    record_ids_qs = InvoiceTempOCR.objects.filter(
+                        upload_session_id=sess_id
+                    ).values_list('id', flat=True)
+                    record_ids = [str(rid) for rid in record_ids_qs]
+                    logger.info(
+                        f"[PROGRESS_AGGREGATION] session={sess_id} "
+                        f"resolving record_ids={record_ids} for Redis aggregation"
+                    )
+                    if not record_ids:
+                        # No records yet — session may still be bootstrapping
+                        logger.info(f"[PROGRESS_AGGREGATION] session={sess_id} no record_ids found in DB yet")
+                        return None
+
+                    statuses = []
+                    progresses = []
+                    for rid in record_ids:
+                        rs = orchestrator.get_session_status(rid)
+                        st = rs.get('status', 'UNKNOWN') if rs else 'UNKNOWN'
+                        prog = float(rs.get('progress', 0.0)) if rs else 0.0
+                        statuses.append(st)
+                        progresses.append(prog)
+                        logger.info(
+                            f"[PROGRESS_RECORD_STATUS] session={sess_id} "
+                            f"record_id={rid} redis_status={st} redis_progress={prog:.1f}%"
+                        )
+
+                    # Aggregate: use the MAX progress, dominant status
+                    agg_progress = max(progresses) if progresses else 0.0
+                    TERMINAL_STATES = {"HYDRATION_READY", "FINALIZED", "COMPLETED", "FAILED", "ERROR", "PARTIAL_FAILED"}
+                    PROCESSING_STATES = {"AI_PROCESSING", "ASSEMBLY_PENDING", "ASSEMBLY_COMPLETE",
+                                         "PROCESSING", "INGESTION_COMPLETE", "INGESTION_STARTED",
+                                         "INGESTING", "INGESTED", "FINALIZING", "SNAPSHOTTING"}
+                    terminal_statuses = [s for s in statuses if s in TERMINAL_STATES]
+                    processing_statuses = [s for s in statuses if s in PROCESSING_STATES]
+
+                    if terminal_statuses:
+                        agg_status = terminal_statuses[0]  # FINALIZED/FAILED take priority
+                    elif processing_statuses:
+                        agg_status = processing_statuses[0]
+                    else:
+                        agg_status = statuses[0] if statuses else 'UNKNOWN'
+
+                    logger.info(
+                        f"[PROGRESS_AGGREGATION_RESULT] session={sess_id} "
+                        f"agg_status={agg_status} agg_progress={agg_progress:.1f}% "
+                        f"all_statuses={statuses} all_progresses={progresses}"
+                    )
+                    return {"status": agg_status, "progress": agg_progress}
+                except Exception as _agg_err:
+                    logger.warning(f"[PROGRESS_AGGREGATION_ERROR] session={sess_id} error={_agg_err}")
+                    return None
+
+            redis_status = _get_aggregated_redis_status_for_session(session_id)
             if redis_status:
                 redis_st = redis_status.get('status', '')
-                if redis_st in ("PROCESSING", "INGESTING", "INGESTED"):
+                # Normalize legacy/raw states to the canonical set checked below
+                _PROCESSING_LIKE = {
+                    "PROCESSING", "INGESTING", "INGESTED", "AI_PROCESSING",
+                    "ASSEMBLY_PENDING", "ASSEMBLY_COMPLETE", "INGESTION_COMPLETE",
+                    "INGESTION_STARTED", "FINALIZING", "SNAPSHOTTING"
+                }
+                if redis_st in _PROCESSING_LIKE:
                     # Check for stale state regression
                     has_snapshots = False
                     try:
@@ -565,24 +679,39 @@ class CleanOCRStagingView(views.APIView):
                         has_snapshots = FinalizedSnapshot.objects.filter(session_id=session_id).exists()
                     except:
                         pass
-                        
+
                     if has_snapshots:
                         logger.warning(f"[STALE_STATE_DETECTED] session={session_id} redis={redis_st} but snapshots exist! Overriding.")
                         # Fall through to snapshot hydration
                     else:
-                        logger.info(f"[STAGING_QUERY_RESULT_COUNT] count=0 (Redis status={redis_st})")
-                        logger.info(f"[STAGING_QUERY_EMPTY_REASON] Redis state is still processing: {redis_st}.")
-                        
-                        # [FIX] Never return 100% progress if we are still returning PROCESSING.
-                        # This prevents the UI from sticking at 100% while materialization finishes.
+                        # [PROGRESSIVE_HYDRATION_FIX] Query staging records progressively
+                        records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
+                        if not records.exists():
+                            records = InvoiceTempOCR.objects.filter(upload_session_id=session_id).order_by('created_at', 'id')
+
+                        data = []
+                        for r in records:
+                            mapped = self._map_record_to_ui_row(r)
+                            norm = getattr(r, 'extracted_data', {}) or {}
+                            page_role = norm.get('_page_role', '') or norm.get('page_role', '')
+                            if page_role == 'PAGE_ROLE_CONTINUATION':
+                                continue
+                            data.append(mapped)
+
                         display_progress = min(99.0, float(redis_status.get('progress', 0.0)))
+                        logger.info(
+                            f"[PROGRESS_SERIALIZER] session={session_id} "
+                            f"redis_progress={redis_status.get('progress', 0.0):.1f}% "
+                            f"display_progress={display_progress:.1f}% source=redis_aggregated "
+                            f"records_count={len(data)}"
+                        )
                         return Response({
                             "status": "PROCESSING",
-                            "data": [],
+                            "data": data,
                             "progress_percent": display_progress,
-                            "source": "redis"
+                            "source": "redis_aggregated"
                         })
-                elif redis_st in ("FINALIZED", "PARTIAL_FAILED", "FAILED", "EXPORTED"):
+                elif redis_st in ("HYDRATION_READY", "FINALIZED", "PARTIAL_FAILED", "FAILED", "EXPORTED", "COMPLETED"):
                     # [FIX] Terminal status written by finalize_worker must break polling immediately.
                     # Previously only PROCESSING was handled — FINALIZED was silently ignored.
                     logger.info(f"[STAGING_REDIS_TERMINAL] session={session_id} status={redis_st} — proceeding to snapshot/DB hydration")
@@ -618,10 +747,66 @@ class CleanOCRStagingView(views.APIView):
                 empty_reason = "No staging records exist for this session yet." if records.count() == 0 else "Staging records are still in progress/processing."
                 logger.info(f"[STAGING_QUERY_RESULT_COUNT] count=0 (is_processing={is_processing} count={records.count()})")
                 logger.info(f"[STAGING_QUERY_EMPTY_REASON] {empty_reason}")
+
+                # [PURCHASE_SCAN_PROGRESS_FIX] Read real Redis progress instead of hardcoding 0.
+                # Previously this barrier always returned progress_percent=0, disconnecting
+                # the frontend from actual backend extraction progress (18.75%, 25%, etc.).
+                barrier_progress = 0.0
+                try:
+                    # [PROGRESS_PROPAGATION_FIX] Workers write to session:{record_id}, NOT session:{session_id}.
+                    # Re-use the aggregated helper defined above in the Redis section.
+                    # If the helper ran and gave us a result, use it; otherwise re-run.
+                    _agg = None
+                    try:
+                        _agg = _get_aggregated_redis_status_for_session(session_id)
+                    except NameError:
+                        # Helper not in scope (early return path skipped that block)
+                        from core.redis_orchestrator import orchestrator as _orch
+                        _rec_ids = list(
+                            InvoiceTempOCR.objects.filter(upload_session_id=session_id)
+                            .values_list('id', flat=True)
+                        )
+                        _progresses = []
+                        for _rid in _rec_ids:
+                            _rs = _orch.get_session_status(str(_rid))
+                            if _rs:
+                                _progresses.append(float(_rs.get('progress', 0.0)))
+                        if _progresses:
+                            _agg = {"progress": max(_progresses)}
+
+                    if _agg:
+                        raw_progress = _agg.get('progress', 0.0)
+                        barrier_progress = min(99.0, float(raw_progress or 0.0))
+                        logger.info(
+                            f"[PURCHASE_SCAN_BARRIER_PROGRESS] session={session_id} "
+                            f"redis_progress={raw_progress} barrier_progress={barrier_progress} "
+                            f"source=record_id_aggregated"
+                        )
+                    else:
+                        logger.info(f"[PURCHASE_SCAN_BARRIER_PROGRESS] session={session_id} no Redis data found, using 0")
+                except Exception as _prog_err:
+                    logger.warning(f"[PURCHASE_SCAN_BARRIER_PROGRESS_ERROR] session={session_id} err={_prog_err}")
+
+                logger.info(
+                    f"[PROGRESS_SERIALIZER] session={session_id} "
+                    f"barrier_progress={barrier_progress:.1f}% source=barrier_gate"
+                )
+
+                # [PROGRESSIVE_HYDRATION_FIX] Query staging records progressively
+                data = []
+                for r in records:
+                    mapped = self._map_record_to_ui_row(r)
+                    norm = getattr(r, 'extracted_data', {}) or {}
+                    page_role = norm.get('_page_role', '') or norm.get('page_role', '')
+                    if page_role == 'PAGE_ROLE_CONTINUATION':
+                        continue
+                    data.append(mapped)
+
                 return Response({
                     "status": "PROCESSING",
-                    "data": [],
-                    "progress_percent": 0
+                    "data": data,
+                    "progress_percent": barrier_progress,
+                    "source": "barrier"
                 })
                 
 
@@ -753,9 +938,32 @@ class CleanOCRStagingView(views.APIView):
         if not file_hash:
             return Response({'error': 'Id or file_hash required'}, status=400)
             
-        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).first()
-        if not record:
-            record = InvoiceTempOCR.objects.filter(id=int(file_hash) if str(file_hash).isdigit() else None).first()
+        record = None
+        if str(file_hash).startswith('snap_'):
+            session_id = str(file_hash).replace('snap_', '')
+            updated_data = request.data.get('extracted_data', {})
+            sections = updated_data.get('sections', {})
+            inv_no = (
+                sections.get('supplier_details', {}).get('supplier_invoice_no') or 
+                updated_data.get('supplier_invoice_no') or
+                updated_data.get('invoice_no')
+            )
+            gstin_val = (
+                sections.get('supplier_details', {}).get('gstin') or 
+                updated_data.get('gstin')
+            )
+            query = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=request.user.branch_id)
+            if inv_no:
+                query = query.filter(supplier_invoice_no__iexact=inv_no)
+            if gstin_val:
+                query = query.filter(gstin__iexact=gstin_val)
+            record = query.first()
+            if not record:
+                record = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=request.user.branch_id).first()
+        else:
+            record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).first()
+            if not record:
+                record = InvoiceTempOCR.objects.filter(id=int(file_hash) if str(file_hash).isdigit() else None).first()
             
         if not record:
             return Response({'error': 'File not found'}, status=404)
@@ -1155,40 +1363,63 @@ class OCRStagingFinalizeView(views.APIView):
         tenant_id = request.user.branch_id
         upload_session_id = request.data.get('upload_session_id')
         
-        # 1. Enqueue Finalization Task via Message Factory
-        from vouchers.message_factory import message_factory
+        logger.info(f"[FINALIZE_START] session={upload_session_id} tenant={tenant_id}")
         
-        finalize_payload = {
-            "upload_session_id": upload_session_id,
-            "user_id": request.user.id
+        # ── Step 1: Find processable records (READY/Matched Only - Exclude Duplicates) ──
+        # We include ANY record that has a vendor_id, even if status is NEED_VENDOR (syncing issue)
+        query = InvoiceTempOCR.objects.filter(
+            tenant_id=tenant_id,
+            processed=False
+        ).filter(
+            Q(validation_status__in=['READY', 'FOUND', 'RESOLVED', 'MATCHED_VENDOR', 'SUCCESS', 'NEEDS_ATTENTION', 'LOW_CONFIDENCE', 'NEED_VENDOR']) |
+            Q(vendor_id__isnull=False)
+        ).exclude(validation_status__in=['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'])
+        if upload_session_id:
+            query = query.filter(upload_session_id=upload_session_id)
+            
+        records_to_process = query.filter(Q(is_primary=True) | Q(group_id__isnull=True))
+        
+        summary = {
+            'success': True,
+            'total': InvoiceTempOCR.objects.filter(tenant_id=tenant_id, upload_session_id=upload_session_id).count() if upload_session_id else 0,
+            'created': 0,
+            'skipped': 0,
+            'failed': 0,
+            'errors': []
         }
         
-        msg = message_factory.create_message(
-            task_type="FINALIZE",
-            tenant_id=tenant_id,
-            session_id=upload_session_id,
-            payload=finalize_payload
-        )
+        if not records_to_process.exists():
+            # Check if all records are already processed or if there are no records at all
+            total_count = InvoiceTempOCR.objects.filter(tenant_id=tenant_id, upload_session_id=upload_session_id).count() if upload_session_id else 0
+            if total_count > 0:
+                # Already processed or skipped
+                processed_count = InvoiceTempOCR.objects.filter(tenant_id=tenant_id, upload_session_id=upload_session_id, processed=True).count() if upload_session_id else 0
+                summary['created'] = processed_count
+                return Response(summary)
+            return Response({'error': 'No processable invoices found in staging.'}, status=400)
+
+        from .pipeline import validate_and_process
         
-        from copy import deepcopy
-        msg_copy = deepcopy(msg)
-        
-        try:
-            queue_service.push(msg_copy, queue_type='finalize')
-            logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=finalize msg_id={msg_copy['id']}")
-            logger.info(f"[DOWNSTREAM_ENQUEUE_SUCCESS] target_queue=finalize msg_id={msg_copy['id']}")
-        except Exception as e:
-            logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=finalize error={e}")
-            logger.error(f"[DOWNSTREAM_ENQUEUE_FAILED] target_queue=finalize error={e}")
-            raise
-        
-        logger.info(f"[FINALIZE_ENQUEUED] session={upload_session_id} tenant={tenant_id}")
-        
-        return Response({
-            "success": True,
-            "status": "QUEUED",
-            "message": "Bulk finalization started in background. Monitor SSE for completion."
-        }, status=status.HTTP_202_ACCEPTED)
+        for record in records_to_process:
+            if record.processed:
+                continue
+                
+            try:
+                res = validate_and_process(record, auto_save=True)
+                if res.get('status') == 'VOUCHER_CREATED':
+                    summary['created'] += 1
+                elif res.get('status') in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
+                    summary['skipped'] += 1
+                else:
+                    summary['failed'] += 1
+                    summary['errors'].append({'file': record.file_path, 'error': res.get('validation_message') or "Finalization failed"})
+            except Exception as e:
+                logger.error(f"[FINALIZE_RECORD_FAILED] record={record.id} error={e}", exc_info=True)
+                summary['failed'] += 1
+                summary['errors'].append({'file': record.file_path, 'error': str(e)})
+
+        logger.info(f"[FINALIZE_SUCCESS] session={upload_session_id} created={summary['created']} skipped={summary['skipped']} failed={summary['failed']}")
+        return Response(summary)
 
 class OCRStagingCancelView(views.APIView):
     """
@@ -1212,65 +1443,14 @@ class OCRStagingCancelView(views.APIView):
         orchestrator.update_session_status(session_id, "CANCELLED", progress=0.0, extra_data={"hydration_ready": True, "fatal_error_verified": True})
         
         # 2. Update DB Job state if exists
-        OCRJob.objects.filter(upload_session_id=session_id).update(status='CANCELLED')
+        from ocr_pipeline.models import OCRTask
+        job_ids = OCRTask.objects.filter(result__upload_session_id=session_id).values_list('job_id', flat=True).distinct()
+        OCRJob.objects.filter(id__in=job_ids).update(status='CANCELLED')
         
         # 3. Mark staging records cancelled
         InvoiceTempOCR.objects.filter(upload_session_id=session_id).update(status='CANCELLED')
         
         return Response({"success": True, "message": "Session terminally cancelled."})
-
-        summary = {
-            'total': len(all_session_records), 
-            'created': created_count,
-            'skipped': skipped_count,
-            'failed': failed_count,
-            'errors': []
-        }
-        
-        if not records_to_process and not all_session_records:
-            return Response({'error': 'No processable invoices found in staging.'}, status=400)
-
-        # ΓöÇΓöÇ Step 3: Progressive Processing (Grouped for Multi-Page) ΓöÇΓöÇ
-        # We process ONLY primary records, but fetch all group members to pass to the merging pipeline
-        groups = {}
-        processed_group_ids = set()
-
-        # Collect all primary records and standalone records
-        primaries = records_to_process.filter(Q(is_primary=True) | Q(group_id__isnull=True))
-
-        for primary in primaries:
-            if primary.group_id:
-                # Fetch all members of this group in order
-                group_members = list(InvoiceTempOCR.objects.filter(
-                    group_id=primary.group_id, 
-                    tenant_id=tenant_id
-                ).order_by('created_at', 'id'))
-                key = primary.group_id
-            else:
-                group_members = [primary]
-                key = f"UNGROUPED_{primary.id}"
-            
-            groups[key] = group_members
-
-        from .pipeline import finalize_merged_records
-        for key, group_records in groups.items():
-            # Check if any record in group is already processed (safety)
-            if any(r.processed for r in group_records):
-                continue
-                
-            res = finalize_merged_records(group_records, auto_save=True)
-            
-            if res.get('status') == 'VOUCHER_CREATED':
-                summary['created'] += 1
-            elif res.get('status') in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
-                summary['skipped'] += 1
-            else:
-                summary['failed'] += 1
-                summary['errors'].append({'key': key, 'error': res.get('error')})
-
-        summary['success'] = True
-        return Response(summary)
-
 class OCRStagingRescanView(views.APIView):
     """
     Re-trigger OCR extraction for an existing staging record.

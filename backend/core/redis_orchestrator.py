@@ -86,22 +86,40 @@ class RedisOrchestrator:
             with self.redis.lock(lock_key, timeout=10):
                 logger.info(f"[BARRIER_LOCK_ACQUIRED] record={record_id}")
                 
-                # 1. CROSS-SET DUPLICATE DETECTION
-                # A page must affect the barrier state EXACTLY once.
+                # 1. RETRY-AWARE STATE MACHINE TRANSITION & DUPLICATE DETECTION
                 already_completed = self.redis.sismember(completed_key, page_number)
                 already_failed = self.redis.sismember(failed_key, page_number)
                 
-                if already_completed or already_failed:
-                    logger.warning(f"[BARRIER_DUPLICATE_REJECTED] record={record_id} page={page_number} (already_{'completed' if already_completed else 'failed'})")
-                    return False
-                
-                # 2. APPLY ATOMIC COUNTER
                 if is_failed:
+                    # SUCCESS -> FAILED is FORBIDDEN
+                    if already_completed:
+                        logger.warning(f"[BARRIER_REGRESSION_REJECTED] record={record_id} page={page_number} tried to mark FAILED but page is already SUCCESS.")
+                        return False
+                    # FAILED -> FAILED is idempotent ignore
+                    if already_failed:
+                        logger.info(f"[BARRIER_IDEMPOTENT_IGNORE] record={record_id} page={page_number} already FAILED.")
+                        return True
+                    
+                    # PENDING -> FAILED
                     self.redis.sadd(failed_key, page_number)
                     logger.info(f"[BARRIER_FAILED_INCREMENT] record={record_id} page={page_number}")
                 else:
-                    self.redis.sadd(completed_key, page_number)
-                    logger.info(f"[BARRIER_SUCCESS_INCREMENT] record={record_id} page={page_number}")
+                    # SUCCESS -> SUCCESS is idempotent ignore
+                    if already_completed:
+                        logger.info(f"[BARRIER_IDEMPOTENT_IGNORE] record={record_id} page={page_number} already SUCCESS.")
+                        return True
+                    
+                    # FAILED -> SUCCESS (Recovery transition allowed!)
+                    if already_failed:
+                        logger.info(f"[BARRIER_RECOVERY_APPLIED] record={record_id} page={page_number} transition FAILED -> SUCCESS")
+                        logger.info(f"[FAILED_PAGE_RECOVERED] record={record_id} page={page_number}")
+                        # Atomically remove from failed set and add to completed set
+                        self.redis.srem(failed_key, page_number)
+                        self.redis.sadd(completed_key, page_number)
+                    else:
+                        # PENDING -> SUCCESS
+                        self.redis.sadd(completed_key, page_number)
+                        logger.info(f"[BARRIER_SUCCESS_INCREMENT] record={record_id} page={page_number}")
                 
                 logger.info(f"[BARRIER_COUNTER_APPLIED] record={record_id} page={page_number} status={'FAILED' if is_failed else 'SUCCESS'}")
                 
@@ -124,12 +142,21 @@ class RedisOrchestrator:
         completed_key = f"{session_key}:completed_pages"
         failed_key = f"{session_key}:failed_pages"
         
-        completed_count = self.redis.scard(completed_key)
-        failed_count = self.redis.scard(failed_key)
-        total_ready = completed_count + failed_count
+        completed_set = self.redis.smembers(completed_key)
+        failed_set = self.redis.smembers(failed_key)
+        
+        if not completed_set: completed_set = set()
+        if not failed_set: failed_set = set()
+        
+        # Unique terminal page accounting via union
+        terminal_pages = set(completed_set).union(set(failed_set))
+        total_ready = len(terminal_pages)
+        completed_count = len(completed_set)
+        failed_count = len(failed_set)
         
         # [PHASE 11.9] Forensic Snapshot
         logger.info(f"[BARRIER_TERMINAL_PROGRESS] record={record_id} terminal={total_ready} expected={expected_pages} success={completed_count} failed={failed_count}")
+        logger.info(f"[BARRIER_PROGRESS] record={record_id} progress={total_ready}/{expected_pages}")
         
         # Sanity Check for Corruption
         if total_ready > expected_pages:
@@ -148,6 +175,7 @@ class RedisOrchestrator:
         if is_ready:
             logger.info(f"[BARRIER_READY] record={record_id} state={state}")
             logger.info(f"[BARRIER_COMPLETED] record={record_id} state={state}")
+            logger.info(f"[BARRIER_COMPLETE] record={record_id}")
         else:
             logger.info(f"[BARRIER_INCOMPLETE] record={record_id} progress={total_ready}/{expected_pages}")
             updated_at_str = self.redis.hget(session_key, "updated_at")
@@ -161,8 +189,95 @@ class RedisOrchestrator:
                         missing_pages = [p for p in range(1, expected_pages + 1) if p not in received_pages]
                         logger.error(f"[BARRIER_TIMEOUT] record={record_id} missing_pages={missing_pages}")
                 except: pass
-                
+        
         return state
+                
+    def get_active_slots_count(self, record_id: str) -> int:
+        """Returns the number of active slots for a given record."""
+        slot_key = f"assembly:{record_id}:active_slots"
+        try:
+            return self.redis.hlen(slot_key) or 0
+        except Exception as e:
+            logger.error(f"[SLOT_COUNT_ERR] record={record_id} error={e}")
+            return 0
+
+    def clean_stale_slots(self, record_id: str, session_id: str = "unknown"):
+        """Watchdog: releases slots active for > 120 seconds and updates barrier."""
+        slot_key = f"assembly:{record_id}:active_slots"
+        try:
+            now = time.time()
+            active_slots = self.redis.hgetall(slot_key) or {}
+            for page_str, ts_str in active_slots.items():
+                try:
+                    # Decode field and value if bytes
+                    p_str = page_str.decode('utf-8') if isinstance(page_str, bytes) else str(page_str)
+                    t_str = ts_str.decode('utf-8') if isinstance(ts_str, bytes) else str(ts_str)
+                    ts = float(t_str)
+                    page_num = int(p_str)
+                    
+                    if now - ts > 120:
+                        logger.warning(f"[WINDOW_LEAK_DETECTED] record={record_id} page={page_num} exceeded 120s timeout. Watchdog cleanup triggered.")
+                        self.release_ai_slot(record_id, page_num, session_id=session_id, release_reason="WATCHDOG_TIMEOUT")
+                        
+                        # Mark page terminally failed in barrier
+                        self.register_page_completion(record_id, page_num, is_failed=True)
+                except Exception as inner_ex:
+                    logger.error(f"[WATCHDOG_PAGE_CLEAN_ERR] page={page_str} error={inner_ex}")
+        except Exception as e:
+            logger.error(f"[WATCHDOG_CLEAN_ERR] record={record_id} error={e}")
+
+    def acquire_ai_slot(self, record_id: str, page_number: int, session_id: str = "unknown") -> bool:
+        """Atomically acquires an AI slot for a page."""
+        slot_key = f"assembly:{record_id}:active_slots"
+        lock_key = f"lock:slot:{record_id}"
+        MAX_WINDOW = 5
+        
+        try:
+            # 1. Stale slots check
+            self.clean_stale_slots(record_id, session_id=session_id)
+            
+            with self.redis.lock(lock_key, timeout=5):
+                active_count = self.redis.hlen(slot_key) or 0
+                if active_count >= MAX_WINDOW:
+                    logger.debug(f"[FANOUT_WINDOW_STATUS] record={record_id} current={active_count} (MAX_WINDOW={MAX_WINDOW}) — slot acquisition denied")
+                    return False
+                
+                # Acquire slot
+                self.redis.hset(slot_key, str(page_number), str(time.time()))
+                self.redis.expire(slot_key, 86400)
+                
+                new_count = self.redis.hlen(slot_key) or 0
+                logger.info(f"[SLOT_ACQUIRED] record_id={record_id} page_number={page_number} session_id={session_id} current_window_count={new_count} worker_role=AI")
+                logger.info(f"[WINDOW_COUNT] record={record_id} count={new_count}")
+                logger.info(f"[FANOUT_WINDOW_STATUS] record={record_id} current={new_count}")
+                return True
+        except Exception as e:
+            logger.error(f"[SLOT_ACQUIRED_ERR] record={record_id} page={page_number} error={e}")
+            return False
+
+    def release_ai_slot(self, record_id: str, page_number: int, session_id: str = "unknown", release_reason: str = "COMPLETED") -> bool:
+        """Atomically releases an AI slot for a page."""
+        slot_key = f"assembly:{record_id}:active_slots"
+        lock_key = f"lock:slot:{record_id}"
+        
+        try:
+            with self.redis.lock(lock_key, timeout=5):
+                # Check if it was active
+                existed = self.redis.hexists(slot_key, str(page_number))
+                if existed:
+                    self.redis.hdel(slot_key, str(page_number))
+                    new_count = self.redis.hlen(slot_key) or 0
+                    logger.info(f"[SLOT_RELEASED] record_id={record_id} page_number={page_number} session_id={session_id} current_window_count={new_count} worker_role=AI")
+                    logger.info(f"[SLOT_RELEASE_REASON] record={record_id} page={page_number} reason={release_reason}")
+                    logger.info(f"[WINDOW_COUNT] record={record_id} count={new_count}")
+                    logger.info(f"[FANOUT_WINDOW_STATUS] record={record_id} current={new_count}")
+                    return True
+                else:
+                    logger.debug(f"[SLOT_RELEASE_SKIP] record={record_id} page={page_number} — not in active slots")
+                    return False
+        except Exception as e:
+            logger.error(f"[SLOT_RELEASE_ERR] record={record_id} page={page_number} error={e}")
+            return False
 
     # ── STEP 3B: REDIS FINALIZATION LOCK ──
     def acquire_finalize_lock(self, record_id: str, expiry_ms: int = 30000) -> bool:
@@ -208,6 +323,16 @@ class RedisOrchestrator:
             current_status = self.redis.hget(status_key, "status")
             if current_status:
                 current_status = current_status.upper()
+
+            current_progress = self.redis.hget(status_key, "progress")
+            current_prog_float = 0.0
+            if current_progress:
+                try:
+                    current_prog_float = float(current_progress)
+                except ValueError:
+                    pass
+
+            effective_progress = max(progress, current_prog_float)
 
             # 1. State Normalization
             STATE_NORMALIZATION = {
@@ -289,7 +414,7 @@ class RedisOrchestrator:
             logger.info(f"[REDIS_STATE_WRITE] record={record_id} status={target_status}")
             try:
                 self.redis.hset(status_key, "status", target_status)
-                self.redis.hset(status_key, "progress", progress)
+                self.redis.hset(status_key, "progress", effective_progress)
                 self.redis.hset(status_key, "updated_at", time.time())
                 if extra_data:
                     for k, v in extra_data.items():
@@ -302,7 +427,7 @@ class RedisOrchestrator:
                 logger.error(f"[REDIS_STATE_EXCEPTION] record={record_id} status={target_status} error={e}")
                 raise
 
-            logger.info(f"[STATUS_SYNC_OK] record={record_id} status={target_status} progress={progress}%")
+            logger.info(f"[STATUS_SYNC_OK] record={record_id} status={target_status} progress={effective_progress}%")
 
         self._safe_exec(_update)
 

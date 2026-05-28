@@ -418,7 +418,35 @@ class AIServiceProxy:
             
             from core.sqs import queue_service
             try:
-                queue_service.push(msg_copy, queue_type='ai', delay_seconds=delay_seconds)
+                pushed = queue_service.push(msg_copy, queue_type='ai', delay_seconds=delay_seconds)
+                if not pushed:
+                    raise RuntimeError(f"[SQS_PUSH_FAILED] push() returned False for msg_id={msg_copy['id']} record={record_id}")
+                
+                # Mark as successfully enqueued in Redis to prevent enqueue_fail execution
+                if record_id and record_id != 'unknown':
+                    rec_id_str = str(record_id)
+                    page_nums = []
+                    single_page = request_data.get('page_number') or (metadata.get('page_index') if metadata else None)
+                    if single_page is not None:
+                        page_nums.append(str(single_page))
+                    
+                    if 'page_index' in request_data and request_data['page_index'] is not None:
+                        page_nums.append(str(request_data['page_index']))
+                    
+                    if 'batch_indices' in request_data and request_data['batch_indices']:
+                        page_nums.extend([str(idx + 1) for idx in request_data['batch_indices']])
+                    
+                    # Deduplicate
+                    seen = set()
+                    page_nums = [x for x in page_nums if not (x in seen or seen.add(x))]
+                    
+                    if page_nums:
+                        from core.redis_orchestrator import orchestrator
+                        for p_num in page_nums:
+                            orchestrator.redis.set(f"assembly:{rec_id_str}:page:{p_num}:enqueued", "true", ex=86400)
+                            orchestrator.redis.sadd(f"assembly:{rec_id_str}:enqueued_success_pages", p_num)
+                        orchestrator.redis.expire(f"assembly:{rec_id_str}:enqueued_success_pages", 86400)
+                
                 logger.info(f"[QUEUE_FORWARD_SUCCESS] target_queue=ai msg_id={msg_copy['id']} record={record_id} job={job_id}")
             except Exception as e:
                 logger.error(f"[QUEUE_FORWARD_FAILURE] target_queue=ai error={e}")

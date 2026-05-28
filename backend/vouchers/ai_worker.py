@@ -159,6 +159,13 @@ class AIWorker(BaseWorker):
             if already_processed:
                 logger.info(f"[IDEMPOTENCY_SKIP] record={record_id} page={page_idx} already successfully processed. Forwarding to assembly to prevent barrier deadlock.")
                 
+                # Release slot for idempotency skipped page
+                from core.redis_orchestrator import orchestrator
+                try:
+                    orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="IDEMPOTENCY_SKIP")
+                except Exception as rel_err:
+                    logger.error(f"[SLOT_RELEASE_IDEMPOTENCY_FAIL] record={record_id} page={page_idx} error={rel_err}")
+
                 # We MUST push to assembly queue so the barrier state advances
                 from .message_factory import message_factory
                 from core.sqs import queue_service
@@ -229,8 +236,10 @@ class AIWorker(BaseWorker):
                                 None,
                                 lambda rr=raw_reply: _repair_json(rr, record_id=record_id, page=page_idx)
                             )
-                            parsed = json.loads(repaired_text)
-                            canonical_payload = get_canonical_export_record(parsed, tenant_id=tenant_id)
+                            canonical_payload = await loop.run_in_executor(
+                                self.executor,
+                                lambda: get_canonical_export_record(parsed, tenant_id=tenant_id)
+                            )
 
                             if self._is_dto_valid(canonical_payload):
                                 text_str = json.dumps(canonical_payload)
@@ -311,6 +320,10 @@ class AIWorker(BaseWorker):
                             res_obj.counted_in_barrier = True
                             res_obj.save(update_fields=['counted_in_barrier'])
                             
+                        # Release active AI slot before triggering next fanout
+                        from core.redis_orchestrator import orchestrator
+                        orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="UNHANDLED_EXCEPTION")
+
                         # Also trigger next fanout so we don't stall the window
                         from ocr_pipeline.pipeline import trigger_next_fanout
                         trigger_next_fanout(record_id)
@@ -388,8 +401,10 @@ class AIWorker(BaseWorker):
                         parsed['job_id'] = str(job_id)
                     parsed['upload_session_id'] = str(session_id)
                     parsed['tenant_id'] = str(tenant_id)
-                    
-                    canonical_payload = get_canonical_export_record(parsed, tenant_id=tenant_id)
+                    canonical_payload = await loop.run_in_executor(
+                        self.executor,
+                        lambda: get_canonical_export_record(parsed, tenant_id=tenant_id)
+                    )
                     
                     # Double-ensure they are in the final payload
                     canonical_payload['record_id'] = str(record_id)
@@ -454,6 +469,9 @@ class AIWorker(BaseWorker):
                         orchestrator.update_session_status(str(record_id), "PROCESSING", progress=pct)
                 except Exception as _prog_err:
                     logger.warning(f"[AI_PROGRESS_HINT_FAIL] {_prog_err}")
+
+                # Release active AI slot before triggering next fanout
+                orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="COMPLETED")
 
                 from ocr_pipeline.pipeline import trigger_next_fanout
                 trigger_next_fanout(record_id)

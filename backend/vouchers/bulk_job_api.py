@@ -448,6 +448,7 @@ class BulkStatusAPIView(APIView):
         def event_stream():
             from django.db import models
             from ocr_pipeline.models import FinalizedSnapshot, InvoiceTempOCR
+            from core.redis_orchestrator import orchestrator
             
             tenant_id = getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None) or '88fe4389-58a9-4244-9878-8a4e646898bd'
             tenant_id = str(tenant_id)
@@ -458,38 +459,42 @@ class BulkStatusAPIView(APIView):
                     yield f"data: {json.dumps({'error': 'Job not found'})}\n\n"
                     break
                 
-                total_files = job.total_files or 1
-                staging_records = InvoiceTempOCR.objects.filter(upload_session_id=job.upload_session_id).values('status')
+                # Use Authoritative Orchestrator State just like GET JSON endpoint
+                auth_state = orchestrator.get_authoritative_session_state(job.upload_session_id)
+                is_completed = auth_state.get('terminal', False)
+                status_str = "PROCESSING"
                 
-                success, failed, processing = 0, 0, 0
-                for r in staging_records:
-                    live_status = r['status'].upper()
-                    if live_status in ['FINALIZED', 'COMPLETED', 'SUCCESS', 'VOUCHER_CREATED']: success += 1
-                    elif live_status in ['FAILED', 'ERROR']: failed += 1
-                    else: processing += 1
-                        
-                total = max(total_files, success + failed + processing)
-                
-                val_query = FinalizedSnapshot.objects.filter(session_id=job.upload_session_id, tenant_id=tenant_id)
-                snapshot_count = val_query.count()
-                has_snapshot = (snapshot_count > 0)
-                
-                items_terminal = (processing == 0) and ((success + failed) >= total_files)
-                is_completed = items_terminal and (has_snapshot or success == 0)
+                success = auth_state.get('completed_pages', 0)
+                failed = auth_state.get('failed_pages', 0)
                 
                 if is_completed:
-                    if success > 0 and failed == 0: status_str = 'FINALIZED'
-                    elif success > 0 and failed > 0: status_str = 'PARTIAL_FAILED'
-                    else: status_str = 'FAILED'
-                    progress = 100
+                    term_reason = auth_state.get('terminal_reason', 'FAILED')
+                    if term_reason == "COMPLETED":
+                        status_str = "FINALIZED" if failed == 0 else "PARTIAL_FAILED"
+                    else:
+                        status_str = "FAILED"
+                    
+                total_files = job.total_files or 1
+                expected_pages = auth_state.get('expected_pages', 0)
+                if expected_pages > 0:
+                    total = expected_pages
+                    processing = max(0, total - success - failed)
                 else:
-                    status_str = 'PROCESSING'
-                    progress = int(((success + failed + (processing * 0.5)) / total) * 100) if total > 0 else 0
-                    progress = min(progress, 99)
+                    processing = max(0, total_files - success - failed)
+                    if not is_completed:
+                        processing = max(1, processing)
+                    total = max(total_files, success + failed + processing)
+                
+                progress = 100 if is_completed else int(((success + failed + (processing * 0.5)) / total) * 100) if total > 0 else 0
+                progress = min(progress, 99) if not is_completed else 100
 
                 response_data = {
-                    'status': status_str, 'progress': progress, 'total': total,
-                    'processed': success, 'failed': failed, 'completed': is_completed
+                    'status': status_str,
+                    'progress': min(progress, 100),
+                    'total': total,
+                    'processed': success,
+                    'failed': failed,
+                    'completed': is_completed
                 }
                 
                 yield f"data: {json.dumps(response_data)}\n\n"
@@ -497,7 +502,6 @@ class BulkStatusAPIView(APIView):
                 if is_completed:
                     break
                 
-                # Prevent DB thrashing by polling less aggressively in the background loop
                 time.sleep(2)
         
         response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
