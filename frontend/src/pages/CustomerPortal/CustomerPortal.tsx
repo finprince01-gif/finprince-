@@ -18,7 +18,7 @@ import SalesOrderList from './SalesOrderList';
 import SalesOrderViewModal from './SalesOrderViewModal';
 import { Search, Plus, Filter, Download, ChevronLeft, ChevronRight, Edit, Trash2, X, Info, Check, ChevronDown, Eye, Mail, Calendar, Pencil, FileText, ArrowLeft, Receipt } from 'lucide-react';
 import MultiSelectDropdown from '../../components/MultiSelectDropdown';
-import CustomerViewModal from './CustomerViewModal';
+
 import SalesGSTViewModal from './SalesGSTViewModal';
 import { formatDate } from '../../utils/formatting';
 import { BulkImportFeedbackModal } from '../../components/BulkImportFeedbackModal';
@@ -253,7 +253,7 @@ const CustomerPortalPage: React.FC<CustomerPortalProps> = ({ onNavigate, setPref
                         </div>
 
                         {/* Masters Content */}
-                        <div className="min-h-[500px] border-t border-slate-200">
+                        <div>
                             {activeMasterSubTab === 'Category' && <CategoryContent />}
                             {activeMasterSubTab === 'Customer' && <CustomerContent onNavigate={onNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />}
                             {activeMasterSubTab === 'Sales Quotation & Order' && <SalesOrderContent />}
@@ -280,7 +280,7 @@ const CustomerPortalPage: React.FC<CustomerPortalProps> = ({ onNavigate, setPref
                         </div>
 
                         {/* Transactions Content */}
-                        <div className="border-t border-slate-200 p-8 text-center min-h-[500px]">
+                        <div className="p-8">
                             {activeTransactionSubTab === 'Sales Quotation' && (
                                 showCreateQuotation ? (
                                     <CreateSalesQuotation
@@ -402,7 +402,7 @@ interface CustomerContentProps {
 const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefilledVoucherData }) => {
     // State for view mode
     const [view, setView] = useState<'list' | 'create'>('list');
-    const [viewCustomer, setViewCustomer] = useState<any | null>(null); // State for viewing customer details
+    // viewCustomer state replaced by global viewer
     const [activeTab, setActiveTab] = useState(''); // Start with empty to show overview first
 
     // State for filters
@@ -637,7 +637,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
         branchName: string;
         swiftCode: string;
         associatedBranches: string[];
-    }[]>([]);
+    }[]>([{ id: Date.now(), accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', associatedBranches: [] }]);
     const [isAddingBank, setIsAddingBank] = useState(false);
     const [openBranchDropdown, setOpenBranchDropdown] = useState<number | null>(null);
 
@@ -1064,7 +1064,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
 
     // Helper function to handle Back button navigation
     const handleBackButton = () => {
-        const tabs = ['Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory Details', 'Banking Info', 'Terms & Conditions'];
+        const tabs = ['Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory Details', 'Banking Information', 'Terms & Conditions'];
         const currentIndex = tabs.indexOf(activeTab);
 
         if (currentIndex > 0) {
@@ -1239,7 +1239,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 associatedBranches: acc.associatedBranches || []
             })));
         } else {
-            setBankAccounts([]);
+            setBankAccounts([{ id: Date.now(), accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', associatedBranches: [] }]);
         }
 
         // 7. Terms
@@ -1271,7 +1271,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 const cat = categories.find((c: Category) => c.id === fullCustomer.customer_category);
                 if (cat) resolvedCategoryName = cat.full_path || cat.category;
             }
-            setViewCustomer({ ...fullCustomer, customer_category_name: resolvedCategoryName });
+            window.showGlobalCustomerView?.({ ...fullCustomer, customer_category_name: resolvedCategoryName });
         } catch (error) {
             handleApiError(error, 'Fetch Customer Details');
         }
@@ -1442,10 +1442,9 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                     <>
                         <button
                             onClick={() => setView('list')}
-                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 mb-4 transition-colors"
+                            className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
                         >
-                            <ChevronLeft className="w-4 h-4" />
-                            Back to Customer List
+                            <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO CUSTOMER LIST
                         </button>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">
                             {createdCustomerId ? 'Edit Customer' : 'Create New Customer'}
@@ -1459,7 +1458,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                 { name: 'GST Details', description: 'Configure gst details' },
                                 { name: 'Products/Services', description: 'Configure products/services' },
                                 { name: 'TDS & Other Statutory Details', description: 'Configure tds & other statutory' },
-                                { name: 'Banking Info', description: 'Configure banking info' },
+                                { name: 'Banking Information', description: 'Configure banking info' },
                                 { name: 'Terms & Conditions', description: 'Configure terms & conditions' }
                             ].map(tab => (
                                 <button
@@ -1485,14 +1484,13 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                     </>
                 ) : (
                     <>
-                        {/* Section Header with Back to Overview */}
+                        {/* Section Header with Back to Customer Creation Hub */}
                         <div className="mb-6">
                             <button
                                 onClick={() => setActiveTab('')}
-                                className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 mb-4 transition-colors"
+                                className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
                             >
-                                <ChevronLeft className="w-4 h-4" />
-                                Back to overview
+                                <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO CUSTOMER CREATION HUB
                             </button>
                             <h3 className="text-xl font-bold text-gray-900">{activeTab}</h3>
                         </div>
@@ -1503,20 +1501,34 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 {activeTab === 'Basic Details' && (
                     <div className="max-w-6xl">
                         {/* ... (Basic Details Form Component) */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                            {/* Row 1 */}
+                            {/* Customer Code */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name <span className="text-red-500">*</span></label>
+                                <label className="label-text">Customer Code</label>
+                                <input
+                                    type="text"
+                                    value={customerFormData.customer_code}
+                                    readOnly
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                                />
+                            </div>
+
+                            {/* Customer Name */}
+                            <div>
+                                <label className="label-text">Customer Name <span className="text-red-500">*</span></label>
                                 <input
                                     type="text"
                                     value={customerFormData.customer_name}
                                     onChange={(e) => handleCustomerFieldChange('customer_name', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    placeholder="Enter customer name"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
+
+                            {/* Customer Category */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Category</label>
+                                <label className="label-text">Customer Category</label>
                                 <SearchableDropdown
                                     options={categories.map(cat => cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > '))}
                                     value={categories.find(cat => String(cat.id) === customerFormData.customer_category)?.full_path || categories.find(cat => String(cat.id) === customerFormData.customer_category)?.category || customerFormData.customer_category || ''}
@@ -1531,97 +1543,96 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                     }}
                                     placeholder="Select Category"
                                     allowCustomValue={true}
+                                    className="rounded-md border-gray-300 min-h-[40px] py-2"
                                 />
                             </div>
 
-                            {/* Row 2 */}
+                            {/* Billing Currency */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Code</label>
-                                <input
-                                    type="text"
-                                    value={customerFormData.customer_code}
-                                    readOnly
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-600"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">PAN Number <span className="text-red-500">*</span></label>
-                                <input
-                                    type="text"
-                                    value={customerFormData.pan_number}
-                                    onChange={(e) => handleCustomerFieldChange('pan_number', e.target.value.toUpperCase())}
-                                    placeholder="ABCDE1234F"
-                                    maxLength={10}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                />
-                            </div>
-
-                            {/* Row 3 */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Person</label>
-                                <input
-                                    type="text"
-                                    value={customerFormData.contact_person}
-                                    onChange={(e) => handleCustomerFieldChange('contact_person', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
-                                <input
-                                    type="email"
-                                    value={customerFormData.email_address}
-                                    onChange={(e) => handleCustomerFieldChange('email_address', e.target.value)}
-                                    placeholder="e.g. customer@example.com"
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                />
-                            </div>
-
-                            {/* Row 4 */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Number</label>
-                                <input
-                                    type="text"
-                                    value={customerFormData.contact_number}
-                                    onChange={(e) => handleCustomerFieldChange('contact_number', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Billing Currency</label>
+                                <label className="label-text">Billing Currency</label>
                                 <SearchableDropdown
                                     options={BILLING_CURRENCIES.map(curr => curr.code)}
                                     value={customerFormData.billing_currency}
                                     onChange={(val) => handleCustomerFieldChange('billing_currency', val)}
                                     placeholder="Select Currency"
                                     allowCustomValue={true}
+                                    className="rounded-md border-gray-300 min-h-[40px] py-2"
+                                />
+                            </div>
+
+                            {/* PAN Number */}
+                            <div>
+                                <label className="label-text">PAN Number <span className="text-red-500">*</span></label>
+                                <input
+                                    type="text"
+                                    value={customerFormData.pan_number}
+                                    onChange={(e) => handleCustomerFieldChange('pan_number', e.target.value.toUpperCase())}
+                                    placeholder="ABCDE1234F"
+                                    maxLength={10}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                />
+                            </div>
+
+                            {/* Contact Person */}
+                            <div>
+                                <label className="label-text">Contact Person</label>
+                                <input
+                                    type="text"
+                                    value={customerFormData.contact_person}
+                                    onChange={(e) => handleCustomerFieldChange('contact_person', e.target.value)}
+                                    placeholder="Primary contact name"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                />
+                            </div>
+
+                            {/* Email Address */}
+                            <div>
+                                <label className="label-text">Email Address</label>
+                                <input
+                                    type="email"
+                                    value={customerFormData.email_address}
+                                    onChange={(e) => handleCustomerFieldChange('email_address', e.target.value)}
+                                    placeholder="customer@example.com"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                />
+                            </div>
+
+                            {/* Contact Number */}
+                            <div>
+                                <label className="label-text">Contact Number</label>
+                                <input
+                                    type="text"
+                                    value={customerFormData.contact_number}
+                                    onChange={(e) => handleCustomerFieldChange('contact_number', e.target.value)}
+                                    placeholder="+91 XXXXX XXXXX"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
 
                             {/* Radio Groups */}
                             <div className="md:col-span-2 border border-gray-200 rounded-[4px] p-6 bg-gray-50/50">
-                                <label className="block text-sm font-semibold text-gray-700 mb-3">Is this customer also a vendor?</label>
-                                <div className="flex gap-6 mb-4">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="isVendor"
-                                            checked={isVendor}
-                                            onChange={() => handleVendorRadioChange(true)}
-                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                                        />
-                                        <span className="text-sm text-gray-700">Yes</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="isVendor"
-                                            checked={!isVendor}
-                                            onChange={() => handleVendorRadioChange(false)}
-                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                                        />
-                                        <span className="text-sm text-gray-700">No</span>
-                                    </label>
+                                <label className="label-text">Is this customer also a vendor?</label>
+                                <div className="flex gap-2 mb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleVendorRadioChange(true)}
+                                        className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${isVendor
+                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
+                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        Yes
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleVendorRadioChange(false)}
+                                        className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!isVendor
+                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
+                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        No
+                                    </button>
                                 </div>
 
                                 {/* Dynamic Vendor Logic */}
@@ -1690,28 +1701,28 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="block text-sm font-semibold text-gray-700 mb-3">TDS Applicable under GST?</label>
-                                <div className="flex gap-6">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="gst_tds_applicable"
-                                            checked={customerFormData.gst_tds_applicable === true}
-                                            onChange={() => handleCustomerFieldChange('gst_tds_applicable', true)}
-                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                                        />
-                                        <span className="text-sm text-gray-700">Yes</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="gst_tds_applicable"
-                                            checked={customerFormData.gst_tds_applicable === false}
-                                            onChange={() => handleCustomerFieldChange('gst_tds_applicable', false)}
-                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                                        />
-                                        <span className="text-sm text-gray-700">No</span>
-                                    </label>
+                                <label className="label-text">TDS Applicable under GST?</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCustomerFieldChange('gst_tds_applicable', true)}
+                                        className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${customerFormData.gst_tds_applicable === true
+                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
+                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        Yes
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCustomerFieldChange('gst_tds_applicable', false)}
+                                        className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${customerFormData.gst_tds_applicable === false
+                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
+                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        No
+                                    </button>
                                 </div>
                             </div>
 
@@ -1726,8 +1737,14 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                 <ChevronLeft className="w-4 h-4" />
                                 Back
                             </button>
-                            <div className="flex gap-4">
-                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setActiveTab(''); }}
+                                    className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                >
+                                    BACK TO CUSTOMER CREATION HUB
+                                </button>
                                 <button
                                     onClick={() => {
                                         if (!customerFormData.customer_name.trim()) {
@@ -2409,16 +2426,22 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             )}
 
                             {/* Footer Buttons for GST Tab */}
-                            <div className="flex justify-center items-center gap-6 mt-16 border-t border-gray-100 pt-8">
+                            <div className="flex justify-between items-center gap-4 mt-16 border-t border-gray-100 pt-8">
                                 <button
                                     onClick={handleBackButton}
-                                    className="flex items-center gap-2 px-8 py-2.5 border border-gray-300 rounded-[4px] text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-none border border-slate-200-none border border-slate-200"
+                                    className="flex items-center gap-2 px-8 py-2.5 border border-gray-300 rounded-[4px] text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                     Back
                                 </button>
-                                <div className="flex gap-4">
-                                    <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setActiveTab(''); }}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                    >
+                                        BACK TO CUSTOMER CREATION HUB
+                                    </button>
                                     <button
                                         onClick={() => setActiveTab('Products/Services')}
                                         className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
@@ -2566,8 +2589,14 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                     <ChevronLeft className="w-4 h-4" />
                                     Back
                                 </button>
-                                <div className="flex gap-4">
-                                    <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setActiveTab(''); }}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                    >
+                                        BACK TO CUSTOMER CREATION HUB
+                                    </button>
                                     <button
                                         onClick={() => setActiveTab('TDS & Other Statutory Details')}
                                         className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
@@ -2585,129 +2614,174 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                     activeTab === 'TDS & Other Statutory Details' && (
                         <div className="max-w-6xl mx-auto space-y-10">
 
-                            {/* SECTION 1: STATUTORY INFORMATION */}
-                            <div>
-                                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-6">Statutory Information</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">MSME (Udyam) Registration Number</label>
-                                        <div className="relative flex items-center">
-                                            <input
-                                                type="text"
-                                                className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
-                                                placeholder="UDYAM-XX-00-000000"
-                                                value={statutoryDetails.msmeNo}
-                                                onChange={(e) => setStatutoryDetails({ ...statutoryDetails, msmeNo: e.target.value })}
-                                            />
-                                            <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-[4px] hover:bg-gray-100 transition-colors">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">FSSAI License Number</label>
-                                        <div className="relative flex items-center">
-                                            <input
-                                                type="text"
-                                                className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
-                                                placeholder="14-digit License Number"
-                                                value={statutoryDetails.fssaiNo}
-                                                onChange={(e) => setStatutoryDetails({ ...statutoryDetails, fssaiNo: e.target.value })}
-                                            />
-                                            <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-[4px] hover:bg-gray-100 transition-colors">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                            </button>
-                                        </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="label-text">
+                                        MSME Udyam No
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 bg-white"
+                                            placeholder="UDYAM-XX-00-000000"
+                                            value={statutoryDetails.msmeNo}
+                                            onChange={(e) => setStatutoryDetails({ ...statutoryDetails, msmeNo: e.target.value })}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
+                                            title="Upload MSME Registration Certificate"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            </svg>
+                                        </button>
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* SECTION 2: IMPORT / EXPORT & COMPLIANCE */}
-                            <div>
-                                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-6">Import / Export & Compliance</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Import Export Code (IEC)</label>
-                                        <div className="relative flex items-center">
-                                            <input
-                                                type="text"
-                                                className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
-                                                placeholder="10-DIGIT IEC CODE"
-                                                value={statutoryDetails.iecCode}
-                                                onChange={(e) => setStatutoryDetails({ ...statutoryDetails, iecCode: e.target.value })}
-                                            />
-                                            <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-[4px] hover:bg-gray-100 transition-colors">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                            </button>
-                                        </div>
+                                <div>
+                                    <label className="label-text">
+                                        FSSAI License No
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 bg-white"
+                                            placeholder="14-digit License Number"
+                                            value={statutoryDetails.fssaiNo}
+                                            onChange={(e) => {
+                                                const value = e.target.value.replace(/[^0-9]/g, '');
+                                                if (value.length <= 14) {
+                                                    setStatutoryDetails({ ...statutoryDetails, fssaiNo: value });
+                                                }
+                                            }}
+                                            maxLength={14}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
+                                            title="Upload FSSAI License / Registration Certificate"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            </svg>
+                                        </button>
                                     </div>
-                                    <div className="space-y-4">
-                                        <div className="md:col-span-1">
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">EOU Status</label>
-                                            <select
-                                                className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                value={statutoryDetails.eouStatus}
-                                                onChange={(e) => setStatutoryDetails({ ...statutoryDetails, eouStatus: e.target.value })}
-                                            >
-                                                <option>Export Oriented Unit (EOU)</option>
-                                                <option>SEZ Unit</option>
-                                                <option>STP Unit</option>
-                                                <option>None</option>
-                                            </select>
-                                        </div>
+                                </div>
+                                <div>
+                                    <label className="label-text">
+                                        Import Export Code (IEC)
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 bg-white"
+                                            placeholder="10-DIGIT IEC CODE"
+                                            value={statutoryDetails.iecCode}
+                                            onChange={(e) => setStatutoryDetails({ ...statutoryDetails, iecCode: e.target.value })}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
+                                            title="Upload IEC Certificate"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="label-text">
+                                        EOU Status
+                                    </label>
+                                    <select
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                        value={statutoryDetails.eouStatus}
+                                        onChange={(e) => setStatutoryDetails({ ...statutoryDetails, eouStatus: e.target.value })}
+                                    >
+                                        <option value="None">None</option>
+                                        <option value="Export Oriented Unit (EOU)">Export Oriented Unit (EOU)</option>
+                                        <option value="SEZ Unit">SEZ Unit</option>
+                                        <option value="STP Unit">STP Unit</option>
+                                    </select>
 
-                                        {/* Conditional Uploads for EOU/SEZ/STP */}
-                                        {statutoryDetails.eouStatus !== 'None' && (
-                                            <div className="flex gap-8 pl-1">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-sm text-gray-500">Letter of Permission</span>
-                                                    <button className="p-1.5 border border-gray-200 rounded-[4px] text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
-                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                                    </button>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-sm text-gray-500">Green Card</span>
-                                                    <button className="p-1.5 border border-gray-200 rounded-[4px] text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
-                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                                    </button>
-                                                </div>
+                                    {/* Conditional Uploads for EOU/SEZ/STP */}
+                                    {statutoryDetails.eouStatus !== 'None' && (
+                                        <div className="flex gap-8 mt-3 pl-1">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm text-gray-500">Letter of Permission</span>
+                                                <button
+                                                    type="button"
+                                                    className="p-1.5 border border-indigo-200 bg-indigo-50/50 rounded-[4px] text-slate-700 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+                                                    title="Upload Letter of Permission"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                    </svg>
+                                                </button>
                                             </div>
-                                        )}
-                                    </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm text-gray-500">Green Card</span>
+                                                <button
+                                                    type="button"
+                                                    className="p-1.5 border border-indigo-200 bg-indigo-50/50 rounded-[4px] text-slate-700 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+                                                    title="Upload Green Card"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
-
-                            {/* SECTION 3: TAX CONFIGURATION */}
-                            <div>
-                                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-4">Tax Configuration</h4>
-
-                                {/* Toggle: TDS / TCS / NONE */}
-                                <div className="mb-6">
-                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Tax Deducted / Collected at Source</p>
-                                    <div className="inline-flex rounded-[4px] border border-gray-300 overflow-hidden">
-                                        {(['TDS', 'TCS', 'NONE'] as const).map((type) => (
-                                            <button
-                                                key={type}
-                                                type="button"
-                                                onClick={() => setStatutoryDetails({
-                                                    ...statutoryDetails,
-                                                    taxType: type,
-                                                    // reset fields when switching
-                                                    tcsSections: type !== 'TCS' ? [] : statutoryDetails.tcsSections,
-                                                    tcsEnabled: type !== 'TCS' ? false : statutoryDetails.tcsEnabled,
-                                                    tdsSections: type !== 'TDS' ? [] : statutoryDetails.tdsSections,
-                                                    tdsEnabled: type !== 'TDS' ? false : statutoryDetails.tdsEnabled,
-                                                })}
-                                                className={`px-6 py-2 text-sm font-semibold transition-colors border-r border-gray-300 last:border-r-0 ${statutoryDetails.taxType === type
-                                                    ? 'bg-gray-700 text-white'
-                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
-                                                    }`}
-                                            >
-                                                {type}
-                                            </button>
-                                        ))}
-                                    </div>
+                            {/* Tax Type — mutually exclusive selector */}
+                            <div className="space-y-3">
+                                <label className="label-text">Tax Deducted / Collected at Source</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setStatutoryDetails({
+                                            ...statutoryDetails,
+                                            taxType: 'TDS',
+                                            tcsSections: [],
+                                            tcsEnabled: false,
+                                        })}
+                                        className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${statutoryDetails.taxType === 'TDS'
+                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+                                            }`}
+                                    >TDS</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStatutoryDetails({
+                                            ...statutoryDetails,
+                                            taxType: 'TCS',
+                                            tdsSections: [],
+                                            tdsEnabled: false,
+                                        })}
+                                        className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${statutoryDetails.taxType === 'TCS'
+                                            ? 'bg-emerald-600 text-white border-emerald-600'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'
+                                            }`}
+                                    >TCS</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStatutoryDetails({
+                                            ...statutoryDetails,
+                                            taxType: 'NONE',
+                                            tdsSections: [],
+                                            tdsEnabled: false,
+                                            tcsSections: [],
+                                            tcsEnabled: false,
+                                        })}
+                                        className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${statutoryDetails.taxType === 'NONE'
+                                            ? 'bg-gray-500 text-white border-gray-500'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                                            }`}
+                                    >None</button>
                                 </div>
 
                                 {/* TCS Card */}
@@ -2954,10 +3028,16 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                     <ChevronLeft className="w-4 h-4" />
                                     Back
                                 </button>
-                                <div className="flex gap-4">
-                                    <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <div className="flex gap-3">
                                     <button
-                                        onClick={() => setActiveTab('Banking Info')}
+                                        type="button"
+                                        onClick={() => { setActiveTab(''); }}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                    >
+                                        BACK TO CUSTOMER CREATION HUB
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('Banking Information')}
                                         className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                                     >
                                         Next
@@ -2971,7 +3051,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
 
                 {/* Banking Info Content */}
                 {
-                    activeTab === 'Banking Info' && (
+                    activeTab === 'Banking Information' && (
                         <div className="max-w-6xl mx-auto space-y-8">
                             {/* Info Banner */}
                             <div className="bg-yellow-50 border border-yellow-200 rounded-[4px] p-4 flex items-start gap-3">
@@ -2984,19 +3064,8 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             </div>
 
                             {/* Bank Accounts Section */}
-                            {bankAccounts.length === 0 ? (
-                                // Empty State
-                                <div className="border-2 border-dashed border-gray-200 rounded-[4px] p-12 flex flex-col items-center justify-center text-center">
-                                    <p className="text-gray-500 mb-6">No bank accounts added yet</p>
-                                    <button
-                                        onClick={handleAddBank}
-                                        className="px-6 py-2.5 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors shadow-none border border-slate-200-none border border-slate-200"
-                                    >
-                                        + Add Bank Account
-                                    </button>
-                                </div>
-                            ) : (
-                                // Detailed Card List
+                            {(
+                                // Card List
                                 <div className="space-y-6">
                                     {bankAccounts.map((account, index) => (
                                         <div key={account.id} className="border border-gray-200 rounded-[4px] p-6 bg-white shadow-none border border-slate-200-none border border-slate-200 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
@@ -3196,8 +3265,14 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                     <ChevronLeft className="w-4 h-4" />
                                     Back
                                 </button>
-                                <div className="flex gap-4">
-                                    <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setActiveTab(''); }}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                    >
+                                        BACK TO CUSTOMER CREATION HUB
+                                    </button>
                                     <button
                                         onClick={() => setActiveTab('Terms & Conditions')}
                                         className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
@@ -3303,7 +3378,13 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                     Back
                                 </button>
                                 <div className="flex gap-4">
-                                    <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setActiveTab(''); }}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                    >
+                                        BACK TO CUSTOMER CREATION HUB
+                                    </button>
                                     <button
                                         onClick={async () => {
                                             const success = await handleSaveCustomer({ exit: true });
@@ -3324,14 +3405,6 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                         </div>
                     )
                 }
-
-                {
-                    activeTab !== 'Basic Details' && activeTab !== 'GST Details' && activeTab !== 'Products/Services' && activeTab !== 'TDS & Other Statutory Details' && activeTab !== 'Banking Info' && activeTab !== 'Terms & Conditions' && (
-                        <div className="py-12 text-center text-gray-500 italic">
-                            {activeTab} content coming soon.
-                        </div>
-                    )
-                }
             </div >
         );
     }
@@ -3347,7 +3420,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                             onClick={() => setIsExcelDropdownOpen(!isExcelDropdownOpen)}
                             className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
                         >
-                            <Icon name="file-spreadsheet" className="w-4 h-4" /> EXCEL
+                            <Icon name="file-spreadsheet" className="w-4 h-4" /> UPLOAD
                         </button>
                         {isExcelDropdownOpen && (
                             <div className="absolute right-0 z-[100] mt-2 w-52 bg-white border border-gray-200 rounded-[4px] shadow-lg py-1">
@@ -3524,12 +3597,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
             </div>
 
             {/* View Modal */}
-            {viewCustomer && (
-                <CustomerViewModal
-                    customer={viewCustomer}
-                    onClose={() => setViewCustomer(null)}
-                />
-            )}
+
 
             {/* Import Feedback Modal */}
             <BulkImportFeedbackModal
@@ -3572,8 +3640,8 @@ const SalesOrderContent: React.FC = () => {
     const [sqForm, setSqForm] = useState({
         name: '',
         category: '',
-        prefix: 'SQ/',
-        suffix: '/24-25',
+        prefix: '',
+        suffix: '',
         autoYear: true,
         digits: 4
     });
@@ -3584,8 +3652,8 @@ const SalesOrderContent: React.FC = () => {
     const [soForm, setSoForm] = useState({
         name: '',
         category: '',
-        prefix: 'SO/',
-        suffix: '/24-25',
+        prefix: '',
+        suffix: '',
         autoYear: true,
         digits: 4
     });
@@ -3691,8 +3759,8 @@ const SalesOrderContent: React.FC = () => {
                 ...prev,
                 name: '',
                 category: '',
-                prefix: subTab === 'Sales Quotation' ? 'SQ/' : 'SO/',
-                suffix: '/24-25',
+                prefix: '',
+                suffix: '',
                 autoYear: true,
                 digits: 4
             }));
@@ -3727,8 +3795,8 @@ const SalesOrderContent: React.FC = () => {
         setForm({
             name: series.series_name || '',
             category: series.customer_category || '',
-            prefix: series.prefix || (isSQ ? 'SQ/' : 'SO/'),
-            suffix: series.suffix || '/24-25',
+            prefix: series.prefix || '',
+            suffix: series.suffix || '',
             autoYear: series.auto_year !== undefined ? series.auto_year : true,
             digits: series.required_digits || 4
         });
@@ -3740,15 +3808,15 @@ const SalesOrderContent: React.FC = () => {
         setForm({
             name: '',
             category: '',
-            prefix: isSQ ? 'SQ/' : 'SO/',
-            suffix: '/24-25',
+            prefix: '',
+            suffix: '',
             autoYear: true,
             digits: 4
         });
     };
 
     return (
-        <div className="p-8">
+        <div className="p-6">
             {/* Sub-tabs */}
             <div className="mb-8">
                 <div className="bg-gray-50 p-1 rounded-[4px] inline-flex">
@@ -3757,7 +3825,7 @@ const SalesOrderContent: React.FC = () => {
                             key={tab}
                             onClick={() => setSubTab(tab as any)}
                             className={`px-6 py-2 rounded-[4px] text-sm font-medium transition-all ${subTab === tab
-                                ? 'bg-white text-indigo-600 shadow-none border border-slate-200-none border border-slate-200'
+                                ? 'bg-white text-indigo-600 shadow-none border border-slate-200'
                                 : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
@@ -3767,126 +3835,137 @@ const SalesOrderContent: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left: New Series Form */}
-                <div className="lg:col-span-4 space-y-6">
-                    <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">
-                        {editingId ? 'Edit' : 'New'} {subTab} Series
+                <div className="lg:col-span-1 border-r border-gray-200 pr-0 lg:pr-8">
+                    <h3 className="section-title mb-4">
+                        {editingId ? 'Edit Series' : `New ${subTab} Series`}
                     </h3>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Name of Series <span className="text-red-500">*</span></label>
-                        <input
-                            type="text"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            placeholder={`e.g. Retail ${subTab}`}
-                            value={form.name}
-                            onChange={(e) => handleChange('name', e.target.value)}
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Customer Category <span className="text-red-500">*</span></label>
-                        <CategoryHierarchicalDropdown
-                            apiEndpoint="/api/customerportal/categories/"
-                            systemCategories={['Export', 'Within Country (B2B)', 'Within Country (B2C)']}
-                            value={form.category}
-                            onSelect={(selection) => handleChange('category', selection.fullPath)}
-                            mergeSystem={true}
-                            colorTheme="teal"
-                            placeholder="Select Category"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Prefix</label>
+                            <label className="label-text">Name of {subTab} Series <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                value={form.prefix}
-                                onChange={(e) => handleChange('prefix', e.target.value)}
+                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                placeholder={`e.g. Retail ${subTab}`}
+                                value={form.name}
+                                onChange={(e) => handleChange('name', e.target.value)}
                             />
                         </div>
+
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Suffix</label>
-                            <input
-                                type="text"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                value={form.suffix}
-                                onChange={(e) => handleChange('suffix', e.target.value)}
+                            <label className="label-text">Customer Category <span className="text-red-500">*</span></label>
+                            <CategoryHierarchicalDropdown
+                                apiEndpoint="/api/customerportal/categories/"
+                                systemCategories={['Export', 'Within Country (B2B)', 'Within Country (B2C)']}
+                                value={form.category}
+                                onSelect={(selection) => handleChange('category', selection.fullPath)}
+                                mergeSystem={true}
+                                placeholder="Select Category"
                             />
                         </div>
-                    </div>
 
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="label-text">Prefix</label>
+                                <input
+                                    type="text"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                    placeholder={isSQ ? 'SQ/' : 'SO/'}
+                                    value={form.prefix}
+                                    onChange={(e) => handleChange('prefix', e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="label-text">Suffix</label>
+                                <input
+                                    type="text"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                    placeholder="/24-25"
+                                    value={form.suffix}
+                                    onChange={(e) => handleChange('suffix', e.target.value)}
+                                />
+                            </div>
+                        </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Digits</label>
-                        <input
-                            type="number"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            value={form.digits}
-                            onChange={(e) => handleChange('digits', Number(e.target.value))}
-                        />
-                    </div>
+                        <div>
+                            <label className="label-text">Digits</label>
+                            <input
+                                type="number"
+                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                value={form.digits}
+                                onChange={(e) => handleChange('digits', Number(e.target.value))}
+                            />
+                        </div>
 
+                        <div className="bg-gray-100 p-6 rounded-[4px] text-center">
+                            <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>
+                            <p className="text-xl font-bold text-gray-800">{getPreview()}</p>
+                        </div>
 
-                    <div className="bg-gray-100 rounded-[4px] p-6 text-center">
-                        <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>
-                        <p className="text-xl font-bold text-gray-800">{getPreview()}</p>
-                    </div>
-
-                    <div className="flex gap-2">
-                        {editingId && (
+                        <div className="flex gap-3 pt-4">
                             <button
-                                onClick={handleCancelEdit}
-                                className="w-1/2 py-2.5 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 transition-colors"
+                                onClick={handleSaveSeries}
+                                disabled={!form.name || !form.category}
+                                className={`flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none disabled:bg-gray-400 disabled:cursor-not-allowed ${editingId ? 'w-1/2' : 'w-full'}`}
                             >
-                                Cancel
+                                {editingId ? 'Update Series' : 'Save Series'}
                             </button>
-                        )}
-                        <button
-                            onClick={handleSaveSeries}
-                            disabled={!form.name || !form.category}
-                            className={`py-2.5 bg-teal-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed ${editingId ? 'w-1/2' : 'w-full'}`}
-                        >
-                            {editingId ? 'Update Series' : 'Save Series'}
-                        </button>
+                            {editingId && (
+                                <button
+                                    onClick={handleCancelEdit}
+                                    className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none w-1/2"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 {/* Right: Table */}
-                <div className="lg:col-span-8">
-                    <h3 className="text-lg font-bold text-gray-900 mb-6">Existing {isSQ ? 'Sales Quotation' : 'Sales Order'} Series</h3>
-                    <div className="border border-gray-200 rounded-[4px] overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
+                <div className="lg:col-span-2">
+                    <h3 className="section-title mb-4">Existing {isSQ ? 'Sales Quotation' : 'Sales Order'} Series</h3>
+                    <div className="border border-slate-200 rounded-[4px] overflow-hidden">
+                        <table className="erp-table min-w-full">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NAME</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CATEGORY</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DETAILS</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                                    <th className="table-header">Name</th>
+                                    <th className="table-header">Category</th>
+                                    <th className="table-header">Details</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {list.map((series) => (
-                                    <tr key={series.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{series.series_name}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{series.customer_category}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {'displayDetails' in series ? series.displayDetails : `${series.prefix} (${series.required_digits} digits)`}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button onClick={() => handleEditSeries(series)} className="text-teal-600 hover:text-indigo-900 mr-4">Edit</button>
-                                            <button onClick={() => handleDeleteSeries(series.id)} className="text-red-600 hover:text-red-900">Delete</button>
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
+                                            Loading...
                                         </td>
                                     </tr>
-                                ))}
+                                ) : list.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-20 text-center text-slate-400">
+                                            <p className="text-sm font-medium">No series found.</p>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    list.map((series) => (
+                                        <tr key={series.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{series.series_name}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{series.customer_category}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">
+                                                {(series.prefix || '') + '0'.repeat(Math.max(0, series.required_digits - 1)) + '1' + (series.suffix || '')}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button onClick={() => handleEditSeries(series)} className="text-indigo-600 hover:text-indigo-900 mr-4">EDIT</button>
+                                                <button onClick={() => handleDeleteSeries(series.id)} className="text-red-600 hover:text-red-900">DELETE</button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
-                        {list.length === 0 && (
-                            <div className="p-8 text-center text-gray-500 text-sm">No series found.</div>
-                        )}
                     </div>
                 </div>
             </div>
@@ -4849,24 +4928,32 @@ function ReceiptContent() {
     };
     const [isLoading, setIsLoading] = useState(true);
     const [receipts, setReceipts] = useState<any[]>([]);
+    const [customers, setCustomers] = useState<any[]>([]);
+    const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
+    const [activeCategory, setActiveCategory] = useState<string>('Export');
 
     const fetchDueInvoices = async () => {
         try {
             setIsLoading(true);
-            console.log('DEBUG: Fetching due invoices from /api/voucher-sales-new/');
-            const data = await httpClient.get<any[]>('/api/voucher-sales-new/');
-            console.log('DEBUG: Received invoices:', data);
+            console.log('DEBUG: Fetching due invoices and customers');
+            const [salesResponse, custResponse] = await Promise.all([
+                httpClient.get<any[]>('/api/voucher-sales-new/'),
+                httpClient.get<any[]>('/api/customerportal/customer-master/')
+            ]);
+            
+            setCustomers(custResponse || []);
 
-            if (!Array.isArray(data)) {
-                console.error('DEBUG: Expected array from /api/voucher-sales-new/, got:', data);
+            if (!Array.isArray(salesResponse)) {
+                console.error('DEBUG: Expected array from /api/voucher-sales-new/, got:', salesResponse);
                 setReceipts([]);
                 return;
             }
 
-            const transformed = data.map((inv: any) => ({
+            const transformed = salesResponse.map((inv: any) => ({
                 id: inv.id,
                 date: inv.date,
                 customerRefName: inv.customer_name || 'N/A',
+                customer_id: inv.customer_id,
                 voucherNo: inv.sales_invoice_no,
                 amount: parseFloat(inv.payment_details?.payment_payable) || 0
             }));
@@ -4909,6 +4996,26 @@ function ReceiptContent() {
             return true;
         });
     }, [receipts, dateFilter, customerFilter, amountFilter]);
+
+    const getReceiptsForCategory = (category: string, list: any[]) => {
+        return list.filter(r => {
+            const customer = customers.find((c: any) => c.id?.toString() === r.customer_id?.toString());
+            if (!customer) return false;
+            const custCategoryName = (customer.customer_category_name || '').toLowerCase();
+            if (category === 'Export') {
+                return custCategoryName.includes('export');
+            } else if (category === 'Within Country (B2B)') {
+                return custCategoryName.includes('b2b') && !custCategoryName.includes('b2c');
+            } else if (category === 'Within Country (B2C)') {
+                return custCategoryName.includes('b2c');
+            }
+            return false;
+        });
+    };
+
+    const categoryFilteredReceipts = useMemo(() => {
+        return getReceiptsForCategory(activeCategory, filteredReceipts);
+    }, [filteredReceipts, activeCategory, customers]);
 
     const handlePostClick = (receipt: any) => {
         setSelectedReceipt(receipt);
@@ -4974,153 +5081,204 @@ function ReceiptContent() {
         }
     };
 
+    const handleCardClick = (category: string) => {
+        setActiveCategory(category);
+        setViewMode('list');
+    };
+
     return (
         <div className="text-left">
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-medium text-gray-900">Receipt</h3>
-            </div>
+            {viewMode === 'dashboard' ? (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-gray-900">Receipt - Categories</h3>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Export Card */}
+                        <CategoryCard
+                            category="Export"
+                            desc="View export receipts."
+                            activeOrders={getReceiptsForCategory('Export', receipts).length}
+                            activeAdvances={0}
+                            onClick={() => handleCardClick('Export')}
+                        />
 
-            {/* Invoices Listing Table */}
-            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    <div className="flex items-center justify-between relative">
-                                        <span>Date</span>
-                                        <div className="ml-2">
-                                            <Filter
-                                                className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                onClick={() => toggleFilter('date')}
-                                            />
-                                            {activeFilter === 'date' && (
-                                                <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-xs font-semibold">Filter Date</span>
-                                                        <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <div>
-                                                            <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
-                                                            <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
-                                                            <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    <div className="flex items-center justify-between relative">
-                                        <span>Customer Reference Name</span>
-                                        <div className="ml-2">
-                                            <Filter
-                                                className={`w-4 h-4 cursor-pointer ${activeFilter === 'customer' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                onClick={() => toggleFilter('customer')}
-                                            />
-                                            {activeFilter === 'customer' && (
-                                                <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-60">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-xs font-semibold">Filter Customer</span>
-                                                        <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                    </div>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Search Customer..."
-                                                        value={customerFilter}
-                                                        onChange={(e) => setCustomerFilter(e.target.value)}
-                                                        className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500"
-                                                        autoFocus
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Invoice No
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    <div className="flex items-center justify-between relative">
-                                        <span>Amount</span>
-                                        <div className="ml-2">
-                                            <Filter
-                                                className={`w-4 h-4 cursor-pointer ${activeFilter === 'amount' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                onClick={() => toggleFilter('amount')}
-                                            />
-                                            {activeFilter === 'amount' && (
-                                                <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-xs font-semibold">Filter Amount</span>
-                                                        <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <input type="number" placeholder="Min" value={amountFilter.min} onChange={(e) => setAmountFilter({ ...amountFilter, min: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
-                                                            <span className="text-gray-500">-</span>
-                                                            <input type="number" placeholder="Max" value={amountFilter.max} onChange={(e) => setAmountFilter({ ...amountFilter, max: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Action
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {isLoading ? (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-20 text-center">
-                                        <div className="flex flex-col items-center justify-center">
-                                            <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                                            <p className="text-gray-500 font-medium">Loading due invoices...</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : filteredReceipts.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500 font-medium">
-                                        No due invoices found matching the selected filters.
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredReceipts.map((receipt) => (
-                                    <tr key={receipt.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {receipt.date}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {receipt.customerRefName}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {receipt.voucherNo}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            ₹{receipt.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <button
-                                                onClick={() => handlePostClick(receipt)}
-                                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
-                                            >
-                                                Post
-                                            </button>
-                                        </td>
-                                    </tr>
-                                )))}
-                        </tbody>
-                    </table>
+                        {/* Within Country (B2B) Card */}
+                        <CategoryCard
+                            category="Within Country (B2B)"
+                            desc="View B2B receipts."
+                            activeOrders={getReceiptsForCategory('Within Country (B2B)', receipts).length}
+                            activeAdvances={0}
+                            onClick={() => handleCardClick('Within Country (B2B)')}
+                        />
+
+                        {/* Within Country (B2C) Card */}
+                        <CategoryCard
+                            category="Within Country (B2C)"
+                            desc="View B2C receipts."
+                            activeOrders={getReceiptsForCategory('Within Country (B2C)', receipts).length}
+                            activeAdvances={0}
+                            onClick={() => handleCardClick('Within Country (B2C)')}
+                        />
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <>
+                    {/* Header Section */}
+                    <div className="flex items-center gap-4 mb-6">
+                        <button
+                            onClick={() => setViewMode('dashboard')}
+                            className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                            title="Back to Dashboard"
+                        >
+                            <ChevronLeft className="w-5 h-5 text-gray-600" />
+                        </button>
+                        <h3 className="text-xl font-bold text-gray-900">Receipt - {activeCategory}</h3>
+                    </div>
+
+                    {/* Invoices Listing Table */}
+                    <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <div className="flex items-center justify-between relative">
+                                                <span>Date</span>
+                                                <div className="ml-2">
+                                                    <Filter
+                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                        onClick={() => toggleFilter('date')}
+                                                    />
+                                                    {activeFilter === 'date' && (
+                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="text-xs font-semibold">Filter Date</span>
+                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <div>
+                                                                    <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
+                                                                    <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
+                                                                    <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <div className="flex items-center justify-between relative">
+                                                <span>Customer Reference Name</span>
+                                                <div className="ml-2">
+                                                    <Filter
+                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'customer' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                        onClick={() => toggleFilter('customer')}
+                                                    />
+                                                    {activeFilter === 'customer' && (
+                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-60">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="text-xs font-semibold">Filter Customer</span>
+                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search Customer..."
+                                                                value={customerFilter}
+                                                                onChange={(e) => setCustomerFilter(e.target.value)}
+                                                                className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500"
+                                                                autoFocus
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Invoice No
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <div className="flex items-center justify-between relative">
+                                                <span>Amount</span>
+                                                <div className="ml-2">
+                                                    <Filter
+                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'amount' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                        onClick={() => toggleFilter('amount')}
+                                                    />
+                                                    {activeFilter === 'amount' && (
+                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="text-xs font-semibold">Filter Amount</span>
+                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <input type="number" placeholder="Min" value={amountFilter.min} onChange={(e) => setAmountFilter({ ...amountFilter, min: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                                    <span className="text-gray-500">-</span>
+                                                                    <input type="number" placeholder="Max" value={amountFilter.max} onChange={(e) => setAmountFilter({ ...amountFilter, max: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Action
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {isLoading ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-20 text-center">
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                                    <p className="text-gray-500 font-medium">Loading due invoices...</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : categoryFilteredReceipts.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500 font-medium">
+                                                No due invoices found matching the selected filters.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        categoryFilteredReceipts.map((receipt) => (
+                                            <tr key={receipt.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {receipt.date}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {receipt.customerRefName}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                    {receipt.voucherNo}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    ₹{receipt.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                    <button
+                                                        onClick={() => handlePostClick(receipt)}
+                                                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
+                                                    >
+                                                        Post
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Post Receipt Modal */}
             {showPostModal && (
@@ -5229,7 +5387,7 @@ function ReceiptContent() {
             )}
         </div>
     );
-};
+}
 // Net-off Modal Component
 interface PurchaseVoucher {
     id: string;

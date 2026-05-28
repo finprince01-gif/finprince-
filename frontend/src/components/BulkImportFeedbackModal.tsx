@@ -230,7 +230,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     'GST & Address Details',
                                     'Products/Services',
                                     'TDS & Other Statutory Details',
-                                    'Banking Info',
+                                    'Banking Information',
                                     'Terms & Conditions'
                                 ];
 
@@ -301,7 +301,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         ]
                                     },
                                     {
-                                        title: 'Banking Info',
+                                        title: 'Banking Information',
                                         fields: [
                                             { label: 'BANK ACCOUNT NO', key: 'Bank Account No', placeholder: 'XXXXXXXXXXXX' },
                                             { label: 'BANK NAME', key: 'Bank Name', placeholder: 'Enter bank name' },
@@ -385,7 +385,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         ]
                                     },
                                     {
-                                        title: 'Banking Info',
+                                        title: 'Banking Information',
                                         fields: [
                                             { label: 'BANK ACCOUNT NO', key: 'Bank Account No', placeholder: 'XXXXXXXXXXXX' },
                                             { label: 'BANK NAME', key: 'Bank Name', placeholder: 'Enter bank name' },

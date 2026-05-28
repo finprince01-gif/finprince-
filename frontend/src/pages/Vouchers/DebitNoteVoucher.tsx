@@ -1012,7 +1012,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
             if (onAddVouchers) {
                 const savedVoucher = { ...response, id: response?.id || prefilledData?.voucherId || Date.now().toString() };
-                onAddVouchers([savedVoucher], false);
+                onAddVouchers([savedVoucher]);
             }
             handleCancel();
         } catch (error: any) {
@@ -2656,17 +2656,6 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                 className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50"
                             >
                                 POST & PRINT/EMAIL
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-                                        window.location.reload();
-                                    }
-                                }}
-                                className="px-10 py-3 bg-white text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-all font-bold"
-                            >
-                                CANCEL
                             </button>
                         </div>
                     </div>

@@ -48,10 +48,9 @@ const CompanyBranches: React.FC<CompanyBranchesProps> = ({ company, onBack, onSe
         setLoading(true);
         setError(null);
         try {
-            // GET /api/master/branches/?company_id=<id>  → grouped endpoint filtered by name
-            // We use the grouped endpoint and pull the correct company's branches
-            const grouped = await masterApiService.getGroupedBranches();
-            const companyBranches: Branch[] = grouped[company.name] || [];
+            // Retrieve all branches and filter locally by company name
+            const allBranches = await masterApiService.getBranches();
+            const companyBranches: Branch[] = allBranches.filter(b => b.name === company.name) || [];
             setBranches(companyBranches);
         } catch {
             setError('Failed to load branches for this company.');
