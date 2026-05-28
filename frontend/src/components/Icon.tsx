@@ -1,6 +1,6 @@
 import React from 'react';
 
-type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'banking' | 'bank' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'history' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'chevron-left' | 'chevron-right' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt' | 'file-text' | 'file-spreadsheet' | 'bar-chart-2' | 'edit-3' | 'user-plus' | 'trash-2' | 'alert-circle' | 'loader' | 'arrow-left' | 'arrow-right' | 'refresh' | 'link' | 'calendar' | 'skip-forward' | 'info' | 'eye' | 'eye-off' | 'more-vertical' | 'key' | 'slash' | 'location' | 'calculator';
+type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'banking' | 'bank' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'history' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'chevron-left' | 'chevron-right' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt' | 'file-text' | 'file-spreadsheet' | 'bar-chart-2' | 'edit-3' | 'user-plus' | 'trash-2' | 'alert-circle' | 'loader' | 'arrow-left' | 'arrow-right' | 'refresh' | 'link' | 'calendar' | 'skip-forward' | 'info' | 'eye' | 'eye-off' | 'more-vertical' | 'key' | 'slash' | 'location' | 'calculator' | 'bell';
 
 
 interface IconProps {
@@ -260,6 +260,9 @@ const Icon: React.FC<IconProps> = ({ name, className = '', size, style }) => {
         <circle cx="12" cy="20" r="1" fill="currentColor" />
         <rect x="14.5" y="18.7" width="3" height="2.5" rx="1" fill="currentColor" strokeWidth={0} />
       </>
+    ),
+    bell: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
     ),
 
   };
