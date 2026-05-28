@@ -50,6 +50,8 @@ class CleanOCRStagingView(views.APIView):
         files = request.FILES.getlist('files')
         file_paths = get_list(request.data, 'file_paths')
         voucher_type = request.data.get('voucher_type', 'PURCHASE')
+        # [UPLOAD_TYPE PROPAGATION FIX] Read source-aware upload type sent by frontend
+        upload_type = request.data.get('upload_type', '').strip().upper() or 'UNKNOWN'
         upload_session_id = request.data.get('upload_session_id') or request.query_params.get('upload_session_id')
         tenant_id = request.user.branch_id
         
@@ -117,10 +119,14 @@ class CleanOCRStagingView(views.APIView):
                 file_hash = hashlib.sha256(file_bytes).hexdigest()
                 
                 # ΓöÇΓöÇ DEDUPLICATION ΓöÇΓöÇ
-                # If we already have a successful result for this hash, reuse it
+                # If we already have a successful result for this hash, we log it.
+                # [BOOTSTRAP_FIX] We MUST NOT 'continue' here, otherwise the new session
+                # never gets an InvoiceTempOCR row, never queues a message, and hangs the UI.
+                # Downstream AI Inference Cache will handle the actual compute deduplication.
                 existing = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=tenant_id).first()
                 if existing and existing.processed:
                     duplicate_count += 1
+                    logger.info(f"[DUPLICATE_FOUND] Allowing pipeline to orchestrate duplicate file={original_display_name} hash={file_hash}")
                     # Link existing result to this job via a special completed task
                     OCRTask.objects.create(
                         job=job,
@@ -129,23 +135,30 @@ class CleanOCRStagingView(views.APIView):
                         status='COMPLETED',
                         result_id=existing.id
                     )
-                    job.processed_files += 1
-                    continue
+                    # We no longer `continue` so that get_or_create and queue.push still run for the NEW session!
 
                 # Upload to storage (local fallback if S3 not configured)
                 s3_key = f"ocr/{tenant_id}/{job.id}/{file_hash}_{original_display_name.replace('/', '_')}"
                 safe_content_type = uploaded_file.content_type or 'application/octet-stream'
                 file_url = storage.upload_file(file_bytes, s3_key, safe_content_type)
                 
-                # Create InvoiceTempOCR (The primary state container for the pipeline)
-                record = InvoiceTempOCR.objects.create(
+                # Create or get InvoiceTempOCR (The primary state container for the pipeline)
+                record, created = InvoiceTempOCR.objects.get_or_create(
                     tenant_id=tenant_id,
                     upload_session_id=upload_session_id,
-                    file_path=file_url,
                     file_hash=file_hash,
-                    status='PENDING',
-                    voucher_type=voucher_type
+                    defaults={
+                        'file_path': file_url,
+                        'status': 'PENDING',
+                        'voucher_type': voucher_type,
+                        'upload_type': upload_type  # [UPLOAD_TYPE PROPAGATION FIX]
+                    }
                 )
+                
+                if not created:
+                    logger.warning(f"[DUPLICATE_UPLOAD] session={upload_session_id} file={original_display_name} hash={file_hash} already exists in this session. Reusing record={record.id}.")
+                    # If it's already completed or processing, we might want to skip SQS enqueue, but let's at least avoid the 500 error.
+                    # We will continue to enqueue so it can be processed if it was stuck, but if it's already processed, the worker handles deduplication.
                 
                 # Create Task (Legacy tracking)
                 task = OCRTask.objects.create(
@@ -174,11 +187,15 @@ class CleanOCRStagingView(views.APIView):
                     logger.error(f"[INGESTION_ABORTED] Missing critical record data for file {uploaded_file.name}")
                     continue
 
+                from core.middleware import get_correlation_id
                 msg = message_factory.create_message(
                     task_type="INGESTION",
                     tenant_id=tenant_id,
                     session_id=upload_session_id,
-                    payload=ingestion_payload,
+                    payload={
+                        **ingestion_payload,
+                        'upload_type': upload_type,  # [UPLOAD_TYPE PROPAGATION FIX]
+                    },
                     correlation_id=get_correlation_id()
                 )
                 
@@ -202,9 +219,28 @@ class CleanOCRStagingView(views.APIView):
                 
             except Exception as e:
                 logger.error(f"Failed to process file {uploaded_file.name}: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
                 job.total_files -= 1
         
         job.save()
+
+        # [BOOTSTRAP TERMINALIZATION FIX]
+        # If no files were successfully queued but there were files uploaded, the pipeline is stalled.
+        if queued_count == 0 and len(files) > 0 and duplicate_count == 0:
+            logger.error(f"[BOOTSTRAP_FAILURE] session={upload_session_id} - No files queued. Marking session as FAILED.")
+            try:
+                from core.redis_orchestrator import orchestrator
+                orchestrator.set_terminal_status(upload_session_id, "FAILED", "BOOTSTRAP_CRASH")
+                job.status = 'FAILED'
+                job.save(update_fields=['status'])
+            except Exception as re:
+                logger.error(f"[BOOTSTRAP_TERMINALIZATION_FAIL] {re}")
+            
+            return Response({
+                'error': 'Internal server error during upload bootstrap.',
+                'status': 'FAILED'
+            }, status=500)
         
         # Calculate estimated delay (assuming ~2s per invoice per worker)
         estimated_delay = (depth * 2) / max(int(os.getenv('AI_GLOBAL_CONCURRENCY', '20')), 1)
@@ -229,11 +265,51 @@ class CleanOCRStagingView(views.APIView):
         v_id = getattr(r, 'vendor_id', None)
         v_status_record = getattr(r, 'status', "PROCESSING")
         
+        sections = norm.get("sections", {})
+        supplier = sections.get("supplier_details", {})
+        header = norm.get("header", {})
+        
+        # Real-time strict vendor matching gate
+        tenant_id = getattr(r, 'tenant_id', None)
+        if not v_id and tenant_id:
+            gstin_val = (getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or norm.get("vendor_gstin") or "")
+            if isinstance(gstin_val, str):
+                gstin_val = gstin_val.strip()
+                if gstin_val in ["", "—", "None", "null"]:
+                    gstin_val = ""
+            else:
+                gstin_val = ""
+                
+            branch_val = (getattr(r, 'branch', None) or header.get("branch") or supplier.get("branch") or norm.get("branch") or "")
+            if isinstance(branch_val, str):
+                branch_val = branch_val.strip()
+                if branch_val in ["", "—", "None", "null"]:
+                    branch_val = ""
+            else:
+                branch_val = ""
+
+            if gstin_val:
+                from vendors.vendor_validation_logic import validate_vendor_strict
+                try:
+                    val_res = validate_vendor_strict(tenant_id, gstin_val, branch_val)
+                    if val_res.get('status') == 'EXISTING_VENDOR':
+                        v_id = val_res.get('vendor_id')
+                        if v_status in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
+                            v_status = 'READY'
+                        # Update database record in place so we don't need to re-validate in future
+                        if hasattr(r, 'save') and getattr(r, 'id', None):
+                            r.vendor_id = v_id
+                            if getattr(r, 'validation_status', None) in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
+                                r.validation_status = 'READY'
+                            r.save(update_fields=['vendor_id', 'validation_status'])
+                except Exception as db_err:
+                    logger.error(f"[REALTIME_VENDOR_SAVE_FAILED] id={getattr(r, 'id', None)} error={db_err}")
+
         # --- [PHASE 11.9] DETERMINISTIC STATE ENFORCEMENT ---
         # Requirement #2: Enforce PROCESSING, FINALIZED, FAILED, PARTIAL_FAILED
         # Requirement #3: Block hydration for incomplete records
         
-        is_finalized = v_status_record in ['FINALIZED', 'VOUCHER_CREATED'] or getattr(r, 'processed', False)
+        is_finalized = v_status_record in ['FINALIZED', 'VOUCHER_CREATED', 'COMPLETED', 'EXTRACTED'] or getattr(r, 'processed', False)
         is_failed = v_status_record in ['FAILED', 'ERROR']
         
         if not is_finalized and not is_failed:
@@ -241,6 +317,8 @@ class CleanOCRStagingView(views.APIView):
              return {
                  "processing": True, 
                  "id": getattr(r, 'id', None),
+                 "file_path": getattr(r, 'file_path', '') or '',
+                 "file_hash": getattr(r, 'file_hash', '') or '',
                  "invoice": {},
                  "items": [],
                  "status": "PROCESSING",
@@ -252,7 +330,14 @@ class CleanOCRStagingView(views.APIView):
         if is_failed: 
             ui_status = 'EXTRACTION_FAILED'
         elif is_finalized:
-            ui_status = 'READY' if v_status == 'READY' else 'VOUCHER_CREATED'
+            if v_status == 'VOUCHER_CREATED' or v_status_record == 'VOUCHER_CREATED':
+                ui_status = 'VOUCHER_CREATED'
+            elif v_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'] or v_id:
+                ui_status = 'READY'
+            elif v_status in ['GSTIN_CONFLICT', 'DUPLICATE']:
+                ui_status = v_status
+            else:
+                ui_status = 'NEED_VENDOR'
 
         # Map to final deterministic status
         final_status = "PROCESSING"
@@ -266,21 +351,8 @@ class CleanOCRStagingView(views.APIView):
         from .normalize import fix_encoding_corruption
         branch = fix_encoding_corruption(str(getattr(r, 'branch', None) or header.get("branch") or supplier.get("branch") or norm.get("branch") or "—"))
         
-        bill_from = fix_encoding_corruption(
-            norm.get("bill_from") or 
-            header.get("bill_from") or 
-            supplier.get("bill_from") or 
-            supplier.get("vendor_address") or 
-            header.get("vendor_address") or 
-            norm.get("vendor_address") or ""
-        )
-        bill_to = (
-            header.get("billing_address") or 
-            supplier.get("billing_address") or 
-            norm.get("billing_address") or 
-            supplier.get("bill_to") or 
-            norm.get("bill_to") or ""
-        )
+        bill_from = fix_encoding_corruption(norm.get("bill_from", ""))
+        bill_to = fix_encoding_corruption(norm.get("bill_to", "") or norm.get("billing_address", ""))
         inv_no = (
             getattr(r, 'supplier_invoice_no', None) or 
             header.get("invoice_no") or 
@@ -340,6 +412,8 @@ class CleanOCRStagingView(views.APIView):
             "total_igst": norm.get("total_igst") or supplier.get("total_igst") or norm.get("igst") or "0.00",
             "total_cgst": norm.get("total_cgst") or supplier.get("total_cgst") or norm.get("cgst") or "0.00",
             "total_sgst": norm.get("total_sgst") or supplier.get("total_sgst") or norm.get("sgst") or "0.00",
+            "total_cess": norm.get("total_cess") or supplier.get("total_cess") or norm.get("cess") or "0.00",
+            "round_off": norm.get("round_off") or supplier.get("round_off") or "0.00",
             "total_invoice_value": norm.get("total_invoice_value") or norm.get("invoice_total") or supplier.get("total_invoice_value") or "0.00",
         }
         
@@ -498,10 +572,14 @@ class CleanOCRStagingView(views.APIView):
                     else:
                         logger.info(f"[STAGING_QUERY_RESULT_COUNT] count=0 (Redis status={redis_st})")
                         logger.info(f"[STAGING_QUERY_EMPTY_REASON] Redis state is still processing: {redis_st}.")
+                        
+                        # [FIX] Never return 100% progress if we are still returning PROCESSING.
+                        # This prevents the UI from sticking at 100% while materialization finishes.
+                        display_progress = min(99.0, float(redis_status.get('progress', 0.0)))
                         return Response({
                             "status": "PROCESSING",
                             "data": [],
-                            "progress_percent": redis_status['progress'],
+                            "progress_percent": display_progress,
                             "source": "redis"
                         })
                 elif redis_st in ("FINALIZED", "PARTIAL_FAILED", "FAILED", "EXPORTED"):
@@ -510,6 +588,8 @@ class CleanOCRStagingView(views.APIView):
                     logger.info(f"[STAGING_REDIS_TERMINAL] session={session_id} status={redis_st} — proceeding to snapshot/DB hydration")
                     # Fall through to snapshot + DB hydration below (do not return early)
 
+        is_purchase_flow = False
+        
         # ── 3. STATE MACHINE BARRIER (PHASE 3) ──
         if session_id:
             records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id)
@@ -521,6 +601,8 @@ class CleanOCRStagingView(views.APIView):
                     logger.warning(f"[TENANT_MISMATCH_RECOVERED] Found staging records by session_id={session_id} but tenant_id was different (query tenant={tenant_id}, records tenant={records_fb.first().tenant_id})")
                     records = records_fb
 
+            is_purchase_flow = records.filter(upload_type='PURCHASE').exists()
+
             # [FIX] Requirement #3: Include PENDING in is_processing list to block premature hydration
             is_processing = records.filter(status__in=[
                 'PENDING', 'INGESTED', 'INGESTING',
@@ -528,7 +610,11 @@ class CleanOCRStagingView(views.APIView):
                 PipelineStatus.ASSEMBLING, PipelineStatus.FINALIZING
             ]).exists()
             
-            if is_processing or records.count() == 0:
+            # [HYDRATION_FIX]
+            # Restrict review UI hydration to finalized, validated DTOs to prevent placeholder row leaks and edit-screen schema errors.
+            # We MUST wait for terminal orchestration convergence or materialization.
+            
+            if not terminal_from_redis and (is_processing or records.count() == 0):
                 empty_reason = "No staging records exist for this session yet." if records.count() == 0 else "Staging records are still in progress/processing."
                 logger.info(f"[STAGING_QUERY_RESULT_COUNT] count=0 (is_processing={is_processing} count={records.count()})")
                 logger.info(f"[STAGING_QUERY_EMPTY_REASON] {empty_reason}")
@@ -537,13 +623,24 @@ class CleanOCRStagingView(views.APIView):
                     "data": [],
                     "progress_percent": 0
                 })
-        
+                
+
         # ── 4. FALLBACK: RAW STAGING HYDRATION ──
         if file_hash:
             if str(file_hash).isdigit():
                 records = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=tenant_id)
+                if not records.exists():
+                    records_fb = InvoiceTempOCR.objects.filter(id=int(file_hash))
+                    if records_fb.exists():
+                        logger.warning(f"[TENANT_MISMATCH_RECOVERED] Raw staging records recovery by id={file_hash}")
+                        records = records_fb
             else:
                 records = InvoiceTempOCR.objects.filter(Q(file_hash=file_hash) | Q(upload_session_id=file_hash), tenant_id=tenant_id)
+                if not records.exists():
+                    records_fb = InvoiceTempOCR.objects.filter(Q(file_hash=file_hash) | Q(upload_session_id=file_hash))
+                    if records_fb.exists():
+                        logger.warning(f"[TENANT_MISMATCH_RECOVERED] Raw staging records recovery by file_hash={file_hash}")
+                        records = records_fb
         elif session_id:
             records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
             
@@ -584,7 +681,7 @@ class CleanOCRStagingView(views.APIView):
             # --------------------------------------
 
             if not mapped.get('invoice_no') and not mapped.get('items'):
-                logger.warning(f"[ROW_FILTER_WARNING] reason='completely_empty_record' record={rid}")
+                logger.warning(f"[ROW_FILTER_WARNING] reason='completely_empty_record' record={r.id}")
                 mapped['_pipeline_warning'] = 'completely_empty_record'
                 # DO NOT drop the row! The frontend needs to know it processed and yielded nothing,
                 # otherwise the frontend assumes the row is still "in-flight" and retries forever.
@@ -611,11 +708,11 @@ class CleanOCRStagingView(views.APIView):
             auth_state = orchestrator.get_authoritative_session_state(session_to_check)
             terminal = auth_state.get('terminal', False)
             snapshot_complete = auth_state.get('snapshot_complete', False)
-            terminal_reason = auth_state.get('reason', '')
+            terminal_reason = auth_state.get('terminal_reason', '')
             
             if terminal:
                 # If terminal, it's either COMPLETED or FAILED
-                if terminal_reason == 'FAILED' or (not snapshot_complete and len(data) == 0):
+                if terminal_reason in ['FAILED', 'FAILED_DUPLICATE', 'ERROR'] or (not snapshot_complete and len(data) == 0):
                     pipeline_status = 'failed'
                 else:
                     pipeline_status = 'completed'
@@ -645,11 +742,106 @@ class CleanOCRStagingView(views.APIView):
             "poll_latency": round(poll_duration, 3)
         })
 
+    def patch(self, request, file_hash=None):
+        """
+        Step 3: Fix normalization on manual edits.
+        """
+        from vendors.vendor_validation_logic import validate_vendor
+        from .normalize import get_canonical_export_record
+        from .grouping import run_grouping_logic
+        
+        if not file_hash:
+            return Response({'error': 'Id or file_hash required'}, status=400)
+            
+        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).first()
+        if not record:
+            record = InvoiceTempOCR.objects.filter(id=int(file_hash) if str(file_hash).isdigit() else None).first()
+            
+        if not record:
+            return Response({'error': 'File not found'}, status=404)
+            
+        updated_data = request.data.get('extracted_data')
+        if not updated_data:
+            return Response({'error': 'extracted_data required'}, status=400)
+            
+        try:
+            sections = updated_data.get('sections', {})
+            raw_target = {
+                **{k: v for k, v in updated_data.items() if k != 'sections'},
+                **(sections.get('supplier_details', {})),
+                **(sections.get('supply_details', {})),
+                **(sections.get('due_details', {})),
+                **(sections.get('transit_details', {})),
+                "line_items": sections.get('items', [])
+            }
+            
+            # Instead of calling old validate_vendor(), run the full pipeline validate_and_process
+            # so the status, vendor_id and branch matching all stay in sync.
+            
+            # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
+            normalized_patch = get_canonical_export_record(updated_data, tenant_id=record.tenant_id)
+            record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
+            record.status = PipelineStatus.FINALIZED
+            record.supplier_invoice_no = (
+                sections.get('supplier_details', {}).get('supplier_invoice_no') or 
+                raw_target.get('supplier_invoice_no')
+            )
+            record.gstin = (
+                sections.get('supplier_details', {}).get('gstin') or 
+                raw_target.get('gstin')
+            )
+            record.branch = sections.get('supplier_details', {}).get('branch') or ''
+            record.save()
+            
+            # Run the authoritative pipeline validation
+            from .pipeline import validate_and_process
+            v_res = validate_and_process(record)
+
+            # Re-run grouping after manual edit
+            try:
+                run_grouping_logic(record.tenant_id, record.upload_session_id)
+            except Exception as ge:
+                logger.error(f"Post-patch grouping failed: {str(ge)}")
+            
+            # Re-read the saved record to get accurate status
+            record.refresh_from_db()
+            mapped = self._map_record_to_ui_row(record)
+            
+            return Response({
+                "success": True, 
+                "status": mapped.get("validationStatus") or record.validation_status,
+                "vendor_id": mapped.get("vendor_id") or record.vendor_id,
+                "vendor_name": mapped.get("vendor_name") or (
+                    sections.get('supplier_details', {}).get('vendor_name') or
+                    updated_data.get('vendor_name') or ''
+                ),
+                "vendor_status": mapped.get("vendor_status") or ("EXISTS" if record.vendor_id else "NEW"),
+                "extracted_data": mapped.get("extracted_data") or {
+                    "sections": record.extracted_data.get("sections", {}) if isinstance(record.extracted_data, dict) else {},
+                    **(record.extracted_data if isinstance(record.extracted_data, dict) else {})
+                }
+            })
+        except Exception as e:
+            logger.error(f"PATCH failure: {str(e)}")
+            return Response({'error': str(e)}, status=400)
+
+    def delete(self, request, file_hash=None):
+        if not file_hash:
+            return Response({'error': 'Id or file_hash required'}, status=400)
+            
+        if str(file_hash).isdigit():
+            deleted, _ = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=request.user.branch_id).delete()
+        else:
+            deleted, _ = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).delete()
+            
+        return Response({'success': bool(deleted)})
+
     def _handle_session_metadata_upload(self, request, session_ids, tenant_id):
         """Processes metadata for files already uploaded to S3 via pre-signed URLs."""
         from core.sqs import QueueService
         queue = QueueService()
         voucher_type = request.data.get('voucher_type', 'PURCHASE')
+        upload_type = request.data.get('upload_type', '').strip().upper() or 'UNKNOWN'
         upload_session_id = request.data.get('upload_session_id')
         
         # ── BACKPRESSURE GATING (Phase 13) ──
@@ -673,7 +865,8 @@ class CleanOCRStagingView(views.APIView):
         job = OCRJob.objects.create(
             tenant_id=tenant_id,
             total_files=sessions.count(),
-            status='PENDING'
+            status='PENDING',
+            upload_type=upload_type
         )
         
         queued_count = 0
@@ -694,6 +887,7 @@ class CleanOCRStagingView(views.APIView):
                 "job_id": str(job.id),
                 "file_key": session.s3_key,
                 "voucher_type": voucher_type,
+                "upload_type": upload_type,
                 "upload_session_id": upload_session_id or str(session.id)
             }
             
@@ -778,7 +972,17 @@ class PipelineStatusSSEView(views.APIView):
                         PipelineStatus.ASSEMBLING, PipelineStatus.FINALIZING
                     ]).exists() if records.exists() else True
 
-                    # 1. Check Redis for immediate status update
+                    # 1. Authoritative Pipeline Terminality Override
+                    auth_state = orchestrator.get_authoritative_session_state(session_id)
+                    if auth_state and auth_state.get('terminal', False):
+                        terminal_reason = auth_state.get('terminal_reason', 'FAILED')
+                        logger.info(f"[SSE_AUTHORITATIVE_TERMINAL] session={session_id} reason={terminal_reason}")
+                        
+                        if terminal_reason in ["FAILED", "FAILED_DUPLICATE", "ERROR"]:
+                            yield f"data: {json.dumps({'status': 'FAILED', 'session_id': session_id, 'reason': terminal_reason})}\n\n"
+                            break
+
+                    # 2. Check Redis for immediate status update
                     redis_status = orchestrator.get_session_status(session_id)
                     if redis_status:
                         logger.info(f"[SSE_REDIS_HIT] session={session_id} status={redis_status['status']} progress={redis_status['progress']}")
@@ -941,96 +1145,6 @@ class OCRJobStatusView(views.APIView):
         except OCRJob.DoesNotExist:
             return Response({"error": "Job not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    def patch(self, request, file_hash=None):
-        """
-        Step 3: Fix normalization on manual edits.
-        """
-        from vendors.vendor_validation_logic import validate_vendor
-        
-        if not file_hash:
-            return Response({'error': 'Id or file_hash required'}, status=400)
-            
-        record = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).first()
-        if not record:
-            record = InvoiceTempOCR.objects.filter(id=int(file_hash) if str(file_hash).isdigit() else None).first()
-            
-        if not record:
-            return Response({'error': 'File not found'}, status=404)
-            
-        updated_data = request.data.get('extracted_data')
-        if not updated_data:
-            return Response({'error': 'extracted_data required'}, status=400)
-            
-        try:
-            sections = updated_data.get('sections', {})
-            raw_target = {
-                **{k: v for k, v in updated_data.items() if k != 'sections'},
-                **(sections.get('supplier_details', {})),
-                **(sections.get('supply_details', {})),
-                **(sections.get('due_details', {})),
-                **(sections.get('transit_details', {})),
-                "line_items": sections.get('items', [])
-            }
-            
-            # Instead of calling old validate_vendor(), run the full pipeline validate_and_process
-            # so the status, vendor_id and branch matching all stay in sync.
-            
-            # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
-            normalized_patch = normalize(updated_data)
-            record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
-            record.status = PipelineStatus.FINALIZED
-            record.supplier_invoice_no = (
-                sections.get('supplier_details', {}).get('supplier_invoice_no') or 
-                raw_target.get('supplier_invoice_no')
-            )
-            record.gstin = (
-                sections.get('supplier_details', {}).get('gstin') or 
-                raw_target.get('gstin')
-            )
-            record.branch = sections.get('supplier_details', {}).get('branch') or ''
-            record.save()
-            
-            # Run the authoritative pipeline validation
-            from .pipeline import validate_and_process
-            v_res = validate_and_process(record)
-
-            # Re-run grouping after manual edit
-            try:
-                run_grouping_logic(record.tenant_id, record.upload_session_id)
-            except Exception as ge:
-                logger.error(f"Post-patch grouping failed: {str(ge)}")
-            
-            # Re-read the saved record to get accurate status
-            record.refresh_from_db()
-            
-            return Response({
-                "success": True, 
-                "status": record.validation_status,
-                "vendor_id": record.vendor_id,
-                "vendor_name": (
-                    sections.get('supplier_details', {}).get('vendor_name') or
-                    updated_data.get('vendor_name') or ''
-                ),
-                "extracted_data": {
-                    "sections": record.extracted_data.get("sections", {}) if isinstance(record.extracted_data, dict) else {},
-                    **(record.extracted_data if isinstance(record.extracted_data, dict) else {})
-                }
-            })
-        except Exception as e:
-            logger.error(f"PATCH failure: {str(e)}")
-            return Response({'error': str(e)}, status=400)
-
-    def delete(self, request, file_hash=None):
-        if not file_hash:
-            return Response({'error': 'Id or file_hash required'}, status=400)
-            
-        if str(file_hash).isdigit():
-            deleted, _ = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=request.user.branch_id).delete()
-        else:
-            deleted, _ = InvoiceTempOCR.objects.filter(file_hash=file_hash, tenant_id=request.user.branch_id).delete()
-            
-        return Response({'success': bool(deleted)})
-
 class OCRStagingFinalizeView(views.APIView):
     """
     Finalize staged invoices into real Vouchers.
@@ -1075,6 +1189,35 @@ class OCRStagingFinalizeView(views.APIView):
             "status": "QUEUED",
             "message": "Bulk finalization started in background. Monitor SSE for completion."
         }, status=status.HTTP_202_ACCEPTED)
+
+class OCRStagingCancelView(views.APIView):
+    """
+    Cancels an in-progress OCR session terminally.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        tenant_id = request.user.branch_id
+        session_id = request.data.get('session_id')
+        if not session_id:
+            return Response({'error': 'session_id required'}, status=400)
+            
+        from core.redis_orchestrator import orchestrator
+        from ocr_pipeline.models import OCRJob
+        
+        logger.warning(f"[SESSION_CANCELLED] Cancelling session={session_id} tenant={tenant_id}")
+        
+        # 1. Update Orchestrator state to terminal CANCELLED
+        orchestrator.set_terminal_status(session_id, "CANCELLED", reason="USER_CANCELLED")
+        orchestrator.update_session_status(session_id, "CANCELLED", progress=0.0, extra_data={"hydration_ready": True, "fatal_error_verified": True})
+        
+        # 2. Update DB Job state if exists
+        OCRJob.objects.filter(upload_session_id=session_id).update(status='CANCELLED')
+        
+        # 3. Mark staging records cancelled
+        InvoiceTempOCR.objects.filter(upload_session_id=session_id).update(status='CANCELLED')
+        
+        return Response({"success": True, "message": "Session terminally cancelled."})
 
         summary = {
             'total': len(all_session_records), 

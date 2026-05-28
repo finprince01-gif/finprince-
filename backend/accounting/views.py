@@ -289,9 +289,14 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
         queryset = self.get_queryset().select_related('ledger').order_by('transaction_date', 'id') # pyre-ignore
 
         if ledger_id:
-            queryset = queryset.filter(ledger_id=ledger_id) # pyre-ignore
+            from django.db.models import Q
+            if resolved_ledger and resolved_ledger.name:
+                queryset = queryset.filter(Q(ledger_id=ledger_id) | Q(ledger_name=resolved_ledger.name) | Q(ledger__name=resolved_ledger.name))
+            else:
+                queryset = queryset.filter(ledger_id=ledger_id)
         elif ledger_name:
-            queryset = queryset.filter(ledger_name=ledger_name) # pyre-ignore
+            from django.db.models import Q
+            queryset = queryset.filter(Q(ledger_name=ledger_name) | Q(ledger__name=ledger_name)) # pyre-ignore
 
         if start_date:
             try:
@@ -418,11 +423,16 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             # Determine particulars: find the OTHER ledger(s) in this voucher
             vid = e.voucher_id
             own_lid = e.ledger_id
+            own_lname = e.ledger.name if e.ledger else (e.ledger_name or 'N/A')
             counterparts = counterpart_map.get(vid, [])
-            opposite_names = [
-                lname for (lid, lname) in counterparts
-                if lid != own_lid
-            ]
+            opposite_names = []
+            for lid, lname in counterparts:
+                if lid is not None and own_lid is not None:
+                    if lid != own_lid:
+                        opposite_names.append(lname)
+                else:
+                    if lname != own_lname:
+                        opposite_names.append(lname)
             # Remove duplicates while preserving order
             seen = set()
             unique_opposites = []

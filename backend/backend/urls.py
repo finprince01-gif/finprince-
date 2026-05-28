@@ -8,7 +8,7 @@ from ocr_pipeline.views import (
     CleanOCRStagingView, OCRStagingFinalizeView, OCRStagingRescanView, 
     OCRStagingRescanUploadView, ZohoAdapterView, ZohoReconstructView, 
     OCRJobStatusView, S3UploadPolicyView, PipelineStatusSSEView,
-    OperationalDashboardView
+    OperationalDashboardView, OCRStagingCancelView
 )
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
@@ -99,6 +99,7 @@ urlpatterns = [
     path('api/ocr-job-status/<uuid:job_id>/', OCRJobStatusView.as_view(), name='ocr-job-status'),
     path('api/ocr-staging/<str:file_hash>/', CleanOCRStagingView.as_view(), name='ocr-staging-remove'),
     path('api/ocr-staging-finalize/', OCRStagingFinalizeView.as_view(), name='ocr-staging-finalize'),
+    path('api/ocr-staging-cancel/', OCRStagingCancelView.as_view(), name='ocr-staging-cancel'),
     path('api/ocr-staging-rescan/', OCRStagingRescanView.as_view(), name='ocr-staging-rescan'),
     path('api/ocr-staging-rescan-upload/', OCRStagingRescanUploadView.as_view(), name='ocr-staging-rescan-upload'),
     path('api/zoho-adapter/', ZohoAdapterView.as_view(), name='zoho-adapter'),

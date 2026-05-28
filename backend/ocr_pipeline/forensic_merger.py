@@ -143,9 +143,23 @@ class ForensicMerger:
         header_cgst = self._to_decimal(inv.get("total_cgst"))
         header_sgst = self._to_decimal(inv.get("total_sgst"))
         header_cess = self._to_decimal(inv.get("total_cess") or inv.get("cess"))
+        header_round_off = self._to_decimal(inv.get("round_off"))
         header_invoice_val = self._to_decimal(inv.get("total_invoice_value") or inv.get("total_amount"))
         
-        logger.info(f"[TOTAL_RECOMPUTE_INPUT] invoice_no='{invoice_no}' header_taxable={header_taxable} header_invoice={header_invoice_val} header_igst={header_igst} header_cgst={header_cgst} header_sgst={header_sgst} header_cess={header_cess} items_count={len(items)}")
+        # ── EXTRACT ROUND OFF ──
+        ocr_text = inv.get("_pdf_ocr_text", "")
+        
+        # Look for round off in OCR text if missing from header
+        if self.is_empty_or_zero(header_round_off) and ocr_text:
+            ro_match = re.search(r'(?i)(?:Round\s*Off|Rounding\s*Adjustment|Adjustment|Final\s*Adjustment)\s*[:/-]?\s*([+-]?[0-9]*\.[0-9]{1,2})', ocr_text)
+            if ro_match:
+                header_round_off = self._to_decimal(ro_match.group(1))
+                logger.info(f"[ROUND_OFF_DETECTED] invoice_no='{invoice_no}' source='ocr' value={header_round_off}")
+                inv["round_off"] = float(header_round_off)
+        elif not self.is_empty_or_zero(header_round_off):
+            logger.info(f"[ROUND_OFF_CANDIDATE] invoice_no='{invoice_no}' value={header_round_off}")
+        
+        logger.info(f"[TOTAL_RECOMPUTE_INPUT] invoice_no='{invoice_no}' header_taxable={header_taxable} header_invoice={header_invoice_val} header_igst={header_igst} header_cgst={header_cgst} header_sgst={header_sgst} header_cess={header_cess} header_round_off={header_round_off} items_count={len(items)}")
 
         # Item totals calculations
         calc_taxable = Decimal("0.00")
@@ -170,8 +184,8 @@ class ForensicMerger:
                 calc_sgst += i_sgst
                 calc_cess += i_cess
 
-        calc_invoice_val = calc_taxable + calc_igst + calc_cgst + calc_sgst + calc_cess
-        logger.info(f"[TOTAL_COMPONENT_TRACE] invoice_no='{invoice_no}' sum_calculated={calc_invoice_val} calc_taxable={calc_taxable} calc_igst={calc_igst} calc_cgst={calc_cgst} calc_sgst={calc_sgst} calc_cess={calc_cess}")
+        calc_invoice_val = calc_taxable + calc_igst + calc_cgst + calc_sgst + calc_cess + header_round_off
+        logger.info(f"[TOTAL_COMPONENT_TRACE] invoice_no='{invoice_no}' sum_calculated={calc_invoice_val} calc_taxable={calc_taxable} calc_igst={calc_igst} calc_cgst={calc_cgst} calc_sgst={calc_sgst} calc_cess={calc_cess} round_off={header_round_off}")
 
         # Check if totals are missing or empty
         taxable_missing = self.is_empty_or_zero(header_taxable)
@@ -219,8 +233,13 @@ class ForensicMerger:
                 inv["total_invoice_value"] = float(calc_invoice_val)
                 inv["total_amount"] = float(calc_invoice_val)
         else:
+            delta = calc_invoice_val - header_invoice_val
+            if delta != 0:
+                logger.info(f"[TOTAL_DELTA_ANALYSIS] invoice_no='{invoice_no}' header={header_invoice_val} calc={calc_invoice_val} delta={delta}")
+            
             logger.info(f"[TOTAL_PRESERVED] invoice_no='{invoice_no}' field='total_invoice_value' value={header_invoice_val}")
             logger.info(f"[TOTAL_OVERRIDE_BLOCKED] invoice_no='{invoice_no}' field='total_invoice_value' preserved={header_invoice_val} rejected={calc_invoice_val} reason='original_field_valid'")
+            logger.info(f"[HEADER_TOTAL_LOCKED] invoice_no='{invoice_no}' preserved_total={header_invoice_val}")
             inv["total_invoice_value"] = float(header_invoice_val)
             inv["total_amount"] = float(header_invoice_val)
 
@@ -458,6 +477,9 @@ class ForensicMerger:
         """Step 3: MERGE ALL PAGES (MANDATORY)."""
         if not group:
             return {}
+
+        import copy
+        group = copy.deepcopy(group) # Deepcopy to prevent DTO leakage during in-place merges
 
         # [MERGE_GROUP_TRACE] (Requirement #5)
         for p in group:

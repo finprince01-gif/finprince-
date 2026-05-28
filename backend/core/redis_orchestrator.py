@@ -355,6 +355,21 @@ class RedisOrchestrator:
 
         return self._safe_exec(_collect)
 
+    def set_terminal_status(self, session_id: str, status: str, reason: str = ""):
+        """
+        [SURGICAL FIX] Directly marks a session as terminal without requiring DB records.
+        Useful for aborting sessions when DB insertion fails (e.g. duplicate hash).
+        """
+        def _set():
+            key = f"session_terminal:{session_id}"
+            self.redis.hset(key, mapping={
+                "status": status,
+                "reason": reason,
+                "timestamp": str(time.time())
+            })
+            self.redis.expire(key, 86400) # Keep for 24 hours
+        return self._safe_exec(_set)
+
     def get_authoritative_session_state(self, session_id: str):
         """
         [PHASE 15] SINGLE SOURCE OF TRUTH FOR PIPELINE TERMINALITY.
@@ -363,7 +378,27 @@ class RedisOrchestrator:
         def _get_auth():
             from ocr_pipeline.models import SessionFinalizationState, FinalizedSnapshot, InvoiceTempOCR
             from core.sqs import queue_service
-            
+
+            # 0. Check for explicit terminal session state (SURGICAL FIX for duplicates)
+            try:
+                term_key = f"session_terminal:{session_id}"
+                if self.redis.exists(term_key):
+                    term_data = self.redis.hgetall(term_key)
+                    if term_data and term_data.get("status"):
+                        logger.warning(f"[AUTHORITATIVE_TERMINAL_OVERRIDE] session={session_id} status={term_data.get('status')} reason={term_data.get('reason')}")
+                        return {
+                            'terminal': True,
+                            'terminal_reason': term_data.get('reason', 'FAILED'),
+                            'barrier_complete': True,
+                            'snapshot_complete': True,
+                            'materialization_complete': True,
+                            'expected_pages': 0,
+                            'completed_pages': 0,
+                            'failed_pages': 0,
+                        }
+            except Exception as e:
+                logger.error(f"[TERMINAL_KEY_CHECK_ERROR] {e}")
+
             # 1. Base DB State - Aggregate across all files in the session
             logger.info(f"[SESSION_AGGREGATE_START] session={session_id}")
             records = InvoiceTempOCR.objects.filter(upload_session_id=session_id).values_list('id', flat=True)

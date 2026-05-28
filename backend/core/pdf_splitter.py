@@ -157,42 +157,71 @@ def detect_invoice_groups(doc) -> List[InvoiceGroup]:
         inv_no = _extract_invoice_number(page_text) or "UNKNOWN-1"
         return [InvoiceGroup(invoice_number=inv_no, page_indices=[0])]
 
-    groups: List[InvoiceGroup] = []
-    current_pages: List[int] = []
-    current_inv_no: str | None = None
-    fallback_counter = 1
-    
-    any_headers_found_in_doc = False
-    
+    # Pre-extract headers and invoice numbers to allow clean look-ahead
+    page_invoice_nos = []
+    page_has_headers = []
     for page_idx in range(total_pages):
         page = doc[page_idx]
-        has_header = _page_has_header(page)
+        page_has_headers.append(_page_has_header(page))
         page_text = page.get_text()
-        extracted_no = _extract_invoice_number(page_text)
+        page_invoice_nos.append(_extract_invoice_number(page_text))
+
+    groups: List[InvoiceGroup] = []
+    current_pages: List[int] = [0]
+    current_inv_no: str | None = page_invoice_nos[0]
+    fallback_counter = 1
+    
+    any_headers_found_in_doc = any(page_has_headers)
+
+    for page_idx in range(1, total_pages):
+        has_header = page_has_headers[page_idx]
+        extracted_no = page_invoice_nos[page_idx]
         
+        should_split = False
         if has_header:
-            any_headers_found_in_doc = True
+            is_continuation = False
             
-        if has_header or not current_pages:
-            # New segment (Requirements 1-4)
-            if current_pages:
-                groups.append(
-                    InvoiceGroup(
-                        invoice_number=current_inv_no or f"UNKNOWN-{fallback_counter}",
-                        page_indices=current_pages,
-                    )
+            # Case 1: The current page has an invoice number, and we have an active invoice number
+            if extracted_no and current_inv_no:
+                if extracted_no.lower() == current_inv_no.lower():
+                    is_continuation = True
+            
+            # Case 2: The current page does NOT have an invoice number, but we have an active invoice number
+            elif not extracted_no and current_inv_no:
+                # Look-ahead: scan subsequent pages to find the first page with an invoice number
+                next_extracted_no = None
+                for look_idx in range(page_idx + 1, total_pages):
+                    look_no = page_invoice_nos[look_idx]
+                    if look_no:
+                        next_extracted_no = look_no
+                        break
+                
+                if next_extracted_no:
+                    if next_extracted_no.lower() == current_inv_no.lower():
+                        is_continuation = True
+                else:
+                    # No subsequent invoice number found. 
+                    # If the next pages don't introduce a new invoice number,
+                    # we treat this page as a continuation of the active invoice.
+                    is_continuation = True
+            
+            if not is_continuation:
+                should_split = True
+
+        if should_split:
+            groups.append(
+                InvoiceGroup(
+                    invoice_number=current_inv_no or f"UNKNOWN-{fallback_counter}",
+                    page_indices=current_pages,
                 )
-                if not current_inv_no:
-                    fallback_counter += 1
+            )
+            if not current_inv_no:
+                fallback_counter += 1
             
             current_pages = [page_idx]
             current_inv_no = extracted_no
         else:
-            # Does NOT contain a header. 
-            # Attach to the active invoice continuation.
-            # Multi-page requirement 5: goes to existing segment
             current_pages.append(page_idx)
-            # if we didn't have a number initially but we do now
             if not current_inv_no and extracted_no:
                 current_inv_no = extracted_no
 
@@ -211,8 +240,7 @@ def detect_invoice_groups(doc) -> List[InvoiceGroup]:
         logger.info("pdf_splitter: No headers detected globally. Applying Fallback Rule: each page is independent.")
         groups = []
         for i in range(total_pages):
-            page_text = doc[i].get_text()
-            extracted = _extract_invoice_number(page_text) or f"UNKNOWN-{i+1}"
+            extracted = page_invoice_nos[i] or f"UNKNOWN-{i+1}"
             groups.append(InvoiceGroup(invoice_number=extracted, page_indices=[i]))
 
     logger.info(
@@ -223,6 +251,7 @@ def detect_invoice_groups(doc) -> List[InvoiceGroup]:
         logger.info("  Invoice %d: range [%s]", idx, ", ".join(str(p+1) for p in grp.page_indices)) # logged as 1-based ranges for user readability
         
     return groups
+
 
 def write_temp_pdf(pdf_bytes: bytes, page_indices: List[int]) -> str:
     """

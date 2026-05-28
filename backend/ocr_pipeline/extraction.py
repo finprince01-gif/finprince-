@@ -201,7 +201,7 @@ def _set_cached_ai_result(ocr_text: str, payload: dict):
     except Exception as e:
         logger.error(f"[CACHE_SAVE_ERR] {e}")
 
-def extract_invoice(client, file_bytes=None, voucher_type='Purchase', public_ip="0.0.0.0", user_id='system', tenant_id='system', wait_for_result=True, record_id=None, item_id=None, upload_session_id=None, job_id=None, file_path=None, start_page=0, limit=None):
+def extract_invoice(client, file_bytes=None, voucher_type='Purchase', upload_type='UNKNOWN', public_ip="0.0.0.0", user_id='system', tenant_id='system', wait_for_result=True, record_id=None, item_id=None, upload_session_id=None, job_id=None, file_path=None, start_page=0, limit=None):
     """
     Extracts invoice data using the central AI Proxy service with fallbacks.
     Returns a unified JSON object matching the internal schema.
@@ -281,6 +281,7 @@ Return a JSON object with a "pages" key containing a list of {count} results in 
             'job_id': job_id,
             'upload_session_id': upload_session_id,
             'tenant_id': tenant_id,
+            'upload_type': upload_type,  # [UPLOAD_TYPE ISOLATION FIX]
             'batch_indices': [p['idx'] for p in batch_data]
         }
 
@@ -482,6 +483,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             'job_id': job_id,
             'upload_session_id': upload_session_id,
             'tenant_id': tenant_id,
+            'upload_type': upload_type,  # [UPLOAD_TYPE ISOLATION FIX]
             'correlation_id': corr_id
         }
         
@@ -846,7 +848,7 @@ Failure to extract ANY field that is visible on the document is unacceptable.
     MAX_INITIAL_FANOUT = 5
     batches_to_enqueue = batches[:MAX_INITIAL_FANOUT]
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(batches_to_enqueue), 5)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(len(batches_to_enqueue), 5))) as executor:
         futures = [executor.submit(process_batch, b) for b in batches_to_enqueue]
         for future in concurrent.futures.as_completed(futures):
             batch_res = future.result()

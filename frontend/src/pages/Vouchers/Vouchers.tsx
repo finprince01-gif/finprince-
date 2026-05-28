@@ -3506,7 +3506,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         // Instantly propagate to application cache so reports reveal update immediately
         if (onAddVouchers) {
           onAddVouchers([{
-            id: response?.id?.toString() || Date.now().toString(),
+            id: genericVoucherId?.toString() || response?.id?.toString() || Date.now().toString(),
             type: 'Purchase',
             date: date,
             party: party,
@@ -3536,6 +3536,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setShowPurchasePrintPreview(true);
         } else {
           resetForm();
+          if (isEditing) handleCloseVoucher();
         }
         refetch(); // Refresh usage statistics
 
@@ -3586,8 +3587,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           customer_debit_note_date: cnCustomerDebitNoteDate,
           gstin: cnGstin,
           grn_ref_no: cnGrnRefNo,
-          bill_from: cnBillFrom,
-          ship_from: cnSameAsBillFrom ? cnBillFrom : cnShipFrom,
+          bill_from: [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', '),
+          ship_from: cnSameAsBillFrom 
+            ? [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ')
+            : [shipFromAddress1, shipFromAddress2, shipFromAddress3, shipFromCity, shipFromPincode, shipFromState, shipFromCountry].filter(Boolean).join(', '),
           input_type: cnInputType.join(', '),
           in_foreign_currency: cnInForeignCurrency,
           narration: cnPostingNote || '',
@@ -3639,7 +3642,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         // Instantly propagate to application cache so reports reveal update immediately
         if (onAddVouchers) {
           onAddVouchers([{
-            id: response?.id?.toString() || Date.now().toString(),
+            id: genericVoucherId?.toString() || response?.id?.toString() || Date.now().toString(),
             type: 'Credit Note',
             date: cnDate,
             party: cnCustomer,
@@ -3661,8 +3664,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           // TODO: Implement Credit Note Print Preview
           // For now, just close
           resetForm();
+          if (isEditing) handleCloseVoucher();
         } else {
           resetForm();
+          if (isEditing) handleCloseVoucher();
         }
         refetch();
 
@@ -3815,6 +3820,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (voucherType === 'Journal') fetchJournalConfigs();
         if (voucherType === 'Expenses') fetchExpensesConfigs();
 
+        if (!shouldPrint && isEditing) {
+          handleCloseVoucher();
+        }
+
       } catch (error: any) {
         console.error(`Error saving ${voucherType}:`, error);
         const serverError = error.response?.data;
@@ -3826,6 +3835,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       showSuccess(`${voucherType} Voucher Saved Successfully!`);
       resetForm();
       refetch(); // Refresh usage statistics
+      if (!shouldPrint && isEditing) {
+        handleCloseVoucher();
+      }
     }
   };
 
@@ -4313,6 +4325,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       purchase: 'Purchase', sales: 'Sales', payment: 'Payment',
       receipt: 'Receipt', contra: 'Contra', journal: 'Journal',
       expenses: 'Expenses', expense: 'Expenses',
+      'credit note': 'Credit Note', 'debit note': 'Debit Note',
+      credit_note: 'Credit Note', debit_note: 'Debit Note',
+      credit_note_voucher: 'Credit Note', debit_note_voucher: 'Debit Note',
     };
     const mappedType = typeMap[vType] || (vType ? vType.charAt(0).toUpperCase() + vType.slice(1) : 'Purchase');
     setVoucherType(mappedType);
@@ -4557,8 +4572,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           if (details.credit_note_series || details.voucher_series) setSelectedCnConfig(details.credit_note_series || details.voucher_series);
           if (details.customer_name || details.party) setCnCustomer(details.customer_name || details.party);
           if (details.branch) setCnBranch(details.branch);
+          // Date
+          if (details.date) setCnDate(new Date(details.date).toISOString().split('T')[0]);
           if (details.sales_invoice_nos) {
-            const nos = typeof details.sales_invoice_nos === 'string' ? details.sales_invoice_nos.split(',').map((s: string) => s.trim()) : details.sales_invoice_nos;
+            const nos = typeof details.sales_invoice_nos === 'string' ? details.sales_invoice_nos.split(',').map((s: string) => s.trim()).filter(Boolean) : (Array.isArray(details.sales_invoice_nos) ? details.sales_invoice_nos : []);
             if (Array.isArray(nos)) setCnSelectedSalesInvoices(nos);
           }
           if (details.sales_invoice_dates) setCnSalesInvoiceDate(details.sales_invoice_dates);
@@ -4566,34 +4583,56 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           if (details.customer_debit_note_date) setCnCustomerDebitNoteDate(details.customer_debit_note_date);
           if (details.gstin) setCnGstin(details.gstin);
           if (details.grn_ref_no) setCnGrnRefNo(details.grn_ref_no);
-          if (details.bill_from) setCnBillFrom(details.bill_from);
+          if (details.bill_from) {
+             setCnBillFrom(details.bill_from);
+             setAddressFields(details.bill_from);
+          }
           if (details.ship_from) {
              setCnShipFrom(details.ship_from);
-             if (details.ship_from === details.bill_from) setCnSameAsBillFrom(true);
+             if (details.ship_from === details.bill_from) {
+                 setCnSameAsBillFrom(true);
+             } else {
+                 setCnSameAsBillFrom(false);
+                 const parts = typeof details.ship_from === 'string' ? details.ship_from.split(',').map((p: string) => p.trim()) : [];
+                 setShipFromAddress1(parts[0] || '');
+                 setShipFromAddress2(parts[1] || '');
+                 setShipFromAddress3(parts[2] || '');
+                 setShipFromCity(parts[3] || '');
+                 setShipFromPincode(parts[4] || '');
+                 setShipFromState(parts[5] || '');
+                 setShipFromCountry(parts[6] || 'India');
+             }
           }
-          if (details.input_type) setCnInputType(typeof details.input_type === 'string' ? details.input_type.split(',').map((s:string) => s.trim()) : details.input_type);
+          if (details.input_type) {
+            const inputTypeVal = typeof details.input_type === 'string'
+              ? details.input_type.split(',').map((s: string) => s.trim()).filter(Boolean)
+              : (Array.isArray(details.input_type) ? details.input_type : []);
+            setCnInputType(inputTypeVal);
+          }
           if (details.in_foreign_currency) setCnInForeignCurrency(details.in_foreign_currency);
           if (details.narration || details.posting_note) setCnPostingNote(details.narration || details.posting_note);
 
-          if (details.item_details?.items) {
-             setCnItems(details.item_details.items.map((item: any, idx: number) => ({
-                id: item.id || String(idx + 1),
-                itemCode: item.itemCode || item.item_code || '',
-                itemName: item.itemName || item.item_name || '',
-                hsnSac: item.hsnSac || item.hsn_sac || '',
-                qty: parseFloat(item.qty || item.quantity || '0'),
+          // item_details.line_items is the readable DB field (items is write_only)
+          const lineItems = details.item_details?.line_items || details.item_details?.items || [];
+          if (Array.isArray(lineItems) && lineItems.length > 0) {
+             setCnItems(lineItems.map((item: any, idx: number) => ({
+                id: item.id ? String(item.id) : String(idx + 1),
+                itemCode: item.item_code || item.itemCode || '',
+                itemName: item.item_name || item.itemName || '',
+                hsnSac: item.hsn_sac || item.hsnSac || '',
+                qty: parseFloat(String(item.quantity || item.qty || '0')),
                 uom: item.uom || '',
-                rate: parseFloat(item.rate || item.itemRate || '0'),
-                taxableValue: parseFloat(item.taxableValue || item.taxable_value || '0'),
-                foreignRate: parseFloat(item.foreignRate || item.foreign_rate || '0'),
-                foreignAmount: parseFloat(item.foreignAmount || item.foreign_amount || '0'),
-                igst: parseFloat(item.igst || item.igst_amount || '0'),
-                cgst: parseFloat(item.cgst || item.cgst_amount || '0'),
-                sgst: parseFloat(item.sgst || item.sgst_amount || '0'),
-                cess: parseFloat(item.cess || item.cess_amount || '0'),
-                invoiceValue: parseFloat(item.invoiceValue || item.invoice_value || '0'),
+                rate: parseFloat(String(item.rate || item.itemRate || '0')),
+                taxableValue: parseFloat(String(item.taxable_value || item.taxableValue || '0')),
+                foreignRate: parseFloat(String(item.foreign_rate || item.foreignRate || '0')),
+                foreignAmount: parseFloat(String(item.foreign_amount || item.foreignAmount || '0')),
+                igst: parseFloat(String(item.igst_amount || item.igst || '0')),
+                cgst: parseFloat(String(item.cgst_amount || item.cgst || '0')),
+                sgst: parseFloat(String(item.sgst_amount || item.sgst || '0')),
+                cess: parseFloat(String(item.cess_amount || item.cess || '0')),
+                invoiceValue: parseFloat(String(item.invoice_value || item.invoiceValue || '0')),
                 description: item.description || '',
-                salesLedger: item.salesLedger || item.sales_ledger || '',
+                salesLedger: item.sales_ledger || item.salesLedger || '',
                 poRate: item.poRate || null,
                 invoiceRate: item.invoiceRate || null,
                 rateMismatch: item.rateMismatch || false,
@@ -4602,8 +4641,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 qtyMismatch: item.qtyMismatch || false,
                 grnQty: item.grnQty || null,
                 sourcePoNo: item.sourcePoNo || null,
-                salesInvoiceNo: item.salesInvoiceNo || item.sales_invoice_no || null,
-                financialAmount: parseFloat(item.financialAmount || item.financial_amount || '0')
+                salesInvoiceNo: item.sales_invoice_no || item.salesInvoiceNo || null,
+                financialAmount: parseFloat(String(item.financial_amount || item.financialAmount || '0'))
              })));
           }
 
@@ -4612,10 +4651,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
              setCnReverseGstTds(details.due_details.reverse_gst_tds || 'No');
              setCnReverseIncomeTaxTcs(details.due_details.reverse_income_tax_tcs || 'No');
              setCnReverseIncomeTaxTds(details.due_details.reverse_income_tax_tds || 'No');
-             setCnIncomeTaxTdsTcsAmount(details.due_details.income_tax_tds_tcs_amount?.toString() || '0');
-             setCnGstTdsTcsAmount(details.due_details.gst_tds_tcs_amount?.toString() || '0');
-             setCnAdvanceAmount(details.due_details.advance_amount?.toString() || '0');
-             setCnPayableAmount(details.due_details.payable_amount?.toString() || '0');
+             setCnIncomeTaxTdsTcsAmount(String(details.due_details.income_tax_tds_tcs_amount || '0.00'));
+             setCnGstTdsTcsAmount(String(details.due_details.gst_tds_tcs_amount || '0.00'));
+             setCnAdvanceAmount(String(details.due_details.advance_amount || '0.00'));
+             setCnPayableAmount(String(details.due_details.payable_amount || '0.00'));
              setCnTermsConditions(details.due_details.terms_conditions || '');
           }
 
@@ -11284,6 +11323,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     </>
   );
 
+  const handleCloseVoucher = () => {
+    setIsReadOnlyMode(false);
+    setDrillDownDetails(null);
+    if (clearViewVoucherData) clearViewVoucherData();
+    if (onNavigate) {
+      if (viewVoucherData?.ledgerName) {
+        onNavigate('Reports', { reportType: 'LedgerReport', drillDownLedger: viewVoucherData.ledgerName });
+      } else {
+        onNavigate('Reports', { reportType: 'DayBook' });
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -11331,12 +11383,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   EDIT VOUCHER
                 </button>
                 <button
-                  onClick={() => {
-                    setIsReadOnlyMode(false);
-                    setDrillDownDetails(null);
-                    if (clearViewVoucherData) clearViewVoucherData();
-                    if (onNavigate) onNavigate('Reports');
-                  }}
+                  onClick={handleCloseVoucher}
                   className="flex items-center gap-2 bg-indigo-800/60 text-indigo-50 px-5 py-3 rounded-xl font-bold text-sm border border-indigo-400/40 hover:bg-indigo-800/90 transition-all active:scale-95"
                 >
                   <Icon name="x" className="w-4 h-4" />

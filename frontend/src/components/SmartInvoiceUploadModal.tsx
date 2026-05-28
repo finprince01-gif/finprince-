@@ -332,11 +332,13 @@ const EditInvoiceModal: React.FC<{
         const fetchFreshData = async () => {
             setLoading(true);
             try {
-                // STEP 1: Fetch FULL Dynamic Schema + Data from DB
-                const [schemaRes, rowRes]: any = await Promise.all([
-                    httpClient.get(`/api/voucher-schema/?type=${voucherType}`),
-                    httpClient.get(`/api/ocr-staging/${row.id}/`)
-                ]);
+                // STEP 1: Fetch FULL Dynamic Schema + Data from DB (or use snapshot row directly)
+                const isSnapshot = String(row.id).startsWith('snap_') || !!row._isSnapshot;
+                
+                const schemaPromise = httpClient.get(`/api/voucher-schema/?type=${voucherType}`);
+                const rowPromise = isSnapshot ? Promise.resolve({ data: [row] }) : httpClient.get(`/api/ocr-staging/${row.id}/`);
+                
+                const [schemaRes, rowRes]: any = await Promise.all([schemaPromise, rowPromise]);
 
                 const fetchedSchema = schemaRes as VoucherSchema;
                 const dbRow = (rowRes?.data && rowRes.data[0]) || null;
@@ -344,17 +346,20 @@ const EditInvoiceModal: React.FC<{
                 if (!dbRow) throw new Error("Record not found in DB.");
 
                 console.log("SCHEMA:", fetchedSchema);
-                console.log("FORM SOURCE (DB):", dbRow.extracted_data);
+                console.log(`FORM SOURCE (${isSnapshot ? 'SNAPSHOT' : 'DB'}):`, dbRow.extracted_data);
 
                 setDynamicSchema(fetchedSchema);
 
                 const raw = JSON.parse(JSON.stringify(dbRow.extracted_data || {}));
 
-                // ── INITIALIZATION (Strictly Schema Driven + Section Based) ──
                 const normalizedSections: any = {};
                 Object.entries(fetchedSchema.sections || {}).forEach(([sectionName, fields]: any) => {
+                    if (!Array.isArray(fields)) return;
+
                     if (sectionName === 'items') {
-                        const itmsRaw = raw.sections?.items || raw.items || raw.line_items || [];
+                        let itmsRaw = raw.sections?.items || raw.items || raw.line_items || [];
+                        if (!Array.isArray(itmsRaw)) itmsRaw = [];
+                        
                         normalizedSections['items'] = (itmsRaw.length > 0 ? itmsRaw : [{}]).map((item: any) => {
                             const normalizedItem: any = {};
                             fields.forEach((f: any) => {
@@ -502,7 +507,7 @@ const EditInvoiceModal: React.FC<{
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">✕</button>
                 </div>
                 {/* Vendor Status Headers */}
-                {row.vendor_status === 'EXISTS' ? (
+                {['EXISTS', 'FOUND', 'MATCHED'].includes(row.vendor_status || '') ? (
                     <div className="px-6 py-4 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-xl">✅</div>
@@ -570,6 +575,16 @@ const EditInvoiceModal: React.FC<{
                                             let displayVal = "";
                                             if (v !== null && v !== undefined) {
                                                 displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                                            }
+                                            
+                                            if (field.type === 'date' && displayVal) {
+                                                const parts = displayVal.split(/[-\/]/);
+                                                if (parts.length === 3) {
+                                                    // if DD-MM-YYYY
+                                                    if (parts[0].length === 2 && parts[2].length === 4) {
+                                                        displayVal = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                                                    }
+                                                }
                                             }
 
                                             return (
@@ -1054,6 +1069,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 console.log('✅ SNAPSHOT RECEIVED — HALTING POLL.');
                 const snapshotInvoices = snapshotInvoicesRaw.map((inv: any, idx: number) => {
                     const result = {
+                        ...inv, // Preserve mapped fields from backend (vendor_status, status, etc)
                         id: String(inv.id || `snap_${idx}`),
                         file_hash: inv.file_hash || `snap_${sid}`,
                         file_path: inv.file_path || 'Finalized Result',
@@ -1065,6 +1081,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         total_amount: String(inv.total_amount || inv.invoice_total || '0.00'),
                         extracted_data: inv.extracted_data || inv,
                         validationStatus: (inv.validationStatus || inv.validation_status || 'READY') as ValidationStatus,
+                        vendor_status: inv.vendor_status || (inv.vendor_id ? 'EXISTS' : 'NEW'),
                         processed: !!inv.processed,
                         _isSnapshot: true,
                         _isMerged: !!inv._isMerged,
@@ -1283,7 +1300,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     validationStatus: vStatus,
                     vendor_status: (['READY', 'FOUND', 'MATCHED'].includes(vStatus) ? 'FOUND' : 'NEW') as VendorStatus,
                     vendor_id: r.vendor_id,
-                    branch: r.branch || clean(inv['branch'], inv['Branch']),
+                    branch: clean(r.branch, inv['branch'], inv['Branch']),
                     extracted_data: rawExtracted,
                     status: r.status || vStatus,
                     created_at: r.created_at || new Date().toISOString(),
@@ -1302,6 +1319,12 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             console.log("API count:", rows.length);
             console.log("UI count:", seeded.length);
 
+            // [ISSUE 1 FIX] Transition to review only when the first hydrated row exists
+            const hasHydratedRows = seeded.some(r => r.validationStatus !== 'processing' && r.status !== 'processing');
+            if ((hasHydratedRows || pipelineStatus === 'completed') && isMounted.current) {
+                setStep(prev => prev === 'scanning' ? 'review' : prev);
+            }
+
             // ── Stop polling if backend says completed or all rows settled ──
             if (pipelineStatus === 'completed') {
                 console.log('✅ Backend reported completed — stopping poll.');
@@ -1316,7 +1339,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         try {
                             const patchResult: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
                             if (patchResult.status === 'READY') {
-                                setScanResults(prev => prev.map(r => r.id === row.id ? { ...r, ...patchResult, validationStatus: 'READY' } : r));
+                                setScanResults(prev => prev.map(r => 
+                                    (r.id === row.id && !r._isSnapshot) ? { ...r, ...patchResult, validationStatus: 'READY' } : r
+                                ));
                             }
                         } catch { /* silent */ }
                     }
@@ -1484,6 +1509,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             const formData = new FormData();
             selectedFiles.forEach(f => formData.append('files', f));
             formData.append('voucher_type', voucherType);
+            formData.append('upload_type', 'PURCHASE'); // [UPLOAD_TYPE PROPAGATION FIX] Purchase Scan
             formData.append('upload_session_id', uploadSessionId);
 
             setScanProgress(40);
@@ -1517,7 +1543,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             // MANDATORY: Always fetch from DB after upload. No shortcut.
             // This ensures invoice_ocr_temp is the SINGLE SOURCE OF TRUTH.
             fetchStagedInvoices(uploadSessionId);
-            setStep('review');
+            // [ISSUE 1 FIX] Removed setStep('review') so UI stays in scanning state until progressive hydration begins.
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.message || 'Scan failed. Please try again.';
             showError(`❌ Scan failed: ${msg}`);
@@ -1574,23 +1600,30 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 );
 
                 if (patchRes.success) {
+                    let newStatus: ValidationStatus = 'READY';
+                    const s = patchRes.status || '';
+                    if (s === 'DUPLICATE' || s === 'duplicate') {
+                        newStatus = 'DUPLICATE';
+                    } else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') {
+                        newStatus = 'GSTIN_CONFLICT';
+                    } else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR' || s === 'NEED_VENDOR') {
+                        newStatus = 'NEED_VENDOR';
+                    }
+
                     // Update ONLY the specific row that was just resolved (strict per-row update)
-                    // We set it to 'processing' (SCANNING) and let fetchStagedInvoices settle the final state
                     setScanResults(prev => prev.map(r =>
                         r.file_hash === resolvingRow.file_hash
                             ? {
                                 ...r,
-                                extracted_data: updatedExtracted,
-                                validationStatus: 'processing' as ValidationStatus,
+                                extracted_data: patchRes.extracted_data || updatedExtracted,
+                                validationStatus: newStatus,
                                 vendor_id: patchRes.vendor_id || res.vendor_id,
-                                vendor_name: patchRes.vendor_name || patchRes.vendor_name || vendorData.vendor_name,
+                                vendor_name: patchRes.vendor_name || vendorData.vendor_name,
                                 vendor_gstin: vendorData.gstin,
-                                vendor_status: 'EXISTS' as VendorStatus,
+                                vendor_status: (patchRes.vendor_status === 'EXISTS' || patchRes.vendor_status === 'MATCHED' || patchRes.vendor_status === 'FOUND' || patchRes.vendor_id || res.vendor_id) ? 'FOUND' as VendorStatus : 'NEW' as VendorStatus,
                             }
                             : r
                     ));
-                    // Refresh all staged invoices to sync any other rows with same vendor from backend
-                    await fetchStagedInvoices(undefined, false, vFilterRef.current);
                     fetchResumeCounts();
                 }
                 setResolvingRow(null);
@@ -1631,7 +1664,11 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     const handleRemove = async (fileHash: string) => {
         try {
-            await httpClient.delete(`/api/ocr-staging/${fileHash}/`);
+            const targetRow = scanResults.find(r => r.file_hash === fileHash);
+            const isSnapshotRow = targetRow ? !!targetRow._isSnapshot : String(fileHash).startsWith('snap_');
+            if (!isSnapshotRow) {
+                await httpClient.delete(`/api/ocr-staging/${fileHash}/`);
+            }
             setScanResults(prev => prev.filter(r => r.file_hash !== fileHash));
             setSelectedHashes(prev => {
                 const next = new Set(prev);
@@ -1650,8 +1687,14 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
         try {
             const hashes = Array.from(selectedHashes);
-            // Parallel delete
-            await Promise.all(hashes.map(h => httpClient.delete(`/api/ocr-staging/${h}/`)));
+            const nonSnapshotHashes = hashes.filter(h => {
+                const targetRow = scanResults.find(r => r.file_hash === h);
+                return targetRow ? !targetRow._isSnapshot : !String(h).startsWith('snap_');
+            });
+            // Parallel delete only for staging records
+            if (nonSnapshotHashes.length > 0) {
+                await Promise.all(nonSnapshotHashes.map(h => httpClient.delete(`/api/ocr-staging/${h}/`)));
+            }
 
             setScanResults(prev => prev.filter(r => !selectedHashes.has(r.file_hash)));
             setSelectedHashes(new Set());
@@ -2449,7 +2492,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                             </div>
                                                         </td>
                                                         <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{getCellValue(row, 'vendor_gstin')}</td>
-                                                        <td className="px-3 py-3 text-[11px] text-gray-600 font-medium">{row.extracted_data?.sections?.supplier_details?.branch || '—'}</td>
+                                                        <td className="px-3 py-3 text-[11px] text-gray-600 font-medium">{getCellValue(row, 'branch') || row.branch || row.extracted_data?.sections?.supplier_details?.branch || '—'}</td>
                                                         <td className="px-3 py-3 text-right font-black text-gray-900 text-[11px]">₹{(() => {
                                                             const val = getCellValue(row, 'total_amount');
                                                             console.log(`[CELL_VALUE_TRACE] row=${row.id} field=total_amount value=${val}`);

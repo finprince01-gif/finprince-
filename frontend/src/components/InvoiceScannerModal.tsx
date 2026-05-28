@@ -410,7 +410,14 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         setBulkJobId(null);
         setCountdownSeconds(null);
         startTimeRef.current = null;
-        // 4. Rotate the session ID so the NEXT upload starts with a clean session
+        // 4. Send cancellation signal to backend to stop workers and update Redis/DB state
+        if (uploadSessionIdRef.current) {
+            httpClient.post('/api/ocr-staging-cancel/', { session_id: uploadSessionIdRef.current })
+                .then(() => console.log(`[CANCEL_API] Successfully sent cancel signal for session: ${uploadSessionIdRef.current}`))
+                .catch(err => console.error(`[CANCEL_API] Failed to cancel session:`, err));
+        }
+
+        // 5. Rotate the session ID so the NEXT upload starts with a clean session
         const newId = String(Date.now());
         uploadSessionIdRef.current = newId;
         console.log(`[CANCEL] Extraction cancelled. New session allocated: ${newId}`);
@@ -672,6 +679,16 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
             formData.append('upload_session_id', currentSessionId);
             formData.append('voucher_type', voucherType);
+
+            // [UPLOAD_TYPE PROPAGATION FIX] Map extractionMode → upload_type for backend routing
+            const uploadTypeMap: Record<string, string> = {
+                'ai_native': 'PURCHASE',
+                'zoho': 'ZOHO',
+                'tally': 'TALLY',
+                'sap': 'SAP',
+            };
+            const derivedUploadType = uploadTypeMap[extractionMode] || 'PURCHASE';
+            formData.append('upload_type', derivedUploadType);
 
             if (isOthersMode) {
                 formData.append('no_persist', 'true');

@@ -634,6 +634,14 @@ class ApiService {
                 response = await httpClient.get<any>(`/api/vouchers/journal/${id}/`, undefined, options);
                 response.type = 'Journal';
                 fetchedAsDetail = true;
+            } else if (normalizedSource === 'credit_note_voucher' || normalizedSource === 'credit note' || normalizedSource === 'credit_note') {
+                response = await httpClient.get<any>(`/api/vouchers/credit-note/${id}/`, undefined, options);
+                response.type = 'Credit Note';
+                fetchedAsDetail = true;
+            } else if (normalizedSource === 'debit_note_voucher' || normalizedSource === 'debit note' || normalizedSource === 'debit_note') {
+                response = await httpClient.get<any>(`/api/vouchers/debit-note/${id}/`, undefined, options);
+                response.type = 'Debit Note';
+                fetchedAsDetail = true;
             } else {
                 response = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
             }

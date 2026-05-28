@@ -179,7 +179,7 @@ def validate_dedup_source(record: InvoiceTempOCR) -> Dict[str, Any]:
 
     # Pull canonical view once to avoid repeated unwrapping
     try:
-        canonical = get_canonical_export_record(data)
+        canonical = get_canonical_export_record(data, tenant_id=record.tenant_id)
     except Exception as e:
         logger.error(f"[DEDUP_VALIDATION_ERROR] record={record.id} canonical_parse_failed={e}")
         return {"valid": False, "failures": ["CANONICAL_PARSE_FAILURE"], "details": {"error": str(e)}}
@@ -281,7 +281,7 @@ def sync_record_flattened_fields(record: InvoiceTempOCR, data: Dict[str, Any], c
     
     # 1. Use canonical normalizer to get consistent names (Target for Unification)
     from ocr_pipeline.normalize import get_canonical_export_record
-    canonical = get_canonical_export_record(data)
+    canonical = get_canonical_export_record(data, tenant_id=record.tenant_id)
     
     # 2. Audit Model Schema (Root Cause #1 - Dynamic Contract)
     # We use _meta.get_fields() to ensure we only save concrete DB columns.
@@ -753,7 +753,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         merger = get_forensic_merger()
         pages_list = []
         for k in sorted(raw_pages.keys(), key=int):
-            p = get_canonical_export_record(raw_pages[k])
+            p = get_canonical_export_record(raw_pages[k], tenant_id=record.tenant_id)
             p["_page_no"] = int(k)
             pages_list.append(p)
 
@@ -1092,7 +1092,8 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                             status=PipelineStatus.FINALIZED,
                             is_primary=True,
                             processed=False,
-                            voucher_type=record.voucher_type
+                            voucher_type=record.voucher_type,
+                            upload_type=record.upload_type  # [UPLOAD_TYPE ISOLATION FIX]
                         )
                         sync_record_flattened_fields(sibling, inv_ui, commit=False)
                         siblings.append(sibling)
@@ -1322,22 +1323,49 @@ def trigger_next_fanout(record_id):
                 logger.debug(f"[FANOUT_FILL] record={record_id} inflight={inflight} filling={batch_size} next={next_start+1}")
                 
                 record = InvoiceTempOCR.objects.get(id=record_id)
+                actual_path = resolve_storage_path(record)
+                
+                # [FIX] MessageFactory MUST receive 'job_id' in payload for task_type=AI_EXTRACTION
+                from ocr_pipeline.models import OCRJob
+                job = OCRJob.objects.filter(upload_session_id=record.upload_session_id).first()
+                job_id = job.id if job else record.upload_session_id
                 
                 # Enqueue the batch (usually 1 but support multiple)
                 for i in range(batch_size):
                     page_idx = next_start + i
                     logger.debug(f"[SLIDING_WINDOW_ENQUEUE] record={record_id} page={page_idx + 1}")
                     
-                    extract_invoice(
-                        None, 
-                        record_id=record.id,
-                        file_path=record.file_path,
-                        wait_for_result=False,
-                        tenant_id=record.tenant_id,
-                        upload_session_id=record.upload_session_id,
-                        start_page=page_idx,
-                        limit=1 
-                    )
+                    try:
+                        extract_invoice(
+                            None, 
+                            record_id=record.id,
+                            file_path=actual_path,
+                            wait_for_result=False,
+                            tenant_id=record.tenant_id,
+                            upload_session_id=record.upload_session_id,
+                            job_id=job_id,
+                            start_page=page_idx,
+                            limit=1 
+                        )
+                    except Exception as e:
+                        logger.error(f"[SLIDING_WINDOW_ENQUEUE_FAIL] record={record_id} page={page_idx + 1} error={e}")
+                        # [FIX] Reconcile failure so barrier does not deadlock
+                        from core.redis_orchestrator import orchestrator
+                        orchestrator.register_page_completion(str(record_id), page_idx + 1, is_failed=True)
+                        # Also increment the high-water mark so it moves on
+                        SessionFinalizationState.objects.filter(id=str(record_id)).update(
+                            total_pages_completed=models.F('total_pages_completed') + 1,
+                            failed_pages=models.F('failed_pages') + 1
+                        )
+                        from ocr_pipeline.models import InvoicePageResult
+                        InvoicePageResult.objects.update_or_create(
+                            record_id=record_id, page_number=page_idx + 1,
+                            defaults={
+                                'session_id': record.upload_session_id,
+                                'is_failed': True,
+                                'canonical_payload': {'status': 'OCR_FAILED', 'error': f"Enqueue Failed: {e}"}
+                            }
+                        )
             else:
                 logger.debug(f"[FANOUT_STALLED] record={record_id} window_full={inflight}")
     except Exception as e:
@@ -1385,11 +1413,22 @@ def force_reconcile_stale_barriers():
 
 
 
+@transaction.atomic
 def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwargs):
     """
     CORE VALIDATION FUNCTION: 
     Checks for Vendor, Duplicates, and optionally creates Voucher.
     """
+    try:
+        record = InvoiceTempOCR.objects.select_for_update().get(id=record.id)
+    except InvoiceTempOCR.DoesNotExist:
+        logger.error(f"[VALIDATION_ABORT] Record {record.id} not found in database.")
+        return {"status": "ERROR"}
+
+    if record.status in ['COMPLETED', 'SPLIT_COMPLETE'] and not kwargs.get('force'):
+        logger.info(f"[VALIDATION_ABORT] Record {record.id} is already in terminal state '{record.status}'. Skipping processing.")
+        return {"status": record.validation_status or "SUCCESS"}
+
     # ── [PHASE 1] SAFE INITIALIZATION ──
     supplier = {}
     vendor = None
@@ -1475,7 +1514,8 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                                     'gstin': gstin,
                                     'branch': branch,
                                     'is_primary': True, # MUST be primary to show in UI independently
-                                    'status': 'EXTRACTED'
+                                    'status': 'EXTRACTED',
+                                    'upload_type': record.upload_type  # [UPLOAD_TYPE ISOLATION FIX]
                                 }
                             )
                             
@@ -1517,7 +1557,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         supply = sections.get("supply_details", {})
         due = sections.get("due_details", {})
         
-        canonical = get_canonical_export_record(data)
+        canonical = get_canonical_export_record(data, tenant_id=record.tenant_id)
         gstin = (canonical.get("gstin") or "").strip().upper()
         invoice_no = (canonical.get("supplier_invoice_no") or canonical.get("invoice_no") or "").strip()
         vendor_name = (canonical.get("vendor_name") or "").strip()
@@ -1594,6 +1634,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         logger.debug(f"[DUPLICATE_AUDIT] is_duplicate={is_duplicate}")
 
         if is_duplicate:
+            record.status = "EXTRACTED"
             record.validation_status = "DUPLICATE"
             record.save()
             logger.warning(f"[FINAL_STATUS] DUPLICATE id={record.id}")
@@ -1618,6 +1659,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                     record.validation_status = 'FOUND'
                     record.save()
             else:
+                record.status = "EXTRACTED"
                 record.validation_status = "NEED_VENDOR"
                 record.save()
                 return {"status": "NEED_VENDOR"}
@@ -1628,6 +1670,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
 
         # 🔹 CREATE PURCHASE VOUCHER (ONLY IF auto_save IS TRUE)
         if not auto_save:
+            record.status = "EXTRACTED"
             record.validation_status = "READY"
             record.save()
             logger.info(f"[FINAL_STATUS] READY record={record.id}")
@@ -1635,6 +1678,22 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
 
         # Using the Pipeline 2 logic refined earlier
         with transaction.atomic():
+            # Double-check inside transaction to avoid race-condition duplicate voucher creation
+            existing_voucher = VoucherPurchaseSupplierDetails.objects.filter(
+                supplier_invoice_no__iexact=invoice_no,
+                gstin__iexact=gstin,
+                branch__iexact=branch_name,
+                vendor_name__iexact=vendor_name,
+                tenant_id=tenant_id
+            ).first()
+            
+            if existing_voucher:
+                logger.warning(f"[RACE_PREVENTED] Voucher already exists for invoice={invoice_no} gstin={gstin}. Skipping creation.")
+                record.status = "EXTRACTED"
+                record.validation_status = "DUPLICATE"
+                record.save()
+                return {"status": "DUPLICATE"}
+
             branch_record = Branch.objects.filter(id=tenant_id).first()
             company_gstin = branch_record.gstin if branch_record else None
             is_interstate = gstin[:2] != company_gstin[:2] if company_gstin and len(gstin)>=2 and len(company_gstin)>=2 else False

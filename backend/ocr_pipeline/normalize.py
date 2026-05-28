@@ -335,11 +335,28 @@ def derive_branch_from_address(addr: str) -> str:
             return branch
     return ""
 
-def get_normalized_export_record(invoice: Any) -> Dict[str, Any]:
+def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[str, Any]:
     """
     STRICT CANONICAL NORMALIZER.
     Provides ONE authoritative snake_case record.
     """
+    tenant_gstin = None
+    tenant_name = None
+    tenant_address_keywords = set()
+    if tenant_id:
+        try:
+            from core.models import Tenant
+            tenant = Tenant.objects.filter(id=str(tenant_id)).first()
+            if tenant:
+                tenant_gstin = (tenant.gstin or "").strip().upper()
+                tenant_name = (tenant.name or "").strip().lower()
+                for field_val in [tenant.name, tenant.branch_name, tenant.address_line1, tenant.address_line2, tenant.address_line3, tenant.city]:
+                    if field_val:
+                        words = [w.strip().lower() for w in re.split(r'\W+', str(field_val)) if len(w.strip()) > 3]
+                        tenant_address_keywords.update(words)
+        except Exception as e:
+            logger.error(f"[TENANT_ISOLATION_INIT_FAIL] tenant_id={tenant_id} error={e}")
+
     def get_strict(keys, default=""):
         if isinstance(invoice, dict):
             # 1. Root level
@@ -414,16 +431,51 @@ def get_normalized_export_record(invoice: Any) -> Dict[str, Any]:
                     if match:
                         raw_to = match.group(1).strip()
                         logger.info(f"[BILL_TO_WINDOW_DESPERATE_HIT] len={len(raw_to)}")
+
+    # ── [TENANT-BRANCH ISOLATION GUARD] ──
+    # Wipe vendor address if it leaks customer (tenant) data
+    if raw_from and tenant_address_keywords:
+        bill_from_words = [w.strip().lower() for w in re.split(r'\W+', str(raw_from)) if len(w.strip()) > 3]
+        matches = [w for w in bill_from_words if w in tenant_address_keywords]
+        if len(matches) >= 4 or (len(bill_from_words) > 0 and len(matches) / len(bill_from_words) > 0.6):
+            logger.warning(f"[TENANT_ISOLATION_WARN] Extracted bill_from address '{raw_from}' matches tenant address keywords {matches}. Wiping bill_from to prevent customer address contamination.")
+            raw_from = ""
+
+    if tenant_gstin and raw_from and tenant_gstin in raw_from.upper():
+        logger.warning(f"[TENANT_ISOLATION_WARN] Extracted bill_from contains tenant GSTIN '{tenant_gstin}'. Wiping bill_from to prevent contamination.")
+        raw_from = ""
+
+    # ── [ADDRESS_DUPLICATION_GUARD] ──
+    # If the AI accidentally cloned the buyer address into the vendor address, wipe the vendor address
+    # so we don't contaminate the 'bill_from' field with a customer address.
+    if raw_from and raw_to:
+        clean_from = sanitize_address(raw_from)
+        clean_to = sanitize_address(raw_to)
+        if clean_from and clean_from == clean_to:
+            logger.warning(f"[ADDRESS_DUPLICATION_BLOCKED] bill_from and bill_to are identical. Clearing bill_from to prevent customer address contamination.")
+            raw_from = ""
+
     bill_from = sanitize_address(raw_from)
     bill_to = sanitize_address(raw_to)
     
     branch = get_strict(["branch"])[0] or derive_branch_from_address(bill_to) or derive_branch_from_address(bill_from)
 
+    vendor_name_val = fix_encoding_corruption(str(get_strict(["vendor_name", "supplier_name", "name"])[0]))
+    vendor_name_clean = vendor_name_val.strip().lower()
+    if tenant_name and (vendor_name_clean == tenant_name or vendor_name_clean == "main branch"):
+        logger.warning(f"[TENANT_ISOLATION_WARN] Extracted vendor_name '{vendor_name_val}' matches tenant name '{tenant_name}'. Wiping to prevent contamination.")
+        vendor_name_val = ""
+
+    gstin_val = normalize_gstin_safe(get_strict(["gstin", "vendor_gstin", "supplier_gstin"])[0])
+    if tenant_gstin and gstin_val and gstin_val.upper() == tenant_gstin:
+        logger.warning(f"[TENANT_ISOLATION_WARN] Extracted GSTIN '{gstin_val}' matches tenant GSTIN '{tenant_gstin}'. Wiping vendor GSTIN to prevent contamination.")
+        gstin_val = ""
+
     record = {
         "invoice_no": fix_encoding_corruption(str(get_strict(["invoice_no", "invoice_number", "bill_no", "supplier_invoice_no"])[0])),
         "invoice_date": normalize_date(get_strict(["invoice_date", "date", "bill_date", "supplier_invoice_date"])[0]),
-        "vendor_name": fix_encoding_corruption(str(get_strict(["vendor_name", "supplier_name", "name"])[0])),
-        "gstin": normalize_gstin_safe(get_strict(["gstin", "vendor_gstin", "supplier_gstin"])[0]),
+        "vendor_name": vendor_name_val,
+        "gstin": gstin_val,
         "branch": fix_encoding_corruption(str(branch)),
         "bill_from": fix_encoding_corruption(str(bill_from)),
         "bill_to": fix_encoding_corruption(str(bill_to)),
@@ -432,6 +484,8 @@ def get_normalized_export_record(invoice: Any) -> Dict[str, Any]:
         "total_igst": normalize_amount(get_strict(["total_igst", "igst"])[0]),
         "total_cgst": normalize_amount(get_strict(["total_cgst", "cgst"])[0]),
         "total_sgst": normalize_amount(get_strict(["total_sgst", "sgst", "utgst"])[0]),
+        "total_cess": normalize_amount(get_strict(["total_cess", "cess", "cess_amount"])[0]),
+        "round_off": normalize_amount(get_strict(["round_off", "rounding", "adjustment", "rounding_adjustment"])[0]),
         "total_invoice_value": normalize_amount(get_strict(["total_invoice_value", "invoice_total", "total_amount", "grand_total"])[0]),
         "irn": str(get_strict(["irn"])[0]).strip(),
         "ack_no": str(get_strict(["ack_no"])[0]).strip(),
@@ -576,12 +630,14 @@ def get_normalized_items(invoice: Any) -> List[Dict[str, Any]]:
         
     return merge_item_continuations(normalized_items)
 
-def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
+def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str, Any]:
     """
     PHASE 4: CANONICAL SCHEMA STABILIZATION
     Provides ONE authoritative normalized export record using CanonicalInvoiceSchema.
     DOWNSTREAM SYSTEMS MUST ONLY USE THIS.
     """
+    import copy
+    
     # ── [DEFENSIVE UNWRAPPING] ──
     if isinstance(invoice, str):
         try:
@@ -589,6 +645,9 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
         except: pass
     
     if isinstance(invoice, dict):
+        invoice = copy.deepcopy(invoice) # Prevent DTO leakage by copying at the boundary
+        if not tenant_id:
+            tenant_id = invoice.get('tenant_id') or invoice.get('upload_session_id')
         unwrapped = invoice.get('reply_json') or invoice.get('data') or invoice.get('reply')
         if unwrapped:
             if isinstance(unwrapped, str):
@@ -615,7 +674,7 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
     # ── [PHASE 11.9] FORENSIC DTO AUDIT ──
     logger.info(f"[DTO_PRE_VALIDATION] record_id={invoice.get('record_id')} keys={list(invoice.keys())}")
 
-    raw_header = get_normalized_export_record(invoice)
+    raw_header = get_normalized_export_record(invoice, tenant_id=tenant_id)
     raw_items = get_normalized_items(invoice)
     
     canonical_items = []
@@ -652,6 +711,8 @@ def get_canonical_export_record(invoice: Any) -> Dict[str, Any]:
         "total_igst": normalize_amount(raw_header.get("total_igst", 0)),
         "total_cgst": normalize_amount(raw_header.get("total_cgst", 0)),
         "total_sgst": normalize_amount(raw_header.get("total_sgst", 0)),
+        "total_cess": normalize_amount(raw_header.get("total_cess", 0)),
+        "round_off": normalize_amount(raw_header.get("round_off", 0)),
         "total_invoice_value": normalize_amount(raw_header.get("total_invoice_value", 0)),
         "irn": str(raw_header.get("irn", "")),
         "ack_no": str(raw_header.get("ack_no", "")),
