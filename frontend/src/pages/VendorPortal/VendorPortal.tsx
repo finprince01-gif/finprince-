@@ -5762,28 +5762,25 @@ return (
 
         {
             activeTab === 'Transaction' && (
-                <div>
+                <div className="erp-card p-0 overflow-hidden">
                     {/* Sub-tabs for Transaction */}
-                    <div className="mb-6">
-                        <nav className="flex space-x-8 border-b border-gray-200">
+                    <div className="erp-tab-container !mb-0 px-6 pt-4">
+                        <nav className="flex space-x-2">
                             {['Purchase Orders', 'Procurement', 'Payment']
                                 .filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab))
                                 .map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
-                                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTransactionSubTab === subTab
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }`}
+                                        className={`erp-tab ${activeTransactionSubTab === subTab ? 'active' : ''}`}
                                     >
-                                        {subTab.toUpperCase()}
+                                        {subTab}
                                     </button>
                                 ))}
                         </nav>
                     </div>
 
-                    <div className="p-6 erp-card">
+                    <div className="p-6">
                         {activeTransactionSubTab === 'Purchase Orders' && (
                             <div>
                                 {activePOSubTab === 'Dashboard' && (
@@ -7374,27 +7371,25 @@ return (
                                                             className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
                                                         >
                                                             <div className="flex items-center justify-between mb-4">
-                                                                <div className="p-3 rounded-[4px] bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                                                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                                                     <Filter className="w-6 h-6" />
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
                                                                     <div className="text-right mr-2">
                                                                         <p className="text-lg font-bold text-gray-800">{pendingBillsList.length}</p>
-                                                                        <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Unpaid</p>
+                                                                        <p className="text-[10px] text-indigo-600 font-semibold uppercase tracking-wider">Unpaid</p>
+                                                                    </div>
+                                                                    <div className="text-right mr-2">
+                                                                        <p className="text-lg font-bold text-gray-800">
+                                                                            {totalPendingAmount >= 1000 ? `₹${(totalPendingAmount / 1000).toFixed(1)}k` : `₹${Math.round(totalPendingAmount)}`}
+                                                                        </p>
+                                                                        <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Payable</p>
                                                                     </div>
                                                                     <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                                                                 </div>
                                                             </div>
-                                                            <div className="flex justify-between items-end">
-                                                                <div>
-                                                                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
-                                                                    <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <p className="text-lg font-bold text-gray-900">{formattedTotal}</p>
-                                                                    <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Payable</p>
-                                                                </div>
-                                                            </div>
+                                                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+                                                            <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
                                                         </div>
                                                     );
                                                 })}

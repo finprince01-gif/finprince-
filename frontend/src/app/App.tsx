@@ -63,6 +63,8 @@ import MasterSidebar, { MasterPage } from '../components/MasterSidebar';
 import Modal from '../components/Modal';                  // Reusable modal dialog
 import AIAgent from '../components/AIAgent';              // AI Agent (Kiki)
 import FloatingCalculator from '../components/FloatingCalculator';
+import FloatingCalendar from '../components/FloatingCalendar';
+import FloatingNotes from '../components/FloatingNotes';
 import Icon from '../components/Icon';                    // Icon component
 import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrapper
 import { showError, showSuccess } from '../utils/toast';
@@ -81,10 +83,10 @@ import { extractInvoiceDataWithRetry, getAgentResponse, getGroundedAgentResponse
 
 // API Service - Handles all HTTP requests to Django backend
 import { apiService, httpClient } from '../services';
-import { 
-    hasStoredSession, hasMasterSession, hasCompanySession, 
-    clearTenantContext, getAccessToken,
-    setMasterTokens, setCompanyTokens
+import {
+  hasStoredSession, hasMasterSession, hasCompanySession,
+  clearTenantContext, getAccessToken,
+  setMasterTokens, setCompanyTokens
 } from '../services/authService';
 import { getUserTypeFromToken, isTokenExpired } from '../services/jwtUtils';
 
@@ -124,6 +126,20 @@ const App: React.FC = () => {
   // Global View Modal states
   const [globalVendorId, setGlobalVendorId] = useState<number | null>(null);
   const [globalCustomer, setGlobalCustomer] = useState<any | null>(null);
+  const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
+  const toolsDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target as Node)) {
+        setIsToolsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, []);
 
   useEffect(() => {
     window.showGlobalVendorView = (id: number) => {
@@ -530,7 +546,7 @@ const App: React.FC = () => {
         // 1. Validate Session with Backend
         const userData = await apiService.getCurrentUser();
         console.log('✅ App: Session validated.', userData?.username);
-        
+
         if (!userData) {
           throw new Error('Invalid user session');
         }
@@ -554,7 +570,7 @@ const App: React.FC = () => {
             sessionStorage.setItem('tenantId', tenantId);
             localStorage.setItem('tenantId', tenantId);
           }
-          
+
           if (userData.company_name) {
             sessionStorage.setItem('companyName', userData.company_name);
             localStorage.setItem('companyName', userData.company_name);
@@ -1348,25 +1364,25 @@ const App: React.FC = () => {
   // "Company pages: Must NOT render if master_token exists"
   // "Master pages: Must NOT render if company_token exists"
   if (isMasterPath && !isAuthPath && hasCompanySession() && !hasMasterSession()) {
-     // User is on master path but ONLY company token exists — redirect to company UI
-     window.history.replaceState({}, '', '/dashboard');
-     setCurrentPath('/dashboard');
-     return (
-        <div className="flex items-center justify-center h-screen erp-main-bg">
-            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-     );
+    // User is on master path but ONLY company token exists — redirect to company UI
+    window.history.replaceState({}, '', '/dashboard');
+    setCurrentPath('/dashboard');
+    return (
+      <div className="flex items-center justify-center h-screen erp-main-bg">
+        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   if (!isMasterPath && !isAuthPath && hasMasterSession() && !hasCompanySession()) {
-     // User is on company path but ONLY master token exists — redirect to master UI
-     window.history.replaceState({}, '', '/master/dashboard');
-     setCurrentPath('/master/dashboard');
-     return (
-        <div className="flex items-center justify-center h-screen erp-main-bg">
-            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-     );
+    // User is on company path but ONLY master token exists — redirect to master UI
+    window.history.replaceState({}, '', '/master/dashboard');
+    setCurrentPath('/master/dashboard');
+    return (
+      <div className="flex items-center justify-center h-screen erp-main-bg">
+        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   // ── MASTER DOMAIN AUTH PAGES ───────────────────────────────────
@@ -1499,7 +1515,66 @@ const App: React.FC = () => {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-3" />
+          <div className="flex items-center gap-3">
+            {isLoggedIn && (
+              <div ref={toolsDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsToolsDropdownOpen(prev => !prev)}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-white border border-[#E2E8F0] rounded-[10px] shadow-[0_2px_6px_rgba(0,0,0,0.03)] hover:bg-[#F8FAFC] transition-all duration-200 active:scale-95 text-[11px] font-bold text-slate-700 uppercase tracking-wider"
+                  title="Toggle Tools"
+                >
+                  <Icon name="settings" className="w-4 h-4 text-purple-600" />
+                  <span>Tools</span>
+                  <Icon name="chevron-down" className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isToolsDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isToolsDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-[#E2E8F0] rounded-[10px] shadow-[0_10px_25px_rgba(15,23,42,0.08)] py-1.5 z-50 flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsToolsDropdownOpen(false);
+                        if ((window as any).toggleGlobalCalculator) {
+                          (window as any).toggleGlobalCalculator(true);
+                        }
+                      }}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-[10px] font-black text-slate-600 hover:bg-purple-50 hover:text-purple-700 transition-all w-full text-left uppercase tracking-wider"
+                    >
+                      <Icon name="calculator" className="w-4 h-4" />
+                      <span>Calculator</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsToolsDropdownOpen(false);
+                        if ((window as any).toggleGlobalCalendar) {
+                          (window as any).toggleGlobalCalendar(true);
+                        }
+                      }}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-[10px] font-black text-slate-600 hover:bg-purple-50 hover:text-purple-700 transition-all w-full text-left uppercase tracking-wider"
+                    >
+                      <Icon name="calendar" className="w-4 h-4" />
+                      <span>Reminders</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsToolsDropdownOpen(false);
+                        if ((window as any).toggleGlobalNotes) {
+                          (window as any).toggleGlobalNotes(true);
+                        }
+                      }}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-[10px] font-black text-slate-600 hover:bg-purple-50 hover:text-purple-700 transition-all w-full text-left uppercase tracking-wider"
+                    >
+                      <Icon name="file-text" className="w-4 h-4" />
+                      <span>Notes</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Page Content ──────────────────────────────────── */}
@@ -1542,6 +1617,8 @@ const App: React.FC = () => {
       </Modal>
 
       <FloatingCalculator />
+      <FloatingCalendar />
+      <FloatingNotes />
 
       <button
         onClick={() => setIsAgentOpen(true)}
@@ -1568,9 +1645,9 @@ const App: React.FC = () => {
         className="hover:scale-110 transition-transform duration-300 group"
         title="Chat with Kiki Agent"
       >
-        <img 
-          src={kikiLogo} 
-          alt="AI Agent" 
+        <img
+          src={kikiLogo}
+          alt="AI Agent"
           style={{
             width: '100%',
             height: '100%',
@@ -1604,9 +1681,11 @@ const App: React.FC = () => {
         />
       )}
 
+
     </div>
   );
 };
 
 export default App;
+
 

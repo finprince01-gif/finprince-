@@ -8029,8 +8029,9 @@ function SalesContent({ onNavigate, setPrefilledVoucherData }: { onNavigate?: (p
         <div className="text-left">
             {viewMode === 'dashboard' ? (
                 <div>
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-bold text-gray-900">Sales - Customer Aging</h3>
+                    <div className="mb-8">
+                        <h2 className="section-title">Sales</h2>
+                        <p className="helper-text mt-1">Select a sales category to manage.</p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Export Card */}
