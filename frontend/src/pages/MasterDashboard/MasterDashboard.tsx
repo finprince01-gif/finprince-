@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { masterApiService } from '../../services';
 import { decodeJWT } from '../../services/jwtUtils';
 import { getAccessToken } from '../../services/authService';
-import MasterLayout from '../../components/MasterLayout';
 import { MasterPage } from '../../components/MasterSidebar';
 import StatCard from '../../components/StatCard';
 import Icon from '../../components/Icon';
@@ -57,12 +56,20 @@ const defaultCompanyDetails: CompanyDetails = {
  * MASTER DASHBOARD - Platform Administration Panel
  * Enhanced Reports & Settings UI to match exactly the company/business accounting layout.
  */
-const MasterDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+interface MasterDashboardPageProps {
+    onLogout: () => void;
+    currentPage: MasterPage | 'BranchDetail';
+    setCurrentPage: (page: MasterPage | 'BranchDetail') => void;
+}
+
+const MasterDashboardPage: React.FC<MasterDashboardPageProps> = ({ 
+    onLogout, 
+    currentPage, 
+    setCurrentPage 
+}) => {
     const adminToken = getAccessToken();
     const adminPayload = decodeJWT(adminToken);
     const adminName = adminPayload?.username || 'Master Admin';
-
-    const [currentPage, setCurrentPage] = useState<MasterPage | 'BranchDetail'>('Dashboard');
     const [branches, setBranches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<PlatformStats | null>(null);
@@ -295,7 +302,7 @@ const MasterDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
     );
 
     return (
-        <MasterLayout currentPage={currentPage === 'BranchDetail' ? 'Branches' : currentPage} onNavigate={setCurrentPage} onLogout={onLogout} adminName={adminName}>
+        <React.Fragment>
             {currentPage === 'Dashboard' && renderDashboard()}
             {currentPage === 'Branches' && (
                 <BranchesPage />
@@ -311,7 +318,7 @@ const MasterDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
             )}
             {currentPage === 'Reports' && renderReports()}
             {currentPage === 'Settings' && renderSettings()}
-        </MasterLayout>
+        </React.Fragment>
     );
 };
 

@@ -59,12 +59,15 @@ import AuthPortalPage from '../pages/AuthPortal/AuthPortal';
 
 // Shared UI Components
 import Sidebar from '../components/Sidebar';  // Left navigation sidebar
+import MasterSidebar, { MasterPage } from '../components/MasterSidebar';
 import Modal from '../components/Modal';                  // Reusable modal dialog
 import AIAgent from '../components/AIAgent';              // AI Agent (Kiki)
 import FloatingCalculator from '../components/FloatingCalculator';
 import Icon from '../components/Icon';                    // Icon component
 import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrapper
 import { showError, showSuccess } from '../utils/toast';
+import VendorViewModal from '../components/VendorViewModal';
+import CustomerViewModal from '../pages/CustomerPortal/CustomerViewModal';
 
 
 // Import assets
@@ -107,10 +110,34 @@ const defaultCompanyDetails: CompanyDetails = {
   }
 };
 
+declare global {
+  interface Window {
+    showGlobalVendorView?: (id: number) => void;
+    showGlobalCustomerView?: (customerOrId: any) => void;
+  }
+}
+
 // ============================================================================
 // MAIN APP COMPONENT
 // ============================================================================
 const App: React.FC = () => {
+  // Global View Modal states
+  const [globalVendorId, setGlobalVendorId] = useState<number | null>(null);
+  const [globalCustomer, setGlobalCustomer] = useState<any | null>(null);
+
+  useEffect(() => {
+    window.showGlobalVendorView = (id: number) => {
+      setGlobalVendorId(id);
+    };
+    window.showGlobalCustomerView = (customerOrId: any) => {
+      setGlobalCustomer(customerOrId);
+    };
+    return () => {
+      window.showGlobalVendorView = undefined;
+      window.showGlobalCustomerView = undefined;
+    };
+  }, []);
+
   // ============================================================================
   // HELPER FUNCTIONS
   // ============================================================================
@@ -180,9 +207,13 @@ const App: React.FC = () => {
 
   // Router state
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
-  const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
+  const [currentPage, setCurrentPage] = useState<Page | MasterPage | 'BranchDetail'>('Dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  const isMasterMode = useMemo(() => {
+    return hasMasterSession() && currentPath.startsWith('/master');
+  }, [currentPath]);
 
   // User permissions - No longer used (RBAC removed)
   // const [permissions, setPermissions] = useState<string[]>([]);
@@ -275,7 +306,7 @@ const App: React.FC = () => {
    * Handle page navigation
    * Called when user clicks on sidebar menu items
    */
-  const handleNavigate = (page: Page, params?: any) => {
+  const handleNavigate = (page: Page | MasterPage | 'BranchDetail', params?: any) => {
     if (page === 'Vouchers' && params?.viewVoucher) {
       setViewVoucherData(params.viewVoucher);
     } else if (page !== 'Vouchers') {
@@ -359,8 +390,7 @@ const App: React.FC = () => {
         backendJournalEntries,
         backendStockItems,
         backendRichVendors,
-        backendRichCustomers,
-        backendEntries
+        backendRichCustomers
       ] = await Promise.all([
 
         apiService.getCompanyDetails().catch(() => defaultCompanyDetails),
@@ -1223,8 +1253,18 @@ const App: React.FC = () => {
       );
     }
 
+    if (isMasterMode) {
+      return (
+        <MasterDashboardPage
+          onLogout={handleLogout}
+          currentPage={currentPage as MasterPage | 'BranchDetail'}
+          setCurrentPage={(page) => setCurrentPage(page)}
+        />
+      );
+    }
+
     // Plan-based feature restrictions (only for premium features now)
-    switch (currentPage) {
+    switch (currentPage as Page) {
       case 'Dashboard': return <DashboardPage onNavigate={handleNavigate} companyName={companyDetails.name} vouchers={vouchers} ledgers={ledgers} isAdmin={(sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId')) === null || (sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId')) === 'null'} />;
       case 'Masters': return <MastersPage
         ledgers={ledgers}
@@ -1333,22 +1373,6 @@ const App: React.FC = () => {
     );
   }
 
-  // ── MASTER DOMAIN APP ──────────────────────────────────────────
-  // Wait for full initialization before rendering dashboard
-  if (isMasterPath && isLoggedIn && isDataLoaded) {
-    // JWT guard: reject if token doesn't prove master domain
-    const currentToken = getAccessToken();
-    const tokenDomain = getUserTypeFromToken(currentToken);
-    if (tokenDomain !== 'master') {
-      // Wrong domain — redirect to company dashboard
-      window.history.replaceState({}, '', '/dashboard');
-      setCurrentPath('/dashboard');
-    } else {
-      return (
-        <MasterDashboardPage onLogout={handleLogout} />
-      );
-    }
-  }
 
   // Show global loader while initializing master path
   if (isMasterPath && isAuthenticating && !isDataLoaded) {
@@ -1420,20 +1444,30 @@ const App: React.FC = () => {
     // Token says master but we're on a company path — redirect
     window.history.replaceState({}, '', '/master/dashboard');
     setCurrentPath('/master/dashboard');
-    return <Suspense fallback={<PageLoader />}><MasterDashboardPage onLogout={handleLogout} /></Suspense>;
+    return <PageLoader />;
   }
 
   return (
     <div className="flex min-h-screen font-sans erp-main-bg">
-      {/* Company sidebar — only shown for company domain sessions */}
+      {/* Sidebar — renders MasterSidebar for Master admin, Sidebar for company users */}
       {(isLoggedIn || isAuthenticating) && (
-        <Sidebar
-          currentPage={currentPage}
-          onNavigate={handleNavigate}
-          onLogout={handleLogout}
-          companyName={companyDetails.name}
-          isOpen={isSidebarOpen}
-        />
+        isMasterMode ? (
+          <MasterSidebar
+            currentPage={(currentPage === 'BranchDetail' ? 'Branches' : currentPage) as MasterPage}
+            onNavigate={(page) => setCurrentPage(page)}
+            onLogout={handleLogout}
+            adminName={sessionStorage.getItem('username') || localStorage.getItem('username') || 'Master Admin'}
+            isOpen={isSidebarOpen}
+          />
+        ) : (
+          <Sidebar
+            currentPage={currentPage as Page}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+            companyName={companyDetails.name}
+            isOpen={isSidebarOpen}
+          />
+        )
       )}
 
       <main className={`flex-1 ${(isLoggedIn || isAuthenticating) && isSidebarOpen ? 'ml-[260px]' : 'ml-0'} min-h-screen transition-all duration-300 erp-main-bg`}>
@@ -1453,7 +1487,9 @@ const App: React.FC = () => {
                 {currentPage}
               </h2>
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.15em] mt-1.5 leading-none">
-                {companyDetails.name || 'Ai Accounting'}
+                {isMasterMode
+                  ? (sessionStorage.getItem('username') || localStorage.getItem('username') || 'Platform Admin')
+                  : (companyDetails.name || 'Ai Accounting')}
               </span>
             </div>
           </div>
@@ -1548,6 +1584,19 @@ const App: React.FC = () => {
         isLoading={isAgentLoading}
         queueStatus={agentQueueStatus}
       />
+
+      {globalVendorId !== null && (
+        <VendorViewModal
+          vendorId={globalVendorId}
+          onClose={() => setGlobalVendorId(null)}
+        />
+      )}
+      {globalCustomer !== null && (
+        <CustomerViewModal
+          customer={globalCustomer}
+          onClose={() => setGlobalCustomer(null)}
+        />
+      )}
 
     </div>
   );

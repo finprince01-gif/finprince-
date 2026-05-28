@@ -193,12 +193,12 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
             ) : (
                 gst.map((record: any, idx: number) => (
                     <div key={idx} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                        <div className="bg-slate-900 p-6 flex items-center justify-between">
+                        <div className="bg-slate-50 border-b border-slate-100 p-6 flex items-center justify-between">
                             <div>
-                                <span className="text-indigo-400 text-xs font-black tracking-[0.2em] uppercase mb-1 block">Registration {idx + 1}</span>
-                                <h4 className="text-white text-xl font-bold tracking-wider">{record.gstin}</h4>
+                                <span className="text-indigo-600 text-xs font-black tracking-[0.2em] uppercase mb-1 block">Registration {idx + 1}</span>
+                                <h4 className="text-slate-800 text-xl font-bold tracking-wider font-mono">{record.gstin}</h4>
                             </div>
-                            <span className="px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black tracking-widest uppercase rounded-lg">
+                            <span className="px-4 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black tracking-widest uppercase rounded-lg">
                                 {record.gst_registration_type || 'Regular'}
                             </span>
                         </div>
@@ -373,7 +373,7 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {banking.map((bank: any, idx: number) => (
-                        <div key={idx} className="relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 rounded-[2rem] p-8 shadow-2xl group border border-white/5">
+                        <div key={idx} className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-indigo-900 rounded-[2rem] p-8 shadow-2xl group border border-white/5">
                             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
                                 <CreditCard className="w-32 h-32 text-white" />
                             </div>
@@ -381,7 +381,7 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
                             <div className="relative z-10 flex flex-col h-full justify-between gap-12">
                                 <div className="flex justify-between items-start">
                                     <div className="flex flex-col gap-0.5">
-                                        <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest">{bank.account_type || 'Current Account'}</span>
+                                        <span className="text-indigo-300 text-[10px] font-black uppercase tracking-widest">{bank.account_type || 'Current Account'}</span>
                                         <h4 className="text-white text-xl font-bold tracking-tight">{bank.bank_name}</h4>
                                     </div>
                                     <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md">
@@ -481,11 +481,11 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
                     <div className="flex justify-between items-start mb-6">
                         <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="px-2.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-black tracking-widest uppercase rounded">Vendor Profile</span>
+                                <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-black tracking-widest uppercase rounded">Vendor Profile</span>
                                 <span className="text-indigo-400 text-xs font-bold font-mono">#{basic.id}</span>
                             </div>
-                            <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">{basic.vendor_name}</h2>
-                            <p className="text-slate-500 font-medium flex items-center gap-1.5 uppercase text-[10px] tracking-widest mt-1">
+                            <h2 className="text-3xl font-black text-indigo-950 tracking-tight leading-tight">{basic.vendor_name}</h2>
+                            <p className="text-indigo-400 font-medium flex items-center gap-1.5 uppercase text-[10px] tracking-widest mt-1">
                                 <Calendar className="w-3 h-3 text-indigo-500" />
                                 Partner Relationship since {new Date(basic.created_at).getFullYear()}
                             </p>
@@ -493,7 +493,7 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
 
                         <button
                             onClick={onClose}
-                            className="p-3 bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-2xl transition-all shadow-sm border border-slate-200/50 active:scale-95"
+                            className="p-3 bg-slate-100 text-indigo-400 hover:bg-rose-50 hover:text-rose-500 rounded-2xl transition-all shadow-sm border border-slate-200/50 active:scale-95"
                         >
                             <X className="w-6 h-6" />
                         </button>
@@ -513,11 +513,11 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
                                 onClick={() => setActiveTab(tab.id as any)}
                                 className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap active:scale-95
                   ${activeTab === tab.id
-                                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-200 -translate-y-0.5'
-                                        : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'
+                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 -translate-y-0.5'
+                                        : 'text-indigo-400 hover:text-indigo-600 hover:bg-slate-100'
                                     }`}
                             >
-                                <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-indigo-400' : 'text-slate-300'}`} />
+                                <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-white' : 'text-indigo-300'}`} />
                                 {tab.label}
                             </button>
                         ))}
@@ -553,10 +553,10 @@ const VendorViewModal: React.FC<VendorViewModalProps> = ({ vendorId, onClose }) 
 
                     <div className="flex items-center gap-3">
                         <button
-                            className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all shadow-md active:scale-95"
+                            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-md active:scale-95"
                             onClick={() => window.print()}
                         >
-                            <FileText className="w-4 h-4 text-indigo-400" />
+                            <FileText className="w-4 h-4 text-white" />
                             Download PDF
                         </button>
                     </div>

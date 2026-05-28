@@ -3784,11 +3784,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         
         let party = 'N/A';
         if (voucherType === 'Expenses') {
-          party = expenses.find(e => e.postToLedger)?.postToLedger?.split(' - ')[0] || 'N/A';
+          party = expenseRows.find(e => e.postTo)?.postTo?.split(' - ')[0] || 'N/A';
         } else if (voucherType === 'Journal') {
           party = entries.find(e => e.ledger)?.ledger?.split(' - ')[0] || 'N/A';
         } else if (voucherType === 'Contra') {
-          party = contraForm.toAccount?.split(' - ')[0] || 'N/A';
+          party = toAccount?.split(' - ')[0] || 'N/A';
         }
 
         const sourceMap: Record<string, string> = {
@@ -3803,8 +3803,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           id: genericVoucherId || response?.id || voucherId || Date.now().toString(),
           type: voucherType,
           party: party,
-          source: sourceMap[voucherType] || voucher?.source,
-          total: response?.total_amount || response?.total_debit || response?.amount || voucher?.amount || 0
+          source: sourceMap[voucherType] || (voucher as any)?.source,
+          total: response?.total_amount || response?.total_debit || response?.amount || (voucher as any)?.amount || 0
         };
         onAddVouchers([savedVoucher], false);
 
@@ -11711,7 +11711,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div className="flex space-x-3 mt-4">
                       <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                       <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                      <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
                     </div>
                   )
                 )}
@@ -11737,7 +11736,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div className="flex space-x-3 mt-4">
                       <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                       <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                      <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
                     </div>
                   )
                 )}
@@ -11746,7 +11744,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div className="flex space-x-3 mt-4">
                     <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                     <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                    <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
                   </div>
                 )}
               </>
