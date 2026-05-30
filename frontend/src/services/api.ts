@@ -492,6 +492,11 @@ class ApiService {
         return httpClient.post('/api/vouchers/debit-note/', data);
     }
 
+    async updateDebitNote(id: number | string, data: any) {
+        return httpClient.put(`/api/vouchers/debit-note/${id}/`, data);
+    }
+
+
     async getHierarchy() {
         return httpClient.get<any[]>('/api/masters/hierarchy/');
     }
@@ -595,7 +600,11 @@ class ApiService {
             'payment': 'Payment',
             'receipt': 'Receipt',
             'contra': 'Contra',
-            'journal': 'Journal'
+            'journal': 'Journal',
+            'credit_note': 'Credit Note',
+            'debit_note': 'Debit Note',
+            'credit note': 'Credit Note',
+            'debit note': 'Debit Note',
         };
 
         return vouchers.map(v => ({
@@ -635,11 +644,23 @@ class ApiService {
                 response.type = 'Journal';
                 fetchedAsDetail = true;
             } else if (normalizedSource === 'credit_note_voucher' || normalizedSource === 'credit note' || normalizedSource === 'credit_note') {
-                response = await httpClient.get<any>(`/api/vouchers/credit-note/${id}/`, undefined, options);
+                try {
+                    const genericVoucher = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+                    const refId = genericVoucher.data?.reference_id || genericVoucher.reference_id || id;
+                    response = await httpClient.get<any>(`/api/vouchers/credit-note/${refId}/`, undefined, options);
+                } catch (innerE) {
+                    response = await httpClient.get<any>(`/api/vouchers/credit-note/${id}/`, undefined, options);
+                }
                 response.type = 'Credit Note';
                 fetchedAsDetail = true;
             } else if (normalizedSource === 'debit_note_voucher' || normalizedSource === 'debit note' || normalizedSource === 'debit_note') {
-                response = await httpClient.get<any>(`/api/vouchers/debit-note/${id}/`, undefined, options);
+                try {
+                    const genericVoucher = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+                    const refId = genericVoucher.data?.reference_id || genericVoucher.reference_id || id;
+                    response = await httpClient.get<any>(`/api/vouchers/debit-note/${refId}/`, undefined, options);
+                } catch (innerE) {
+                    response = await httpClient.get<any>(`/api/vouchers/debit-note/${id}/`, undefined, options);
+                }
                 response.type = 'Debit Note';
                 fetchedAsDetail = true;
             } else {
@@ -669,11 +690,23 @@ class ApiService {
                     response.type = 'Journal';
                     fetchedAsDetail = true;
                 } else if (normalizedSource === 'credit note' || normalizedSource === 'credit_note') {
-                    response = await httpClient.get<any>(`/api/vouchers/credit-note/${id}/`, undefined, options);
+                    try {
+                        const genericVoucher = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+                        const refId = genericVoucher.data?.reference_id || genericVoucher.reference_id || id;
+                        response = await httpClient.get<any>(`/api/vouchers/credit-note/${refId}/`, undefined, options);
+                    } catch (innerE) {
+                        response = await httpClient.get<any>(`/api/vouchers/credit-note/${id}/`, undefined, options);
+                    }
                     response.type = 'Credit Note';
                     fetchedAsDetail = true;
                 } else if (normalizedSource === 'debit note' || normalizedSource === 'debit_note') {
-                    response = await httpClient.get<any>(`/api/vouchers/debit-note/${id}/`, undefined, options);
+                    try {
+                        const genericVoucher = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
+                        const refId = genericVoucher.data?.reference_id || genericVoucher.reference_id || id;
+                        response = await httpClient.get<any>(`/api/vouchers/debit-note/${refId}/`, undefined, options);
+                    } catch (innerE) {
+                        response = await httpClient.get<any>(`/api/vouchers/debit-note/${id}/`, undefined, options);
+                    }
                     response.type = 'Debit Note';
                     fetchedAsDetail = true;
                 } else if (source) {
@@ -698,6 +731,8 @@ class ApiService {
             'expense_voucher': 'Expenses',
             'credit note': 'Credit Note',
             'debit note': 'Debit Note',
+            'credit_note': 'Credit Note',
+            'debit_note': 'Debit Note',
         };
 
         const base = {
@@ -1097,7 +1132,12 @@ class ApiService {
 
         // Handle Debit Note Vouchers
         for (const voucher of debitNoteVouchers) {
-            promises.push(this.saveDebitNote(voucher));
+            const updateId = voucher.reference_id || voucher.id;
+            if (updateId && !String(updateId).includes('T') && !String(updateId).includes('.')) {
+                promises.push(this.updateDebitNote(updateId, voucher));
+            } else {
+                promises.push(this.saveDebitNote(voucher));
+            }
         }
 
         // Handle others via bulk endpoint

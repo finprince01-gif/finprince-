@@ -284,6 +284,52 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             resolved_ledger = MasterLedger.objects.filter(id=ledger_id, tenant_id=tenant_id).first() # pyre-ignore
         elif is_gst_ledger or is_tds_ledger:
             resolved_ledger = MasterLedger.objects.filter(name=ledger_name, tenant_id=tenant_id).first() # pyre-ignore
+        elif ledger_name:
+            resolved_ledger = MasterLedger.objects.filter(name=ledger_name, tenant_id=tenant_id).first()
+
+        # Try to resolve credit period if this ledger belongs to a vendor or customer
+        credit_period = 0
+        if resolved_ledger:
+            # Check additional_data first
+            if isinstance(resolved_ledger.additional_data, dict):
+                cp = resolved_ledger.additional_data.get('credit_period')
+                if cp: credit_period = int(cp)
+            
+            # If still 0, try to find a vendor or customer
+            if not credit_period:
+                try:
+                    from vendors.models import VendorMasterBasicDetail, VendorMasterTerms
+                    vendor = VendorMasterBasicDetail.objects.filter(ledger=resolved_ledger).first()
+                    if vendor:
+                        vterm = VendorMasterTerms.objects.filter(vendor_basic_detail=vendor).first()
+                        if vterm and vterm.credit_period:
+                            import re
+                            raw = str(vterm.credit_period)
+                            if raw.isdigit():
+                                credit_period = int(raw)
+                            else:
+                                m = re.search(r'(\d+)', raw)
+                                if m: credit_period = int(m.group(1))
+                except Exception:
+                    pass
+                
+                # Check Customer if still 0
+                if not credit_period:
+                    try:
+                        from customerportal.database import CustomerMasterCustomerBasicDetails, CustomerMasterTerms
+                        customer = CustomerMasterCustomerBasicDetails.objects.filter(ledger=resolved_ledger).first()
+                        if customer:
+                            cterm = CustomerMasterTerms.objects.filter(customer_basic_detail=customer).first()
+                            if cterm and cterm.credit_period:
+                                import re
+                                raw = str(cterm.credit_period)
+                                if raw.isdigit():
+                                    credit_period = int(raw)
+                                else:
+                                    m = re.search(r'(\d+)', raw)
+                                    if m: credit_period = int(m.group(1))
+                    except Exception:
+                        pass
 
         # Base queryset — GST/TDS detail rows are excluded by get_queryset()
         queryset = self.get_queryset().select_related('ledger').order_by('transaction_date', 'id') # pyre-ignore

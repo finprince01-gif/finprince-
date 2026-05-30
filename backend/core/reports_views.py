@@ -29,7 +29,8 @@ class BaseExcelView(APIView):
         """Fetch vouchers from all split tables and combine them"""
         from accounting.models import (
             VoucherSales, VoucherPurchase, VoucherPayment,
-            VoucherReceipt, VoucherContra, VoucherJournal
+            VoucherReceipt, VoucherContra, VoucherJournal,
+            Voucher as GenericVoucher
         )
         
         tenant_id = request.tenant_id
@@ -157,6 +158,48 @@ class BaseExcelView(APIView):
                 'narration': v.narration or '',
                 'id': v.id,
             })
+
+        # Fetch Debit Note vouchers from the generic Voucher table
+        # (type='debit_note', party=vendor_name, total=net_amount_due)
+        dnote_qs = GenericVoucher.objects.filter(tenant_id=tenant_id, type='debit_note')
+        if start_date:
+            dnote_qs = dnote_qs.filter(date__gte=start_date)
+        if end_date:
+            dnote_qs = dnote_qs.filter(date__lte=end_date)
+        for v in dnote_qs:
+            vouchers.append({
+                'date': v.date,
+                'type': 'Debit Note',
+                'voucher_number': v.voucher_number,
+                'invoice_no': v.voucher_number,
+                'party': v.party or '',
+                'account': '',
+                'total': float(v.total or 0),
+                'amount': float(v.total or 0),
+                'narration': v.narration or '',
+                'id': v.id,
+            })
+
+        # Fetch Credit Note vouchers from the generic Voucher table
+        # (type='credit_note', party=customer_name, total=net_amount)
+        cnote_qs = GenericVoucher.objects.filter(tenant_id=tenant_id, type='credit_note')
+        if start_date:
+            cnote_qs = cnote_qs.filter(date__gte=start_date)
+        if end_date:
+            cnote_qs = cnote_qs.filter(date__lte=end_date)
+        for v in cnote_qs:
+            vouchers.append({
+                'date': v.date,
+                'type': 'Credit Note',
+                'voucher_number': v.voucher_number,
+                'invoice_no': v.voucher_number,
+                'party': v.party or '',
+                'account': '',
+                'total': float(v.total or 0),
+                'amount': float(v.total or 0),
+                'narration': v.narration or '',
+                'id': v.id,
+            })
         
         # Sort by date
         vouchers.sort(key=lambda x: x['date'])
@@ -264,6 +307,28 @@ class LedgerExcelView(BaseExcelView):
                 # For journal entries, would need to check journal_entries table
                 # Simplified for now
                 particulars = "Journal Entry"
+
+            elif v['type'] == 'Debit Note':
+                # Debit Note: reduces vendor liability (debit vendor, credit purchase return)
+                if v['party'] == ledger_name:
+                    # Vendor ledger – being DEBITED (liability reduced by return)
+                    debit = v['amount']
+                    particulars = "Purchase Return / Debit Note"
+                elif ledger_name in ('Purchase Return', 'Purchase Return A/c', 'Purchases'):
+                    # Purchase Return account – being CREDITED
+                    credit = v['amount']
+                    particulars = v['party']
+
+            elif v['type'] == 'Credit Note':
+                # Credit Note: reduces customer receivable (credit customer, debit sales return)
+                if v['party'] == ledger_name:
+                    # Customer ledger – being CREDITED (receivable reduced)
+                    credit = v['amount']
+                    particulars = "Sales Return / Credit Note"
+                elif ledger_name in ('Sales Return', 'Sales Return A/c', 'Sales'):
+                    # Sales Return account – being DEBITED
+                    debit = v['amount']
+                    particulars = v['party']
             
             # Only add row if this ledger was involved
             if debit > 0 or credit > 0:
@@ -313,6 +378,12 @@ class TrialBalanceExcelView(BaseExcelView):
             elif v['type'] == 'Journal':
                 # Would need to fetch journal entries
                 pass
+            elif v['type'] == 'Debit Note':
+                add_amt(v['party'], 'debit', v['amount'])
+                add_amt('Purchase Return A/c', 'credit', v['amount'])
+            elif v['type'] == 'Credit Note':
+                add_amt(v['party'], 'credit', v['amount'])
+                add_amt('Sales Return A/c', 'debit', v['amount'])
             
         data = []
         total_debit = 0
