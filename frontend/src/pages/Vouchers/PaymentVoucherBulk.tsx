@@ -276,15 +276,15 @@ const PaymentVoucherBulk: React.FC = () => {
       if (response.ok) {
         showSuccess('Payment voucher posted successfully!');
 
-        // Increment the voucher series counter so the next number is ready
+        // Refresh the voucher series counter so the next number is ready
         const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
         if (savedConfig && savedConfig.enable_auto_numbering) {
           try {
-            const res = await httpClient.post<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/increment-number/`, {});
+            const res = await httpClient.get<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/next-number/`);
             // Update local state with the next formatted number
-            setVoucherNumber(res.next_invoice_number || '');
+            setVoucherNumber(res.invoice_number || '');
           } catch (e) {
-            console.error('Failed to increment voucher number:', e);
+            console.error('Failed to refresh voucher number:', e);
           }
         }
 

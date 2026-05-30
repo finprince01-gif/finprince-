@@ -1050,11 +1050,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     }], false);
                 }
 
-                // Increment the voucher series counter so the next number is ready (Skip if editing existing!)
+                // Refresh the voucher series counter so the next number is ready (Skip if editing existing!)
                 const savedConfig = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
                 if (savedConfig && savedConfig.enable_auto_numbering && !editingVoucherId) {
                     try {
-                        await httpClient.post(`/api/masters/master-voucher-receipts/${savedConfig.id}/increment-number/`, {});
                         const res = await httpClient.get<any>(`/api/masters/master-voucher-receipts/${savedConfig.id}/next-number/`);
                         const nextNumber = res.invoice_number || '';
                         const keepConfig = selectedReceiptConfig;
@@ -1062,7 +1061,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         setSelectedReceiptConfig(keepConfig);
                         setVoucherNumber(nextNumber);
                     } catch (e) {
-                        console.error('Failed to increment receipt voucher number:', e);
+                        console.error('Failed to refresh receipt voucher number:', e);
                         const keepConfig = selectedReceiptConfig;
                         handleCancel();
                         setSelectedReceiptConfig(keepConfig);
@@ -1221,11 +1220,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     }], false);
                 }
 
-                // Increment the voucher series counter so the next number is ready (Skip if editing existing!)
+                // Refresh the voucher series counter so the next number is ready (Skip if editing existing!)
                 const savedConfigBulk = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
                 if (savedConfigBulk && savedConfigBulk.enable_auto_numbering && !editingVoucherId) {
                     try {
-                        await httpClient.post(`/api/masters/master-voucher-receipts/${savedConfigBulk.id}/increment-number/`, {});
                         const res = await httpClient.get<any>(`/api/masters/master-voucher-receipts/${savedConfigBulk.id}/next-number/`);
                         const nextNumber = res.invoice_number || '';
                         const keepConfig = selectedReceiptConfig;
@@ -1233,7 +1231,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                         setSelectedReceiptConfig(keepConfig);
                         setVoucherNumber(nextNumber);
                     } catch (e) {
-                        console.error('Failed to increment receipt voucher number:', e);
+                        console.error('Failed to refresh receipt voucher number:', e);
                         const keepConfig = selectedReceiptConfig;
                         handleCancel();
                         setSelectedReceiptConfig(keepConfig);

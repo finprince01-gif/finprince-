@@ -39,7 +39,16 @@ router.register('operations/outward', InventoryOperationOutwardViewSet, basename
 router.register('operations/new-grn', InventoryOperationNewGRNViewSet, basename='inventory-operation-new-grn')
 router.register('reports/stock-movement', StockMovementSummaryViewSet, basename='inventory-report-stock-movement')
 
+from .excel_api import (
+    InventoryItemExcelTemplateDownloadView,
+    InventoryItemExcelUploadView,
+    InventoryItemExcelExportView
+)
+
 urlpatterns = [
+    path('excel/template/', InventoryItemExcelTemplateDownloadView.as_view(), name='inventory-item-excel-template'),
+    path('excel/upload/', InventoryItemExcelUploadView.as_view(), name='inventory-item-excel-upload'),
+    path('excel/export/', InventoryItemExcelExportView.as_view(), name='inventory-item-excel-export'),
     path('', include(router.urls)),
     path('operations/pending-grns/', PendingGRNListView.as_view(), name='pending-grns-list'),
     path('operations/next-grn-number/', InventoryOperationNewGRNViewSet.as_view({'get': 'next_grn_number'}), name='next-grn-number'),

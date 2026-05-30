@@ -14,6 +14,8 @@ from .serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
 
 logger = logging.getLogger(__name__)
 
+from core.utils import match_headers
+
 from .sales_validation_logic import validate_sales_customer_and_invoice
 import io
 import json
@@ -327,24 +329,12 @@ class SalesExcelUploadView(APIView):
             if ws is None:
                 return Response({"error": "No active sheet found in Excel file"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # 1. Map Headers to Columns (Case-insensitive & Trimmed)
-            # Create a index map using normalized Uppercase labels
-            excel_col_index = {}
-            for idx, cell in enumerate(ws[1]):
-                if cell.value:
-                    lbl = str(cell.value).strip().upper()
-                    excel_col_index[lbl] = idx
-            
-            # Map of Our internal Label -> Excel Column Index
-            header_map = {}
-            for col_cfg in SALES_VOUCHER_COLUMNS:
-                label = str(col_cfg["label"])
-                norm = label.strip().upper()
-                if norm in excel_col_index:
-                    header_map[label] = excel_col_index[norm]
+            # 1. Map Headers to Columns (Case-insensitive & Trimmed) using fuzzy matching
+            excel_headers = [str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]]
+            matched = match_headers(excel_headers, SALES_VOUCHER_COLUMNS)
+            header_map = {lbl: idx - 1 for lbl, idx in matched.items()}
 
-            uploaded_labels = {str(k).upper() for k in excel_col_index.keys()}
-            missing_cols = [str(l) for l in REQUIRED_LABELS if str(l).strip().upper() not in uploaded_labels]
+            missing_cols = [str(l) for l in REQUIRED_LABELS if str(l) not in header_map]
             if missing_cols:
                 return Response({
                     "error": "Missing required columns",
@@ -896,9 +886,10 @@ class SalesExcelWorkflowUploadView(APIView):
             if ws is None:
                 return Response({"error": "No active sheet found"}, status=400)
             
-            excel_col_index = {str(cell.value).strip().upper(): idx for idx, cell in enumerate(ws[1]) if cell.value}
-            header_map = {str(c["label"]): excel_col_index[str(c["label"]).upper()] 
-                         for c in SALES_VOUCHER_COLUMNS if str(c["label"]).upper() in excel_col_index}
+            # Map Excel Columns using fuzzy matching
+            excel_headers = [str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]]
+            matched = match_headers(excel_headers, SALES_VOUCHER_COLUMNS)
+            header_map = {lbl: idx - 1 for lbl, idx in matched.items()}
 
             # Batch Extract
             rows_data = []
