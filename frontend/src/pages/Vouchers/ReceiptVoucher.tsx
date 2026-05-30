@@ -696,6 +696,39 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }
 
         try {
+            // Find the ledger ID first
+            const findLedgerId = (name: string) => {
+                const normalized = name.trim().toLowerCase();
+                const ledger = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
+                if (ledger) return ledger.id;
+                const portalCust = portalCustomers.find(c => (c.customer_name || c.name || '').trim().toLowerCase() === normalized);
+                if (portalCust) return portalCust.ledger_id;
+                return null;
+            };
+            const lId = findLedgerId(customerName);
+
+            // Fetch pending expenses first so we can merge them regardless of customer/standard type
+            let mappedExpenses: BulkTransaction[] = [];
+            if (lId) {
+                try {
+                    const expenseData = await apiService.getPendingInvoices(lId);
+                    mappedExpenses = (expenseData || [])
+                        .filter((item: any) => (item.type || '').toLowerCase() === 'expense')
+                        .map((item: any) => ({
+                            id: (item.id || Math.random()).toString(),
+                            date: item.date,
+                            invoiceNo: item.reference_number,
+                            amount: item.amount,
+                            receiveNow: 0,
+                            selected: false,
+                            status: item.due_status || 'Due',
+                            dueDate: item.due_date
+                        }));
+                } catch (e) {
+                    console.error("Failed to fetch pending expenses:", e);
+                }
+            }
+
             // Fetch transactions (Sales Invoices) from the rich system
             console.log(`[DEBUG] ReceiptVoucher: Fetching rich sales for ${customerName}`);
             const response = await apiService.getRichCustomerSalesInvoices(customerName);
@@ -708,7 +741,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             );
             const creditPeriod = parseInt(customer?.credit_period || '0', 10);
 
-            if (response && Array.isArray(response)) {
+            let validTransactions: BulkTransaction[] = [];
+
+            if (response && Array.isArray(response) && response.length > 0) {
                 const today = new Date();
 
                 const mappedTransactions: BulkTransaction[] = response.map((item: any) => {
@@ -759,40 +794,55 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                 // Filter: Only Due, Partially Received, Due Today. 
                 // CRITICAL: Filter out items with 0 or negative balance, those with 'Received' status, and 'Not Due' status.
-                const validTransactions = mappedTransactions.filter(t =>
+                validTransactions = mappedTransactions.filter(t =>
                     t.amount > 0 &&
                     t.status.trim().toLowerCase() !== 'received' &&
                     t.status !== 'Not Due' &&
                     (t.status === 'Due' || t.status === 'Partially Received' || t.status === 'Due Today')
                 );
-
-                setBulkTransactions(validTransactions);
-                const mappedPending: PendingTransaction[] = validTransactions.map(t => ({
-                    id: t.id,
-                    date: t.date,
-                    referenceNumber: t.invoiceNo,
-                    amount: t.amount,
-                    receipt: 0,
-                    status: t.status,
-                    dueDate: t.dueDate,
-                }));
-                setPendingTransactions(mappedPending);
-
-            } else {
-                setBulkTransactions([]);
-                setPendingTransactions([]);
+            } else if (lId) {
+                // Fallback to standard pending invoices for other ledgers
+                try {
+                    const pendingData = await apiService.getPendingInvoices(lId);
+                    validTransactions = (pendingData || [])
+                        .map((item: any) => ({
+                            id: (item.id || Math.random()).toString(),
+                            date: item.date,
+                            invoiceNo: item.reference_number,
+                            amount: item.amount,
+                            receiveNow: 0,
+                            selected: false,
+                            status: item.due_status || 'Due',
+                            dueDate: item.due_date
+                        }));
+                } catch (e) {
+                    console.error("Failed to fetch standard pending invoices:", e);
+                }
             }
 
+            // Always merge any additional pending expenses if they weren't already added
+            if (mappedExpenses.length > 0) {
+                const existingNos = new Set(validTransactions.map(t => t.invoiceNo.toLowerCase()));
+                mappedExpenses.forEach(exp => {
+                    if (!existingNos.has(exp.invoiceNo.toLowerCase())) {
+                        validTransactions.push(exp);
+                    }
+                });
+            }
+
+            setBulkTransactions(validTransactions);
+            const mappedPending: PendingTransaction[] = validTransactions.map(t => ({
+                id: t.id,
+                date: t.date,
+                referenceNumber: t.invoiceNo,
+                amount: t.amount,
+                receipt: 0,
+                status: t.status,
+                dueDate: t.dueDate,
+            }));
+            setPendingTransactions(mappedPending);
+
             // Also load advances here for consistency with Single mode
-            const findLedgerId = (name: string) => {
-                const normalized = name.trim().toLowerCase();
-                const ledger = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
-                if (ledger) return ledger.id;
-                const portalCust = portalCustomers.find(c => (c.customer_name || c.name || '').trim().toLowerCase() === normalized);
-                if (portalCust) return portalCust.ledger_id;
-                return null;
-            };
-            const lId = findLedgerId(customerName);
             if (lId) {
                 const advEndpoint = `/api/vouchers/advances/?ledger_id=${lId}`;
                 console.log(`[DEBUG] ReceiptVoucher: Fetching advances from ${advEndpoint}`);
