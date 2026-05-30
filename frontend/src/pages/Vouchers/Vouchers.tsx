@@ -62,6 +62,31 @@ const UPLOAD_OPTIONS_CONFIG: Record<string, string[]> = {
 
 
 
+const normalizeStatutorySection = (str: string): string => {
+  if (!str) return '';
+  return str.replace(/[-\|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+};
+
+const findRate = (map: Record<string, number>, sectionStr: string): number => {
+  if (!sectionStr) return 0;
+  const normalizedSearch = normalizeStatutorySection(sectionStr);
+  
+  // 1. Direct match
+  if (map[sectionStr] !== undefined) return map[sectionStr];
+  
+  // 2. Part split by pipe if applicable
+  const part = sectionStr.includes('|') ? sectionStr.split('|')[1] : '';
+  if (part && map[part] !== undefined) return map[part];
+  
+  // 3. Normalized matching
+  for (const key of Object.keys(map)) {
+    if (normalizeStatutorySection(key) === normalizedSearch || (part && normalizeStatutorySection(key) === normalizeStatutorySection(part))) {
+      return map[key];
+    }
+  }
+  return 0;
+};
+
 const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onNavigate, permissions = [], viewVoucherData, clearViewVoucherData }) => {
 
   const { hasTabAccess, isSuperuser } = usePermissions();
@@ -2637,12 +2662,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     let isTcs = false;
 
     if (vendorTaxType === 'TDS' && purchaseSelectedStatutorySection) {
-      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
-      rateDecimal = TDS_RATE_MAP[name] ?? 0;
+      rateDecimal = findRate(TDS_RATE_MAP, purchaseSelectedStatutorySection);
       isTcs = false;
     } else if (vendorTaxType === 'TCS' && purchaseSelectedStatutorySection) {
-      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
-      rateDecimal = TCS_RATE_MAP[name] ?? 0;
+      rateDecimal = findRate(TCS_RATE_MAP, purchaseSelectedStatutorySection);
       isTcs = true;
     } else {
       // Fallback for legacy data
