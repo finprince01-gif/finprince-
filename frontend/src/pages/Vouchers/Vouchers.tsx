@@ -87,6 +87,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const [voucherType, setVoucherType] = useState<VoucherType>(defaultVoucherType);
   const [isReadOnlyMode, setIsReadOnlyMode] = useState(!!viewVoucherData);
+  // Tracks whether we are viewing/editing an EXISTING voucher (stays true even after clicking Edit)
+  const isExistingVoucherRef = useRef(!!viewVoucherData);
   const [drillDownDetails, setDrillDownDetails] = useState<any>(null);
   const [drillDownLoading, setDrillDownLoading] = useState(false);
 
@@ -1415,18 +1417,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       httpClient.get<any[]>('/api/masters/master-voucher-creditnote/')
         .then(configs => {
           setCnVoucherConfigs(configs || []);
-          if (configs && configs.length === 1) {
-            setSelectedCnConfig(configs[0].voucher_name);
-          } else if (configs && configs.length > 1 && !selectedCnConfig) {
-            setSelectedCnConfig(configs[0].voucher_name);
+          // Only auto-select a series when creating a NEW voucher (not viewing/editing existing)
+          if (!isExistingVoucherRef.current) {
+            if (configs && configs.length === 1) {
+              setSelectedCnConfig(configs[0].voucher_name);
+            } else if (configs && configs.length > 1 && !selectedCnConfig) {
+              setSelectedCnConfig(configs[0].voucher_name);
+            }
           }
         })
         .catch(err => console.error('Failed to fetch Credit Note configs', err));
     }
   }, [voucherType]);
 
-  // Generate Credit Note number
+  // Generate Credit Note number (only for NEW vouchers, not when viewing/editing existing)
   useEffect(() => {
+    if (viewVoucherData) return; // Immediate guard against race conditions during drill-down
+    if (isExistingVoucherRef.current) return; // Do NOT overwrite the saved credit note number when viewing/editing an existing voucher
     if (voucherType === 'Credit Note' && selectedCnConfig && cnVoucherConfigs.length > 0) {
       const config = cnVoucherConfigs.find(c => c.voucher_name === selectedCnConfig);
       if (config && config.enable_auto_numbering) {
@@ -4314,6 +4321,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   useEffect(() => {
     if (!viewVoucherData) {
       setIsReadOnlyMode(false);
+      isExistingVoucherRef.current = false; // Reset: no existing voucher loaded
       setDrillDownDetails(null);
       return;
     }
@@ -4332,6 +4340,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const mappedType = typeMap[vType] || (vType ? vType.charAt(0).toUpperCase() + vType.slice(1) : 'Purchase');
     setVoucherType(mappedType);
     setIsReadOnlyMode(true);
+    isExistingVoucherRef.current = true; // Mark: an existing voucher is being viewed/edited
     setDrillDownDetails(null);
 
     const source = viewVoucherData.source || rawVoucher.source || mappedType.toLowerCase();
@@ -4746,6 +4755,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
           narration: rawVoucher.narration || viewVoucherData.narration || '',
           voucher_type: rawVoucher.voucher_type || rawVoucher.type || 'Debit Note',
+          ...rawVoucher,
+          ...viewVoucherData
         } as any);
       }
     }).finally(() => setDrillDownLoading(false));
