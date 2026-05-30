@@ -338,20 +338,20 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         }
     }, [salesVoucherConfigs]);
 
-    // Helper: increment backend counter after successful save, return next number
+    // Helper: refresh invoice number from backend after successful save, return next number
     const incrementInvoiceNumber = React.useCallback(async (seriesId: number): Promise<string> => {
         try {
-            const res: any = await httpClient.post(`/api/masters/master-voucher-sales/${seriesId}/increment-number/`, {});
-            if (res && res.next_invoice_number) {
+            const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${seriesId}/next-number/`);
+            if (res && res.invoice_number) {
                 // Update local configs cache with new current_number
                 setSalesVoucherConfigs(prev => prev.map(c =>
-                    String(c.id) === String(seriesId) ? { ...c, current_number: res.new_current_number } : c
+                    String(c.id) === String(seriesId) ? { ...c, current_number: res.current_number } : c
                 ));
-                setSalesInvoiceNo(res.next_invoice_number);
-                return res.assigned_number;
+                setSalesInvoiceNo(res.invoice_number);
+                return res.invoice_number;
             }
         } catch (e) {
-            console.error('Failed to increment invoice number', e);
+            console.error('Failed to refresh invoice number', e);
         }
         return salesInvoiceNo;
     }, [salesInvoiceNo]);

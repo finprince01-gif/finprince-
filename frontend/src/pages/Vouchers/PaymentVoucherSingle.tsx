@@ -1258,22 +1258,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 }], false);
             }
 
-            // Increment the voucher series counter so the next number is ready (Skip if editing existing!)
+            // Refresh the voucher series counter so the next number is ready (Skip if editing existing!)
             const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === (selectedPaymentConfig || voucherType));
             if (savedConfig && savedConfig.enable_auto_numbering && !editingVoucherId) {
                 try {
-                    const res = await httpClient.post<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/increment-number/`, {});
-                    // Use the next number returned by the increment call
-                    setVoucherNumber(res.next_invoice_number || '');
+                    const res = await httpClient.get<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/next-number/`);
+                    setVoucherNumber(res.invoice_number || '');
                 } catch (e) {
-                    console.error('Failed to increment voucher number:', e);
-                    // Fallback: try refreshing manually if increment call response is unexpected
-                    try {
-                        const res = await httpClient.get<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/next-number/`);
-                        setVoucherNumber(res.invoice_number || '');
-                    } catch (err) {
-                        console.error('Failed to refresh voucher number:', err);
-                    }
+                    console.error('Failed to refresh voucher number:', e);
                 }
             }
 
