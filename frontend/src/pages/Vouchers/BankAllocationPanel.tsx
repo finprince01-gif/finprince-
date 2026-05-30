@@ -115,6 +115,29 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
         const today    = new Date();
         let txns: PendingTransaction[] = [];
 
+        // Fetch pending expenses first so we can merge them regardless of type
+        let mappedExpenses: PendingTransaction[] = [];
+        if (ledgerId) {
+          try {
+            const expenseData = await apiService.getPendingInvoices(ledgerId);
+            mappedExpenses = (expenseData || [])
+              .filter((item: any) => (item.type || '').toLowerCase() === 'expense')
+              .map((item: any) => ({
+                id: item.id || Math.random(),
+                date: item.date,
+                referenceNumber: item.reference_number,
+                amount: Number(item.amount) || 0,
+                payment: 0,
+                postingNote: '',
+                dueStatus: item.due_status || 'Due',
+                dueDate: item.due_date,
+                daysToDue: item.days_to_due,
+              }));
+          } catch (e) {
+            console.error("Failed to fetch pending expenses in BankAllocationPanel:", e);
+          }
+        }
+
         if (partyOption.type === 'vendor') {
           // If in Receipt mode, skip vendor pending bills (only customer allowed)
           if (voucherType === 'receipt') {
@@ -127,7 +150,7 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
             `/api/vendors/transactions/by_vendor/?vendor_id=${partyOption.id}`
           );
           const transactions = Array.isArray(res) ? res : (res.results || []);
-          txns = transactions
+          const mappedVendorTxns = transactions
             .filter((t: any) => {
               const type = t.transaction_type?.toLowerCase();
               const s    = (t.due_status || '').toLowerCase();
@@ -154,6 +177,8 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
               };
             });
 
+          txns = [...mappedVendorTxns, ...mappedExpenses];
+
         } else if (partyOption.type === 'customer') {
           // If in Payment mode, skip customer pending bills (only vendor allowed)
           if (voucherType === 'payment') {
@@ -163,7 +188,7 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
           }
 
           const data = await apiService.getRichCustomerSalesInvoices(partyOption.name);
-          txns = data
+          const mappedCustomerTxns = data
             .map((item: any) => {
               const invDate  = new Date(item.date || '');
               const d1       = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
@@ -193,6 +218,8 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
             })
             .filter((t: any) => t.amount > 0 && t.dueStatus !== 'Not Due');
 
+          txns = [...mappedCustomerTxns, ...mappedExpenses];
+
         } else if (ledgerId) {
           const data = await apiService.getPendingInvoices(ledgerId);
           txns = data
@@ -206,10 +233,12 @@ const BankAllocationPanel: React.FC<BankAllocationPanelProps> = ({
               dueStatus: item.due_status,
               dueDate: item.due_date,
               daysToDue: item.days_to_due,
+              type: item.type,
             }))
             .filter((t: any) => {
               const s = (t.dueStatus || '').toLowerCase();
-              return s === 'due' || s === 'due today' || s === 'partially paid' || s === 'partially received';
+              const isExp = (t.type || '').toLowerCase() === 'expense';
+              return s === 'due' || s === 'due today' || s === 'partially paid' || s === 'partially received' || isExp;
             });
         }
 

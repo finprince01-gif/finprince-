@@ -41,7 +41,7 @@ interface VouchersPageProps {
   clearPrefilledData: () => void;
   onInvoiceUpload: (file: File, voucherType?: string) => void;
   companyDetails: CompanyDetails;
-  onNavigate: (page: Page) => void;
+  onNavigate: (page: Page, params?: any) => void;
   permissions: string[];
   viewVoucherData?: any;
   clearViewVoucherData?: () => void;
@@ -2911,7 +2911,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     });
   }, [party, ledgers, companyDetails, invoiceInForeignCurrency]);
 
-  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions } = useMemo(() => {
+  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions, expenseLedgerOptions } = useMemo(() => {
     // Merge the prop ledgers with freshly-fetched ledgers so we always have the full set
     // The prop is the reliable source; freshLedgers supplements with any newly created ledgers
     const mergedMap = new Map<string, Ledger>();
@@ -3027,7 +3027,29 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       ...defaultLedgerNames.filter(n => !EXCLUDED_NAMES.includes(n.toLowerCase().trim()))
     ])).filter(Boolean) as string[];
 
-    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions };
+    // Expense Ledger dropdown: only Expenditure category ledgers
+    const expenseLedgerOptions = Array.from(new Set([
+      ...effectiveLedgers
+        .filter(l => {
+          if (!isRealLedgerLeaf(l)) return false;
+          const cat = (l.category || '').toLowerCase().trim();
+          return cat === 'expenditure' || cat === 'expense' || cat === 'expenses';
+        })
+        .map(l => l.name),
+      ...hierarchy
+        .filter(r => {
+          const cat = (r.major_group_1 || '').toLowerCase().trim();
+          return cat === 'expenditure' || cat === 'expense' || cat === 'expenses';
+        })
+        .map(r => r.ledger_1)
+        .filter(Boolean) as string[]
+    ])).filter(name => {
+      if (!name) return false;
+      const n = name.toLowerCase().trim();
+      return !['purchase account', 'sales account'].includes(n);
+    }) as string[];
+
+    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions, expenseLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
@@ -10703,8 +10725,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // GST Rate options
   const gstRateOptions = [0, 0.5, 1.5, 3, 5, 7.5, 12, 18, 28, 40];
 
-  // Expenses and PostTo use the full allLedgerOptions (including hierarchy) so all master ledgers appear
-  const expenseLedgers = useMemo(() => allLedgerOptions.map(name => ({ name })), [allLedgerOptions]);
+  // Expenses uses filtered expenseLedgerOptions, PostTo uses the full allLedgerOptions (including hierarchy) so all master ledgers appear
+  const expenseLedgers = useMemo(() => expenseLedgerOptions.map(name => ({ name })), [expenseLedgerOptions]);
   const postToLedgers = useMemo(() => allLedgerOptions.map(name => ({ name })), [allLedgerOptions]);
 
 
