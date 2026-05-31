@@ -2984,13 +2984,23 @@ const handleFinish = async (e?: React.FormEvent) => {
             const existingBanking: any = await httpClient.get(`/api/vendors/banking-details/by-vendor/${newId}/`);
             const existingBankingList = Array.isArray(existingBanking) ? existingBanking : (existingBanking.results || []);
 
-            // Filter out empty rows from frontend state
+            // Filter out empty rows from frontend state, but save at least one empty record if no records exist
             const validBanks = bankAccounts.filter(b => b.accountNumber && b.accountNumber.trim() !== '');
+            const banksToSave = validBanks.length > 0 ? validBanks : [{
+                id: bankAccounts[0]?.id,
+                accountNumber: '',
+                bankName: '',
+                ifscCode: '',
+                branchName: '',
+                swiftCode: '',
+                vendorBranch: [],
+                accountType: 'savings'
+            }];
 
-            for (const bank of validBanks) {
+            for (const bank of banksToSave) {
                 const bankPayload = {
                     vendor_basic_detail: newId,
-                    bank_account_no: bank.accountNumber,
+                    bank_account_no: bank.accountNumber || '',
                     bank_name: bank.bankName || '',
                     ifsc_code: bank.ifscCode || '',
                     branch_name: bank.branchName || '',
@@ -3001,23 +3011,22 @@ const handleFinish = async (e?: React.FormEvent) => {
                 };
 
                 // Check if this branch/account already exists
-                const existingRecord = existingBankingList.find((b: any) => b.id === bank.id);
+                const existingRecord = bank.id 
+                    ? existingBankingList.find((b: any) => b.id === bank.id)
+                    : (bank.accountNumber 
+                        ? existingBankingList.find((b: any) => b.bank_account_no === bank.accountNumber) 
+                        : existingBankingList[0]);
 
                 if (existingRecord) {
                     // Update existing
                     await httpClient.patch(`/api/vendors/banking-details/${existingRecord.id}/`, bankPayload);
-                    console.log(`✅ Bank account updated: ${bank.accountNumber}`);
+                    console.log(`✅ Bank account updated: ${bank.accountNumber || 'blank'}`);
                 } else {
                     // Create new
                     await httpClient.post('/api/vendors/banking-details/', bankPayload);
-                    console.log(`✅ Bank account created: ${bank.accountNumber}`);
+                    console.log(`✅ Bank account created: ${bank.accountNumber || 'blank'}`);
                 }
             }
-
-            if (validBanks.length === 0) {
-                console.log('ℹ️  No banking details data to save');
-            }
-
         } catch (error) {
             console.error('❌ Error saving banking details:', error);
             // Don't throw - continue with other sections

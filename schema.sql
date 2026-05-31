@@ -4494,3 +4494,35 @@ CREATE TABLE `voucher_purchase_advance_links` (
 ) ENGINE=InnoDB AUTO_INCREMENT=148 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
+
+
+CREATE TABLE IF NOT EXISTS purchase_scan_uploads (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid CHAR(36) NOT NULL UNIQUE,
+    batch_id CHAR(36),
+    session_id CHAR(36),
+    file_name TEXT,
+    original_file_name TEXT,
+    file_path TEXT,
+    mime_type TEXT,
+    file_size BIGINT,
+    uploaded_by BIGINT,
+    uploaded_at TIMESTAMP NULL,
+    ocr_status VARCHAR(50),
+    extraction_status VARCHAR(50),
+    hydration_status VARCHAR(50),
+    raw_ocr_response JSON,
+    normalized_extraction JSON,
+    canonical_voucher_dto JSON,
+    vendor_status VARCHAR(100),
+    voucher_status VARCHAR(100),
+    vendor_id BIGINT,
+    purchase_voucher_id BIGINT,
+    review_status VARCHAR(50),
+    last_edited_by BIGINT,
+    last_edited_at TIMESTAMP NULL,
+    error_message TEXT,
+    validation_errors JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

@@ -63,17 +63,16 @@ def detect_continuation_markers(text: str) -> List[str]:
     
     patterns = {
         "continued_to_page": r"continued\s+to\s+page",
+        "continued": r"\bcontinued\b",
+        "carry_forward": r"carry\s+forward",
         "page_2": r"page[\s-]*2",
-        "amount_chargeable": r"amount\s+chargeable",
-        "total_invoice_value": r"total\s+invoice\s+value",
-        "rounded_off": r"rounded\s+off",
-        "tax_amount": r"tax\s+amount",
-        "bank_details": r"bank\s+details",
-        "authorised_signatory": r"authorised\s+signatory",
-        "tax_summary": r"tax\s+summary",
-        "gst_summary": r"gst\s+summary",
+        "page_2_of_3": r"page[\s-]*2[\s-]*of[\s-]*3",
+        "item_table_continues": r"item\s+table\s+continues",
+        "subtotal_carried_forward": r"subtotal\s+carried\s+forward",
         "carried_forward": r"carried\s+forward",
-        "brought_forward": r"brought\s+forward"
+        "brought_forward": r"brought\s+forward",
+        "tax_summary": r"tax\s+summary",
+        "gst_summary": r"gst\s+summary"
     }
     
     for marker, pattern in patterns.items():
@@ -100,80 +99,59 @@ class ZohoIntegrityEnforcer:
 
     def should_merge(self, prev: Dict[str, Any], curr: Dict[str, Any]) -> (bool, str):
         """
-        [PHASE 4 STABILIZATION] Strict Deterministic Merge Rules.
-        Harden boundaries using multiple anchors (Requirement #8).
+        [PHASE 4 STABILIZATION] SAFE MULTI-PAGE CONTINUATION LOGIC.
         """
+        # ── CRITICAL OCR FAILURE RULE ──
+        curr_error = curr.get("_error")
+        ocr_text = str(curr.get("_pdf_ocr_text") or curr.get("_raw_text") or "").strip()
+        ocr_quality = len(ocr_text)
+        if curr_error or ocr_quality < 15:
+            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Failed OCR page")
+            return False, "Failed OCR page (DO NOT MERGE)"
+        
+        # ── NEW HEADER DETECTED RULE ──
+        curr_role = self.classify_page(curr.get("_raw_text", ""), curr.get("items", []), invoice_data=curr)
+        if curr_role == "PAGE_ROLE_PRIMARY":
+            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: New invoice header detected on page")
+            return False, "New header detected (FORCE PRIMARY)"
+            
+        # ── INVOICE_NO MUST DOMINATE RULE ──
         p_no = str(prev.get("invoice_no") or "").strip().upper()
         c_no = str(curr.get("invoice_no") or "").strip().upper()
         
-        p_irn = str(prev.get("irn") or "").strip().upper()
-        c_irn = str(curr.get("irn") or "").strip().upper()
-
-        p_ack = str(prev.get("ack_no") or "").strip().upper()
-        c_ack = str(curr.get("ack_no") or "").strip().upper()
-
-        # ── 1. PRIMARY GROUP KEYS MATCH ──
-        # If any of the primary keys match (and are not empty), MERGE SAFELY.
-        if p_no and c_no and p_no == c_no and p_no != "MISSING":
-            logger.info(f"[SAFE_MERGE_APPLIED] Matched on invoice_no: {p_no}")
-            return True, f"[SAFE_MERGE_APPLIED] Matched invoice_no: {p_no}"
-            
-        if p_irn and c_irn and p_irn == c_irn and p_irn != "MISSING":
-            logger.info(f"[SAFE_MERGE_APPLIED] Matched on irn: {p_irn}")
-            return True, f"[SAFE_MERGE_APPLIED] Matched irn: {p_irn}"
-            
-        if p_ack and c_ack and p_ack == c_ack and p_ack != "MISSING":
-            logger.info(f"[SAFE_MERGE_APPLIED] Matched on ack_no: {p_ack}")
-            return True, f"[SAFE_MERGE_APPLIED] Matched ack_no: {p_ack}"
-
-        # ── 2. EXPLICIT MISMATCHES ──
-        # If primary keys are present on both but they mismatch, DO NOT MERGE.
+        # If invoice_no differs: NEVER MERGE
         if p_no and c_no and p_no != c_no and p_no != "MISSING" and c_no != "MISSING":
             logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Invoice number mismatch '{p_no}' vs '{c_no}'")
-            logger.info(f"[SAFE_NEW_INVOICE_CREATED] New invoice boundary detected (invoice_no mismatch)")
             return False, "Invoice number mismatch"
             
-        if p_irn and c_irn and p_irn != c_irn and p_irn != "MISSING" and c_irn != "MISSING":
-            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: IRN mismatch '{p_irn}' vs '{c_irn}'")
-            logger.info(f"[SAFE_NEW_INVOICE_CREATED] New invoice boundary detected (IRN mismatch)")
-            return False, "IRN mismatch"
-            
-        if p_ack and c_ack and p_ack != c_ack and p_ack != "MISSING" and c_ack != "MISSING":
-            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Ack No mismatch '{p_ack}' vs '{c_ack}'")
-            logger.info(f"[SAFE_NEW_INVOICE_CREATED] New invoice boundary detected (Ack mismatch)")
-            return False, "Ack No mismatch"
-            
-        p_vendor = str(prev.get("vendor_name") or "").strip().upper()
-        c_vendor = str(curr.get("vendor_name") or "").strip().upper()
-        if p_vendor and c_vendor and p_vendor != c_vendor and p_vendor != "MISSING" and c_vendor != "MISSING":
-            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Vendor mismatch '{p_vendor}' vs '{c_vendor}'")
+        same_invoice = (not c_no or c_no == "MISSING" or c_no == p_no)
+        
+        p_gstin = str(prev.get("gstin") or prev.get("vendor_gstin") or "").strip().upper()
+        c_gstin = str(curr.get("gstin") or curr.get("vendor_gstin") or "").strip().upper()
+        if p_gstin and c_gstin and p_gstin != c_gstin and p_gstin != "MISSING" and c_gstin != "MISSING":
+            logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Vendor mismatch '{p_gstin}' vs '{c_gstin}'")
             return False, "Vendor mismatch"
-
+        same_vendor = (not c_gstin or c_gstin == "MISSING" or c_gstin == p_gstin)
+        
+        p_branch = str(prev.get("tenant_id") or "").strip().upper()
+        c_branch = str(curr.get("tenant_id") or "").strip().upper()
+        same_branch = (not c_branch or c_branch == "MISSING" or c_branch == p_branch)
+        
         p_date = str(prev.get("invoice_date") or "").strip().upper()
         c_date = str(curr.get("invoice_date") or "").strip().upper()
         if p_date and c_date and p_date != c_date and p_date != "MISSING" and c_date != "MISSING":
             logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: Date mismatch '{p_date}' vs '{c_date}'")
             return False, "Date mismatch"
-
-        # ── 3. SECONDARY CHECKS OR SAFE FALLBACK ──
-        # If current page has NO identity (no inv_no, no irn, no ack_no), 
-        # and it's sequential to a page with items, we can safely merge it as a continuation.
-        has_primary_identity = (c_no and c_no != "MISSING") or (c_irn and c_irn != "MISSING") or (c_ack and c_ack != "MISSING")
-        if not has_primary_identity:
-            p_idx = int(prev.get("_page_no") or 0)
-            c_idx = int(curr.get("_page_no") or 0)
-            is_sequential = (c_idx == p_idx + 1)
+        same_date = (not c_date or c_date == "MISSING" or c_date == p_date)
+        
+        # ── POSITIVE CONTINUATION EVIDENCE ──
+        continuation_structure = (curr_role in ["PAGE_ROLE_CONTINUATION", "PAGE_ROLE_TOTALS", "PAGE_ROLE_TAX_SUMMARY"])
+        
+        if same_invoice and same_vendor and same_branch and same_date and continuation_structure:
+            logger.info(f"[SAFE_MERGE_APPLIED] Safe continuation merge applied")
+            return True, "Safe continuation merge"
             
-            p_items = prev.get("items", [])
-            has_p_items = len(p_items) > 0
-            
-            if is_sequential and has_p_items:
-                logger.info(f"[SAFE_MERGE_APPLIED] Sequential page without primary identity -> merging as continuation.")
-                return True, "[SAFE_MERGE_APPLIED] Sequential continuation"
-
-        # If confidence is ambiguous, DO NOT MERGE. False duplicate is safer than deleted.
-        logger.info(f"[SAFE_NEW_INVOICE_CREATED] Ambiguous identity -> creating new invoice entry.")
-        return False, "Ambiguous identity (Deterministic SPLIT)"
+        return False, "No positive continuation evidence"
 
     def classify_page(self, text: str, items: List[Dict[str, Any]], invoice_data: Dict[str, Any] = None) -> str:
         """
@@ -204,7 +182,7 @@ class ZohoIntegrityEnforcer:
                 break
         
         # ── CLASSIFICATION LOGIC ──
-        role = "PAGE_ROLE_CONTINUATION" # Default
+        role = "PAGE_ROLE_UNKNOWN" # Default: Unknown is NOT continuation
 
         if "continued_to_page" in markers:
             role = "PAGE_ROLE_PRIMARY"
@@ -212,11 +190,11 @@ class ZohoIntegrityEnforcer:
             role = "PAGE_ROLE_TOTALS"
         elif any(m in ["tax_summary", "gst_summary"] for m in markers):
             role = "PAGE_ROLE_TAX_SUMMARY"
-        elif "page_2" in markers or "amount_chargeable" in markers or "carried_forward" in markers or "brought_forward" in markers:
+        elif any(m in markers for m in ["continued", "carry_forward", "page_2", "page_2_of_3", "item_table_continues", "subtotal_carried_forward", "carried_forward", "brought_forward"]):
             role = "PAGE_ROLE_CONTINUATION"
-        elif has_real_items and anchor_count >= 1:
-            # [PHASE 11.9] Relaxed anchor requirement. 
-            # If we have items AND at least one anchor (like "Invoice No" or "Tax Invoice"), it's PRIMARY.
+        elif anchor_count >= 1:
+            # [ROOT-CAUSE FIX] Even if item extraction failed, if we see identity anchors ("Tax Invoice", etc)
+            # it is a primary page, NOT a continuation.
             role = "PAGE_ROLE_PRIMARY"
         elif has_real_items:
             role = "PAGE_ROLE_CONTINUATION"
@@ -254,10 +232,12 @@ class ZohoIntegrityEnforcer:
                 logger.warning(f"[INTEGRITY_WARNING] {err}")
                 report["failures"].append(err)
                 # [PHASE 11.9] Tolerant Mode: We don't fail the whole batch for warnings
-                # Unless it's a TOTAL void
+                # [FIX] VOID != FAILED. Treat as degraded visible rows instead of fatal rejection.
                 if not v_name and not v_inv_no and not v_items:
-                     report.update({"validation": "FAIL", "ready_for_zoho": False})
-                     logger.error(f"[INTEGRITY_FAIL] Invoice[{idx}] is a total void. Rejecting batch.")
+                     logger.warning(f"[DEGRADED_INVOICE_VISIBLE] idx={idx} Invoice is a total void. Treating as partial extraction, NOT failing batch.")
+                     inv["status"] = "partial_extraction"
+                     inv["visible_in_ui"] = True
+                     inv["requires_manual_review"] = True
             else:
                 logger.info(f"[INTEGRITY_PASS] Invoice[{idx}] has minimum identity anchors.")
                 

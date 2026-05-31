@@ -23,9 +23,10 @@ class FinalizeWorker(BaseWorker):
         record_id = payload.get('record_id')
         session_id = task['session_id']
 
-        logger.info(f"[FINALIZE_STAGE_ENTER] type={task_type} id={task.get('id')} record={record_id} session={session_id}")
         import time
         t_finalize_start = time.time()
+        logger.info(f"[FINALIZE_WORKER_START] type={task_type} id={task.get('id')} record={record_id} session={session_id}")
+        logger.info(f"[FINALIZE_STAGE_ENTER] type={task_type} id={task.get('id')} record={record_id} session={session_id}")
         logger.info(f"[FINALIZE_WORKER_ENTER] id={task.get('id')} record={record_id}")
         logger.info(f"[FINALIZE_WORKER_FETCH] id={task.get('id')}")
 
@@ -137,6 +138,49 @@ class FinalizeWorker(BaseWorker):
                     f"processed={not is_failed} rows_updated={updated}"
                 )
                 logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state={terminal_status}")
+
+                # 1B. ── PURCHASE SAVE SERVICE ────────────────────────────────
+                # Call the canonical validate_and_process(auto_save=True) — the same service
+                # used by Manual Purchase save. This persists into:
+                #   PurchaseVoucher / VoucherPurchaseSupplierDetails
+                #   PurchaseEntry, PurchaseItems, ledger tables, tax tables
+                # Duplicate validation occurs INSIDE this service — NOT as an orchestration gate.
+                # This must run AFTER terminal status is written so the record is queryable.
+                if not is_failed:
+                    logger.info(f"[PURCHASE_SAVE_SERVICE_START] record={record_id} session={canonical_session_id}")
+                    try:
+                        record_obj = InvoiceTempOCR.objects.filter(id=record_id).first()
+                        if record_obj:
+                            from ocr_pipeline.pipeline import validate_and_process
+                            logger.info(f"[PURCHASE_DB_INSERT_START] record={record_id} vendor_id={getattr(record_obj, 'vendor_id', None)} validation_status={getattr(record_obj, 'validation_status', None)}")
+                            from django.db import transaction as _tx_save
+                            try:
+                                with _tx_save.atomic():
+                                    save_result = validate_and_process(record_obj, auto_save=True)
+                                    save_status = save_result.get('status') if isinstance(save_result, dict) else None
+                                    if save_status == 'VOUCHER_CREATED':
+                                        logger.info(f"[PURCHASE_DB_INSERT_SUCCESS] record={record_id} status=VOUCHER_CREATED")
+                                        logger.info(f"[PURCHASE_COMMIT_SUCCESS] record={record_id} voucher_id={save_result.get('voucher_id')}")
+                                    elif save_status in ('DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'):
+                                        logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={record_id} status={save_status} validation_status={save_result.get('validation_message')}")
+                                        # Duplicate is not a failure — update record status to reflect
+                                        InvoiceTempOCR.objects.filter(id=record_id).update(
+                                            validation_status=save_status
+                                        )
+                                    else:
+                                        logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={record_id} save_status={save_status} message={save_result.get('validation_message') if isinstance(save_result, dict) else save_result}")
+                            except Exception as tx_err:
+                                logger.error(f"[DB_ROLLBACK] record={record_id} error={tx_err}")
+                                logger.exception(f"[FINALIZE_EXCEPTION] record={record_id} purchase_save rollback triggered")
+                                # Non-fatal: log and continue — record is already marked FINALIZED
+                        else:
+                            logger.warning(f"[PURCHASE_SAVE_RECORD_MISSING] record={record_id} — InvoiceTempOCR not found, skipping purchase save")
+                    except Exception as ps_err:
+                        logger.error(f"[PURCHASE_SAVE_SERVICE_ERROR] record={record_id} error={ps_err}")
+                        logger.exception(f"[FINALIZE_EXCEPTION] record={record_id} purchase_save_service threw")
+                        # Non-fatal: orchestration state is already committed above
+                else:
+                    logger.info(f"[PURCHASE_SAVE_SERVICE_SKIPPED] record={record_id} reason=is_failed")
 
 
                 # 2. Update the OCRJob processed/failed counts

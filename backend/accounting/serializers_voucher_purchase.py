@@ -73,7 +73,7 @@ class VoucherPurchaseDueDetailsSerializer(serializers.ModelSerializer):  # type:
 
 
 class VoucherPurchaseTransitDetailsSerializer(serializers.ModelSerializer):  # type: ignore[misc]
-    mode = serializers.CharField(required=False, default='Road')
+    mode = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
     received_in = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     receipt_date = serializers.DateField(required=False, allow_null=True)
     receipt_time = serializers.TimeField(required=False, allow_null=True)
@@ -259,20 +259,22 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
             )
 
-        if transit_data is not None:
-            valid_fields = {
-                'mode', 'received_in', 'receipt_date', 'receipt_time',
-                'received_quantity', 'uqc', 'delivery_type', 'self_third_party',
-                'transporter_id', 'transporter_name', 'vehicle_no',
-                'lr_gr_consignment', 'extra_details', 'document',
-                'beyond_port_port_of_loading', 'upto_port_fnr_no', 'upto_port_origin_country', 'rail_beyond_station_loading', 'upto_port_rr_no', 'beyond_port_port_of_discharge', 'rail_beyond_rail_no', 'rail_upto_transporter_name', 'upto_port_final_dest_city', 'rail_beyond_origin_country', 'upto_port_origin_city', 'beyond_port_sb_no', 'rail_upto_delivery_type', 'rail_beyond_rr_date', 'upto_port_port_of_loading', 'rail_beyond_origin', 'upto_port_station_discharge', 'rail_upto_transporter_id', 'beyond_port_vessel_flight_no', 'beyond_port_sb_date', 'beyond_port_final_dest', 'beyond_port_dest_country', 'rail_beyond_dest_country', 'rail_beyond_final_dest', 'beyond_port_origin_country', 'upto_port_vessel_flight_no', 'rail_beyond_rr_no', 'beyond_port_ship_port_code', 'rail_beyond_station_discharge', 'upto_port_final_dest_country', 'upto_port_rr_date', 'upto_port_station_loading', 'upto_port_port_of_discharge',
-            }
-            filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
-            if transit_document:
-                filtered_data['document'] = transit_document
-            VoucherPurchaseTransitDetails.objects.create(
-                supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
-            )
+        # Always create VoucherPurchaseTransitDetails (even when no transit data).
+        # When transit_details=None from the scan pipeline, create an empty row so every
+        # VoucherPurchaseSupplierDetails record has a linked transit row (null values for all fields).
+        _valid_transit_fields = {
+            'mode', 'received_in', 'receipt_date', 'receipt_time',
+            'received_quantity', 'uqc', 'delivery_type', 'self_third_party',
+            'transporter_id', 'transporter_name', 'vehicle_no',
+            'lr_gr_consignment', 'extra_details', 'document',
+            'beyond_port_port_of_loading', 'upto_port_fnr_no', 'upto_port_origin_country', 'rail_beyond_station_loading', 'upto_port_rr_no', 'beyond_port_port_of_discharge', 'rail_beyond_rail_no', 'rail_upto_transporter_name', 'upto_port_final_dest_city', 'rail_beyond_origin_country', 'upto_port_origin_city', 'beyond_port_sb_no', 'rail_upto_delivery_type', 'rail_beyond_rr_date', 'upto_port_port_of_loading', 'rail_beyond_origin', 'upto_port_station_discharge', 'rail_upto_transporter_id', 'beyond_port_vessel_flight_no', 'beyond_port_sb_date', 'beyond_port_final_dest', 'beyond_port_dest_country', 'rail_beyond_dest_country', 'rail_beyond_final_dest', 'beyond_port_origin_country', 'upto_port_vessel_flight_no', 'rail_beyond_rr_no', 'beyond_port_ship_port_code', 'rail_beyond_station_discharge', 'upto_port_final_dest_country', 'upto_port_rr_date', 'upto_port_station_loading', 'upto_port_port_of_discharge',
+        }
+        _filtered_transit = {k: v for k, v in (transit_data or {}).items() if k in _valid_transit_fields}
+        if transit_document:
+            _filtered_transit['document'] = transit_document
+        VoucherPurchaseTransitDetails.objects.create(
+            supplier_details=supplier_instance, tenant_id=tenant_id, **_filtered_transit
+        )
 
         # Sync legacy JSON to new relational tables
         self._sync_relational_data(supplier_instance, supply_inr_data, supply_foreign_data, due_data)

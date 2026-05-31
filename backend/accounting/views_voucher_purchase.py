@@ -1,9 +1,11 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from django.db import transaction as db_transaction
 from .models import Voucher
 from .models_voucher_purchase import VoucherPurchaseSupplierDetails
 from .serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer
+
 
 
 class VoucherPurchaseViewSet(viewsets.ModelViewSet):
@@ -96,3 +98,35 @@ class VoucherPurchaseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         tenant_id = self.request.user.branch_id
         serializer.save(tenant_id=tenant_id)
+
+    @action(detail=False, methods=['post'], url_path='validate-voucher')
+    def validate_voucher(self, request):
+        """
+        Strict check for duplicate vouchers.
+        """
+        user = self.request.user
+        tenant_id = getattr(user, 'tenant_id', None) or getattr(user, 'branch_id', None)
+
+        supplier_invoice_no = request.data.get('supplier_invoice_no', '').strip()
+        gstin = request.data.get('gstin', '').strip()
+        branch = request.data.get('branch', '').strip()
+        vendor_name = request.data.get('vendor_name', '').strip()
+
+        exists = VoucherPurchaseSupplierDetails.objects.filter(
+            tenant_id=tenant_id,
+            supplier_invoice_no__iexact=supplier_invoice_no,
+            gstin__iexact=gstin,
+            branch__iexact=branch
+        ).exists()
+
+        if exists:
+            return Response({
+                "status": "DUPLICATE",
+                "voucher_status": "Duplicate Voucher"
+            })
+        else:
+            return Response({
+                "status": "UNIQUE",
+                "voucher_status": "Unique Voucher"
+            })
+

@@ -680,6 +680,9 @@ interface BulkInvoiceUploadModalProps {
     onFinalized?: (result: FinalizeResult) => void;
     voucherType: string;
     isLimitReached?: boolean;
+    activeSessionId?: string;
+    initialStep?: string;
+    onEditRow?: (row: any) => void;
 }
 
 type ModalStep = 'upload' | 'scanning' | 'review' | 'finalizing' | 'done';
@@ -890,7 +893,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         r.validation_status === 'NEED_VENDOR' ||
                         r.validation_status === 'VENDOR_MISSING' ||
                         r.validation_status === 'NOT_FOUND' ||
-                        (r.vendor_status === 'CREATE_VENDOR') ||
+                        (r.vendor_status === 'NEW' || r.vendor_status === 'CREATE_VENDOR') ||
                         (!r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'DUPLICATE', 'VOUCHER_CREATED'].includes(r.validation_status))
                     )
                 ).length;
@@ -1055,6 +1058,18 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             setIsLoading(false);
             setFetchError(null);
             console.log("OCR API response:", res);
+            if (res) {
+                console.log("[FRONTEND_RECEIPT] raw API payload:", res);
+                const rowsToLog = Array.isArray(res) ? res : (res.data || []);
+                rowsToLog.forEach((row: any) => {
+                    console.log(
+                        `[FRONTEND_ROW_RECEIPT] ` +
+                        `invoice_no=${row.invoice_no || ''} ` +
+                        `vendor_id=${row.vendor_id || ''} ` +
+                        `vendor_status=${row.vendor_status || ''}`
+                    );
+                });
+            }
 
             // ── Handle both envelope {status, data:[]} and legacy plain array ──
             let rows: any[];
@@ -1081,7 +1096,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         total_amount: String(inv.total_amount || inv.invoice_total || '0.00'),
                         extracted_data: inv.extracted_data || inv,
                         validationStatus: (inv.validationStatus || inv.validation_status || 'READY') as ValidationStatus,
-                        vendor_status: inv.vendor_status || (inv.vendor_id ? 'EXISTS' : 'NEW'),
+                        vendor_status: (inv.vendor_id ? 'EXISTS' : (inv.vendor_status || 'NEW')) as VendorStatus,
                         processed: !!inv.processed,
                         _isSnapshot: true,
                         _isMerged: !!inv._isMerged,
@@ -1299,7 +1314,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     total_sgst: totalSgst,
                     total_igst: totalIgst,
                     validationStatus: vStatus,
-                    vendor_status: (['READY', 'FOUND', 'MATCHED'].includes(vStatus) ? 'FOUND' : 'NEW') as VendorStatus,
+                    vendor_status: (r.vendor_id ? 'EXISTS' : (r.vendor_status || 'NEW')) as VendorStatus,
                     vendor_id: r.vendor_id,
                     branch: clean(r.branch, inv['branch'], inv['Branch']),
                     extracted_data: rawExtracted,
@@ -2017,14 +2032,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                 total_amount: newAmount,
                                 vendor_id: revalidation?.vendor_id ?? r.vendor_id,
                                 vendor_name: revalidation?.vendor_name || r.vendor_name,
-                                // Use backend's authoritative vendor_status (EXISTS→FOUND, NEW→MISSING)
-                                // falling back to status-based inference for legacy compatibility
-                                vendor_status: (
-                                    revalidation?.vendor_status === 'EXISTS' ||
-                                    revalidation?.status === 'READY' ||
-                                    revalidation?.status === 'FOUND' ||
-                                    revalidation?.status === 'found'
-                                ) ? 'FOUND' as VendorStatus : r.vendor_status,
+                                vendor_status: ((revalidation?.vendor_id ?? r.vendor_id) ? 'EXISTS' : (revalidation?.vendor_status || 'NEW')) as VendorStatus,
                             };
                             if (newValidationStatus === 'VENDOR_MISSING') updatedRow = updated;
                             return updated;
@@ -2314,7 +2322,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                         <div className="text-2xl">{attentionNeededCount}</div>
                                         <div className="text-[10px] uppercase opacity-70 tracking-wider">Need Attention</div>
                                         <div className="mt-1 text-[9px] text-amber-600/60 font-medium">
-                                            (from {mergedResults.filter(r => !r.processed && (r.validationStatus === 'NEED_VENDOR' || r.vendor_status === 'CREATE_VENDOR' || r.validationStatus === 'NOT_FOUND' || r.validationStatus === 'VENDOR_MISSING' || !r.vendor_id)).reduce((acc, r) => acc + (r._mergedCount || 1), 0)} physical files)
+                                            (from {mergedResults.filter(r => !r.processed && (r.validationStatus === 'NEED_VENDOR' || r.vendor_status === 'NEW' || r.vendor_status === 'CREATE_VENDOR' || r.validationStatus === 'NOT_FOUND' || r.validationStatus === 'VENDOR_MISSING' || !r.vendor_id)).reduce((acc, r) => acc + (r._mergedCount || 1), 0)} physical files)
                                         </div>
                                     </div>
                                 </div>
@@ -2396,7 +2404,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 <input
                                                     type="checkbox"
                                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                    checked={selectedHashes.size > 0 && selectedHashes.size === scanResults.filter(row => row.vendor_status !== 'EXISTS').length}
+                                                    checked={selectedHashes.size > 0 && selectedHashes.size === scanResults.filter(row => !['EXISTS', 'FOUND', 'MATCHED'].includes(row.vendor_status || '')).length}
                                                     onChange={toggleSelectAll}
                                                 />
                                             </th>
@@ -2440,23 +2448,39 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 const rowBranch = (row.extracted_data?.sections?.supplier_details?.branch || row.branch || "").toString().trim().toUpperCase();
                                                 const rowName = (row.extracted_data?.sections?.supplier_details?.vendor_name || row.vendor_name || "").toString().trim().toUpperCase();
 
-                                                const matchedOther = scanResults.find(r => {
-                                                    if (r.file_hash === row.file_hash) return false;
+                                                // [SIBLING_VENDOR_INFERENCE_BLOCKED] Each row uses ONLY its own backend validation.
+                                                // Borrowing vendor_id from sibling rows is explicitly disabled — it was the root
+                                                // cause of false "ALREADY EXIST" badges for vendors not in the master.
+                                                console.log(
+                                                    `[SIBLING_VENDOR_INFERENCE_BLOCKED]\n` +
+                                                    `record_id=${row.id}`
+                                                );
 
-                                                    const isRMatched = r.vendor_id || ["READY", "FOUND", "RESOLVED", "SUCCESS", "DUPLICATE"].includes(r.validationStatus);
-                                                    if (!isRMatched) return false;
+                                                // STRICTLY own row only — never inherit from siblings
+                                                const effectiveVendorId = row.vendor_id;
 
-                                                    const rGstin = (r.extracted_data?.sections?.supplier_details?.gstin || r.vendor_gstin || "").toString().trim().toUpperCase();
-                                                    const rBranch = (r.extracted_data?.sections?.supplier_details?.branch || r.branch || "").toString().trim().toUpperCase();
-                                                    const rName = (r.extracted_data?.sections?.supplier_details?.vendor_name || r.vendor_name || "").toString().trim().toUpperCase();
+                                                const hasEffectiveMatch = ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'].includes(row.vendor_status || '');
+                                                const renderedBadge = hasEffectiveMatch ? 'ALREADY EXIST' : 'Create Vendor';
 
-                                                    if (rowGstin && rGstin && rowGstin === rGstin) return true;
-                                                    if (rowName && rName && rowName === rName && rowBranch === rBranch) return true;
-                                                    return false;
-                                                });
+                                                console.log(
+                                                    `[FRONTEND_VENDOR_RENDER_DECISION] ` +
+                                                    `invoice_no=${row.invoice_number || ''} ` +
+                                                    `displayed_badge=${renderedBadge} ` +
+                                                    `source_field_used=row.vendor_status ` +
+                                                    `vendor_status_val=${row.vendor_status || ''} ` +
+                                                    `vendor_id_val=${row.vendor_id || ''}`
+                                                );
 
-                                                const effectiveVendorId = row.vendor_id || matchedOther?.vendor_id;
-                                                const hasEffectiveMatch = !!effectiveVendorId || ["READY", "FOUND", "RESOLVED", "SUCCESS", "DUPLICATE", "VOUCHER_CREATED"].includes(row.validationStatus);
+                                                if (row.vendor_id && renderedBadge === 'Create Vendor') {
+                                                    console.error(
+                                                        `[VENDOR_UI_STATE_CORRUPTION] UI is rendering 'Create Vendor' even though vendor_id exists!\n` +
+                                                        `invoice_no=${row.invoice_number || ''}\n` +
+                                                        `vendor_id=${row.vendor_id}\n` +
+                                                        `vendor_status=${row.vendor_status || ''}\n` +
+                                                        `rendered_badge=${renderedBadge}\n` +
+                                                        `row_payload=${JSON.stringify(row)}`
+                                                    );
+                                                }
 
                                                 return (
                                                     <tr key={idx} className={`group hover:bg-indigo-50/40 transition-colors ${row._isMerged ? 'bg-blue-50/30' : ''} ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' :
@@ -2570,12 +2594,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                                         validationStatus: newStatus,
                                                                                         vendor_id: result.vendor_id ?? r.vendor_id,
                                                                                         vendor_name: result.vendor_name || r.vendor_name,
-                                                                                        // Sync vendor_status from PATCH response (Handle both legacy and modern codes)
-                                                                                        vendor_status: (result.vendor_status === 'EXISTS' || result.vendor_status === 'MATCHED')
-                                                                                            ? 'MATCHED' as VendorStatus
-                                                                                            : (result.vendor_status === 'NEW' || result.vendor_status === 'CREATE_VENDOR')
-                                                                                                ? 'CREATE_VENDOR' as VendorStatus
-                                                                                                : r.vendor_status,
+                                                                                        vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
                                                                                     };
                                                                                     if (newStatus === 'VENDOR_MISSING') setTimeout(() => setResolvingRow(updated), 150);
                                                                                     return updated;
