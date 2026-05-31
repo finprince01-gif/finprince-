@@ -272,11 +272,18 @@ class ForensicMerger:
             curr_tenant = str(curr.get("tenant_id") or "").strip() or "MISSING"
             
             # ── DETERMINISTIC MERGE KEY (Requirement #11) ──
-            merge_key = f"{curr_tenant}_{curr_gstin}_{curr_inv}_{curr_date}"
+            # [FIX 6] CORRECT: gstin + invoice_no + invoice_date + branch
+            # Page identity must always remain unique if invoice_no is MISSING to prevent false collapse
+            if curr_inv == "MISSING":
+                merge_key = f"{curr_tenant}_{curr_gstin}_MISSING_{curr_date}_page_{curr_page_no}"
+            else:
+                merge_key = f"{curr_tenant}_{curr_gstin}_{curr_inv}_{curr_date}"
+                
             is_deterministic = (curr_inv != "MISSING")
             
-            # [IDENTITY_TRACE] stage=grouping_input (Requirement #10)
-            logger.info(f"[IDENTITY_TRACE] stage=grouping_input page={curr_page_no} inv={curr_inv} gstin={curr_gstin} vendor={curr_vendor} merge_key={merge_key}")
+            # [DEDUPE_EVALUATION] and [FILTER_DECISION]
+            logger.info(f"[DEDUPE_EVALUATION] page_no={curr_page_no} invoice_no={curr_inv} merge_key={merge_key} dedupe_key={merge_key} filter_reason=None dropped=False")
+            logger.info(f"[FILTER_DECISION] page_no={curr_page_no} invoice_no={curr_inv} merge_key={merge_key} dedupe_key={merge_key} filter_reason=None dropped=False")
             
             # [GROUP_PRECHECK] (Requirement #7)
             logger.info(f"[GROUP_PRECHECK] page={curr_page_no} inv={curr_inv} gstin={curr_gstin} vendor={curr_vendor} hydrated={bool(curr_inv != 'MISSING' or curr_gstin != 'MISSING')}")
@@ -586,6 +593,9 @@ class ForensicMerger:
         if abs(total_items_taxable - header_taxable) > 1.0:
             merged_invoice["_forensic_warning"] = f"Taxable mismatch after merge: Items({total_items_taxable}) vs Header({header_taxable})"
             logger.warning(merged_invoice["_forensic_warning"])
+
+        # [ROOT-CAUSE FIX] Explicit lineage tracking for pipeline integrity verification
+        merged_invoice["_source_pages"] = [p.get("_page_no") for p in sorted_group if p.get("_page_no")]
 
         return merged_invoice
 

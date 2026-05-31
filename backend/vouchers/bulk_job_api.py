@@ -383,23 +383,26 @@ class BulkStatusAPIView(APIView):
         if is_completed:
             term_reason = auth_state.get('terminal_reason', 'FAILED')
             if term_reason == "COMPLETED":
-                # Ensure compatibility with frontend mapping
-                status_str = "FINALIZED" if failed == 0 else "PARTIAL_FAILED"
+                # Ensure compatibility with frontend mapping: if no failures, it's successful.
+                # Since degraded pages are now completed instead of failed, they map here.
+                status_str = "SUCCESS_WITH_WARNINGS" if failed == 0 else "PARTIAL_FAILED"
             else:
                 status_str = "FAILED"
             
         # Use orchestrator's expected_pages (pages) if available, otherwise fallback to files
         expected_pages = auth_state.get('expected_pages', 0)
+        terminal_count = auth_state.get('terminal_count', success + failed)
+
         if expected_pages > 0:
             total = expected_pages
-            processing = max(0, total - success - failed)
+            processing = max(0, total - terminal_count)
         else:
-            processing = max(0, total_files - success - failed)
+            processing = max(0, total_files - terminal_count)
             if not is_completed:
                 processing = max(1, processing) # force processing
-            total = max(total_files, success + failed + processing)
+            total = max(total_files, terminal_count + processing)
         
-        progress = 100 if is_completed else int(((success + failed + (processing * 0.5)) / total) * 100) if total > 0 else 0
+        progress = 100 if is_completed else int(((terminal_count + (processing * 0.5)) / total) * 100) if total > 0 else 0
         progress = min(progress, 99) if not is_completed else 100
 
         logger.info(f"[ORCHESTRATOR_STATE_EMITTED] session={job.upload_session_id} terminal={is_completed} reason={auth_state.get('terminal_reason')}")
@@ -470,22 +473,24 @@ class BulkStatusAPIView(APIView):
                 if is_completed:
                     term_reason = auth_state.get('terminal_reason', 'FAILED')
                     if term_reason == "COMPLETED":
-                        status_str = "FINALIZED" if failed == 0 else "PARTIAL_FAILED"
+                        status_str = "SUCCESS_WITH_WARNINGS" if failed == 0 else "PARTIAL_FAILED"
                     else:
                         status_str = "FAILED"
                     
                 total_files = job.total_files or 1
                 expected_pages = auth_state.get('expected_pages', 0)
+                terminal_count = auth_state.get('terminal_count', success + failed)
+
                 if expected_pages > 0:
                     total = expected_pages
-                    processing = max(0, total - success - failed)
+                    processing = max(0, total - terminal_count)
                 else:
-                    processing = max(0, total_files - success - failed)
+                    processing = max(0, total_files - terminal_count)
                     if not is_completed:
                         processing = max(1, processing)
-                    total = max(total_files, success + failed + processing)
+                    total = max(total_files, terminal_count + processing)
                 
-                progress = 100 if is_completed else int(((success + failed + (processing * 0.5)) / total) * 100) if total > 0 else 0
+                progress = 100 if is_completed else int(((terminal_count + (processing * 0.5)) / total) * 100) if total > 0 else 0
                 progress = min(progress, 99) if not is_completed else 100
 
                 response_data = {

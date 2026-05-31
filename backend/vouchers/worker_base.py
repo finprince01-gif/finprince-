@@ -720,6 +720,15 @@ class BaseWorker(ABC):
                             logger.info(f"[QUEUE_MESSAGE_DELETE] id={msg_id} queue={queue_name}")
                             logger.info(f"[MESSAGE_ACK] id={task_id} queue={queue_name} (Terminal Failure)")
                         return
+                        
+                    if exc_class == 'ProviderSaturatedError':
+                        logger.warning(f"[PROVIDER_SATURATED] id={task_id} queue={queue_name} - Backing off without quarantine.")
+                        if handle:
+                            backoff_seconds = min(900, (2 ** receive_count) * 20)
+                            loop = asyncio.get_running_loop()
+                            await loop.run_in_executor(None, lambda: queue_service.change_visibility(handle, backoff_seconds, queue_type=self.queue_type))
+                            logger.info(f"[MESSAGE_NACK] id={task_id} queue={queue_name} reason=PROVIDER_SATURATED backoff={backoff_seconds}s")
+                        return
                     # [PHASE 5: POISON DOCUMENT FORENSICS]
                     # Logic to move to PoisonDocument model if retry count exceeded
                     receive_count = int(task.get('_sqs_receive_count', 1))
