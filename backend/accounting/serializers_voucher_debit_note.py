@@ -221,12 +221,21 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
 
         # ── Persist nested tabs ───────────────────────────────────────
         item_instance = None
+        parsed_items = []
         if item_data:
+            parsed_items = item_data.get('items', [])
+            if isinstance(parsed_items, str):
+                try:
+                    parsed_items = json.loads(parsed_items)
+                except (json.JSONDecodeError, TypeError):
+                    parsed_items = []
+            item_data['items'] = parsed_items
+
             item_instance = VoucherDebitNoteItemDetails.objects.create(
                 debit_note_details=instance, tenant_id=tenant_id, **{k: v for k, v in item_data.items() if k != 'items'}
             )
             # Sync to Normalized Debit Note Items Table
-            self._sync_debit_note_items(item_instance, item_data.get('items'))
+            self._sync_debit_note_items(item_instance, parsed_items)
         due_instance = None
         if due_data_raw:
             due_instance = VoucherDebitNoteDueDetails.objects.create(
@@ -274,7 +283,7 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
         supply_dict = {}
         if item_instance:
             supply_dict = {
-                "items": item_data.get('items', []),
+                "items": parsed_items,
                 "total_taxable_value": float(item_instance.total_taxable_value or 0),
                 "total_igst":  float(item_instance.total_igst or 0),
                 "total_cgst":  float(item_instance.total_cgst or 0),
@@ -287,6 +296,7 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             due_dict = due_data_raw
         if due_instance:
             due_dict.update({
+                "net_amount_due": due_instance.net_amount_due,
                 "reverseTcs": due_instance.reverse_tcs,
                 "reverseTds": due_instance.reverse_tds,
             })
@@ -386,12 +396,21 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
         tenant_id = instance.tenant_id
 
         item_instance = None
+        parsed_items = []
         if item_data is not None:
+            parsed_items = item_data.get('items', [])
+            if isinstance(parsed_items, str):
+                try:
+                    parsed_items = json.loads(parsed_items)
+                except (json.JSONDecodeError, TypeError):
+                    parsed_items = []
+            item_data['items'] = parsed_items
+
             item_instance, _ = VoucherDebitNoteItemDetails.objects.update_or_create(
                 debit_note_details=instance,
                 defaults={"tenant_id": tenant_id, **{k: v for k, v in item_data.items() if k != 'items'}},
             )
-            self._sync_debit_note_items(item_instance, item_data.get('items'))
+            self._sync_debit_note_items(item_instance, parsed_items)
 
         due_instance = None
         if due_data_raw is not None:
@@ -418,7 +437,6 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
                 voucher.total_cgst           = item_instance.total_cgst
                 voucher.total_sgst           = item_instance.total_sgst
                 voucher.total_igst           = item_instance.total_igst
-                voucher.items_data           = item_data.get('items') if item_data else []
             if due_instance:
                 voucher.total = due_instance.net_amount_due
             voucher.date   = instance.date
@@ -458,8 +476,9 @@ class VoucherDebitNoteSupplierDetailsSerializer(serializers.ModelSerializer):
             due_dict = due_data_raw or {}
             if due_instance:
                 due_dict.update({
-                    "reverseTcs": due_instance.reverse_gst_tcs,
-                    "reverseTds": due_instance.reverse_gst_tds,
+                    "net_amount_due": due_instance.net_amount_due,
+                    "reverseTcs": getattr(due_instance, 'reverse_gst_tcs', None) or getattr(due_instance, 'reverse_tcs', None),
+                    "reverseTds": getattr(due_instance, 'reverse_gst_tds', None) or getattr(due_instance, 'reverse_tds', None),
                 })
 
             try:

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePermissions } from '../../hooks/usePermissions';
-import type { Ledger, Voucher, StockItem, SalesPurchaseVoucher, LedgerGroupMaster } from '../../types';
+import type { Ledger, Voucher, StockItem, SalesPurchaseVoucher, LedgerGroupMaster, Page } from '../../types';
 import { showError, showSuccess } from '../../utils/toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 import { apiService } from '../../services/api';
@@ -77,6 +77,27 @@ const formatToDMY = (dateVal: any) => {
     }
   } catch (e) { }
   return str;
+};
+
+/** Normalize raw backend voucher_type strings to human-readable labels */
+const normalizeVoucherType = (raw: string | undefined | null): string => {
+  if (!raw) return '';
+  const typeMap: Record<string, string> = {
+    'DEBIT_NOTE': 'Debit Note',
+    'debit_note': 'Debit Note',
+    'debit note': 'Debit Note',
+    'CREDIT_NOTE': 'Credit Note',
+    'credit_note': 'Credit Note',
+    'credit note': 'Credit Note',
+    'PURCHASE_VOUCHER': 'Purchase',
+    'SALES_VOUCHER': 'Sales',
+    'PAYMENT_VOUCHER': 'Payment',
+    'RECEIPT_VOUCHER': 'Receipt',
+    'CONTRA_VOUCHER': 'Contra',
+    'JOURNAL_VOUCHER': 'Journal',
+    'EXPENSE_VOUCHER': 'Expenses',
+  };
+  return typeMap[raw] || typeMap[raw.toLowerCase()] || raw;
 };
 
 const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], ledgers = [], ledgerGroups = [], stockItems = [], onNavigate, setViewVoucherData, navParams }) => {
@@ -1181,6 +1202,10 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             return filteredLedgers.includes(v.fromAccount) || filteredLedgers.includes(v.toAccount);
           case 'Journal':
             return v.entries && Array.isArray(v.entries) && v.entries.some(e => e && filteredLedgers.includes(e.ledger));
+          case 'Debit Note':
+          case 'Credit Note':
+            // Debit Note / Credit Note involve the party (vendor/customer)
+            return filteredLedgers.includes(v.party);
           default:
             return false;
         }
@@ -1212,7 +1237,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     }
     return 0;
   };
-  const getVoucherParty = (v: Voucher) => ('party' in v ? v.party : 'N/A');
+  const getVoucherParty = (v: any) => {
+    let p = v.party;
+    if (p && String(p).trim() !== '') return p;
+    
+    // Fallbacks
+    p = v.party_name || v.vendor_name || v.customer_name || v.pay_to_ledger || v.pay_to || v.pay_from || v.account;
+    if (p && String(p).trim() !== '') return p;
+    
+    return 'Unknown';
+  };
 
   const ledgerEntries = useMemo(() => {
     const [prefix, nameOrId] = (selectedLedger || '').split(':');
@@ -1256,7 +1290,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         return {
           id: e.id,
           date: e.date || e.transaction_date,
-          type: e.type || e.voucher_type,
+          type: normalizeVoucherType(e.type || e.voucher_type),
           // Backend now sends correct counterpart name as 'particulars'
           particulars: e.particulars || e.ledger || 'N/A',
           debit: dr,
@@ -1320,6 +1354,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             const toAcc = (v as any).toAccount || 'Account';
             addEntry(fromAcc, 0, amount, toAcc, `${v.id}-1`);
             addEntry(toAcc, amount, 0, fromAcc, `${v.id}-2`);
+
+          } else if (v.type === 'debit_note' || v.type === 'Debit Note' || v.type === 'DEBIT_NOTE') {
+            // Debit Note: Debit the vendor
+            const partyName = getVoucherParty(v);
+            addEntry(partyName, amount, 0, 'Purchase Return', v.id);
+            
+          } else if (v.type === 'credit_note' || v.type === 'Credit Note' || v.type === 'CREDIT_NOTE') {
+            // Credit Note: Credit the customer
+            const partyName = getVoucherParty(v);
+            addEntry(partyName, 0, amount, 'Sales Return', v.id);
 
           } else {
             // Sales → Debit customer. Purchase → Credit vendor.
@@ -1446,6 +1490,28 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             }
           }
           break;
+        case 'debit_note':
+        case 'Debit Note':
+        case 'DEBIT_NOTE':
+          // Debit Note: reduces vendor liability
+          // Vendor (party) is DEBITED (liability reduced — they owe us less)
+          // Purchase Return A/c is CREDITED
+          if (v.party === name) {
+            debit = Number(v.total) || Number(v.amount) || 0;
+            particulars = 'Purchase Return / Debit Note';
+          }
+          break;
+        case 'credit_note':
+        case 'Credit Note':
+        case 'CREDIT_NOTE':
+          // Credit Note: reduces customer receivable
+          // Customer (party) is CREDITED (they owe us less)
+          // Sales Return A/c is DEBITED
+          if (v.party === name) {
+            credit = Number(v.total) || Number(v.amount) || 0;
+            particulars = 'Sales Return / Credit Note';
+          }
+          break;
       }
 
       // Running balance: Dr entries increase balance, Cr entries decrease it
@@ -1565,7 +1631,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         push(
           e.transaction_date || e.date || '',
           e.particulars || 'N/A',
-          e.voucher_type || e.type || '',
+          normalizeVoucherType(e.voucher_type || e.type || ''),
           e.voucher_number || e.voucherNo || '',
           Number(e.debit) || 0,
           Number(e.credit) || 0,
@@ -1582,7 +1648,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         rel.forEach(e => push(
           e.transaction_date || e.date || '', 
           e.particulars || e.ledger || 'N/A', 
-          e.voucher_type || e.type || '', 
+          normalizeVoucherType(e.voucher_type || e.type || ''), 
           e.voucher_number || e.voucherNo || '', 
           Number(e.debit) || 0, 
           Number(e.credit) || 0, 
@@ -1599,6 +1665,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       if (v.type === 'Payment') { const vn = (v as any).party || 'Vendor', cn = (v as any).account || 'Cash/Bank'; if (vn === name) push(v.date, cn, v.type, vNo, amt, 0); if (cn === name) push(v.date, vn, v.type, vNo, 0, amt); }
       else if (v.type === 'Receipt') { const cn = (v as any).party || 'Customer', an = (v as any).account || 'Cash/Bank'; if (cn === name) push(v.date, an, v.type, vNo, 0, amt); if (an === name) push(v.date, cn, v.type, vNo, amt, 0); }
       else if (v.type === 'Contra') { const fa = (v as any).fromAccount || 'Account', ta = (v as any).toAccount || 'Account'; if (fa === name) push(v.date, ta, v.type, vNo, 0, amt); if (ta === name) push(v.date, fa, v.type, vNo, amt, 0); }
+      else if (v.type === 'debit_note' || v.type === 'Debit Note' || v.type === 'DEBIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Purchase Return', 'Debit Note', vNo, amt, 0); }
+      else if (v.type === 'credit_note' || v.type === 'Credit Note' || v.type === 'CREDIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Sales Return', 'Credit Note', vNo, 0, amt); }
       else if ('entries' in v && Array.isArray((v as any).entries)) {
         (v as any).entries.forEach((e: any) => { if (e.ledger === name) { const cp = (v as any).entries.filter((x: any) => x !== e).map((x: any) => x.ledger).join(', ') || 'Journal'; push(v.date, cp, v.type, vNo, Number(e.debit) || 0, Number(e.credit) || 0); } });
       } else { const p = getVoucherParty(v); if (p === name) { const s = v.type === 'Sales'; push(v.date, s ? 'Sales' : 'Purchases', v.type, vNo, s ? amt : 0, s ? 0 : amt); } }
@@ -1686,7 +1754,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       if (entry.voucherType === 'Opening') return;
       const vt = (entry.voucherType || '').toLowerCase();
       const isSource = vt.includes('sales') || vt.includes('purchase') || vt.includes('journal') || vt.includes('opening');
-      const isApplication = vt.includes('receipt') || vt.includes('payment') || vt.includes('contra');
+      const isApplication = vt.includes('receipt') || vt.includes('payment') || vt.includes('contra') || vt.includes('debit') || vt.includes('credit');
       
       let ref = entry.referenceNo?.trim() || entry.rawVoucher?.reference_number?.trim() || '-';
       
@@ -1707,6 +1775,24 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
     const rows: any[] = [];
 
+    const activeLedgerName = drillDownLedger?.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
+    const activeLedger = ledgers?.find(l => l.name === activeLedgerName);
+    const cpStr = activeLedger?.additional_data?.credit_period || activeLedger?.extended_data?.credit_period || activeLedger?.credit_period || '0';
+    let cp = parseInt(String(cpStr), 10) || 0;
+    if (cp === 0 && drillDownData.length > 0) {
+        cp = drillDownData[0]?.ledger_credit_period || 0;
+    }
+
+    const getAgingStatus = (dateStr: string) => {
+        if (!dateStr) return 'Due';
+        const invDate = new Date(dateStr);
+        const todayD = new Date();
+        const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+        const d2 = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+        const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays > cp ? 'Due' : 'Not Due';
+    };
+
     // Process groups and sort by date
     const sortedGroupRefs = Object.keys(groups).sort((aRef, bRef) => {
       const firstA = groups[aRef][0];
@@ -1722,10 +1808,19 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         const entry = entries[0];
         const vt = (entry.voucherType || '').toLowerCase();
         // Only show sources in Allocation View
-        if (!['sales', 'purchase', 'journal', 'opening'].includes(vt) && entry.debit === 0 && entry.credit === 0) return;
+        if (!['sales', 'purchase', 'journal', 'opening', 'debit note', 'credit note'].includes(vt) && entry.debit === 0 && entry.credit === 0) return;
 
         const isDr = (entry.debit || 0) > 0;
         const amt = isDr ? (entry.debit || 0) : (entry.credit || 0);
+        
+        const isApplication = ['receipt', 'payment', 'contra', 'debit', 'credit'].some(t => vt.includes(t));
+        const rawSt = entry.rawVoucher?.allocation_status || entry.rawVoucher?.allocationStatus;
+        let calcSt = 'Due';
+        if (isApplication) {
+            calcSt = rawSt === 'Utilized' ? 'Utilized' : 'Not Utilized';
+        } else {
+            calcSt = rawSt === 'Utilized' ? 'Paid' : (amt === 0 ? 'Paid' : getAgingStatus(entry.date));
+        }
 
         rows.push({
           date: entry.date,
@@ -1736,7 +1831,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           appliedRefNo: '-',
           appliedAmount: '-',
           pendingBalance: amt,
-          status: amt === 0 ? 'Paid' : 'Due',
+          status: calcSt,
           rowSpan: 1,
           isFirstInSource: true
         });
@@ -1744,8 +1839,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       }
 
       // For linked groups
-      const sources = entries.filter(e => !['receipt', 'payment', 'contra'].includes((e.voucherType || '').toLowerCase()));
-      const applications = entries.filter(e => ['receipt', 'payment', 'contra'].includes((e.voucherType || '').toLowerCase()));
+      const sources = entries.filter(e => !['receipt', 'payment', 'contra', 'debit', 'credit'].includes((e.voucherType || '').toLowerCase()));
+      const applications = entries.filter(e => ['receipt', 'payment', 'contra', 'debit', 'credit'].includes((e.voucherType || '').toLowerCase()));
 
       if (sources.length === 0) return;
 
@@ -1757,7 +1852,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
       if (applications.length === 0) {
         const sourceAllocStatus = firstSource.rawVoucher?.allocation_status;
-        const displayStatus = sourceAllocStatus === 'Utilized' ? 'Paid' : (totalSourceAmt === 0 ? 'Paid' : 'Due');
+        const displayStatus = sourceAllocStatus === 'Utilized' ? 'Paid' : (totalSourceAmt === 0 ? 'Paid' : getAgingStatus(firstSource.date));
         rows.push({
           date: firstSource.date,
           postedFrom: firstSource.voucherType,
@@ -1775,7 +1870,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         let lastPending = totalSourceAmt;
         const totalAppAmt = applications.reduce((sum, a) => sum + (isDr ? (a.credit || 0) : (a.debit || 0)), 0);
         
-        let calcStatus = 'Due';
+        let calcStatus = getAgingStatus(firstSource.date);
         if (Math.round(totalSourceAmt * 100) <= Math.round(totalAppAmt * 100)) {
             calcStatus = 'Paid';
         } else if (totalAppAmt > 0) {
@@ -1783,7 +1878,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
         }
         
         // If any application is explicitly utilized, we can also consider it partially paid at least
-        if (calcStatus === 'Due' && applications.some(a => a.rawVoucher?.allocation_status === 'Utilized')) {
+        if ((calcStatus === 'Due' || calcStatus === 'Not Due') && applications.some(a => a.rawVoucher?.allocation_status === 'Utilized')) {
             calcStatus = 'Partially Paid';
         }
 
@@ -1812,13 +1907,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
   const renderDayBook = () => (
     <div className="erp-table-container">
-      <table className="erp-table">
-        <thead className="bg-gray-50">
+      <table className="erp-table min-w-full">
+        <thead className="bg-[#F8F9FA] border-b border-gray-200">
           <tr>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Voucher Type</th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Party</th>
             <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
+            <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
@@ -1829,28 +1925,46 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                 key={`daybook-${v.type}-${v.date}-${v.id || idx}`} 
                 className="hover:bg-indigo-50 transition-colors cursor-pointer group"
                 onClick={() => {
-                  if (party && party !== 'Unknown') {
-                    setReportType('LedgerReport');
-                    setSelectedLedger(`ledger:${party}`);
-                    setDrillDownLedger(party);
+                  if (setViewVoucherData && onNavigate) {
+                    setViewVoucherData(v);
+                    onNavigate('Vouchers');
                   }
                 }}
-                title={`View Ledger Report for ${party}`}
+                title={`View Voucher`}
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(v.date).toLocaleDateString()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{v.type}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-indigo-600 group-hover:font-semibold transition-colors flex items-center gap-1">
+                <td 
+                  className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-indigo-600 group-hover:font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReportType('LedgerReport');
+                    setDrillDownLedger(party);
+                  }}
+                  title={`View Ledger Report for ${party}`}
+                >
                   {party}
                   <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-right font-semibold text-gray-900">₹{getVoucherAmount(v).toFixed(2)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-center" onClick={(e) => {
+                  e.stopPropagation();
+                  if (setViewVoucherData && onNavigate) {
+                    setViewVoucherData(v);
+                    onNavigate('Vouchers');
+                  }
+                }}>
+                  <button className="text-indigo-600 hover:text-indigo-900 mx-auto inline-block" title="View Voucher">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  </button>
+                </td>
               </tr>
             );
           }) : (
             <tr>
-              <td colSpan={4} className="px-6 py-12 text-sm text-center text-gray-500">
+              <td colSpan={5} className="px-6 py-12 text-sm text-center text-gray-500">
                 {(startDate || endDate) ? 'No transactions found for the selected filter.' : 'No transactions found.'}
               </td>
             </tr>
@@ -1991,12 +2105,21 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
                     {filteredDrillData.length > 0 ? filteredDrillData.map((e, idx) => {
-                      const st = allocationRows.find(r => r.refNo === e.voucherNo && r.isFirstInSource)?.status || '-';
+                      let st = allocationRows.find(r => r.refNo === e.voucherNo && r.isFirstInSource)?.status;
+                      if (!st) {
+                        const isApp = ['payment', 'receipt', 'contra', 'debit', 'credit'].some(t => (e.voucherType || '').toLowerCase().includes(t));
+                        if (isApp) {
+                          const isLinkedApp = allocationRows.some(r => r.appliedRefNo === e.voucherNo);
+                          st = isLinkedApp ? 'Utilized' : (e.rawVoucher?.allocation_status === 'Utilized' ? 'Utilized' : 'Unutilized');
+                        } else {
+                          st = '-';
+                        }
+                      }
                       return (
                         <tr key={`dd-${idx}`}
                           className={`transition-colors ${e.voucherType === 'Opening' ? 'bg-indigo-50/50' : 'hover:bg-indigo-50'}`}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-50">{fmtDate(e.date)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{e.voucherType || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{normalizeVoucherType(e.voucherType) || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium border-r border-gray-50">{e.voucherNo || '-'}</td>
                           {isTdsTcsLedger && (
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600 border-r border-gray-50">
@@ -2079,7 +2202,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                             onClick={() => e.voucherType !== 'Opening' && handleViewTransaction(e)}>
                             <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top border-r border-gray-100">{fmtDate(e.date)}</td>
                             <td className="px-6 py-4 text-sm font-bold text-gray-800 border-r border-gray-100">{e.voucherType !== 'Opening' ? '(as per details)' : e.particulars || 'Opening Balance'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-100">{e.voucherType || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-500 uppercase border-r border-gray-100">{normalizeVoucherType(e.voucherType) || '-'}</td>
                             <td className="px-6 py-4 text-sm text-gray-500 border-r border-gray-100">{e.voucherNo || '-'}</td>
                             <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100">
                               {st !== '-' && e.voucherType !== 'Opening' ? (
@@ -2300,7 +2423,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                         <>
                           <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-medium text-slate-600 border-r border-slate-100 align-top">{row.date ? new Date(row.date).toLocaleDateString('en-IN') : '-'}</td>
                           <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 align-top">
-                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.postedFrom === 'Purchase' ? 'bg-blue-50 text-blue-600 border border-blue-100' : row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>{row.postedFrom}</span>
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.postedFrom === 'Purchase' ? 'bg-blue-50 text-blue-600 border border-blue-100' : row.postedFrom === 'Sales' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>{normalizeVoucherType(row.postedFrom)}</span>
                           </td>
                           <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm font-bold text-indigo-600 border-r border-slate-100 align-top">{row.refNo}</td>
                           <td rowSpan={row.rowSpan} className="px-6 py-4 text-sm text-right font-medium text-slate-900 border-r border-slate-100 align-top">{row.netAmount !== '-' ? `₹${Number(row.netAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>

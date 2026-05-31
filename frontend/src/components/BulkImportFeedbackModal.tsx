@@ -11,17 +11,19 @@ interface BulkImportFeedbackModalProps {
     onUpload?: (file: File | any[], dryRun?: boolean) => void;
     isProcessing?: boolean;
     dropdownOptions?: Record<string, { label: string, value: string, full?: any }[]>;
+    onDownloadTemplate?: () => void;
 }
 
-export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = ({ 
-    isOpen, 
-    onClose, 
-    summary: initialSummary, 
-    title, 
+export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = ({
+    isOpen,
+    onClose,
+    summary: initialSummary,
+    title,
     onEditImported,
     onUpload,
     isProcessing = false,
-    dropdownOptions
+    dropdownOptions,
+    onDownloadTemplate
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -29,6 +31,46 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
     const [activeTab, setActiveTab] = useState<'all' | 'success' | 'failed'>('all');
     const [editingItem, setEditingItem] = useState<{ type: 'success' | 'error'; index: number; data: any } | null>(null);
     const [editingTab, setEditingTab] = useState<string>('Basic Details');
+
+    const isItem = title.toLowerCase().includes('item') || title.toLowerCase().includes('inventory');
+
+    const getFieldValue = (data: any, key: string): any => {
+        if (!data) return '';
+        if (data[key] !== undefined) return data[key];
+        const cleanK = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (const dk of Object.keys(data)) {
+            const cleanDk = dk.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanK === cleanDk || cleanDk.includes(cleanK) || cleanK.includes(cleanDk)) {
+                return data[dk];
+            }
+        }
+        return '';
+    };
+
+    const setFieldValue = (data: any, key: string, val: any): void => {
+        if (!data) return;
+        if (data[key] !== undefined) {
+            data[key] = val;
+            return;
+        }
+        const cleanK = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (const dk of Object.keys(data)) {
+            const cleanDk = dk.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanK === cleanDk || cleanDk.includes(cleanK) || cleanK.includes(cleanDk)) {
+                data[dk] = val;
+                return;
+            }
+        }
+        data[key] = val;
+    };
+
+    useEffect(() => {
+        if (isItem) {
+            setEditingTab('Item Details');
+        } else {
+            setEditingTab('Basic Details');
+        }
+    }, [title]);
 
     // Default 'India' and map products
     useEffect(() => {
@@ -115,7 +157,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
         if (onUpload && summary) {
             const allImports = summary.successful_imports || [];
             const selectedImports = allImports.filter((s: any) => s.isSelected);
-            
+
             // If nothing is selected, import ALL records. Otherwise, import only selected ones.
             const recordsToProcess = selectedImports.length === 0 ? allImports : selectedImports;
 
@@ -125,7 +167,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
             }
 
             const payload = recordsToProcess.map((s: any) => ({ row_data: s.row_data, row_index: s.row_index }));
-            onUpload(payload, false); 
+            onUpload(payload, false);
             setActiveTab('all');
         }
     };
@@ -135,9 +177,12 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
 
         // Validation before saving
         const isVendor = title.toLowerCase().includes('vendor');
-        const requiredFields = isVendor ? 
+        const isItem = title.toLowerCase().includes('item') || title.toLowerCase().includes('inventory');
+        const requiredFields = isVendor ?
             ['Vendor Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2'] :
-            ['Customer Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2'];
+            isItem ?
+                ['Item Code', 'Item Name', 'UOM'] :
+                ['Customer Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2'];
 
         const missing = requiredFields.filter(f => {
             const val = updatedData[f];
@@ -147,7 +192,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
         if (missing.length > 0) {
             // Show error in modal instead of alert if possible, but for now blocking save
             // The UI already shows red warnings, so we just prevent moving to success list
-            return; 
+            return;
         }
 
         const newSummary = { ...summary };
@@ -156,7 +201,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
             const fixedItem = newSummary.errors[editingItem.index];
             newSummary.errors.splice(editingItem.index, 1);
             newSummary.failed -= 1;
-            
+
             newSummary.successful_imports.push({
                 ...fixedItem,
                 row_data: updatedData,
@@ -192,7 +237,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] relative">
-                
+
                 {/* Quick Edit Overlay */}
                 {editingItem && (
                     <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-md animate-in fade-in slide-in-from-bottom-8 duration-300 flex flex-col">
@@ -225,12 +270,12 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
 
                             {/* Horizontal Text Tabs Navigation */}
                             {(() => {
-                                const sectionTitles = [
+                                const sectionTitles = isItem ? ['Item Details'] : [
                                     'Basic Details',
                                     'GST & Address Details',
                                     'Products/Services',
                                     'TDS & Other Statutory Details',
-                                    'Banking Info',
+                                    'Banking Information',
                                     'Terms & Conditions'
                                 ];
 
@@ -240,9 +285,8 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                             <button
                                                 key={tab}
                                                 onClick={() => setEditingTab(tab)}
-                                                className={`pb-4 text-[11px] font-black uppercase tracking-[0.2em] transition-all relative whitespace-nowrap ${
-                                                    editingTab === tab ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'
-                                                }`}
+                                                className={`pb-4 text-[11px] font-black uppercase tracking-[0.2em] transition-all relative whitespace-nowrap ${editingTab === tab ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'
+                                                    }`}
                                             >
                                                 {tab}
                                                 {editingTab === tab && (
@@ -301,7 +345,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         ]
                                     },
                                     {
-                                        title: 'Banking Info',
+                                        title: 'Banking Information',
                                         fields: [
                                             { label: 'BANK ACCOUNT NO', key: 'Bank Account No', placeholder: 'XXXXXXXXXXXX' },
                                             { label: 'BANK NAME', key: 'Bank Name', placeholder: 'Enter bank name' },
@@ -325,9 +369,9 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     {
                                         title: 'Products/Services',
                                         fields: [
-                                            { 
-                                                label: 'Products & Services List', 
-                                                key: 'products', 
+                                            {
+                                                label: 'Products & Services List',
+                                                key: 'products',
                                                 type: 'table',
                                                 columns: [
                                                     { label: 'ITEM CODE', key: 'Item Code', placeholder: 'ITM-XXXX' },
@@ -339,6 +383,25 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                     { label: 'PACKING NOTES', key: 'Packing Notes', placeholder: 'Notes' },
                                                 ]
                                             }
+                                        ]
+                                    }
+                                ] : isItem ? [
+                                    {
+                                        title: 'Item Details',
+                                        fields: [
+                                            { label: 'ITEM CODE', key: 'Item Code', placeholder: 'e.g. ITEM001', required: true },
+                                            { label: 'ITEM NAME', key: 'Item Name', placeholder: 'Enter item name', required: true },
+                                            { label: 'DESCRIPTION', key: 'Description', placeholder: 'Enter item description' },
+                                            { label: 'CATEGORY PATH', key: 'Category Path', type: 'select', placeholder: 'SELECT CATEGORY PATH' },
+                                            { label: 'UOM', key: 'UOM', type: 'select', placeholder: 'SELECT UOM', required: true },
+                                            { label: 'ALTERNATE UOM', key: 'Alternate UOM', type: 'select', placeholder: 'SELECT ALTERNATE UOM' },
+                                            { label: 'CONVERSION FACTOR', key: 'Conversion Factor', placeholder: 'e.g. 1.0000' },
+                                            { label: 'RATE', key: 'Rate', placeholder: 'e.g. 100.00' },
+                                            { label: 'HSN CODE', key: 'HSN Code', placeholder: 'e.g. 8471' },
+                                            { label: 'GST RATE (%)', key: 'GST Rate', placeholder: 'e.g. 18' },
+                                            { label: 'CESS RATE (%)', key: 'Cess Rate', placeholder: 'e.g. 2' },
+                                            { label: 'REORDER LEVEL', key: 'Reorder Level', placeholder: 'e.g. 10' },
+                                            { label: 'IS SALEABLE (YES/NO)', key: 'Is Saleable', placeholder: 'Yes or No' },
                                         ]
                                     }
                                 ] : [
@@ -385,7 +448,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         ]
                                     },
                                     {
-                                        title: 'Banking Info',
+                                        title: 'Banking Information',
                                         fields: [
                                             { label: 'BANK ACCOUNT NO', key: 'Bank Account No', placeholder: 'XXXXXXXXXXXX' },
                                             { label: 'BANK NAME', key: 'Bank Name', placeholder: 'Enter bank name' },
@@ -409,24 +472,24 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     {
                                         title: 'Products/Services',
                                         fields: [
-                                            { 
-                                                label: 'Products & Services List', 
-                                                key: 'products', 
+                                            {
+                                                label: 'Products & Services List',
+                                                key: 'products',
                                                 type: 'table',
                                                 columns: [
                                                     { label: 'ITEM CODE', key: 'Item Code', placeholder: 'ITM-XXXX' },
                                                     { label: 'ITEM NAME', key: 'Item Name', placeholder: 'Item name' },
                                                     { label: 'HSN/SAC CODE', key: 'HSN/SAC Code', placeholder: 'XXXX' },
                                                     { label: 'UOM', key: 'UOM', type: 'select', placeholder: 'Select' },
-                                                    { 
-                                                        label: title.toLowerCase().includes('vendor') ? 'SUPPLIER ITEM CODE' : 'CUSTOMER ITEM CODE', 
-                                                        key: title.toLowerCase().includes('vendor') ? 'Supplier Item Code' : 'Customer Item Code', 
-                                                        placeholder: 'Optional' 
+                                                    {
+                                                        label: title.toLowerCase().includes('vendor') ? 'SUPPLIER ITEM CODE' : 'CUSTOMER ITEM CODE',
+                                                        key: title.toLowerCase().includes('vendor') ? 'Supplier Item Code' : 'Customer Item Code',
+                                                        placeholder: 'Optional'
                                                     },
-                                                    { 
-                                                        label: title.toLowerCase().includes('vendor') ? 'SUPPLIER ITEM NAME' : 'CUSTOMER ITEM NAME', 
-                                                        key: title.toLowerCase().includes('vendor') ? 'Supplier Item Name' : 'Customer Item Name', 
-                                                        placeholder: 'Optional' 
+                                                    {
+                                                        label: title.toLowerCase().includes('vendor') ? 'SUPPLIER ITEM NAME' : 'CUSTOMER ITEM NAME',
+                                                        key: title.toLowerCase().includes('vendor') ? 'Supplier Item Name' : 'Customer Item Name',
+                                                        placeholder: 'Optional'
                                                     },
                                                     { label: 'PACKING NOTES', key: 'Packing Notes', placeholder: 'Notes' },
                                                 ]
@@ -442,8 +505,8 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         <div className="grid grid-cols-2 gap-x-12 gap-y-8">
                                             {activeSection.fields.map((field, fIdx) => {
                                                 const key = field.key;
-                                                const value = editingItem.data[key];
-                                                
+                                                const value = getFieldValue(editingItem.data, key);
+
                                                 // Error/Warning Logic
                                                 const errorMessage = summary.errors[editingItem.index]?.message?.toLowerCase() || '';
                                                 const isMentionedInError = errorMessage.includes(key.toLowerCase().replace(/ /g, '_')) || errorMessage.includes(key.toLowerCase());
@@ -457,14 +520,14 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                 if (key === 'Country') {
                                                     fieldOptions = Country.getAllCountries().map(c => ({ label: c.name, value: c.name }));
                                                 } else if (key === 'State') {
-                                                    const selectedCountryName = editingItem.data['Country'];
+                                                    const selectedCountryName = getFieldValue(editingItem.data, 'Country');
                                                     const country = Country.getAllCountries().find(c => c.name === selectedCountryName);
                                                     if (country) {
                                                         fieldOptions = State.getStatesOfCountry(country.isoCode).map(s => ({ label: s.name, value: s.name }));
                                                     }
                                                 } else if (key === 'City') {
-                                                    const selectedCountryName = editingItem.data['Country'];
-                                                    const selectedStateName = editingItem.data['State'];
+                                                    const selectedCountryName = getFieldValue(editingItem.data, 'Country');
+                                                    const selectedStateName = getFieldValue(editingItem.data, 'State');
                                                     const country = Country.getAllCountries().find(c => c.name === selectedCountryName);
                                                     const state = country ? State.getStatesOfCountry(country.isoCode).find(s => s.name === selectedStateName) : null;
                                                     if (country && state) {
@@ -475,10 +538,10 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                 // Mutual exclusivity for TDS/TCS
                                                 const isTDS = key === 'TDS Section';
                                                 const isTCS = key === 'TCS Section';
-                                                const tdsValue = editingItem.data['TDS Section'];
-                                                const tcsValue = editingItem.data['TCS Section'];
-                                                const isFieldDisabled = (isTDS && !!tcsValue && tcsValue !== '' && (!tdsValue || tdsValue === '')) || 
-                                                                      (isTCS && !!tdsValue && tdsValue !== '' && (!tcsValue || tcsValue === ''));
+                                                const tdsValue = getFieldValue(editingItem.data, 'TDS Section');
+                                                const tcsValue = getFieldValue(editingItem.data, 'TCS Section');
+                                                const isFieldDisabled = (isTDS && !!tcsValue && tcsValue !== '' && (!tdsValue || tdsValue === '')) ||
+                                                    (isTCS && !!tdsValue && tdsValue !== '' && (!tcsValue || tcsValue === ''));
 
                                                 return (
                                                     <div key={fIdx} className={`space-y-2.5 ${field.type === 'table' ? 'col-span-full' : ''}`}>
@@ -517,7 +580,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                                             const newVal = e.target.value;
                                                                                                             const newProducts = [...(value || [{}])];
                                                                                                             let updatedRow = { ...newProducts[rIdx], [col.key]: newVal };
-                                                                                                            
+
                                                                                                             if (col.key === 'Item Code' || col.key === 'Item Name') {
                                                                                                                 const selectedOption = (colOptions || []).find((opt: any) => opt.value === newVal);
                                                                                                                 if (selectedOption?.full) {
@@ -527,13 +590,13 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                                                         'Item Code': item.item_code || item.code || '',
                                                                                                                         'Item Name': item.item_name || item.name || '',
                                                                                                                         'HSN/SAC Code': item.hsn_code || item.hsnCode || item.hsn_sac || '',
-                                                                                                                        'UOM': (typeof item.uom === 'object' ? (item.uom?.symbol || item.uom?.name) : item.uom) || 
-                                                                                                                               (typeof item.unit === 'object' ? (item.unit?.symbol || item.unit?.name) : item.unit) || 
-                                                                                                                               item.uom || item.unit || ''
+                                                                                                                        'UOM': (typeof item.uom === 'object' ? (item.uom?.symbol || item.uom?.name) : item.uom) ||
+                                                                                                                            (typeof item.unit === 'object' ? (item.unit?.symbol || item.unit?.name) : item.unit) ||
+                                                                                                                            item.uom || item.unit || ''
                                                                                                                     };
                                                                                                                 }
                                                                                                             }
-                                                                                                            
+
                                                                                                             newProducts[rIdx] = updatedRow;
                                                                                                             editingItem.data[key] = newProducts;
                                                                                                             setEditingItem({ ...editingItem });
@@ -553,7 +616,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                                             const newVal = e.target.value;
                                                                                                             const newProducts = [...(value || [{}])];
                                                                                                             let updatedRow = { ...newProducts[rIdx], [col.key]: newVal };
-                                                                                                            
+
                                                                                                             if (col.key === 'HSN/SAC Code' && newVal && newVal.length >= 4) {
                                                                                                                 const masterList = dropdownOptions?.['Item Code'] || dropdownOptions?.['Item Name'] || [];
                                                                                                                 const match = masterList.find((opt: any) => {
@@ -562,20 +625,20 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                                                     const itemHsn = item.hsn_code || item.hsnCode || item.hsn_sac || '';
                                                                                                                     return itemHsn === newVal;
                                                                                                                 });
-                                                                                                                
+
                                                                                                                 if (match?.full) {
                                                                                                                     const item = match.full;
                                                                                                                     updatedRow = {
                                                                                                                         ...updatedRow,
                                                                                                                         'Item Code': item.item_code || item.code || '',
                                                                                                                         'Item Name': item.item_name || item.name || '',
-                                                                                                                        'UOM': (typeof item.uom === 'object' ? (item.uom?.symbol || item.uom?.name) : item.uom) || 
-                                                                                                                               (typeof item.unit === 'object' ? (item.unit?.symbol || item.unit?.name) : item.unit) || 
-                                                                                                                               item.uom || item.unit || ''
+                                                                                                                        'UOM': (typeof item.uom === 'object' ? (item.uom?.symbol || item.uom?.name) : item.uom) ||
+                                                                                                                            (typeof item.unit === 'object' ? (item.unit?.symbol || item.unit?.name) : item.unit) ||
+                                                                                                                            item.uom || item.unit || ''
                                                                                                                     };
                                                                                                                 }
                                                                                                             }
-                                                                                                            
+
                                                                                                             newProducts[rIdx] = updatedRow;
                                                                                                             editingItem.data[key] = newProducts;
                                                                                                             setEditingItem({ ...editingItem });
@@ -587,7 +650,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                         );
                                                                                     })}
                                                                                     <td className="px-4 py-4">
-                                                                                        <button 
+                                                                                        <button
                                                                                             onClick={() => {
                                                                                                 const newProducts = (value || [{}]).filter((_: any, i: number) => i !== rIdx);
                                                                                                 editingItem.data[key] = newProducts.length ? newProducts : [{}];
@@ -618,8 +681,8 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                         ) : field.type === 'toggle' ? (
                                                             <div className="flex gap-4">
                                                                 {['YES', 'NO'].map(opt => {
-                                                                    const isActive = (opt === 'YES' && (value === true || value?.toString().toLowerCase() === 'yes')) || 
-                                                                                   (opt === 'NO' && (value === false || value?.toString().toLowerCase() === 'no' || !value));
+                                                                    const isActive = (opt === 'YES' && (value === true || value?.toString().toLowerCase() === 'yes')) ||
+                                                                        (opt === 'NO' && (value === false || value?.toString().toLowerCase() === 'no' || !value));
                                                                     return (
                                                                         <button
                                                                             key={opt}
@@ -627,11 +690,10 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                 editingItem.data[key] = opt === 'YES';
                                                                                 setEditingItem({ ...editingItem }); // Trigger re-render
                                                                             }}
-                                                                            className={`flex-1 py-3 px-6 rounded-xl text-xs font-black tracking-widest transition-all ${
-                                                                                isActive 
-                                                                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 ring-4 ring-indigo-50' 
-                                                                                : 'bg-white border-2 border-gray-100 text-gray-400 hover:border-indigo-100 hover:bg-indigo-50/10'
-                                                                            }`}
+                                                                            className={`flex-1 py-3 px-6 rounded-xl text-xs font-black tracking-widest transition-all ${isActive
+                                                                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 ring-4 ring-indigo-50'
+                                                                                    : 'bg-white border-2 border-gray-100 text-gray-400 hover:border-indigo-100 hover:bg-indigo-50/10'
+                                                                                }`}
                                                                         >
                                                                             {opt}
                                                                         </button>
@@ -640,26 +702,25 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                             </div>
                                                         ) : field.type === 'select' || fieldOptions ? (
                                                             <div className="relative group">
-                                                                <select 
+                                                                <select
                                                                     value={value || ''}
                                                                     onChange={(e) => {
-                                                                        editingItem.data[key] = e.target.value;
+                                                                        setFieldValue(editingItem.data, key, e.target.value);
                                                                         if (key === 'Country') {
-                                                                            editingItem.data['State'] = '';
-                                                                            editingItem.data['City'] = '';
+                                                                            setFieldValue(editingItem.data, 'State', '');
+                                                                            setFieldValue(editingItem.data, 'City', '');
                                                                         } else if (key === 'State') {
-                                                                            editingItem.data['City'] = '';
+                                                                            setFieldValue(editingItem.data, 'City', '');
                                                                         }
                                                                         setEditingItem({ ...editingItem });
                                                                     }}
                                                                     disabled={isFieldDisabled}
-                                                                    className={`w-full px-5 py-4 rounded-2xl text-sm font-bold transition-all focus:ring-4 outline-none appearance-none bg-no-repeat bg-[right_1.25rem_center] bg-[length:1.2em_1.2em] ${
-                                                                        isFieldDisabled
-                                                                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-                                                                        : hasWarning 
-                                                                        ? 'bg-rose-50 border-2 border-rose-100 focus:border-rose-500 focus:ring-rose-500/10' 
-                                                                        : 'bg-gray-50/50 border-2 border-gray-100 focus:border-indigo-500 focus:ring-indigo-500/10 group-hover:border-indigo-200'
-                                                                    }`}
+                                                                    className={`w-full px-5 py-4 rounded-2xl text-sm font-bold transition-all focus:ring-4 outline-none appearance-none bg-no-repeat bg-[right_1.25rem_center] bg-[length:1.2em_1.2em] ${isFieldDisabled
+                                                                            ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                                                            : hasWarning
+                                                                                ? 'bg-rose-50 border-2 border-rose-100 focus:border-rose-500 focus:ring-rose-500/10'
+                                                                                : 'bg-gray-50/50 border-2 border-gray-100 focus:border-indigo-500 focus:ring-indigo-500/10 group-hover:border-indigo-200'
+                                                                        }`}
                                                                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                                                                 >
                                                                     <option value="">{field.placeholder || 'SELECT OPTION'}</option>
@@ -669,25 +730,24 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                 </select>
                                                             </div>
                                                         ) : (
-                                                            <input 
+                                                            <input
                                                                 type="text"
                                                                 value={value || ''}
                                                                 placeholder={field.placeholder}
                                                                 disabled={isFieldDisabled}
                                                                 onChange={(e) => {
-                                                                    editingItem.data[key] = e.target.value;
+                                                                    setFieldValue(editingItem.data, key, e.target.value);
                                                                     setEditingItem({ ...editingItem });
                                                                 }}
-                                                                className={`w-full px-5 py-4 rounded-2xl text-sm font-bold transition-all focus:ring-4 outline-none ${
-                                                                    isFieldDisabled
-                                                                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-                                                                    : hasWarning 
-                                                                    ? 'bg-rose-50 border-2 border-rose-100 focus:border-rose-500 focus:ring-rose-500/10' 
-                                                                    : 'bg-gray-50/50 border-2 border-gray-100 focus:border-indigo-500 focus:ring-indigo-500/10 group-hover:border-indigo-200'
-                                                                }`}
+                                                                className={`w-full px-5 py-4 rounded-2xl text-sm font-bold transition-all focus:ring-4 outline-none ${isFieldDisabled
+                                                                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                                                        : hasWarning
+                                                                            ? 'bg-rose-50 border-2 border-rose-100 focus:border-rose-500 focus:ring-rose-500/10'
+                                                                            : 'bg-gray-50/50 border-2 border-gray-100 focus:border-indigo-500 focus:ring-indigo-500/10 group-hover:border-indigo-200'
+                                                                    }`}
                                                             />
                                                         )}
-                                                        
+
                                                         {hasWarning && (
                                                             <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1 mt-1 animate-in slide-in-from-top-1">
                                                                 <Icon name={"exclamation-circle" as any} className="w-3 h-3" />
@@ -703,13 +763,13 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                             })()}
                         </div>
                         <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
-                            <button 
+                            <button
                                 onClick={() => setEditingItem(null)}
                                 className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
                             >
                                 CANCEL
                             </button>
-                            <button 
+                            <button
                                 onClick={() => handleQuickSave(editingItem.data)}
                                 className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5 active:translate-y-0"
                             >
@@ -752,7 +812,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     {isPreview ? 'Validating File...' : 'Finalizing Import...'}
                                 </p>
                                 <p className="text-sm text-gray-500 max-w-[240px] mx-auto">
-                                    {isPreview 
+                                    {isPreview
                                         ? "We're checking your file for any errors before we save it."
                                         : "Almost there! We're saving your records to the database."}
                                 </p>
@@ -760,6 +820,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                         </div>
                     ) : isInitialView ? (
                         <div className="py-12 flex flex-col items-center justify-center text-center space-y-8">
+
                             <div className="relative">
                                 <div className="w-24 h-24 bg-indigo-50 rounded-3xl flex items-center justify-center rotate-6 group-hover:rotate-0 transition-transform">
                                     <Icon name="upload" className="w-12 h-12 text-indigo-500" />
@@ -774,14 +835,14 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     Drag and drop your excel file here or click the button below to browse.
                                 </p>
                             </div>
-                            <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                className="hidden" 
-                                accept=".xlsx, .xls" 
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept=".xlsx, .xls"
                                 onChange={handleFileChange}
                             />
-                            <button 
+                            <button
                                 onClick={() => fileInputRef.current?.click()}
                                 className="px-16 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-2xl shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-3 uppercase tracking-widest"
                             >
@@ -807,7 +868,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
 
                             {/* Stats Cards (Filter Buttons) */}
                             <div className="grid grid-cols-2 gap-6">
-                                <button 
+                                <button
                                     onClick={() => setActiveTab(activeTab === 'success' ? 'all' : 'success')}
                                     className={`bg-emerald-50 border rounded-[2rem] p-8 transition-all group relative text-left ${activeTab === 'success' ? 'border-emerald-500 shadow-xl shadow-emerald-100' : 'border-emerald-100 hover:shadow-lg hover:shadow-emerald-100/50'}`}
                                 >
@@ -820,7 +881,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     <div className="flex items-baseline gap-2">
                                         <p className="text-6xl font-black text-emerald-600 tracking-tighter">
                                             {!hasExplicitSelection
-                                                ? summary.success 
+                                                ? summary.success
                                                 : summary.successful_imports?.filter((s: any) => s.isSelected).length}
                                         </p>
                                         <p className="text-xl font-bold text-emerald-400">
@@ -831,7 +892,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         <div className="absolute top-4 right-4 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                                     )}
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => setActiveTab(activeTab === 'failed' ? 'all' : 'failed')}
                                     className={`bg-rose-50 border rounded-[2rem] p-8 transition-all group relative text-left ${activeTab === 'failed' ? 'border-rose-500 shadow-xl shadow-rose-100' : 'border-rose-100 hover:shadow-lg hover:shadow-rose-100/50'}`}
                                 >
@@ -868,7 +929,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                     <span className="text-sm text-rose-700 font-medium leading-relaxed">{typeof error === 'string' ? error : error.message}</span>
                                                 </div>
                                                 {isPreview && error.row_data && (
-                                                    <button 
+                                                    <button
                                                         onClick={() => setEditingItem({ type: 'error', index: idx, data: { ...error.row_data } })}
                                                         className="px-4 py-1.5 bg-white border border-rose-200 text-[10px] font-black text-rose-600 rounded-lg hover:bg-rose-600 hover:text-white transition-all uppercase tracking-widest shadow-sm"
                                                     >
@@ -895,28 +956,34 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         <table className="w-full text-left border-collapse">
                                             <thead className="sticky top-0 bg-gray-50/80 backdrop-blur-md z-10 border-b border-gray-100">
                                                 <tr>
-                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</th>
-                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Code</th>
-                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</th>
-                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">GSTIN</th>
-                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">State</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">{isItem ? 'Item Name' : 'Name'}</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">{isItem ? 'Item Code' : 'Code'}</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">{isItem ? 'Category Path' : 'Category'}</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">{isItem ? 'UOM' : 'GSTIN'}</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">{isItem ? 'Rate' : 'State'}</th>
                                                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
                                                 {summary.successful_imports.map((item: any, idx: number) => {
                                                     const rd = item.row_data || {};
-                                                    const display = {
+                                                    const display = isItem ? {
+                                                        name: rd['Item Name'] || rd['item_name'] || item.name || 'N/A',
+                                                        code: rd['Item Code'] || rd['item_code'] || item.code || 'N/A',
+                                                        category: rd['Category Path'] || rd['category_path'] || 'N/A',
+                                                        uom: rd['UOM'] || rd['uom'] || 'N/A',
+                                                        rate: rd['Rate'] || rd['rate'] || 'N/A'
+                                                    } : {
                                                         name: rd['Customer Name'] || rd['Vendor Name'] || rd['name'] || item.name || 'N/A',
                                                         code: rd['Customer Code'] || rd['Vendor Code'] || rd['code'] || item.code || 'N/A',
                                                         category: rd['Category'] || rd['vendor_category'] || rd['customer_category'] || 'N/A',
                                                         gstin: rd['GSTIN'] || rd['gstin'] || 'N/A',
                                                         state: rd['State'] || rd['state'] || rd['branch_state'] || 'N/A'
                                                     };
-                                                    
+
                                                     return (
-                                                        <tr 
-                                                            key={idx} 
+                                                        <tr
+                                                            key={idx}
                                                             onClick={() => hasExplicitSelection && toggleItemSelection(idx)}
                                                             onDoubleClick={() => toggleItemSelection(idx)}
                                                             className={`group transition-all select-none cursor-pointer border-l-4 ${item.isSelected ? 'bg-indigo-50/80 border-indigo-500 shadow-sm' : 'border-transparent hover:bg-gray-50'}`}
@@ -936,22 +1003,22 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                 <span className="text-xs font-bold text-gray-500">{display.category}</span>
                                                             </td>
                                                             <td className="px-6 py-4">
-                                                                <span className="text-xs font-medium text-gray-500 font-mono">{display.gstin}</span>
+                                                                <span className="text-xs font-medium text-gray-500 font-mono">{isItem ? (display as any).uom : display.gstin}</span>
                                                             </td>
                                                             <td className="px-6 py-4">
-                                                                <span className="text-xs font-bold text-gray-500 uppercase">{display.state}</span>
+                                                                <span className="text-xs font-bold text-gray-500 uppercase">{isItem ? `₹${(display as any).rate}` : display.state}</span>
                                                             </td>
                                                             <td className="px-6 py-4 text-right">
                                                                 <div className="flex justify-end gap-2">
                                                                     {isPreview ? (
-                                                                        <button 
+                                                                        <button
                                                                             onClick={() => setEditingItem({ type: 'success', index: idx, data: { ...item.row_data } })}
                                                                             className="px-4 py-1.5 bg-white border border-gray-200 text-[10px] font-black text-gray-600 rounded-lg hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all uppercase tracking-widest shadow-sm"
                                                                         >
                                                                             Edit
                                                                         </button>
                                                                     ) : (
-                                                                        <button 
+                                                                        <button
                                                                             onClick={() => onEditImported?.(item)}
                                                                             className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
                                                                         >
@@ -977,15 +1044,15 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                 {!isInitialView && !isProcessing && summary && (
                     <div className="px-8 py-6 border-t border-gray-100 bg-white/80 backdrop-blur-md z-20 flex justify-between items-center sticky bottom-0">
                         <div className="flex items-center gap-4">
-                            <button 
+                            <button
                                 onClick={handleClose}
                                 className="px-6 py-2 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors uppercase tracking-widest"
                             >
                                 Cancel
                             </button>
-                            
+
                             {hasExplicitSelection && (
-                                <button 
+                                <button
                                     onClick={() => toggleAllSelection(false)}
                                     className="px-4 py-2 text-[10px] font-black text-rose-500 hover:bg-rose-50 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2"
                                 >
@@ -994,9 +1061,9 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                 </button>
                             )}
                         </div>
-                        
+
                         {isPreview ? (
-                            <button 
+                            <button
                                 onClick={handleConfirmImport}
                                 disabled={summary.success === 0}
                                 className="px-10 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-1 active:translate-y-0 flex items-center gap-3 disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
@@ -1005,7 +1072,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                 <span className="uppercase tracking-[0.1em]">Confirm Import</span>
                             </button>
                         ) : (
-                            <button 
+                            <button
                                 onClick={handleClose}
                                 className="px-12 py-4 bg-gray-900 text-white rounded-[1.5rem] font-black text-sm shadow-xl shadow-gray-200 hover:bg-black transition-all hover:-translate-y-1 active:translate-y-0 uppercase tracking-[0.2em]"
                             >

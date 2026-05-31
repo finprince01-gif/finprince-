@@ -41,7 +41,7 @@ interface VouchersPageProps {
   clearPrefilledData: () => void;
   onInvoiceUpload: (file: File, voucherType?: string) => void;
   companyDetails: CompanyDetails;
-  onNavigate: (page: Page) => void;
+  onNavigate: (page: Page, params?: any) => void;
   permissions: string[];
   viewVoucherData?: any;
   clearViewVoucherData?: () => void;
@@ -85,6 +85,31 @@ const findRate = (map: Record<string, number>, sectionStr: string): number => {
   return 0;
 };
 
+const normalizeStatutorySection = (str: string): string => {
+  if (!str) return '';
+  return str.replace(/[-\|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+};
+
+const findRate = (map: Record<string, number>, sectionStr: string): number => {
+  if (!sectionStr) return 0;
+  const normalizedSearch = normalizeStatutorySection(sectionStr);
+  
+  // 1. Direct match
+  if (map[sectionStr] !== undefined) return map[sectionStr];
+  
+  // 2. Part split by pipe if applicable
+  const part = sectionStr.includes('|') ? sectionStr.split('|')[1] : '';
+  if (part && map[part] !== undefined) return map[part];
+  
+  // 3. Normalized matching
+  for (const key of Object.keys(map)) {
+    if (normalizeStatutorySection(key) === normalizedSearch || (part && normalizeStatutorySection(key) === normalizeStatutorySection(part))) {
+      return map[key];
+    }
+  }
+  return 0;
+};
+
 const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onNavigate, permissions = [], viewVoucherData, clearViewVoucherData }) => {
 
   const { hasTabAccess, isSuperuser } = usePermissions();
@@ -110,6 +135,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const [voucherType, setVoucherType] = useState<VoucherType>(defaultVoucherType);
   const [isReadOnlyMode, setIsReadOnlyMode] = useState(!!viewVoucherData);
+  // Tracks whether we are viewing/editing an EXISTING voucher (stays true even after clicking Edit)
+  const isExistingVoucherRef = useRef(!!viewVoucherData);
   const [drillDownDetails, setDrillDownDetails] = useState<any>(null);
   const [drillDownLoading, setDrillDownLoading] = useState(false);
   const [activeOcrSessionId, setActiveOcrSessionId] = useState<string | null>(null);
@@ -1441,18 +1468,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       httpClient.get<any[]>('/api/masters/master-voucher-creditnote/')
         .then(configs => {
           setCnVoucherConfigs(configs || []);
-          if (configs && configs.length === 1) {
-            setSelectedCnConfig(configs[0].voucher_name);
-          } else if (configs && configs.length > 1 && !selectedCnConfig) {
-            setSelectedCnConfig(configs[0].voucher_name);
+          // Only auto-select a series when creating a NEW voucher (not viewing/editing existing)
+          if (!isExistingVoucherRef.current) {
+            if (configs && configs.length === 1) {
+              setSelectedCnConfig(configs[0].voucher_name);
+            } else if (configs && configs.length > 1 && !selectedCnConfig) {
+              setSelectedCnConfig(configs[0].voucher_name);
+            }
           }
         })
         .catch(err => console.error('Failed to fetch Credit Note configs', err));
     }
   }, [voucherType]);
 
-  // Generate Credit Note number
+  // Generate Credit Note number (only for NEW vouchers, not when viewing/editing existing)
   useEffect(() => {
+    if (viewVoucherData) return; // Immediate guard against race conditions during drill-down
+    if (isExistingVoucherRef.current) return; // Do NOT overwrite the saved credit note number when viewing/editing an existing voucher
     if (voucherType === 'Credit Note' && selectedCnConfig && cnVoucherConfigs.length > 0) {
       const config = cnVoucherConfigs.find(c => c.voucher_name === selectedCnConfig);
       if (config && config.enable_auto_numbering) {
@@ -2656,12 +2688,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     let isTcs = false;
 
     if (vendorTaxType === 'TDS' && purchaseSelectedStatutorySection) {
-      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
-      rateDecimal = TDS_RATE_MAP[name] ?? 0;
+      rateDecimal = findRate(TDS_RATE_MAP, purchaseSelectedStatutorySection);
       isTcs = false;
     } else if (vendorTaxType === 'TCS' && purchaseSelectedStatutorySection) {
-      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
-      rateDecimal = TCS_RATE_MAP[name] ?? 0;
+      rateDecimal = findRate(TCS_RATE_MAP, purchaseSelectedStatutorySection);
       isTcs = true;
     } else {
       // Fallback for legacy data
@@ -3092,7 +3122,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     });
   }, [party, ledgers, companyDetails, invoiceInForeignCurrency]);
 
-  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions } = useMemo(() => {
+  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions, expenseLedgerOptions } = useMemo(() => {
     // Merge the prop ledgers with freshly-fetched ledgers so we always have the full set
     // The prop is the reliable source; freshLedgers supplements with any newly created ledgers
     const mergedMap = new Map<string, Ledger>();
@@ -3208,7 +3238,29 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       ...defaultLedgerNames.filter(n => !EXCLUDED_NAMES.includes(n.toLowerCase().trim()))
     ])).filter(Boolean) as string[];
 
-    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions };
+    // Expense Ledger dropdown: only Expenditure category ledgers
+    const expenseLedgerOptions = Array.from(new Set([
+      ...effectiveLedgers
+        .filter(l => {
+          if (!isRealLedgerLeaf(l)) return false;
+          const cat = (l.category || '').toLowerCase().trim();
+          return cat === 'expenditure' || cat === 'expense' || cat === 'expenses';
+        })
+        .map(l => l.name),
+      ...hierarchy
+        .filter(r => {
+          const cat = (r.major_group_1 || '').toLowerCase().trim();
+          return cat === 'expenditure' || cat === 'expense' || cat === 'expenses';
+        })
+        .map(r => r.ledger_1)
+        .filter(Boolean) as string[]
+    ])).filter(name => {
+      if (!name) return false;
+      const n = name.toLowerCase().trim();
+      return !['purchase account', 'sales account'].includes(n);
+    }) as string[];
+
+    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions, expenseLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
@@ -4257,11 +4309,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
         let party = 'N/A';
         if (voucherType === 'Expenses') {
-          party = expenses.find(e => e.postToLedger)?.postToLedger?.split(' - ')[0] || 'N/A';
+          party = expenseRows.find(e => e.postTo)?.postTo?.split(' - ')[0] || 'N/A';
         } else if (voucherType === 'Journal') {
           party = entries.find(e => e.ledger)?.ledger?.split(' - ')[0] || 'N/A';
         } else if (voucherType === 'Contra') {
-          party = contraForm.toAccount?.split(' - ')[0] || 'N/A';
+          party = toAccount?.split(' - ')[0] || 'N/A';
         }
 
         const sourceMap: Record<string, string> = {
@@ -4276,8 +4328,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           id: genericVoucherId || response?.id || voucherId || Date.now().toString(),
           type: voucherType,
           party: party,
-          source: sourceMap[voucherType] || voucher?.source,
-          total: response?.total_amount || response?.total_debit || response?.amount || voucher?.amount || 0
+          source: sourceMap[voucherType] || (voucher as any)?.source,
+          total: response?.total_amount || response?.total_debit || response?.amount || (voucher as any)?.amount || 0
         };
         onAddVouchers([savedVoucher], false);
 
@@ -4782,6 +4834,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   useEffect(() => {
     if (!viewVoucherData) {
       setIsReadOnlyMode(false);
+      isExistingVoucherRef.current = false; // Reset: no existing voucher loaded
       setDrillDownDetails(null);
       return;
     }
@@ -4800,6 +4853,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const mappedType = typeMap[vType] || (vType ? vType.charAt(0).toUpperCase() + vType.slice(1) : 'Purchase');
     setVoucherType(mappedType);
     setIsReadOnlyMode(true);
+    isExistingVoucherRef.current = true; // Mark: an existing voucher is being viewed/edited
     setDrillDownDetails(null);
 
     const source = viewVoucherData.source || rawVoucher.source || mappedType.toLowerCase();
@@ -5214,6 +5268,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
           narration: rawVoucher.narration || viewVoucherData.narration || '',
           voucher_type: rawVoucher.voucher_type || rawVoucher.type || 'Debit Note',
+          ...rawVoucher,
+          ...viewVoucherData
         } as any);
       }
     }).finally(() => setDrillDownLoading(false));
@@ -11195,8 +11251,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // GST Rate options
   const gstRateOptions = [0, 0.5, 1.5, 3, 5, 7.5, 12, 18, 28, 40];
 
-  // Expenses and PostTo use the full allLedgerOptions (including hierarchy) so all master ledgers appear
-  const expenseLedgers = useMemo(() => allLedgerOptions.map(name => ({ name })), [allLedgerOptions]);
+  // Expenses uses filtered expenseLedgerOptions, PostTo uses the full allLedgerOptions (including hierarchy) so all master ledgers appear
+  const expenseLedgers = useMemo(() => expenseLedgerOptions.map(name => ({ name })), [expenseLedgerOptions]);
   const postToLedgers = useMemo(() => allLedgerOptions.map(name => ({ name })), [allLedgerOptions]);
 
 
@@ -12291,7 +12347,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div className="flex space-x-3 mt-4">
                       <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                       <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                      <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
                     </div>
                   )
                 )}
@@ -12300,7 +12355,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div className="flex space-x-3 mt-4">
                     <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
                     <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                    <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
                   </div>
                 )}
               </>

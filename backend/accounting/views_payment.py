@@ -118,27 +118,34 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
         if not tenant_id:
             tenant_id = request.headers.get('X-Branch-Id')
 
-        # 1. Find all Purchase/Sales vouchers involving this ledger via Journal Entries
+        # 1. Find all Purchase/Sales/Expense vouchers involving this ledger via Journal Entries
         # This is the bill-wise lookup source of truth
         entry_qs = JournalEntry.objects.filter(
             tenant_id=tenant_id,
             ledger_id=ledger_id
         ).values('voucher_id', 'voucher_type').distinct()
         
-        valid_types = ['purchase', 'sales', 'Journal', 'purchase-manual', 'Purchase']
+        valid_types = ['purchase', 'sales', 'Journal', 'purchase-manual', 'Purchase', 'expense', 'EXPENSE']
         matched_vouchers_criteria = []
+        matched_expense_ref_ids = []
         for e in entry_qs:
             v_type = e['voucher_type']
-            if v_type and any(t.lower() in v_type.lower() for t in ['purchase', 'sales']):
-                matched_vouchers_criteria.append(e['voucher_id'])
+            if v_type:
+                if any(t.lower() in v_type.lower() for t in ['purchase', 'sales']):
+                    matched_vouchers_criteria.append(e['voucher_id'])
+                elif 'expense' in v_type.lower():
+                    matched_expense_ref_ids.append(e['voucher_id'])
         
-        if not matched_vouchers_criteria:
+        if not matched_vouchers_criteria and not matched_expense_ref_ids:
             return Response([])
 
         # 2. Fetch the corresponding Voucher records
+        from django.db.models import Q
         vouchers = Voucher.objects.filter(
-            tenant_id=tenant_id,
-            id__in=matched_vouchers_criteria
+            tenant_id=tenant_id
+        ).filter(
+            Q(id__in=matched_vouchers_criteria) |
+            Q(type='expense', reference_id__in=matched_expense_ref_ids)
         ).order_by('-date')
         
         # 3. Get Credit Period for this ledger
@@ -204,8 +211,8 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             
             is_partially_paid = float(pending_amt) < float(v_amt) - 0.01
             
-            # FILTER: only show "Due", "Due Today", or "Partially Paid" as requested
-            if due_status in ["Due", "Due Today"] or is_partially_paid:
+            # FILTER: only show "Due", "Due Today", "Partially Paid", or expense vouchers as requested
+            if due_status in ["Due", "Due Today"] or is_partially_paid or v_type_lower == 'expense':
                 results.append({
                     'id': v.id,
                     'date': v.date.strftime('%Y-%m-%d') if v.date else '',

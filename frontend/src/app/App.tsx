@@ -59,12 +59,17 @@ import AuthPortalPage from '../pages/AuthPortal/AuthPortal';
 
 // Shared UI Components
 import Sidebar from '../components/Sidebar';  // Left navigation sidebar
+import MasterSidebar, { MasterPage } from '../components/MasterSidebar';
 import Modal from '../components/Modal';                  // Reusable modal dialog
 import AIAgent from '../components/AIAgent';              // AI Agent (Kiki)
 import FloatingCalculator from '../components/FloatingCalculator';
+import FloatingCalendar from '../components/FloatingCalendar';
+import FloatingNotes from '../components/FloatingNotes';
 import Icon from '../components/Icon';                    // Icon component
 import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrapper
 import { showError, showSuccess } from '../utils/toast';
+import VendorViewModal from '../components/VendorViewModal';
+import CustomerViewModal from '../pages/CustomerPortal/CustomerViewModal';
 
 
 // Import assets
@@ -78,10 +83,10 @@ import { extractInvoiceDataWithRetry, getAgentResponse, getGroundedAgentResponse
 
 // API Service - Handles all HTTP requests to Django backend
 import { apiService, httpClient } from '../services';
-import { 
-    hasStoredSession, hasMasterSession, hasCompanySession, 
-    clearTenantContext, getAccessToken,
-    setMasterTokens, setCompanyTokens
+import {
+  hasStoredSession, hasMasterSession, hasCompanySession,
+  clearTenantContext, getAccessToken,
+  setMasterTokens, setCompanyTokens
 } from '../services/authService';
 import { getUserTypeFromToken, isTokenExpired } from '../services/jwtUtils';
 
@@ -107,10 +112,48 @@ const defaultCompanyDetails: CompanyDetails = {
   }
 };
 
+declare global {
+  interface Window {
+    showGlobalVendorView?: (id: number) => void;
+    showGlobalCustomerView?: (customerOrId: any) => void;
+  }
+}
+
 // ============================================================================
 // MAIN APP COMPONENT
 // ============================================================================
 const App: React.FC = () => {
+  // Global View Modal states
+  const [globalVendorId, setGlobalVendorId] = useState<number | null>(null);
+  const [globalCustomer, setGlobalCustomer] = useState<any | null>(null);
+  const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
+  const toolsDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target as Node)) {
+        setIsToolsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.showGlobalVendorView = (id: number) => {
+      setGlobalVendorId(id);
+    };
+    window.showGlobalCustomerView = (customerOrId: any) => {
+      setGlobalCustomer(customerOrId);
+    };
+    return () => {
+      window.showGlobalVendorView = undefined;
+      window.showGlobalCustomerView = undefined;
+    };
+  }, []);
+
   // ============================================================================
   // HELPER FUNCTIONS
   // ============================================================================
@@ -180,9 +223,13 @@ const App: React.FC = () => {
 
   // Router state
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
-  const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
+  const [currentPage, setCurrentPage] = useState<Page | MasterPage | 'BranchDetail'>('Dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  const isMasterMode = useMemo(() => {
+    return hasMasterSession() && currentPath.startsWith('/master');
+  }, [currentPath]);
 
   // User permissions - No longer used (RBAC removed)
   // const [permissions, setPermissions] = useState<string[]>([]);
@@ -364,8 +411,7 @@ const App: React.FC = () => {
         backendJournalEntries,
         backendStockItems,
         backendRichVendors,
-        backendRichCustomers,
-        backendEntries
+        backendRichCustomers
       ] = await Promise.all([
 
         apiService.getCompanyDetails().catch(() => defaultCompanyDetails),
@@ -500,7 +546,7 @@ const App: React.FC = () => {
         // 1. Validate Session with Backend
         const userData = await apiService.getCurrentUser();
         console.log('✅ App: Session validated.', userData?.username);
-        
+
         if (!userData) {
           throw new Error('Invalid user session');
         }
@@ -524,7 +570,7 @@ const App: React.FC = () => {
             sessionStorage.setItem('tenantId', tenantId);
             localStorage.setItem('tenantId', tenantId);
           }
-          
+
           if (userData.company_name) {
             sessionStorage.setItem('companyName', userData.company_name);
             localStorage.setItem('companyName', userData.company_name);
@@ -1228,8 +1274,18 @@ const App: React.FC = () => {
       );
     }
 
+    if (isMasterMode) {
+      return (
+        <MasterDashboardPage
+          onLogout={handleLogout}
+          currentPage={currentPage as MasterPage | 'BranchDetail'}
+          setCurrentPage={(page) => setCurrentPage(page)}
+        />
+      );
+    }
+
     // Plan-based feature restrictions (only for premium features now)
-    switch (currentPage) {
+    switch (currentPage as Page) {
       case 'Dashboard': return <DashboardPage onNavigate={handleNavigate} companyName={companyDetails.name} vouchers={vouchers} ledgers={ledgers} isAdmin={(sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId')) === null || (sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId')) === 'null'} />;
       case 'Masters': return <MastersPage
         ledgers={ledgers}
@@ -1308,25 +1364,25 @@ const App: React.FC = () => {
   // "Company pages: Must NOT render if master_token exists"
   // "Master pages: Must NOT render if company_token exists"
   if (isMasterPath && !isAuthPath && hasCompanySession() && !hasMasterSession()) {
-     // User is on master path but ONLY company token exists — redirect to company UI
-     window.history.replaceState({}, '', '/dashboard');
-     setCurrentPath('/dashboard');
-     return (
-        <div className="flex items-center justify-center h-screen erp-main-bg">
-            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-     );
+    // User is on master path but ONLY company token exists — redirect to company UI
+    window.history.replaceState({}, '', '/dashboard');
+    setCurrentPath('/dashboard');
+    return (
+      <div className="flex items-center justify-center h-screen erp-main-bg">
+        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   if (!isMasterPath && !isAuthPath && hasMasterSession() && !hasCompanySession()) {
-     // User is on company path but ONLY master token exists — redirect to master UI
-     window.history.replaceState({}, '', '/master/dashboard');
-     setCurrentPath('/master/dashboard');
-     return (
-        <div className="flex items-center justify-center h-screen erp-main-bg">
-            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-     );
+    // User is on company path but ONLY master token exists — redirect to master UI
+    window.history.replaceState({}, '', '/master/dashboard');
+    setCurrentPath('/master/dashboard');
+    return (
+      <div className="flex items-center justify-center h-screen erp-main-bg">
+        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   // ── MASTER DOMAIN AUTH PAGES ───────────────────────────────────
@@ -1339,22 +1395,6 @@ const App: React.FC = () => {
     );
   }
 
-  // ── MASTER DOMAIN APP ──────────────────────────────────────────
-  // Wait for full initialization before rendering dashboard
-  if (isMasterPath && isLoggedIn && isDataLoaded) {
-    // JWT guard: reject if token doesn't prove master domain
-    const currentToken = getAccessToken();
-    const tokenDomain = getUserTypeFromToken(currentToken);
-    if (tokenDomain !== 'master') {
-      // Wrong domain — redirect to company dashboard
-      window.history.replaceState({}, '', '/dashboard');
-      setCurrentPath('/dashboard');
-    } else {
-      return (
-        <MasterDashboardPage onLogout={handleLogout} />
-      );
-    }
-  }
 
   // Show global loader while initializing master path
   if (isMasterPath && isAuthenticating && !isDataLoaded) {
@@ -1426,20 +1466,30 @@ const App: React.FC = () => {
     // Token says master but we're on a company path — redirect
     window.history.replaceState({}, '', '/master/dashboard');
     setCurrentPath('/master/dashboard');
-    return <Suspense fallback={<PageLoader />}><MasterDashboardPage onLogout={handleLogout} /></Suspense>;
+    return <PageLoader />;
   }
 
   return (
     <div className="flex min-h-screen font-sans erp-main-bg">
-      {/* Company sidebar — only shown for company domain sessions */}
+      {/* Sidebar — renders MasterSidebar for Master admin, Sidebar for company users */}
       {(isLoggedIn || isAuthenticating) && (
-        <Sidebar
-          currentPage={currentPage}
-          onNavigate={handleNavigate}
-          onLogout={handleLogout}
-          companyName={companyDetails.name}
-          isOpen={isSidebarOpen}
-        />
+        isMasterMode ? (
+          <MasterSidebar
+            currentPage={(currentPage === 'BranchDetail' ? 'Branches' : currentPage) as MasterPage}
+            onNavigate={(page) => setCurrentPage(page)}
+            onLogout={handleLogout}
+            adminName={sessionStorage.getItem('username') || localStorage.getItem('username') || 'Master Admin'}
+            isOpen={isSidebarOpen}
+          />
+        ) : (
+          <Sidebar
+            currentPage={currentPage as Page}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+            companyName={companyDetails.name}
+            isOpen={isSidebarOpen}
+          />
+        )
       )}
 
       <main className={`flex-1 ${(isLoggedIn || isAuthenticating) && isSidebarOpen ? 'ml-[260px]' : 'ml-0'} min-h-screen transition-all duration-300 erp-main-bg`}>
@@ -1459,11 +1509,72 @@ const App: React.FC = () => {
                 {currentPage}
               </h2>
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.15em] mt-1.5 leading-none">
-                {companyDetails.name || 'Ai Accounting'}
+                {isMasterMode
+                  ? (sessionStorage.getItem('username') || localStorage.getItem('username') || 'Platform Admin')
+                  : (companyDetails.name || 'Ai Accounting')}
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-3" />
+          <div className="flex items-center gap-3">
+            {isLoggedIn && (
+              <div ref={toolsDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsToolsDropdownOpen(prev => !prev)}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-white border border-[#E2E8F0] rounded-[10px] shadow-[0_2px_6px_rgba(0,0,0,0.03)] hover:bg-[#F8FAFC] transition-all duration-200 active:scale-95 text-[11px] font-bold text-slate-700 uppercase tracking-wider"
+                  title="Toggle Tools"
+                >
+                  <Icon name="settings" className="w-4 h-4 text-purple-600" />
+                  <span>Tools</span>
+                  <Icon name="chevron-down" className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isToolsDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isToolsDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-[#E2E8F0] rounded-[10px] shadow-[0_10px_25px_rgba(15,23,42,0.08)] py-1.5 z-50 flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsToolsDropdownOpen(false);
+                        if ((window as any).toggleGlobalCalculator) {
+                          (window as any).toggleGlobalCalculator(true);
+                        }
+                      }}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-[10px] font-black text-slate-600 hover:bg-purple-50 hover:text-purple-700 transition-all w-full text-left uppercase tracking-wider"
+                    >
+                      <Icon name="calculator" className="w-4 h-4" />
+                      <span>Calculator</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsToolsDropdownOpen(false);
+                        if ((window as any).toggleGlobalCalendar) {
+                          (window as any).toggleGlobalCalendar(true);
+                        }
+                      }}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-[10px] font-black text-slate-600 hover:bg-purple-50 hover:text-purple-700 transition-all w-full text-left uppercase tracking-wider"
+                    >
+                      <Icon name="calendar" className="w-4 h-4" />
+                      <span>Reminders</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsToolsDropdownOpen(false);
+                        if ((window as any).toggleGlobalNotes) {
+                          (window as any).toggleGlobalNotes(true);
+                        }
+                      }}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-[10px] font-black text-slate-600 hover:bg-purple-50 hover:text-purple-700 transition-all w-full text-left uppercase tracking-wider"
+                    >
+                      <Icon name="file-text" className="w-4 h-4" />
+                      <span>Notes</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Page Content ──────────────────────────────────── */}
@@ -1506,6 +1617,8 @@ const App: React.FC = () => {
       </Modal>
 
       <FloatingCalculator />
+      <FloatingCalendar />
+      <FloatingNotes />
 
       <button
         onClick={() => setIsAgentOpen(true)}
@@ -1532,9 +1645,9 @@ const App: React.FC = () => {
         className="hover:scale-110 transition-transform duration-300 group"
         title="Chat with Kiki Agent"
       >
-        <img 
-          src={kikiLogo} 
-          alt="AI Agent" 
+        <img
+          src={kikiLogo}
+          alt="AI Agent"
           style={{
             width: '100%',
             height: '100%',
@@ -1555,9 +1668,24 @@ const App: React.FC = () => {
         queueStatus={agentQueueStatus}
       />
 
+      {globalVendorId !== null && (
+        <VendorViewModal
+          vendorId={globalVendorId}
+          onClose={() => setGlobalVendorId(null)}
+        />
+      )}
+      {globalCustomer !== null && (
+        <CustomerViewModal
+          customer={globalCustomer}
+          onClose={() => setGlobalCustomer(null)}
+        />
+      )}
+
+
     </div>
   );
 };
 
 export default App;
+
 

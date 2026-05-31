@@ -21,6 +21,8 @@ from .database import (
 )
 from accounting.models import MasterLedger
 
+from core.utils import match_headers
+
 logger = logging.getLogger(__name__)
 
 # Column Definitions for Customer Excel
@@ -349,11 +351,9 @@ class CustomerExcelUploadView(APIView):
                 ws = wb.active
                 assert ws is not None
                 
-                # Header mapping
-                header_index = {}
-                for idx, cell in enumerate(ws[1], 1):
-                    if cell.value is not None:
-                        header_index[str(cell.value).strip()] = idx
+                # Header mapping using fuzzy matching
+                excel_headers = [str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]]
+                header_index = match_headers(excel_headers, CUSTOMER_COLUMNS)
                 
                 # Validate required columns
                 for col in CUSTOMER_COLUMNS:

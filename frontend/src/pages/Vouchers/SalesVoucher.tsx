@@ -46,6 +46,31 @@ interface SalesVoucherProps {
     onAddVouchers?: (vouchers: any[], saveToMySQL?: boolean) => void;
 }
 
+const normalizeStatutorySection = (str: string): string => {
+    if (!str) return '';
+    return str.replace(/[-\|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+};
+
+const findRate = (map: Record<string, number>, sectionStr: string): number => {
+    if (!sectionStr) return 0;
+    const normalizedSearch = normalizeStatutorySection(sectionStr);
+    
+    // 1. Direct match
+    if (map[sectionStr] !== undefined) return map[sectionStr];
+    
+    // 2. Part split by pipe if applicable
+    const part = sectionStr.includes('|') ? sectionStr.split('|')[1] : '';
+    if (part && map[part] !== undefined) return map[part];
+    
+    // 3. Normalized matching
+    for (const key of Object.keys(map)) {
+        if (normalizeStatutorySection(key) === normalizedSearch || (part && normalizeStatutorySection(key) === normalizeStatutorySection(part))) {
+            return map[key];
+        }
+    }
+    return 0;
+};
+
 const SalesVoucher: React.FC<SalesVoucherProps> = ({
     prefilledData,
     clearPrefilledData,
@@ -338,20 +363,20 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         }
     }, [salesVoucherConfigs]);
 
-    // Helper: increment backend counter after successful save, return next number
+    // Helper: refresh invoice number from backend after successful save, return next number
     const incrementInvoiceNumber = React.useCallback(async (seriesId: number): Promise<string> => {
         try {
-            const res: any = await httpClient.post(`/api/masters/master-voucher-sales/${seriesId}/increment-number/`, {});
-            if (res && res.next_invoice_number) {
+            const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${seriesId}/next-number/`);
+            if (res && res.invoice_number) {
                 // Update local configs cache with new current_number
                 setSalesVoucherConfigs(prev => prev.map(c =>
-                    String(c.id) === String(seriesId) ? { ...c, current_number: res.new_current_number } : c
+                    String(c.id) === String(seriesId) ? { ...c, current_number: res.current_number } : c
                 ));
-                setSalesInvoiceNo(res.next_invoice_number);
-                return res.assigned_number;
+                setSalesInvoiceNo(res.invoice_number);
+                return res.invoice_number;
             }
         } catch (e) {
-            console.error('Failed to increment invoice number', e);
+            console.error('Failed to refresh invoice number', e);
         }
         return salesInvoiceNo;
     }, [salesInvoiceNo]);
@@ -804,9 +829,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 'Section 206C(1F) - Sale of Specified Luxury Goods': 0.01,
             };
             const tcsSection = customer.tcs_section || '';
-            // tcs_section is stored as "Section 206C(1)|Sale of Tendu Leaves"
-            const tcsSectionName = tcsSection.includes('|') ? tcsSection.split('|')[1] : tcsSection;
-            const tcsRateVal = TCS_RATE_MAP[tcsSectionName] ?? 0;
+            const tcsRateVal = findRate(TCS_RATE_MAP, tcsSection);
             setCustomerTcsRate(tcsRateVal);
 
             // ── TDS Rate from Customer Master ──
@@ -859,8 +882,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 'Section 393(2) [Sl. No. 17] - Any other sum payable to Non-Resident': 0.30,
             };
             const tdsSection = customer.tds_section || '';
-            const tdsSectionName = tdsSection.includes('|') ? tdsSection.split('|')[1] : tdsSection;
-            const tdsRateVal = TDS_RATE_MAP[tdsSectionName] ?? 0;
+            const tdsRateVal = findRate(TDS_RATE_MAP, tdsSection);
             setCustomerTdsRate(tdsRateVal);
 
             // ── GST TDS Configuration from Customer Master ──
@@ -1005,12 +1027,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         };
 
         if (customerTaxType === 'TCS' && selectedStatutorySection) {
-            const name = selectedStatutorySection.includes('|') ? selectedStatutorySection.split('|')[1] : selectedStatutorySection;
-            setCustomerTcsRate(TCS_RATE_MAP[name] ?? 0);
+            setCustomerTcsRate(findRate(TCS_RATE_MAP, selectedStatutorySection));
             setCustomerTdsRate(0);
         } else if (customerTaxType === 'TDS' && selectedStatutorySection) {
-            const name = selectedStatutorySection.includes('|') ? selectedStatutorySection.split('|')[1] : selectedStatutorySection;
-            setCustomerTdsRate(TDS_RATE_MAP[name] ?? 0);
+            setCustomerTdsRate(findRate(TDS_RATE_MAP, selectedStatutorySection));
             setCustomerTcsRate(0);
         } else {
             setCustomerTcsRate(0);
@@ -2855,9 +2875,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
     // Auto-calculate TDS/TCS under Income Tax = Invoice Value × (TCS Rate + TDS Rate)
     React.useEffect(() => {
-        // Only calculate if the corresponding automatic posting is enabled for the selected tax type
-        const isTcsApplicable = customerTaxType === 'TCS' && customerTcsEnabled;
-        const isTdsApplicable = customerTaxType === 'TDS' && customerTdsEnabled;
+        // Only calculate if the corresponding automatic posting is enabled or a section has been selected
+        const isTcsApplicable = customerTaxType === 'TCS' && (customerTcsEnabled || !!selectedStatutorySection);
+        const isTdsApplicable = customerTaxType === 'TDS' && (customerTdsEnabled || !!selectedStatutorySection);
 
         let totalRate = 0;
         if (isTcsApplicable) totalRate += customerTcsRate;

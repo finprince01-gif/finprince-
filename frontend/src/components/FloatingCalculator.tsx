@@ -37,13 +37,13 @@ const getInitialPosition = (): Position => {
   };
 };
 
-const getPanelPosition = (buttonPosition: Position): Position => ({
+const getPanelPosition = (buttonPosition: Position, currentScale: number = 1.0): Position => ({
   x: clamp(
-    buttonPosition.x + BUTTON_SIZE - PANEL_WIDTH,
+    buttonPosition.x + BUTTON_SIZE - PANEL_WIDTH * currentScale,
     EDGE_PADDING,
-    window.innerWidth - PANEL_WIDTH - EDGE_PADDING
+    window.innerWidth - PANEL_WIDTH * currentScale - EDGE_PADDING
   ),
-  y: clamp(buttonPosition.y, EDGE_PADDING, window.innerHeight - PANEL_HEIGHT - EDGE_PADDING),
+  y: clamp(buttonPosition.y, EDGE_PADDING, window.innerHeight - PANEL_HEIGHT * currentScale - EDGE_PADDING),
 });
 
 const formatResult = (value: number) => {
@@ -185,6 +185,16 @@ const calcButtons: CalcButton[] = [
 
 const FloatingCalculator: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    (window as any).toggleGlobalCalculator = (open?: boolean) => {
+      setIsOpen(prev => open !== undefined ? open : !prev);
+    };
+    return () => {
+      delete (window as any).toggleGlobalCalculator;
+    };
+  }, []);
+
   const [position, setPosition] = useState<Position>(getInitialPosition);
   const [expression, setExpression] = useState('0');
   const [memory, setMemory] = useState(0);
@@ -201,6 +211,15 @@ const FloatingCalculator: React.FC = () => {
     initialX: number;
     initialY: number;
     moved: boolean;
+  } | null>(null);
+  const [scale, setScale] = useState(0.8);
+  const resizeState = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startScale: number;
+    panelLeft: number;
+    panelTop: number;
   } | null>(null);
 
   const currentValue = useMemo(() => {
@@ -262,7 +281,7 @@ const FloatingCalculator: React.FC = () => {
   }, [showHistory]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
-    const dragPosition = isOpen ? getPanelPosition(position) : position;
+    const dragPosition = isOpen ? getPanelPosition(position, scale) : position;
 
     event.currentTarget.setPointerCapture(event.pointerId);
     dragState.current = {
@@ -287,11 +306,11 @@ const FloatingCalculator: React.FC = () => {
     }
 
     if (isOpen) {
-      const nextPanelX = clamp(drag.initialX + deltaX, EDGE_PADDING, window.innerWidth - PANEL_WIDTH - EDGE_PADDING);
-      const nextPanelY = clamp(drag.initialY + deltaY, EDGE_PADDING, window.innerHeight - PANEL_HEIGHT - EDGE_PADDING);
+      const nextPanelX = clamp(drag.initialX + deltaX, EDGE_PADDING, window.innerWidth - PANEL_WIDTH * scale - EDGE_PADDING);
+      const nextPanelY = clamp(drag.initialY + deltaY, EDGE_PADDING, window.innerHeight - PANEL_HEIGHT * scale - EDGE_PADDING);
 
       setPosition({
-        x: clamp(nextPanelX + PANEL_WIDTH - BUTTON_SIZE, EDGE_PADDING, window.innerWidth - BUTTON_SIZE - EDGE_PADDING),
+        x: clamp(nextPanelX + PANEL_WIDTH * scale - BUTTON_SIZE, EDGE_PADDING, window.innerWidth - BUTTON_SIZE - EDGE_PADDING),
         y: clamp(nextPanelY, EDGE_PADDING, window.innerHeight - BUTTON_SIZE - EDGE_PADDING),
       });
       return;
@@ -309,6 +328,45 @@ const FloatingCalculator: React.FC = () => {
 
     suppressClickRef.current = drag.moved;
     dragState.current = null;
+  };
+
+  const handleResizePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const panelPos = getPanelPosition(position, scale);
+    resizeState.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startScale: scale,
+      panelLeft: panelPos.x,
+      panelTop: panelPos.y,
+    };
+  };
+
+  const handleResizePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = resizeState.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const currentWidth = event.clientX - drag.panelLeft;
+    const currentHeight = event.clientY - drag.panelTop;
+    const scaleFromWidth = currentWidth / PANEL_WIDTH;
+    const scaleFromHeight = currentHeight / PANEL_HEIGHT;
+    const newScale = clamp(Math.max(scaleFromWidth, scaleFromHeight), 0.5, 1.8);
+    
+    setScale(newScale);
+
+    // Update position so the top-left corner remains fixed at (drag.panelLeft, drag.panelTop)
+    setPosition({
+      x: clamp(drag.panelLeft - BUTTON_SIZE + PANEL_WIDTH * newScale, EDGE_PADDING, window.innerWidth - BUTTON_SIZE - EDGE_PADDING),
+      y: clamp(drag.panelTop, EDGE_PADDING, window.innerHeight - BUTTON_SIZE - EDGE_PADDING),
+    });
+  };
+
+  const handleResizePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = resizeState.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    resizeState.current = null;
   };
 
   const setResult = (nextExpression: string, result: string) => {
@@ -445,42 +503,10 @@ const FloatingCalculator: React.FC = () => {
   };
 
   if (!isOpen) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          if (suppressClickRef.current) {
-            suppressClickRef.current = false;
-            return;
-          }
-          setIsOpen(true);
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={() => {
-          dragState.current = null;
-        }}
-        className="fixed flex items-center justify-center rounded-2xl text-white hover:scale-105 active:scale-95 transition-transform duration-150 cursor-grab active:cursor-grabbing"
-        style={{
-          left: position.x,
-          top: position.y,
-          width: BUTTON_SIZE,
-          height: BUTTON_SIZE,
-          zIndex: 40,
-          touchAction: 'none',
-          background: 'linear-gradient(145deg, #6366f1 0%, #4f46e5 100%)',
-          boxShadow: '0 4px 14px rgba(79,70,229,0.45)',
-        }}
-        title="Calculator"
-        aria-label="Open calculator"
-      >
-        <Icon name="calculator" className="w-7 h-7" />
-      </button>
-    );
+    return null;
   }
 
-  const panelPosition = getPanelPosition(position);
+  const panelPosition = getPanelPosition(position, scale);
   const memoryLabel = memory === 0 ? 'Memory empty' : `M ${formatResult(memory)}`;
 
   return (
@@ -491,6 +517,8 @@ const FloatingCalculator: React.FC = () => {
         top: panelPosition.y,
         width: PANEL_WIDTH,
         zIndex: 45,
+        transform: `scale(${scale})`,
+        transformOrigin: 'top left',
       }}
       aria-label="Calculator"
     >
@@ -630,6 +658,29 @@ const FloatingCalculator: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+      {/* Resize Handle */}
+      <div
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerUp}
+        onPointerCancel={() => {
+          resizeState.current = null;
+        }}
+        className="absolute bottom-1.5 right-1.5 w-6 h-6 cursor-se-resize flex items-center justify-center z-50 group hover:bg-slate-200/70 rounded-full transition-colors"
+        style={{ touchAction: 'none' }}
+      >
+        <svg
+          className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-800 transition-colors pointer-events-none"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        >
+          <line x1="8" y1="2" x2="2" y2="8" />
+          <line x1="8" y1="5" x2="5" y2="8" />
+        </svg>
       </div>
     </section>
   );

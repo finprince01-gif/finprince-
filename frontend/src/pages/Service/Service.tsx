@@ -613,18 +613,18 @@ const ServicePage: React.FC<ServicePageProps> = () => {
 
       {/* Service Group Tab */}
       {activeTab === 'service-group' && (
-        <div className="bg-white rounded-[4px] erp-card min-h-[500px]">
-          <div className="px-4 pt-6 pb-3 flex items-center gap-2">
+        <div className="bg-white rounded-[4px] erp-card min-h-[500px] flex flex-col">
+          <div className="px-6 pt-4 pb-3 flex items-center gap-2">
             <Icon name="tag" className="w-5 h-5 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-800">Create Service Group</h3>
+            <h3 className="section-title">Create Service Group</h3>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-5 px-4 pb-6 flex-1 min-h-0">
+          <div className="flex flex-col md:flex-row gap-5 px-6 pb-6 flex-1 min-h-0">
             {/* Left Panel: Service Group Tree */}
-            <div className="w-full md:w-1/2 bg-white rounded-[4px] erp-card flex flex-col">
+            <div className="w-full md:w-1/2 bg-white rounded-[4px] border border-gray-200 flex flex-col">
               <div className="p-4 border-b border-gray-200">
-                <h3 className="font-semibold text-gray-800 text-sm">Select Category</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <h3 className="section-title text-sm">Select Category</h3>
+                <p className="helper-text mt-0.5">
                   Single click to select level. Double click to expand/collapse categories.
                 </p>
               </div>
@@ -639,14 +639,14 @@ const ServicePage: React.FC<ServicePageProps> = () => {
             </div>
 
             {/* Right Panel: Service Group Creation Form */}
-            <div className="w-full md:w-1/2 bg-white rounded-[4px] erp-card">
+            <div className="w-full md:w-1/2 bg-white rounded-[4px] border border-gray-200">
               <div className="p-5">
-                <h3 className="font-semibold text-gray-800 text-sm mb-6">Service Group Preview</h3>
+                <h3 className="section-title text-sm mb-6">Service Group Preview</h3>
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="space-y-5">
                     {/* Category Display */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      <label className="label-text">
                         CATEGORY
                       </label>
                       {selectedNode ? (
@@ -662,7 +662,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
 
                     {/* GROUP: show buttons if level 0, show text if level 1 */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      <label className="label-text">
                         GROUP
                       </label>
                       {selectedNode && selectedNode.level === 1 ? (
@@ -691,7 +691,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     {/* SUBGROUP: only show when level 1 (Direct/Indirect) is selected */}
                     {selectedNode && selectedNode.level === 1 && (
                       <div>
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                        <label className="label-text">
                           SUBGROUP
                         </label>
                         <input

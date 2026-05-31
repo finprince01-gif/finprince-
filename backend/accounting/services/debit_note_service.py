@@ -373,6 +373,9 @@ def post_debit_note_accounting(
         total_sgst    += Decimal(str(item.get("sgst", 0) or 0))
         total_cess    += Decimal(str(item.get("cess", 0) or 0))
 
+    if not items and voucher_obj and voucher_obj.total and voucher_obj.total > 0:
+        total_taxable = Decimal(str(voucher_obj.total))
+
     total_gst = total_igst + total_cgst + total_sgst + total_cess
 
     # Vendor A/c debit = taxable + gst + tcs_reversed - tds_reversed
@@ -1013,16 +1016,16 @@ def post_debit_note(
         # accounting failures are logged but the document is still persisted.
 
     # 4. Bill allocation
-    write_bill_allocation(
-        debit_note_instance=debit_note_instance,
-        voucher_obj=voucher_obj,
-        payment_details=payment_details,
-        vendor_debit_amount=vendor_debit,
-        tenant_id=tenant_id,
-        tcs_by_invoice=tcs_by_invoice,
-        tds_by_invoice=tds_by_invoice,
-        items=items,
-    )
+    # write_bill_allocation(
+    #     debit_note_instance=debit_note_instance,
+    #     voucher_obj=voucher_obj,
+    #     payment_details=payment_details,
+    #     vendor_debit_amount=vendor_debit,
+    #     tenant_id=tenant_id,
+    #     tcs_by_invoice=tcs_by_invoice,
+    #     tds_by_invoice=tds_by_invoice,
+    #     items=items,
+    # )
 
     # 5. Vendor Portal sync
     mirror_to_vendor_portal(

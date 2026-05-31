@@ -2330,6 +2330,25 @@ const handleNextVendorTab = () => {
     }
 };
 
+// Navigate to previous tab in Vendor Creation workflow
+const handlePrevVendorTab = () => {
+    const tabSequence: MasterSubTab[] = [
+        'Basic Details',
+        'Branch details',
+        'Products/Services',
+        'TDS & Other Statutory',
+        'Banking Info',
+        'Terms & Conditions'
+    ];
+
+    const currentIndex = tabSequence.indexOf(activeMasterSubTab);
+    if (currentIndex > 0) {
+        setActiveMasterSubTab(tabSequence[currentIndex - 1]);
+    } else {
+        setActiveMasterSubTab('Vendor Creation');
+    }
+};
+
 
 // Banking Information State
 interface BankAccount {
@@ -3524,7 +3543,13 @@ return (
             {availableTabs.map((tab) => (
                 <button
                     key={tab}
-                    onClick={() => setActiveTab(tab as VendorTab)}
+                    onClick={() => {
+                        setActiveTab(tab as VendorTab);
+                        if (tab !== 'Master') {
+                            setIsCreatingVendor(false);
+                            setActiveMasterSubTab('Vendor Creation');
+                        }
+                    }}
                     className={`erp-tab ${activeTab === tab ? 'active' : ''}`}
                 >
                     {tab}
@@ -3547,7 +3572,14 @@ return (
                                     return (
                                         <button
                                             key={subTab}
-                                            onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
+                                            onClick={() => {
+                                                setActiveMasterSubTab(subTab as MasterSubTab);
+                                                if (subTab !== 'Vendor Creation') {
+                                                    setIsCreatingVendor(false);
+                                                } else if (isCreatingVendor) {
+                                                    setIsCreatingVendor(false);
+                                                }
+                                            }}
                                             className={`erp-tab ${isActive ? 'active' : ''}`}
                                         >
                                             {subTab}
@@ -3776,7 +3808,7 @@ return (
                                                     onClick={() => setIsExcelDropdownOpen(!isExcelDropdownOpen)}
                                                     className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer"
                                                 >
-                                                    <Icon name="file-spreadsheet" className="w-4 h-4" /> EXCEL
+                                                    <Icon name="file-spreadsheet" className="w-4 h-4" /> UPLOAD
                                                 </button>
                                                 {isExcelDropdownOpen && (
                                                     <div className="absolute right-0 z-[100] mt-2 w-52 bg-white border border-gray-200 rounded-[4px] shadow-lg py-1">
@@ -3973,7 +4005,7 @@ return (
                                         </p>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {[
                                             { id: 'Basic Details', title: 'BASIC DETAILS', desc: 'CONFIGURE BASIC DETAILS' },
                                             { id: 'Branch details', title: 'BRANCH DETAILS', desc: 'CONFIGURE BRANCH DETAILS' },
@@ -3985,17 +4017,14 @@ return (
                                             <button
                                                 key={card.id}
                                                 onClick={() => setActiveMasterSubTab(card.id as MasterSubTab)}
-                                                className="p-8 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/30 transition-all text-left group"
+                                                className="p-6 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/30 transition-all text-left group"
                                             >
-                                                <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{card.title}</div>
-                                                <div className="text-xs text-gray-400 mt-1 uppercase tracking-tight">{card.desc}</div>
+                                                <div className="text-base font-semibold mb-1 text-gray-900 group-hover:text-indigo-600 transition-colors">{card.title}</div>
+                                                <div className="text-sm text-gray-500 mt-1 uppercase tracking-tight">{card.desc}</div>
                                             </button>
                                         ))}
                                     </div>
 
-                                    <div className="mt-12 text-center text-gray-400 italic text-sm">
-                                        content coming soon.
-                                    </div>
                                 </>
                             )}
                         </div>
@@ -4025,7 +4054,7 @@ return (
                                             type="text"
                                             value={vendorCode}
                                             onChange={(e) => setVendorCode(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="Auto-generated or manual"
                                         />
                                     </div>
@@ -4039,7 +4068,7 @@ return (
                                             type="text"
                                             value={vendorName}
                                             onChange={(e) => setVendorName(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="Enter vendor name"
                                             required
                                         />
@@ -4081,7 +4110,7 @@ return (
                                             type="text"
                                             value={panNo}
                                             onChange={(e) => setPanNo(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="AAAAA0000A"
                                             maxLength={10}
                                         />
@@ -4096,7 +4125,7 @@ return (
                                             type="text"
                                             value={contactPerson}
                                             onChange={(e) => setContactPerson(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="Primary contact name"
                                         />
                                     </div>
@@ -4110,7 +4139,7 @@ return (
                                             type="email"
                                             value={vendorEmail}
                                             onChange={(e) => setVendorEmail(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="vendor@example.com"
                                             required
                                         />
@@ -4130,7 +4159,7 @@ return (
                                                     setContactNo(value);
                                                 }
                                             }}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="+91 XXXXX XXXXX"
                                             required
                                         />
@@ -4148,7 +4177,7 @@ return (
                                                 type="button"
                                                 onClick={() => setIsAlsoCustomer(true)}
                                                 className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${isAlsoCustomer
-                                                    ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
                                                     : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                                                     }`}
                                             >
@@ -4158,7 +4187,7 @@ return (
                                                 type="button"
                                                 onClick={() => setIsAlsoCustomer(false)}
                                                 className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!isAlsoCustomer
-                                                    ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
                                                     : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                                                     }`}
                                             >
@@ -4208,8 +4237,8 @@ return (
 
                                                 {/* Create Customer Prompt: shown if mismatch or linking declined */}
                                                 {((matchingCustomer && linkVendorToCustomer === false) || (!matchingCustomer && customerSearchAttempted && vendorName && panNo)) && (
-                                                    <div className="p-4 bg-teal-50 border border-teal-100 rounded-[4px]">
-                                                        <label className="label-text text-teal-700">
+                                                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-[4px]">
+                                                        <label className="label-text text-indigo-700">
                                                             Create a Customer?
                                                         </label>
                                                         <div className="flex gap-2 mt-2">
@@ -4217,8 +4246,8 @@ return (
                                                                 type="button"
                                                                 onClick={() => setCreateCustomerOption(true)}
                                                                 className={`px-4 py-1 text-xs border rounded transition-colors ${createCustomerOption === true
-                                                                    ? 'border-teal-600 bg-teal-600 text-white font-medium'
-                                                                    : 'border-teal-300 text-teal-600 bg-white hover:bg-teal-50'
+                                                                    ? 'border-indigo-600 bg-indigo-600 text-white font-medium'
+                                                                    : 'border-indigo-300 text-indigo-600 bg-white hover:bg-indigo-50'
                                                                     }`}
                                                             >
                                                                 Yes
@@ -4227,8 +4256,8 @@ return (
                                                                 type="button"
                                                                 onClick={() => setCreateCustomerOption(false)}
                                                                 className={`px-4 py-1 text-xs border rounded transition-colors ${createCustomerOption === false
-                                                                    ? 'border-teal-600 bg-teal-600 text-white font-medium'
-                                                                    : 'border-teal-300 text-teal-600 bg-white hover:bg-teal-50'
+                                                                    ? 'border-indigo-600 bg-indigo-600 text-white font-medium'
+                                                                    : 'border-indigo-300 text-indigo-600 bg-white hover:bg-indigo-50'
                                                                     }`}
                                                             >
                                                                 No
@@ -4249,7 +4278,7 @@ return (
                                                 type="button"
                                                 onClick={() => setTcsApplicable(true)}
                                                 className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${tcsApplicable
-                                                    ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
                                                     : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                                                     }`}
                                             >
@@ -4259,7 +4288,7 @@ return (
                                                 type="button"
                                                 onClick={() => setTcsApplicable(false)}
                                                 className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!tcsApplicable
-                                                    ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
                                                     : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                                                     }`}
                                             >
@@ -4279,16 +4308,25 @@ return (
                                     <button
                                         type="button"
                                         onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                        className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                        className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                                     >
-                                        BACK TO VENDOR CREATION HUB
+                                        <ChevronDown className="w-4 h-4 rotate-90" /> Back
                                     </button>
-                                    <button
-                                        type="submit"
-                                        className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                    >
-                                        Next
-                                    </button>
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                            className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                        >
+                                            BACK TO VENDOR CREATION HUB
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -4605,17 +4643,26 @@ return (
                                 <div className="flex justify-between pt-4">
                                     <button
                                         type="button"
-                                        onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                        className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                        onClick={handlePrevVendorTab}
+                                        className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                                     >
-                                        BACK TO VENDOR CREATION HUB
+                                        <ChevronDown className="w-4 h-4 rotate-90" /> Back
                                     </button>
-                                    <button
-                                        type="submit"
-                                        className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                    >
-                                        Next
-                                    </button>
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                            className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                        >
+                                            BACK TO VENDOR CREATION HUB
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
                                 </div>
 
                             </form>
@@ -5050,17 +5097,26 @@ return (
                                     <div className="flex justify-between pt-4">
                                         <button
                                             type="button"
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                            onClick={handlePrevVendorTab}
+                                            className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                                         >
-                                            BACK TO VENDOR CREATION HUB
+                                            <ChevronDown className="w-4 h-4 rotate-90" /> Back
                                         </button>
-                                        <button
-                                            type="submit"
-                                            className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                        >
-                                            Next
-                                        </button>
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                            >
+                                                BACK TO VENDOR CREATION HUB
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -5208,18 +5264,27 @@ return (
                                     <div className="flex justify-between pt-4">
                                         <button
                                             type="button"
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                            onClick={handlePrevVendorTab}
+                                            className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                                         >
-                                            BACK TO VENDOR CREATION HUB
+                                            <ChevronDown className="w-4 h-4 rotate-90" /> Back
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleProductServicesSubmit}
-                                            className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                        >
-                                            Next
-                                        </button>
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                            >
+                                                BACK TO VENDOR CREATION HUB
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleProductServicesSubmit}
+                                                className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -5243,8 +5308,8 @@ return (
                                         {bankAccounts.map((bank, index) => (
                                             <div key={bank.id} className={`space-y-6 ${index > 0 ? 'pt-8 border-t border-gray-200' : ''}`}>
                                                 {index > 0 && (
-                                                    <div className="flex justify-between items-center">
-                                                        <h4 className="text-md font-medium text-gray-900">Bank Account #{index + 1}</h4>
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h4 className="text-md font-medium text-gray-950">Bank Account #{index + 1}</h4>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleRemoveBank(bank.id)}
@@ -5258,201 +5323,235 @@ return (
                                                     </div>
                                                 )}
 
-                                                <div>
-                                                    <label className="label-text">
-                                                        Bank account No.
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        value={bank.accountNumber}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value.replace(/[^0-9]/g, '');
-                                                            handleBankChange(bank.id, 'accountNumber', value);
-                                                        }}
-                                                    />
-                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                                    {/* Column 1 */}
+                                                    <div className="space-y-4">
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Bank Account Number</label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Enter account number"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                value={bank.accountNumber}
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value.replace(/[^0-9]/g, '');
+                                                                    handleBankChange(bank.id, 'accountNumber', value);
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-500 mb-1">IFSC Code</label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="ABCD0123456"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                maxLength={11}
+                                                                value={bank.ifscCode}
+                                                                onChange={(e) => {
+                                                                    const ifsc = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                                                    handleBankChange(bank.id, 'ifscCode', ifsc);
+                                                                    if (ifsc.length === 11) {
+                                                                        fetch(`https://ifsc.razorpay.com/${ifsc}`)
+                                                                            .then(res => res.json())
+                                                                            .then(data => {
+                                                                                if (data && data.BANK) {
+                                                                                    const fetchedBank = data.BANK.trim();
+                                                                                    const fetchedBranch = data.BRANCH.trim();
+                                                                                    let mismatch = false;
 
-                                                <div>
-                                                    <label className="label-text">
-                                                        Bank Name
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        value={bank.bankName}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
-                                                            handleBankChange(bank.id, 'bankName', value);
-                                                        }}
-                                                    />
-                                                </div>
+                                                                                    if (bank.bankName && bank.bankName.toUpperCase() !== fetchedBank.toUpperCase()) {
+                                                                                        mismatch = true;
+                                                                                    }
+                                                                                    if (bank.branchName && bank.branchName.toUpperCase() !== fetchedBranch.toUpperCase()) {
+                                                                                        mismatch = true;
+                                                                                    }
 
-                                                <div>
-                                                    <label className="label-text">
-                                                        IFSC Code
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        maxLength={11}
-                                                        value={bank.ifscCode}
-                                                        onChange={(e) => {
-                                                            const ifsc = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                                                            handleBankChange(bank.id, 'ifscCode', ifsc);
-                                                            if (ifsc.length === 11) {
-                                                                fetch(`https://ifsc.razorpay.com/${ifsc}`)
-                                                                    .then(res => res.json())
-                                                                    .then(data => {
-                                                                        if (data && data.BANK) {
-                                                                            const fetchedBank = data.BANK.trim();
-                                                                            const fetchedBranch = data.BRANCH.trim();
-                                                                            let mismatch = false;
-
-                                                                            if (bank.bankName && bank.bankName.toUpperCase() !== fetchedBank.toUpperCase()) {
-                                                                                mismatch = true;
-                                                                            }
-                                                                            if (bank.branchName && bank.branchName.toUpperCase() !== fetchedBranch.toUpperCase()) {
-                                                                                mismatch = true;
-                                                                            }
-
-                                                                            if (mismatch) {
-                                                                                showError(`Bank Name, Branch Name, & IFSC Code mismatch. Suggested Branch: ${fetchedBranch}`);
-                                                                            } else {
-                                                                                if (!bank.bankName) handleBankChange(bank.id, 'bankName', fetchedBank);
-                                                                                if (!bank.branchName) handleBankChange(bank.id, 'branchName', fetchedBranch);
-                                                                            }
-                                                                        } else {
-                                                                            showError("Invalid IFSC Code");
-                                                                        }
-                                                                    })
-                                                                    .catch(() => showError("Invalid IFSC Code"));
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="label-text">
-                                                        Branch Name
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        value={bank.branchName}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
-                                                            handleBankChange(bank.id, 'branchName', value);
-                                                        }}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="label-text">
-                                                        Swift Code
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        value={bank.swiftCode}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                                                            handleBankChange(bank.id, 'swiftCode', value);
-                                                        }}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="label-text">
-                                                        Associate to a vendor branch
-                                                    </label>
-                                                    <div className="relative">
-                                                        <button
-                                                            type="button"
-                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white text-left flex justify-between items-center"
-                                                            onClick={() => {
-                                                                const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
-                                                                if (dropdown) {
-                                                                    dropdown.classList.toggle('hidden');
-                                                                }
-                                                            }}
-                                                        >
-                                                            <span className="truncate">
-                                                                {bank.vendorBranch && bank.vendorBranch.length > 0
-                                                                    ? `${bank.vendorBranch.length} Selected`
-                                                                    : "Select vendor branch"}
-                                                            </span>
-                                                            <ChevronDown className="w-4 h-4 text-gray-500" />
-                                                        </button>
-
-                                                        {/* Dropdown Content */}
-                                                        <div
-                                                            id={`vendor-branch-dropdown-${bank.id}`}
-                                                            className="hidden absolute z-[100] mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
-                                                        >
-                                                            {(() => {
-                                                                // Combine all extracted reference names
-                                                                const liveBranches = (gstRecords || []).flatMap((record, rIdx) => {
-                                                                    const branches = ((record && record.placesOfBusiness) || [])
-                                                                        .map((pob, pIdx) => {
-                                                                            const name = (pob.referenceName ||
-                                                                                (pob as any).reference_name ||
-                                                                                (pob as any).branch_name ||
-                                                                                (pob as any).branchName ||
-                                                                                (pob as any).branch_reference_name || '').trim();
-                                                                            // If user added a branch but hasn't named it, give it a placeholder
-                                                                            return name || `Branch ${pIdx + 1} (${record.gstin || 'New GST Record'})`;
-                                                                        })
-                                                                        .filter(name => name !== '');
-
-                                                                    // If no specific branch reference names exist, use GSTIN or a record placeholder
-                                                                    if (branches.length === 0) {
-                                                                        return [record.gstin || record.tradeName || `GST Detail #${rIdx + 1}`];
+                                                                                    if (mismatch) {
+                                                                                        showError(`Bank Name, Branch Name, & IFSC Code mismatch. Suggested Branch: ${fetchedBranch}`);
+                                                                                    } else {
+                                                                                        if (!bank.bankName) handleBankChange(bank.id, 'bankName', fetchedBank);
+                                                                                        if (!bank.branchName) handleBankChange(bank.id, 'branchName', fetchedBranch);
+                                                                                    }
+                                                                                } else {
+                                                                                    showError("Invalid IFSC Code");
+                                                                                }
+                                                                            })
+                                                                            .catch(() => showError("Invalid IFSC Code"));
                                                                     }
-                                                                    return branches;
-                                                                });
-
-                                                                const dbBranches = (availableBranches || [])
-                                                                    .map(b => (b.reference_name || b.referenceName || (b as any).branch_name || (b as any).branchName || b.gstin || '').trim())
-                                                                    .filter(name => name !== '');
-
-                                                                const allBranches = [...new Set([...liveBranches, ...dbBranches])];
-
-                                                                if (allBranches.length === 0) {
-                                                                    return (
-                                                                        <div className="px-4 py-2 text-gray-500 text-xs italic">
-                                                                            <div>No branch reference names found.</div>
-                                                                        </div>
-                                                                    );
-                                                                }
-
-                                                                return allBranches.map((branchName, idx) => (
-                                                                    <div key={`${branchName}-${idx}`} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const currentBranches = Array.isArray(bank.vendorBranch) ? bank.vendorBranch : [];
-                                                                        const isSelected = currentBranches.includes(branchName);
-                                                                        let newBranches;
-                                                                        if (isSelected) {
-                                                                            newBranches = currentBranches.filter(b => b !== branchName);
-                                                                        } else {
-                                                                            newBranches = [...currentBranches, branchName];
-                                                                        }
-                                                                        handleBankChange(bank.id, 'vendorBranch', newBranches);
-                                                                    }}>
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={(Array.isArray(bank.vendorBranch) ? bank.vendorBranch : []).includes(branchName)}
-                                                                            onChange={() => { }}
-                                                                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-3 pointer-events-none"
-                                                                        />
-                                                                        <span className="text-gray-900">{branchName}</span>
-                                                                    </div>
-                                                                ));
-                                                            })()}
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Swift Code</label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="ENTER SWIFT CODE"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                value={bank.swiftCode}
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                                                    handleBankChange(bank.id, 'swiftCode', value);
+                                                                }}
+                                                            />
                                                         </div>
                                                     </div>
 
+                                                    {/* Column 2 */}
+                                                    <div className="space-y-4">
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Bank Name</label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Enter bank name"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                value={bank.bankName}
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                                                                    handleBankChange(bank.id, 'bankName', value);
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Branch Name</label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Enter branch name"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                value={bank.branchName}
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                                                                    handleBankChange(bank.id, 'branchName', value);
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </div>
                                                 </div>
+
+                                                {/* Associate to a vendor branch - Multi-select Dropdown with Display Field */}
+                                                <div className="mb-2">
+                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Associate to a Vendor Branch</label>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        {/* Multi-select Dropdown */}
+                                                        <div className="relative">
+                                                            <button
+                                                                type="button"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm text-left flex justify-between items-center hover:border-indigo-400 transition-colors"
+                                                                onClick={() => {
+                                                                    const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
+                                                                    if (dropdown) {
+                                                                        dropdown.classList.toggle('hidden');
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <span className="text-gray-700">
+                                                                    {bank.vendorBranch && bank.vendorBranch.length > 0
+                                                                        ? `${bank.vendorBranch.length} branch(es) selected`
+                                                                        : "Select branches"}
+                                                                </span>
+                                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                                            </button>
+
+                                                            {/* Dropdown Content */}
+                                                            <div
+                                                                id={`vendor-branch-dropdown-${bank.id}`}
+                                                                className="hidden absolute z-[100] mt-1 w-full bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-60 py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                                            >
+                                                                {(() => {
+                                                                    // Combine all extracted reference names
+                                                                    const liveBranches = (gstRecords || []).flatMap((record, rIdx) => {
+                                                                        const branches = ((record && record.placesOfBusiness) || [])
+                                                                            .map((pob, pIdx) => {
+                                                                                const name = (pob.referenceName ||
+                                                                                    (pob as any).reference_name ||
+                                                                                    (pob as any).branch_name ||
+                                                                                    (pob as any).branchName ||
+                                                                                    (pob as any).branch_reference_name || '').trim();
+                                                                                // If user added a branch but hasn't named it, give it a placeholder
+                                                                                return name || `Branch ${pIdx + 1} (${record.gstin || 'New GST Record'})`;
+                                                                            })
+                                                                            .filter(name => name !== '');
+
+                                                                        // If no specific branch reference names exist, use GSTIN or a record placeholder
+                                                                        if (branches.length === 0) {
+                                                                            return [record.gstin || record.tradeName || `GST Detail #${rIdx + 1}`];
+                                                                        }
+                                                                        return branches;
+                                                                    });
+
+                                                                    const dbBranches = (availableBranches || [])
+                                                                        .map(b => (b.reference_name || b.referenceName || (b as any).branch_name || (b as any).branchName || b.gstin || '').trim())
+                                                                        .filter(name => name !== '');
+
+                                                                    const allBranches = [...new Set([...liveBranches, ...dbBranches])];
+
+                                                                    if (allBranches.length === 0) {
+                                                                        return (
+                                                                            <div className="px-4 py-2 text-gray-500 text-xs italic">
+                                                                                <div>No branch reference names found.</div>
+                                                                            </div>
+                                                                        );
+                                                                    }
+
+                                                                    return allBranches.map((branchName, idx) => (
+                                                                        <div key={`${branchName}-${idx}`} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const currentBranches = Array.isArray(bank.vendorBranch) ? bank.vendorBranch : [];
+                                                                            const isSelected = currentBranches.includes(branchName);
+                                                                            let newBranches;
+                                                                            if (isSelected) {
+                                                                                newBranches = currentBranches.filter(b => b !== branchName);
+                                                                            } else {
+                                                                                newBranches = [...currentBranches, branchName];
+                                                                            }
+                                                                            handleBankChange(bank.id, 'vendorBranch', newBranches);
+                                                                        }}>
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={(Array.isArray(bank.vendorBranch) ? bank.vendorBranch : []).includes(branchName)}
+                                                                                onChange={() => { }}
+                                                                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-3 pointer-events-none"
+                                                                            />
+                                                                            <span className="text-gray-900">{branchName}</span>
+                                                                        </div>
+                                                                    ));
+                                                                })()}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Display Field */}
+                                                        <div>
+                                                            <div className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-sm text-gray-700 min-h-[38px]">
+                                                                {Array.isArray(bank.vendorBranch) && bank.vendorBranch.length > 0 ? (
+                                                                    <div className="space-y-1">
+                                                                        {bank.vendorBranch.map((branch, idx) => (
+                                                                            <div key={idx} className="flex items-center justify-between group hover:bg-gray-100 px-2 py-1 rounded transition-colors">
+                                                                                <span className="text-sm text-gray-700">{branch}</span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        const currentBranches = Array.isArray(bank.vendorBranch) ? bank.vendorBranch : [];
+                                                                                        const newBranches = currentBranches.filter(b => b !== branch);
+                                                                                        handleBankChange(bank.id, 'vendorBranch', newBranches);
+                                                                                    }}
+                                                                                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all ml-2"
+                                                                                    title="Remove branch"
+                                                                                >
+                                                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                                                    </svg>
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-gray-400">Selected branches will appear here</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                             </div>
                                         ))}
                                     </div>
@@ -5461,13 +5560,11 @@ return (
                                     <div className="pt-2">
                                         <button
                                             type="button"
-                                            className="flex items-center gap-2 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
                                             onClick={handleAddBank}
+                                            className="px-4 py-2 border border-indigo-200 text-indigo-600 rounded-[4px] text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center gap-2"
                                         >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                            </svg>
-                                            <span className="text-sm font-medium">Another Bank</span>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                            Add Another Bank
                                         </button>
                                     </div>
 
@@ -5475,17 +5572,26 @@ return (
                                     <div className="flex justify-between pt-4">
                                         <button
                                             type="button"
-                                            onClick={() => setActiveMasterSubTab('TDS & Other Statutory')}
-                                            className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                            onClick={handlePrevVendorTab}
+                                            className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                                         >
-                                            Back
+                                            <ChevronDown className="w-4 h-4 rotate-90" /> Back
                                         </button>
-                                        <button
-                                            type="submit"
-                                            className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                        >
-                                            Next
-                                        </button>
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                            >
+                                                BACK TO VENDOR CREATION HUB
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -5630,20 +5736,28 @@ return (
                                     <div className="flex justify-between pt-4">
                                         <button
                                             type="button"
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                            onClick={handlePrevVendorTab}
+                                            className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                                         >
-                                            BACK TO VENDOR CREATION HUB
+                                            <ChevronDown className="w-4 h-4 rotate-90" /> Back
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleFinish()}
-                                            disabled={isSubmitting}
-                                            className={`px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white focus:outline-none ${isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
-                                                }`}
-                                        >
-                                            {isSubmitting ? 'Saving...' : (createdVendorId ? 'Update Vendor' : 'Finish (Save)')}
-                                        </button>
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
+                                            >
+                                                BACK TO VENDOR CREATION HUB
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleFinish()}
+                                                disabled={isSubmitting}
+                                                className={`px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white focus:outline-none ${isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                                            >
+                                                {isSubmitting ? 'Saving...' : (createdVendorId ? 'Update Vendor' : 'Finish (Save)')}
+                                            </button>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -5657,28 +5771,25 @@ return (
 
         {
             activeTab === 'Transaction' && (
-                <div>
+                <div className="erp-card p-0 overflow-hidden">
                     {/* Sub-tabs for Transaction */}
-                    <div className="mb-6">
-                        <nav className="flex space-x-8 border-b border-gray-200">
+                    <div className="erp-tab-container !mb-0 px-6 pt-4">
+                        <nav className="flex space-x-2">
                             {['Purchase Orders', 'Procurement', 'Payment']
                                 .filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab))
                                 .map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
-                                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTransactionSubTab === subTab
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }`}
+                                        className={`erp-tab ${activeTransactionSubTab === subTab ? 'active' : ''}`}
                                     >
-                                        {subTab.toUpperCase()}
+                                        {subTab}
                                     </button>
                                 ))}
                         </nav>
                     </div>
 
-                    <div className="p-6 erp-card">
+                    <div className="p-6">
                         {activeTransactionSubTab === 'Purchase Orders' && (
                             <div>
                                 {activePOSubTab === 'Dashboard' && (
@@ -7269,27 +7380,25 @@ return (
                                                             className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
                                                         >
                                                             <div className="flex items-center justify-between mb-4">
-                                                                <div className="p-3 rounded-[4px] bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                                                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                                                     <Filter className="w-6 h-6" />
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
                                                                     <div className="text-right mr-2">
                                                                         <p className="text-lg font-bold text-gray-800">{pendingBillsList.length}</p>
-                                                                        <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Unpaid</p>
+                                                                        <p className="text-[10px] text-indigo-600 font-semibold uppercase tracking-wider">Unpaid</p>
+                                                                    </div>
+                                                                    <div className="text-right mr-2">
+                                                                        <p className="text-lg font-bold text-gray-800">
+                                                                            {totalPendingAmount >= 1000 ? `₹${(totalPendingAmount / 1000).toFixed(1)}k` : `₹${Math.round(totalPendingAmount)}`}
+                                                                        </p>
+                                                                        <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Payable</p>
                                                                     </div>
                                                                     <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                                                                 </div>
                                                             </div>
-                                                            <div className="flex justify-between items-end">
-                                                                <div>
-                                                                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
-                                                                    <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <p className="text-lg font-bold text-gray-900">{formattedTotal}</p>
-                                                                    <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Payable</p>
-                                                                </div>
-                                                            </div>
+                                                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+                                                            <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
                                                         </div>
                                                     );
                                                 })}

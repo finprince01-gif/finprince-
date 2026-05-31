@@ -52,6 +52,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     isReadOnlyMode = false
 }) => {
     const [activeTab, setActiveTab] = useState('invoice');
+    const [editingVoucherId, setEditingVoucherId] = useState<number | string | null>(null);
 
     // Form States
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -183,6 +184,104 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             });
         return items;
     }, [allPurchaseInvoices, selectedSupplierInvoices]);
+    // Populate from Edit Mode (prefilledData)
+    useEffect(() => {
+        if (prefilledData) {
+            if ((prefilledData as any).voucherId || (prefilledData as any).id) {
+                setEditingVoucherId((prefilledData as any).voucherId || (prefilledData as any).id);
+            }
+            if (prefilledData.invoiceDate || (prefilledData as any).date) setDate(prefilledData.invoiceDate || (prefilledData as any).date);
+            if (prefilledData.invoiceNumber || (prefilledData as any).debit_note_no) setDebitNoteNo(prefilledData.invoiceNumber || (prefilledData as any).debit_note_no || '');
+            
+            // Branch and GSTIN
+            if (prefilledData.branch) setVendorBranch(prefilledData.branch);
+            if (prefilledData.gstin) setGstin(prefilledData.gstin);
+            if ((prefilledData as any).place_of_supply) setPlaceOfSupply((prefilledData as any).place_of_supply);
+
+            // Set vendorName
+            if (prefilledData.sellerName || (prefilledData as any).vendor_name) {
+                setVendorName(prefilledData.sellerName || (prefilledData as any).vendor_name || '');
+            }
+            if ((prefilledData as any).vendor_id) setVendorId((prefilledData as any).vendor_id);
+            
+            // Narration
+            if (prefilledData.narration) setNarration(prefilledData.narration);
+            
+            // Address Fields
+            if ((prefilledData as any).bill_to) {
+                setBillFromAddress({ line1: (prefilledData as any).bill_to, line2: '', line3: '', city: '', pincode: '' });
+            }
+            if ((prefilledData as any).ship_to) {
+                setShipFromAddress({ line1: (prefilledData as any).ship_to, line2: '', line3: '', city: '', pincode: '' });
+            }
+
+            // Purchase Reference
+            if ((prefilledData as any).supplier_invoice_nos) {
+                const invoices = typeof (prefilledData as any).supplier_invoice_nos === 'string' 
+                    ? (prefilledData as any).supplier_invoice_nos.split(',').map((s: string) => s.trim()).filter(Boolean)
+                    : (Array.isArray((prefilledData as any).supplier_invoice_nos) ? (prefilledData as any).supplier_invoice_nos : []);
+                setSelectedSupplierInvoices(invoices);
+                setSupplierInvoiceNos(prev => Array.from(new Set([...prev, ...invoices])));
+            }
+            if ((prefilledData as any).purchase_voucher_nos) setPurchaseVoucherNo((prefilledData as any).purchase_voucher_nos);
+            if ((prefilledData as any).purchase_voucher_dates) setPurchaseVoucherDate((prefilledData as any).purchase_voucher_dates);
+
+            // General fields
+            if ((prefilledData as any).nature_of_supply) setNatureOfSupply((prefilledData as any).nature_of_supply);
+            if ((prefilledData as any).is_financial) setIsFinancial((prefilledData as any).is_financial);
+            if ((prefilledData as any).reverse_charge) setReverseCharge((prefilledData as any).reverse_charge);
+            if ((prefilledData as any).invoice_in_foreign_currency) setForeignCurrency((prefilledData as any).foreign_currency || 'USD');
+            if ((prefilledData as any).exchange_rate) setExchangeRate((prefilledData as any).exchange_rate.toString());
+
+            // Items
+            const items = (prefilledData as any).item_details?.items || (prefilledData as any).item_details?.line_items || [];
+            if (Array.isArray(items) && items.length > 0) {
+                setItemRows(items.map((item: any, idx: number) => ({
+                    id: item.id || (idx + 1).toString(),
+                    itemCode: item.item_code || item.itemCode || '',
+                    itemName: item.item_name || item.itemName || '',
+                    hsnSac: item.hsn_sac || item.hsnSac || '',
+                    qty: (item.quantity || item.qty || 0).toString(),
+                    uom: item.uom || '',
+                    itemRate: (item.rate || item.itemRate || 0).toString(),
+                    taxableValue: (item.taxable_value || item.taxableValue || 0).toString(),
+                    igst: (item.igst_amount || item.igst || 0).toString(),
+                    cgst: (item.cgst_amount || item.cgst || 0).toString(),
+                    sgst: (item.sgst_amount || item.sgst || 0).toString(),
+                    cess: (item.cess_amount || item.cess || 0).toString(),
+                    cessRate: '0',
+                    invoiceValue: (item.invoice_value || item.invoiceValue || 0).toString(),
+                    purchaseLedger: item.purchase_ledger || item.purchaseLedger || item.ledger || '',
+                    description: item.description || '',
+                    alternateUnit: '',
+                    gstRate: item.gstRate || item.gst_rate || '0',
+                    selected: true,
+                    reasonForReturn: item.reason_for_return || item.reasonForReturn || '',
+                    supplierInvoiceNo: item.sales_invoice_no || item.supplierInvoiceNo || '',
+                    invoiceRef: item.invoiceRef || '',
+                    fcRate: (item.foreign_rate || item.fcRate || 0).toString(),
+                    fcAmount: (item.foreign_amount || item.fcAmount || 0).toString(),
+                    ledgerNarration: item.ledgerNarration || ''
+                })));
+            }
+            
+            // Due Details
+            if ((prefilledData as any).due_details) {
+                const due = (prefilledData as any).due_details;
+                if (due.reverse_tcs) setReverseTcs(due.reverse_tcs.toString());
+                if (due.reverse_tds) setReverseTds(due.reverse_tds.toString());
+                if (due.tds_it) setTdsIt(due.tds_it.toString());
+                if (due.reverse_gst_tcs) setReverseGstTcs(due.reverse_gst_tcs);
+                if (due.reverse_gst_tds) setReverseGstTds(due.reverse_gst_tds);
+                if (due.reverse_income_tax_tcs) setReverseIncomeTaxTcs(due.reverse_income_tax_tcs);
+                if (due.reverse_income_tax_tds) setReverseIncomeTaxTds(due.reverse_income_tax_tds);
+                if (due.purchase_invoice_amount_applied) setPurchaseInvoiceAmountApplied(due.purchase_invoice_amount_applied.toString());
+                if (due.terms_conditions) setTermsAndConditions(due.terms_conditions);
+            }
+
+            if (clearPrefilledData) clearPrefilledData();
+        }
+    }, [prefilledData, clearPrefilledData]);
 
 
     // Fetch initial data on mount
@@ -243,9 +342,14 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         };
 
         const payload = {
-            id: '',
+            id: editingVoucherId || '',
+            reference_id: prefilledData ? (prefilledData as any).reference_id : undefined,
             type: 'Debit Note',
             date,
+            party: vendorName,
+            total: Number(netAmountDue) || 0,
+            amount: Number(netAmountDue) || 0,
+            voucher_number: debitNoteNo,
             debit_note_series: selectedSeriesId,
             debit_note_no: debitNoteNo,
             vendor_name: vendorName,
@@ -268,7 +372,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             narration: narration,
 
             // Nested Tab 2: Supply
-            supply_details: {
+            item_details: {
                 items: itemRows.map(row => ({
                     ...row,
                     qty: Number(row.qty) || 0,
@@ -522,6 +626,10 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
     };
 
     const fetchNextNo = useCallback(async () => {
+        if (editingVoucherId) return;
+        if (prefilledData && ((prefilledData as any).voucherId || (prefilledData as any).id)) {
+            return; // Do not overwrite existing voucher number in edit mode
+        }
         if (selectedSeriesId) {
             try {
                 const data = await apiService.getDebitNoteNextNumber(selectedSeriesId);
@@ -532,7 +640,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         } else {
             setDebitNoteNo('');
         }
-    }, [selectedSeriesId]);
+    }, [selectedSeriesId, prefilledData]);
 
     // Fetch next number when series changes
     useEffect(() => {
@@ -948,7 +1056,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 total_cess: totalCess,
                 total_invoice_value: totalInvoiceValue
             };
-            formData.append('supply_details', JSON.stringify(supplyDetails));
+            formData.append('item_details', JSON.stringify(supplyDetails));
 
             // Nested Payment Details (needed for Allocation Link in Vendor Portal)
             const paymentDetails = selectedSupplierInvoices.map(invNo => ({
@@ -1011,7 +1119,26 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             }
 
             if (onAddVouchers) {
-                const savedVoucher = { ...response, id: response?.id || prefilledData?.voucherId || Date.now().toString() };
+                const vid = response?.id || prefilledData?.voucherId || Date.now().toString();
+                // Map the backend response or local state to a normalized Voucher format
+                const totalAmt = response?.due_details?.net_amount_due || netAmountDue || 0;
+                const savedVoucher = { 
+                    ...response, 
+                    id: vid,
+                    type: 'Debit Note',
+                    date: date,
+                    invoiceNo: debitNoteNo || response?.debit_note_no || '',
+                    voucherNo: debitNoteNo || response?.debit_note_no || '',
+                    party: vendorName || response?.vendor_name || '',
+                    total: parseFloat(totalAmt.toString()),
+                    amount: parseFloat(totalAmt.toString()),
+                    totalTaxableAmount: parseFloat(totalTaxable.toString()),
+                    totalCgst: parseFloat(totalCgst.toString()),
+                    totalSgst: parseFloat(totalSgst.toString()),
+                    totalIgst: parseFloat(totalIgst.toString()),
+                    isInterState: parseFloat(totalIgst.toString()) > 0,
+                    narration: narration || response?.narration || ''
+                };
                 onAddVouchers([savedVoucher], false);
             }
             handleCancel();
@@ -2656,17 +2783,6 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                 className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50"
                             >
                                 POST & PRINT/EMAIL
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-                                        window.location.reload();
-                                    }
-                                }}
-                                className="px-10 py-3 bg-white text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-all font-bold"
-                            >
-                                CANCEL
                             </button>
                         </div>
                     </div>

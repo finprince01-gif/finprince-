@@ -75,7 +75,7 @@ const TABS = [
     { name: 'GST Details', description: 'GSTIN & branch addresses' },
     { name: 'Products/Services', description: 'Associated products' },
     { name: 'TDS & Statutory', description: 'TDS/TCS & compliance info' },
-    { name: 'Banking Info', description: 'Bank accounts' },
+    { name: 'Banking Information', description: 'Bank accounts' },
     { name: 'Terms & Conditions', description: 'Credit & payment terms' },
 ];
 
@@ -1143,7 +1143,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                     )}
 
                     {/* ── BANKING INFO ── */}
-                    {activeTab === 'Banking Info' && (
+                    {activeTab === 'Banking Information' && (
                         <div>
                             {bankAccounts.map((acc, i) => (
                                 <div key={acc.id} className="border border-gray-200 rounded-lg p-4 mb-4 relative">
