@@ -1321,16 +1321,6 @@ class ApiService {
         return httpClient.post<any>('/api/ocr-staging-finalize/', uploadSessionId ? { upload_session_id: uploadSessionId } : {});
     }
 
-    /** Create a vendor from the staging screen, then trigger re-validation. */
-    async createVendorFromStaging(data: {
-        vendor_name: string;
-        gstin?: string;
-        address?: string;
-        state?: string;
-        branch?: string;
-    }) {
-        return httpClient.post<{ status: string; vendor_id: number }>('/api/purchase/vendors/create/', data);
-    }
 
     // ============================================================================
     // SALES EXCEL UPLOAD WORKFLOW

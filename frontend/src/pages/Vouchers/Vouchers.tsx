@@ -85,31 +85,6 @@ const findRate = (map: Record<string, number>, sectionStr: string): number => {
   return 0;
 };
 
-const normalizeStatutorySection = (str: string): string => {
-  if (!str) return '';
-  return str.replace(/[-\|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-};
-
-const findRate = (map: Record<string, number>, sectionStr: string): number => {
-  if (!sectionStr) return 0;
-  const normalizedSearch = normalizeStatutorySection(sectionStr);
-  
-  // 1. Direct match
-  if (map[sectionStr] !== undefined) return map[sectionStr];
-  
-  // 2. Part split by pipe if applicable
-  const part = sectionStr.includes('|') ? sectionStr.split('|')[1] : '';
-  if (part && map[part] !== undefined) return map[part];
-  
-  // 3. Normalized matching
-  for (const key of Object.keys(map)) {
-    if (normalizeStatutorySection(key) === normalizedSearch || (part && normalizeStatutorySection(key) === normalizeStatutorySection(part))) {
-      return map[key];
-    }
-  }
-  return 0;
-};
-
 const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onNavigate, permissions = [], viewVoucherData, clearViewVoucherData }) => {
 
   const { hasTabAccess, isSuperuser } = usePermissions();
@@ -3501,26 +3476,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
-  const handleCreateVendorFromInvoice = async (data: any) => {
-    try {
-      const response = await httpClient.post<any>('/api/purchase/vendors/create/', data);
-      if (response && response.status === 'CREATED') {
-        showSuccess('Vendor Created Successfully!');
-        setIsCreateVendorModalOpen(false);
-        setVendorValidationStatus('FOUND');
-        setVendorMatchedBy('Newly Created');
-        setIsVendorDisabled(true);
-        setParty(data.vendor_name);
-        setVendorId(response.vendor_id); // Set the newly created vendor ID
-        handlePartyChange(data.vendor_name, response.vendor_id);
-
-        // Refresh master data to include the new vendor
-        fetchRichData();
-      }
-    } catch (err: any) {
-      showError(`Failed to create vendor: ${err.message || 'Error'}`);
-    }
-  };
 
   const openTermsModal = () => {
     // Pre-fill draft fields from current vendor/customer's T&C data

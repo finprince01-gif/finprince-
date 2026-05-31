@@ -16,6 +16,70 @@ from .zoho_adapter import get_zoho_adapter
 
 logger = logging.getLogger(__name__)
 
+# Helper to check blank/empty values
+def is_blank(val):
+    return val is None or not str(val).strip() or str(val).strip() in ['None', 'null', '—', 'MISSING']
+
+# Helper to extract fields for checks
+def extract_fields(record):
+    data = record.extracted_data or {}
+    inv_no = (
+        record.supplier_invoice_no or
+        data.get("invoice_no") or
+        data.get("supplier_invoice_no") or
+        data.get("header", {}).get("invoice_no") or
+        data.get("header", {}).get("invoice_number") or
+        data.get("sections", {}).get("supplier_details", {}).get("supplier_invoice_no")
+    )
+    gstin = (
+        record.gstin or
+        data.get("gstin") or
+        data.get("header", {}).get("gstin") or
+        data.get("header", {}).get("vendor_gstin") or
+        data.get("sections", {}).get("supplier_details", {}).get("gstin")
+    )
+    has_payload = bool(data and len(data) > 0)
+    return inv_no, gstin, has_payload
+
+# Helper to determine if a record is save-eligible
+def is_save_eligible(r, upload_session_id=None, tenant_id=None):
+    # 1. Exclude stale staging rows (must match session and tenant if provided)
+    if upload_session_id and str(r.upload_session_id) != str(upload_session_id):
+        return False, "SESSION_ROW_SCOPE_MISMATCH"
+    if tenant_id and str(r.tenant_id) != str(tenant_id):
+        return False, "SESSION_ROW_SCOPE_MISMATCH"
+
+    # 2. Exclude non-terminal and failed status rows
+    if r.validation_status in ["PENDING", "VALIDATING", "PROCESSING", "NEED_VENDOR", "CREATE_VENDOR", "OCR_RUNNING", "SNAPSHOT_PENDING"]:
+        return False, "NON_TERMINAL"
+    if r.validation_status in ["ERROR", "FAILED", "EXTRACTION_FAILED", "VALIDATION_FAILED"]:
+        return False, "OCR_FAILED"
+
+    # 3. Exclude incomplete/placeholder rows
+    inv_no, gst, has_payload = extract_fields(r)
+    if is_blank(inv_no) or is_blank(gst) or not has_payload:
+        return False, "PLACEHOLDER_OR_MISSING_PAYLOAD"
+
+    # 4. Exclude duplicate records (they are skipped, not saved)
+    if r.validation_status in ["DUPLICATE", "DUPLICATE_IN_BATCH", "DUPLICATE_INVOICE"]:
+        return False, "DUPLICATE"
+
+    # 5. Exclude already processed/saved records
+    if r.processed or r.validation_status == "VOUCHER_CREATED":
+        return False, "ALREADY_PROCESSED"
+
+    # 6. Only rows with valid existing vendor linkage
+    if not r.vendor_id:
+        return False, "NULL_VENDOR_ID"
+
+    # 7. Vendor status must be ALREADY EXIST / resolved
+    valid_vendor_statuses = ["EXISTS", "FOUND", "MATCHED", "RESOLVED", "ALREADY EXIST"]
+    normalized_status = str(r.vendor_status or "").strip().upper()
+    if normalized_status not in valid_vendor_statuses:
+        return False, f"INVALID_VENDOR_STATUS_{normalized_status}"
+
+    return True, None
+
 class CleanOCRStagingView(views.APIView):
     """
     Step 3: Fix API Response.
@@ -1534,98 +1598,174 @@ class OCRStagingFinalizeView(views.APIView):
         logger.info(f"[FINALIZE_ENQUEUE_START] session={upload_session_id} tenant={tenant_id} source=API")
         logger.info(f"[FINALIZE_START] session={upload_session_id} tenant={tenant_id}")
 
-        total_in_session = InvoiceTempOCR.objects.filter(
-            tenant_id=tenant_id, upload_session_id=upload_session_id
-        ).count() if upload_session_id else 0
+        if not upload_session_id:
+            return Response({'error': 'upload_session_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Requirement 1: HARD BLOCK finalize/save until orchestration convergence complete ──
+        from core.redis_orchestrator import orchestrator
+        auth_state = orchestrator.get_authoritative_session_state(upload_session_id)
+        
+        expected = auth_state.get('expected_pages', 0)
+        completed = auth_state.get('completed_pages', 0)
+        failed = auth_state.get('failed_pages', 0)
+        snapshot_complete = auth_state.get('snapshot_complete', False)
+        materialization_complete = auth_state.get('materialization_complete', False)
+        
+        # Check convergence
+        is_converged = (expected > 0) and (completed + failed == expected) and snapshot_complete and materialization_complete
+        
+        if not is_converged:
+            logger.warning(
+                f"[FINALIZE_BLOCKED_BARRIER] session={upload_session_id} expected={expected} "
+                f"completed={completed} failed={failed} snapshot_complete={snapshot_complete} "
+                f"materialization_complete={materialization_complete}"
+            )
+            return Response({
+                'error': 'Finalize blocked: orchestration barrier incomplete.',
+                'status': 'BLOCKED',
+                'details': auth_state
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         summary = {
             'success': True,
-            'total': total_in_session,
+            'total': 0,
             'created': 0,
             'skipped': 0,
             'failed': 0,
             'errors': []
         }
 
-        # ── Step 1: Find processable records (unprocessed, matched/vendor-ready, exclude duplicates) ──
-        query = InvoiceTempOCR.objects.filter(
+        # Fetch all records in this session
+        all_records = list(InvoiceTempOCR.objects.filter(
             tenant_id=tenant_id,
-            processed=False
-        ).filter(
-            Q(validation_status__in=['READY', 'FOUND', 'RESOLVED', 'MATCHED_VENDOR', 'SUCCESS',
-                                     'NEEDS_ATTENTION', 'LOW_CONFIDENCE', 'NEED_VENDOR', 'NEED_TO_SAVE']) |
-            Q(vendor_id__isnull=False)
-        ).exclude(validation_status__in=['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'])
-        if upload_session_id:
-            query = query.filter(upload_session_id=upload_session_id)
+            upload_session_id=upload_session_id
+        ))
+        if not all_records:
+            all_records = list(InvoiceTempOCR.objects.filter(
+                upload_session_id=upload_session_id
+            ))
+            
+        summary['total'] = len(all_records)
+        logger.info(f"[SESSION_ROW_SCOPE] session={upload_session_id} tenant={tenant_id} total_rows={len(all_records)}")
 
-        records_to_process = query.filter(Q(is_primary=True) | Q(group_id__isnull=True))
+        # ── Requirement 4: Fix ready-count calculation ──
+        ready_count = 0
+        for r in all_records:
+            eligible, reason = is_save_eligible(r, upload_session_id=upload_session_id, tenant_id=tenant_id)
+            logger.info(f"[FINALIZE_ROW_VALIDATION] record_id={r.id} eligible={eligible} reason={reason} vendor_id={r.vendor_id} vendor_status={r.vendor_status} validation_status={r.validation_status}")
+            if eligible:
+                ready_count += 1
+        logger.info(f"[READY_COUNT_RECALCULATED] session={upload_session_id} ready_count={ready_count}")
 
-        if not records_to_process.exists():
-            # PATH A: Automated worker already ran — report persisted counts from DB.
-            # Use validation_status=VOUCHER_CREATED (not just processed=True) for accuracy.
-            if total_in_session > 0:
-                qs_base = InvoiceTempOCR.objects.filter(
-                    tenant_id=tenant_id, upload_session_id=upload_session_id
-                ) if upload_session_id else InvoiceTempOCR.objects.none()
+        # Fetch finalized snapshot rows
+        snapshot = FinalizedSnapshot.objects.filter(session_id=upload_session_id).order_by('-created_at').first()
+        snapshot_data = {}
+        if snapshot:
+            if snapshot.s3_key:
+                from core.storage import StorageService
+                try:
+                    data_bytes = StorageService().get_file(snapshot.s3_key)
+                    if snapshot.s3_key.endswith('.gz'):
+                        import gzip
+                        data_bytes = gzip.decompress(data_bytes)
+                    snapshot_data = json.loads(data_bytes)
+                except Exception as e:
+                    logger.error(f"[FINALIZE_SNAPSHOT_S3_ERROR] {e}")
+                    snapshot_data = snapshot.snapshot_json or {}
+            else:
+                snapshot_data = snapshot.snapshot_json or {}
 
-                voucher_created_count = qs_base.filter(validation_status='VOUCHER_CREATED').count()
-                duplicate_count = qs_base.filter(
-                    validation_status__in=['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']
-                ).count()
-                failed_count = qs_base.filter(
-                    processed=True, validation_status='ERROR'
-                ).count()
+        snapshot_rows = snapshot_data.get('data', []) if isinstance(snapshot_data, dict) else []
+        snapshot_inv_keys = set()
+        for row in snapshot_rows:
+            snap_inv = row.get('invoice_no')
+            snap_gst = row.get('gstin') or row.get('vendor_gstin')
+            if snap_inv and snap_gst:
+                snapshot_inv_keys.add((str(snap_inv).strip().upper(), str(snap_gst).strip().upper()))
 
-                summary['created'] = voucher_created_count
-                summary['skipped'] = duplicate_count
-                summary['failed'] = failed_count
-                logger.info(
-                    f"[FINALIZE_PATH_A] session={upload_session_id} "
-                    f"voucher_created={voucher_created_count} duplicate={duplicate_count} failed={failed_count} "
-                    f"(automated worker already ran)"
-                )
-                logger.info(f"[PURCHASE_COMMIT_SUCCESS] session={upload_session_id} created={voucher_created_count} [PATH_A_PERSISTED]")
-                return Response(summary)
-
-            logger.warning(f"[FINALIZE_NO_RECORDS] session={upload_session_id} — no processable invoices found")
-            return Response({'error': 'No processable invoices found in staging.'}, status=400)
-
-        # PATH B: Manual finalize — records not yet processed by worker.
-        logger.info(f"[FINALIZE_PATH_B] session={upload_session_id} records_to_process={records_to_process.count()}")
-        from .pipeline import validate_and_process
-
-        for record in records_to_process:
-            if record.processed:
+        # ── Requirement 5: Fix finalize candidate builder ──
+        candidates = []
+        for r in all_records:
+            eligible, reason = is_save_eligible(r, upload_session_id=upload_session_id, tenant_id=tenant_id)
+            if not eligible:
+                if reason == "DUPLICATE":
+                    logger.info(f"[FINALIZE_CANDIDATE_REJECTED] record_id={r.id} reason=duplicate")
+                    summary['skipped'] += 1
+                else:
+                    logger.info(f"[FINALIZE_CANDIDATE_REJECTED] record_id={r.id} reason={reason}")
+                    logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={r.id} reason={reason}")
                 continue
 
-            logger.info(f"[PURCHASE_DB_INSERT_START] record={record.id} vendor_id={record.vendor_id} validation_status={record.validation_status}")
-            try:
-                res = validate_and_process(record, auto_save=True)
-                save_status = res.get('status') if isinstance(res, dict) else None
-                if save_status == 'VOUCHER_CREATED':
-                    summary['created'] += 1
-                    logger.info(f"[PURCHASE_DB_INSERT_SUCCESS] record={record.id} voucher_id={res.get('voucher_id')}")
-                    logger.info(f"[PURCHASE_COMMIT_SUCCESS] record={record.id} voucher_id={res.get('voucher_id')}")
-                elif save_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
-                    summary['skipped'] += 1
-                    logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={record.id} status={save_status}")
-                else:
-                    summary['failed'] += 1
-                    summary['errors'].append({
-                        'file': record.file_path,
-                        'error': res.get('validation_message') if isinstance(res, dict) else "Finalization failed"
-                    })
-                    logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={record.id} status={save_status}")
-            except Exception as e:
-                logger.error(f"[FINALIZE_RECORD_FAILED] record={record.id} error={e}", exc_info=True)
-                summary['failed'] += 1
-                summary['errors'].append({'file': record.file_path, 'error': str(e)})
+            # Skip if not primary or ungrouped to prevent duplication
+            if not (r.is_primary or r.group_id is None):
+                logger.info(f"[FINALIZE_CANDIDATE_REJECTED] record_id={r.id} reason=not_primary_or_grouped")
+                continue
 
-        logger.info(
-            f"[FINALIZE_SUCCESS] session={upload_session_id} "
-            f"created={summary['created']} skipped={summary['skipped']} failed={summary['failed']}"
-        )
+            # Check if matching row exists in snapshot (if snapshot is present)
+            if snapshot_inv_keys:
+                inv_no, gst, _ = extract_fields(r)
+                rec_inv_key = (str(inv_no).strip().upper(), str(gst).strip().upper())
+                if rec_inv_key not in snapshot_inv_keys:
+                    logger.warning(f"Record {r.id} {rec_inv_key} not found in finalized snapshot rows.")
+                    logger.info(f"[FINALIZE_CANDIDATE_REJECTED] record_id={r.id} reason=not_in_snapshot")
+                    continue
+
+            logger.info(f"[FINALIZE_CANDIDATE_ACCEPTED] record_id={r.id}")
+            candidates.append(r)
+
+        # ── Requirement 7: Fix partial save corruption ──
+        logger.info(f"[SAVE_PIPELINE_START] session={upload_session_id} candidates_count={len(candidates)}")
+        
+        if len(candidates) > 0:
+            from .pipeline import validate_and_process
+            for record in candidates:
+                # Re-fetch/check DB record state to prevent concurrent mutations
+                db_rec = InvoiceTempOCR.objects.filter(id=record.id).first()
+                if not db_rec:
+                    continue
+                eligible, reason = is_save_eligible(db_rec, upload_session_id=upload_session_id, tenant_id=tenant_id)
+                if not eligible:
+                    logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={db_rec.id} reason={reason}")
+                    continue
+                
+                logger.info(f"[PURCHASE_DB_INSERT_START] record={db_rec.id} vendor_id={db_rec.vendor_id} validation_status={db_rec.validation_status}")
+                try:
+                    res = validate_and_process(db_rec, auto_save=True)
+                    save_status = res.get('status') if isinstance(res, dict) else None
+                    if save_status == 'VOUCHER_CREATED':
+                        summary['created'] += 1
+                        logger.info(f"[PURCHASE_DB_INSERT_SUCCESS] record={db_rec.id} voucher_id={res.get('voucher_id')}")
+                        logger.info(f"[PURCHASE_COMMIT_SUCCESS] record={db_rec.id} voucher_id={res.get('voucher_id')}")
+                    elif save_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
+                        summary['skipped'] += 1
+                        logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={db_rec.id} status={save_status}")
+                    else:
+                        summary['failed'] += 1
+                        summary['errors'].append({
+                            'file': db_rec.file_path,
+                            'error': res.get('validation_message') if isinstance(res, dict) else "Finalization failed"
+                        })
+                        logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={db_rec.id} status={save_status}")
+                except Exception as e:
+                    logger.error(f"[FINALIZE_RECORD_FAILED] record={db_rec.id} error={e}", exc_info=True)
+                    summary['failed'] += 1
+                    summary['errors'].append({'file': db_rec.file_path, 'error': str(e)})
+        else:
+            # If no candidates, but total_in_session > 0, report what's already saved (Path A equivalent)
+            if summary['total'] > 0:
+                qs_base = InvoiceTempOCR.objects.filter(
+                    tenant_id=tenant_id, upload_session_id=upload_session_id
+                )
+                summary['created'] = qs_base.filter(validation_status='VOUCHER_CREATED').count()
+                summary['skipped'] = qs_base.filter(
+                    validation_status__in=['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']
+                ).count()
+                summary['failed'] = qs_base.filter(
+                    processed=True, validation_status='ERROR'
+                ).count()
+                logger.info(f"[FINALIZE_PATH_A_FALLBACK] session={upload_session_id} created={summary['created']} skipped={summary['skipped']} failed={summary['failed']}")
+
+        logger.info(f"[SAVE_PIPELINE_COMPLETE] session={upload_session_id} created={summary['created']} skipped={summary['skipped']} failed={summary['failed']}")
         return Response(summary)
 
 

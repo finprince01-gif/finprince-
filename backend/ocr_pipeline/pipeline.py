@@ -1856,6 +1856,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
 
         # Using the Pipeline 2 logic refined earlier
         try:
+            logger.info(f"[ATOMIC_SAVE_START] record_id={record.id}")
             with transaction.atomic():
                 # Double-check inside transaction to avoid race-condition duplicate voucher creation
                 existing_voucher = VoucherPurchaseSupplierDetails.objects.filter(
@@ -2038,9 +2039,19 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
 
 
                 # \u2500\u2500 [SERIALIZER_VALIDATION_START] \u2500\u2500
-                import json as _json
-                _safe_payload = {k: (str(v)[:200] if v else v) for k, v in serializer_data.items() if k not in ('supply_inr_details', 'supply_foreign_details', 'due_details', 'transit_details')}
-                logger.info(f"[PURCHASE_PAYLOAD_TRACE] record={record.id} supplier_invoice_no='{invoice_no}' gstin='{gstin}' branch='{branch_name}' vendor_id={vendor.id} date={invoice_date} total={total_inv_val} has_transit={_has_real_transit}")
+                # ── [PURCHASE_PAYLOAD_TRACE] ──
+                logger.info(
+                    f"[PURCHASE_PAYLOAD_TRACE] record_id={record.id} upload_session_id={record.upload_session_id} "
+                    f"supplier_invoice_no='{invoice_no}' vendor_id={vendor.id if vendor else None} "
+                    f"gstin='{gstin}' branch='{branch_name}' voucher_series='{purchase_series}' "
+                    f"voucher_type='purchase' "
+                    f"transit_details={serializer_data.get('transit_details')} "
+                    f"supply_details={supply_details} "
+                    f"due_details={serializer_data.get('due_details')} "
+                    f"item_rows={serializer_items}"
+                )
+
+                # ── [SERIALIZER_VALIDATION_START] ──
                 logger.info(f"[SERIALIZER_VALIDATION_START] record={record.id} payload_keys={list(serializer_data.keys())}")
 
                 from accounting.serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer
@@ -2060,6 +2071,8 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                         record.validation_message = f"Serializer validation failed: {err_str[:500]}"
                         record.save(update_fields=['validation_status', 'validation_message'])
                         return {"status": "ERROR", "validation_message": err_str[:500]}
+                    else:
+                        logger.info(f"[SERIALIZER_VALIDATION_SUCCESS] record_id={record.id}")
                 except Exception as val_ex:
                     logger.error(f"[SERIALIZER_VALIDATION_FAILED] record={record.id} exception={val_ex}", exc_info=True)
                     raise val_ex
@@ -2071,6 +2084,35 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 except Exception as save_ex:
                     logger.error(f"[PURCHASE_SAVE_EXCEPTION] record={record.id} exception={save_ex}", exc_info=True)
                     raise save_ex
+
+                # ── [VERIFY PHYSICAL DB INSERT] ──
+                logger.info(f"[POST_SAVE_VERIFICATION_START] record={record.id} voucher_id={voucher_main.id}")
+                from accounting.models_voucher_purchase import (
+                    VoucherPurchaseSupplierDetails as VP_SupplierDetails,
+                    VoucherPurchaseSupplyForeignDetails as VP_ForeignDetails,
+                    VoucherPurchaseSupplyINRDetails as VP_INRDetails,
+                    VoucherPurchaseDueDetails as VP_DueDetails,
+                    VoucherPurchaseTransitDetails as VP_TransitDetails,
+                    VoucherPurchaseItem as VP_Item
+                )
+                parent_exists = VP_SupplierDetails.objects.filter(id=voucher_main.id).exists()
+                inr_exists = VP_INRDetails.objects.filter(supplier_details_id=voucher_main.id).exists()
+                foreign_exists = VP_ForeignDetails.objects.filter(supplier_details_id=voucher_main.id).exists()
+                due_exists = VP_DueDetails.objects.filter(supplier_details_id=voucher_main.id).exists()
+                transit_exists = VP_TransitDetails.objects.filter(supplier_details_id=voucher_main.id).exists()
+                items_exists = VP_Item.objects.filter(supplier_details_id=voucher_main.id).exists()
+                
+                logger.info(
+                    f"[POST_SAVE_VERIFICATION_STATUS] record={record.id} voucher_id={voucher_main.id} "
+                    f"parent_exists={parent_exists} due_exists={due_exists} transit_exists={transit_exists} "
+                    f"items_exists={items_exists} inr_exists={inr_exists} foreign_exists={foreign_exists}"
+                )
+                
+                if not parent_exists or not (due_exists and transit_exists and items_exists):
+                    logger.error(
+                        f"[POST_SAVE_VERIFICATION_FAILED] record={record.id} voucher_id={voucher_main.id} "
+                        f"parent={parent_exists} due={due_exists} transit={transit_exists} items={items_exists}"
+                    )
 
                 # ── [PURCHASE_HEADER_INSERT] ──
                 logger.info(f"[PURCHASE_HEADER_INSERT] inserted table='voucher_purchase_supplier_details' row_count=1 tenant_id={tenant_id} voucher_id={voucher_main.id}")
@@ -2123,11 +2165,13 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 # ── [SUCCESS_RESPONSE_SENT] ──
                 logger.info(f"[SUCCESS_RESPONSE_SENT] success toast response ready for record_id={record.id}")
 
+                logger.info(f"[ATOMIC_SAVE_COMMIT] record_id={record.id}")
                 return {"status": "VOUCHER_CREATED", "voucher_id": voucher_main.id}
         except Exception as ex_atomic:
             import traceback as _tb
             _exc_str = str(ex_atomic)
             _tb_str  = _tb.format_exc()
+            logger.error(f"[ATOMIC_SAVE_ROLLBACK] record_id={record.id} exception={_exc_str}")
             logger.error(f"[VOUCHER_TRANSACTION_ROLLBACK] record={record.id} reason={_exc_str[:300]}")
             logger.error(f"[PURCHASE_SAVE_EXCEPTION] record={record.id} traceback=\n{_tb_str}")
             logger.error(f"[PARTIAL_SAVE_DETECTED] Partial save detected for record {record.id} tenant_id={tenant_id}")
@@ -2140,7 +2184,10 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         logger.error(f"[PURCHASE_SAVE_EXCEPTION] record={record.id} exception={_exc_str[:500]}")
         record.validation_status = "ERROR"
         record.validation_message = _exc_str[:500]
-        record.save()
+        try:
+            record.save()
+        except Exception as save_err:
+            logger.error(f"Failed to save record ERROR status: {save_err}")
         logger.error(f"[FINAL_STATUS] ERROR record={record.id} exc={_exc_str[:200]}")
         return {"status": "ERROR", "validation_message": _exc_str[:500]}
 

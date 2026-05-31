@@ -11,7 +11,6 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunSQL("ALTER TABLE advance_allocation MODIFY amount DECIMAL(25,2)"),
-        migrations.RunSQL("ALTER TABLE advance_allocation MODIFY advance DECIMAL(25,2)"),
         migrations.AlterField(
             model_name='advanceallocation',
             name='balance_after',
@@ -58,7 +57,6 @@ class Migration(migrations.Migration):
             field=models.DecimalField(decimal_places=2, default=0.0, help_text='Opening balance amount for this ledger', max_digits=25),
         ),
         migrations.RunSQL("ALTER TABLE pending_transaction MODIFY amount DECIMAL(25,2)"),
-        migrations.RunSQL("ALTER TABLE pending_transaction MODIFY advance DECIMAL(25,2)"),
         migrations.AlterField(
             model_name='pendingtransaction',
             name='balance_after',
@@ -95,7 +93,6 @@ class Migration(migrations.Migration):
             field=models.DecimalField(decimal_places=2, default=0, max_digits=25),
         ),
         migrations.RunSQL("ALTER TABLE transaction_allocations MODIFY amount DECIMAL(25,2)"),
-        migrations.RunSQL("ALTER TABLE transaction_allocations MODIFY advance DECIMAL(25,2)"),
         migrations.AlterField(
             model_name='transactionallocation',
             name='balance_after',

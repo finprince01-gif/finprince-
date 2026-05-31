@@ -84,6 +84,12 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     onVendorCreated,
     prefilledData,
 }) => {
+    React.useEffect(() => {
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] CANONICAL_VENDOR_MODAL_MOUNT');
+    }, []);
+
+    console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] CANONICAL_VENDOR_MODAL_RENDER. prefilledData:', prefilledData);
+
     const [activeTab, setActiveTab] = useState<TabId>('basic');
     const [isSaving, setIsSaving] = useState(false);
 

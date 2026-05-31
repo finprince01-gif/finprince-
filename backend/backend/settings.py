@@ -116,8 +116,17 @@ DATABASES = {
         # Atomic requests for data integrity
         'ATOMIC_REQUESTS': False,  # Disabled - was causing registration rollback
         'AUTOCOMMIT': True,
+        'TEST': {
+            'CHARSET': 'latin1',
+            'COLLATION': 'latin1_swedish_ci',
+        }
     }
 }
+
+import sys
+if 'test' in sys.argv or any('pytest' in arg for arg in sys.argv):
+    DATABASES['default']['OPTIONS']['charset'] = 'latin1'
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {

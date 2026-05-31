@@ -163,3 +163,165 @@ def test_atomic_validate_and_process_duplication_mocked():
         # Verify that it detected the duplicate and marked the record appropriately without failing/crashing
         assert res["status"] == "DUPLICATE"
         assert record.validation_status == "DUPLICATE"
+
+
+def test_finalize_view_blocked_and_success():
+    """
+    Tests OCRStagingFinalizeView POST endpoint under converged and non-converged states.
+    """
+    from ocr_pipeline.views import OCRStagingFinalizeView
+    from rest_framework.test import APIRequestFactory, force_authenticate
+    from unittest.mock import patch, MagicMock
+    
+    factory = APIRequestFactory()
+    
+    # 1. Non-converged state -> Should return HTTP 400
+    with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_state:
+        mock_state.return_value = {
+            'expected_pages': 6,
+            'completed_pages': 2,
+            'failed_pages': 0,
+            'snapshot_complete': False,
+            'materialization_complete': False
+        }
+        
+        view = OCRStagingFinalizeView.as_view()
+        request = factory.post('/api/ocr-staging-finalize/', {'upload_session_id': 'session-123'}, format='json')
+        user = MagicMock()
+        user.branch_id = "tenant-123"
+        force_authenticate(request, user=user)
+        
+        response = view(request)
+        assert response.status_code == 400
+        assert response.data['status'] == 'BLOCKED'
+
+    # 2. Converged state -> Should proceed to processing
+    with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_state, \
+         patch('ocr_pipeline.models.InvoiceTempOCR.objects.filter') as mock_query, \
+         patch('ocr_pipeline.models.FinalizedSnapshot.objects.filter') as mock_snap:
+        
+        mock_state.return_value = {
+            'expected_pages': 6,
+            'completed_pages': 6,
+            'failed_pages': 0,
+            'snapshot_complete': True,
+            'materialization_complete': True
+        }
+        
+        # Mock zero records in session for simplicity of PATH A fallback
+        mock_query.return_value = []
+        mock_snap.return_value.order_by.return_value.first.return_value = None
+        
+        view = OCRStagingFinalizeView.as_view()
+        request = factory.post('/api/ocr-staging-finalize/', {'upload_session_id': 'session-123'}, format='json')
+        user = MagicMock()
+        user.branch_id = "tenant-123"
+        force_authenticate(request, user=user)
+        
+        response = view(request)
+        # Should succeed (HTTP 200) and return response summary
+        assert response.status_code == 200
+        assert response.data['success'] is True
+
+
+def test_finalize_worker_blocked_barrier():
+    """
+    Tests that FinalizeWorker blocks execution and raises ValueError if orchestration barrier is incomplete.
+    """
+    import asyncio
+    from vouchers.finalize_worker import FinalizeWorker
+    worker = FinalizeWorker()
+    
+    task = {
+        'id': 'task-123',
+        'task_type': 'FINALIZE',
+        'session_id': 'session-123',
+        'tenant_id': 'tenant-123',
+        'payload': {
+            'record_id': 123,
+            'job_id': 'job-123',
+            'failed': False
+        }
+    }
+    
+    with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_state, \
+         patch('ocr_pipeline.models.InvoiceTempOCR.objects.filter') as mock_rec_query:
+        
+        # Incomplete barrier state
+        mock_state.return_value = {
+            'expected_pages': 6,
+            'completed_pages': 2,
+            'failed_pages': 0,
+            'snapshot_complete': False,
+            'materialization_complete': False
+        }
+        
+        # Mock database query for record resolution
+        mock_rec_query.return_value.values.return_value.first.return_value = {
+            'upload_session_id': 'session-123',
+            'tenant_id': 'tenant-123'
+        }
+        
+        # Running handle_task should raise ValueError due to incomplete barrier
+        with pytest.raises(ValueError, match="Finalize blocked: orchestration barrier incomplete"):
+            asyncio.run(worker.handle_task(task))
+
+
+def test_is_save_eligible_rules():
+    """
+    Tests the logic of the `is_save_eligible` helper function against various inputs.
+    """
+    from ocr_pipeline.views import is_save_eligible
+    from unittest.mock import MagicMock
+
+    session_id = "session-123"
+    tenant_id = "tenant-123"
+
+    # Base valid case
+    record = MagicMock()
+    record.upload_session_id = session_id
+    record.tenant_id = tenant_id
+    record.validation_status = "READY"
+    record.processed = False
+    record.vendor_id = 101
+    record.vendor_status = "EXISTS"
+    record.supplier_invoice_no = "INV-100"
+    record.gstin = "33AKWPP4092M1ZB"
+    record.extracted_data = {"invoice_no": "INV-100", "gstin": "33AKWPP4092M1ZB"}
+
+    # 1. Valid record should pass
+    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
+    assert eligible is True
+    assert reason is None
+
+    # 2. Session mismatch
+    record.upload_session_id = "other-session"
+    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
+    assert eligible is False
+    assert reason == "SESSION_ROW_SCOPE_MISMATCH"
+    record.upload_session_id = session_id
+
+    # 3. Non-terminal validation status (e.g. NEED_VENDOR)
+    record.validation_status = "NEED_VENDOR"
+    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
+    assert eligible is False
+    assert reason == "NON_TERMINAL"
+    record.validation_status = "READY"
+
+    # 4. Null vendor_id
+    record.vendor_id = None
+    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
+    assert eligible is False
+    assert reason == "NULL_VENDOR_ID"
+    record.vendor_id = 101
+
+    # 5. Invalid vendor status (e.g. CREATE_VENDOR / NEW)
+    record.vendor_status = "CREATE_VENDOR"
+    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
+    assert eligible is False
+    assert reason == "INVALID_VENDOR_STATUS_CREATE_VENDOR"
+
+    record.vendor_status = "EXISTS"
+
+
+

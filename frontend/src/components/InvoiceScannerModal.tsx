@@ -19,7 +19,7 @@ import {
     type AuditEvent,
 } from '../services/mappingEngine';
 import { getVoucherSchema, getVoucherFlatHeaders, type VoucherSchema, type SchemaField } from '../configs/schemaConfig';
-import CreateVendorModal from './CreateVendorModal';
+import CreateNewVendorFullModal from './CreateNewVendorFullModal';
 import Icon from './Icon';
 
 import { getXLSX } from '../utils/xlsx';
@@ -382,6 +382,44 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [vendorValidationMessage, setVendorValidationMessage] = useState<string>('');
     const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
     const [extractedVendorData, setExtractedVendorData] = useState<any>(null);
+    const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+
+    const openCreateVendorModal = () => {
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] CREATE_VENDOR_BUTTON_CLICK');
+        const firstRow = invoiceResults[0]?.invoice || {};
+        setSelectedInvoice(invoiceResults[0]);
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] setSelectedInvoice executed', invoiceResults[0]);
+        
+        const vendorName = firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
+        const gstin = firstRow['GSTIN'] || '';
+        const branch = firstRow['Branch'] || '';
+        const state = firstRow['State'] || firstRow['Billing State'] || firstRow['Bill From - State'] || '';
+        const billFrom = firstRow['Bill From'] || firstRow['Buyer/Supplier - Address'] || firstRow['Bill From - Address Line 1'] || '';
+        const vendorCategory = firstRow['Vendor Category'] || firstRow['vendor_category'] || '';
+        
+        const rawItems = invoiceResults[0]?.items || [];
+        const items = rawItems.filter((pi: any) => pi['Item Name'] || pi['Item Code'] || pi['item_name'] || pi['Description'] || pi['description'] || pi['Item'])
+            .map((pi: any) => ({
+                supplierItemCode: String(pi['Item Code'] || pi['item_code'] || pi['Part No'] || ''),
+                supplierItemName: String(pi['Item Name'] || pi['item_name'] || pi['Description'] || pi['description'] || pi['Item'] || ''),
+                hsnSac: String(pi['HSN/SAC'] || pi['hsn_sac'] || pi['HSN Code'] || pi['hsnSac'] || ''),
+            }));
+
+        const prefData = {
+            vendor_name: vendorName,
+            gstin,
+            state,
+            address: billFrom,
+            branch,
+            vendor_category: vendorCategory,
+            supplier_items: items.length > 0 ? items : undefined
+        };
+        
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] PREFILLED_VENDOR_DATA', prefData);
+        setExtractedVendorData(prefData);
+        setIsCreateVendorModalOpen(true);
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] CREATE_VENDOR_MODAL_OPEN', true);
+    };
 
     // -- Bulk Job State --
     const [bulkJobId, setBulkJobId] = useState<number | null>(null);
@@ -1240,7 +1278,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
         if (voucherType === 'Purchase' && (vendorValidation === 'NOT_FOUND' || vendorValidation === 'GSTIN_CONFLICT')) {
             // Force user to handle Create Vendor first
-            setIsCreateVendorModalOpen(true);
+            openCreateVendorModal();
             return;
         }
 
@@ -1345,33 +1383,41 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         onClose();
     };
 
-    const handleVendorCreated = async (data: any) => {
+    const handleVendorCreatedSuccess = async (vendorName: string, vendorId: number) => {
+        console.info(`[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] Vendor created via canonical Vendor Master form. vendor_name="${vendorName}", vendor_id=${vendorId}`);
         try {
-            const response = await httpClient.post<any>('/api/purchase/vendors/create/', data);
-            if (response && response.status === 'CREATED') {
-                showSuccess(response.message || 'Vendor created successfully');
-                setIsCreateVendorModalOpen(false);
-                setVendorValidation('FOUND');
+            // Fetch the created vendor's details to get the exact GSTIN, branch, and category
+            const basicDetail: any = await httpClient.get(`/api/vendors/basic-details/${vendorId}/`);
+            const gstRes: any = await httpClient.get(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
+            const gstList = Array.isArray(gstRes) ? gstRes : (gstRes.results || []);
 
-                // Update invoice header with corrected vendor info
-                setInvoiceResults(prev => prev.map((res, i) => {
-                    if (i !== 0) return res;
-                    const newRes = { ...res };
-                    newRes.invoice = { ...newRes.invoice };
-                    newRes.invoice['Vendor Name'] = data.vendor_name;
-                    newRes.invoice['GSTIN'] = data.gstin;
-                    newRes.invoice['Vendor Category'] = data.vendor_category || '';
-                    return newRes;
-                }));
+            const gstin = gstList?.[0]?.gstin || '';
+            const vendorCategory = basicDetail.vendor_category || '';
 
-                // Once the vendor is created, automatically continue the AI Extraction process.
-                setTimeout(() => {
-                    handleUploadToAI();
-                }, 200);
-            }
+            console.info(`[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] Retrieved newly created vendor details from backend. GSTIN="${gstin}", category="${vendorCategory}"`);
+
+            showSuccess('Vendor created successfully');
+            setIsCreateVendorModalOpen(false);
+            setVendorValidation('FOUND');
+
+            // Update invoice header with corrected vendor info
+            setInvoiceResults(prev => prev.map((res, i) => {
+                if (i !== 0) return res;
+                const newRes = { ...res };
+                newRes.invoice = { ...newRes.invoice };
+                newRes.invoice['Vendor Name'] = vendorName;
+                newRes.invoice['GSTIN'] = gstin;
+                newRes.invoice['Vendor Category'] = vendorCategory;
+                return newRes;
+            }));
+
+            // Once the vendor is created, automatically continue the AI Extraction process.
+            setTimeout(() => {
+                handleUploadToAI();
+            }, 200);
         } catch (error: any) {
-            console.error('Vendor creation error:', error);
-            showError(error.response?.data?.error || error.message || 'Failed to create vendor');
+            console.error('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] Failed to handle vendor creation completion in InvoiceScannerModal:', error);
+            showError('Failed to refresh invoice details after vendor creation.');
         }
     };
 
@@ -1770,8 +1816,16 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                                         <Icon name="x" className="w-3.5 h-3.5" /> Vendor Not Found
                                                     </div>
                                                     <button
-                                                        onClick={() => setIsCreateVendorModalOpen(true)}
-                                                        className="px-4 py-1.5 bg-white hover:bg-red-50 border border-red-200 hover:border-red-300 text-red-600 rounded-[4px] flex items-center justify-center font-medium shadow-sm transition-all focus:ring-1 focus:ring-red-500 focus:outline-none whitespace-nowrap text-sm"
+                                                        onClick={(e) => {
+                                                            console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
+                                                            const rect = e.currentTarget.getBoundingClientRect();
+                                                            const x = rect.left + rect.width / 2;
+                                                            const y = rect.top + rect.height / 2;
+                                                            const el = document.elementFromPoint(x, y);
+                                                            console.log('[DIAGNOSTIC][CREATE_VENDOR] Element under coordinates (', x, ',', y, ') is:', el);
+                                                            openCreateVendorModal();
+                                                        }}
+                                                        className="px-4 py-1.5 bg-white hover:bg-red-50 border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] hover:border-red-600 text-red-600 rounded-[4px] flex items-center justify-center font-medium transition-all focus:ring-1 focus:ring-red-500 focus:outline-none whitespace-nowrap text-sm"
                                                     >
                                                         <Icon name="plus" className="w-4 h-4 mr-1.5" /> Create Vendor
                                                     </button>
@@ -1784,8 +1838,16 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                                         <span className="line-clamp-2">{vendorValidationMessage}</span>
                                                     </div>
                                                     <button
-                                                        onClick={() => setIsCreateVendorModalOpen(true)}
-                                                        className="px-3 py-1.5 shrink-0 bg-white hover:bg-amber-50 border border-amber-300 hover:border-amber-400 text-amber-700 rounded flex items-center justify-center font-medium shadow-sm transition-colors text-xs"
+                                                        onClick={(e) => {
+                                                            console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
+                                                            const rect = e.currentTarget.getBoundingClientRect();
+                                                            const x = rect.left + rect.width / 2;
+                                                            const y = rect.top + rect.height / 2;
+                                                            const el = document.elementFromPoint(x, y);
+                                                            console.log('[DIAGNOSTIC][CREATE_VENDOR] Element under coordinates (', x, ',', y, ') is:', el);
+                                                            openCreateVendorModal();
+                                                        }}
+                                                        className="px-3 py-1.5 shrink-0 bg-white hover:bg-amber-50 border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] hover:border-amber-400 text-amber-700 rounded flex items-center justify-center font-medium transition-colors text-xs"
                                                     >
                                                         <Icon name="plus" className="w-3 h-3 mr-1" /> Create Vendor
                                                     </button>
@@ -1951,11 +2013,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             </div>
 
             {/* Inline Create Vendor Modal triggered during Upload to Finpixe */}
-            {isCreateVendorModalOpen && extractedVendorData && (
-                <CreateVendorModal
-                    initialData={extractedVendorData}
+            {isCreateVendorModalOpen && (
+                <CreateNewVendorFullModal
+                    prefilledData={extractedVendorData || {}}
                     onClose={() => setIsCreateVendorModalOpen(false)}
-                    onSave={handleVendorCreated}
+                    onVendorCreated={(vendorName, vendorId) => handleVendorCreatedSuccess(vendorName, vendorId)}
                 />
             )}
         </div >
