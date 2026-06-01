@@ -344,6 +344,39 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             from django.db.models import Q
             queryset = queryset.filter(Q(ledger_name=ledger_name) | Q(ledger__name=ledger_name)) # pyre-ignore
 
+        # ── Also include all entries linked to the same VENDOR via vendor FK ──────
+        # This covers debit notes / payments that were posted against a different sub-ledger
+        # (e.g. "supin6", "supin7") but still belong to the same vendor (vendor4).
+        if resolved_ledger:
+            try:
+                from vendors.models import VendorMasterBasicDetail
+                from django.db.models import Q as VQ
+                linked_vendor = VendorMasterBasicDetail.objects.filter(
+                    ledger=resolved_ledger, tenant_id=tenant_id
+                ).first()
+                if linked_vendor:
+                    vendor_entries_qs = self.get_queryset().select_related('ledger').filter(
+                        vendor_id=linked_vendor.id
+                    ).order_by('transaction_date', 'id')
+                    if start_date:
+                        try: vendor_entries_qs = vendor_entries_qs.filter(transaction_date__gte=start_date)
+                        except (ValueError, TypeError): pass
+                    if end_date:
+                        try: vendor_entries_qs = vendor_entries_qs.filter(transaction_date__lte=end_date)
+                        except (ValueError, TypeError): pass
+                    # Merge: union of both querysets, deduplicated by ID
+                    existing_ids = set(queryset.values_list('id', flat=True))
+                    vendor_only = vendor_entries_qs.exclude(id__in=existing_ids)
+                    # Combine using union — order by date, id afterwards
+                    from itertools import chain
+                    from django.db.models import Q as DQ2
+                    all_ids = list(existing_ids) + list(vendor_entries_qs.values_list('id', flat=True))
+                    queryset = self.get_queryset().select_related('ledger').filter(
+                        id__in=all_ids
+                    ).order_by('transaction_date', 'id')
+            except Exception:
+                pass  # Fall back to ledger-only query if vendor lookup fails
+
         if start_date:
             try:
                 queryset = queryset.filter(transaction_date__gte=start_date) # pyre-ignore
@@ -462,6 +495,181 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             except Exception:
                 pass  # Fail silently; just won't enrich the response
 
+        # ── Enrich with Purchase Voucher payment data (due_status, paid_amount) ──
+        # VoucherPurchaseSupplierDetails is the Purchase Voucher header; due details are on
+        # the linked VoucherPurchaseDueDetails. PendingTransaction holds per-invoice due_status.
+        # We key by purchase_voucher_no (= e.voucher_number on the JournalEntry).
+        purchase_payment_map = {}  # voucher_number -> {due_status, paid_amount, total_amount}
+        if voucher_ids:
+            try:
+                from accounting.models_voucher_purchase import (  # pyre-fixme
+                    VoucherPurchaseSupplierDetails, VoucherPurchaseDueDetails
+                )
+                from accounting.models import PendingTransaction  # pyre-fixme
+                # Collect purchase voucher numbers that appear in our journal entries
+                purch_voucher_nos = list(
+                    queryset.filter(voucher_type__icontains='purchase')  # pyre-ignore
+                            .values_list('voucher_number', flat=True).distinct()
+                )
+                if purch_voucher_nos:
+                    pv_headers = VoucherPurchaseSupplierDetails.objects.filter(  # pyre-ignore
+                        tenant_id=tenant_id,
+                        purchase_voucher_no__in=purch_voucher_nos
+                    ).prefetch_related('due_details')
+                    for pvh in pv_headers:
+                        due_d = getattr(pvh, 'due_details', None)
+                        advance_paid = float(getattr(due_d, 'advance_paid', 0) or 0)
+                        to_pay = float(getattr(due_d, 'to_pay', 0) or 0)
+                        # Check PendingTransaction for due_status of this invoice
+                        # (due_status is set by the payment serializer when a payment is applied)
+                        pending = PendingTransaction.objects.filter(  # pyre-ignore
+                            tenant_id=tenant_id,
+                            reference_number=pvh.purchase_voucher_no
+                        ).order_by('-id').first()
+                        due_status_val = getattr(pending, 'due_status', '') or ''
+                        total_amt = advance_paid + to_pay
+                        purchase_payment_map[pvh.purchase_voucher_no] = {
+                            'due_status': due_status_val,
+                            'paid_amount': advance_paid,
+                            'total_amount': total_amt,
+                        }
+            except Exception:
+                pass  # Fail silently if model not available
+
+        # ── Enrich with Payment/Receipt Voucher advance data ──
+        # Transaction model (= PaymentVoucher = ReceiptVoucher) has is_advance/amount info.
+        # AdvanceAllocation sub-items tell us how much has been utilized.
+        payment_advance_map = {}  # voucher_number -> {is_advance, paid_amount, total_amount}
+        if voucher_ids:
+            try:
+                from accounting.models import Transaction, AdvanceAllocation  # pyre-fixme
+                pmt_voucher_nos = list(
+                    queryset.filter(  # pyre-ignore
+                        voucher_type__in=['payment', 'receipt', 'PAYMENT', 'RECEIPT', 'contra', 'CONTRA']
+                    ).values_list('voucher_number', flat=True).distinct()
+                )
+                if pmt_voucher_nos:
+                    pmt_txns = Transaction.objects.filter(  # pyre-ignore
+                        tenant_id=tenant_id,
+                        voucher_number__in=pmt_voucher_nos
+                    ).values('id', 'voucher_number', 'total_amount', 'amount')
+                    pmt_ids = [t['id'] for t in pmt_txns]
+                    # Check AdvanceAllocation to find if this txn has advance items
+                    advance_alloc_map = {}  # txn_id -> total utilized amount
+                    if pmt_ids:
+                        adv_items = AdvanceAllocation.objects.filter(  # pyre-ignore
+                            tenant_id=tenant_id,
+                            transaction_id__in=pmt_ids,
+                            reference_type='ADVANCE'
+                        ).values('transaction_id', 'allocated_amount')
+                        for ai in adv_items:
+                            tid = ai['transaction_id']
+                            advance_alloc_map[tid] = advance_alloc_map.get(tid, 0) + float(ai.get('allocated_amount') or 0)
+                    for t in pmt_txns:
+                        tid = t['id']
+                        is_adv = tid in advance_alloc_map
+                        utilized = advance_alloc_map.get(tid, 0)
+                        total = float(t.get('total_amount') or t.get('amount') or 0)
+                        payment_advance_map[t['voucher_number']] = {
+                            'is_advance': is_adv,
+                            'paid_amount': utilized,
+                            'total_amount': total,
+                            'reference_type': 'ADVANCE' if is_adv else 'INVOICE',
+                        }
+            except Exception:
+                pass
+
+        # ── Debit Note status enrichment (Vendor Portal parity) ──────────────────
+        # In the VP: debit notes marked "Paid" = allocation_status=Utilized OR
+        # the debit note number appears in a PendingTransaction.reference_number.
+        # We compute this per-voucher-number here so the frontend receives it ready.
+        debit_note_status_map = {}  # voucher_number -> {due_status, allocation_status}
+        if voucher_ids:
+            try:
+                from accounting.models import PendingTransaction as PT  # pyre-fixme
+                dn_voucher_nos = list(
+                    queryset.filter(  # pyre-ignore
+                        voucher_type__icontains='debit'
+                    ).values_list('voucher_number', flat=True).distinct()
+                )
+                if dn_voucher_nos:
+                    # Check JournalEntry allocation_status for each debit note number
+                    dn_entries = self.get_queryset().filter(  # pyre-ignore
+                        voucher_number__in=dn_voucher_nos
+                    ).values('voucher_number', 'allocation_status').distinct()
+                    for de in dn_entries:
+                        vno = de['voucher_number']
+                        alloc_st = de.get('allocation_status') or 'Unutilized'
+                        if alloc_st == 'Utilized':
+                            debit_note_status_map[vno] = {'due_status': 'Paid', 'allocation_status': alloc_st}
+                        elif alloc_st == 'Partially Utilized':
+                            debit_note_status_map[vno] = {'due_status': 'Partially Paid', 'allocation_status': alloc_st}
+                    # Also check PendingTransaction: if ref_number points here, it's been utilized
+                    utilized_by_pending = PT.objects.filter(  # pyre-ignore
+                        tenant_id=tenant_id, reference_number__in=dn_voucher_nos
+                    ).values_list('reference_number', flat=True).distinct()
+                    for ref in utilized_by_pending:
+                        if ref not in debit_note_status_map:
+                            debit_note_status_map[ref] = {'due_status': 'Paid', 'allocation_status': 'Utilized'}
+            except Exception:
+                pass
+
+        # ── VendorTransaction status map (single source of truth for VP parity) ───
+        # Fetch due_status directly from vendor_transaction table (same data VP shows)
+        vendor_txn_status_map = {}  # voucher_number -> due_status
+        if resolved_ledger:
+            try:
+                from vendors.models import VendorMasterBasicDetail, VendorTransaction as VT  # pyre-fixme
+                lv = VendorMasterBasicDetail.objects.filter(
+                    ledger=resolved_ledger, tenant_id=tenant_id
+                ).first()
+                if lv:
+                    vt_rows = VT.objects.filter(  # pyre-ignore
+                        tenant_id=tenant_id, vendor_id=lv.id
+                    ).values('transaction_number', 'status', 'transaction_type',
+                             'total_amount', 'reference_number', 'is_advance')
+                    from datetime import date as dt_date, timedelta
+                    cp_days = credit_period
+                    for vtr in vt_rows:
+                        vno = vtr['transaction_number']
+                        vtype = (vtr.get('transaction_type') or '').lower()
+                        vstatus = (vtr.get('status') or '').lower()
+                        # For purchase: compute paid_sum same as VP by_vendor
+                        if vtype == 'purchase':
+                            ref_no = vtr.get('reference_number')
+                            total_amt = float(vtr.get('total_amount') or 0)
+                            paid_sum = 0.0
+                            if ref_no:
+                                linking = VT.objects.filter(  # pyre-ignore
+                                    tenant_id=tenant_id, vendor_id=lv.id,
+                                    reference_number=ref_no
+                                ).exclude(transaction_number=vno)
+                                for ltx in linking:
+                                    lt = (ltx.transaction_type or '').lower()
+                                    if lt in ['payment', 'debit_note']:
+                                        paid_sum += float(ltx.total_amount or ltx.amount or 0)
+                            if total_amt > 0 and paid_sum >= total_amt:
+                                vendor_txn_status_map[vno] = 'Paid'
+                            elif paid_sum > 0:
+                                vendor_txn_status_map[vno] = 'Partially Paid'
+                            # else: aging logic (not computed here; frontend handles)
+                        elif vtype == 'debit_note':
+                            # VP shows debit notes as "Paid" if they have been applied
+                            ref_no = vtr.get('reference_number')
+                            if ref_no:
+                                # Check if any purchase links back to this debit note
+                                usage = VT.objects.filter(  # pyre-ignore
+                                    tenant_id=tenant_id, vendor_id=lv.id,
+                                    reference_number=ref_no,
+                                    transaction_type__iexact='purchase'
+                                ).exists()
+                                if usage:
+                                    vendor_txn_status_map[vno] = 'Paid'
+                        elif vtype in ['payment', 'receipt'] and vtr.get('is_advance'):
+                            vendor_txn_status_map[vno] = vstatus.capitalize() if vstatus else 'Not Utilized'
+            except Exception:
+                pass
+
         for e in queryset:
             dr = float(e.debit)
             cr = float(e.credit)
@@ -502,6 +710,21 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             else:
                 balance_type = ''
 
+            # Look up enrichment data for this voucher
+            vmeta = voucher_meta_map.get(vid, {})
+            ref_id = vmeta.get('reference_id')
+            vsource = vmeta.get('source', '')
+            vno = e.voucher_number or ''
+
+            # Purchase payment enrichment (keyed by voucher_number)
+            pv_data = purchase_payment_map.get(vno, {})
+            # Payment/Receipt advance enrichment (keyed by voucher_number)
+            pmt_data = payment_advance_map.get(vno, {})
+            # Debit Note status enrichment (keyed by voucher_number)
+            dn_data = debit_note_status_map.get(vno, {})
+            # Vendor transaction exact match status
+            vt_status = vendor_txn_status_map.get(vno)
+
             row = {
                 'id': e.id,
                 'transaction_date': e.transaction_date,
@@ -518,12 +741,20 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 'voucher_id': e.voucher_id,
                 'reference_number': getattr(e, 'reference_number', None),
                 'referenceNo': getattr(e, 'reference_number', None),
-                'allocation_status': getattr(e, 'allocation_status', 'Unutilized'),
-                'allocationStatus': getattr(e, 'allocation_status', 'Unutilized'),
+                'allocation_status': dn_data.get('allocation_status') or getattr(e, 'allocation_status', 'Unutilized'),
+                'allocationStatus': dn_data.get('allocation_status') or getattr(e, 'allocation_status', 'Unutilized'),
                 # Enriched fields from generic Voucher table
-                'source': voucher_meta_map.get(vid, {}).get('source', ''),
-                'reference_id': voucher_meta_map.get(vid, {}).get('reference_id'),
-                'voucher_pk': voucher_meta_map.get(vid, {}).get('voucher_pk'),
+                'source': vsource,
+                'reference_id': ref_id,
+                'voucher_pk': vmeta.get('voucher_pk'),
+                # ── Purchase/Debit Note payment status enrichment (for Vendor-Portal-parity) ──
+                'due_status': vt_status or pv_data.get('due_status') or dn_data.get('due_status') or '',
+                'paid_amount': pv_data.get('paid_amount', pmt_data.get('paid_amount', 0)),
+                'total_amount': pv_data.get('total_amount', pmt_data.get('total_amount', 0)),
+                # ── Payment/Receipt advance enrichment ──
+                'is_advance': pmt_data.get('is_advance', False),
+                'reference_type': pmt_data.get('reference_type', ''),
+                'ledger_credit_period': credit_period,
             }
 
             # Attach full legs to power the journal breakdown UI
