@@ -1038,6 +1038,65 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             });
     };
 
+    const getDerivedCategory = (name: string, group: string, majorCategory: string) => {
+        const groupLower = (group || '').toLowerCase();
+        if (groupLower.includes('creditor')) return 'Vendor';
+        if (groupLower.includes('debtor')) return 'Customer';
+        return (majorCategory || group || '').trim().toLowerCase();
+    };
+
+    const validateDuplicateLedgerName = (nameToCheck: string, categoryToMatch: string, groupToMatch: string, currentLedgerId?: number): boolean => {
+        const normalizedNewName = nameToCheck.trim().toLowerCase();
+        const currentDerivedCategory = getDerivedCategory(nameToCheck, groupToMatch, categoryToMatch).toLowerCase();
+
+        const isDuplicateRow = (row: HierarchyRow) => {
+            // Exclude the current node if editing
+            if (currentLedgerId && row.isCustom && row.id === currentLedgerId) return false;
+            
+            const names = [
+                row.custom_ledger,
+                row.ledger_1,
+                row.sub_group_3_1,
+                row.sub_group_2_1
+            ].map(n => (n || '').trim().toLowerCase());
+            return names.includes(normalizedNewName);
+        };
+
+        const exactMatchSameCategory = hierarchyData.find(row => {
+            if (!isDuplicateRow(row)) return false;
+            
+            const existingGroup = row.group_1 || row.sub_group_1_1 || '';
+            const existingMajor = row.major_group_1 || '';
+            const existingDerivedCategory = getDerivedCategory(normalizedNewName, existingGroup, existingMajor).toLowerCase();
+            
+            return existingDerivedCategory === currentDerivedCategory;
+        });
+
+        if (exactMatchSameCategory) {
+            showError(`Ledger name already exists in the same category.`);
+            return false;
+        }
+
+        const exactMatchOtherCategory = hierarchyData.find(row => {
+            if (!isDuplicateRow(row)) return false;
+            
+            const existingGroup = row.group_1 || row.sub_group_1_1 || '';
+            const existingMajor = row.major_group_1 || '';
+            const existingDerivedCategory = getDerivedCategory(normalizedNewName, existingGroup, existingMajor).toLowerCase();
+            
+            return existingDerivedCategory !== currentDerivedCategory;
+        });
+
+        if (exactMatchOtherCategory) {
+            const confirmed = window.confirm(`This ledger name already created in another category. Do you want to continue?`);
+            if (!confirmed) {
+                return false;
+            }
+        }
+        
+        return true;
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -1070,6 +1129,10 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
         if (!finalName || !selectedNode) {
             showWarning('Please enter a name in Sub Group 2, Sub Group 3 or Ledger Type fields.');
+            return;
+        }
+
+        if (!validateDuplicateLedgerName(finalName, selectedNode.fullPath.category || '', selectedNode.fullPath.group || '')) {
             return;
         }
 
@@ -1248,6 +1311,11 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         // Ledger name is only required when editing a leaf ledger node
         if (!isSubGroupEdit && !nextName) {
             showWarning('Ledger name cannot be empty.');
+            return;
+        }
+
+        const finalNameForEdit = !isSubGroupEdit ? nextName : (lvl === 4 ? editSubGroup3.trim() : editSubGroup2.trim());
+        if (finalNameForEdit && !validateDuplicateLedgerName(finalNameForEdit, selectedNode.fullPath.category || '', selectedNode.fullPath.group || '', selectedNode.ledgerId)) {
             return;
         }
 
