@@ -1784,46 +1784,79 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 {
                     activeTab === 'GST Details' && (
                         <div className="max-w-6xl mx-auto">
-                            <div className="flex justify-end mb-10 pt-4">
-                                <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded-[4px] hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200">
-                                    <input
-                                        type="checkbox"
-                                        checked={isUnregistered}
-                                        onChange={(e) => setIsUnregistered(e.target.checked)}
-                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Customer is Unregistered</span>
-                                </label>
+                            <div className="flex gap-4 items-end mb-6 pt-4">
+                                {isUnregistered ? (
+                                    <>
+                                        <div className="relative flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
+                                            <input type="text" value="NA" disabled className="w-full px-4 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 cursor-not-allowed" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Taxpayer Type</label>
+                                            <div className="relative">
+                                                <input type="text" value="Unregistered" readOnly className="w-full px-4 py-2 border border-green-200 rounded-[4px] bg-green-50 text-slate-700 font-medium ring-1 ring-green-200" />
+                                                <span className="absolute right-3 top-2.5 text-xs text-indigo-600">Auto-set</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="relative flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No. <span className="text-red-500">*</span></label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder={selectedGSTINs.length > 0 ? `${selectedGSTINs.length} selected... Type to add more` : "Enter or Select GSTIN"}
+                                                value={gstInput}
+                                                onChange={(e) => setGstInput(e.target.value)}
+                                                onFocus={() => setShowGstDropdown(true)}
+                                                onBlur={() => setTimeout(() => setShowGstDropdown(false), 200)}
+                                            />
+                                            {/* Dropdown Simulation */}
+                                            {showGstDropdown && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 z-10 max-h-48 overflow-y-auto">
+                                                    {mockGSTINs.map(gst => (
+                                                        <div
+                                                            key={gst}
+                                                            className={`px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 text-sm ${selectedGSTINs.includes(gst) ? 'bg-indigo-50/50' : ''}`}
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault(); // Prevent input blur
+                                                                handleGstSelect(gst);
+                                                            }}
+                                                        >
+                                                            <input type="checkbox" checked={selectedGSTINs.includes(gst)} readOnly className="w-4 h-4 text-indigo-600 rounded" />
+                                                            <span className="text-gray-700">{gst}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <button
+                                                onClick={handleFetchBranchDetails}
+                                                className="h-[42px] px-6 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                                            >
+                                                Fetch branch details
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                                <div>
+                                    <label className="flex items-center gap-3 cursor-pointer h-[42px] px-4 rounded-[4px] hover:bg-gray-50 transition-colors border border-gray-200 bg-white">
+                                        <input
+                                            type="checkbox"
+                                            checked={isUnregistered}
+                                            onChange={(e) => setIsUnregistered(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Customer is Unregistered</span>
+                                    </label>
+                                </div>
                             </div>
 
                             {/* Conditional Content based on Registration Status */}
                             {isUnregistered ? (
                                 <div className="space-y-8 animate-fadeIn bg-white border border-gray-200 rounded-[4px] p-8">
-                                    {/* Unregistered Fields */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="relative">
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
-                                            <input
-                                                type="text"
-                                                value="NA"
-                                                disabled
-                                                className="w-full px-4 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 cursor-not-allowed"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Taxpayer Type</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value="Unregistered"
-                                                    readOnly
-                                                    className="w-full px-4 py-2 border border-green-200 rounded-[4px] bg-green-50 text-slate-700 font-medium ring-1 ring-green-200"
-                                                />
-                                                <span className="absolute right-3 top-2.5 text-xs text-indigo-600">Auto-set</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     {/* Branch Configuration */}
                                     <div>
                                         <div className="flex items-center gap-6 mb-6">
@@ -2172,56 +2205,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                 </div>
                             ) : (
                                 // Registered - Existing Flow
-                                <div className="space-y-8">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No. <span className="text-red-500">*</span></label>
-                                        <div className="flex gap-4 items-start">
-                                            <div className="relative flex-1">
-
-                                                <input
-                                                    type="text"
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder={selectedGSTINs.length > 0 ? `${selectedGSTINs.length} selected... Type to add more` : "Enter or Select GSTIN"}
-                                                    value={gstInput}
-                                                    onChange={(e) => setGstInput(e.target.value)}
-                                                    onFocus={() => setShowGstDropdown(true)}
-                                                    onBlur={() => setTimeout(() => setShowGstDropdown(false), 200)}
-                                                />
-                                                {/* Dropdown Simulation */}
-                                                {showGstDropdown && (
-                                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 z-10 max-h-48 overflow-y-auto">
-                                                        {mockGSTINs.map(gst => (
-                                                            <div
-                                                                key={gst}
-                                                                className={`px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 text-sm ${selectedGSTINs.includes(gst) ? 'bg-indigo-50/50' : ''}`}
-                                                                onMouseDown={(e) => {
-                                                                    e.preventDefault(); // Prevent input blur
-                                                                    handleGstSelect(gst);
-                                                                }}
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={selectedGSTINs.includes(gst)}
-                                                                    readOnly
-                                                                    className="w-4 h-4 text-indigo-600 rounded"
-                                                                />
-                                                                <span className="text-gray-700">{gst}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex flex-col gap-1">
-                                                <button
-                                                    onClick={handleFetchBranchDetails}
-                                                    className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap"
-                                                >
-                                                    Fetch branch details
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
+                                <div className="space-y-8 pt-4">
                                     {/* Branch Details List */}
                                     {showBranchDetails && (
                                         <div className="space-y-4">

@@ -1529,7 +1529,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                 <th className="w-12"></th>
                 <th>Group Name</th>
                 <th>Under</th>
-                <th className="text-right">Actions</th>
+                <th className="!text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1580,24 +1580,23 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         <span className="text-gray-400 italic">Primary</span>
                       )}
                     </td>
-                    <td className="text-right px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="!text-center px-6 py-4 whitespace-nowrap text-sm font-medium">
                       {isSelected ? (
-                        <div className="inline-flex items-center gap-2">
+                        <div className="flex justify-center items-center gap-4">
                           <button
                             onClick={handleEditGroup}
-                            className="erp-button-primary py-1.5 px-3 text-xs"
+                            className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
                             aria-label="Edit selected group"
                           >
-                            <Icon name="edit" className="w-3.5 h-3.5 mr-1" />
-                            Edit
+                            EDIT
                           </button>
                           <button
                             onClick={handleDeleteGroup}
-                            className="erp-button-secondary py-1.5 px-3 text-xs bg-red-50 text-red-600 border-red-100 hover:bg-red-100"
+                            className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
                             aria-label="Delete selected group"
                             title="Delete"
                           >
-                            <Icon name="trash" className="w-3.5 h-3.5" />
+                            DELETE
                           </button>
                         </div>
                       ) : (
@@ -1841,7 +1840,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VOUCHER NAME</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                        <th className="px-6 py-3 !text-center text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -1875,21 +1874,23 @@ const MastersPage: React.FC<MastersPageProps> = ({
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                 {seriesPreview}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditVoucherConfig(voucher)}
-                                  className="text-indigo-600 hover:text-indigo-900 mr-4 font-semibold uppercase tracking-wider"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteVoucherConfig(voucher)}
-                                  className="text-red-600 hover:text-red-900 font-semibold uppercase tracking-wider"
-                                >
-                                  Delete
-                                </button>
+                              <td className="px-6 py-4 whitespace-nowrap !text-center text-sm font-medium">
+                                <div className="flex justify-center items-center gap-4">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditVoucherConfig(voucher)}
+                                    className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
+                                  >
+                                    EDIT
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteVoucherConfig(voucher)}
+                                    className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
+                                  >
+                                    DELETE
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
