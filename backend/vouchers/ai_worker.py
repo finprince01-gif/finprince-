@@ -145,7 +145,7 @@ class AIWorker(BaseWorker):
                 # Release slot for idempotency skipped page
                 from core.redis_orchestrator import orchestrator
                 try:
-                    orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="IDEMPOTENCY_SKIP")
+                    orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="IDEMPOTENCY_SKIP", tenant_id=str(tenant_id))
                 except Exception as rel_err:
                     logger.error(f"[SLOT_RELEASE_IDEMPOTENCY_FAIL] record={record_id} page={page_idx} error={rel_err}")
 
@@ -176,98 +176,99 @@ class AIWorker(BaseWorker):
             logger.error(f"[IDEMPOTENCY_CHECK_FAIL] {e}")
 
         try:
-            async with GLOBAL_AI_SEMAPHORE:
-                from core.ai_proxy import process_ai_request
-                from ocr_pipeline.normalize import get_canonical_export_record
-                from ocr_pipeline.extraction import _repair_json
-                from core.observability import metrics
+            from core.ai_proxy import process_ai_request
+            from ocr_pipeline.normalize import get_canonical_export_record
+            from ocr_pipeline.extraction import _repair_json
+            from core.observability import metrics
 
-                loop = asyncio.get_running_loop()
+            loop = asyncio.get_running_loop()
 
-                logger.info(f"[OCR_RETRY_CHAIN_START] record={record_id} page={page_idx} max_passes={MAX_IMAGE_PASSES}")
+            logger.info(f"[OCR_RETRY_CHAIN_START] record={record_id} page={page_idx} max_passes={MAX_IMAGE_PASSES}")
 
-                final_result = None
-                success = False
-                current_payload = payload  # will be updated per pass
+            final_result = None
+            success = False
+            current_payload = payload  # will be updated per pass
 
-                for pass_idx in range(MAX_IMAGE_PASSES):
-                    logger.info(f"[OCR_RECOVERY_PASS] pass={pass_idx+1}/{MAX_IMAGE_PASSES} ({PASS_NAMES[pass_idx]}) record={record_id} page={page_idx}")
+            for pass_idx in range(MAX_IMAGE_PASSES):
+                logger.info(f"[OCR_RECOVERY_PASS] pass={pass_idx+1}/{MAX_IMAGE_PASSES} ({PASS_NAMES[pass_idx]}) record={record_id} page={page_idx}")
 
-                    # Apply image transformation for Gemini
-                    current_payload = await loop.run_in_executor(
+                # Apply image transformation for Gemini
+                current_payload = await loop.run_in_executor(
+                    self.executor,
+                    lambda pi=pass_idx: self._apply_image_transformation(payload, pi)
+                )
+
+                # Run Gemini extraction (SOLE OCR ENGINE)
+                result = None
+                try:
+                    result = await loop.run_in_executor(
                         self.executor,
-                        lambda pi=pass_idx: self._apply_image_transformation(payload, pi)
+                        lambda cp=current_payload: process_ai_request(cp)
                     )
-
-                    # Run Gemini extraction (SOLE OCR ENGINE)
+                except Exception as e:
+                    if e.__class__.__name__ == 'ProviderSaturatedError':
+                        raise e
+                    logger.error(f"[GEMINI_REQUEST_ERROR] pass={pass_idx+1} record={record_id} page={page_idx} error={e}")
                     result = None
+
+                # Validate Gemini output
+                raw_reply = result.get('reply', '') if result else ''
+
+                if result and result.get('status') != 'OCR_FAILED' and raw_reply:
                     try:
-                        result = await loop.run_in_executor(
-                            self.executor,
-                            lambda cp=current_payload: process_ai_request(cp)
+                        repaired_text, _, _ = await loop.run_in_executor(
+                            None,
+                            lambda rr=raw_reply: _repair_json(rr, record_id=record_id, page=page_idx)
                         )
-                    except Exception as e:
-                        logger.error(f"[GEMINI_REQUEST_ERROR] pass={pass_idx+1} record={record_id} page={page_idx} error={e}")
-                        result = None
+                        canonical_payload = await loop.run_in_executor(
+                            self.executor,
+                            lambda: get_canonical_export_record(parsed, tenant_id=tenant_id)
+                        )
 
-                    # Validate Gemini output
-                    raw_reply = result.get('reply', '') if result else ''
-
-                    if result and result.get('status') != 'OCR_FAILED' and raw_reply:
-                        try:
-                            repaired_text, _, _ = await loop.run_in_executor(
-                                None,
-                                lambda rr=raw_reply: _repair_json(rr, record_id=record_id, page=page_idx)
-                            )
-                            canonical_payload = await loop.run_in_executor(
-                                self.executor,
-                                lambda: get_canonical_export_record(parsed, tenant_id=tenant_id)
+                        if self._is_dto_valid(canonical_payload):
+                            text_str = json.dumps(canonical_payload)
+                            char_count = len(text_str)
+                            alnum_count = sum(c.isalnum() for c in text_str)
+                            density = alnum_count / max(1, char_count)
+                            has_anchors = any(
+                                k in parsed and parsed[k]
+                                for k in ["invoice_no", "date", "total_amount", "vendor_name", "items"]
                             )
 
-                            if self._is_dto_valid(canonical_payload):
-                                text_str = json.dumps(canonical_payload)
-                                char_count = len(text_str)
-                                alnum_count = sum(c.isalnum() for c in text_str)
-                                density = alnum_count / max(1, char_count)
-                                has_anchors = any(
-                                    k in parsed and parsed[k]
-                                    for k in ["invoice_no", "date", "total_amount", "vendor_name", "items"]
-                                )
+                            metrics.record_latency("ocr:text_density", density)
 
-                                metrics.record_latency("ocr:text_density", density)
-
-                                if char_count > 50 and density > 0.3 and has_anchors:
-                                    logger.info(f"[OCR_RECOVERY_SUCCESS] pass={pass_idx+1} record={record_id} page={page_idx}")
-                                    logger.info(f"[PAGE_OCR_COMPLETED] record={record_id} page={page_idx}")
-                                    metrics.increment_counter("ocr:page_success")
-                                    if pass_idx > 0:
-                                        metrics.increment_counter("ocr:retry_success")
-                                    final_result = result
-                                    success = True
-                                    break
-                                else:
-                                    logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=low_density_or_missing_anchors density={density:.2f} char_count={char_count}")
+                            if char_count > 50 and density > 0.3 and has_anchors:
+                                logger.info(f"[OCR_RECOVERY_SUCCESS] pass={pass_idx+1} record={record_id} page={page_idx}")
+                                logger.info(f"[PAGE_OCR_COMPLETED] record={record_id} page={page_idx}")
+                                metrics.increment_counter("ocr:page_success")
+                                if pass_idx > 0:
+                                    metrics.increment_counter("ocr:retry_success")
+                                final_result = result
+                                success = True
+                                break
                             else:
-                                logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=invalid_dto")
-                        except Exception as e:
-                            logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=parse_error error={e}")
-                    else:
-                        logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=ocr_failed_or_empty_reply")
+                                logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=low_density_or_missing_anchors density={density:.2f} char_count={char_count}")
+                        else:
+                            logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=invalid_dto")
+                    except Exception as e:
+                        logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=parse_error error={e}")
+                else:
+                    logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=ocr_failed_or_empty_reply")
                         
-                    if not success and pass_idx < MAX_IMAGE_PASSES - 1:
-                        logger.warning(f"[PAGE_FAILED_RETRYABLE] record_id={record_id} page={page_idx} pass={pass_idx+1}/{MAX_IMAGE_PASSES}")
+                if not success and pass_idx < MAX_IMAGE_PASSES - 1:
+                    logger.warning(f"[PAGE_FAILED_RETRYABLE] record_id={record_id} page={page_idx} pass={pass_idx+1}/{MAX_IMAGE_PASSES}")
 
 
-                if not success:
-                    logger.error(f"[OCR_RETRY_CHAIN_EXHAUSTED] record={record_id} page={page_idx} all_passes_failed=True")
-                    logger.error(f"[PAGE_FAILED_TERMINAL] record_id={record_id} page={page_idx}")
-                    metrics.increment_counter("ocr:page_failed")
-                    if final_result is None:
-                        final_result = result  # may be None
+            if not success:
+                logger.error(f"[OCR_RETRY_CHAIN_EXHAUSTED] record={record_id} page={page_idx} all_passes_failed=True")
+                logger.error(f"[PAGE_FAILED_TERMINAL] record_id={record_id} page={page_idx}")
+                metrics.increment_counter("ocr:page_failed")
+                if final_result is None:
+                    final_result = result  # may be None
 
-                # Validation & persistence — ONCE, after retry chain completes
-                final_task = {**task, 'payload': current_payload}
-                await self._process_result(final_task, final_result)
+            # Validation & persistence — ONCE, after retry chain completes
+            final_task = {**task, 'payload': current_payload}
+            await self._process_result(final_task, final_result)
 
         except Exception as e:
             tb = traceback.format_exc()
@@ -292,7 +293,6 @@ class AIWorker(BaseWorker):
                         if not res_obj.counted_in_barrier:
                             SessionFinalizationState.objects.filter(id=str(record_id)).update(
                                 ai_completed_pages=models.F('ai_completed_pages') + 1,
-                                failed_pages=models.F('failed_pages') + 1,
                                 updated_at=timezone.now()
                             )
                             res_obj.counted_in_barrier = True
@@ -300,7 +300,7 @@ class AIWorker(BaseWorker):
                             
                         # Release active AI slot before triggering next fanout
                         from core.redis_orchestrator import orchestrator
-                        orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="UNHANDLED_EXCEPTION")
+                        orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="UNHANDLED_EXCEPTION", tenant_id=str(tenant_id))
 
                         # Also trigger next fanout so we don't stall the window
                         from ocr_pipeline.pipeline import trigger_next_fanout
@@ -392,6 +392,13 @@ class AIWorker(BaseWorker):
                     canonical_payload['tenant_id'] = str(tenant_id)
                     
                     is_failed = not self._is_dto_valid(canonical_payload)
+                    if is_failed:
+                        # [FIX] Do not fail the page or poison the barrier.
+                        # Let it survive as a degraded row (partial_extraction).
+                        is_failed = False
+                        canonical_payload['status'] = 'partial_extraction'
+                        logger.info(f"[DEGRADED_PAGE_TOLERATED] record={record_id} page={page_idx} marked as SUCCESS for barrier.")
+                        
                     if not is_failed:
                         logger.info(f"[AI_PAGE_SUCCESS] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI")
                         logger.info(f"[SESSION_FORENSIC] stage='ai_page_success' record={record_id} session={session_id} tenant={tenant_id} page={page_idx}")
@@ -423,8 +430,7 @@ class AIWorker(BaseWorker):
                     )
                     if not res_obj.counted_in_barrier:
                         SessionFinalizationState.objects.filter(id=str(record_id)).update(
-                            ai_completed_pages=models.F('ai_completed_pages') + 1,
-                            failed_pages=models.F('failed_pages') + (1 if is_failed else 0)
+                            ai_completed_pages=models.F('ai_completed_pages') + 1
                         )
                         res_obj.counted_in_barrier = True
                         res_obj.save(update_fields=['counted_in_barrier'])
@@ -449,7 +455,7 @@ class AIWorker(BaseWorker):
                     logger.warning(f"[AI_PROGRESS_HINT_FAIL] {_prog_err}")
 
                 # Release active AI slot before triggering next fanout
-                orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="COMPLETED")
+                orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="COMPLETED", tenant_id=str(tenant_id))
 
                 from ocr_pipeline.pipeline import trigger_next_fanout
                 trigger_next_fanout(record_id)

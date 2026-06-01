@@ -22,8 +22,14 @@ def create_vendor_banking(data: Dict) -> Optional[Dict]:
     
     tenant_id = data.get('tenant_id')
     bank_account_no = data.get('bank_account_no')
-    bank_name = data.get('bank_name', '')
-    ifsc_code = data.get('ifsc_code', '')
+    if bank_account_no is None:
+        bank_account_no = ''
+    bank_name = data.get('bank_name')
+    if bank_name is None:
+        bank_name = ''
+    ifsc_code = data.get('ifsc_code')
+    if ifsc_code is None:
+        ifsc_code = ''
     branch_name = data.get('branch_name', '')
     swift_code = data.get('swift_code', '')
     vendor_branch = data.get('vendor_branch', '')

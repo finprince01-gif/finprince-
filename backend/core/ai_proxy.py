@@ -151,73 +151,107 @@ class RateLimiter:
 
 class DistributedConcurrencyManager:
     """
-    DB-backed semaphore for distributed concurrency governance.
-    PHASE 9: GEMINI CONCURRENCY GOVERNANCE.
+    Redis-backed atomic semaphore for distributed concurrency governance.
+    Replaces brittle DB locks with auto-expiring lease tokens to prevent permit leaks.
     """
     def __init__(self, max_concurrent=20):
         self.global_max = max_concurrent
-
-    def acquire_permit(self, tenant_id: str = "global") -> bool:
-        from django.db import transaction
-        from vouchers.models import GeminiQuota
-        from core.observability import observability
+        # Lua script for atomic acquire and expiration cleanup
+        self.acquire_script = """
+        local global_key = KEYS[1]
+        local tenant_key = KEYS[2]
+        local permit_id = ARGV[1]
+        local current_time = tonumber(ARGV[2])
+        local expiration_time = tonumber(ARGV[3])
+        local global_limit = tonumber(ARGV[4])
+        local tenant_limit = tonumber(ARGV[5])
         
-        # ── [PHASE 9: ADAPTIVE CONCURRENCY] ──
-        # Reduce concurrency limits if queue depth is exploding
+        -- Cleanup expired
+        redis.call('ZREMRANGEBYSCORE', global_key, 0, current_time)
+        if tenant_key ~= "" then
+            redis.call('ZREMRANGEBYSCORE', tenant_key, 0, current_time)
+        end
+        
+        -- Check limits
+        local global_count = redis.call('ZCARD', global_key)
+        if global_count >= global_limit then
+            return 0
+        end
+        
+        if tenant_key ~= "" then
+            local tenant_count = redis.call('ZCARD', tenant_key)
+            if tenant_count >= tenant_limit then
+                return 0
+            end
+        end
+        
+        -- Acquire
+        redis.call('ZADD', global_key, expiration_time, permit_id)
+        if tenant_key ~= "" then
+            redis.call('ZADD', tenant_key, expiration_time, permit_id)
+        end
+        
+        return 1
+        """
+        self._lua_sha = None
+
+    def _get_redis(self):
+        from core.redis_orchestrator import orchestrator
+        if not orchestrator.redis:
+            orchestrator._connect()
+        return orchestrator.redis
+
+    def acquire_permit(self, permit_id: str, tenant_id: str = "global") -> bool:
+        r = self._get_redis()
+        if not r:
+            logger.warning("[REDIS_UNAVAILABLE] Concurrency governor falling back to deny-all.")
+            return False
+
         from core.sqs import queue_service
-        q_depth = queue_service.get_queue_depth('ai')
+        try:
+            q_depth = queue_service.get_queue_depth('ai')
+        except Exception:
+            q_depth = 0
+            
         effective_max = self.global_max
         if q_depth > 2000:
             effective_max = max(5, self.global_max // 4)
             logger.warning(f"[OVERLOAD_THROTTLE] Q_DEPTH={q_depth}. Reducing concurrency to {effective_max}")
         elif q_depth > 1000:
             effective_max = max(10, self.global_max // 2)
-            logger.info(f"[LOAD_THROTTLE] Q_DEPTH={q_depth}. Reducing concurrency to {effective_max}")
+
+        global_key = "ai_concurrency:global"
+        tenant_key = f"ai_concurrency:tenant:{tenant_id}" if tenant_id and tenant_id != "global" else ""
+        
+        now = time.time()
+        expiration = now + 120 # 2 minute max lease (Gemini timeout is usually 60-90s)
+        tenant_limit = 15
 
         try:
-            with transaction.atomic():
-                # 1. Check Global Limit
-                global_q, _ = GeminiQuota.objects.get_or_create(tenant_id="global", defaults={'max_concurrent': self.global_max})
-                global_q = GeminiQuota.objects.select_for_update().get(tenant_id="global")
-                
-                if global_q.active_calls >= effective_max:
-                    return False
-
-                # 2. Check Tenant Limit (if not global)
-                if tenant_id and tenant_id != "global":
-                    tenant_q, _ = GeminiQuota.objects.get_or_create(tenant_id=tenant_id, defaults={'max_concurrent': 15})
-                    tenant_q = GeminiQuota.objects.select_for_update().get(tenant_id=tenant_id)
-                    
-                    if tenant_q.active_calls >= tenant_q.max_concurrent:
-                        return False
-                    
-                    tenant_q.active_calls += 1
-                    tenant_q.save(update_fields=['active_calls'])
-
-                # 3. Increment Global
-                global_q.active_calls += 1
-                global_q.save(update_fields=['active_calls'])
-                return True
+            if not self._lua_sha:
+                self._lua_sha = r.script_load(self.acquire_script)
+            
+            keys = [global_key, tenant_key]
+            args = [permit_id, now, expiration, effective_max, tenant_limit]
+            
+            result = r.evalsha(self._lua_sha, len(keys), *keys, *args)
+            return result == 1
         except Exception as e:
-            logger.error(f"[QUOTA_ERROR] {e}")
+            logger.error(f"[QUOTA_ACQUIRE_ERROR] {e}")
             return False
 
-    def release_permit(self, tenant_id: str = "global"):
-        from django.db import transaction
-        from vouchers.models import GeminiQuota
+    def release_permit(self, permit_id: str, tenant_id: str = "global"):
+        r = self._get_redis()
+        if not r:
+            return
+            
+        global_key = "ai_concurrency:global"
+        tenant_key = f"ai_concurrency:tenant:{tenant_id}" if tenant_id and tenant_id != "global" else ""
         
         try:
-            with transaction.atomic():
-                # 1. Decrement Global
-                GeminiQuota.objects.filter(tenant_id="global", active_calls__gt=0).select_for_update().update(
-                    active_calls=models.F('active_calls') - 1
-                )
-                
-                # 2. Decrement Tenant
-                if tenant_id and tenant_id != "global":
-                    GeminiQuota.objects.filter(tenant_id=tenant_id, active_calls__gt=0).select_for_update().update(
-                        active_calls=models.F('active_calls') - 1
-                    )
+            r.zrem(global_key, permit_id)
+            if tenant_key:
+                r.zrem(tenant_key, permit_id)
         except Exception as e:
             logger.error(f"[QUOTA_RELEASE_ERROR] {e}")
 
@@ -245,18 +279,20 @@ def process_ai_request(request_data: dict) -> dict:
 
     # ── [PHASE 9: OVERLOAD SHEDDING] ──
     from core.sqs import queue_service
+    import uuid
     q_depth = queue_service.get_queue_depth('ai')
     if q_depth > 5000:
         # Extreme pressure: shed 50% of new requests to protect health
         if random.random() < 0.5:
             logger.critical(f"[OVERLOAD_SHEDDING] Q_DEPTH={q_depth}. Dropping request for {tenant_id}")
-            return {'error': 'AI service is under extreme load. Please try again later.', 'code': 'OVERLOAD_SHED'}
+            raise ProviderSaturatedError('AI service is under extreme load.')
 
-    if not concurrency_governor.acquire_permit(tenant_id):
+    permit_id = request_data.get('id', str(uuid.uuid4()))
+    if not concurrency_governor.acquire_permit(permit_id, tenant_id):
         observability.ai_metric(event="TENANT_THROTTLED", tenant_id=tenant_id)
         metrics.increment_counter("ai:throttled", tags={"tenant": tenant_id})
         logger.warning(f"[QUEUE_MESSAGE_DEADLOCK] [AI_METRIC] TENANT_THROTTLED tenant_id={tenant_id} - AI system is at capacity.")
-        return {'error': 'AI system is at capacity.', 'code': 'CONCURRENCY_LIMIT'}
+        raise ProviderSaturatedError('AI system is at capacity.')
 
     try:
         if os.getenv('MOCK_EXTRACTION_MODE', 'false').lower() == 'true':
@@ -316,7 +352,7 @@ def process_ai_request(request_data: dict) -> dict:
         metrics.increment_counter("ai:errors", tags={"tenant": tenant_id})
         return {'error': str(e)}
     finally:
-        concurrency_governor.release_permit(tenant_id)
+        concurrency_governor.release_permit(permit_id, tenant_id)
 
 
 def _call_gemini_single(prompt: Any, request_data: dict, api_key: str, model_name: str, attempt_label: str, public_ip: str) -> str:
@@ -341,6 +377,10 @@ class TerminalTaskError(Exception):
     """Raised for non-retryable AI orchestration errors (Phase 4)."""
     pass
 
+class ProviderSaturatedError(Exception):
+    """Raised when the AI provider or local concurrency limits are saturated."""
+    pass
+
 def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     """
     Production-grade retry logic with exponential backoff and jitter.
@@ -353,10 +393,17 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     MAX_ATTEMPTS = 5
     base_delay = 1
     
+    # [PHASE 3: MULTI-PROVIDER FALLBACK ROUTING]
+    fallback_models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+    current_model_idx = 0
+    
     last_error = None
-    for attempt in range(MAX_ATTEMPTS):
+    attempt = 0
+    
+    while attempt < MAX_ATTEMPTS:
+        current_model = fallback_models[current_model_idx]
         try:
-            return _call_gemini_single(prompt, request_data, api_key, 'gemini-2.0-flash', f"Attempt {attempt+1}", "local")
+            return _call_gemini_single(prompt, request_data, api_key, current_model, f"Attempt {attempt+1}", "local")
         except Exception as e:
             last_error = e
             err_str = str(e).lower()
@@ -373,15 +420,29 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
                 raise TerminalTaskError(str(e))
             
             # Retryable errors (429 Rate Limits, 5xx, timeouts)
+            if '429' in err_str or 'too many requests' in err_str or 'capacity' in err_str:
+                # [PHASE 3 FAILOVER] Try the next provider model instead of failing immediately
+                if current_model_idx < len(fallback_models) - 1:
+                    current_model_idx += 1
+                    next_model = fallback_models[current_model_idx]
+                    logger.warning(f"[PROVIDER_FAILOVER] {current_model} saturated (429). Failing over to {next_model}.")
+                    from core.observability import observability
+                    observability.ai_metric(event="AI_PROVIDER_FAILOVER", from_model=current_model, to_model=next_model)
+                    continue # Try next model immediately without sleeping
+                else:
+                    logger.warning(f"[PROVIDER_SATURATED_EXHAUSTED] All fallback models saturated. Raising ProviderSaturatedError.")
+                    raise ProviderSaturatedError(str(e))
+                
             # Default fallback for unhandled exceptions is to assume transient network issue
             if attempt < MAX_ATTEMPTS - 1:
                 delay = (base_delay * (2 ** attempt)) + (random.random() * 0.5)
-                logger.warning(f"[AI_RETRY] Attempt {attempt+1} failed: {e}. Retrying in {delay:.2f}s...")
+                logger.warning(f"[AI_RETRY] {current_model} Attempt {attempt+1} failed: {e}. Retrying in {delay:.2f}s...")
                 from core.observability import observability
                 observability.ai_metric(event="AI_RETRY", attempt=attempt+1, error=str(e)[:100])
                 time.sleep(delay)
+                attempt += 1
             else:
-                logger.error(f"[AI_EXHAUSTED] All {MAX_ATTEMPTS} attempts failed: {e}")
+                logger.error(f"[AI_EXHAUSTED] All {MAX_ATTEMPTS} attempts failed on {current_model}: {e}")
                 from core.observability import observability
                 observability.ai_metric(event="AI_EXHAUSTED", error=str(e)[:100])
                 raise e

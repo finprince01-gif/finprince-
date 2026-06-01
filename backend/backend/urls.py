@@ -20,7 +20,7 @@ from accounting.sales_excel_api import (
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from vendors.vendorpo_api import get_pending_pos
-from vendors.vendor_api import PurchaseVendorValidateView, PurchaseVendorCreateView, PurchaseVendorResolveConflictView
+from vendors.vendor_api import PurchaseVendorValidateView, PurchaseVendorResolveConflictView
 from inventory.views import HsnDetailsAPIView
 import threading
 import sys
@@ -66,7 +66,6 @@ urlpatterns = [
     
     # Custom Vendor Validation for Purchase
     path('api/purchase/vendors/validate/', PurchaseVendorValidateView.as_view(), name='purchase-vendors-validate'),
-    path('api/purchase/vendors/create/', PurchaseVendorCreateView.as_view(), name='purchase-vendors-create'),
     path('api/purchase/vendors/resolve-conflict/', PurchaseVendorResolveConflictView.as_view(), name='purchase-vendors-resolve-conflict'),
     
     # Customer Portal

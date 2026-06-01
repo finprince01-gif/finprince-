@@ -149,11 +149,20 @@ def normalize_date(date_val: Any) -> str:
 def normalize_state(state: Any) -> str:
     """Canonical mapping for Indian States and UTs."""
     if is_empty(state): return ""
-    raw = str(state).strip().upper()
+    raw = str(state).strip()
     
-    # Strip numeric prefixes (GST State Codes)
-    raw = re.sub(r'^\d+\s*[-/]?\s*', '', raw)
-    raw = re.sub(r'\s*[-/]?\s*\d+$', '', raw)
+    # FREEZE RAW VALUE
+    raw_frozen = raw
+    
+    value = re.sub(r'\s+', ' ', raw)
+    value = re.sub(r'\bcode\s*:?\s*$', '', value, flags=re.I)
+    value = value.rstrip(",:- ")
+    value = value.strip()
+    
+    # Semantic match
+    upper_val = value.upper()
+    upper_val = re.sub(r'^\d+\s*[-/]?\s*', '', upper_val)
+    upper_val = re.sub(r'\s*[-/]?\s*\d+$', '', upper_val)
 
     STATE_MAP = {
         "TN": "Tamil Nadu", "TAMIL NADU": "Tamil Nadu", "TAMILNADU": "Tamil Nadu",
@@ -172,10 +181,14 @@ def normalize_state(state: Any) -> str:
     }
     
     for kw, canonical in STATE_MAP.items():
-        if raw == kw or raw == canonical.upper():
+        if upper_val == kw or upper_val == canonical.upper():
+            if len(canonical) < len(raw_frozen) * 0.85:
+                logger.warning(f"[FIELD_NORMALIZATION_DIFF] field=place_of_supply raw='{raw_frozen}' normalized='{canonical}'")
             return canonical
             
-    return raw.title()
+    if len(value) < len(raw_frozen) * 0.85:
+        logger.warning(f"[FIELD_NORMALIZATION_DIFF] field=place_of_supply raw='{raw_frozen}' normalized='{value}'")
+    return value.title()
 
 def fix_encoding_corruption(val: Any) -> str:
     """
@@ -261,62 +274,32 @@ def lossless_preserve(existing: Any, incoming: Any, field_name: str = "") -> Any
     
     return existing
 
-def sanitize_address(addr: str) -> str:
+def sanitize_address(addr: str, field_name: str = "address") -> str:
     """
-    CRITICAL ADDRESS SANITIZATION (Requirement #4 & #5)
-    Preserves locality, city, state while removing regulatory noise.
-    Converts multiline to comma-separated preserving order.
+    CRITICAL ADDRESS SANITIZATION (Non-Destructive)
+    Preserves locality, city, state.
+    Converts multiline to single space preserving order.
     """
     if is_empty(addr): return ""
-    raw_lines = re.split(r'[\n\r]', str(addr))
+    raw = str(addr)
     
-    # [PHASE 11.9] FORENSIC: Log raw address before sanitization
-    logger.debug(f"[ADDRESS_SANITIZE_INPUT] lines={len(raw_lines)} first_line='{raw_lines[0][:30] if raw_lines else ''}'")
-
-    REJECT_PATTERNS = [
-        r'(?i)\b(Phone|Mobile|Mob|Ph|Tel|Fax|Email|E-mail|Mail|PAN|URL|WWW|Website)\s*[:/-]?\s*.*',
-        r'[\w.-]+@[\w.-]+\.\w+',
-        r'[A-Z]{5}\d{4}[A-Z]{1}',
-    ]
-    # Keep GSTIN if it's the only thing there, but strip the label
-    GSTIN_REJECT = r'(?i)\bGSTIN\s*[:/-]?\s*'
+    # HIGH CONFIDENCE PROTECTION
+    is_high_confidence = len(raw) > 40
     
-    cleaned_lines = []
-    for line in raw_lines:
-        line = line.strip()
-        if not line: continue
-        
-        # Strip GSTIN label but keep the value
-        line = re.sub(GSTIN_REJECT, '', line).strip()
-        
-        is_rejected = False
-        for pattern in REJECT_PATTERNS:
-            if re.search(pattern, line):
-                # Try to remove the pattern but keep the rest of the line
-                new_line = re.sub(pattern, '', line).strip()
-                if not new_line:
-                    is_rejected = True
-                    break
-                else:
-                    line = new_line
-        
-        if is_rejected: continue
-        
-        line = line.strip().strip(',').strip()
-        if line:
-            cleaned_lines.append(line)
+    value = re.sub(r'\s+', ' ', raw)
+    value = value.strip(",:- \n\r")
     
-    final_addr = ", ".join(cleaned_lines)
-    # Ensure no leading/trailing commas or extra spaces
-    final_addr = re.sub(r',\s*,', ',', final_addr).strip().strip(',')
+    if len(value) < len(raw) * 0.85:
+        logger.warning(f"[ADDRESS_TRUNCATION_BLOCKED] field={field_name} raw_len={len(raw)} normalized_len={len(value)} preserved_raw=True")
+        return raw.strip()
     
-    # ── [PHASE 3] SANITIZATION SAFETY (Root Cause #1) ──
-    if is_empty(final_addr) and not is_empty(addr):
-        logger.warning(f"[ADDRESS_RECOVERY] Sanitization wiped address. Preserving raw. original='{str(addr)[:30]}...'")
-        return str(addr).strip()
-    
-    logger.info(f"[ADDRESS_SANITIZED] original_len={len(str(addr))} final_len={len(final_addr)}")
-    return final_addr
+    if not is_high_confidence:
+        if len(value) < len(raw) * 0.85:
+            logger.warning(f"[ADDRESS_RECOVERY] Sanitization wiped address. Preserving raw. original='{raw[:30]}...'")
+            return raw.strip()
+            
+    logger.info(f"[ADDRESS_SANITIZED] original_len={len(raw)} final_len={len(value)}")
+    return value
 
 def derive_branch_from_address(addr: str) -> str:
     """Infers branch from known location keywords."""
@@ -466,8 +449,8 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
             logger.warning(f"[ADDRESS_DUPLICATION_BLOCKED] bill_from and bill_to are identical. Clearing bill_from to prevent customer address contamination.")
             raw_from = ""
 
-    bill_from = sanitize_address(raw_from)
-    bill_to = sanitize_address(raw_to)
+    bill_from = sanitize_address(raw_from, field_name="bill_from")
+    bill_to = sanitize_address(raw_to, field_name="bill_to")
     
     branch = get_strict(["branch"])[0] or derive_branch_from_address(bill_to) or derive_branch_from_address(bill_from)
 

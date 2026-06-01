@@ -6,6 +6,52 @@ from typing import List, Dict, Optional, Any
 from decimal import Decimal
 
 
+
+def _sanitize_terms_data(
+    credit_limit: Optional[Any] = None,
+    credit_period: Optional[str] = None,
+    credit_terms: Optional[str] = None,
+    penalty_terms: Optional[str] = None,
+    delivery_terms: Optional[str] = None,
+    warranty_guarantee_details: Optional[str] = None,
+    force_majeure: Optional[str] = None,
+    dispute_redressal_terms: Optional[str] = None
+):
+    if credit_limit is not None and str(credit_limit).strip() in ("", "None", "null"):
+        credit_limit = None
+    if credit_limit is not None:
+        try:
+            credit_limit = Decimal(str(credit_limit))
+        except (ValueError, TypeError, ArithmeticError):
+            credit_limit = None
+            
+    if credit_period is not None and str(credit_period).strip() == "":
+        credit_period = None
+    if credit_terms is not None and str(credit_terms).strip() == "":
+        credit_terms = None
+    if penalty_terms is not None and str(penalty_terms).strip() == "":
+        penalty_terms = None
+    if delivery_terms is not None and str(delivery_terms).strip() == "":
+        delivery_terms = None
+    if warranty_guarantee_details is not None and str(warranty_guarantee_details).strip() == "":
+        warranty_guarantee_details = None
+    if force_majeure is not None and str(force_majeure).strip() == "":
+        force_majeure = None
+    if dispute_redressal_terms is not None and str(dispute_redressal_terms).strip() == "":
+        dispute_redressal_terms = None
+        
+    return (
+        credit_limit,
+        credit_period,
+        credit_terms,
+        penalty_terms,
+        delivery_terms,
+        warranty_guarantee_details,
+        force_majeure,
+        dispute_redressal_terms
+    )
+
+
 def create_vendor_terms(
     tenant_id: str,
     vendor_basic_detail_id: int,
@@ -25,6 +71,26 @@ def create_vendor_terms(
     Returns:
         int: The ID of the created terms record
     """
+    (
+        credit_limit,
+        credit_period,
+        credit_terms,
+        penalty_terms,
+        delivery_terms,
+        warranty_guarantee_details,
+        force_majeure,
+        dispute_redressal_terms
+    ) = _sanitize_terms_data(
+        credit_limit,
+        credit_period,
+        credit_terms,
+        penalty_terms,
+        delivery_terms,
+        warranty_guarantee_details,
+        force_majeure,
+        dispute_redressal_terms
+    )
+
     query = """
         INSERT INTO vendor_master_vendorcreation_terms (
             tenant_id,
@@ -156,6 +222,26 @@ def update_vendor_terms(
     Returns:
         bool: True if updated successfully
     """
+    (
+        credit_limit,
+        credit_period,
+        credit_terms,
+        penalty_terms,
+        delivery_terms,
+        warranty_guarantee_details,
+        force_majeure,
+        dispute_redressal_terms
+    ) = _sanitize_terms_data(
+        credit_limit,
+        credit_period,
+        credit_terms,
+        penalty_terms,
+        delivery_terms,
+        warranty_guarantee_details,
+        force_majeure,
+        dispute_redressal_terms
+    )
+
     query = """
         UPDATE vendor_master_vendorcreation_terms
         SET

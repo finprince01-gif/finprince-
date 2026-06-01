@@ -502,6 +502,41 @@ class InvoiceTempOCR(models.Model):
     version_rank = models.IntegerField(default=99)
     is_primary = models.BooleanField(default=False)
 
+    IMMUTABLE_VALIDATION_STATUSES = {'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'}
+    OVERWRITE_BLOCKED_STATUSES = {'READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'PENDING', 'NEED_VENDOR', 'VENDOR_MISSING'}
+
+    def save(self, *args, **kwargs):
+        """
+        IMMUTABILITY ENFORCEMENT: If this record is already marked DUPLICATE,
+        block any attempt to overwrite it with a non-DUPLICATE status.
+        This is the last-line-of-defense guard regardless of which code path runs.
+        """
+        import logging
+        _log = logging.getLogger(__name__)
+
+        if self.pk is not None:
+            current_status = self.validation_status
+            # Fetch actual DB value to check — only if we're about to write something weaker
+            if current_status in self.OVERWRITE_BLOCKED_STATUSES:
+                try:
+                    db_val = InvoiceTempOCR.objects.filter(pk=self.pk).values_list('validation_status', flat=True).first()
+                    if db_val in self.IMMUTABLE_VALIDATION_STATUSES:
+                        _log.error(
+                            f"[READY_OVERWRITE_BLOCKED] id={self.pk} "
+                            f"attempted to write validation_status='{current_status}' "
+                            f"but DB has immutable status='{db_val}'. Write BLOCKED."
+                        )
+                        # Force back to DUPLICATE so the save proceeds with correct value
+                        self.validation_status = db_val
+                except Exception as _e:
+                    _log.warning(f"[IMMUTABILITY_CHECK_FAILED] id={self.pk} error={_e}")
+
+        _log.info(
+            f"[DUPLICATE_RUNTIME_PROBE] file={__file__} "
+            f"id={self.pk} writing validation_status='{self.validation_status}'"
+        )
+        super().save(*args, **kwargs)
+
     class Meta:
         managed = False # Tables are created by external migrations or preexisting
         db_table = 'invoice_ocr_temp'

@@ -8,8 +8,9 @@ class VendorMasterBankingSerializer(serializers.ModelSerializer):
     """
     
     # Override fields to make them optional
-    bank_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
-    ifsc_code = serializers.CharField(max_length=11, required=False, allow_blank=True)
+    bank_account_no = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    bank_name = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+    ifsc_code = serializers.CharField(max_length=11, required=False, allow_blank=True, default="")
     
     class Meta:
         model = VendorMasterBanking
@@ -34,18 +35,15 @@ class VendorMasterBankingSerializer(serializers.ModelSerializer):
     
     def validate_ifsc_code(self, value):
         """Validate IFSC code format"""
-        if value and value.strip() and len(value) != 11:
-            raise serializers.ValidationError("IFSC code must be exactly 11 characters")
-        return value.upper() if value and value.strip() else value
+        if value and value.strip():
+            if len(value) != 11:
+                raise serializers.ValidationError("IFSC code must be exactly 11 characters")
+            return value.upper()
+        return ""
     
     def validate_swift_code(self, value):
         """Validate SWIFT code format"""
         if value and value.strip() and (len(value) < 8 or len(value) > 11):
             raise serializers.ValidationError("SWIFT code must be 8 or 11 characters")
         return value.upper() if value and value.strip() else value
-    
-    def validate_bank_account_no(self, value):
-        """Validate bank account number"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("Bank account number is required")
-        return value
+

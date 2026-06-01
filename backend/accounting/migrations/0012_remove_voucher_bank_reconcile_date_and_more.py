@@ -28,16 +28,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='advanceallocation',
-            name='allocated_amount',
-            field=models.DecimalField(db_column='amount', decimal_places=2, max_digits=25),
+            name='amount',
+            field=models.DecimalField(db_column='advance', decimal_places=2, default=0, max_digits=25),
         ),
         migrations.AlterField(
             model_name='advanceallocation',
-            name='amount',
-            field=models.DecimalField(db_column='advance', decimal_places=2, default=0, max_digits=25),
-        ),
-        migrations.AlterField(
-            model_name='pendingtransaction',
             name='allocated_amount',
             field=models.DecimalField(db_column='amount', decimal_places=2, max_digits=25),
         ),
@@ -47,7 +42,7 @@ class Migration(migrations.Migration):
             field=models.DecimalField(db_column='advance', decimal_places=2, default=0, max_digits=25),
         ),
         migrations.AlterField(
-            model_name='transactionallocation',
+            model_name='pendingtransaction',
             name='allocated_amount',
             field=models.DecimalField(db_column='amount', decimal_places=2, max_digits=25),
         ),
@@ -55,5 +50,10 @@ class Migration(migrations.Migration):
             model_name='transactionallocation',
             name='amount',
             field=models.DecimalField(db_column='advance', decimal_places=2, default=0, max_digits=25),
+        ),
+        migrations.AlterField(
+            model_name='transactionallocation',
+            name='allocated_amount',
+            field=models.DecimalField(db_column='amount', decimal_places=2, max_digits=25),
         ),
     ]

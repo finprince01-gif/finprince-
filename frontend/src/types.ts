@@ -249,6 +249,7 @@ export interface ExtractedLineItem {
   igst?: number;
   cess?: number;
   taxableValue?: number;
+  invoiceValue?: number;
   uom?: string;
 }
 
@@ -273,6 +274,8 @@ export interface ExtractedInvoiceData {
   invoiceType?: string;
   currency?: string;
   exchangeRate?: number;
+  billFrom?: string;
+  billTo?: string;
   billToAddress1?: string;
   billToAddress2?: string;
   billToCity?: string;
