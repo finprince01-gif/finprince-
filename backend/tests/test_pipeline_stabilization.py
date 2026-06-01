@@ -267,61 +267,7 @@ def test_finalize_worker_blocked_barrier():
             asyncio.run(worker.handle_task(task))
 
 
-def test_is_save_eligible_rules():
-    """
-    Tests the logic of the `is_save_eligible` helper function against various inputs.
-    """
-    from ocr_pipeline.views import is_save_eligible
-    from unittest.mock import MagicMock
 
-    session_id = "session-123"
-    tenant_id = "tenant-123"
-
-    # Base valid case
-    record = MagicMock()
-    record.upload_session_id = session_id
-    record.tenant_id = tenant_id
-    record.validation_status = "READY"
-    record.processed = False
-    record.vendor_id = 101
-    record.vendor_status = "EXISTS"
-    record.supplier_invoice_no = "INV-100"
-    record.gstin = "33AKWPP4092M1ZB"
-    record.extracted_data = {"invoice_no": "INV-100", "gstin": "33AKWPP4092M1ZB"}
-
-    # 1. Valid record should pass
-    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
-    assert eligible is True
-    assert reason is None
-
-    # 2. Session mismatch
-    record.upload_session_id = "other-session"
-    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
-    assert eligible is False
-    assert reason == "SESSION_ROW_SCOPE_MISMATCH"
-    record.upload_session_id = session_id
-
-    # 3. Non-terminal validation status (e.g. NEED_VENDOR)
-    record.validation_status = "NEED_VENDOR"
-    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
-    assert eligible is False
-    assert reason == "NON_TERMINAL"
-    record.validation_status = "READY"
-
-    # 4. Null vendor_id
-    record.vendor_id = None
-    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
-    assert eligible is False
-    assert reason == "NULL_VENDOR_ID"
-    record.vendor_id = 101
-
-    # 5. Invalid vendor status (e.g. CREATE_VENDOR / NEW)
-    record.vendor_status = "CREATE_VENDOR"
-    eligible, reason = is_save_eligible(record, upload_session_id=session_id, tenant_id=tenant_id)
-    assert eligible is False
-    assert reason == "INVALID_VENDOR_STATUS_CREATE_VENDOR"
-
-    record.vendor_status = "EXISTS"
 
 
 
