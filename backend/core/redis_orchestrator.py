@@ -598,6 +598,33 @@ class RedisOrchestrator:
             expected = db_expected
             logger.info(f"[BARRIER_STATE_AGGREGATED] session={session_id} source=REDIS_FIRST expected={expected} completed={completed} failed={failed}")
             
+            # [EMPTY_SESSION_CONVERGENCE_BRANCH]
+            # If there are no records, or expected/completed/failed are all 0, it's an empty session
+            if expected == 0 and completed == 0 and failed == 0 and len(record_ids) == 0:
+                logger.info(f"[EMPTY_SESSION_AUTOTERMINATED] session={session_id}")
+                logger.info(f"[EMPTY_SESSION_POLLING_STOPPED] session={session_id}")
+                logger.info(f"[EMPTY_SESSION_NO_WORK] session={session_id}")
+                return {
+                    "session_id": session_id,
+                    "expected_pages": 0,
+                    "completed_pages": 0,
+                    "failed_pages": 0,
+                    "terminal_count": 0,
+                    "barrier_complete": True,
+                    "finalize_complete": True,
+                    "materialization_complete": True,
+                    "snapshot_complete": True,
+                    "ingestion_active": False,
+                    "ai_active": False,
+                    "assembly_active": False,
+                    "finalize_active": False,
+                    "materialization_active": False,
+                    "export_active": False,
+                    "active_workers": 0,
+                    "terminal": True,
+                    "terminal_reason": "EMPTY_SESSION_TERMINAL"
+                }
+
             # Materialization and export completion: DB only (written by finalize_worker)
             # Once True, NEVER regress: use OR across all states
             finalize_complete = any(s.export_complete for s in states) if states else False

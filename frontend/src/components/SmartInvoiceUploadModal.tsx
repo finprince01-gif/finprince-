@@ -55,6 +55,7 @@ interface ScanResult {
     group_id?: string;
     processed: boolean;
     _blocked?: boolean;
+    resume_reason?: string;
 }
 
 interface FinalizeErrorItem {
@@ -334,10 +335,10 @@ const EditInvoiceModal: React.FC<{
             try {
                 // STEP 1: Fetch FULL Dynamic Schema + Data from DB (or use snapshot row directly)
                 const isSnapshot = String(row.id).startsWith('snap_') || !!row._isSnapshot;
-                
+
                 const schemaPromise = httpClient.get(`/api/voucher-schema/?type=${voucherType}`);
                 const rowPromise = isSnapshot ? Promise.resolve({ data: [row] }) : httpClient.get(`/api/ocr-staging/${row.id}/`);
-                
+
                 const [schemaRes, rowRes]: any = await Promise.all([schemaPromise, rowPromise]);
 
                 const fetchedSchema = schemaRes as VoucherSchema;
@@ -359,7 +360,7 @@ const EditInvoiceModal: React.FC<{
                     if (sectionName === 'items') {
                         let itmsRaw = raw.sections?.items || raw.items || raw.line_items || [];
                         if (!Array.isArray(itmsRaw)) itmsRaw = [];
-                        
+
                         normalizedSections['items'] = (itmsRaw.length > 0 ? itmsRaw : [{}]).map((item: any) => {
                             const normalizedItem: any = {};
                             fields.forEach((f: any) => {
@@ -576,7 +577,7 @@ const EditInvoiceModal: React.FC<{
                                             if (v !== null && v !== undefined) {
                                                 displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
                                             }
-                                            
+
                                             if (field.type === 'date' && displayVal) {
                                                 const parts = displayVal.split(/[-\/]/);
                                                 if (parts.length === 3) {
@@ -697,8 +698,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
 
-    // State
-
+    const [workflowState, setWorkflowState] = useState<"LIVE_UPLOAD" | "REVIEW" | "FINALIZING" | "FINALIZED">("LIVE_UPLOAD");
     const [step, setStep] = useState<ModalStep>('upload');
     const [isLoading, setIsLoading] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
@@ -725,7 +725,33 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const [dragOver, setDragOver] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [scanId, setScanId] = useState<string>('');
-    const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+    const useAllUnresolvedRef = useRef(false); // Moved up to use for routing state
+
+    // ── ISOLATED STORES FOR UPLOAD VS RESUME FLOWS ──
+    const [uploadRows, setUploadRows] = useState<ScanResult[]>([]);
+    const [resumeRows, setResumeRows] = useState<ScanResult[]>([]);
+    const [uploadSelectedHashes, setUploadSelectedHashes] = useState<Set<string>>(new Set());
+    const [resumeSelectedHashes, setResumeSelectedHashes] = useState<Set<string>>(new Set());
+
+    // Computed properties mapped to the active flow
+    const scanResults = useAllUnresolvedRef.current ? resumeRows : uploadRows;
+    const selectedHashes = useAllUnresolvedRef.current ? resumeSelectedHashes : uploadSelectedHashes;
+
+    const setScanResults = useCallback((val: React.SetStateAction<ScanResult[]>) => {
+        if (useAllUnresolvedRef.current) {
+            setResumeRows(val);
+        } else {
+            setUploadRows(val);
+        }
+    }, []);
+
+    const setSelectedHashes = useCallback((val: React.SetStateAction<Set<string>>) => {
+        if (useAllUnresolvedRef.current) {
+            setResumeSelectedHashes(val);
+        } else {
+            setUploadSelectedHashes(val);
+        }
+    }, []);
     const [scanProgress, setScanProgress] = useState(0);       // 0-100
     const [scanCurrentFile, setScanCurrentFile] = useState('');
     const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
@@ -744,7 +770,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         setResolvingRow(row);
         setSelectedInvoice(row);
         console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] setSelectedInvoice executed', row);
-        
+
         const sections = row.extracted_data?.sections || {};
         const supplier = sections.supplier_details || row.extracted_data || {};
         const rawItems = sections.items || row.extracted_data?.items || row.extracted_data?.line_items || [];
@@ -753,7 +779,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             supplierItemName: String(it['Item Name'] || it['item_name'] || it['Description'] || it['description'] || it['Item'] || ''),
             hsnSac: String(it['HSN/SAC'] || it['hsn_sac'] || it['HSN Code'] || it['hsnSac'] || '')
         }));
-        
+
         const prefData = {
             vendor_name: row.vendor_name || supplier['vendor_name'] || supplier['Vendor Name'] || '',
             gstin: row.vendor_gstin || supplier['gstin'] || supplier['GSTIN'] || '',
@@ -763,7 +789,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             vendor_category: supplier['vendor_category'] || supplier['Vendor Category'] || '',
             supplier_items: supplier_items
         };
-        
+
         console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] PREFILLED_VENDOR_DATA', prefData);
         setExtractedVendorData(prefData);
         setIsCreateVendorModalOpen(true);
@@ -773,7 +799,6 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const [estimatedExtractionTime, setEstimatedExtractionTime] = useState<number | null>(null);
     const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
     const [editingRow, setEditingRow] = useState<ScanResult | null>(null);
-    const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
 
 
 
@@ -886,7 +911,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     }, [scanResults, pollingIntervalRef2.current]); // Added a few more deps to ensure refresh
 
 
-    const [uploadSessionId] = useState(() => {
+    const [uploadSessionId, setUploadSessionId] = useState<string | null>(() => {
         if (typeof window.crypto !== 'undefined' && typeof window.crypto.randomUUID === 'function') {
             return window.crypto.randomUUID();
         }
@@ -903,8 +928,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // Duplicate detection set
     const uploadedFilesSetRef = useRef<Set<string>>(new Set());
-    // Ref so fetchStagedInvoices (stable callback) can always read the latest value
-    const useAllUnresolvedRef = useRef(false);
+    // Ref already declared above
 
     // Listen for events from sub-modals to trigger workflows
     useEffect(() => {
@@ -1057,9 +1081,10 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const POLL_INTERVAL_MS = 5000;
 
     /**
-     * Stop the active polling interval.
+     * Centralized Polling Manager: Stops all active polling intervals and SSE connections.
      */
-    const stopPolling = useCallback(() => {
+    const stopAllPolling = useCallback(() => {
+        console.log('[POLLING_STOPPED] Halting all polling mechanisms');
         if (pollingIntervalRef2.current) {
             clearInterval(pollingIntervalRef2.current);
             pollingIntervalRef2.current = null;
@@ -1068,8 +1093,13 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             clearTimeout(pollingTimeoutRef.current);
             pollingTimeoutRef.current = null;
         }
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
         retryCountRef.current = 0;
         setRetryCount(0);
+        stalledAt100Ref.current = null;
     }, []);
 
     /**
@@ -1149,7 +1179,17 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 setIsLoading(false);
                 setStep('review');
                 return true; // Stop polling
-            } else if (res && (res.data !== undefined || res.status === 'PROCESSING')) {
+            } else if (res && (res.data !== undefined || res.status === 'PROCESSING' || res.status === 'EMPTY_SESSION_TERMINAL')) {
+                if (res.status === 'EMPTY_SESSION_TERMINAL') {
+                    console.log(`[EMPTY_SESSION_TERMINAL_DETECTED] session=${uploadSessionId}`);
+                    setScanProgress(100);
+                    setScanCurrentFile('No active records in this upload session');
+                    setIsLoading(false);
+                    setScanResults([]);
+                    setStep('review');
+                    return true;
+                }
+
                 // ── Update Progress (Fix #6) ──
                 if (res.progress_percent !== undefined) {
                     const pct = Math.round(res.progress_percent);
@@ -1366,9 +1406,53 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 return result;
             });
 
-            setScanResults(seeded);
+            setScanResults(prev => {
+                if (!useAllUnresolvedRef.current) {
+                    // Live Session: seeded is the exact authoritative state
+                    return seeded;
+                }
+
+                // Resume Staging: Deterministic Unresolved Identity Merge
+                const normalize = (s: any) => String(s || '').replace(/[^A-Z0-9]/g, '').trim().toUpperCase();
+
+                const getResumeKey = (r: ScanResult) => {
+                    const gstin = normalize(r.vendor_gstin || getCellValue(r, 'vendor_gstin'));
+                    const invNo = normalize(r.invoice_number || getCellValue(r, 'invoice_no') || r.invoice_number);
+                    const branch = normalize(r.branch || getCellValue(r, 'branch') || '');
+                    if (gstin && invNo) return `RES_${gstin}_${branch}_${invNo}`;
+                    return r.file_hash || String(r.id);
+                };
+
+                const next = [...prev];
+                const seenKeys = new Set<string>();
+
+                for (const incoming of seeded) {
+                    const rKey = getResumeKey(incoming);
+                    if (seenKeys.has(rKey)) {
+                        console.log(`[RESUME_DEDUP_SKIPPED] frontend skipping duplicate incoming row key=${rKey}`);
+                        continue;
+                    }
+                    seenKeys.add(rKey);
+
+                    const existingIndex = next.findIndex(r => getResumeKey(r) === rKey);
+                    if (existingIndex >= 0) {
+                        next[existingIndex] = incoming;
+                        console.log(`[RESUME_ROW_REPLACED] key=${rKey}`);
+                    } else {
+                        next.push(incoming);
+                        console.log(`[RESUME_ROW_APPENDED] key=${rKey}`);
+                    }
+                }
+
+                // Reconcile and remove resolved rows (present in prev but missing from authoritative seeded)
+                const finalRows = next.filter(r => {
+                    const keep = seenKeys.has(getResumeKey(r));
+                    if (!keep) console.log(`[RESUME_ROW_RESOLVED] key=${getResumeKey(r)} removed from staging`);
+                    return keep;
+                });
+                return finalRows;
+            });
             console.log("API count:", rows.length);
-            console.log("UI count:", seeded.length);
 
             // [BUG 2 FIX: PROGRESSIVE REVIEW UNLOCK] 
             // Unlock the review step progressively as soon as records exist in the session,
@@ -1393,7 +1477,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         try {
                             const patchResult: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
                             if (patchResult.status === 'READY') {
-                                setScanResults(prev => prev.map(r => 
+                                setScanResults(prev => prev.map(r =>
                                     (r.id === row.id && !r._isSnapshot) ? { ...r, ...patchResult, validationStatus: 'READY' } : r
                                 ));
                             }
@@ -1440,13 +1524,15 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             sid = useAllUnresolvedRef.current ? '' : uploadSessionId;
         }
 
-        if (sid === undefined || sid === null) {
-            console.error('Invalid sessionId passed to fetchStagedInvoices:', forcedSid);
-            return;
+        if (!sid || sid === 'null' || sid === 'undefined' || sid === 'None') {
+            if (!useAllUnresolvedRef.current) {
+                console.error('[ORPHAN_POLL_BLOCKED] Invalid sessionId passed to fetchStagedInvoices for live upload:', forcedSid, 'sid:', sid);
+                return;
+            }
         }
 
         // ── Stop any existing poll before starting a new one ──
-        stopPolling();
+        stopAllPolling();
         setFetchError(null);
         setRetryCount(0);
         retryCountRef.current = 0;
@@ -1460,7 +1546,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         // Replaces polling with push-based terminal state signaling.
         const startSSE = (session_id: string) => {
             if (eventSourceRef.current) eventSourceRef.current.close();
-            
+
             console.log(`[SSE_CONNECTED] session_id=${session_id}`);
             // Note: EventSource sends cookies by default if same-origin.
             const es = new EventSource(`/api/ocr-status-stream/${session_id}/`);
@@ -1470,7 +1556,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 try {
                     const data = JSON.parse(event.data);
                     console.log(`[SSE_EVENT] session=${session_id} status=${data.status}`);
-                    
+
                     if (data.status === 'FINALIZED' || data.status === 'FAILED') {
                         console.log(`[SESSION_FINALIZED_EVENT] session_id=${session_id} event=${data.status}`);
                         console.log('✅ TERMINAL STATE REACHED — HALTING SSE.');
@@ -1640,7 +1726,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             // Fetch GST details to get the GSTIN and branch
             const gstDetails: any = await httpClient.get(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
             const gstList = Array.isArray(gstDetails) ? gstDetails : (gstDetails.results || []);
-            
+
             const gstin = gstList?.[0]?.gstin || '';
             const branch = gstList?.[0]?.reference_name || 'Main Branch';
             const address = gstList?.[0]?.branch_address || '';
@@ -1712,6 +1798,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     };
 
     const handleRescan = async (row: ScanResult) => {
+        const oldStatus = row.validationStatus;
         // Show loading state for the specific row
         setScanResults(prev => prev.map(r =>
             r.file_hash === row.file_hash ? { ...r, validationStatus: 'processing' as ValidationStatus } : r
@@ -1728,11 +1815,15 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 fetchStagedInvoices();
             } else {
                 showError(res.error || 'Rescan failed');
-                fetchStagedInvoices();
+                setScanResults(prev => prev.map(r =>
+                    r.file_hash === row.file_hash ? { ...r, validationStatus: oldStatus } : r
+                ));
             }
         } catch (err: any) {
             showError(err?.response?.data?.error || 'Network error during rescan');
-            fetchStagedInvoices();
+            setScanResults(prev => prev.map(r =>
+                r.file_hash === row.file_hash ? { ...r, validationStatus: oldStatus } : r
+            ));
         }
     };
 
@@ -1799,6 +1890,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     };
 
     const handleBack = () => {
+        if (workflowState === "FINALIZING") return;
         setStep('upload');
         if (useAllUnresolved) {
             setUseAllUnresolved(false);
@@ -1841,16 +1933,20 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             }
         }
 
+        if (workflowState === "FINALIZING") return;
+        setWorkflowState("FINALIZING");
         setFinalizing(true);
         setStep('finalizing');
 
+        console.log('[FINALIZE_STARTED] Halting polling and hydration');
+        stopAllPolling();
+
         try {
             const res: FinalizeResult = await httpClient.post('/api/ocr-staging-finalize/', {
-                upload_session_id: useAllUnresolved ? undefined : uploadSessionId
+                upload_session_id: uploadSessionId // Send uploadSessionId ALWAYS!
             });
 
             setFinalizeResult(res);
-            setStep('done');
 
             if (res.created > 0) {
                 showSuccess(res.message || `✅ ${res.created} voucher(s) created successfully!`);
@@ -1859,13 +1955,47 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 showError(`⚠️ ${res.failed} internal error(s) occurred.`);
             }
 
-            // Refresh staged invoices so the unresolved ones remain visible when user comes back
-            fetchStagedInvoices(undefined, false, vFilterRef.current);
+            if (res.skipped > 0) {
+                // If there are skipped/pending items left, stay on review screen and fetch them.
+                console.log('[SESSION_PARTIAL_TEARDOWN] Fetching remaining staging rows...');
+                setStep('review');
+                setWorkflowState("REVIEW");
+                // Fetch canonical backend state
+                fetchStagedInvoices(useAllUnresolvedRef.current ? undefined : uploadSessionId);
+            } else {
+                console.log('[SESSION_TEARDOWN_STARTED] Cleaning up live upload state');
+                // TEARDOWN ORCHESTRATION STATE BEFORE CLEARING upload_session_id
+                setUploadRows([]);
+                setResumeRows([]);
+                setUploadSelectedHashes(new Set());
+                setResumeSelectedHashes(new Set());
+                setScanProgress(0);
+
+                console.log('[SESSION_TEARDOWN_COMPLETED] Upload session cleared');
+
+                if (typeof window.crypto !== 'undefined' && typeof window.crypto.randomUUID === 'function') {
+                    setUploadSessionId(window.crypto.randomUUID());
+                } else {
+                    setUploadSessionId(Math.random().toString(36).substring(2, 11) + Date.now().toString(36));
+                }
+
+                if (useAllUnresolvedRef.current) {
+                    setUseAllUnresolved(false);
+                    useAllUnresolvedRef.current = false;
+                }
+
+                setWorkflowState("FINALIZED");
+                console.log('[LIVE_UPLOAD_RESET] Transitioning to clean upload state');
+                setStep('upload');
+                setWorkflowState("LIVE_UPLOAD");
+            }
+
             onFinalized?.(res);
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.message || 'Finalize failed.';
             showError(`❌ ${msg}`);
             setStep('review');
+            setWorkflowState("REVIEW");
         } finally {
             setFinalizing(false);
         }
@@ -2083,25 +2213,57 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                             </div>
                         </div>
 
-                        {/* Step Indicator */}
-                        <div className="flex items-center gap-1 mr-4">
-                            {(['upload', 'review', 'done'] as const).map((s, idx) => {
-                                const labels = ['1. Upload', '2. Review', '3. Save'];
-                                const active = step === s || (s === 'upload' && step === 'scanning') || (s === 'review' && step === 'finalizing');
-                                const done = (s === 'upload' && ['review', 'finalizing', 'done'].includes(step)) ||
-                                    (s === 'review' && step === 'done');
-                                return (
-                                    <React.Fragment key={s}>
-                                        {idx > 0 && (
-                                            <div className={`w-6 h-px ${done ? 'bg-white' : 'bg-white/30'}`} />
-                                        )}
-                                        <div className={`px-2 py-0.5 rounded text-xs font-semibold transition-all
-                                            ${done ? 'bg-emerald-400 text-white' : active ? 'bg-white text-indigo-700' : 'bg-white/20 text-white/70'}`}>
-                                            {done ? '✓' : labels[idx]}
-                                        </div>
-                                    </React.Fragment>
-                                );
-                            })}
+                        {/* Resume Toggle & Step Indicator */}
+                        <div className="flex items-center gap-4 mr-4">
+                            {/* LIVE VS RESUME TOGGLE */}
+                            <div className="flex items-center bg-black/20 p-1 rounded-lg mr-2">
+                                <button
+                                    onClick={() => {
+                                        useAllUnresolvedRef.current = false;
+                                        setUseAllUnresolved(false);
+                                        if (step === 'review') fetchStagedInvoices(uploadSessionId);
+                                    }}
+                                    className={`px-3 py-1 text-xs rounded-md font-bold transition-all ${!useAllUnresolved ? 'bg-white text-indigo-700 shadow-sm' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                                >
+                                    Live Upload
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        useAllUnresolvedRef.current = true;
+                                        setUseAllUnresolved(true);
+                                        setStep('review');
+                                        fetchStagedInvoices();
+                                    }}
+                                    className={`px-3 py-1 text-xs rounded-md font-bold transition-all flex items-center gap-2 ${useAllUnresolved ? 'bg-white text-indigo-700 shadow-sm' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                                >
+                                    Resume Staging
+                                    {unresolvedCount > 0 && (
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${useAllUnresolved ? 'bg-indigo-100 text-indigo-700' : 'bg-white/20 text-white'}`}>
+                                            {unresolvedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                                {(['upload', 'review', 'done'] as const).map((s, idx) => {
+                                    const labels = ['1. Upload', '2. Review', '3. Save'];
+                                    const active = step === s || (s === 'upload' && step === 'scanning') || (s === 'review' && step === 'finalizing');
+                                    const done = (s === 'upload' && ['review', 'finalizing', 'done'].includes(step)) ||
+                                        (s === 'review' && step === 'done');
+                                    return (
+                                        <React.Fragment key={s}>
+                                            {idx > 0 && (
+                                                <div className={`w-6 h-px ${done ? 'bg-white' : 'bg-white/30'}`} />
+                                            )}
+                                            <div className={`px-2 py-0.5 rounded text-xs font-semibold transition-all
+                                                ${done ? 'bg-emerald-400 text-white' : active ? 'bg-white text-indigo-700' : 'bg-white/20 text-white/70'}`}>
+                                                {done ? '✓' : labels[idx]}
+                                            </div>
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         <button
@@ -2345,6 +2507,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             <th className="px-3 py-3 text-right">Amount</th>
                                             <th className="px-3 py-3 text-center">Vendor Status</th>
                                             <th className="px-3 py-3 text-center">Voucher Status</th>
+                                            <th className="px-3 py-3 text-center">Resume Reason</th>
                                             <th className="px-3 py-3 text-center">Action</th>
                                         </tr>
                                     </thead>
@@ -2410,7 +2573,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 }
 
                                                 return (
-                                                    <tr key={idx} className={`group hover:bg-indigo-50/40 transition-colors ${row._isMerged ? 'bg-blue-50/30' : ''} ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' :
+                                                    <tr key={row.file_hash || row.id || idx} className={`group hover:bg-indigo-50/40 transition-colors ${row._isMerged ? 'bg-blue-50/30' : ''} ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' :
                                                         row.vendor_status === 'NEW' ? 'bg-amber-50/30' : ''
                                                         }`}>
                                                         <td className="px-3 py-3">
@@ -2493,6 +2656,24 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                 <span className="bg-gray-100 text-gray-400 border border-gray-200 px-2 py-1 rounded">Wait</span>
                                                             )}
                                                         </td>
+                                                        {/* Resume Reason */}
+                                                        <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                            {row.resume_reason === 'Vendor + Voucher Pending' ? (
+                                                                <span className="bg-gradient-to-r from-orange-100 to-indigo-100 text-indigo-900 border border-indigo-200 px-2 py-1 rounded-full shadow-sm" title="Requires both vendor creation and voucher saving">
+                                                                    Vendor + Voucher Pending
+                                                                </span>
+                                                            ) : row.resume_reason === 'Voucher Pending' ? (
+                                                                <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-1 rounded-full shadow-sm" title="Vendor resolved; requires saving voucher to ledger">
+                                                                    Voucher Pending
+                                                                </span>
+                                                            ) : row.resume_reason === 'Vendor Pending' ? (
+                                                                <span className="bg-orange-50 text-orange-700 border border-orange-200 px-2 py-1 rounded-full shadow-sm" title="Voucher already exists; requires creating canonical vendor record">
+                                                                    Vendor Pending
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-gray-300">—</span>
+                                                            )}
+                                                        </td>
                                                         <td className="px-2 py-3 text-center">
                                                             <div
                                                                 className="flex items-center justify-center gap-1"
@@ -2503,14 +2684,14 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                             >
                                                                 {!hasEffectiveMatch && ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) && (
                                                                     <button onClick={(e) => {
-                                                                             console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
-                                                                             const rect = e.currentTarget.getBoundingClientRect();
-                                                                             const x = rect.left + rect.width / 2;
-                                                                             const y = rect.top + rect.height / 2;
-                                                                             const el = document.elementFromPoint(x, y);
-                                                                             console.log('[DIAGNOSTIC][CREATE_VENDOR] Element under coordinates (', x, ',', y, ') is:', el);
-                                                                             openCreateVendorModal(row);
-                                                                         }} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
+                                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                                        const x = rect.left + rect.width / 2;
+                                                                        const y = rect.top + rect.height / 2;
+                                                                        const el = document.elementFromPoint(x, y);
+                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] Element under coordinates (', x, ',', y, ') is:', el);
+                                                                        openCreateVendorModal(row);
+                                                                    }} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
                                                                         CREATE VENDOR
                                                                     </button>
                                                                 )}

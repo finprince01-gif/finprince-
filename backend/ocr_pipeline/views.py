@@ -42,43 +42,60 @@ def extract_fields(record):
     return inv_no, gstin, has_payload
 
 # Helper to determine if a record is save-eligible
-def is_save_eligible(r, upload_session_id=None, tenant_id=None):
-    # 1. Exclude stale staging rows (must match session and tenant if provided)
-    if upload_session_id and str(r.upload_session_id) != str(upload_session_id):
-        return False, "SESSION_ROW_SCOPE_MISMATCH"
-    if tenant_id and str(r.tenant_id) != str(tenant_id):
-        return False, "SESSION_ROW_SCOPE_MISMATCH"
-
-    # 2. Exclude non-terminal and failed status rows
-    if r.validation_status in ["PENDING", "VALIDATING", "PROCESSING", "NEED_VENDOR", "CREATE_VENDOR", "OCR_RUNNING", "SNAPSHOT_PENDING"]:
-        return False, "NON_TERMINAL"
-    if r.validation_status in ["ERROR", "FAILED", "EXTRACTION_FAILED", "VALIDATION_FAILED"]:
-        return False, "OCR_FAILED"
-
-    # 3. Exclude incomplete/placeholder rows
-    inv_no, gst, has_payload = extract_fields(r)
-    if is_blank(inv_no) or is_blank(gst) or not has_payload:
-        return False, "PLACEHOLDER_OR_MISSING_PAYLOAD"
-
-    # 4. Exclude duplicate records (they are skipped, not saved)
-    if r.validation_status in ["DUPLICATE", "DUPLICATE_IN_BATCH", "DUPLICATE_INVOICE"]:
-        return False, "DUPLICATE"
-
-    # 5. Exclude already processed/saved records
-    if r.processed or r.validation_status == "VOUCHER_CREATED":
-        return False, "ALREADY_PROCESSED"
-
-    # 6. Only rows with valid existing vendor linkage
-    if not r.vendor_id:
-        return False, "NULL_VENDOR_ID"
-
-    # 7. Vendor status must be ALREADY EXIST / resolved
-    valid_vendor_statuses = ["EXISTS", "FOUND", "MATCHED", "RESOLVED", "ALREADY EXIST"]
-    normalized_status = str(r.vendor_status or "").strip().upper()
-    if normalized_status not in valid_vendor_statuses:
-        return False, f"INVALID_VENDOR_STATUS_{normalized_status}"
-
-    return True, None
+def get_save_eligible_rows(upload_session_id, tenant_id=None):
+    """
+    Centralized helper for finalizing vouchers.
+    Returns: list of (InvoiceTempOCR, UI_Row_Dict)
+    ONLY rows where:
+      - vendor_status == "ALREADY_EXIST"
+      AND
+      - voucher_status == "NEED_TO_SAVE"
+    are eligible.
+    """
+    from vendors.vendor_validation_logic import build_session_vendor_map
+    
+    qs = InvoiceTempOCR.objects.filter(upload_session_id=upload_session_id)
+    if tenant_id:
+        qs = qs.filter(tenant_id=tenant_id)
+    records_list = list(qs)
+    
+    vendor_map = build_session_vendor_map(tenant_id, records_list)
+    view_instance = CleanOCRStagingView()
+    
+    eligible = []
+    
+    for r in records_list:
+        # Ignore sub-pages
+        if not (r.is_primary or r.group_id is None):
+            continue
+            
+        ui_row = view_instance._map_record_to_ui_row(r, vendor_map=vendor_map)
+        
+        effective_vendor_id = ui_row.get('vendor_id')
+        ui_validation_status = ui_row.get('validationStatus')
+        
+        # Determine vendor_status exactly as frontend does
+        has_effective_match = r.vendor_status in ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'] or effective_vendor_id
+        vendor_status_badge = 'ALREADY_EXIST' if has_effective_match else 'CREATE_VENDOR'
+        
+        # Determine voucher_status exactly as frontend does
+        if ui_validation_status in ['processing', 'PENDING', 'EXTRACTING', 'PROCESSING', 'SCANNING']:
+            voucher_status_badge = 'SCANNING'
+        elif ui_validation_status == 'EXTRACTION_FAILED':
+            voucher_status_badge = 'FAILED'
+        elif ui_validation_status == 'VOUCHER_CREATED':
+            voucher_status_badge = 'SAVED'
+        elif ui_validation_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
+            voucher_status_badge = 'ALREADY_EXIST'
+        elif effective_vendor_id or ui_validation_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR']:
+            voucher_status_badge = 'NEED_TO_SAVE'
+        else:
+            voucher_status_badge = 'WAIT'
+            
+        if vendor_status_badge == 'ALREADY_EXIST' and voucher_status_badge == 'NEED_TO_SAVE':
+            eligible.append((r, ui_row))
+            
+    return eligible
 
 class CleanOCRStagingView(views.APIView):
     """
@@ -581,6 +598,30 @@ class CleanOCRStagingView(views.APIView):
         res["created_at"] = getattr(r, 'created_at', None)
         res["voucher_type"] = getattr(r, 'voucher_type', 'PURCHASE')
         
+        # [RESUME_STAGING_FILTER]
+        # Hide: Vendor Already Exists + Voucher Already Exists
+        is_vendor_exists = res["vendor_status"] == "EXISTS"
+        is_voucher_exists = res["validationStatus"] in ["DUPLICATE", "VOUCHER_CREATED", "DUPLICATE_IN_BATCH", "DUPLICATE_INVOICE"]
+        res["is_resume_pending"] = not (is_vendor_exists and is_voucher_exists)
+        
+        # ── Requirement 7: Mark completed explicitly ──
+        if is_voucher_exists:
+            res["is_saved"] = True
+            res["processing_state"] = "COMPLETED"
+        else:
+            res["is_saved"] = False
+            res["processing_state"] = res["status"]
+        
+        # [RESUME_REASON_LOGIC]
+        if not is_vendor_exists and not is_voucher_exists:
+            res["resume_reason"] = "Vendor + Voucher Pending"
+        elif is_vendor_exists and not is_voucher_exists:
+            res["resume_reason"] = "Voucher Pending"
+        elif not is_vendor_exists and is_voucher_exists:
+            res["resume_reason"] = "Vendor Pending"
+        else:
+            res["resume_reason"] = None
+        
         return res
 
     def _log_final_api_response_rows(self, data, source):
@@ -617,6 +658,15 @@ class CleanOCRStagingView(views.APIView):
                 
         logger.info("[STAGING_QUERY_START] Polling /api/ocr-staging/")
         logger.info(f"[STAGING_QUERY_FILTERS] upload_session_id='{session_id}' tenant_id='{tenant_id}' job_id='{job_id}' status='ACTIVE'")
+
+        if not resume and session_id in ['None', 'null', 'undefined', '', None]:
+            logger.warning(f"[ORPHAN_POLL_BLOCKED] Rejected staging poll with session_id='{session_id}'")
+            return Response({
+                "status": "EMPTY_SESSION_TERMINAL",
+                "data": [],
+                "progress_percent": 100,
+                "hydration_pending": False
+            })
 
         # Compute is_processing state to prevent premature finalization when processing multiple files
         is_processing = False
@@ -747,6 +797,12 @@ class CleanOCRStagingView(views.APIView):
                             logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='missing_vendor_warning'")
                         
                         # We absolutely preserve the DTO to enforce 100% hydration count consistency!
+                        if resume:
+                            # ── Requirement 7: Resume query MUST exclude completed rows ──
+                            if mapped.get("is_saved") or mapped.get("validationStatus") in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'] or mapped.get('processed'):
+                                logger.info(f"[RESUME_FILTER] Dropping stale completed row inv_no='{inv_no}'")
+                                continue
+                                
                         mapped_data.append(mapped)
                 
                 logger.info(f"[FINAL_HYDRATION_COUNT] count={len(mapped_data)}")
@@ -1033,6 +1089,8 @@ class CleanOCRStagingView(views.APIView):
             logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=raw_staging session={session_id} map_size={len(_vendor_map_raw)}")
 
         data = []
+        _resume_dedup_seen = set()
+
         for r in records_list:
             mapped = self._map_record_to_ui_row(r, vendor_map=_vendor_map_raw)
             # [FIX] Do NOT filter out FAILED rows. The UI must see them so the user can manually review
@@ -1060,6 +1118,23 @@ class CleanOCRStagingView(views.APIView):
                 mapped['_pipeline_warning'] = 'completely_empty_record'
                 # DO NOT drop the row! The frontend needs to know it processed and yielded nothing,
                 # otherwise the frontend assumes the row is still "in-flight" and retries forever.
+
+            if resume:
+                if not mapped.get("is_resume_pending", True):
+                    logger.info(f"[RESUME_ROW_RESOLVED] id={mapped.get('id')} reason='is_resume_pending=False'")
+                    continue
+                
+                # [RESUME_STAGING_DEDUP] deduplicate by canonical key
+                _gstin = str(mapped.get('vendor_gstin') or "").strip().upper()
+                _branch = str(mapped.get('branch') or getattr(r, 'branch', '') or "").strip().upper()
+                _inv_no = str(mapped.get('invoice_number') or mapped.get('invoice_no') or "").strip().upper()
+                
+                if _gstin and _inv_no and _inv_no != "—" and _gstin != "—":
+                    resume_key = (_gstin, _branch, _inv_no)
+                    if resume_key in _resume_dedup_seen:
+                        logger.info(f"[RESUME_DEDUP_SKIPPED] id={mapped.get('id')} resume_key={resume_key} reason='already_exists_in_unresolved_set'")
+                        continue
+                    _resume_dedup_seen.add(resume_key)
 
             data.append(mapped)
 
@@ -1109,8 +1184,10 @@ class CleanOCRStagingView(views.APIView):
             terminal_reason = auth_state.get('terminal_reason', '')
             
             if terminal:
-                # If terminal, it's either COMPLETED or FAILED
-                if terminal_reason in ['FAILED', 'FAILED_DUPLICATE', 'ERROR'] or (not snapshot_complete and len(data) == 0):
+                # If terminal, it's either COMPLETED or FAILED or EMPTY_SESSION_TERMINAL
+                if terminal_reason == 'EMPTY_SESSION_TERMINAL':
+                    pipeline_status = 'EMPTY_SESSION_TERMINAL'
+                elif terminal_reason in ['FAILED', 'FAILED_DUPLICATE', 'ERROR'] or (not snapshot_complete and len(data) == 0):
                     pipeline_status = 'failed'
                 else:
                     pipeline_status = 'completed'
@@ -1611,8 +1688,8 @@ class OCRStagingFinalizeView(views.APIView):
         snapshot_complete = auth_state.get('snapshot_complete', False)
         materialization_complete = auth_state.get('materialization_complete', False)
         
-        # Check convergence
-        is_converged = (expected > 0) and (completed + failed == expected) and snapshot_complete and materialization_complete
+        # Check convergence: Finalize must only run when completed == expected.
+        is_converged = (expected > 0) and (completed == expected) and snapshot_complete and materialization_complete
         
         if not is_converged:
             logger.warning(
@@ -1649,69 +1726,16 @@ class OCRStagingFinalizeView(views.APIView):
         logger.info(f"[SESSION_ROW_SCOPE] session={upload_session_id} tenant={tenant_id} total_rows={len(all_records)}")
 
         # ── Requirement 4: Fix ready-count calculation ──
-        ready_count = 0
-        for r in all_records:
-            eligible, reason = is_save_eligible(r, upload_session_id=upload_session_id, tenant_id=tenant_id)
-            logger.info(f"[FINALIZE_ROW_VALIDATION] record_id={r.id} eligible={eligible} reason={reason} vendor_id={r.vendor_id} vendor_status={r.vendor_status} validation_status={r.validation_status}")
-            if eligible:
-                ready_count += 1
+        eligible_tuples = get_save_eligible_rows(upload_session_id, tenant_id=tenant_id)
+        ready_count = len(eligible_tuples)
         logger.info(f"[READY_COUNT_RECALCULATED] session={upload_session_id} ready_count={ready_count}")
 
-        # Fetch finalized snapshot rows
-        snapshot = FinalizedSnapshot.objects.filter(session_id=upload_session_id).order_by('-created_at').first()
-        snapshot_data = {}
-        if snapshot:
-            if snapshot.s3_key:
-                from core.storage import StorageService
-                try:
-                    data_bytes = StorageService().get_file(snapshot.s3_key)
-                    if snapshot.s3_key.endswith('.gz'):
-                        import gzip
-                        data_bytes = gzip.decompress(data_bytes)
-                    snapshot_data = json.loads(data_bytes)
-                except Exception as e:
-                    logger.error(f"[FINALIZE_SNAPSHOT_S3_ERROR] {e}")
-                    snapshot_data = snapshot.snapshot_json or {}
-            else:
-                snapshot_data = snapshot.snapshot_json or {}
-
-        snapshot_rows = snapshot_data.get('data', []) if isinstance(snapshot_data, dict) else []
-        snapshot_inv_keys = set()
-        for row in snapshot_rows:
-            snap_inv = row.get('invoice_no')
-            snap_gst = row.get('gstin') or row.get('vendor_gstin')
-            if snap_inv and snap_gst:
-                snapshot_inv_keys.add((str(snap_inv).strip().upper(), str(snap_gst).strip().upper()))
-
         # ── Requirement 5: Fix finalize candidate builder ──
+        # Get only the records from the eligible tuples
         candidates = []
-        for r in all_records:
-            eligible, reason = is_save_eligible(r, upload_session_id=upload_session_id, tenant_id=tenant_id)
-            if not eligible:
-                if reason == "DUPLICATE":
-                    logger.info(f"[FINALIZE_CANDIDATE_REJECTED] record_id={r.id} reason=duplicate")
-                    summary['skipped'] += 1
-                else:
-                    logger.info(f"[FINALIZE_CANDIDATE_REJECTED] record_id={r.id} reason={reason}")
-                    logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={r.id} reason={reason}")
-                continue
-
-            # Skip if not primary or ungrouped to prevent duplication
-            if not (r.is_primary or r.group_id is None):
-                logger.info(f"[FINALIZE_CANDIDATE_REJECTED] record_id={r.id} reason=not_primary_or_grouped")
-                continue
-
-            # Check if matching row exists in snapshot (if snapshot is present)
-            if snapshot_inv_keys:
-                inv_no, gst, _ = extract_fields(r)
-                rec_inv_key = (str(inv_no).strip().upper(), str(gst).strip().upper())
-                if rec_inv_key not in snapshot_inv_keys:
-                    logger.warning(f"Record {r.id} {rec_inv_key} not found in finalized snapshot rows.")
-                    logger.info(f"[FINALIZE_CANDIDATE_REJECTED] record_id={r.id} reason=not_in_snapshot")
-                    continue
-
-            logger.info(f"[FINALIZE_CANDIDATE_ACCEPTED] record_id={r.id}")
+        for r, ui_row in eligible_tuples:
             candidates.append(r)
+            logger.info(f"[FINALIZE_CANDIDATE_ACCEPTED] record_id={r.id}")
 
         # ── Requirement 7: Fix partial save corruption ──
         logger.info(f"[SAVE_PIPELINE_START] session={upload_session_id} candidates_count={len(candidates)}")
@@ -1723,29 +1747,48 @@ class OCRStagingFinalizeView(views.APIView):
                 db_rec = InvoiceTempOCR.objects.filter(id=record.id).first()
                 if not db_rec:
                     continue
-                eligible, reason = is_save_eligible(db_rec, upload_session_id=upload_session_id, tenant_id=tenant_id)
-                if not eligible:
-                    logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={db_rec.id} reason={reason}")
+                
+                # Check eligibility again using the centralized helper
+                eligibility_check = get_save_eligible_rows(upload_session_id, tenant_id=tenant_id)
+                eligible_ids = [t[0].id for t in eligibility_check]
+                
+                if db_rec.id not in eligible_ids:
+                    logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={db_rec.id} no longer eligible")
                     continue
                 
                 logger.info(f"[PURCHASE_DB_INSERT_START] record={db_rec.id} vendor_id={db_rec.vendor_id} validation_status={db_rec.validation_status}")
+                
+                # We wrap the save attempt in an atomic block and log every step
                 try:
-                    res = validate_and_process(db_rec, auto_save=True)
-                    save_status = res.get('status') if isinstance(res, dict) else None
-                    if save_status == 'VOUCHER_CREATED':
-                        summary['created'] += 1
-                        logger.info(f"[PURCHASE_DB_INSERT_SUCCESS] record={db_rec.id} voucher_id={res.get('voucher_id')}")
-                        logger.info(f"[PURCHASE_COMMIT_SUCCESS] record={db_rec.id} voucher_id={res.get('voucher_id')}")
-                    elif save_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
-                        summary['skipped'] += 1
-                        logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={db_rec.id} status={save_status}")
-                    else:
-                        summary['failed'] += 1
-                        summary['errors'].append({
-                            'file': db_rec.file_path,
-                            'error': res.get('validation_message') if isinstance(res, dict) else "Finalization failed"
-                        })
-                        logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={db_rec.id} status={save_status}")
+                    with transaction.atomic():
+                        logger.info(f"[SAVE_ELIGIBLE_ROW] Starting processing for record_id={db_rec.id}")
+                        res = validate_and_process(db_rec, auto_save=True)
+                        save_status = res.get('status') if isinstance(res, dict) else None
+                        
+                        if save_status == 'VOUCHER_CREATED':
+                            summary['created'] += 1
+                            logger.info(f"[VOUCHER_INSERT_SUCCESS] record={db_rec.id} voucher_id={res.get('voucher_id')}")
+                            # Mark the row as completed to prevent it from reappearing in resume staging
+                            db_rec.processed = True
+                            db_rec.validation_status = 'VOUCHER_CREATED'
+                            db_rec.status = 'COMPLETED'
+                            db_rec.save(update_fields=['processed', 'validation_status', 'status'])
+                        elif save_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
+                            summary['skipped'] += 1
+                            logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={db_rec.id} status={save_status}")
+                            # Duplicate is also skipped, handled correctly.
+                            db_rec.validation_status = 'DUPLICATE'
+                            db_rec.save(update_fields=['validation_status'])
+                        else:
+                            summary['failed'] += 1
+                            err_msg = res.get('validation_message') if isinstance(res, dict) else "Finalization failed"
+                            summary['errors'].append({
+                                'file': db_rec.file_path,
+                                'error': err_msg
+                            })
+                            logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={db_rec.id} status={save_status} err={err_msg}")
+                            # If not created, rollback explicit transaction context to discard partial updates
+                            transaction.set_rollback(True)
                 except Exception as e:
                     logger.error(f"[FINALIZE_RECORD_FAILED] record={db_rec.id} error={e}", exc_info=True)
                     summary['failed'] += 1
