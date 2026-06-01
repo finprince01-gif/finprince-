@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon';
 import { showInfo, showSuccess, confirm } from '../utils/toast';
+import { httpClient } from '../services/httpClient';
 
 type Position = {
   x: number;
@@ -62,14 +63,27 @@ const FloatingCalendar: React.FC = () => {
   const [viewMode, setViewMode] = useState<'calendar' | 'day-details' | 'add-reminder'>('calendar');
 
   // Reminders State
-  const [reminders, setReminders] = useState<Reminder[]>(() => {
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+
+  useEffect(() => {
+    fetchReminders();
+  }, []);
+
+  const fetchReminders = async () => {
     try {
-      const stored = localStorage.getItem('calendar_reminders');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
+      const response = await httpClient.get<any[]>('/api/tools/notes/?type=REMINDER');
+      setReminders(response.map(r => ({
+        id: r.id.toString(),
+        date: r.reminder_date ? new Date(r.reminder_date).toISOString().split('T')[0] : '', // YYYY-MM-DD
+        time: r.reminder_date ? new Date(r.reminder_date).toTimeString().substring(0, 5) : '', // HH:MM
+        title: r.title,
+        description: r.content || '',
+        triggered: r.is_completed,
+      })));
+    } catch (e) {
+      console.error('Failed to fetch reminders:', e);
     }
-  });
+  };
 
   // Active Alerts State
   const [activeAlerts, setActiveAlerts] = useState<Reminder[]>([]);
@@ -103,10 +117,7 @@ const FloatingCalendar: React.FC = () => {
     panelTop: number;
   } | null>(null);
   
-  // Save reminders to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('calendar_reminders', JSON.stringify(reminders));
-  }, [reminders]);
+  // Sync reminders logic handled by API endpoints directly
 
   // Window resize listener
   useEffect(() => {
@@ -141,6 +152,17 @@ const FloatingCalendar: React.FC = () => {
       if (triggeredList.length > 0) {
         setReminders(updated);
         setActiveAlerts(prev => [...prev, ...triggeredList]);
+        
+        // Update DB
+        triggeredList.forEach(rem => {
+          httpClient.put(`/api/tools/notes/${rem.id}/`, {
+            type: 'REMINDER',
+            title: rem.title,
+            content: rem.description,
+            is_completed: true,
+            reminder_date: new Date(`${rem.date}T${rem.time}:00`).toISOString()
+          }).catch(e => console.error('Failed to update triggered reminder:', e));
+        });
       }
     }, 10000); // Check every 10 seconds
 
@@ -302,32 +324,55 @@ const FloatingCalendar: React.FC = () => {
       .slice(0, 3);
   }, [reminders]);
 
-  const handleAddReminder = (e: React.FormEvent) => {
+  const handleAddReminder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) {
       showInfo('Please enter a title');
       return;
     }
-    const newRem: Reminder = {
-      id: Date.now().toString(),
-      date: selectedDateStr,
-      time: newTime,
-      title: newTitle,
-      description: newDescription,
-      triggered: false,
-    };
-    setReminders(prev => [...prev, newRem]);
-    setNewTitle('');
-    setNewDescription('');
-    setNewTime('12:00');
-    setViewMode('day-details');
-    showSuccess('Reminder added successfully!');
+
+    try {
+      const reminderDate = new Date(`${selectedDateStr}T${newTime}:00`);
+      
+      const response = await httpClient.post<any>('/api/tools/notes/', {
+        type: 'REMINDER',
+        title: newTitle,
+        content: newDescription,
+        reminder_date: reminderDate.toISOString(),
+        is_completed: false
+      });
+
+      const newRem: Reminder = {
+        id: response.id.toString(),
+        date: selectedDateStr,
+        time: newTime,
+        title: response.title,
+        description: response.content || '',
+        triggered: response.is_completed,
+      };
+
+      setReminders(prev => [...prev, newRem]);
+      setNewTitle('');
+      setNewDescription('');
+      setNewTime('12:00');
+      setViewMode('day-details');
+      showSuccess('Reminder added successfully!');
+    } catch (error) {
+      console.error('Failed to create reminder:', error);
+      showInfo('Failed to create reminder');
+    }
   };
 
   const handleDeleteReminder = async (id: string) => {
     if (!await confirm('Are you sure you want to delete this reminder?')) return;
-    setReminders(prev => prev.filter(r => r.id !== id));
-    showSuccess('Reminder deleted!');
+    try {
+      await httpClient.delete(`/api/tools/notes/${id}/`);
+      setReminders(prev => prev.filter(r => r.id !== id));
+      showSuccess('Reminder deleted!');
+    } catch (error) {
+      console.error('Failed to delete reminder:', error);
+      showInfo('Failed to delete reminder');
+    }
   };
 
   const handleDismissAlert = (id: string) => {

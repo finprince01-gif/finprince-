@@ -1872,7 +1872,7 @@ const InventoryPage: React.FC = () => {
                       <th className="table-header">Name</th>
                       <th className="table-header">Type</th>
                       <th className="table-header">Details</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 !text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -1902,7 +1902,7 @@ const InventoryPage: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {details}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <td className="px-6 py-4 whitespace-nowrap !text-center text-sm font-medium">
                             <button
                               onClick={() => handleViewLocation(loc)}
                               className="text-gray-600 hover:text-gray-900 mr-4 font-bold text-xs"
@@ -9734,7 +9734,7 @@ const InventoryPage: React.FC = () => {
                   <th>GST Rate</th>
                   <th>UOM</th>
                   <th>Rate</th>
-                  <th className="text-center">Action</th>
+                  <th className="!text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -9749,19 +9749,21 @@ const InventoryPage: React.FC = () => {
                       <td className="px-6 py-4 text-sm text-gray-500">{item.gstRate}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{item.uom}</td>
                       <td className="px-6 py-4 text-sm text-gray-900 font-medium">₹{item.rate}</td>
-                      <td className="px-6 py-4 text-center space-x-2">
-                        <button
-                          onClick={() => handleEditItemOpen(item)}
-                          className="inline-block px-3 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200 font-medium text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="inline-block px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 font-medium text-sm"
-                        >
-                          Delete
-                        </button>
+                      <td className="px-6 py-4 !text-center text-sm font-medium">
+                        <div className="flex justify-center items-center gap-4">
+                          <button
+                            onClick={() => handleEditItemOpen(item)}
+                            className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
+                          >
+                            EDIT
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
+                          >
+                            DELETE
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -10306,7 +10308,7 @@ const InventoryPage: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GRN Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GRN Series Name</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <th className="px-6 py-3 !text-center text-xs font-medium text-gray-500 uppercase">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -10315,8 +10317,8 @@ const InventoryPage: React.FC = () => {
                       <td className="px-6 py-4 text-sm text-gray-900">{series.grnType || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{series.preview || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-900">{series.name || '-'}</td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex gap-2 justify-center">
+                      <td className="px-6 py-4 !text-center text-sm font-medium">
+                        <div className="flex justify-center items-center gap-4">
                           <button
                             onClick={() => {
                               setGrnSeriesName(series.name);
@@ -10328,10 +10330,10 @@ const InventoryPage: React.FC = () => {
                               setIsEditModeGRNSeries(true);
                               setSelectedGrnSeries(series);
                             }}
-                            className="text-white bg-indigo-600 px-3 py-1 rounded text-xs hover:bg-indigo-700"
+                            className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
                             title="Edit"
                           >
-                            ✎ Edit
+                            EDIT
                           </button>
                           <button
                             onClick={async () => {
@@ -10345,10 +10347,10 @@ const InventoryPage: React.FC = () => {
                                 }
                               }
                             }}
-                            className="text-white bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-700"
+                            className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
                             title="Delete"
                           >
-                            🗑 Delete
+                            DELETE
                           </button>
                         </div>
                       </td>
@@ -10587,7 +10589,7 @@ const InventoryPage: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue Slip Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue Slip Series Name</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <th className="px-6 py-3 !text-center text-xs font-medium text-gray-500 uppercase">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -10596,8 +10598,8 @@ const InventoryPage: React.FC = () => {
                       <td className="px-6 py-4 text-sm text-gray-900">{series.issueSlipType || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{series.preview || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-900">{series.name || '-'}</td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex gap-2 justify-center">
+                      <td className="px-6 py-4 !text-center text-sm font-medium">
+                        <div className="flex justify-center items-center gap-4">
                           <button
                             onClick={() => {
                               setIssueSlipSeriesName(series.name);
@@ -10609,10 +10611,10 @@ const InventoryPage: React.FC = () => {
                               setIsEditModeIssueSlipSeries(true);
                               setSelectedIssueSlipSeries(series);
                             }}
-                            className="text-white bg-indigo-600 px-3 py-1 rounded text-xs hover:bg-indigo-700"
+                            className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
                             title="Edit"
                           >
-                            ✎ Edit
+                            EDIT
                           </button>
                           <button
                             onClick={async () => {
@@ -10626,10 +10628,10 @@ const InventoryPage: React.FC = () => {
                                 }
                               }
                             }}
-                            className="text-white bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-700"
+                            className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
                             title="Delete"
                           >
-                            🗑 Delete
+                            DELETE
                           </button>
                         </div>
                       </td>
