@@ -670,6 +670,53 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             except Exception:
                 pass
 
+        # ── CustomerTransaction status map (single source of truth for CP parity) ──
+        customer_txn_status_map = {}  # voucher_number -> due_status
+        if resolved_ledger:
+            try:
+                from customerportal.models import CustomerMasterCustomerBasicDetails, CustomerTransaction as CT  # pyre-fixme
+                lc = CustomerMasterCustomerBasicDetails.objects.filter(
+                    ledger=resolved_ledger, tenant_id=tenant_id
+                ).first()
+                if lc:
+                    ct_rows = CT.objects.filter(  # pyre-ignore
+                        tenant_id=tenant_id, customer_id=lc.id
+                    ).values('transaction_number', 'payment_status', 'transaction_type',
+                             'total_amount', 'amount', 'reference_number')
+                    from datetime import date as dt_date, timedelta
+                    from decimal import Decimal
+                    for ctr in ct_rows:
+                        vno = ctr['transaction_number']
+                        vtype = (ctr.get('transaction_type') or '').lower()
+                        pstatus = (ctr.get('payment_status') or '').lower()
+                        
+                        if vtype in ('sales', 'invoice', 'debit_note'):
+                            ref_no = ctr.get('reference_number') or vno
+                            total_amt = float(ctr.get('total_amount') or ctr.get('amount') or 0)
+                            paid_sum = 0.0
+                            if ref_no:
+                                linking = CT.objects.filter(  # pyre-ignore
+                                    tenant_id=tenant_id, customer_id=lc.id,
+                                    reference_number=ref_no
+                                ).exclude(transaction_number=vno)
+                                for ltx in linking:
+                                    lt = (ltx.transaction_type or '').lower()
+                                    if lt in ('receipt', 'credit_note'):
+                                        paid_sum += float(ltx.total_amount or ltx.amount or 0)
+                                    elif lt in ('debit_note',):
+                                        paid_sum -= float(ltx.total_amount or ltx.amount or 0)
+                                        
+                            if total_amt > 0 and paid_sum >= total_amt:
+                                customer_txn_status_map[vno] = 'Received'
+                            elif paid_sum > 0:
+                                customer_txn_status_map[vno] = 'Partially Received'
+                            # else: aging logic (not computed here; frontend handles)
+                        elif vtype in ['payment', 'receipt']:
+                            customer_txn_status_map[vno] = pstatus.capitalize() if pstatus else 'Not Utilized'
+            except Exception:
+                pass
+
+
         for e in queryset:
             dr = float(e.debit)
             cr = float(e.credit)
@@ -724,6 +771,8 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             dn_data = debit_note_status_map.get(vno, {})
             # Vendor transaction exact match status
             vt_status = vendor_txn_status_map.get(vno)
+            # Customer transaction exact match status
+            ct_status = customer_txn_status_map.get(vno)
 
             row = {
                 'id': e.id,
@@ -747,8 +796,8 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                 'source': vsource,
                 'reference_id': ref_id,
                 'voucher_pk': vmeta.get('voucher_pk'),
-                # ── Purchase/Debit Note payment status enrichment (for Vendor-Portal-parity) ──
-                'due_status': vt_status or pv_data.get('due_status') or dn_data.get('due_status') or '',
+                # ── Purchase/Debit Note/Customer payment status enrichment (for Portal parity) ──
+                'due_status': ct_status or vt_status or pv_data.get('due_status') or dn_data.get('due_status') or '',
                 'paid_amount': pv_data.get('paid_amount', pmt_data.get('paid_amount', 0)),
                 'total_amount': pv_data.get('total_amount', pmt_data.get('total_amount', 0)),
                 # ── Payment/Receipt advance enrichment ──

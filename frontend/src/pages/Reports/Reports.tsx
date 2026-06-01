@@ -1576,7 +1576,20 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       });
     }
     let result = Array.from(map.entries())
-      .map(([name, net]) => ({ name, balance: Math.abs(net), balanceType: net > 0 ? 'Dr' : net < 0 ? 'Cr' : '' }))
+      .map(([name, net]) => {
+        const ledgerObj = ledgers?.find(l => l.name === name);
+        let category = '-';
+        if (ledgerObj) {
+           const groupLower = (ledgerObj.group || '').toLowerCase();
+           if (groupLower.includes('creditor')) category = 'Vendor';
+           else if (groupLower.includes('debtor')) category = 'Customer';
+           else {
+             // Fallback to Major Category (e.g. ASSET, LIABILITY, INCOME) as requested
+             category = ledgerObj.category || ledgerObj.group || '-';
+           }
+        }
+        return { name, category, balance: Math.abs(net), balanceType: net > 0 ? 'Dr' : net < 0 ? 'Cr' : '' };
+      })
       .filter(r => r.balance > 0).sort((a, b) => a.name.localeCompare(b.name));
 
     if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
@@ -1980,8 +1993,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       <table className="erp-table w-full">
         <thead>
           <tr className="bg-indigo-50">
-            <th className="px-6 py-3 text-left text-xs font-bold text-indigo-700 uppercase tracking-wider w-2/3">Ledger Name</th>
-            <th className="px-6 py-3 text-right text-xs font-bold text-indigo-700 uppercase tracking-wider w-1/3">Running Balance</th>
+            <th className="px-6 py-3 text-left text-xs font-bold text-indigo-700 uppercase tracking-wider w-5/12">Ledger Name</th>
+            <th className="px-6 py-3 text-left text-xs font-bold text-indigo-700 uppercase tracking-wider w-3/12">Category</th>
+            <th className="px-6 py-3 text-right text-xs font-bold text-indigo-700 uppercase tracking-wider w-4/12">Running Balance</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
@@ -1996,6 +2010,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   </svg>
                 </span>
               </td>
+              <td className="px-6 py-3 whitespace-nowrap text-left">
+                <span className="px-2 py-1 text-xs font-medium rounded-md bg-gray-100 text-gray-700 border border-gray-200 shadow-sm">{row.category}</span>
+              </td>
               <td className="px-6 py-3 whitespace-nowrap text-right">
                 <span className={`text-sm font-mono font-bold ${row.balanceType === 'Dr' ? 'text-orange-600' : 'text-green-700'}`}>
                   ₹{row.balance.toFixed(2)}
@@ -2004,13 +2021,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
               </td>
             </tr>
           )) : (
-            <tr><td colSpan={2} className="px-6 py-12 text-sm text-center text-gray-400">No ledger data found. Add some vouchers first.</td></tr>
+            <tr><td colSpan={3} className="px-6 py-12 text-sm text-center text-gray-400">No ledger data found. Add some vouchers first.</td></tr>
           )}
         </tbody>
         {ledgerSummary.length > 0 && (
           <tfoot className="bg-gray-50 border-t-2 border-gray-200">
             <tr>
               <td className="px-6 py-3 text-sm font-bold text-gray-600">{ledgerSummary.length} Ledgers</td>
+              <td className="px-6 py-3"></td>
               <td className="px-6 py-3 text-right text-sm font-bold text-orange-600">
                 Dr: ₹{ledgerSummary.filter(r => r.balanceType === 'Dr').reduce((s, r) => s + r.balance, 0).toFixed(2)}
               </td>
@@ -2105,89 +2123,55 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
                     {filteredDrillData.length > 0 ? filteredDrillData.map((e, idx) => {
-                      // ── Vendor-Portal-parity status logic ──────────────────────────────
-                      // Priority 1: Check allocationRows for source vouchers (Purchase/Sales)
-                      let st = allocationRows.find(r => r.refNo === e.voucherNo && r.isFirstInSource)?.status;
+                      // ── Unified Status Logic (As per user request) ──────────────────────
+                      let st = '';
                       const raw = e.rawVoucher || {};
                       
-                      // 1. If backend explicitly provides due_status (via vendor_txn_status_map or debit_note_status_map), use it unconditionally.
-                      if (raw.due_status) {
-                        st = raw.due_status;
-                      } 
-                      
-                      if (!st) {
-                        const vtLower = (e.voucherType || '').toLowerCase();
-                        const txType = (raw.voucher_type || raw.type || vtLower).toLowerCase();
-                        const isPurchase = txType.includes('purchase');
-                        const isDebitNote = vtLower.includes('debit');
-                        const isCreditNote = vtLower.includes('credit');
-                        const isPayment = vtLower.includes('payment');
-                        const isReceipt = vtLower.includes('receipt');
-                        const isContra = vtLower.includes('contra');
+                      // Calculate if credit term is expired
+                      let isExpired = false;
+                      const amount = parseFloat(raw.total || raw.amount || raw.total_amount || 0);
+                      const paidAmount = parseFloat(raw.paid_amount || raw.used_amount || 0);
+                      const pendingBalance = Math.max(0, amount - paidAmount);
 
-                        if (isPurchase) {
-                          // Purchase voucher fallback logic
-                          const amount = parseFloat(raw.total || raw.amount || raw.total_amount || 0);
-                          const paidAmount = parseFloat(raw.paid_amount || raw.used_amount || 0);
-                          const isFullyPaid = amount > 0 && Math.abs(paidAmount - amount) < 0.01;
-                          const isPartiallyPaid = paidAmount > 0 && paidAmount < amount;
-                          if (isFullyPaid || (amount > 0 && paidAmount >= amount)) st = 'Paid';
-                          else if (isPartiallyPaid) st = 'Partially Paid';
-                          else {
-                            // Use aging (credit period) to determine Due vs Not Due
-                            st = allocationRows.find(r => r.refNo === e.voucherNo)?.status || (() => {
-                              const activeLedgerNameForStatus = drillDownLedger?.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-                              const activeLedgerForStatus = ledgers?.find((l: any) => l.name === activeLedgerNameForStatus);
-                              const cpStrStatus = activeLedgerForStatus?.additional_data?.credit_period || activeLedgerForStatus?.credit_period || '0';
-                              const cpStatus = parseInt(String(cpStrStatus), 10) || (drillDownData[0]?.ledger_credit_period || 0);
-                              if (!e.date) return 'Due';
-                              const invDate = new Date(e.date);
-                              const today = new Date();
-                              const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
-                              const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                              const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-                              return diffDays > cpStatus ? 'Due' : 'Not Due';
-                            })();
-                          }
-                        } else if (isDebitNote || isCreditNote) {
-                          // Debit/Credit Notes: check if utilized (linked to a purchase)
-                          const allocSt = raw.allocation_status || raw.allocationStatus || '';
-                          const isLinkedApp = allocationRows.some(r => r.appliedRefNo === e.voucherNo);
-                          if (isLinkedApp || allocSt === 'Utilized') st = 'Paid';
-                          else if (allocSt === 'Partially Utilized') st = 'Partially Paid';
-                          else {
-                            // Not linked to any source invoice → treat same as advance
-                            const amount = parseFloat(raw.total || raw.amount || 0);
-                            const usedAmt = parseFloat(raw.paid_amount || raw.used_amount || 0);
-                            if (amount > 0 && usedAmt >= amount) st = 'Paid';
-                            else if (usedAmt > 0) st = 'Partially Paid';
-                            else st = 'Not Utilized';
-                          }
-                        } else if (isPayment || isReceipt || isContra) {
-                          // Payment/Receipt: advance or linked payment
-                          const allocSt = raw.allocation_status || raw.allocationStatus || '';
-                          const isAdvance = (raw.is_advance) ||
-                            (raw.reference_type || '').toUpperCase() === 'ADVANCE' ||
-                            (raw.status || '').toLowerCase() === 'advance';
-                          const isLinkedApp = allocationRows.some(r => r.appliedRefNo === e.voucherNo);
-                          if (isLinkedApp || allocSt === 'Utilized') {
-                            st = isAdvance ? 'Utilized' : 'Paid';
-                          } else if (isAdvance) {
-                            const amount = parseFloat(raw.total || raw.amount || 0);
-                            const usedAmt = parseFloat(raw.paid_amount || raw.used_amount || 0);
-                            if (amount > 0 && usedAmt >= amount) st = 'Utilized';
-                            else if (usedAmt > 0) st = 'Partially Utilized';
-                            else st = 'Not Utilized';
-                          } else {
-                            const amount = parseFloat(raw.total || raw.amount || 0);
-                            const paidAmt = parseFloat(raw.paid_amount || raw.used_amount || 0);
-                            if (amount > 0 && paidAmt >= amount) st = 'Paid';
-                            else if (paidAmt > 0) st = 'Partially Paid';
-                            else st = 'Not Utilized';
-                          }
-                        } else {
-                          st = '-';
-                        }
+                      if (amount > 0 && e.date) {
+                        const activeLedgerNameForStatus = drillDownLedger?.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
+                        const activeLedgerForStatus = ledgers?.find((l: any) => l.name === activeLedgerNameForStatus);
+                        const cpStrStatus = activeLedgerForStatus?.additional_data?.credit_period || activeLedgerForStatus?.credit_period || '0';
+                        const cpStatus = parseInt(String(cpStrStatus), 10) || (drillDownData[0]?.ledger_credit_period || 0);
+                        const invDate = new Date(e.date);
+                        const today = new Date();
+                        const diffDays = Math.floor((new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() - new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate()).getTime()) / 86400000);
+                        isExpired = diffDays > cpStatus;
+                      }
+
+                      const vtLower = (e.voucherType || '').toLowerCase();
+                      const txType = (raw.voucher_type || raw.type || vtLower).toLowerCase();
+                      const isPurchase = txType.includes('purchase') || txType.includes('expense');
+                      const isSales = txType.includes('sales') || txType.includes('invoice');
+                      const isDebitNote = vtLower.includes('debit');
+                      const isCreditNote = vtLower.includes('credit');
+                      const isPayment = vtLower.includes('payment') || vtLower.includes('receipt') || vtLower.includes('contra');
+
+                      // 1. Check Disputed
+                      if (raw.is_disputed || raw.status === 'Disputed' || raw.payment_status === 'Disputed') {
+                        st = 'Disputed';
+                      } else if (isSales || isDebitNote) {
+                        if (pendingBalance === 0 && amount > 0) st = 'Received';
+                        else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Received';
+                        else if (pendingBalance === amount) st = isExpired ? 'Due' : 'Not Due';
+                        else st = 'Not Due';
+                      } else if (isPurchase || isCreditNote) {
+                        if (pendingBalance === 0 && amount > 0) st = 'Paid';
+                        else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Paid';
+                        else if (pendingBalance === amount) st = isExpired ? 'Unpaid' : 'Not Due';
+                        else st = 'Not Due';
+                      } else if (isPayment) {
+                        if (pendingBalance === 0 && amount > 0) st = 'Utilized';
+                        else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Utilized';
+                        else if (pendingBalance === amount) st = 'Unutilized';
+                        else st = 'Unutilized';
+                      } else {
+                        st = '-';
                       }
                       return (
                         <tr key={`dd-${idx}`}
@@ -2277,57 +2261,55 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   </thead>
                   <tbody className="bg-white">
                     {filteredDrillData.length > 0 ? filteredDrillData.map((e, idx) => {
-                      // ── Vendor-Portal-parity status logic (Journal View) ──────────
-                      let st = allocationRows.find(r => r.refNo === e.voucherNo && r.isFirstInSource)?.status;
+                      // ── Unified Status Logic (As per user request) ──────────────────────
+                      let st = '';
                       const raw = e.rawVoucher || {};
                       
-                      // 1. If backend explicitly provides due_status (via vendor_txn_status_map or debit_note_status_map), use it unconditionally.
-                      if (raw.due_status) {
-                        st = raw.due_status;
+                      // Calculate if credit term is expired
+                      let isExpired = false;
+                      const amount = parseFloat(raw.total || raw.amount || raw.total_amount || 0);
+                      const paidAmount = parseFloat(raw.paid_amount || raw.used_amount || 0);
+                      const pendingBalance = Math.max(0, amount - paidAmount);
+
+                      if (amount > 0 && e.date) {
+                        const activeLedgerNameForStatus = drillDownLedger?.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
+                        const activeLedgerForStatus = ledgers?.find((l: any) => l.name === activeLedgerNameForStatus);
+                        const cpStrStatus = activeLedgerForStatus?.additional_data?.credit_period || activeLedgerForStatus?.credit_period || '0';
+                        const cpStatus = parseInt(String(cpStrStatus), 10) || (drillDownData[0]?.ledger_credit_period || 0);
+                        const invDate = new Date(e.date);
+                        const today = new Date();
+                        const diffDays = Math.floor((new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() - new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate()).getTime()) / 86400000);
+                        isExpired = diffDays > cpStatus;
                       }
-                      
-                      if (!st) {
-                        const vtLower = (e.voucherType || '').toLowerCase();
-                        const txType = (raw.voucher_type || raw.type || vtLower).toLowerCase();
-                        const isPurchase = txType.includes('purchase');
-                        const isDebitNote = vtLower.includes('debit');
-                        const isCreditNote = vtLower.includes('credit');
-                        const isPayment = vtLower.includes('payment');
-                        const isReceipt = vtLower.includes('receipt');
-                        const isContra = vtLower.includes('contra');
-                        
-                        if (isPurchase) {
-                          // Purchase voucher fallback logic
-                            const amount = parseFloat(raw.total || raw.amount || raw.total_amount || 0);
-                            const paidAmount = parseFloat(raw.paid_amount || raw.used_amount || 0);
-                            if (amount > 0 && paidAmount >= amount) st = 'Paid';
-                            else if (paidAmount > 0 && paidAmount < amount) st = 'Partially Paid';
-                            else {
-                              const allocLedgerName = drillDownLedger?.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-                              const allocLedger = ledgers?.find((l: any) => l.name === allocLedgerName);
-                              const cpStr2 = allocLedger?.additional_data?.credit_period || allocLedger?.credit_period || '0';
-                              const cp2 = parseInt(String(cpStr2), 10) || (drillDownData[0]?.ledger_credit_period || 0);
-                              if (!e.date) { st = 'Due'; }
-                              else {
-                                const d1j = new Date(e.date); const d2j = new Date();
-                                const diffj = Math.floor((new Date(d2j.getFullYear(), d2j.getMonth(), d2j.getDate()).getTime() - new Date(d1j.getFullYear(), d1j.getMonth(), d1j.getDate()).getTime()) / 86400000);
-                                st = diffj > cp2 ? 'Due' : 'Not Due';
-                              }
-                            }
-                        } else if (isDebitNote || isCreditNote) {
-                          const allocSt = raw.allocation_status || raw.allocationStatus || '';
-                          const isLinkedAppJ = allocationRows.some((r: any) => r.appliedRefNo === e.voucherNo);
-                          if (isLinkedAppJ || allocSt === 'Utilized') st = 'Paid';
-                          else if (allocSt === 'Partially Utilized') st = 'Partially Paid';
-                          else { const uamt = parseFloat(raw.paid_amount || raw.used_amount || 0); st = uamt > 0 ? 'Partially Paid' : 'Not Utilized'; }
-                        } else if (isPayment || isReceipt || isContra) {
-                          const allocSt = raw.allocation_status || raw.allocationStatus || '';
-                          const isAdvJ = raw.is_advance || (raw.reference_type || '').toUpperCase() === 'ADVANCE' || (raw.status || '').toLowerCase() === 'advance';
-                          const isLinkedAppJ = allocationRows.some((r: any) => r.appliedRefNo === e.voucherNo);
-                          if (isLinkedAppJ || allocSt === 'Utilized') { st = isAdvJ ? 'Utilized' : 'Paid'; }
-                          else if (isAdvJ) { const uamt = parseFloat(raw.paid_amount || raw.used_amount || 0); const tamt = parseFloat(raw.total || raw.amount || 0); st = (tamt > 0 && uamt >= tamt) ? 'Utilized' : uamt > 0 ? 'Partially Utilized' : 'Not Utilized'; }
-                          else { const pamt = parseFloat(raw.paid_amount || raw.used_amount || 0); const tamt = parseFloat(raw.total || raw.amount || 0); st = (tamt > 0 && pamt >= tamt) ? 'Paid' : pamt > 0 ? 'Partially Paid' : 'Not Utilized'; }
-                        } else { st = '-'; }
+
+                      const vtLower = (e.voucherType || '').toLowerCase();
+                      const txType = (raw.voucher_type || raw.type || vtLower).toLowerCase();
+                      const isPurchase = txType.includes('purchase') || txType.includes('expense');
+                      const isSales = txType.includes('sales') || txType.includes('invoice');
+                      const isDebitNote = vtLower.includes('debit');
+                      const isCreditNote = vtLower.includes('credit');
+                      const isPayment = vtLower.includes('payment') || vtLower.includes('receipt') || vtLower.includes('contra');
+
+                      // 1. Check Disputed
+                      if (raw.is_disputed || raw.status === 'Disputed' || raw.payment_status === 'Disputed') {
+                        st = 'Disputed';
+                      } else if (isSales || isDebitNote) {
+                        if (pendingBalance === 0 && amount > 0) st = 'Received';
+                        else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Received';
+                        else if (pendingBalance === amount) st = isExpired ? 'Due' : 'Not Due';
+                        else st = 'Not Due';
+                      } else if (isPurchase || isCreditNote) {
+                        if (pendingBalance === 0 && amount > 0) st = 'Paid';
+                        else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Paid';
+                        else if (pendingBalance === amount) st = isExpired ? 'Unpaid' : 'Not Due';
+                        else st = 'Not Due';
+                      } else if (isPayment) {
+                        if (pendingBalance === 0 && amount > 0) st = 'Utilized';
+                        else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Utilized';
+                        else if (pendingBalance === amount) st = 'Unutilized';
+                        else st = 'Unutilized';
+                      } else {
+                        st = '-';
                       }
                       const stFinal = st || '-';
                       return (
