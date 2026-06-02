@@ -143,48 +143,70 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                 const missingFields: string[] = item.missing_fields ? [...item.missing_fields] : [];
                 let existingMessage = item.message ? item.message : '';
                 
-                const checkDropdown = (key: string, required: boolean, validOptions: {value: string}[]) => {
-                    const val = getFieldValue(data, key);
+                const checkDropdown = (targetData: any, prefix: string, key: string, required: boolean, validOptions: {value: string}[]) => {
+                    const val = getFieldValue(targetData, key);
                     const valStr = val ? val.toString().trim().toLowerCase() : '';
                     const isRawEmpty = !val || valStr === '' || valStr === 'n/a' || valStr === 'none' || valStr === 'nan' || valStr === 'null' || valStr.startsWith('select ');
                     
+                    const fieldKey = prefix ? `${prefix} ${key}` : key;
+                    
                     if (isRawEmpty) {
-                        if (required) missingFields.push(key);
+                        if (required && !missingFields.includes(fieldKey)) missingFields.push(fieldKey);
                         return;
                     }
                     
                     const matched = validOptions.find(o => o.value?.toString().toLowerCase() === valStr || norm(o.value) === norm(valStr));
                     if (!matched) {
-                        if (required) missingFields.push(key);
-                        setFieldValue(data, key, ''); // Clear invalid value
+                        if (required && !missingFields.includes(fieldKey)) missingFields.push(fieldKey);
+                        setFieldValue(targetData, key, ''); // Clear invalid value
                     } else {
-                        if (val !== matched.value) setFieldValue(data, key, matched.value); // Auto-correct
+                        if (val !== matched.value) setFieldValue(targetData, key, matched.value); // Auto-correct
                     }
                 };
 
                 const countryOptions = Country.getAllCountries().map(c => ({ value: c.name, isoCode: c.isoCode }));
                 
-                // Default Country to India if empty, to match backend behavior and allow state/city validation
-                if (!getFieldValue(data, 'Country')) {
-                    setFieldValue(data, 'Country', 'India');
-                }
-                
-                checkDropdown('Country', true, countryOptions);
-                
-                const countryNorm = norm(getFieldValue(data, 'Country'));
-                const country = countryOptions.find(c => norm(c.value) === countryNorm);
-                const stateOptions = country ? State.getStatesOfCountry(country.isoCode).map(s => ({ value: s.name, isoCode: s.isoCode })) : [];
-                checkDropdown('State', true, stateOptions);
-                
-                const stateNorm = norm(getFieldValue(data, 'State'));
-                const state = stateOptions.find(s => norm(s.value) === stateNorm);
-                const cityOptions = (country && state) ? City.getCitiesOfState(country.isoCode, state.isoCode).map(c => ({ value: c.name })) : [];
-                checkDropdown('City', true, cityOptions);
+                const branchesToValidate = [
+                    { data: data, prefix: '' },
+                    ...(data['extra_branches'] || []).map((b: any, i: number) => ({ data: b, prefix: `Branch ${i + 1}` }))
+                ];
+
+                branchesToValidate.forEach((branchInfo) => {
+                    const bData = branchInfo.data;
+                    const bPrefix = branchInfo.prefix;
+
+                    // Default Country to India if empty, to match backend behavior and allow state/city validation
+                    if (!getFieldValue(bData, 'Country')) {
+                        setFieldValue(bData, 'Country', 'India');
+                    }
+                    
+                    checkDropdown(bData, bPrefix, 'Country', true, countryOptions);
+                    
+                    const countryNorm = norm(getFieldValue(bData, 'Country'));
+                    const country = countryOptions.find(c => norm(c.value) === countryNorm);
+                    const stateOptions = country ? State.getStatesOfCountry(country.isoCode).map(s => ({ value: s.name, isoCode: s.isoCode })) : [];
+                    checkDropdown(bData, bPrefix, 'State', true, stateOptions);
+                    
+                    const stateNorm = norm(getFieldValue(bData, 'State'));
+                    const state = stateOptions.find(s => norm(s.value) === stateNorm);
+                    const cityOptions = (country && state) ? City.getCitiesOfState(country.isoCode, state.isoCode).map(c => ({ value: c.name })) : [];
+                    
+                    if (cityOptions.length > 0) {
+                        checkDropdown(bData, bPrefix, 'City', true, cityOptions);
+                    } else {
+                        // No dropdown options — just require non-empty text
+                        const cityVal = getFieldValue(bData, 'City');
+                        const cityStr = cityVal ? cityVal.toString().trim().toLowerCase() : '';
+                        const cityEmpty = !cityVal || cityStr === '' || cityStr === 'n/a' || cityStr === 'none' || cityStr === 'nan' || cityStr === 'null' || cityStr.startsWith('select ');
+                        const fieldKey = bPrefix ? `${bPrefix} City` : 'City';
+                        if (cityEmpty && !missingFields.includes(fieldKey)) missingFields.push(fieldKey);
+                    }
+                });
                 
                 // Validate generic dropdown options passed from props (e.g., Registration Type, Category, etc.)
                 if (dropdownOptions) {
                     Object.entries(dropdownOptions).forEach(([key, options]) => {
-                        checkDropdown(key, false, options);
+                        checkDropdown(data, '', key, false, options);
                     });
                 }
 
@@ -209,6 +231,52 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                             );
                             if (!match) missingFields.push(`Product ${idx + 1} Item Name`);
                         }
+                    });
+                }
+
+                // Check ALL required fields for emptiness
+                const isVendorCheck = title.toLowerCase().includes('vendor');
+                const isItemCheck = title.toLowerCase().includes('item') || title.toLowerCase().includes('inventory');
+                const requiredFieldsCheck = isItemCheck ?
+                    ['Item Code', 'Item Name', 'UOM'] :
+                    isVendorCheck ?
+                    ['Vendor Code', 'Vendor Name', 'Category', 'PAN Number', 'Email Address', 'Contact Number', 'Reference Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'] :
+                    ['Customer Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'];
+
+                requiredFieldsCheck.forEach(f => {
+                    const val = getFieldValue(data, f);
+                    const isValEmpty = val === undefined || val === null || (() => {
+                        const s = val.toString().trim().toLowerCase();
+                        return s === '' || s === 'n/a' || s === 'none' || s === 'nan' || s === 'null' || s.startsWith('select ');
+                    })();
+                    if (isValEmpty && !missingFields.includes(f)) {
+                        missingFields.push(f);
+                    }
+                });
+
+                // Validate Contact Number (must be 10 digits)
+                const contactNum = getFieldValue(data, 'Contact Number');
+                if (contactNum) {
+                    const digits = contactNum.toString().replace(/\D/g, '');
+                    if (digits.length < 10 && !missingFields.includes('Contact Number')) {
+                        missingFields.push('Contact Number');
+                    }
+                }
+
+                // Check extra branches for mandatory fields
+                if (data['extra_branches'] && Array.isArray(data['extra_branches'])) {
+                    data['extra_branches'].forEach((branch: any, bIdx: number) => {
+                        const branchRequiredFields = ['Branch Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'];
+                        branchRequiredFields.forEach(f => {
+                            const val = getFieldValue(branch, f);
+                            const isValEmpty = val === undefined || val === null || (() => {
+                                const s = val.toString().trim().toLowerCase();
+                                return s === '' || s === 'n/a' || s === 'none' || s === 'nan' || s === 'null' || s.startsWith('select ');
+                            })();
+                            if (isValEmpty && !missingFields.includes(`Branch ${bIdx + 1} ${f}`)) {
+                                missingFields.push(`Branch ${bIdx + 1} ${f}`);
+                            }
+                        });
                     });
                 }
 
@@ -297,27 +365,54 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
     const handleQuickSave = (updatedData: any) => {
         if (!editingItem || !summary) return;
 
-        // Validation before saving
+        // Validation before saving — use getFieldValue so aliased/fuzzy keys are resolved
         const isVendor = title.toLowerCase().includes('vendor');
         const isItem = title.toLowerCase().includes('item') || title.toLowerCase().includes('inventory');
-        const requiredFields = isItem ? 
-            ['Item Code', 'Item Name', 'UOM', 'Purchase Price', 'Selling Price'] :
-            title.includes('Vendor') ? 
+        const requiredFields = isItem ?
+            ['Item Code', 'Item Name', 'UOM'] :
+            isVendor ?
             ['Vendor Code', 'Vendor Name', 'Category', 'PAN Number', 'Email Address', 'Contact Number', 'Reference Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'] :
-            isItem ?
-                ['Item Code', 'Item Name', 'UOM'] :
-                ['Customer Name', 'Category', 'Email Address', 'Contact Number', 'Reference Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'];
+            ['Customer Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'];
+
+        const isEmptyVal = (val: any) => {
+            if (val === undefined || val === null) return true;
+            const s = val.toString().trim().toLowerCase();
+            return s === '' || s === 'n/a' || s === 'none' || s === 'nan' || s === 'null' || s.startsWith('select ');
+        };
 
         const missing = requiredFields.filter(f => {
-            const val = updatedData[f];
-            if (!val) return true;
-            const valStr = val.toString().trim().toLowerCase();
-            return valStr === '' || valStr === 'n/a' || valStr === 'none' || valStr === 'nan' || valStr === 'null' || valStr.startsWith('select ');
+            const val = getFieldValue(updatedData, f);
+            return isEmptyVal(val);
         });
+
+        // Validate extra branches mandatory fields
+        if (updatedData['extra_branches'] && Array.isArray(updatedData['extra_branches'])) {
+            updatedData['extra_branches'].forEach((branch: any, bIdx: number) => {
+                const branchRequiredFields = ['Branch Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'];
+                branchRequiredFields.forEach(f => {
+                    const val = getFieldValue(branch, f);
+                    if (isEmptyVal(val)) {
+                        missing.push(`Branch ${bIdx + 1} ${f}`);
+                    }
+                });
+            });
+        }
 
         if (missing.length > 0) {
             setValidationErrors(missing);
+            alert(`Please fill in the following mandatory fields before saving:\n• ${missing.join('\n• ')}`);
             return;
+        }
+
+        // Validate Contact Number: must be 10 digits
+        const contactNum = getFieldValue(updatedData, 'Contact Number');
+        if (contactNum) {
+            const digits = contactNum.toString().replace(/\D/g, '');
+            if (digits.length < 10) {
+                setValidationErrors(['Contact Number']);
+                alert('Contact Number must have at least 10 digits.');
+                return;
+            }
         }
 
         // Validate PAN format for vendors
@@ -736,7 +831,11 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                     const country = Country.getAllCountries().find(c => norm(c.name) === countryNorm);
                                                     const state = country ? State.getStatesOfCountry(country.isoCode).find(s => norm(s.name) === stateNorm) : null;
                                                     if (country && state) {
-                                                        fieldOptions = City.getCitiesOfState(country.isoCode, state.isoCode).map(c => ({ label: c.name, value: c.name }));
+                                                        const cities = City.getCitiesOfState(country.isoCode, state.isoCode).map(c => ({ label: c.name, value: c.name }));
+                                                        // Only use dropdown if cities exist; otherwise leave undefined so it renders as text input
+                                                        if (cities.length > 0) {
+                                                            fieldOptions = cities;
+                                                        }
                                                     }
                                                 }
 
@@ -752,7 +851,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                 const isNotInOptions = isSelectField && fieldOptions && fieldOptions.length > 0 && !matchedOption;
                                                 const isEmpty = isRawEmpty || (isSelectField && (!value || isNotInOptions));
                                                 const isInvalidPan = key === 'PAN Number' && !isEmpty && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(valStr.toUpperCase());
-                                                const hasWarning = (field.required && isEmpty) || isInvalidPan || isMentionedInError || validationErrors.includes(key);
+                                                const hasWarning = (field.required && isEmpty) || isInvalidPan || (isMentionedInError && isEmpty) || validationErrors.includes(key);
                                                 const warningMessage = isInvalidPan ? 'Invalid PAN format (e.g. AAAAA0000A)' : 'This field is mandatory';
                                                 
                                                 // Auto-correct the stored value to properly-cased option value
