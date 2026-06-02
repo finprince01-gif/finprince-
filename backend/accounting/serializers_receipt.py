@@ -614,7 +614,6 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     "narration": receipt.narration,
                     "ref_no": receipt.ref_no,
                     "source": getattr(receipt, 'source', 'manual'),
-                    "items_data": items_data,
                     "ledger_id_val": receipt.ledger_id_val,
                     "party_customer_id": receipt.party_customer_id,
                     "party_vendor_id": receipt.party_vendor_id
@@ -817,7 +816,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 )
                 if not lid:
                     continue
-                amt = Decimal(str(item.received_amount))
+                amt = Decimal(str(item.amount))
                 if lid not in customer_data_map:
                     customer_data_map[lid] = {
                         "amount": Decimal("0"),
@@ -826,15 +825,26 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     }
                 customer_data_map[lid]["amount"] += amt
 
-            # If no items resolved, fall back to pay_from_ledger on the header
-            if not customer_data_map:
+            sum_items_total = sum(data["amount"] for data in customer_data_map.values())
+            
+            # Prevent double-counting if frontend sends both advance and invoice allocations
+            if sum_items_total != total_decimal:
+                # If there is a mismatch (like 81212 vs 40606), fallback to the header's customer
                 from_ledger = getattr(receipt, 'pay_from_ledger', None)
                 if from_ledger:
-                    customer_data_map[from_ledger.id] = {
-                        "amount": total_decimal,
-                        "c_id": receipt.party_customer_id,
-                        "v_id": receipt.party_vendor_id
+                    customer_data_map = {
+                        from_ledger.id: {
+                            "amount": total_decimal,
+                            "c_id": receipt.party_customer_id,
+                            "v_id": receipt.party_vendor_id
+                        }
                     }
+                else:
+                    # If no header ledger, scale the amounts proportionally to match total_amount
+                    if sum_items_total > 0:
+                        scale = total_decimal / sum_items_total
+                        for data in customer_data_map.values():
+                            data["amount"] = (data["amount"] * scale).quantize(Decimal('0.00'))
 
             for lid, data in customer_data_map.items():
                 amt = data["amount"]

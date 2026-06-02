@@ -1864,8 +1864,42 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       const totalSourceAmt = sources.reduce((sum, s) => sum + (isDr ? (s.debit || 0) : (s.credit || 0)), 0);
 
       if (applications.length === 0) {
-        const sourceAllocStatus = firstSource.rawVoucher?.allocation_status;
-        const displayStatus = sourceAllocStatus === 'Utilized' ? 'Paid' : (totalSourceAmt === 0 ? 'Paid' : getAgingStatus(firstSource.date));
+        const raw = firstSource.rawVoucher || {};
+        const vtLower = (firstSource.voucherType || '').toLowerCase();
+        const txType = (raw.voucher_type || raw.type || vtLower).toLowerCase();
+        const isPurchase = txType.includes('purchase') || txType.includes('expense');
+        const isSales = txType.includes('sales') || txType.includes('invoice');
+        const isDebitNote = vtLower.includes('debit');
+        const isCreditNote = vtLower.includes('credit');
+        const isPayment = vtLower.includes('payment') || vtLower.includes('receipt') || vtLower.includes('contra');
+
+        const rawDueStatus = raw.due_status || '';
+        let displayStatus = getAgingStatus(firstSource.date);
+        
+        if (raw.is_disputed || raw.status === 'Disputed' || raw.payment_status === 'Disputed') {
+            displayStatus = 'Disputed';
+        } else if (isSales || isDebitNote) {
+            if (rawDueStatus) displayStatus = rawDueStatus;
+            else if (totalSourceAmt === 0) displayStatus = 'Received';
+            else displayStatus = displayStatus;
+        } else if (isPurchase || isCreditNote) {
+            if (rawDueStatus) displayStatus = rawDueStatus;
+            else if (totalSourceAmt === 0) displayStatus = 'Paid';
+            else displayStatus = displayStatus;
+        } else if (isPayment) {
+            if (rawDueStatus) displayStatus = rawDueStatus;
+            else if (totalSourceAmt === 0) displayStatus = 'Utilized';
+            else displayStatus = 'Unutilized';
+        } else {
+            const sourceAllocStatus = raw.allocation_status;
+            displayStatus = sourceAllocStatus === 'Utilized' ? 'Paid' : (totalSourceAmt === 0 ? 'Paid' : displayStatus);
+        }
+
+        let pendingBal = totalSourceAmt;
+        if (['Paid', 'Received', 'Utilized'].includes(displayStatus)) {
+            pendingBal = 0;
+        }
+
         rows.push({
           date: firstSource.date,
           postedFrom: firstSource.voucherType,
@@ -1874,7 +1908,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           appliedDate: '-',
           appliedRefNo: '-',
           appliedAmount: '-',
-          pendingBalance: totalSourceAmt,
+          pendingBalance: pendingBal,
           status: displayStatus,
           rowSpan: 1,
           isFirstInSource: true
@@ -2156,19 +2190,30 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       if (raw.is_disputed || raw.status === 'Disputed' || raw.payment_status === 'Disputed') {
                         st = 'Disputed';
                       } else if (isSales || isDebitNote) {
-                        if (pendingBalance === 0 && amount > 0) st = 'Received';
+                        // ── Customer Portal parity: trust backend due_status FIRST ──
+                        const rawDueStatus = raw.due_status || '';
+                        if (rawDueStatus) {
+                          st = rawDueStatus; // 'Due', 'Not Due', 'Received', 'Partially Received' from backend
+                        } else if (pendingBalance === 0 && amount > 0) st = 'Received';
                         else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Received';
                         else if (pendingBalance === amount) st = isExpired ? 'Due' : 'Not Due';
                         else st = 'Not Due';
                       } else if (isPurchase || isCreditNote) {
-                        if (pendingBalance === 0 && amount > 0) st = 'Paid';
+                        // ── Vendor Portal parity: trust backend due_status when no payment applied yet ──
+                        const rawDueStatus = raw.due_status || '';
+                        if (rawDueStatus && pendingBalance === amount) {
+                          st = rawDueStatus; // 'Paid', 'Partially Paid', 'Due', 'Not Due' from backend
+                        } else if (pendingBalance === 0 && amount > 0) st = 'Paid';
                         else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Paid';
-                        else if (pendingBalance === amount) st = isExpired ? 'Unpaid' : 'Not Due';
+                        else if (pendingBalance === amount) st = isExpired ? 'Due' : 'Not Due';
                         else st = 'Not Due';
                       } else if (isPayment) {
-                        if (pendingBalance === 0 && amount > 0) st = 'Utilized';
+                        // ── Portal parity: trust backend due_status (same notes-based lookup) ──
+                        const rawPayStatus = raw.due_status || '';
+                        if (rawPayStatus) {
+                          st = rawPayStatus; // 'Utilized', 'Partially Utilized', 'Unutilized', 'Advance Applied' from backend
+                        } else if (pendingBalance === 0 && amount > 0) st = 'Utilized';
                         else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Utilized';
-                        else if (pendingBalance === amount) st = 'Unutilized';
                         else st = 'Unutilized';
                       } else {
                         st = '-';
@@ -2190,13 +2235,18 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           <td className="px-6 py-4 whitespace-nowrap border-r border-gray-50">
                             {st !== '-' && e.voucherType !== 'Opening' ? (
                               <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
+                                st === 'Received' ? 'bg-green-100 text-green-800' :
                                 st === 'Paid' ? 'bg-green-100 text-green-800' :
                                 st === 'Utilized' ? 'bg-teal-100 text-teal-800' :
                                 st === 'Due' ? 'bg-red-100 text-red-800' :
                                 st === 'Not Due' ? 'bg-blue-100 text-blue-700' :
+                                st === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
                                 st === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
                                 st === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
-                                st === 'Not Utilized' ? 'bg-purple-100 text-purple-700' :
+                                st === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
+                                st === 'Advance' ? 'bg-purple-100 text-purple-700' :
+                                st === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
+                                st === 'Open' ? 'bg-gray-100 text-gray-600' :
                                 'bg-gray-100 text-gray-600'
                               }`}>{st}</span>
                             ) : '-'}
@@ -2294,19 +2344,30 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       if (raw.is_disputed || raw.status === 'Disputed' || raw.payment_status === 'Disputed') {
                         st = 'Disputed';
                       } else if (isSales || isDebitNote) {
-                        if (pendingBalance === 0 && amount > 0) st = 'Received';
+                        // ── Customer Portal parity: trust backend due_status FIRST ──
+                        const rawDueStatus = raw.due_status || '';
+                        if (rawDueStatus) {
+                          st = rawDueStatus; // 'Due', 'Not Due', 'Received', 'Partially Received' from backend
+                        } else if (pendingBalance === 0 && amount > 0) st = 'Received';
                         else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Received';
                         else if (pendingBalance === amount) st = isExpired ? 'Due' : 'Not Due';
                         else st = 'Not Due';
                       } else if (isPurchase || isCreditNote) {
-                        if (pendingBalance === 0 && amount > 0) st = 'Paid';
+                        // ── Vendor Portal parity: trust backend due_status when no payment applied yet ──
+                        const rawDueStatus = raw.due_status || '';
+                        if (rawDueStatus && pendingBalance === amount) {
+                          st = rawDueStatus; // 'Paid', 'Partially Paid', 'Due', 'Not Due' from backend
+                        } else if (pendingBalance === 0 && amount > 0) st = 'Paid';
                         else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Paid';
-                        else if (pendingBalance === amount) st = isExpired ? 'Unpaid' : 'Not Due';
+                        else if (pendingBalance === amount) st = isExpired ? 'Due' : 'Not Due';
                         else st = 'Not Due';
                       } else if (isPayment) {
-                        if (pendingBalance === 0 && amount > 0) st = 'Utilized';
+                        // ── Portal parity: trust backend due_status ──
+                        const rawPayStatus = raw.due_status || '';
+                        if (rawPayStatus) {
+                          st = rawPayStatus; // 'Utilized', 'Partially Utilized', 'Unutilized', 'Advance Applied' from backend
+                        } else if (pendingBalance === 0 && amount > 0) st = 'Utilized';
                         else if (pendingBalance < amount && pendingBalance > 0) st = 'Partially Utilized';
-                        else if (pendingBalance === amount) st = 'Unutilized';
                         else st = 'Unutilized';
                       } else {
                         st = '-';
@@ -2324,13 +2385,18 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                             <td className="px-6 py-4 whitespace-nowrap border-r border-gray-100">
                               {stFinal !== '-' && e.voucherType !== 'Opening' ? (
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
+                                  stFinal === 'Received' ? 'bg-green-100 text-green-800' :
                                   stFinal === 'Paid' ? 'bg-green-100 text-green-800' :
                                   stFinal === 'Utilized' ? 'bg-teal-100 text-teal-800' :
                                   stFinal === 'Due' ? 'bg-red-100 text-red-800' :
                                   stFinal === 'Not Due' ? 'bg-blue-100 text-blue-700' :
+                                  stFinal === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
                                   stFinal === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
                                   stFinal === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
-                                  stFinal === 'Not Utilized' ? 'bg-purple-100 text-purple-700' :
+                                  stFinal === 'Advance Applied' ? 'bg-purple-100 text-purple-700' :
+                                  stFinal === 'Advance' ? 'bg-purple-100 text-purple-700' :
+                                  stFinal === 'Unutilized' ? 'bg-gray-100 text-gray-600' :
+                                  stFinal === 'Open' ? 'bg-gray-100 text-gray-600' :
                                   'bg-gray-100 text-gray-600'
                                 }`}>{stFinal}</span>
                               ) : '-'}
@@ -2624,14 +2690,20 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
                 {/* Available Payment Vouchers */}
                 {(() => {
-                  const advances = filteredDrillData.filter(e =>
-                    e.voucherType && ['Receipt', 'Payment', 'receipt', 'payment'].some(t => (e.voucherType || '').toLowerCase().includes(t.toLowerCase())) &&
-                    (e.referenceNo === '-' || !e.referenceNo || e.referenceNo.trim() === '')
-                  );
+                  const advances = filteredDrillData.filter(e => {
+                    const isPmt = e.voucherType && ['Receipt', 'Payment', 'receipt', 'payment', 'Credit Note', 'credit note', 'Debit Note', 'debit note', 'credit', 'debit'].some(t => (e.voucherType || '').toLowerCase().includes(t.toLowerCase()));
+                    if (!isPmt) return false;
+                    const isAdv = e.is_advance || e.rawVoucher?.is_advance || (e.referenceNo === '-' || !e.referenceNo || e.referenceNo.trim() === '');
+                    if (!isAdv) return false;
+                    const total = parseFloat(e.rawVoucher?.total_amount || e.rawVoucher?.amount || e.rawVoucher?.total || 0) || (e.debit > 0 ? e.debit : e.credit);
+                    const paid = parseFloat(e.rawVoucher?.paid_amount || e.rawVoucher?.used_amount || 0);
+                    const pending = Math.max(0, total - paid);
+                    return pending > 0;
+                  });
                   return advances.length > 0 ? (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Available Payment Vouchers</h4>
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Available Advance Vouchers</h4>
                         <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{advances.length} Found</span>
                       </div>
                       <div className="max-h-[320px] overflow-y-auto border border-gray-200 rounded">
@@ -2648,6 +2720,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           <tbody className="divide-y divide-gray-100 bg-white">
                             {advances.map((adv: any, idx: number) => {
                               const isSelected = selectedAllocationAdvances.some(a => a.voucherNo === adv.voucherNo);
+                              const total = parseFloat(adv.rawVoucher?.total_amount || adv.rawVoucher?.amount || adv.rawVoucher?.total || 0) || (adv.debit > 0 ? adv.debit : adv.credit);
+                              const paid = parseFloat(adv.rawVoucher?.paid_amount || adv.rawVoucher?.used_amount || 0);
+                              const pending = Math.max(0, total - paid);
                               return (
                                 <tr key={idx} className={`hover:bg-gray-50 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => {
                                   if (isSelected) {
@@ -2670,7 +2745,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                                     {adv.credit > 0 ? `₹${adv.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : adv.debit > 0 ? `₹${adv.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                   </td>
                                   <td className="px-4 py-3 text-right font-bold text-rose-600">
-                                    ₹{Number(adv.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    ₹{Number(pending || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                   </td>
                                 </tr>
                               );

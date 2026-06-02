@@ -655,33 +655,61 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     referenceNo: t.reference_number || '-',
                     ledger: transactionType === 'receipt' ? 'Receipt' : (t.ledger_name || (transactionType === 'purchase' ? 'Purchase A/c' : '-')),
                     status: (() => {
-                        const refType = (t.reference_type || '').toUpperCase();
                         const txType = transactionType;
                         const amount = amt;
                         const paidAmount = parseFloat(t.paid_amount || t.used_amount || 0);
+                        const pendingBalance = Math.max(0, amount - paidAmount);
 
-                        // ── PURCHASE: use backend credit-period due status ──────────
-                        // ── PURCHASE: use backend credit-period due status ──────────
-                        if (txType === 'purchase') {
-                            if (t.due_status) return t.due_status;
+                        // ── 1. Disputed overrides everything ───────────────────────
+                        if (t.is_disputed || t.status === 'Disputed' || t.payment_status === 'Disputed') {
+                            return 'Disputed';
+                        }
 
-                            const isFullyPaid = Math.abs(paidAmount - amount) < 0.01 || paidAmount >= amount;
-                            const isPartiallyPaid = paidAmount > 0 && paidAmount < amount;
+                        // ── 2. Calculate credit term expiry ───────────────────────
+                        let isExpired = false;
+                        const txDate = t.transaction_date || t.date;
+                        if (amount > 0 && txDate) {
+                            const creditPeriod = parseInt(String(t.credit_period || t.due_details?.credit_period || 0), 10) || 0;
+                            if (creditPeriod > 0) {
+                                const invDate = new Date(txDate);
+                                const today = new Date();
+                                const diffDays = Math.floor(
+                                    (new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() -
+                                     new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate()).getTime()) / 86400000
+                                );
+                                isExpired = diffDays > creditPeriod;
+                            } else {
+                                // No credit period set — check backend due_status directly
+                                const ds = (t.due_status || '').toLowerCase();
+                                if (ds === 'due' || ds === 'unpaid') isExpired = true;
+                            }
+                        }
 
-                            if (isFullyPaid) return 'Paid';
-                            if (isPartiallyPaid) return 'Partially Paid';
+                        // ── 3. Sales / Debit Note ────────────────────────────────
+                        if (txType === 'sales' || txType === 'debit_note') {
+                            if (pendingBalance === 0 && amount > 0) return 'Received';
+                            if (pendingBalance < amount && pendingBalance > 0) return 'Partially Received';
+                            if (pendingBalance === amount) return isExpired ? 'Due' : 'Not Due';
                             return 'Not Due';
                         }
 
-                        // ── ADVANCE entries ────────────────────────────────────────
-                        if (refType === 'ADVANCE' || t.is_advance) {
-                            return paidAmount > 0 ? 'Utilized' : 'Not Utilized';
-                        }
-                        // ── ADVANCE / GENERIC UNALLOCATED entries ─────────────────
-                        if (txType === 'payment' || txType === 'receipt') {
-                            const isGenericPayment = t.transaction_number && t.reference_number && t.transaction_number.startsWith(t.reference_number + '-');
+                        // ── 4. Purchase / Expense / Credit Note ─────────────────
+                        if (txType === 'purchase' || txType === 'expense' || txType === 'credit_note') {
+                            // Use backend due_status when no payment has been applied yet
+                            if (t.due_status && pendingBalance === amount) return t.due_status;
 
-                            const isAdvanceEntry = (t.reference_type || '').toUpperCase() === 'ADVANCE' ||
+                            if (pendingBalance === 0 && amount > 0) return 'Paid';
+                            if (pendingBalance < amount && pendingBalance > 0) return 'Partially Paid';
+                            if (pendingBalance === amount) return isExpired ? 'Unpaid' : 'Not Due';
+                            return 'Not Due';
+                        }
+
+                        // ── 5. Payment / Receipt ─────────────────────────────────
+                        if (txType === 'payment' || txType === 'receipt') {
+                            const refType = (t.reference_type || '').toUpperCase();
+                            const isGenericPayment = t.transaction_number && t.reference_number &&
+                                t.transaction_number.startsWith(t.reference_number + '-');
+                            const isAdvanceEntry = refType === 'ADVANCE' ||
                                 t.is_advance ||
                                 (t.status || '').toLowerCase() === 'advance' ||
                                 !t.reference_number ||
@@ -693,15 +721,19 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                 const usedAmt = parseFloat(t.paid_amount || t.used_amount || 0);
                                 if (usedAmt >= amount && amount > 0) return 'Utilized';
                                 if (usedAmt > 0) return 'Partially Utilized';
-                                return 'Not Utilized';
+                                return 'Unutilized';
                             }
-                            return paidAmount >= amount ? 'Paid' : paidAmount > 0 ? 'Partially Paid' : 'Not Due';
+                            // Regular (non-advance) payment/receipt — track utilization
+                            if (pendingBalance === 0 && amount > 0) return 'Utilized';
+                            if (pendingBalance < amount && pendingBalance > 0) return 'Partially Utilized';
+                            return 'Unutilized';
                         }
-                        // ── Fallback ───────────────────────────────────────────────
+
+                        // ── Fallback ──────────────────────────────────────────────
                         const s = (t.status || '').toLowerCase();
                         if (s === 'paid' || s === 'received') return 'Paid';
-                        if (s === 'advance') return 'Not Utilized';
-                        return 'Not Due';
+                        if (s === 'advance') return 'Unutilized';
+                        return '-';
                     })(),
                     debit: isDebit ? amt : 0,
                     credit: !isDebit ? amt : 0,
@@ -6478,8 +6510,27 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                             autoFocus
                                                                                         />
                                                                                     </div>
-                                                                                )}
-                                                                            </div>
+                                                                                    <select
+                                                                                        value={ledgerFilters.status}
+                                                                                        onChange={(e) => { setLedgerFilters({ ...ledgerFilters, status: e.target.value }); setActiveFilter(null); }}
+                                                                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+                                                                                        autoFocus
+                                                                                    >
+                                                                                        <option value="">All Statuses</option>
+                                                                                        <option value="Not Due">Not Due</option>
+                                                                                        <option value="Due">Due</option>
+                                                                                        <option value="Unpaid">Unpaid</option>
+                                                                                        <option value="Partially Paid">Partially Paid</option>
+                                                                                        <option value="Paid">Paid</option>
+                                                                                        <option value="Received">Received</option>
+                                                                                        <option value="Partially Received">Partially Received</option>
+                                                                                        <option value="Utilized">Utilized</option>
+                                                                                        <option value="Partially Utilized">Partially Utilized</option>
+                                                                                        <option value="Unutilized">Unutilized</option>
+                                                                                        <option value="Disputed">Disputed</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     </th>
                                                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
@@ -6568,74 +6619,108 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                 )}
                                                                             </div>
                                                                         </div>
-                                                                    </th>
-                                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
-                                                                        <div className="flex items-center justify-end relative">
-                                                                            <span>Credit</span>
-                                                                            <div className="ml-2">
-                                                                                <Filter
-                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'credit' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                    onClick={() => toggleFilter('credit')}
-                                                                                />
-                                                                                {activeFilter === 'credit' && (
-                                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
-                                                                                        <div className="flex justify-between items-center mb-2">
-                                                                                            <span className="text-xs font-bold text-gray-700">Credit Mask</span>
-                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                        </div>
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            placeholder="0.00"
-                                                                                            value={ledgerFilters.credit}
-                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, credit: e.target.value })}
-                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
-                                                                                            autoFocus
-                                                                                        />
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </th>
-                                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                                                        <div className="flex items-center justify-end relative">
-                                                                            <span className="truncate">Running Bal</span>
-                                                                            <div className="ml-2">
-                                                                                <Filter
-                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'runningBalance' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                    onClick={() => toggleFilter('runningBalance')}
-                                                                                />
-                                                                                {activeFilter === 'runningBalance' && (
-                                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-44">
-                                                                                        <div className="flex justify-between items-center mb-2">
-                                                                                            <span className="text-xs font-bold text-gray-700">Balance Mask</span>
-                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                        </div>
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            placeholder="0.00"
-                                                                                            value={ledgerFilters.runningBalance}
-                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, runningBalance: e.target.value })}
-                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
-                                                                                            autoFocus
-                                                                                        />
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </th>
+                                                                    </td>
                                                                 </tr>
-                                                            </thead>
-                                                            <tbody className="bg-white divide-y divide-gray-200">
-                                                                {loadingLedger ? (
-                                                                    <tr>
-                                                                        <td colSpan={8} className="px-6 py-8 text-center text-sm text-gray-500">
-                                                                            <div className="flex items-center justify-center space-x-2">
-                                                                                <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                                                                                </svg>
-                                                                                <span>Loading ledger data...</span>
-                                                                            </div>
+                                                            ) : filteredLedgerData.map((entry) => (
+                                                                <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.date)}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.transferFrom}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.referenceNo || entry.ledger}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
+                                                                            entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
+                                                                            entry.status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                                            entry.status === 'Utilized' ? 'bg-teal-100 text-teal-800' :
+                                                                            entry.status === 'Due' ? 'bg-red-100 text-red-800' :
+                                                                            entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
+                                                                            entry.status === 'Not Due' ? 'bg-blue-100 text-blue-700' :
+                                                                            entry.status === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
+                                                                            entry.status === 'Partially Received' ? 'bg-orange-100 text-orange-700' :
+                                                                            entry.status === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
+                                                                            entry.status === 'Unutilized' ? 'bg-purple-100 text-purple-700' :
+                                                                            entry.status === 'Disputed' ? 'bg-yellow-100 text-yellow-800' :
+                                                                            'bg-gray-100 text-gray-600'
+                                                                        }`}>
+                                                                            {entry.status}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-900">{entry.runningBalance !== '-' ? `₹${entry.runningBalance}` : '-'}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                        <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
+                                                            <tr>
+                                                                <td colSpan={5} className="px-6 py-3 text-right text-gray-900 text-sm">TOTAL</td>
+                                                                <td className="px-6 py-3 text-right text-gray-900 text-sm">₹{totalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-6 py-3 text-right text-gray-900 text-sm">₹{totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-6 py-3 text-right text-gray-900 text-sm">
+                                                                    {filteredLedgerData.length > 0 && `₹${filteredLedgerData[filteredLedgerData.length - 1].runningBalance}`}
+                                                                </td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {procurementViewMode === 'journal' && selectedProcurementVendor && (
+                                            <div className="erp-card border border-slate-200 p-0">
+                                                <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
+                                                    <h3 className="section-title">{selectedProcurementVendor.name} - Journal View</h3>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => setProcurementViewMode('allocation')}
+                                                            className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                        >
+                                                            Allocation View
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setProcurementViewMode('month')}
+                                                            className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                        >
+                                                            Month View
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setProcurementViewMode('ledger')}
+                                                            className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                        >
+                                                            Bill-wise View
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="overflow-x-auto">
+                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                        <thead className="bg-[#F8F9FA]">
+                                                            <tr>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Date</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100 min-w-[350px]">Transaction Particulars</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
+                                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Status</th>
+                                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
+                                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Credit (₹)</th>
+                                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                            {filteredLedgerData.map((entry) => (
+                                                                <React.Fragment key={entry.id}>
+                                                                    {/* Main Transaction Row */}
+                                                                    <tr className="hover:bg-indigo-50/30 transition-colors border-b border-gray-100">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-50">
+                                                                            {formatDate(entry.date)}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">
+                                                                            {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' || entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">
+                                                                            {entry.rawVoucher?.transaction_type?.toLowerCase() === 'purchase' ? 'PURCHASE' : entry.rawVoucher?.transaction_type?.toLowerCase() === 'payment' ? 'PAYMENT' : entry.transferFrom}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">
+                                                                            {entry.referenceNo || '-'}
                                                                         </td>
                                                                     </tr>
                                                                 ) : filteredLedgerData.map((entry) => (

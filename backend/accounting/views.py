@@ -561,10 +561,20 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                             tenant_id=tenant_id,
                             transaction_id__in=pmt_ids,
                             reference_type='ADVANCE'
-                        ).values('transaction_id', 'allocated_amount')
+                        ).values('transaction_id')
                         for ai in adv_items:
-                            tid = ai['transaction_id']
-                            advance_alloc_map[tid] = advance_alloc_map.get(tid, 0) + float(ai.get('allocated_amount') or 0)
+                            advance_alloc_map[ai['transaction_id']] = 0
+
+                        # Fetch utilized amounts from PendingTransaction
+                        from accounting.models import PendingTransaction as PT  # pyre-ignore
+                        pt_items = PT.objects.filter(
+                            tenant_id=tenant_id,
+                            transaction_id__in=pmt_ids
+                        ).values('transaction_id', 'allocated_amount')
+                        for pt in pt_items:
+                            tid = pt['transaction_id']
+                            if tid in advance_alloc_map:
+                                advance_alloc_map[tid] += float(pt.get('allocated_amount') or 0)
                     for t in pmt_txns:
                         tid = t['id']
                         is_adv = tid in advance_alloc_map
@@ -648,16 +658,19 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                                     lt = (ltx.transaction_type or '').lower()
                                     if lt in ['payment', 'debit_note']:
                                         paid_sum += float(ltx.total_amount or ltx.amount or 0)
+                            status_val = None
                             if total_amt > 0 and paid_sum >= total_amt:
-                                vendor_txn_status_map[vno] = 'Paid'
+                                status_val = 'Paid'
                             elif paid_sum > 0:
-                                vendor_txn_status_map[vno] = 'Partially Paid'
-                            # else: aging logic (not computed here; frontend handles)
+                                status_val = 'Partially Paid'
+                            # else: aging logic — frontend handles via isExpired
+                            if status_val:
+                                vendor_txn_status_map[vno] = status_val
+                                if ref_no and ref_no.upper() not in ('ADVANCE', ''):
+                                    vendor_txn_status_map[ref_no] = status_val
                         elif vtype == 'debit_note':
-                            # VP shows debit notes as "Paid" if they have been applied
                             ref_no = vtr.get('reference_number')
                             if ref_no:
-                                # Check if any purchase links back to this debit note
                                 usage = VT.objects.filter(  # pyre-ignore
                                     tenant_id=tenant_id, vendor_id=lv.id,
                                     reference_number=ref_no,
@@ -665,54 +678,58 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
                                 ).exists()
                                 if usage:
                                     vendor_txn_status_map[vno] = 'Paid'
-                        elif vtype in ['payment', 'receipt'] and vtr.get('is_advance'):
-                            vendor_txn_status_map[vno] = vstatus.capitalize() if vstatus else 'Not Utilized'
+                                    vendor_txn_status_map[ref_no] = 'Paid'
+                        elif vtype in ['payment', 'receipt']:
+                            # Compute utilization SAME way as VP by_vendor API:
+                            # look for VendorTransaction rows whose notes say
+                            # "Allocated from <transaction_number>"
+                            from django.db.models import Sum as VTSum  # pyre-fixme
+                            used_sum = VT.objects.filter(  # pyre-ignore
+                                tenant_id=tenant_id,
+                                vendor_id=lv.id,
+                                notes__icontains=f"Allocated from {vno}"
+                            ).aggregate(s=VTSum('total_amount'))['s'] or 0
+                            used_sum = float(used_sum)
+                            total_amt = float(vtr.get('total_amount') or 0)
+                            if total_amt > 0 and used_sum >= total_amt:
+                                pmt_status_val = 'Utilized'
+                            elif used_sum > 0:
+                                pmt_status_val = 'Partially Utilized'
+                            else:
+                                pmt_status_val = 'Unutilized'
+                            # Key by BOTH transaction_number and reference_number so
+                            # the ledger lookup by voucher_number or reference_number both hit
+                            vendor_txn_status_map[vno] = pmt_status_val
+                            ref_no = vtr.get('reference_number') or ''
+                            if ref_no and ref_no.upper() not in ('ADVANCE', ''):
+                                vendor_txn_status_map[ref_no] = pmt_status_val
             except Exception:
                 pass
 
-        # ── CustomerTransaction status map (single source of truth for CP parity) ──
+        # ── CustomerTransaction status map — DIRECT READ from CustomerTransaction.payment_status ──
+        # CustomerTransaction.payment_status is already set to the exact value the Customer Portal
+        # displays (Due, Not Due, Received, Partially Received, Open, Advance Applied, Utilized…).
+        # No need to recompute — just read it directly and map by transaction_number.
         customer_txn_status_map = {}  # voucher_number -> due_status
         if resolved_ledger:
             try:
                 from customerportal.models import CustomerMasterCustomerBasicDetails, CustomerTransaction as CT  # pyre-fixme
+
                 lc = CustomerMasterCustomerBasicDetails.objects.filter(
                     ledger=resolved_ledger, tenant_id=tenant_id
                 ).first()
+
                 if lc:
                     ct_rows = CT.objects.filter(  # pyre-ignore
                         tenant_id=tenant_id, customer_id=lc.id
-                    ).values('transaction_number', 'payment_status', 'transaction_type',
-                             'total_amount', 'amount', 'reference_number')
-                    from datetime import date as dt_date, timedelta
-                    from decimal import Decimal
+                    ).values('transaction_number', 'payment_status')
+
                     for ctr in ct_rows:
-                        vno = ctr['transaction_number']
-                        vtype = (ctr.get('transaction_type') or '').lower()
-                        pstatus = (ctr.get('payment_status') or '').lower()
-                        
-                        if vtype in ('sales', 'invoice', 'debit_note'):
-                            ref_no = ctr.get('reference_number') or vno
-                            total_amt = float(ctr.get('total_amount') or ctr.get('amount') or 0)
-                            paid_sum = 0.0
-                            if ref_no:
-                                linking = CT.objects.filter(  # pyre-ignore
-                                    tenant_id=tenant_id, customer_id=lc.id,
-                                    reference_number=ref_no
-                                ).exclude(transaction_number=vno)
-                                for ltx in linking:
-                                    lt = (ltx.transaction_type or '').lower()
-                                    if lt in ('receipt', 'credit_note'):
-                                        paid_sum += float(ltx.total_amount or ltx.amount or 0)
-                                    elif lt in ('debit_note',):
-                                        paid_sum -= float(ltx.total_amount or ltx.amount or 0)
-                                        
-                            if total_amt > 0 and paid_sum >= total_amt:
-                                customer_txn_status_map[vno] = 'Received'
-                            elif paid_sum > 0:
-                                customer_txn_status_map[vno] = 'Partially Received'
-                            # else: aging logic (not computed here; frontend handles)
-                        elif vtype in ['payment', 'receipt']:
-                            customer_txn_status_map[vno] = pstatus.capitalize() if pstatus else 'Not Utilized'
+                        vno = ctr.get('transaction_number')
+                        pstatus = (ctr.get('payment_status') or '').strip()
+                        if vno and pstatus:
+                            customer_txn_status_map[vno] = pstatus
+
             except Exception:
                 pass
 
@@ -769,10 +786,11 @@ class JournalEntryViewSet(BranchQuerysetMixin, viewsets.ModelViewSet):
             pmt_data = payment_advance_map.get(vno, {})
             # Debit Note status enrichment (keyed by voucher_number)
             dn_data = debit_note_status_map.get(vno, {})
-            # Vendor transaction exact match status
-            vt_status = vendor_txn_status_map.get(vno)
+            # Vendor transaction exact match status — try both voucher_number and reference_number
+            e_ref = getattr(e, 'reference_number', '') or ''
+            vt_status = vendor_txn_status_map.get(vno) or vendor_txn_status_map.get(e_ref) or None
             # Customer transaction exact match status
-            ct_status = customer_txn_status_map.get(vno)
+            ct_status = customer_txn_status_map.get(vno) or customer_txn_status_map.get(e_ref) or None
 
             row = {
                 'id': e.id,
