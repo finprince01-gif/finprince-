@@ -326,8 +326,9 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                     .filter(([k]) => !ignoreKeys.includes(k))
                     .map(([k, v]) => {
                         const val = Array.isArray(v) ? v[0] : v;
-                        // Keep PAN capitalized, otherwise title case
+                        // Keep PAN / Customer Code nicely labelled, otherwise title case
                         const niceKey = k === 'pan_number' ? 'PAN Number'
+                            : k === 'customer_code' ? 'Customer Code'
                             : k.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                         return `${niceKey}: ${val}`;
                     });

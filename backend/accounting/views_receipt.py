@@ -166,6 +166,43 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
                 receive_from_ledger_id_val=pt_l
             )
             
+            # Create AdvanceAllocation since entire amount is unallocated
+            AdvanceAllocation.objects.create(
+                tenant_id=tenant_id,
+                transaction=instance,
+                type='receipt_single',
+                reference_id='ADVANCE',
+                reference_number=v_num,
+                reference_type='ADVANCE',
+                pay_from_ledger=receive_from_ledger,
+                pay_to_ledger=receive_in_ledger,
+                allocated_amount=entered_amount,
+                amount=entered_amount,
+                original_amount=entered_amount,
+                is_advance=True,
+                advance_ref_no=v_num,
+                ref_no=data.get('ref_no', ''),
+                posting_note=data.get('posting_note', ''),
+                vouch_amount=entered_amount,
+                ledger_id_val=pt_l or pf_l,
+                party_customer_id=pt_c or pf_c,
+                party_vendor_id=pt_v or pf_v,
+                receive_from_ledger_id_val=pt_l,
+                receive_from_customer_id_val=pt_c,
+                receive_from_vendor_id_val=pt_v,
+                receive_in_ledger_id_val=pf_l,
+                receive_in_customer_id_val=pf_c,
+                receive_in_vendor_id_val=pf_v
+            )
+
+            # Mirror to Customer Portal
+            from .serializers_receipt import ReceiptVoucherSerializer
+            try:
+                ReceiptVoucherSerializer(context={'request': request})._mirror_to_customer_portal(instance)
+            except Exception as e:
+                print(f"!!! Failed to mirror to customer portal in save_amount_only: {e}")
+
+            
             # Create Journal Entries
             if receive_in_ledger:
                 JournalEntry.objects.create( # type: ignore

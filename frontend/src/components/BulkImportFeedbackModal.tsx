@@ -12,6 +12,8 @@ interface BulkImportFeedbackModalProps {
     isProcessing?: boolean;
     dropdownOptions?: Record<string, { label: string, value: string, full?: any }[]>;
     onDownloadTemplate?: () => void;
+    /** Existing codes in the DB (customer_code / vendor_code) for duplicate detection */
+    existingCodes?: string[];
 }
 
 export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = ({
@@ -23,7 +25,8 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
     onUpload,
     isProcessing = false,
     dropdownOptions,
-    onDownloadTemplate
+    onDownloadTemplate,
+    existingCodes = []
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -421,6 +424,19 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
             const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
             if (!panRegex.test(pan.toString().trim().toUpperCase())) {
                 setValidationErrors([`Invalid PAN format: "${pan}". Must be in AAAAA0000A format (5 letters, 4 digits, 1 letter).`]);
+                return;
+            }
+        }
+
+        // Validate Customer Code / Vendor Code uniqueness against existing records
+        const codeKey = isVendor ? 'Vendor Code' : 'Customer Code';
+        const enteredCode = (getFieldValue(updatedData, codeKey) || '').toString().trim();
+        if (enteredCode && existingCodes.length > 0) {
+            const isDuplicate = existingCodes.some(
+                c => c && c.toString().toLowerCase() === enteredCode.toLowerCase()
+            );
+            if (isDuplicate) {
+                setValidationErrors([codeKey]);
                 return;
             }
         }
@@ -851,8 +867,24 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                 const isNotInOptions = isSelectField && fieldOptions && fieldOptions.length > 0 && !matchedOption;
                                                 const isEmpty = isRawEmpty || (isSelectField && (!value || isNotInOptions));
                                                 const isInvalidPan = key === 'PAN Number' && !isEmpty && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(valStr.toUpperCase());
-                                                const hasWarning = (field.required && isEmpty) || isInvalidPan || (isMentionedInError && isEmpty) || validationErrors.includes(key);
-                                                const warningMessage = isInvalidPan ? 'Invalid PAN format (e.g. AAAAA0000A)' : 'This field is mandatory';
+                                                const isCodeKey = key === 'Customer Code' || key === 'Vendor Code';
+                                                const isWithinFileDuplicate = isMentionedInError && (
+                                                    errorMessage.includes('more than once') ||
+                                                    errorMessage.includes('in this file')
+                                                );
+                                                const isDuplicateField = isMentionedInError && (
+                                                    errorMessage.includes('already exists') || 
+                                                    errorMessage.includes('exist') || 
+                                                    errorMessage.includes('duplicate') ||
+                                                    errorMessage.includes('in this file')
+                                                );
+                                                const isDuplicateCode = (isCodeKey && validationErrors.includes(key)) || isDuplicateField;
+                                                const hasWarning = (field.required && isEmpty) || isInvalidPan || isDuplicateField || (isMentionedInError && isEmpty) || validationErrors.includes(key);
+                                                const warningMessage = isWithinFileDuplicate
+                                                    ? `This ${field.label} is already used in this file. Each entry must be unique.`
+                                                    : isDuplicateCode
+                                                        ? `This ${field.label} already exists in the system.`
+                                                        : isInvalidPan ? 'Invalid PAN format (e.g. AAAAA0000A)' : 'This field is mandatory';
                                                 
                                                 // Auto-correct the stored value to properly-cased option value
                                                 if (matchedOption && value !== matchedOption.value) {

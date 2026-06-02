@@ -64,7 +64,6 @@ export const SALES_VOUCHER_COLUMNS: SalesVoucherColumn[] = [
     { label: 'GSTIN', key: 'gstin', tab: 'Invoice Details', required: true, type: 'string' },
     { label: 'Contact', key: 'contact', tab: 'Invoice Details', required: false, type: 'string' },
     { label: 'Place of Supply', key: 'place_of_supply', tab: 'Invoice Details', required: false, type: 'string' },
-    { label: 'Reverse Charge', key: 'reverse_charge', tab: 'Invoice Details', required: false, type: 'string' },
     { label: 'Nature of Supply', key: 'invoice_type', tab: 'Invoice Details', required: false, type: 'string' },
     { label: 'Exchange Rate', key: 'exchange_rate', tab: 'Invoice Details', required: false, type: 'number' },
 

@@ -305,7 +305,8 @@ class VendorBasicDetailDatabase:
         """
         queryset = VendorMasterBasicDetail.objects.filter(
             tenant_id=tenant_id,
-            vendor_code=vendor_code
+            vendor_code=vendor_code,
+            is_deleted=False
         )
         if exclude_id:
             queryset = queryset.exclude(id=exclude_id)
@@ -326,7 +327,8 @@ class VendorBasicDetailDatabase:
         """
         queryset = VendorMasterBasicDetail.objects.filter(
             tenant_id=tenant_id,
-            email=email
+            email=email,
+            is_deleted=False
         )
         if exclude_id:
             queryset = queryset.exclude(id=exclude_id)
@@ -350,7 +352,8 @@ class VendorBasicDetailDatabase:
             
         queryset = VendorMasterBasicDetail.objects.filter(
             tenant_id=tenant_id,
-            pan_no=pan_no
+            pan_no=pan_no,
+            is_deleted=False
         )
         if exclude_id:
             queryset = queryset.exclude(id=exclude_id)

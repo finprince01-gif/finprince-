@@ -39,9 +39,9 @@ CUSTOMER_COLUMNS = [
     {"label": "Email Address", "key": "email_address", "required": False},
     {"label": "Contact Number", "key": "contact_number", "required": False},
     {"label": "Billing Currency", "key": "billing_currency", "required": False},
+    {"label": "GST TDS Applicable", "key": "gst_tds_applicable", "required": False},
     {"label": "Registered", "key": "registered", "required": True},
     {"label": "GSTIN", "key": "gstin", "required": False},
-    {"label": "GST TDS Applicable", "key": "gst_tds_applicable", "required": False},
     {"label": "Branch Name", "key": "branch_name", "required": False},
     {"label": "Address Line 1", "key": "address_line_1", "required": False},
     {"label": "Address Line 2", "key": "address_line_2", "required": False},
@@ -466,6 +466,7 @@ class CustomerExcelUploadView(APIView):
 
             # Cache for customers created in this file (so multiple distinct named branches in same file link together)
             file_customers_cache = {}
+            file_customers_code_cache = {}
 
             for item in records_to_process:
                 row_data = item.get("row_data")
@@ -643,14 +644,52 @@ class CustomerExcelUploadView(APIView):
                         c_name_lower = str(c_name).strip().lower()
                         
                         # Check cache first for same-file duplicates
-                        if c_name_lower in file_customers_cache:
-                            customer = file_customers_cache[c_name_lower]
+                        if cust_code and cust_code in file_customers_code_cache:
+                            raise Exception(f"DUPLICATE ENTRY: Customer Code '{cust_code}' appears more than once in this file. Each customer must have a unique code.")
                         else:
-                            # Check DB
+                            # Check DB for duplicate / soft-deleted customer
+                            # Search by customer code
                             if cust_code:
-                                customer = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, customer_code=cust_code).first()
-                            if not customer:
-                                customer = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, customer_name__iexact=str(c_name).strip()).first()
+                                existing_by_code = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, customer_code=cust_code).first()
+                                if existing_by_code:
+                                    if not existing_by_code.is_deleted:
+                                        raise Exception(f"DUPLICATE ENTRY: Customer Code '{cust_code}' already exists in the system. Please use a unique code or leave it blank.")
+                                    else:
+                                        # It's soft-deleted, we will reactivate it
+                                        customer = existing_by_code
+
+                            if customer:
+                                # Restore/reactivate soft-deleted customer
+                                customer.is_deleted = False
+                                customer.is_active = True
+                                customer.customer_name = row_data.get("Customer Name") or row_data.get("customer_name") or row_data.get("name") or row_data.get("Name")
+                                customer.customer_code = cust_code or customer.customer_code
+                                customer.pan_number = row_data.get("PAN Number")
+                                customer.contact_person = row_data.get("Contact Person")
+                                customer.email_address = row_data.get("Email Address") or row_data.get("email_address") or row_data.get("email_id") or row_data.get("email") or row_data.get("Email ID") or row_data.get("Email")
+                                customer.contact_number = row_data.get("Contact Number") or row_data.get("contact_number") or row_data.get("contact") or row_data.get("Contact No") or row_data.get("contact_no") or row_data.get("Phone") or row_data.get("phone")
+                                customer.billing_currency = row_data.get("Billing Currency", "INR")
+                                customer.is_also_vendor = True if str(row_data.get("Is Also Vendor", "")).lower() in ['yes', 'true', '1'] else False
+                                customer.gst_tds_applicable = True if str(row_data.get("GST TDS Applicable", "")).lower() in ['yes', 'true', '1'] else False
+                                
+                                cat_name_val = row_data.get("Category", "Regular")
+                                cat, _ = CustomerMasterCategory.objects.get_or_create(
+                                    tenant_id=tenant_id,
+                                    category=cat_name_val,
+                                    defaults={'is_active': True}
+                                )
+                                customer.customer_category = cat
+                                customer.updated_by = username
+                                customer.save()
+                                
+                                # Clean up existing related records to prevent duplicate constraints or orphan records
+                                CustomerMasterCustomerGSTDetails.objects.filter(customer_basic_detail=customer).delete()
+                                CustomerMasterCustomerBanking.objects.filter(customer_basic_detail=customer).delete()
+                                CustomerMasterCustomerTDS.objects.filter(customer_basic_detail=customer).delete()
+                                CustomerMasterCustomerTermsCondition.objects.filter(customer_basic_detail=customer).delete()
+                                
+                                file_customers_cache[c_name_lower] = customer
+                                file_customers_code_cache[customer.customer_code] = customer
                         
                         is_new_customer = False
                         if not customer:
@@ -692,6 +731,7 @@ class CustomerExcelUploadView(APIView):
                             customer.save(update_fields=['ledger_id'])
                             
                             file_customers_cache[c_name_lower] = customer
+                            file_customers_code_cache[customer.customer_code] = customer
                         
                         # 2. GST Details
                         all_branches = [row_data] + row_data.get("extra_branches", [])

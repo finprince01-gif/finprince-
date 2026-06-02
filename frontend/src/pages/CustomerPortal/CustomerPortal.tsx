@@ -510,6 +510,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
     const [selectedGSTINs, setSelectedGSTINs] = useState<string[]>([]);
     const [showBranchDetails, setShowBranchDetails] = useState(false);
     const [expandedBranches, setExpandedBranches] = useState<number[]>([1]); // Default first expanded
+    const [loadingGstFetch, setLoadingGstFetch] = useState(false);
     const [showGstDropdown, setShowGstDropdown] = useState(false); // Dropdown visibility state
     const [addMultipleBranches, setAddMultipleBranches] = useState(false); // Toggle for multiple branches
     const [unregisteredBranches, setUnregisteredBranches] = useState([
@@ -995,8 +996,62 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
     };
 
     const handleFetchBranchDetails = () => {
-        if (selectedGSTINs.length > 0) {
-            setShowBranchDetails(true);
+        let currentGstins = [...selectedGSTINs];
+        const newGstInput = gstInput.trim().toUpperCase();
+
+        if (newGstInput && !currentGstins.includes(newGstInput)) {
+            currentGstins.push(newGstInput);
+            setSelectedGSTINs(currentGstins);
+            setGstInput('');
+            initializeRegisteredBranch(newGstInput);
+        }
+
+        if (currentGstins.length > 0) {
+            setLoadingGstFetch(true);
+            setTimeout(() => {
+                setRegisteredBranches(prev => {
+                    // Ensure the new input is in prev if initializeRegisteredBranch hasn't fully propagated yet
+                    let updatedBranches = [...prev];
+                    if (newGstInput && !updatedBranches.find(b => b.gstin === newGstInput)) {
+                        const mock = mockBranches.find(b => b.gstin === newGstInput);
+                        updatedBranches.push({
+                            gstin: newGstInput,
+                            defaultRef: mock ? mock.defaultRef : '',
+                            address: mock ? mock.address : '',
+                            contactPerson: '',
+                            contactNumber: '',
+                            email: ''
+                        });
+                    }
+
+                    return updatedBranches.map(branch => {
+                        if (currentGstins.includes(branch.gstin)) {
+                            return {
+                                ...branch,
+                                legalName: branch.legalName || 'Mock Legal Name Ltd',
+                                tradeName: branch.tradeName || 'Mock Trade Name Ltd',
+                                registrationType: branch.registrationType || 'Regular',
+                                addressLine1: branch.addressLine1 || '123, Business Park',
+                                addressLine2: branch.addressLine2 || 'Tech City',
+                                addressLine3: branch.addressLine3 || 'India',
+                                city: branch.city || 'Tech City',
+                                state: branch.state || 'Tamil Nadu',
+                                country: branch.country || 'India',
+                                pincode: branch.pincode || '600001',
+                                contactPerson: branch.contactPerson || 'John Doe',
+                                contactNumber: branch.contactNumber || '9876543210',
+                                email: branch.email || 'john@example.com',
+                                defaultRef: branch.defaultRef || 'Main Branch'
+                            };
+                        }
+                        return branch;
+                    });
+                });
+                setShowBranchDetails(true);
+                setLoadingGstFetch(false);
+            }, 1000);
+        } else {
+            showError("Please enter or select a GSTIN first");
         }
     };
 
@@ -1834,9 +1889,10 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                         <div>
                                             <button
                                                 onClick={handleFetchBranchDetails}
-                                                className="h-[42px] px-6 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                                                disabled={loadingGstFetch}
+                                                className="h-[42px] px-6 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                Fetch branch details
+                                                {loadingGstFetch ? 'Fetching...' : 'Fetch branch details'}
                                             </button>
                                         </div>
                                     </>
@@ -2076,9 +2132,26 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                                                     {branch.defaultRef || 'New Branch'}
                                                                 </span>
                                                             </div>
-                                                            <span className="text-gray-400">
-                                                                {isExpanded ? '▲' : '▼'}
-                                                            </span>
+                                                            <div className="flex items-center gap-4 text-gray-400">
+                                                                <span>
+                                                                    {isExpanded ? '▲' : '▼'}
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedGSTINs(prev => prev.filter(g => g !== gstin));
+                                                                        setRegisteredBranches(prev => prev.filter(b => b.gstin !== gstin));
+                                                                        if (selectedGSTINs.length <= 1) {
+                                                                            setShowBranchDetails(false);
+                                                                        }
+                                                                    }}
+                                                                    className="hover:text-red-500 transition-colors text-lg font-bold w-6 h-6 flex items-center justify-center"
+                                                                    title="Remove GSTIN"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            </div>
                                                         </div>
 
                                                         {/* Expanded Content */}
@@ -3440,6 +3513,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 onEditImported={handleEditImportedCustomer}
                 onUpload={handleCustomerExcelUploadFromModal}
                 isProcessing={isImporting}
+                existingCodes={customers.map((c: any) => c.customer_code).filter(Boolean)}
                 dropdownOptions={{
                     'Category': Array.from(new Set(categories.map(c => c.full_path || [c.category, c.group, c.subgroup].filter(Boolean).join(' > ')))).map(c => ({ label: c, value: c })),
                     'Billing Currency': [
