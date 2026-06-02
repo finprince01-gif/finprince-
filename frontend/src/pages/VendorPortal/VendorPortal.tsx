@@ -184,22 +184,30 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
     const advances = (ledgerEntries || []).filter(e =>
         (e.transferFrom === 'Payment' || e.transferFrom === 'Debit Note') &&
         // Must be an advance type record
-        (e.is_advance || (e.status && ['Advance', 'Not Utilized', 'Partially Utilized'].includes(e.status))) &&
+        (e.is_advance || (e.status && ['Advance', 'Not Utilized', 'Partially Utilized', 'Unutilized'].includes(e.status))) &&
         // AND it must NOT be allocated to a specific invoice yet
         (
             !e.rawVoucher?.reference_number ||
             e.rawVoucher.reference_number.toUpperCase() === 'ADVANCE' ||
             e.rawVoucher.reference_number.trim() === '' ||
-            e.rawVoucher.reference_number === '-'
+            e.rawVoucher.reference_number === '-' ||
+            e.rawVoucher.reference_type?.toUpperCase() === 'ADVANCE' ||
+            e.rawVoucher.reference_number === e.voucherNo
         )
     ).filter(e => e.status !== 'Utilized' && e.status !== 'Paid') // Only show those that still have balance
-        .map(e => ({
-            id: e.id,
-            voucherNo: e.voucherNo,
-            date: e.date,
-            amount: e.debit !== '-' ? parseFloat(e.debit.replace(/,/g, '')) : 0,
-            status: e.status
-        }));
+        .map(e => {
+            const totalAmount = e.debit !== '-' ? parseFloat(e.debit.toString().replace(/,/g, '')) : 0;
+            const usedAmount = parseFloat(e.rawVoucher?.used_amount || e.rawVoucher?.paid_amount || 0);
+            const remaining = Math.max(0, totalAmount - usedAmount);
+            return {
+                id: e.id,
+                voucherNo: e.voucherNo,
+                date: e.date,
+                amount: totalAmount,
+                remainingAmount: remaining,
+                status: e.status
+            };
+        }).filter(e => e.remainingAmount > 0);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -267,19 +275,19 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
                                                 </td>
                                                 <td className="px-4 py-3 font-medium text-gray-900">{adv.voucherNo}</td>
                                                 <td className="px-4 py-3 text-gray-600">{adv.date.split('-').reverse().join('-')}</td>
-                                                <td className="px-4 py-3 text-right font-bold text-gray-900">₹{adv.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                <td className="px-4 py-3 text-right font-bold text-gray-900">₹{adv.remainingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                            <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                            <p className="text-sm text-gray-500 font-medium">No unutilized payment vouchers available for this vendor.</p>
-                            <p className="text-[10px] text-gray-400 mt-1">Vouchers with "Advance" or "Not Utilized" status will appear here.</p>
-                        </div>
+                                         ))}
+                                     </tbody>
+                                 </table>
+                             </div>
+                         </div>
+                     ) : (
+                         <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                             <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                             <p className="text-sm text-gray-500 font-medium">No unutilized payment vouchers available for this vendor.</p>
+                             <p className="text-[10px] text-gray-400 mt-1">Vouchers with "Advance" or "Unutilized" status will appear here.</p>
+                         </div>
                     )}
 
                     <div className="mt-8 flex gap-3">

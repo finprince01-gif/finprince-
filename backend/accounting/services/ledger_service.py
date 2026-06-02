@@ -4,11 +4,34 @@ from accounting.models import JournalEntry, MasterLedger
 
 def _resolve_ledger(value, tenant_id=None):
     """
-    Resolve either a numeric ID or a ledger name (string) to a MasterLedger instance.
+    Resolve either a numeric ID, a ledger name (string), or a portal prefixed ID 
+    (e.g., 'portal-cust-123' or 'portal-vend-456') to a MasterLedger instance.
     Returns the MasterLedger instance, or None if not found/invalid.
     """
     if value is None or value == '':
         return None
+
+    # Handle portal prefixes
+    if isinstance(value, str):
+        val_str = value.strip()
+        if val_str.startswith('portal-cust-'):
+            try:
+                cust_id = int(val_str.replace('portal-cust-', ''))
+                from customerportal.database import CustomerMasterCustomerBasicDetails
+                cust = CustomerMasterCustomerBasicDetails.objects.filter(id=cust_id).first()
+                if cust and cust.ledger_id:
+                    value = cust.ledger_id
+            except Exception:
+                pass
+        elif val_str.startswith('portal-vend-'):
+            try:
+                vend_id = int(val_str.replace('portal-vend-', ''))
+                from vendors.models import VendorMasterBasicDetail
+                vend = VendorMasterBasicDetail.objects.filter(id=vend_id).first()
+                if vend and vend.ledger_id:
+                    value = vend.ledger_id
+            except Exception:
+                pass
 
     # Already an integer ID
     try:
