@@ -42,6 +42,7 @@ const VouchersPage = React.lazy(() => import('../pages/Vouchers'));
 const ReportsPage = React.lazy(() => import('../pages/Reports'));
 const SettingsPage = React.lazy(() => import('../pages/Settings'));
 const UsersAndRolesPage = React.lazy(() => import('../pages/UsersAndRoles'));
+const PendingPurchasesPage = React.lazy(() => import('../pages/PendingPurchases/PendingPurchases'));
 const VendorPortalPage = React.lazy(() => import('../pages/VendorPortal'));
 const CustomerPortalPage = React.lazy(() => import('../pages/CustomerPortal'));
 const PayrollPage = React.lazy(() => import('../pages/Payroll'));
@@ -1325,6 +1326,7 @@ const App: React.FC = () => {
 
       case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />;
       case 'Users & Roles': return <UsersAndRolesPage onNavigate={handleNavigate} />;
+      case 'Pending Purchases': return <PendingPurchasesPage onNavigate={handleNavigate} />;
       case 'Vendor Portal': return <VendorPortalPage onLogout={handleLogout} onNavigate={handleNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
       case 'Customer Portal': return <CustomerPortalPage onNavigate={handleNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
       case 'Payroll': return <PayrollPage />;

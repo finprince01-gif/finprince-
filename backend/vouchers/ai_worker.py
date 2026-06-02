@@ -118,6 +118,23 @@ class AIWorker(BaseWorker):
         return new_payload
 
     async def handle_task(self, task: Dict[str, Any]):
+        try:
+            await self._handle_task_inner(task)
+        finally:
+            payload = task.get('payload', {})
+            record_id = payload.get('record_id')
+            page_idx = payload.get('page_number') or payload.get('page_index') or task.get('page_number')
+            session_id = task.get('session_id')
+            tenant_id = task.get('tenant_id')
+            if record_id:
+                try:
+                    from core.redis_orchestrator import orchestrator
+                    logger.info(f"[SLOT_FORCE_RELEASE] record={record_id} page={page_idx} session={session_id}")
+                    orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="FINALLY_BLOCK_CLEANUP", tenant_id=str(tenant_id))
+                except Exception as e:
+                    logger.error(f"[SLOT_FORCE_RELEASE_ERROR] {e}")
+
+    async def _handle_task_inner(self, task: Dict[str, Any]):
         # [PHASE 11.5] Unwrap canonical payload
         payload = task['payload']
         record_id = payload.get('record_id')
@@ -132,6 +149,7 @@ class AIWorker(BaseWorker):
         logger.info(f"[AI_PAGE_START] record={record_id} page={page_idx} session={session_id} correlation_id={correlation_id} worker_role=AI")
 
         # ── [PHASE 13: IDEMPOTENCY CHECK] ──
+        slot_released = False
         try:
             from ocr_pipeline.models import InvoicePageResult
             loop = asyncio.get_running_loop()
@@ -145,7 +163,9 @@ class AIWorker(BaseWorker):
                 # Release slot for idempotency skipped page
                 from core.redis_orchestrator import orchestrator
                 try:
-                    orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="IDEMPOTENCY_SKIP", tenant_id=str(tenant_id))
+                    if not slot_released:
+                        orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="IDEMPOTENCY_SKIP", tenant_id=str(tenant_id))
+                        slot_released = True
                 except Exception as rel_err:
                     logger.error(f"[SLOT_RELEASE_IDEMPOTENCY_FAIL] record={record_id} page={page_idx} error={rel_err}")
 
@@ -209,6 +229,12 @@ class AIWorker(BaseWorker):
                     if e.__class__.__name__ == 'ProviderSaturatedError':
                         raise e
                     logger.error(f"[GEMINI_REQUEST_ERROR] pass={pass_idx+1} record={record_id} page={page_idx} error={e}")
+                    # Phase 3: Check if terminal failure
+                    from core.ai_proxy import is_retryable_ai_error
+                    if not is_retryable_ai_error(e):
+                        logger.error(f"[OCR_RECOVERY_SKIPPED_INFRA_FAILURE] Terminal AI failure, skipping recovery chain. record={record_id} page={page_idx} error={e}")
+                        result = {'error': str(e), 'retryable': False}
+                        break
                     result = None
 
                 # Validate Gemini output
@@ -216,10 +242,16 @@ class AIWorker(BaseWorker):
 
                 if result and result.get('status') != 'OCR_FAILED' and raw_reply:
                     try:
+                        parsed = None
                         repaired_text, _, _ = await loop.run_in_executor(
                             None,
                             lambda rr=raw_reply: _repair_json(rr, record_id=record_id, page=page_idx)
                         )
+                        parsed = json.loads(repaired_text)
+                        if not parsed:
+                            raise ValueError("StructuredParseError: parsed output is empty")
+                        logger.info(f"[PARSER_VARIABLE_INIT] record={record_id} page={page_idx} stage=retries")
+                        
                         canonical_payload = await loop.run_in_executor(
                             self.executor,
                             lambda: get_canonical_export_record(parsed, tenant_id=tenant_id)
@@ -251,6 +283,9 @@ class AIWorker(BaseWorker):
                         else:
                             logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=invalid_dto")
                     except Exception as e:
+                        if isinstance(e, (NameError, AttributeError, TypeError)):
+                            logger.error(f"[OCR_PROGRAMMING_ERROR] pass={pass_idx+1} record={record_id} page={page_idx} error={e}. Aborting retries.")
+                            raise e
                         logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=parse_error error={e}")
                 else:
                     logger.warning(f"[OCR_RECOVERY_FAILED] pass={pass_idx+1} record={record_id} page={page_idx} reason=ocr_failed_or_empty_reply")
@@ -263,8 +298,11 @@ class AIWorker(BaseWorker):
                 logger.error(f"[OCR_RETRY_CHAIN_EXHAUSTED] record={record_id} page={page_idx} all_passes_failed=True")
                 logger.error(f"[PAGE_FAILED_TERMINAL] record_id={record_id} page={page_idx}")
                 metrics.increment_counter("ocr:page_failed")
-                if final_result is None:
-                    final_result = result  # may be None
+                if final_result is not None:
+                    final_result['status'] = 'OCR_FAILED'
+                    final_result['error'] = 'Terminal validation failure (density/DTO)'
+                else:
+                    final_result = {'status': 'OCR_FAILED', 'error': 'All passes failed'}
 
             # Validation & persistence — ONCE, after retry chain completes
             final_task = {**task, 'payload': current_payload}
@@ -298,10 +336,8 @@ class AIWorker(BaseWorker):
                             res_obj.counted_in_barrier = True
                             res_obj.save(update_fields=['counted_in_barrier'])
                             
-                        # Release active AI slot before triggering next fanout
-                        from core.redis_orchestrator import orchestrator
-                        orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="UNHANDLED_EXCEPTION", tenant_id=str(tenant_id))
-
+                        # Note: Slot is released in finally block
+                        
                         # Also trigger next fanout so we don't stall the window
                         from ocr_pipeline.pipeline import trigger_next_fanout
                         trigger_next_fanout(record_id)
@@ -363,6 +399,7 @@ class AIWorker(BaseWorker):
 
             if result and result.get('status') != 'OCR_FAILED' and raw_reply:
                 try:
+                    parsed = None
                     loop = asyncio.get_running_loop()
                     repaired_text, _, _ = await loop.run_in_executor(
                         None,
@@ -370,6 +407,9 @@ class AIWorker(BaseWorker):
                     )
                     logger.info(f"[AI_PARSE_START] record={record_id} page={page_idx}")
                     parsed = json.loads(repaired_text)
+                    if not parsed:
+                        raise ValueError("StructuredParseError: parsed output is empty")
+                    logger.info(f"[PARSER_VARIABLE_INIT] record={record_id} page={page_idx} stage=process_result")
                     
                     # [PHASE 5: DTO CONTEXT PROPAGATION]
                     # Ensure canonical context survives the async boundary.
@@ -393,11 +433,8 @@ class AIWorker(BaseWorker):
                     
                     is_failed = not self._is_dto_valid(canonical_payload)
                     if is_failed:
-                        # [FIX] Do not fail the page or poison the barrier.
-                        # Let it survive as a degraded row (partial_extraction).
-                        is_failed = False
-                        canonical_payload['status'] = 'partial_extraction'
-                        logger.info(f"[DEGRADED_PAGE_TOLERATED] record={record_id} page={page_idx} marked as SUCCESS for barrier.")
+                        # [FIX] Do NOT emit AI_PAGE_SUCCESS for terminal page failures
+                        logger.warning(f"[DEGRADED_PAGE_FAILED] record={record_id} page={page_idx} marked as FAILED for barrier.")
                         
                     if not is_failed:
                         logger.info(f"[AI_PAGE_SUCCESS] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI")
@@ -454,8 +491,7 @@ class AIWorker(BaseWorker):
                 except Exception as _prog_err:
                     logger.warning(f"[AI_PROGRESS_HINT_FAIL] {_prog_err}")
 
-                # Release active AI slot before triggering next fanout
-                orchestrator.release_ai_slot(str(record_id), page_idx, session_id=str(session_id), release_reason="COMPLETED", tenant_id=str(tenant_id))
+                # Note: Slot is released in finally block
 
                 from ocr_pipeline.pipeline import trigger_next_fanout
                 trigger_next_fanout(record_id)
@@ -495,6 +531,7 @@ class AIWorker(BaseWorker):
             logger.error(f"[DOWNSTREAM_ENQUEUE_FAILED] target_queue=assembly error={e}")
             raise
         logger.info(f"[AI_WORKER_DONE] record={record_id} page={page_idx} -> ASSEMBLY_QUEUED")
+
 
     def _is_dto_valid(self, payload):
         record_id = payload.get('record_id') or "unknown"

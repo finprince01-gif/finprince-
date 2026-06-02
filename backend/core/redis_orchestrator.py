@@ -207,9 +207,7 @@ class RedisOrchestrator:
                 try:
                     updated_at = float(updated_at_str)
                     if time.time() - updated_at > 60:
-                        completed_set = self.redis.smembers(completed_key)
-                        failed_set = self.redis.smembers(failed_key)
-                        received_pages = sorted([int(p) for p in list(completed_set) + list(failed_set)])
+                        received_pages = sorted([int(p) for p in terminal_pages])
                         missing_pages = [p for p in range(1, expected_pages + 1) if p not in received_pages]
                         logger.error(f"[BARRIER_TIMEOUT] record={record_id} missing_pages={missing_pages}")
                 except: pass
@@ -410,8 +408,9 @@ class RedisOrchestrator:
                 "INGESTION_COMPLETE": ["AI_PROCESSING", "FAILED", "ERROR"],
                 "AI_PROCESSING": ["AI_COMPLETE", "ASSEMBLY_PENDING", "FAILED", "ERROR"],
                 "AI_COMPLETE": ["ASSEMBLY_PENDING", "ASSEMBLY_COMPLETE", "FAILED", "ERROR"],
-                "ASSEMBLY_PENDING": ["AI_PROCESSING", "ASSEMBLY_COMPLETE", "PARTIAL_FAILED", "FAILED", "ERROR"],
-                "ASSEMBLY_COMPLETE": ["FINALIZING", "PARTIAL_FAILED", "FAILED", "ERROR"],
+                "ASSEMBLY_PENDING": ["AI_PROCESSING", "ASSEMBLY_COMPLETE", "READY_FOR_REVIEW", "PARTIAL_FAILED", "FAILED", "ERROR"],
+                "ASSEMBLY_COMPLETE": ["FINALIZING", "READY_FOR_REVIEW", "PARTIAL_FAILED", "FAILED", "ERROR"],
+                "READY_FOR_REVIEW": ["FINALIZING", "PARTIAL_FAILED", "FAILED", "ERROR"],
                 "PARTIAL_FAILED": ["FINALIZING", "FAILED", "ERROR"],
                 "FINALIZING": ["MATERIALIZING", "SNAPSHOTTING", "HYDRATION_READY", "FAILED", "ERROR", "MATERIALIZATION_PENDING"],
                 "MATERIALIZATION_PENDING": ["MATERIALIZING", "FAILED", "ERROR"],

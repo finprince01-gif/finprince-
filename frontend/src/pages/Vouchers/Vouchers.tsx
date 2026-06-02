@@ -6,12 +6,12 @@ import type { Page, VoucherType, Ledger, StockItem, Voucher, SalesPurchaseVouche
 import Icon from '../../components/Icon';
 import { apiService, httpClient } from '../../services';
 import { showError, showSuccess, showInfo, confirm } from '../../utils/toast';
-
 import InvoiceScannerModal from '../../components/InvoiceScannerModal';
 import BulkInvoiceUploadModal from '../../components/SmartInvoiceUploadModal';
 import TallyMasterScannerModal from '../../components/TallyMasterScannerModal';
 import SalesExcelUploadWorkflow from '../../components/SalesExcelUploadWorkflow';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import { useOcrWorkflowStore } from '../../store/ocrWorkflowStore';
 import SalesVoucher from './SalesVoucher';
 import DebitNoteVoucher from './DebitNoteVoucher';
 import PaymentVoucherSingle from './PaymentVoucherSingle';
@@ -49,15 +49,15 @@ interface VouchersPageProps {
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
 const UPLOAD_OPTIONS_CONFIG: Record<string, string[]> = {
-  purchase: ["purchase_scan", "others"],
-  sales: ["sales_excel_upload", "others"],
-  payment: ["bank_upload", "others"],
-  receipt: ["bank_upload", "others"],
-  contra: ["others"],
-  journal: ["others"],
-  expenses: ["others"],
-  "credit note": ["others"],
-  "debit note": ["others"],
+  purchase: ["purchase_scan", "pending_purchase", "upload_for_excel"],
+  sales: ["sales_excel_upload", "upload_for_excel"],
+  payment: ["bank_upload", "upload_for_excel"],
+  receipt: ["bank_upload", "upload_for_excel"],
+  contra: ["upload_for_excel"],
+  journal: ["upload_for_excel"],
+  expenses: ["upload_for_excel"],
+  "credit note": ["upload_for_excel"],
+  "debit note": ["upload_for_excel"],
 };
 
 const normalizeStatutorySection = (str: string): string => {
@@ -142,8 +142,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [isScannerMenuOpen, setIsScannerMenuOpen] = useState(false);
-  const [isOthersSubmenuOpen, setIsOthersSubmenuOpen] = useState(false);
-  const [isTallySubmenuOpen, setIsTallySubmenuOpen] = useState(false);
   const importMenuRef = useRef<HTMLDivElement>(null);
   const scannerMenuRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -247,8 +245,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const handleClickOutside = (event: MouseEvent) => {
       if (scannerMenuRef.current && !scannerMenuRef.current.contains(event.target as Node)) {
         setIsScannerMenuOpen(false);
-        setIsOthersSubmenuOpen(false);
-        setIsTallySubmenuOpen(false);
       }
       if (importMenuRef.current && !importMenuRef.current.contains(event.target as Node)) {
         setIsImportMenuOpen(false);
@@ -11944,7 +11940,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <div className="py-1" role="menu">
                         {(() => {
                           const currentVoucherType = voucherType.toLowerCase();
-                          const allowedOptions = UPLOAD_OPTIONS_CONFIG[currentVoucherType] || ["others"];
+                          const allowedOptions = UPLOAD_OPTIONS_CONFIG[currentVoucherType] || ["upload_for_excel"];
 
                           const UPLOAD_OPTION_META: Record<string, any> = {
                             purchase_scan: {
@@ -11954,6 +11950,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               onClick: () => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); },
                               className: `flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`,
                               extraLabel: isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>
+                            },
+                            pending_purchase: {
+                              id: 'pending_purchase',
+                              label: "Pending Purchase",
+                              icon: <Icon name="package" className="w-4 h-4 mr-3 text-purple-500" />,
+                              onClick: () => { onNavigate('Pending Purchases' as any); setIsScannerMenuOpen(false); },
+                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             },
                             bank_upload: {
                               id: 'bank_upload',
@@ -11969,13 +11972,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               onClick: () => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); },
                               className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             },
-                            others: {
-                              id: 'others',
-                              label: "Others",
-                              icon: <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />,
-                              onClick: () => setIsOthersSubmenuOpen(prev => !prev),
-                              className: "flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100",
-                              hasSubmenu: true
+                            upload_for_excel: {
+                              id: 'upload_for_excel',
+                              label: "UPLOAD FOR EXCEL",
+                              icon: <Icon name="document" className="w-4 h-4 mr-3 text-gray-500" />,
+                              onClick: () => {
+                                setExtractionMode('zoho');
+                                setScanType('bulk');
+                                setScannerFiles(null);
+                                setIsInvoiceScannerOpen(true);
+                                setIsScannerMenuOpen(false);
+                              },
+                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             }
                           };
 
@@ -11995,77 +12003,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                     {option.label}
                                     {option.extraLabel}
                                   </div>
-                                  {option.hasSubmenu && (
-                                    <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
-                                  )}
                                 </button>
-
-                                {key === 'others' && isOthersSubmenuOpen && (
-                                  <div className="bg-gray-50 py-1 shadow-inner">
-                                    <button
-                                      onClick={() => setIsTallySubmenuOpen(prev => !prev)}
-                                      className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                                      role="menuitem"
-                                    >
-                                      <div className="flex items-center">
-                                        <Icon name="document" className="w-3 h-3 mr-3" />
-                                        Tally
-                                      </div>
-                                      <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
-                                    </button>
-
-                                    {isTallySubmenuOpen && (
-                                      <div className="bg-gray-100/50 py-0.5 shadow-inner">
-                                        <button
-                                          onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                                          className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
-                                          role="menuitem"
-                                        >
-                                          <Icon name="plus" className="w-3 h-3 mr-2" />
-                                          Voucher
-                                        </button>
-                                        <button
-                                          onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                                          className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
-                                          role="menuitem"
-                                        >
-                                          <Icon name="masters" className="w-3 h-3 mr-2" />
-                                          Master
-                                        </button>
-                                      </div>
-                                    )}
-                                    <button
-                                      onClick={() => {
-                                        setExtractionMode('zoho');
-                                        setScanType('bulk');
-                                        setScannerFiles(null);
-                                        setIsInvoiceScannerOpen(true);
-                                        setIsScannerMenuOpen(false);
-                                        setIsOthersSubmenuOpen(false);
-                                      }}
-                                      className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                                      role="menuitem"
-                                    >
-                                      <Icon name="document" className="w-3 h-3 mr-3" />
-                                      Zoho
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setExtractionMode('sap');
-                                        setScanType('bulk');
-                                        setScannerFiles(null);
-                                        setIsInvoiceScannerOpen(true);
-                                        setIsScannerMenuOpen(false);
-                                        setIsOthersSubmenuOpen(false);
-                                      }}
-                                      className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                                      role="menuitem"
-                                    >
-                                      <Icon name="document" className="w-3 h-3 mr-3" />
-                                      SAP
-                                    </button>
-                                  </div>
-                                )}
                               </React.Fragment>
                             );
                           });
@@ -13084,6 +13022,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               onClose={() => {
                 setIsBulkUploadOpen(false);
                 setActiveOcrSessionId(null);
+                useOcrWorkflowStore.getState().clearWorkflow();
                 refetch(); // Refresh usage
               }}
               onEditRow={(row: any) => {

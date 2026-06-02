@@ -787,7 +787,17 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         )
         
         if missing_pages_pre_group:
-            raise Exception(f"PAGE_LOSS_BEFORE_GROUPING: {missing_pages_pre_group}")
+            logger.error(f"[TERMINAL_PARTIAL_FAILURE] session={record.upload_session_id} record={record.id} missing_pages={missing_pages_pre_group}")
+            for missing_p in missing_pages_pre_group:
+                pages_list.append({
+                    "_physical_page_no": missing_p,
+                    "_page_no": missing_p,
+                    "status": "PARTIAL_FAILED",
+                    "validation_warnings": ["missing_or_failed_page"],
+                    "error": "This page failed extraction completely.",
+                    "invoice_no": "FAILED",
+                    "vendor_name": "FAILED",
+                })
 
         groups_dict = merger.group_invoices(pages_list)
         logger.info(f"[GROUPED_INVOICE_COUNT] count={len(groups_dict)}")
@@ -896,10 +906,14 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             ) and totals_empty
             
             if is_completely_empty:
-                logger.error(f"[DTO_VALIDATION_REJECT] idx={idx} reason='completely_empty_void' -> Converting to partial extraction instead of discarding.")
-                ui_pay["status"] = "partial_extraction"
+                logger.error(f"[DTO_VALIDATION_REJECT] idx={idx} reason='completely_empty_void' -> Converting to PARTIAL_FAILED instead of discarding.")
+                ui_pay["status"] = "PARTIAL_FAILED"
                 ui_pay["warnings"] = ["low_confidence", "completely_empty_void"]
                 ui_pay["_page_no"] = inv.get("_page_no")
+                
+                # If this group was artificially created due to missing pages, ensure the status propagates.
+                if ui_pay.get("invoice_no") == "FAILED":
+                    ui_pay["error"] = "Extraction failed or pages missing"
                 
             # Otherwise, we warn but preserve the DTO (Convert hard failures into warnings)
             validation_warnings = []
@@ -1770,16 +1784,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             record.validation_status = "DUPLICATE"
             record.save()
             logger.warning(f"[DUPLICATE_STATUS_PERSISTED] id={record.id} validation_status=DUPLICATE")
-            # Still run vendor validation to set vendor_id for the UI/mapping
-            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
-            _vendor_map = build_session_vendor_map(tenant_id, [record])
-            gstin_key = (gstin or "").strip().upper()
-            branch_key = _nb(branch_name or "Main Branch")
-            val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
-            if val_res['status'] == 'EXISTING_VENDOR':
-                record.vendor_id = val_res['vendor_id']
-                record.save()
-            return {"status": "DUPLICATE"}
+            # We don't return early here anymore. Let it flow to vendor and inventory validation for Pending Purchase evaluation.
 
         # ⚫ FAST PATH: vendor_id already validated and stored in staging — skip re-validation.
         # Expand status list to include READY, FINALIZED, VOUCHER_CREATED to cover all valid states.
@@ -1840,11 +1845,54 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 record.validation_status = "NEED_VENDOR"
                 logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_VENDOR")
                 record.save()
-                return {"status": "NEED_VENDOR"}
+                
+                if not auto_save:
+                    return {"status": "NEED_VENDOR"}
+                # If auto_save is True, we allow it to proceed to Pending Purchase evaluation.
 
         # Sync vendor name from master if found
         if vendor:
              vendor_name = vendor.vendor_name
+
+        # ── [INVENTORY ITEM VALIDATION GATING] ──
+        from .inventory_validation import InventoryItemValidationService
+        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+        
+        # ── [PERSIST METADATA INTO DB] ──
+        # Inject the validation result items (which contain match confidence, strategy, and normalized names)
+        # back into the extracted data so they are permanently saved.
+        if "assembled_exports" in record.extracted_data and record.extracted_data["assembled_exports"]:
+            record.extracted_data["assembled_exports"][0]["items"] = inv_val["items"]
+        else:
+            record.extracted_data["items"] = inv_val["items"]
+        record.save(update_fields=['extracted_data'])
+
+        # ── [EXPLICIT PENDING EVALUATION STAGE] ──
+        if auto_save:
+            from ocr_pipeline.statuses import ValidationEnums
+            from pending_purchases.services import evaluate_pending_purchase
+            
+            vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
+            voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
+            item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
+            
+            is_pending = evaluate_pending_purchase(
+                record,
+                vendor_status_enum,
+                voucher_status_enum,
+                item_status_enum,
+                tenant_id
+            )
+            
+            if is_pending:
+                record.validation_status = "PENDING_PURCHASE"
+                record.save(update_fields=['validation_status'])
+                logger.info(f"[FINAL_STATUS] PENDING_PURCHASE record={record.id}")
+                return {"status": "PENDING_PURCHASE"}
+
+        # If it's a duplicate and NOT sent to pending purchase, NOW we return DUPLICATE
+        if is_duplicate:
+            return {"status": "DUPLICATE"}
 
         # 🔹 CREATE PURCHASE VOUCHER (ONLY IF auto_save IS TRUE)
         if not auto_save:
@@ -1853,6 +1901,14 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             record.save()
             logger.info(f"[FINAL_STATUS] NEED_TO_SAVE record={record.id}")
             return {"status": "NEED_TO_SAVE"}
+
+        # Enforce backend hard validation to block voucher saves unless the item status is 'ALREADY EXIST'
+        if inv_val["item_status"] != "ALREADY EXIST":
+            logger.error(f"[INVENTORY_SAVE_BLOCKED] Save blocked for record {record.id} because item_status is {inv_val['item_status']}")
+            record.validation_status = "ERROR"
+            record.validation_message = "Voucher save blocked: one or more inventory items do not exist in Master."
+            record.save()
+            return {"status": "ERROR", "validation_message": "Voucher save blocked: one or more inventory items do not exist."}
 
         # Using the Pipeline 2 logic refined earlier
         try:

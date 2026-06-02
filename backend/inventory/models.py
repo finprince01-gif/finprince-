@@ -176,6 +176,7 @@ class InventoryItem(BaseModel):
         indexes = [
             models.Index(fields=['tenant_id', 'item_code']),
             models.Index(fields=['category']),
+            models.Index(fields=['tenant_id', 'item_code', 'hsn_code']),
         ]
 
     def __str__(self):

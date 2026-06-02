@@ -120,6 +120,9 @@ urlpatterns = [
     # GST Reconciliation & Computation (New Module)
     path('api/gst/', include('gst_reconciliation.urls')),
 
+    # Pending Purchases
+    path('api/pending-purchases/', include('pending_purchases.urls')),
+
     # Bank Statement Upload & Staging Module
     path('api/bank-upload/', include('bank_upload.urls')),
 

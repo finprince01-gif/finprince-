@@ -50,6 +50,8 @@ def get_save_eligible_rows(upload_session_id, tenant_id=None):
       - vendor_status == "ALREADY_EXIST"
       AND
       - voucher_status == "NEED_TO_SAVE"
+      AND
+      - item_status == "ALREADY EXIST"
     are eligible.
     """
     from vendors.vendor_validation_logic import build_session_vendor_map
@@ -92,10 +94,60 @@ def get_save_eligible_rows(upload_session_id, tenant_id=None):
         else:
             voucher_status_badge = 'WAIT'
             
-        if vendor_status_badge == 'ALREADY_EXIST' and voucher_status_badge == 'NEED_TO_SAVE':
+        if vendor_status_badge == 'ALREADY_EXIST' and voucher_status_badge == 'NEED_TO_SAVE' and ui_row.get('item_status') == 'ALREADY EXIST':
             eligible.append((r, ui_row))
             
     return eligible
+
+def get_pending_purchase_eligible_rows(upload_session_id, tenant_id=None):
+    from vendors.vendor_validation_logic import build_session_vendor_map
+    
+    qs = InvoiceTempOCR.objects.filter(upload_session_id=upload_session_id)
+    if tenant_id:
+        qs = qs.filter(tenant_id=tenant_id)
+    records_list = list(qs)
+    
+    vendor_map = build_session_vendor_map(tenant_id, records_list)
+    view_instance = CleanOCRStagingView()
+    
+    eligible = []
+    
+    for r in records_list:
+        if not (r.is_primary or r.group_id is None):
+            continue
+            
+        ui_row = view_instance._map_record_to_ui_row(r, vendor_map=vendor_map)
+        
+        effective_vendor_id = ui_row.get('vendor_id')
+        ui_validation_status = ui_row.get('validationStatus')
+        
+        has_effective_match = r.vendor_status in ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'] or effective_vendor_id
+        vendor_status_badge = 'ALREADY_EXIST' if has_effective_match else 'CREATE_VENDOR'
+        
+        if ui_validation_status in ['processing', 'PENDING', 'EXTRACTING', 'PROCESSING', 'SCANNING']:
+            voucher_status_badge = 'SCANNING'
+        elif ui_validation_status == 'EXTRACTION_FAILED':
+            voucher_status_badge = 'FAILED'
+        elif ui_validation_status == 'VOUCHER_CREATED':
+            voucher_status_badge = 'SAVED'
+        elif ui_validation_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
+            voucher_status_badge = 'ALREADY_EXIST'
+        elif effective_vendor_id or ui_validation_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR']:
+            voucher_status_badge = 'NEED_TO_SAVE'
+        else:
+            voucher_status_badge = 'WAIT'
+            
+        show_in_pending = False
+        if vendor_status_badge == 'ALREADY_EXIST' and voucher_status_badge == 'ALREADY_EXIST' and ui_row.get('item_status') == 'ALREADY EXIST':
+            pass
+        else:
+            show_in_pending = True
+
+        if show_in_pending:
+            eligible.append((r, ui_row))
+            
+    return eligible
+
 
 class CleanOCRStagingView(views.APIView):
     """
@@ -421,21 +473,25 @@ class CleanOCRStagingView(views.APIView):
                     v_id = val_res.get('vendor_id')
                     if v_status not in IMMUTABLE_STATUSES:
                         if v_status in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
-                            v_status = 'READY'
+                            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=vendor_validation source_layer=hydration destination_layer=ui_hydration function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+                            v_status = 'NEED_TO_SAVE'
                     logger.info(
                         f"[VENDOR_STATUS_ASSIGNED] record_id={getattr(r, 'id', None)} "
                         f"vendor_id={v_id} validation_status={v_status} "
                         f"source=session_vendor_map (read-only — DB not mutated)"
                     )
+                    logger.info(f"[VALIDATION_STATE_STABLE] record_id={getattr(r, 'id', None)} result_status={val_res.get('status')}")
                 else:
                     v_id = None
                     if v_status not in IMMUTABLE_STATUSES:
                         if v_status in ['FOUND', 'READY', 'RESOLVED']:
+                            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_VENDOR status_domain=vendor_validation source_layer=hydration destination_layer=ui_hydration function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                             v_status = 'NEED_VENDOR'
                     logger.info(
                         f"[VENDOR_VALIDATION_RESULT] id={getattr(r, 'id', None)} "
                         f"result_status={val_res.get('status') if val_res else 'None'} → no vendor_id assigned"
                     )
+                    logger.info(f"[VALIDATION_STATE_STABLE] record_id={getattr(r, 'id', None)} result_status={val_res.get('status') if val_res else 'None'}")
             else:
                 v_id = None
                 logger.info(
@@ -473,20 +529,30 @@ class CleanOCRStagingView(views.APIView):
         # Determine terminal validation status
         ui_status = v_status or "PENDING"
         if v_status == 'DUPLICATE':
+            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=DUPLICATE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
             ui_status = 'DUPLICATE'
         elif is_failed: 
+            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=EXTRACTION_FAILED status_domain=workflow_state source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
             ui_status = 'EXTRACTION_FAILED'
         elif is_finalized:
             if v_status == 'VOUCHER_CREATED' or v_status_record == 'VOUCHER_CREATED':
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=VOUCHER_CREATED status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = 'VOUCHER_CREATED'
-            elif v_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE'] or v_id:
-                ui_status = 'READY'
+            elif v_status == 'NEED_TO_SAVE':
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+                ui_status = 'NEED_TO_SAVE'
+            elif v_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'] or v_id:
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+                ui_status = 'NEED_TO_SAVE'
             elif v_status in ['GSTIN_CONFLICT']:
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status={v_status} status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = v_status
             else:
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_VENDOR status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = 'NEED_VENDOR'
 
         logger.info(f"[REVIEW_STATUS_HYDRATION] id={getattr(r, 'id', None)} v_status='{v_status}' ui_status='{ui_status}'")
+        logger.info(f"[HYDRATION_STATE_READ] id={getattr(r, 'id', None)} status_read={ui_status} source=HYDRATION")
 
         # Map to final deterministic status
         final_status = "PROCESSING"
@@ -510,7 +576,22 @@ class CleanOCRStagingView(views.APIView):
             norm.get("supplier_invoice_no") or 
             supplier.get("supplier_invoice_no") or ""
         )
-        items = norm.get("items") or header.get("items") or []
+        raw_items = norm.get("items") or header.get("items") or []
+
+        # [FORENSIC][RAW_OCR_ITEM_TAX] Add logging of raw OCR tax fields
+        for idx, item in enumerate(raw_items):
+            tax_fields = {k: v for k, v in item.items() if any(p in k.lower() for p in ['cgst', 'sgst', 'igst', 'cess', 'tax', 'gst', 'rate'])}
+            logger.info(f"[FORENSIC][RAW_OCR_ITEM_TAX] index={idx} desc='{item.get('description')}' tax_fields={tax_fields}")
+
+        from .normalize import get_normalized_items
+        items = get_normalized_items({"items": raw_items}, tenant_id=tenant_id)
+
+        # Validate extracted items using InventoryItemValidationService
+        from .inventory_validation import InventoryItemValidationService
+        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+
+        # [FORENSIC][NORMALIZED_TAX_DTO] Add logging of normalized tax DTO
+        logger.info(f"[FORENSIC][NORMALIZED_TAX_DTO] inv_val_item_status='{inv_val.get('item_status')}' missing_items={inv_val.get('missing_items')}")
 
         # [INVALID_HYBRID_STATUS_BLOCKED] Prevention logic
         if final_status == "FINALIZED" and ui_status == "EXTRACTION_FAILED":
@@ -549,10 +630,12 @@ class CleanOCRStagingView(views.APIView):
             "validationStatus": ui_status,
             "validation_status": ui_status,
             "vendor_status": "EXISTS" if v_id else "NEW",
+            "item_status": inv_val["item_status"],
+            "missing_items": inv_val["missing_items"],
             "processed": getattr(r, 'processed', False),
             "bill_from": bill_from,
             "bill_to": bill_to,
-            "items": items,
+            "items": inv_val["items"],
             "irn": getattr(r, 'irn', None) or norm.get("irn"),
             "ack_no": getattr(r, 'ack_no', None) or norm.get("ack_no"),
             "ack_date": getattr(r, 'ack_date', None) or norm.get("ack_date"),
@@ -569,7 +652,7 @@ class CleanOCRStagingView(views.APIView):
         
         # ── [FIX] VOID/DEGRADED ROW HANDLING ──
         # If the invoice has no valid identity and no items, it's a degraded row.
-        is_degraded = (not inv_no or str(inv_no).upper() == "MISSING") and not items
+        is_degraded = (not inv_no or str(inv_no).upper() == "MISSING") and not inv_val["items"]
         if getattr(r, 'status', None) == 'partial_extraction' or norm.get('status') == 'partial_extraction':
             is_degraded = True
             
@@ -582,7 +665,7 @@ class CleanOCRStagingView(views.APIView):
             res["status"] = "Needs Review"
             res["vendor_status"] = "NEW"
             ui_status = "Needs Review"
-
+ 
         # [PHASE 11.9] FORENSIC HSN HYDRATION LOG
         logger.info(f"[HSN_UI_HYDRATED] inv={inv_no} hsn_sac='{res.get('hsn_sac')}'")
         logger.info(f"[VENDOR_STATUS_MAPPING] id={getattr(r, 'id', None)} v_status={v_status} v_id={v_id} ui_status={ui_status}")
@@ -592,7 +675,9 @@ class CleanOCRStagingView(views.APIView):
                 "sections": sections,
                 "bill_from": bill_from,
                 "billing_address": bill_to,
-                "items": items,
+                "items": inv_val["items"],
+                "item_status": inv_val["item_status"],
+                "missing_items": inv_val["missing_items"],
                 **norm
             }
         res["created_at"] = getattr(r, 'created_at', None)
@@ -601,7 +686,7 @@ class CleanOCRStagingView(views.APIView):
         # [RESUME_STAGING_FILTER]
         # Hide: Vendor Already Exists + Voucher Already Exists
         is_vendor_exists = res["vendor_status"] == "EXISTS"
-        is_voucher_exists = res["validationStatus"] in ["DUPLICATE", "VOUCHER_CREATED", "DUPLICATE_IN_BATCH", "DUPLICATE_INVOICE"]
+        is_voucher_exists = res["validationStatus"] in ["DUPLICATE", "VOUCHER_CREATED", "DUPLICATE_IN_BATCH", "DUPLICATE_INVOICE", "PENDING_PURCHASE"]
         res["is_resume_pending"] = not (is_vendor_exists and is_voucher_exists)
         
         # ── Requirement 7: Mark completed explicitly ──
@@ -1207,6 +1292,9 @@ class CleanOCRStagingView(views.APIView):
         )
         logger.info(f"[STAGING_ROWS_RETURNED] count={len(data)} session={session_to_check}")
         logger.info(f"[FRONTEND_ROWS_RECEIVED] count={len(data)} session={session_to_check}")
+        
+        if terminal:
+            logger.info(f"[LIFECYCLE_TERMINAL_STATE] session={session_to_check} tenant_id={tenant_id} state={pipeline_status}")
 
         self._log_final_api_response_rows(data, "raw_staging")
         return Response({
@@ -1215,6 +1303,8 @@ class CleanOCRStagingView(views.APIView):
             "pipeline_status": pipeline_status,
             "terminal": terminal,
             "hydration_pending": hydration_pending,
+            "completed": True if terminal else False,
+            "failed": True if pipeline_status == 'failed' else False,
             "poll_latency": round(poll_duration, 3)
         })
 
@@ -1330,6 +1420,9 @@ class CleanOCRStagingView(views.APIView):
                     updated_data.get('vendor_name') or ''
                 ),
                 "vendor_status": mapped.get("vendor_status") or ("EXISTS" if record.vendor_id else "NEW"),
+                "item_status": mapped.get("item_status") or "ALREADY EXIST",
+                "missing_items": mapped.get("missing_items") or [],
+                "items": mapped.get("items") or [],
                 "extracted_data": mapped.get("extracted_data") or {
                     "sections": record.extracted_data.get("sections", {}) if isinstance(record.extracted_data, dict) else {},
                     **(record.extracted_data if isinstance(record.extracted_data, dict) else {})
@@ -1688,8 +1781,8 @@ class OCRStagingFinalizeView(views.APIView):
         snapshot_complete = auth_state.get('snapshot_complete', False)
         materialization_complete = auth_state.get('materialization_complete', False)
         
-        # Check convergence: Finalize must only run when completed == expected.
-        is_converged = (expected > 0) and (completed == expected) and snapshot_complete and materialization_complete
+        # Check convergence: Finalize must only run when completed + failed == expected.
+        is_converged = (expected > 0) and ((completed + failed) == expected) and snapshot_complete and materialization_complete
         
         if not is_converged:
             logger.warning(
@@ -1727,13 +1820,15 @@ class OCRStagingFinalizeView(views.APIView):
 
         # ── Requirement 4: Fix ready-count calculation ──
         eligible_tuples = get_save_eligible_rows(upload_session_id, tenant_id=tenant_id)
+        pending_tuples = get_pending_purchase_eligible_rows(upload_session_id, tenant_id=tenant_id)
         ready_count = len(eligible_tuples)
-        logger.info(f"[READY_COUNT_RECALCULATED] session={upload_session_id} ready_count={ready_count}")
+        pending_count = len(pending_tuples)
+        logger.info(f"[READY_COUNT_RECALCULATED] session={upload_session_id} ready_count={ready_count} pending_count={pending_count}")
 
         # ── Requirement 5: Fix finalize candidate builder ──
         # Get only the records from the eligible tuples
         candidates = []
-        for r, ui_row in eligible_tuples:
+        for r, ui_row in eligible_tuples + pending_tuples:
             candidates.append(r)
             logger.info(f"[FINALIZE_CANDIDATE_ACCEPTED] record_id={r.id}")
 
@@ -1750,7 +1845,8 @@ class OCRStagingFinalizeView(views.APIView):
                 
                 # Check eligibility again using the centralized helper
                 eligibility_check = get_save_eligible_rows(upload_session_id, tenant_id=tenant_id)
-                eligible_ids = [t[0].id for t in eligibility_check]
+                pending_check = get_pending_purchase_eligible_rows(upload_session_id, tenant_id=tenant_id)
+                eligible_ids = [t[0].id for t in eligibility_check] + [t[0].id for t in pending_check]
                 
                 if db_rec.id not in eligible_ids:
                     logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={db_rec.id} no longer eligible")
@@ -1779,6 +1875,9 @@ class OCRStagingFinalizeView(views.APIView):
                             # Duplicate is also skipped, handled correctly.
                             db_rec.validation_status = 'DUPLICATE'
                             db_rec.save(update_fields=['validation_status'])
+                        elif save_status == 'PENDING_PURCHASE':
+                            summary['created'] += 1
+                            logger.info(f"[PENDING_PURCHASE_CREATED] record={db_rec.id}")
                         else:
                             summary['failed'] += 1
                             err_msg = res.get('validation_message') if isinstance(res, dict) else "Finalization failed"
@@ -1793,7 +1892,8 @@ class OCRStagingFinalizeView(views.APIView):
                     logger.error(f"[FINALIZE_RECORD_FAILED] record={db_rec.id} error={e}", exc_info=True)
                     summary['failed'] += 1
                     summary['errors'].append({'file': db_rec.file_path, 'error': str(e)})
-        else:
+                    
+        if len(candidates) == 0:
             # If no candidates, but total_in_session > 0, report what's already saved (Path A equivalent)
             if summary['total'] > 0:
                 qs_base = InvoiceTempOCR.objects.filter(
