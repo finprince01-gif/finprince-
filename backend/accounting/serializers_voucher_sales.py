@@ -200,7 +200,7 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
 
     def validate_sales_invoice_no(self, value):
         """
-        Ensures the invoice number is unique within the tenant.
+        Ensures the invoice number is unique within the tenant by auto-incrementing if it already exists.
         """
         request = self.context.get('request')
         tenant_id = self.context.get('tenant_id')
@@ -211,16 +211,36 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
             return value
 
         if value:
-            qs = VoucherSalesInvoiceDetails.objects.filter(
-                tenant_id=tenant_id,
-                sales_invoice_no__iexact=value.strip()
-            )
-            if self.instance:
-                qs = qs.exclude(pk=self.instance.pk)
+            import re
             
-            if qs.exists():
-                existing = qs.first()
-                raise serializers.ValidationError(f"Invoice number '{value}' already exists for customer '{existing.customer_name}'.")
+            def increment_invoice_string(val):
+                # Regex to match: prefix, numeric sequence, and trailing suffix (like -27, /27, -26-27 or any non-digits at the end)
+                # The suffix regex specifically matches 2-digit fiscal year formats (e.g. -27, /27, -26-27)
+                match = re.match(r'^(.*?)(?P<num>\d+)([-/]\d{2}(?:-\d{2})?|[^0-9]*)$', val)
+                if match:
+                    prefix = match.group(1)
+                    num_str = match.group('num')
+                    suffix = val[match.end('num'):]
+                    
+                    num = int(num_str) + 1
+                    # Keep zero padding (zfill) matching length of original numeric string
+                    new_num_str = str(num).zfill(len(num_str))
+                    return f"{prefix}{new_num_str}{suffix}"
+                else:
+                    return val + "-1"
+
+            while True:
+                qs = VoucherSalesInvoiceDetails.objects.filter(
+                    tenant_id=tenant_id,
+                    sales_invoice_no__iexact=value.strip()
+                )
+                if self.instance:
+                    qs = qs.exclude(pk=self.instance.pk)
+                
+                if qs.exists():
+                    value = increment_invoice_string(value)
+                else:
+                    break
         
         return value
     
