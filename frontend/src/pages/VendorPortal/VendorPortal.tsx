@@ -655,33 +655,61 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                     referenceNo: t.reference_number || '-',
                     ledger: transactionType === 'receipt' ? 'Receipt' : (t.ledger_name || (transactionType === 'purchase' ? 'Purchase A/c' : '-')),
                     status: (() => {
-                        const refType = (t.reference_type || '').toUpperCase();
                         const txType = transactionType;
                         const amount = amt;
                         const paidAmount = parseFloat(t.paid_amount || t.used_amount || 0);
+                        const pendingBalance = Math.max(0, amount - paidAmount);
 
-                        // ── PURCHASE: use backend credit-period due status ──────────
-                        // ── PURCHASE: use backend credit-period due status ──────────
-                        if (txType === 'purchase') {
-                            if (t.due_status) return t.due_status;
+                        // ── 1. Disputed overrides everything ───────────────────────
+                        if (t.is_disputed || t.status === 'Disputed' || t.payment_status === 'Disputed') {
+                            return 'Disputed';
+                        }
 
-                            const isFullyPaid = Math.abs(paidAmount - amount) < 0.01 || paidAmount >= amount;
-                            const isPartiallyPaid = paidAmount > 0 && paidAmount < amount;
+                        // ── 2. Calculate credit term expiry ───────────────────────
+                        let isExpired = false;
+                        const txDate = t.transaction_date || t.date;
+                        if (amount > 0 && txDate) {
+                            const creditPeriod = parseInt(String(t.credit_period || t.due_details?.credit_period || 0), 10) || 0;
+                            if (creditPeriod > 0) {
+                                const invDate = new Date(txDate);
+                                const today = new Date();
+                                const diffDays = Math.floor(
+                                    (new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() -
+                                     new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate()).getTime()) / 86400000
+                                );
+                                isExpired = diffDays > creditPeriod;
+                            } else {
+                                // No credit period set — check backend due_status directly
+                                const ds = (t.due_status || '').toLowerCase();
+                                if (ds === 'due' || ds === 'unpaid') isExpired = true;
+                            }
+                        }
 
-                            if (isFullyPaid) return 'Paid';
-                            if (isPartiallyPaid) return 'Partially Paid';
+                        // ── 3. Sales / Debit Note ────────────────────────────────
+                        if (txType === 'sales' || txType === 'debit_note') {
+                            if (pendingBalance === 0 && amount > 0) return 'Received';
+                            if (pendingBalance < amount && pendingBalance > 0) return 'Partially Received';
+                            if (pendingBalance === amount) return isExpired ? 'Due' : 'Not Due';
                             return 'Not Due';
                         }
 
-                        // ── ADVANCE entries ────────────────────────────────────────
-                        if (refType === 'ADVANCE' || t.is_advance) {
-                            return paidAmount > 0 ? 'Utilized' : 'Not Utilized';
-                        }
-                        // ── ADVANCE / GENERIC UNALLOCATED entries ─────────────────
-                        if (txType === 'payment' || txType === 'receipt') {
-                            const isGenericPayment = t.transaction_number && t.reference_number && t.transaction_number.startsWith(t.reference_number + '-');
+                        // ── 4. Purchase / Expense / Credit Note ─────────────────
+                        if (txType === 'purchase' || txType === 'expense' || txType === 'credit_note') {
+                            // Use backend due_status when no payment has been applied yet
+                            if (t.due_status && pendingBalance === amount) return t.due_status;
 
-                            const isAdvanceEntry = (t.reference_type || '').toUpperCase() === 'ADVANCE' ||
+                            if (pendingBalance === 0 && amount > 0) return 'Paid';
+                            if (pendingBalance < amount && pendingBalance > 0) return 'Partially Paid';
+                            if (pendingBalance === amount) return isExpired ? 'Unpaid' : 'Not Due';
+                            return 'Not Due';
+                        }
+
+                        // ── 5. Payment / Receipt ─────────────────────────────────
+                        if (txType === 'payment' || txType === 'receipt') {
+                            const refType = (t.reference_type || '').toUpperCase();
+                            const isGenericPayment = t.transaction_number && t.reference_number &&
+                                t.transaction_number.startsWith(t.reference_number + '-');
+                            const isAdvanceEntry = refType === 'ADVANCE' ||
                                 t.is_advance ||
                                 (t.status || '').toLowerCase() === 'advance' ||
                                 !t.reference_number ||
@@ -693,15 +721,19 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                 const usedAmt = parseFloat(t.paid_amount || t.used_amount || 0);
                                 if (usedAmt >= amount && amount > 0) return 'Utilized';
                                 if (usedAmt > 0) return 'Partially Utilized';
-                                return 'Not Utilized';
+                                return 'Unutilized';
                             }
-                            return paidAmount >= amount ? 'Paid' : paidAmount > 0 ? 'Partially Paid' : 'Not Due';
+                            // Regular (non-advance) payment/receipt — track utilization
+                            if (pendingBalance === 0 && amount > 0) return 'Utilized';
+                            if (pendingBalance < amount && pendingBalance > 0) return 'Partially Utilized';
+                            return 'Unutilized';
                         }
-                        // ── Fallback ───────────────────────────────────────────────
+
+                        // ── Fallback ──────────────────────────────────────────────
                         const s = (t.status || '').toLowerCase();
                         if (s === 'paid' || s === 'received') return 'Paid';
-                        if (s === 'advance') return 'Not Utilized';
-                        return 'Not Due';
+                        if (s === 'advance') return 'Unutilized';
+                        return '-';
                     })(),
                     debit: isDebit ? amt : 0,
                     credit: !isDebit ? amt : 0,
@@ -6523,10 +6555,15 @@ return (
                                                                                         <option value="">All Statuses</option>
                                                                                         <option value="Not Due">Not Due</option>
                                                                                         <option value="Due">Due</option>
+                                                                                        <option value="Unpaid">Unpaid</option>
                                                                                         <option value="Partially Paid">Partially Paid</option>
                                                                                         <option value="Paid">Paid</option>
+                                                                                        <option value="Received">Received</option>
+                                                                                        <option value="Partially Received">Partially Received</option>
                                                                                         <option value="Utilized">Utilized</option>
-                                                                                        <option value="Not Utilized">Not Utilized</option>
+                                                                                        <option value="Partially Utilized">Partially Utilized</option>
+                                                                                        <option value="Unutilized">Unutilized</option>
+                                                                                        <option value="Disputed">Disputed</option>
                                                                                     </select>
                                                                                 </div>
                                                                             )}
@@ -6636,13 +6673,20 @@ return (
                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.referenceNo || entry.ledger}</td>
                                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
+                                                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
+                                                                            entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
+                                                                            entry.status === 'Received' ? 'bg-green-100 text-green-800' :
+                                                                            entry.status === 'Utilized' ? 'bg-teal-100 text-teal-800' :
                                                                             entry.status === 'Due' ? 'bg-red-100 text-red-800' :
-                                                                                entry.status === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
-                                                                                    entry.status === 'Utilized' ? 'bg-blue-100 text-blue-700' :
-                                                                                        entry.status === 'Not Utilized' ? 'bg-purple-100 text-purple-700' :
-                                                                                            'bg-gray-100 text-gray-600'
-                                                                            }`}>
+                                                                            entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
+                                                                            entry.status === 'Not Due' ? 'bg-blue-100 text-blue-700' :
+                                                                            entry.status === 'Partially Paid' ? 'bg-orange-100 text-orange-700' :
+                                                                            entry.status === 'Partially Received' ? 'bg-orange-100 text-orange-700' :
+                                                                            entry.status === 'Partially Utilized' ? 'bg-amber-100 text-amber-700' :
+                                                                            entry.status === 'Unutilized' ? 'bg-purple-100 text-purple-700' :
+                                                                            entry.status === 'Disputed' ? 'bg-yellow-100 text-yellow-800' :
+                                                                            'bg-gray-100 text-gray-600'
+                                                                        }`}>
                                                                             {entry.status}
                                                                         </span>
                                                                     </td>

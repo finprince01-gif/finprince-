@@ -191,7 +191,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 setEditingVoucherId((prefilledData as any).voucherId || (prefilledData as any).id);
             }
             if (prefilledData.invoiceDate || (prefilledData as any).date) setDate(prefilledData.invoiceDate || (prefilledData as any).date);
-            if (prefilledData.invoiceNumber || (prefilledData as any).debit_note_no) setDebitNoteNo(prefilledData.invoiceNumber || (prefilledData as any).debit_note_no || '');
+            if ((prefilledData as any).debit_note_no) setDebitNoteNo((prefilledData as any).debit_note_no || '');
             
             // Branch and GSTIN
             if (prefilledData.branch) setVendorBranch(prefilledData.branch);
