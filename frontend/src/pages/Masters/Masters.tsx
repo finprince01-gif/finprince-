@@ -782,46 +782,33 @@ const MastersPage: React.FC<MastersPageProps> = ({
   };
 
   // Handle edit voucher configuration
-  const handleEditVoucherConfig = () => {
-    if (!selectedVoucherConfig) {
-      showError('Please select a voucher configuration first');
-      return;
-    }
-
-
-    setVoucherName(selectedVoucherConfig.voucher_name || '');
-    setEnableAutoNumbering(selectedVoucherConfig.enable_auto_numbering ?? true);
-    setVoucherPrefix(selectedVoucherConfig.prefix || '');
-    setVoucherSuffix(selectedVoucherConfig.suffix || '');
-    setVoucherStartFrom(selectedVoucherConfig.start_from || 1);
-    setVoucherRequiredDigits(selectedVoucherConfig.required_digits || 4);
+  const handleEditVoucherConfig = (voucher: any) => {
+    setSelectedVoucherConfig(voucher);
+    setVoucherName(voucher.voucher_name || '');
+    setEnableAutoNumbering(voucher.enable_auto_numbering ?? true);
+    setVoucherPrefix(voucher.prefix || '');
+    setVoucherSuffix(voucher.suffix || '');
+    setVoucherStartFrom(voucher.start_from || 1);
+    setVoucherRequiredDigits(voucher.required_digits || 4);
     setIsEditModeVoucher(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Handle delete voucher configuration
-  const handleDeleteVoucherConfig = async () => {
-    if (!selectedVoucherConfig) {
-      showError('Please select a voucher configuration first');
+  const handleDeleteVoucherConfig = async (voucher: any) => {
+    if (!await confirm(`Are you sure you want to delete "${voucher.voucher_name}"?`)) {
       return;
     }
-
-
-    if (!await confirm(`Are you sure you want to delete "${selectedVoucherConfig.voucher_name}"?`)) {
-      return;
-    }
-
 
     try {
       const endpoint = getVoucherEndpoint(selectedVoucher);
-      await httpClient.delete(`${endpoint}${selectedVoucherConfig.id}/`);
+      await httpClient.delete(`${endpoint}${voucher.id}/`);
       await fetchVoucherConfigurations();
       resetVoucherForm();
       showSuccess('Voucher configuration deleted successfully!');
     } catch (error) {
       handleApiError(error, 'Delete Voucher Configuration');
     }
-
   };
 
   const handleAddVoucherType = (e: React.FormEvent) => {
@@ -1542,7 +1529,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                 <th className="w-12"></th>
                 <th>Group Name</th>
                 <th>Under</th>
-                <th className="text-right">Actions</th>
+                <th className="!text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1593,24 +1580,23 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         <span className="text-gray-400 italic">Primary</span>
                       )}
                     </td>
-                    <td className="text-right px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="!text-center px-6 py-4 whitespace-nowrap text-sm font-medium">
                       {isSelected ? (
-                        <div className="inline-flex items-center gap-2">
+                        <div className="flex justify-center items-center gap-4">
                           <button
                             onClick={handleEditGroup}
-                            className="erp-button-primary py-1.5 px-3 text-xs"
+                            className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
                             aria-label="Edit selected group"
                           >
-                            <Icon name="edit" className="w-3.5 h-3.5 mr-1" />
-                            Edit
+                            EDIT
                           </button>
                           <button
                             onClick={handleDeleteGroup}
-                            className="erp-button-secondary py-1.5 px-3 text-xs bg-red-50 text-red-600 border-red-100 hover:bg-red-100"
+                            className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
                             aria-label="Delete selected group"
                             title="Delete"
                           >
-                            <Icon name="trash" className="w-3.5 h-3.5" />
+                            DELETE
                           </button>
                         </div>
                       ) : (
@@ -1691,13 +1677,15 @@ const MastersPage: React.FC<MastersPageProps> = ({
           })}
         </div>
 
-        {/* Sales Voucher Form with Existing Vouchers Table */}
-        {selectedVoucher === 'sales' && (
+        {/* Sales / Voucher Form with Existing Vouchers Table */}
+        {selectedVoucher && (
           <div className="erp-container">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Column - Sales Voucher Configuration */}
-              <div>
-                <h3 className="erp-section-title">Sales</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Column - Voucher Configuration */}
+              <div className="lg:col-span-1 border-r border-gray-200 pr-0 lg:pr-8">
+                <h3 className="section-title mb-4">
+                  {isEditModeVoucher ? 'Edit Voucher' : (voucherButtons.find(v => v.id === selectedVoucher)?.label || 'Voucher')}
+                </h3>
 
                 {/* Error Message */}
                 {voucherFormError && (
@@ -1706,21 +1694,21 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   </div>
                 )}
 
-                <form onSubmit={handleVoucherSubmit} className="space-y-6">
+                <form onSubmit={handleVoucherSubmit} className="space-y-4">
                   {/* Voucher Name */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="label-text">
                       Voucher Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={voucherName}
                       onChange={(e) => setVoucherName(e.target.value)}
-                      className="w-full max-w-md px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-gray-800"
                       placeholder="Enter voucher name"
                       required
                     />
-                    <p className="mt-1 text-xs text-gray-500">Data Validation: Text</p>
+                    <p className="mt-1 text-xs text-gray-400">Data Validation: Text</p>
                   </div>
 
                   {/* Enable Automatic Numbering Series */}
@@ -1732,87 +1720,83 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       onChange={(e) => setEnableAutoNumbering(e.target.checked)}
                       className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
-                    <label htmlFor="enableAutoNumbering" className="ml-2 text-sm font-medium text-gray-700">
+                    <label htmlFor="enableAutoNumbering" className="ml-2 text-sm font-semibold text-gray-700">
                       Enable Automatic Numbering Series
                     </label>
                   </div>
 
                   {/* Prefix and Suffix */}
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="label-text">
                         Prefix <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={voucherPrefix}
                         onChange={(e) => setVoucherPrefix(e.target.value)}
-                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="e.g., INV-"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-gray-800"
+                        placeholder={selectedVoucher === 'sales' ? 'e.g., INV-' : 'e.g., CN-'}
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
                         required
                       />
-                      <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
+                      <p className="mt-1 text-[11px] text-gray-400">Alphanumeric (With / and -)</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="label-text">
                         Suffix <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={voucherSuffix}
                         onChange={(e) => setVoucherSuffix(e.target.value)}
-                        className="erp-input"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-gray-800"
                         placeholder="e.g., /24-25"
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
                         required
                       />
-                      <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
+                      <p className="mt-1 text-[11px] text-gray-400">Alphanumeric (With / and -)</p>
                     </div>
                   </div>
 
                   {/* Start From and Required Digits */}
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="label-text">
                         Start From
                       </label>
                       <input
                         type="number"
                         value={voucherStartFrom}
                         onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
-                        className="erp-input"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-gray-800"
                         placeholder="1"
                         min="1"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="label-text">
                         Required Digits
                       </label>
                       <input
                         type="number"
                         value={voucherRequiredDigits}
                         onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
-                        className="erp-input"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-gray-800"
                         placeholder="4"
                         min="1"
                       />
-                      <p className={`mt-1 text-xs ${(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0) > 16 ? 'text-red-500' : 'text-gray-500'}`}>
+                      <p className={`mt-1 text-[11px] ${(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0) > 16 ? 'text-red-500' : 'text-gray-400'}`}>
                         Total Length: {(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0)}/16 (GST Limit)
                       </p>
                     </div>
                   </div>
 
-
-
                   {/* Voucher Preview */}
-                  <div className="mt-6 p-6 bg-gray-100 rounded-[4px] flex flex-col items-center justify-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                      SAMPLE PREVIEW
-                    </span>
+                  <div className="bg-gray-100 p-6 rounded-[4px] text-center">
+                    <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>
                     <p className="text-xl font-bold text-gray-800 tracking-wide">
                       {formatVoucherNumber({
                         prefix: voucherPrefix,
@@ -1824,349 +1808,93 @@ const MastersPage: React.FC<MastersPageProps> = ({
                     </p>
                   </div>
 
-                  {/* Submit Button */}
-                  <div className="flex justify-end gap-3 pt-4">
+                  {/* Submit and Cancel Buttons */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-2 text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                    >
+                      {isEditModeVoucher ? 'Update' : 'Save'}
+                    </button>
                     {isEditModeVoucher && (
                       <button
                         type="button"
                         onClick={resetVoucherForm}
-                        className="erp-button-secondary"
+                        className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
                       >
                         Cancel
                       </button>
                     )}
-                    <button
-                      type="submit"
-                      className="erp-button-primary"
-                    >
-                      {isEditModeVoucher ? 'Update' : 'Save'}
-                    </button>
                   </div>
                 </form>
               </div>
 
               {/* Right Column - Existing Vouchers */}
-              <div>
-                <h3 className="erp-section-title">Existing Vouchers</h3>
+              <div className="lg:col-span-2">
+                <h3 className="section-title mb-4">Existing Vouchers</h3>
 
                 {/* Table */}
-                <div className="erp-table-container">
-                  <table className="erp-table text-xs">
-                    <thead>
+                <div className="border border-slate-200 rounded-[4px] overflow-hidden">
+                  <table className="erp-table min-w-full text-xs">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
-
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">ACTIONS</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VOUCHER NAME</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
+                        <th className="px-6 py-3 !text-center text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="bg-white divide-y divide-gray-200">
                       {existingVouchers.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-3 py-12 text-center">
-                            <p className="text-sm text-gray-400">No vouchers configured yet</p>
+                          <td colSpan={3} className="px-6 py-12 text-center text-gray-400">
+                            No vouchers configured yet
                           </td>
                         </tr>
                       ) : (
-                        existingVouchers
-                          .map((voucher) => {
-                            const isSelected = selectedVoucherConfig?.id === voucher.id;
-                            const seriesPreview = voucher.enable_auto_numbering
-                              ? formatVoucherNumber({
-                                prefix: voucher.prefix,
-                                suffix: voucher.suffix,
-                                start_from: voucher.start_from,
-                                current_number: voucher.current_number,
-                                required_digits: voucher.required_digits
-                              })
-                              : 'Manual';
+                        existingVouchers.map((voucher) => {
+                          const isEditingThis = selectedVoucherConfig?.id === voucher.id;
+                          const seriesPreview = voucher.enable_auto_numbering
+                            ? formatVoucherNumber({
+                              prefix: voucher.prefix,
+                              suffix: voucher.suffix,
+                              start_from: voucher.start_from,
+                              current_number: voucher.current_number,
+                              required_digits: voucher.required_digits
+                            })
+                            : 'Manual';
 
-                            return (
-                              <tr
-                                key={voucher.id}
-                                className={`transition-colors ${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50' : 'hover:bg-gray-50'}`}
-                              >
-                                <td className="px-3 py-3 whitespace-nowrap">
-                                  <input
-                                    type="radio"
-                                    name="selectedVoucherConfig"
-                                    checked={isSelected}
-                                    onChange={() => setSelectedVoucherConfig(voucher)}
-                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                  />
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {voucher.voucher_name}
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700">
-                                  {seriesPreview}
-                                </td>
-
-                                <td className="px-3 py-3 whitespace-nowrap text-sm">
-                                  {isSelected ? (
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={handleEditVoucherConfig}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        onClick={handleDeleteVoucherConfig}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-[4px] text-white bg-red-600 hover:bg-red-700 transition-colors"
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <span className="text-gray-400 text-xs italic">Select to edit</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-
-        {/* Other Vouchers Form - For all vouchers except Sales */}
-        {selectedVoucher !== 'sales' && (
-          <div className="erp-container">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Column - Voucher Configuration */}
-              <div>
-                <h3 className="erp-section-title">
-                  {voucherButtons.find(v => v.id === selectedVoucher)?.label}
-                </h3>
-                <form onSubmit={handleVoucherSubmit} className="space-y-6">
-                  {/* Voucher Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Voucher Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={voucherName}
-                      onChange={(e) => setVoucherName(e.target.value)}
-                      className="erp-input"
-                      placeholder="Enter voucher name"
-                      required
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Data Validation: Text</p>
-                  </div>
-
-                  {/* Enable Automatic Numbering Series */}
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="otherEnableAutoNumbering"
-                      checked={enableAutoNumbering}
-                      onChange={(e) => setEnableAutoNumbering(e.target.checked)}
-                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                    />
-                    <label htmlFor="otherEnableAutoNumbering" className="ml-2 text-sm font-medium text-gray-700">
-                      Enable Automatic Numbering Series
-                    </label>
-                  </div>
-
-                  {/* Prefix and Suffix */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Prefix <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={voucherPrefix}
-                        onChange={(e) => setVoucherPrefix(e.target.value)}
-                        className="erp-input"
-                        placeholder="e.g., CN-"
-                        pattern="[a-zA-Z0-9/\-]*"
-                        title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
-                        required
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Suffix <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={voucherSuffix}
-                        onChange={(e) => setVoucherSuffix(e.target.value)}
-                        className="erp-input"
-                        placeholder="e.g., /24-25"
-                        pattern="[a-zA-Z0-9/\-]*"
-                        title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
-                        required
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
-                    </div>
-                  </div>
-
-                  {/* Start From and Required Digits */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Start From
-                      </label>
-                      <input
-                        type="number"
-                        value={voucherStartFrom}
-                        onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
-                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="1"
-                        min="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Required Digits
-                      </label>
-                      <input
-                        type="number"
-                        value={voucherRequiredDigits}
-                        onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
-                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="4"
-                        min="1"
-                      />
-                      <p className={`mt-1 text-xs ${(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0) > 16 ? 'text-red-500' : 'text-gray-500'}`}>
-                        Total Length: {(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0)}/16 (GST Limit)
-                      </p>
-                    </div>
-                  </div>
-
-
-
-                  {/* Voucher Preview */}
-                  <div className="mt-6 p-6 bg-gray-100 rounded-[4px] flex flex-col items-center justify-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                      SAMPLE PREVIEW
-                    </span>
-                    <p className="text-xl font-bold text-gray-800 tracking-wide">
-                      {formatVoucherNumber({
-                        prefix: voucherPrefix,
-                        suffix: voucherSuffix,
-                        start_from: voucherStartFrom,
-                        current_number: null,
-                        required_digits: voucherRequiredDigits
-                      })}
-                    </p>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="flex justify-end gap-3 pt-4">
-                    {isEditModeVoucher && (
-                      <button
-                        type="button"
-                        onClick={resetVoucherForm}
-                        className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-[4px] hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-[4px] hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
-                    >
-                      {isEditModeVoucher ? 'Update' : 'Save'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* Right Column - Existing Vouchers */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Vouchers</h3>
-
-                {/* Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
-
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {existingVouchers.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-3 py-12 text-center">
-                            <p className="text-sm text-gray-400">No vouchers configured yet</p>
-                          </td>
-                        </tr>
-                      ) : (
-                        existingVouchers
-                          .map((voucher) => {
-                            const isSelected = selectedVoucherConfig?.id === voucher.id;
-                            const seriesPreview = voucher.enable_auto_numbering
-                              ? formatVoucherNumber({
-                                prefix: voucher.prefix,
-                                suffix: voucher.suffix,
-                                start_from: voucher.start_from,
-                                current_number: voucher.current_number,
-                                required_digits: voucher.required_digits
-                              })
-                              : 'Manual';
-
-                            return (
-                              <tr
-                                key={voucher.id}
-                                className={`transition-colors ${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50' : 'hover:bg-gray-50'}`}
-                              >
-                                <td className="px-3 py-3 whitespace-nowrap">
-                                  <input
-                                    type="radio"
-                                    name="selectedVoucherConfig"
-                                    checked={isSelected}
-                                    onChange={() => setSelectedVoucherConfig(voucher)}
-                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                  />
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {voucher.voucher_name}
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700">
-                                  {seriesPreview}
-                                </td>
-
-                                <td className="px-3 py-3 whitespace-nowrap text-sm">
-                                  {isSelected ? (
-                                    <div className="flex gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={handleEditVoucherConfig}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={handleDeleteVoucherConfig}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-[4px] text-white bg-red-600 hover:bg-red-700 transition-colors"
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <span className="text-gray-400 text-xs italic">Select to edit</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })
+                          return (
+                            <tr
+                              key={voucher.id}
+                              className={`hover:bg-gray-50 transition-colors ${isEditingThis ? 'bg-indigo-50/50 hover:bg-indigo-50' : ''}`}
+                            >
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {voucher.voucher_name}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                {seriesPreview}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap !text-center text-sm font-medium">
+                                <div className="flex justify-center items-center gap-4">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditVoucherConfig(voucher)}
+                                    className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
+                                  >
+                                    EDIT
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteVoucherConfig(voucher)}
+                                    className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
+                                  >
+                                    DELETE
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>

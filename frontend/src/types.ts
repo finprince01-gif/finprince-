@@ -1,4 +1,4 @@
-export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'GST' | 'Users & Roles' | 'Dashboard Builder';
+export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'GST' | 'Users & Roles' | 'Dashboard Builder' | 'Pending Purchases';
 
 export interface CompanyDetails {
   name: string;
@@ -249,6 +249,7 @@ export interface ExtractedLineItem {
   igst?: number;
   cess?: number;
   taxableValue?: number;
+  invoiceValue?: number;
   uom?: string;
 }
 
@@ -273,6 +274,8 @@ export interface ExtractedInvoiceData {
   invoiceType?: string;
   currency?: string;
   exchangeRate?: number;
+  billFrom?: string;
+  billTo?: string;
   billToAddress1?: string;
   billToAddress2?: string;
   billToCity?: string;

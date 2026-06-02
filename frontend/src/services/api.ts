@@ -1132,7 +1132,7 @@ class ApiService {
 
         // Handle Debit Note Vouchers
         for (const voucher of debitNoteVouchers) {
-            const updateId = voucher.reference_id || voucher.id;
+            const updateId = (voucher as any).reference_id || voucher.id;
             if (updateId && !String(updateId).includes('T') && !String(updateId).includes('.')) {
                 promises.push(this.updateDebitNote(updateId, voucher));
             } else {
@@ -1306,7 +1306,7 @@ class ApiService {
             formData.append(key, value);
         });
         formData.append('file', file);
-        
+
         // Use postExternal to avoid sending local auth headers to AWS
         return httpClient.postExternal<any>(url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
@@ -1321,16 +1321,6 @@ class ApiService {
         return httpClient.post<any>('/api/ocr-staging-finalize/', uploadSessionId ? { upload_session_id: uploadSessionId } : {});
     }
 
-    /** Create a vendor from the staging screen, then trigger re-validation. */
-    async createVendorFromStaging(data: {
-        vendor_name: string;
-        gstin?: string;
-        address?: string;
-        state?: string;
-        branch?: string;
-    }) {
-        return httpClient.post<{ status: string; vendor_id: number }>('/api/purchase/vendors/create/', data);
-    }
 
     // ============================================================================
     // SALES EXCEL UPLOAD WORKFLOW

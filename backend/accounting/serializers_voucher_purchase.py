@@ -1,4 +1,6 @@
 import json
+import logging
+logger = logging.getLogger("ocr_pipeline")
 from rest_framework import serializers  # type: ignore[import]
 from vendors.models import VendorMasterBasicDetail  # type: ignore[import]
 from .models_voucher_purchase import (  # type: ignore[import]
@@ -73,7 +75,7 @@ class VoucherPurchaseDueDetailsSerializer(serializers.ModelSerializer):  # type:
 
 
 class VoucherPurchaseTransitDetailsSerializer(serializers.ModelSerializer):  # type: ignore[misc]
-    mode = serializers.CharField(required=False, default='Road')
+    mode = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
     received_in = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     receipt_date = serializers.DateField(required=False, allow_null=True)
     receipt_time = serializers.TimeField(required=False, allow_null=True)
@@ -185,7 +187,14 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         due_data = due_data if isinstance(due_data, dict) else None
         transit_data = transit_data if isinstance(transit_data, dict) else None
 
-        supplier_instance = VoucherPurchaseSupplierDetails.objects.create(**validated_data)
+        logger.info("[CHILD_INSERT_START] table='voucher_purchase_supplier_details'")
+        try:
+            supplier_instance = VoucherPurchaseSupplierDetails.objects.create(**validated_data)
+            logger.info(f"[CHILD_INSERT_SUCCESS] table='voucher_purchase_supplier_details' id={supplier_instance.id}")
+        except Exception as e:
+            logger.error(f"[CHILD_INSERT_FAILED] table='voucher_purchase_supplier_details' error={e}", exc_info=True)
+            raise e
+
         tenant_id = supplier_instance.tenant_id
 
         # Build a clean voucher_number (prefer purchase_voucher_no, then supplier_invoice_no, then generated)
@@ -213,24 +222,30 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 total_igst += float(item.get('igst', 0))
 
         # Use update_or_create so repeated saves don't stack Voucher rows
-        voucher, _ = Voucher.objects.update_or_create(
-            tenant_id=tenant_id,
-            type='purchase',
-            reference_id=supplier_instance.id,
-            defaults={
-                'voucher_number': purchase_voucher_number,
-                'date': supplier_instance.date,
-                'invoice_no': supplier_instance.supplier_invoice_no,
-                'party': supplier_instance.vendor_name,
-                'total': purchase_total_gross,
-                'source': 'purchase_voucher',
-                'is_inter_state': supplier_instance.input_type == 'Interstate',
-                'total_taxable_amount': total_taxable,
-                'total_cgst': total_cgst,
-                'total_sgst': total_sgst,
-                'total_igst': total_igst,
-            }
-        )
+        logger.info("[CHILD_INSERT_START] table='voucher'")
+        try:
+            voucher, _ = Voucher.objects.update_or_create(
+                tenant_id=tenant_id,
+                type='purchase',
+                reference_id=supplier_instance.id,
+                defaults={
+                    'voucher_number': purchase_voucher_number,
+                    'date': supplier_instance.date,
+                    'invoice_no': supplier_instance.supplier_invoice_no,
+                    'party': supplier_instance.vendor_name,
+                    'total': purchase_total_gross,
+                    'source': 'purchase_voucher',
+                    'is_inter_state': supplier_instance.input_type == 'Interstate',
+                    'total_taxable_amount': total_taxable,
+                    'total_cgst': total_cgst,
+                    'total_sgst': total_sgst,
+                    'total_igst': total_igst,
+                }
+            )
+            logger.info(f"[CHILD_INSERT_SUCCESS] table='voucher' id={voucher.id}")
+        except Exception as e:
+            logger.error(f"[CHILD_INSERT_FAILED] table='voucher' error={e}", exc_info=True)
+            raise e
 
         setattr(supplier_instance, '_accounting_voucher_id', voucher.id)
         if any(field.name == 'voucher_id' for field in supplier_instance._meta.fields):
@@ -241,38 +256,64 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         if supply_foreign_data is not None:
             valid_fields = {'purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description'}
             filtered_data = {k: v for k, v in supply_foreign_data.items() if k in valid_fields}
-            VoucherPurchaseSupplyForeignDetails.objects.create(
-                supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
-            )
+            logger.info("[CHILD_INSERT_START] table='voucher_purchase_supply_foreign_details'")
+            try:
+                VoucherPurchaseSupplyForeignDetails.objects.create(
+                    supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
+                )
+                logger.info("[CHILD_INSERT_SUCCESS] table='voucher_purchase_supply_foreign_details'")
+            except Exception as e:
+                logger.error(f"[CHILD_INSERT_FAILED] table='voucher_purchase_supply_foreign_details' error={e}", exc_info=True)
+                raise e
 
         if supply_inr_data is not None:
             valid_fields = {'purchase_order_no', 'purchase_ledger', 'description'}
             filtered_data = {k: v for k, v in supply_inr_data.items() if k in valid_fields}
-            VoucherPurchaseSupplyINRDetails.objects.create(
-                supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
-            )
+            logger.info("[CHILD_INSERT_START] table='voucher_purchase_supply_details'")
+            try:
+                VoucherPurchaseSupplyINRDetails.objects.create(
+                    supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
+                )
+                logger.info("[CHILD_INSERT_SUCCESS] table='voucher_purchase_supply_details'")
+            except Exception as e:
+                logger.error(f"[CHILD_INSERT_FAILED] table='voucher_purchase_supply_details' error={e}", exc_info=True)
+                raise e
 
         if due_data is not None:
             valid_fields = {'tds_gst', 'tds_it', 'advance_paid', 'to_pay', 'posting_note', 'terms', 'advance_references'}
             filtered_data = {k: v for k, v in due_data.items() if k in valid_fields}
-            VoucherPurchaseDueDetails.objects.create(
-                supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
-            )
+            logger.info("[CHILD_INSERT_START] table='voucher_purchase_due_details'")
+            try:
+                VoucherPurchaseDueDetails.objects.create(
+                    supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
+                )
+                logger.info("[CHILD_INSERT_SUCCESS] table='voucher_purchase_due_details'")
+            except Exception as e:
+                logger.error(f"[CHILD_INSERT_FAILED] table='voucher_purchase_due_details' error={e}", exc_info=True)
+                raise e
 
-        if transit_data is not None:
-            valid_fields = {
-                'mode', 'received_in', 'receipt_date', 'receipt_time',
-                'received_quantity', 'uqc', 'delivery_type', 'self_third_party',
-                'transporter_id', 'transporter_name', 'vehicle_no',
-                'lr_gr_consignment', 'extra_details', 'document',
-                'beyond_port_port_of_loading', 'upto_port_fnr_no', 'upto_port_origin_country', 'rail_beyond_station_loading', 'upto_port_rr_no', 'beyond_port_port_of_discharge', 'rail_beyond_rail_no', 'rail_upto_transporter_name', 'upto_port_final_dest_city', 'rail_beyond_origin_country', 'upto_port_origin_city', 'beyond_port_sb_no', 'rail_upto_delivery_type', 'rail_beyond_rr_date', 'upto_port_port_of_loading', 'rail_beyond_origin', 'upto_port_station_discharge', 'rail_upto_transporter_id', 'beyond_port_vessel_flight_no', 'beyond_port_sb_date', 'beyond_port_final_dest', 'beyond_port_dest_country', 'rail_beyond_dest_country', 'rail_beyond_final_dest', 'beyond_port_origin_country', 'upto_port_vessel_flight_no', 'rail_beyond_rr_no', 'beyond_port_ship_port_code', 'rail_beyond_station_discharge', 'upto_port_final_dest_country', 'upto_port_rr_date', 'upto_port_station_loading', 'upto_port_port_of_discharge',
-            }
-            filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
-            if transit_document:
-                filtered_data['document'] = transit_document
+        # Always create VoucherPurchaseTransitDetails (even when no transit data).
+        # When transit_details=None from the scan pipeline, create an empty row so every
+        # VoucherPurchaseSupplierDetails record has a linked transit row (null values for all fields).
+        _valid_transit_fields = {
+            'mode', 'received_in', 'receipt_date', 'receipt_time',
+            'received_quantity', 'uqc', 'delivery_type', 'self_third_party',
+            'transporter_id', 'transporter_name', 'vehicle_no',
+            'lr_gr_consignment', 'extra_details', 'document',
+            'beyond_port_port_of_loading', 'upto_port_fnr_no', 'upto_port_origin_country', 'rail_beyond_station_loading', 'upto_port_rr_no', 'beyond_port_port_of_discharge', 'rail_beyond_rail_no', 'rail_upto_transporter_name', 'upto_port_final_dest_city', 'rail_beyond_origin_country', 'upto_port_origin_city', 'beyond_port_sb_no', 'rail_upto_delivery_type', 'rail_beyond_rr_date', 'upto_port_port_of_loading', 'rail_beyond_origin', 'upto_port_station_discharge', 'rail_upto_transporter_id', 'beyond_port_vessel_flight_no', 'beyond_port_sb_date', 'beyond_port_final_dest', 'beyond_port_dest_country', 'rail_beyond_dest_country', 'rail_beyond_final_dest', 'beyond_port_origin_country', 'upto_port_vessel_flight_no', 'rail_beyond_rr_no', 'beyond_port_ship_port_code', 'rail_beyond_station_discharge', 'upto_port_final_dest_country', 'upto_port_rr_date', 'upto_port_station_loading', 'upto_port_port_of_discharge',
+        }
+        _filtered_transit = {k: v for k, v in (transit_data or {}).items() if k in _valid_transit_fields}
+        if transit_document:
+            _filtered_transit['document'] = transit_document
+        logger.info("[CHILD_INSERT_START] table='voucher_purchase_transit_details'")
+        try:
             VoucherPurchaseTransitDetails.objects.create(
-                supplier_details=supplier_instance, tenant_id=tenant_id, **filtered_data
+                supplier_details=supplier_instance, tenant_id=tenant_id, **_filtered_transit
             )
+            logger.info("[CHILD_INSERT_SUCCESS] table='voucher_purchase_transit_details'")
+        except Exception as e:
+            logger.error(f"[CHILD_INSERT_FAILED] table='voucher_purchase_transit_details' error={e}", exc_info=True)
+            raise e
 
         # Sync legacy JSON to new relational tables
         self._sync_relational_data(supplier_instance, supply_inr_data, supply_foreign_data, due_data)
@@ -326,6 +367,8 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         elif supply_foreign_data and supply_foreign_data.get('purchase_order_no'):
             po_no = supply_foreign_data.get('purchase_order_no')
         
+
+
 
         return supplier_instance
 
@@ -511,25 +554,31 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 tx_val = item.get('taxableValue') or item.get('amount') or 0
                 inv_val = item.get('invoiceValue') or item.get('amount') or 0
                 
-                VoucherPurchaseItem.objects.create(
-                    supplier_details=supplier_instance,
-                    tenant_id=tenant_id,
-                    item_code=item.get('itemCode', item.get('item_code', '')),
-                    item_name=item.get('itemName', item.get('item_name', '')),
-                    hsn_sac=item.get('hsnSac', item.get('hsn_sac', '')),
-                    quantity=Decimal(str(q)),
-                    uom=item.get('uom', ''),
-                    rate=Decimal(str(r)),
-                    taxable_value=Decimal(str(tx_val)),
-                    igst_amount=Decimal(str(item.get('igst', 0))),
-                    cgst_amount=Decimal(str(item.get('cgst', 0))),
-                    sgst_amount=Decimal(str(item.get('sgst', 0))),
-                    cess_amount=Decimal(str(item.get('cess', 0))),
-                    gst_rate=Decimal(str(item.get('gstRate', item.get('gst_rate', 0)))),
-                    invoice_value=Decimal(str(inv_val)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP),
-                    currency=cur,
-                    exchange_rate=ex_rate
-                )
+                logger.info("[CHILD_INSERT_START] table='voucher_purchase_item_details'")
+                try:
+                    VoucherPurchaseItem.objects.create(
+                        supplier_details=supplier_instance,
+                        tenant_id=tenant_id,
+                        item_code=item.get('itemCode', item.get('item_code', '')),
+                        item_name=item.get('itemName', item.get('item_name', '')),
+                        hsn_sac=item.get('hsnSac', item.get('hsn_sac', '')),
+                        quantity=Decimal(str(q)),
+                        uom=item.get('uom', ''),
+                        rate=Decimal(str(r)),
+                        taxable_value=Decimal(str(tx_val)),
+                        igst_amount=Decimal(str(item.get('igst', 0))),
+                        cgst_amount=Decimal(str(item.get('cgst', 0))),
+                        sgst_amount=Decimal(str(item.get('sgst', 0))),
+                        cess_amount=Decimal(str(item.get('cess', 0))),
+                        gst_rate=Decimal(str(item.get('gstRate', item.get('gst_rate', 0)))),
+                        invoice_value=Decimal(str(inv_val)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP),
+                        currency=cur,
+                        exchange_rate=ex_rate
+                    )
+                    logger.info("[CHILD_INSERT_SUCCESS] table='voucher_purchase_item_details'")
+                except Exception as e:
+                    logger.error(f"[CHILD_INSERT_FAILED] table='voucher_purchase_item_details' error={e}", exc_info=True)
+                    raise e
 
         # 4. Sync Advance Links
         if due_data and 'advance_references' in due_data:
@@ -542,14 +591,20 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
             if isinstance(refs, list):
                 for adv in refs:
                     if not isinstance(adv, dict): continue
-                    VoucherPurchaseAdvanceLink.objects.create(
-                        due_details=due_details,
-                        tenant_id=tenant_id,
-                        ref_no=adv.get('refNo', ''),
-                        date=adv.get('date'),
-                        amount=Decimal(str(adv.get('amount', 0))),
-                        applied_now=Decimal(str(adv.get('appliedNow', 0)))
-                    )
+                    logger.info("[CHILD_INSERT_START] table='voucher_purchase_advance_link'")
+                    try:
+                        VoucherPurchaseAdvanceLink.objects.create(
+                            due_details=due_details,
+                            tenant_id=tenant_id,
+                            ref_no=adv.get('refNo', ''),
+                            date=adv.get('date'),
+                            amount=Decimal(str(adv.get('amount', 0))),
+                            applied_now=Decimal(str(adv.get('appliedNow', 0)))
+                        )
+                        logger.info("[CHILD_INSERT_SUCCESS] table='voucher_purchase_advance_link'")
+                    except Exception as e:
+                        logger.error(f"[CHILD_INSERT_FAILED] table='voucher_purchase_advance_link' error={e}", exc_info=True)
+                        raise e
 
     def _mirror_to_vendor_portal(self, purchase):
         """

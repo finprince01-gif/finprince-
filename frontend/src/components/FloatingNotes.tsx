@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon';
 import { showInfo, showSuccess, confirm } from '../utils/toast';
+import { httpClient } from '../services/httpClient';
 
 type Position = {
   x: number;
@@ -58,23 +59,25 @@ const FloatingNotes: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Notes State
-  const [notes, setNotes] = useState<Note[]>(() => {
+  const [notes, setNotes] = useState<Note[]>([]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, []);
+
+  const fetchNotes = async () => {
     try {
-      const stored = localStorage.getItem('erp_notes_list');
-      if (stored) return JSON.parse(stored);
-      // Default welcome note
-      return [
-        {
-          id: 'welcome',
-          title: 'Welcome to Notes',
-          content: 'You can write anything here! Click the "+" button in the header to create a new note.\n\nNotes are automatically saved locally on your device.',
-          updatedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        }
-      ];
-    } catch {
-      return [];
+      const response = await httpClient.get<any[]>('/api/tools/notes/?type=NOTE');
+      setNotes(response.map(n => ({
+        id: n.id.toString(),
+        title: n.title,
+        content: n.content || '',
+        updatedAt: new Date(n.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      })));
+    } catch (e) {
+      console.error('Failed to fetch notes:', e);
     }
-  });
+  };
 
   // Current Active Note for view/edit
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
@@ -102,10 +105,7 @@ const FloatingNotes: React.FC = () => {
     panelTop: number;
   } | null>(null);
 
-  // Save notes to localStorage
-  useEffect(() => {
-    localStorage.setItem('erp_notes_list', JSON.stringify(notes));
-  }, [notes]);
+  // Sync notes logic handled by API endpoints directly
 
   // Window resize listener
   useEffect(() => {
@@ -196,27 +196,38 @@ const FloatingNotes: React.FC = () => {
   };
 
   // Notes Actions
-  const handleCreateNote = (e: React.FormEvent) => {
+  const handleCreateNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteTitle.trim()) {
       showInfo('Please enter a note title');
       return;
     }
-    const newNote: Note = {
-      id: Date.now().toString(),
-      title: noteTitle,
-      content: noteContent,
-      updatedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    };
+    
+    try {
+      const response = await httpClient.post<any>('/api/tools/notes/', {
+        title: noteTitle,
+        content: noteContent,
+        type: 'NOTE'
+      });
+      const newNote: Note = {
+        id: response.id.toString(),
+        title: response.title,
+        content: response.content || '',
+        updatedAt: new Date(response.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      };
 
-    setNotes(prev => [newNote, ...prev]);
-    setNoteTitle('');
-    setNoteContent('');
-    setViewMode('list');
-    showSuccess('Note created successfully!');
+      setNotes(prev => [newNote, ...prev]);
+      setNoteTitle('');
+      setNoteContent('');
+      setViewMode('list');
+      showSuccess('Note created successfully!');
+    } catch (error) {
+      console.error('Failed to create note:', error);
+      showInfo('Failed to create note');
+    }
   };
 
-  const handleUpdateNote = (e: React.FormEvent) => {
+  const handleUpdateNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeNoteId) return;
     if (!noteTitle.trim()) {
@@ -224,28 +235,46 @@ const FloatingNotes: React.FC = () => {
       return;
     }
 
-    setNotes(prev => prev.map(n => n.id === activeNoteId ? {
-      ...n,
-      title: noteTitle,
-      content: noteContent,
-      updatedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    } : n));
+    try {
+      const response = await httpClient.put<any>(`/api/tools/notes/${activeNoteId}/`, {
+        title: noteTitle,
+        content: noteContent,
+        type: 'NOTE'
+      });
 
-    setNoteTitle('');
-    setNoteContent('');
-    setViewMode('view');
-    showSuccess('Note saved!');
+      setNotes(prev => prev.map(n => n.id === activeNoteId ? {
+        ...n,
+        title: response.title,
+        content: response.content || '',
+        updatedAt: new Date(response.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      } : n));
+
+      setNoteTitle('');
+      setNoteContent('');
+      setViewMode('view');
+      showSuccess('Note saved!');
+    } catch (error) {
+      console.error('Failed to update note:', error);
+      showInfo('Failed to update note');
+    }
   };
 
   const handleDeleteNote = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!await confirm('Are you sure you want to delete this note?')) return;
-    setNotes(prev => prev.filter(n => n.id !== id));
-    if (activeNoteId === id) {
-      setActiveNoteId(null);
-      setViewMode('list');
+    
+    try {
+      await httpClient.delete(`/api/tools/notes/${id}/`);
+      setNotes(prev => prev.filter(n => n.id !== id));
+      if (activeNoteId === id) {
+        setActiveNoteId(null);
+        setViewMode('list');
+      }
+      showSuccess('Note deleted!');
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+      showInfo('Failed to delete note');
     }
-    showSuccess('Note deleted!');
   };
 
   const startEdit = (note: Note, e: React.MouseEvent) => {

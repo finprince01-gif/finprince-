@@ -54,6 +54,7 @@ interface CreateNewVendorFullModalProps {
     onClose: () => void;
     /** Called after vendor is saved; receives the new vendor's name & id */
     onVendorCreated: (vendorName: string, vendorId: number) => void;
+    prefilledData?: any;
 }
 
 const TDS_SECTIONS = [
@@ -81,9 +82,17 @@ const TABS: { id: TabId; label: string }[] = [
 const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     onClose,
     onVendorCreated,
+    prefilledData,
 }) => {
+    React.useEffect(() => {
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] CANONICAL_VENDOR_MODAL_MOUNT');
+    }, []);
+
+    console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] CANONICAL_VENDOR_MODAL_RENDER. prefilledData:', prefilledData);
+
     const [activeTab, setActiveTab] = useState<TabId>('basic');
     const [isSaving, setIsSaving] = useState(false);
+
     const [createdVendorId, setCreatedVendorId] = useState<number | null>(null);
 
     /* ── Basic Details State ─────────────────── */
@@ -185,6 +194,53 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
 
         fetchCategories();
     }, []);
+
+    useEffect(() => {
+        if (prefilledData) {
+            console.log('[CreateNewVendorFullModal] Prefilling from:', prefilledData);
+            if (prefilledData.vendor_name) setVendorName(prefilledData.vendor_name);
+            if (prefilledData.pan_no) setPanNo(prefilledData.pan_no);
+            if (prefilledData.email) setVendorEmail(prefilledData.email);
+            if (prefilledData.contact_no) setContactNo(prefilledData.contact_no);
+            if (prefilledData.vendor_category) setVendorCategory(prefilledData.vendor_category);
+
+            if (prefilledData.gstin) {
+                const address = prefilledData.address || '';
+                const branchName = prefilledData.branch || 'Main Branch';
+                const state = prefilledData.state || '';
+
+                setGstRecords([{
+                    id: genId(),
+                    gstin: prefilledData.gstin,
+                    registrationType: 'Regular',
+                    tradeName: prefilledData.vendor_name || '',
+                    legalName: prefilledData.vendor_name || '',
+                    isExpanded: true,
+                    placesOfBusiness: [{
+                        id: genId(),
+                        referenceName: branchName,
+                        address: address,
+                        contactPerson: prefilledData.contact_person || '',
+                        email: prefilledData.email || '',
+                        contactNumber: prefilledData.contact_no || ''
+                    }]
+                }]);
+            }
+
+            if (prefilledData.supplier_items && prefilledData.supplier_items.length > 0) {
+                const itemsToSet = prefilledData.supplier_items.map((it: any, idx: number) => ({
+                    id: idx + 1,
+                    hsnSacCode: it.hsnSac || it.hsnSacCode || '',
+                    itemCode: it.supplierItemCode || it.itemCode || '',
+                    itemName: it.supplierItemName || it.itemName || '',
+                    supplierItemCode: it.supplierItemCode || '',
+                    supplierItemName: it.supplierItemName || ''
+                }));
+                setItems(itemsToSet);
+            }
+        }
+    }, [prefilledData]);
+
 
     const handleFileUpload = (type: keyof typeof uploadedFiles, file: File | null) => {
         if (file) {
@@ -533,10 +589,21 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                 const existingBanking: any = await httpClient.get(`/api/vendors/banking-details/by-vendor/${newId}/`);
                 const existingBankingList: any[] = Array.isArray(existingBanking) ? existingBanking : (existingBanking.results || []);
 
-                for (const bank of bankAccounts.filter(b => b.accountNumber?.trim())) {
+                const validBanks = bankAccounts.filter(b => b.accountNumber?.trim());
+                const banksToSave = validBanks.length > 0 ? validBanks : [{
+                    accountNumber: '',
+                    bankName: '',
+                    ifscCode: '',
+                    branchName: '',
+                    swiftCode: '',
+                    vendorBranch: [],
+                    accountType: 'savings'
+                }];
+
+                for (const bank of banksToSave) {
                     const bankPayload = {
                         vendor_basic_detail: newId,
-                        bank_account_no: bank.accountNumber,
+                        bank_account_no: bank.accountNumber || '',
                         bank_name: bank.bankName || '',
                         ifsc_code: bank.ifscCode || '',
                         branch_name: bank.branchName || '',
@@ -545,7 +612,12 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                         account_type: bank.accountType ? bank.accountType.toLowerCase().replace(' ', '_') : 'savings',
                         is_active: true,
                     };
-                    const existing = existingBankingList.find(b => b.bank_account_no === bank.accountNumber);
+                    const bankAny = bank as any;
+                    const existing = bankAny.id 
+                        ? existingBankingList.find((b: any) => b.id === bankAny.id)
+                        : (bankAny.accountNumber 
+                            ? existingBankingList.find((b: any) => b.bank_account_no === bankAny.accountNumber) 
+                            : existingBankingList[0]);
                     if (existing) {
                         await httpClient.patch(`/api/vendors/banking-details/${existing.id}/`, bankPayload);
                     } else {
@@ -562,11 +634,11 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
 
                 const termsPayload = {
                     vendor_basic_detail: newId,
-                    credit_limit: creditLimit || '',
-                    credit_period: creditPeriod || '',
-                    credit_terms: creditTerms || '',
-                    penalty_terms: penaltyTerms || '',
-                    delivery_terms: deliveryTerms || '',
+                    credit_limit: creditLimit && !isNaN(parseFloat(creditLimit)) ? parseFloat(creditLimit) : null,
+                    credit_period: creditPeriod || null,
+                    credit_terms: creditTerms || null,
+                    penalty_terms: penaltyTerms || null,
+                    delivery_terms: deliveryTerms || null,
                 };
                 if (existingTermsId) {
                     await httpClient.patch(`/api/vendors/terms/${existingTermsId}/`, termsPayload);

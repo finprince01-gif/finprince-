@@ -1784,444 +1784,276 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 {
                     activeTab === 'GST Details' && (
                         <div className="max-w-6xl mx-auto">
-                            <div className="flex justify-end mb-10 pt-4">
-                                <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded-[4px] hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200">
-                                    <input
-                                        type="checkbox"
-                                        checked={isUnregistered}
-                                        onChange={(e) => setIsUnregistered(e.target.checked)}
-                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Customer is Unregistered</span>
-                                </label>
+                            <div className="flex gap-4 items-end mb-6 pt-4">
+                                {isUnregistered ? (
+                                    <>
+                                        <div className="relative flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
+                                            <input type="text" value="NA" disabled className="w-full px-4 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 cursor-not-allowed" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Taxpayer Type</label>
+                                            <div className="relative">
+                                                <input type="text" value="Unregistered" readOnly className="w-full px-4 py-2 border border-green-200 rounded-[4px] bg-green-50 text-slate-700 font-medium ring-1 ring-green-200" />
+                                                <span className="absolute right-3 top-2.5 text-xs text-indigo-600">Auto-set</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="relative flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No. <span className="text-red-500">*</span></label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder={selectedGSTINs.length > 0 ? `${selectedGSTINs.length} selected... Type to add more` : "Enter or Select GSTIN"}
+                                                value={gstInput}
+                                                onChange={(e) => setGstInput(e.target.value)}
+                                                onFocus={() => setShowGstDropdown(true)}
+                                                onBlur={() => setTimeout(() => setShowGstDropdown(false), 200)}
+                                            />
+                                            {/* Dropdown Simulation */}
+                                            {showGstDropdown && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 z-10 max-h-48 overflow-y-auto">
+                                                    {mockGSTINs.map(gst => (
+                                                        <div
+                                                            key={gst}
+                                                            className={`px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 text-sm ${selectedGSTINs.includes(gst) ? 'bg-indigo-50/50' : ''}`}
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault(); // Prevent input blur
+                                                                handleGstSelect(gst);
+                                                            }}
+                                                        >
+                                                            <input type="checkbox" checked={selectedGSTINs.includes(gst)} readOnly className="w-4 h-4 text-indigo-600 rounded" />
+                                                            <span className="text-gray-700">{gst}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <button
+                                                onClick={handleFetchBranchDetails}
+                                                className="h-[42px] px-6 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                                            >
+                                                Fetch branch details
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                                <div>
+                                    <label className="flex items-center gap-3 cursor-pointer h-[42px] px-4 rounded-[4px] hover:bg-gray-50 transition-colors border border-gray-200 bg-white">
+                                        <input
+                                            type="checkbox"
+                                            checked={isUnregistered}
+                                            onChange={(e) => setIsUnregistered(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Customer is Unregistered</span>
+                                    </label>
+                                </div>
                             </div>
 
                             {/* Conditional Content based on Registration Status */}
                             {isUnregistered ? (
                                 <div className="space-y-8 animate-fadeIn bg-white border border-gray-200 rounded-[4px] p-8">
-                                    {/* Unregistered Fields */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="relative">
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
-                                            <input
-                                                type="text"
-                                                value="NA"
-                                                disabled
-                                                className="w-full px-4 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 cursor-not-allowed"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Taxpayer Type</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value="Unregistered"
-                                                    readOnly
-                                                    className="w-full px-4 py-2 border border-green-200 rounded-[4px] bg-green-50 text-slate-700 font-medium ring-1 ring-green-200"
-                                                />
-                                                <span className="absolute right-3 top-2.5 text-xs text-indigo-600">Auto-set</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     {/* Branch Configuration */}
                                     <div>
-                                        <div className="flex items-center gap-6 mb-6">
-                                            <label className="text-sm font-semibold text-gray-700">Add Multiple Branches</label>
-                                            <div className="flex bg-gray-100 p-1 rounded-[4px]">
-                                                <button
-                                                    onClick={() => setAddMultipleBranches(true)}
-                                                    className={`px-4 py-1 text-xs font-medium rounded ${addMultipleBranches ? 'bg-indigo-600 text-white shadow-none border border-slate-200-none border border-slate-200' : 'text-gray-500 hover:text-gray-700'}`}
-                                                >
-                                                    Yes
-                                                </button>
-                                                <button
-                                                    onClick={() => setAddMultipleBranches(false)}
-                                                    className={`px-4 py-1 text-xs font-medium rounded ${!addMultipleBranches ? 'bg-white text-gray-800 shadow-none border border-slate-200-none border border-slate-200 ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}
-                                                >
-                                                    No
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {!addMultipleBranches ? (
-                                            // Single Branch - Simple Address
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div className="md:col-span-2">
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Reference Name</label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                        value={unregisteredBranches[0].referenceName || ''}
-                                                        onChange={(e) => handleManualBranchChange(1, 'referenceName', e.target.value)}
-                                                        placeholder="e.g. Main Office, Warehouse"
-                                                    />
-                                                </div>
-                                                <div className="md:col-span-2">
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                        value={unregisteredBranches[0].addressLine1}
-                                                        onChange={(e) => handleManualBranchChange(1, 'addressLine1', e.target.value)}
-                                                        placeholder="Enter address line 1"
-                                                    />
-                                                </div>
-                                                <div className="md:col-span-2">
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line 2</label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                        value={unregisteredBranches[0].addressLine2}
-                                                        onChange={(e) => handleManualBranchChange(1, 'addressLine2', e.target.value)}
-                                                        placeholder="Enter address line 2"
-                                                    />
-                                                </div>
-                                                <div className="md:col-span-2">
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line 3</label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                        value={unregisteredBranches[0].addressLine3}
-                                                        onChange={(e) => handleManualBranchChange(1, 'addressLine3', e.target.value)}
-                                                        placeholder="Enter address line 3"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Country</label>
-                                                    <select
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                        value={Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || ''}
-                                                        onChange={(e) => {
-                                                            const countryCode = e.target.value;
-                                                            const countryInfo = Country.getCountryByCode(countryCode);
-                                                            handleManualBranchChange(1, 'country', countryInfo?.name || '');
-                                                            handleManualBranchChange(1, 'state', '');
-                                                            handleManualBranchChange(1, 'city', '');
-                                                        }}
-                                                    >
-                                                        <option value="">Select Country</option>
-                                                        {Country.getAllCountries().map((country) => (
-                                                            <option key={country.isoCode} value={country.isoCode}>
-                                                                {country.name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">State</label>
-                                                    <select
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                        value={getAvailableStates(Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '').find(s => s.name === unregisteredBranches[0].state)?.isoCode || ''}
-                                                        onChange={(e) => {
-                                                            const countryCode = Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '';
-                                                            const stateCode = e.target.value;
-                                                            const allStates = getAvailableStates(countryCode);
-                                                            const stateInfo = allStates.find(s => s.isoCode === stateCode);
-                                                            handleManualBranchChange(1, 'state', stateInfo?.name || '');
-                                                            handleManualBranchChange(1, 'city', '');
-                                                        }}
-                                                        disabled={!unregisteredBranches[0].country}
-                                                    >
-                                                        <option value="">Select State</option>
-                                                        {getAvailableStates(Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '').map((state) => (
-                                                            <option key={state.isoCode} value={state.isoCode}>
-                                                                {state.name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">City</label>
-                                                    {(() => {
-                                                        const countryCode = Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '';
-                                                        const allStates = getAvailableStates(countryCode);
-                                                        const stateCode = allStates.find(s => s.name === unregisteredBranches[0].state)?.isoCode || '';
-                                                        const cities = (countryCode && stateCode) ? City.getCitiesOfState(countryCode, stateCode) : [];
-
-                                                        return cities.length > 0 ? (
-                                                            <select
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                                value={unregisteredBranches[0].city || ''}
-                                                                onChange={(e) => handleManualBranchChange(1, 'city', e.target.value)}
-                                                                disabled={!unregisteredBranches[0].state}
-                                                            >
-                                                                <option value="">Select City</option>
-                                                                {cities.map((city) => (
-                                                                    <option key={city.name} value={city.name}>
-                                                                        {city.name}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        ) : (
-                                                            <input
-                                                                type="text"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                value={unregisteredBranches[0].city || ''}
-                                                                onChange={(e) => handleManualBranchChange(1, 'city', e.target.value)}
-                                                                placeholder="Enter city"
-                                                                disabled={!unregisteredBranches[0].state}
-                                                            />
-                                                        );
-                                                    })()}
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Pincode</label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                        value={unregisteredBranches[0].pincode || ''}
-                                                        onChange={(e) => handleManualBranchChange(1, 'pincode', e.target.value)}
-                                                        placeholder="Enter pincode"
-                                                    />
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            // Multiple Manual Branches
-                                            <div className="space-y-4">
-                                                {unregisteredBranches.map((branch, index) => {
-                                                    const isExpanded = expandedBranches.includes(branch.id);
-                                                    return (
-                                                        <div key={branch.id} className="border border-gray-200 rounded-[4px] overflow-hidden bg-white shadow-none border border-slate-200-none border border-slate-200">
-                                                            <div
-                                                                className="flex items-center justify-between px-6 py-4 bg-gray-50 cursor-pointer hover:bg-gray-100"
-                                                                onClick={() => toggleBranchExpand(branch.id)}
-                                                            >
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className="w-6 h-6 flex items-center justify-center bg-white border border-gray-200 rounded text-xs font-semibold text-gray-600">
-                                                                        {index + 1}
-                                                                    </span>
-                                                                    <span className="font-semibold text-gray-800">
-                                                                        {branch.referenceName || `Branch ${index + 1}`}
-                                                                    </span>
-                                                                </div>
-                                                                <span className="text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                                        {/* Multiple Manual Branches - always shown */}
+                                        <div className="space-y-4">
+                                            {unregisteredBranches.map((branch, index) => {
+                                                const isExpanded = expandedBranches.includes(branch.id);
+                                                return (
+                                                    <div key={branch.id} className="border border-gray-200 rounded-[4px] overflow-hidden bg-white shadow-none border border-slate-200-none border border-slate-200">
+                                                        <div
+                                                            className="flex items-center justify-between px-6 py-4 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                                                            onClick={() => toggleBranchExpand(branch.id)}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="w-6 h-6 flex items-center justify-center bg-white border border-gray-200 rounded text-xs font-semibold text-gray-600">
+                                                                    {index + 1}
+                                                                </span>
+                                                                <span className="font-semibold text-gray-800">
+                                                                    {branch.referenceName || `Branch ${index + 1}`}
+                                                                </span>
                                                             </div>
-
-                                                            {isExpanded && (
-                                                                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                                    <div className="md:col-span-2">
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                            value={branch.referenceName}
-                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'referenceName', e.target.value)}
-                                                                            placeholder="e.g. Warehouse, Main Office"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="md:col-span-2">
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 1</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                            value={branch.addressLine1 || ''}
-                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'addressLine1', e.target.value)}
-                                                                            placeholder="Enter address line 1"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="md:col-span-2">
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 2</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                            value={branch.addressLine2 || ''}
-                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'addressLine2', e.target.value)}
-                                                                            placeholder="Enter address line 2"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="md:col-span-2">
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 3</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                            value={branch.addressLine3 || ''}
-                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'addressLine3', e.target.value)}
-                                                                            placeholder="Enter address line 3"
-                                                                        />
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
-                                                                        <select
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                                            value={Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || ''}
-                                                                            onChange={(e) => {
-                                                                                const countryCode = e.target.value;
-                                                                                const countryInfo = Country.getCountryByCode(countryCode);
-                                                                                handleManualBranchChange(branch.id, 'country', countryInfo?.name || '');
-                                                                                handleManualBranchChange(branch.id, 'state', '');
-                                                                                handleManualBranchChange(branch.id, 'city', '');
-                                                                            }}
-                                                                        >
-                                                                            <option value="">Select Country</option>
-                                                                            {Country.getAllCountries().map((country) => (
-                                                                                <option key={country.isoCode} value={country.isoCode}>
-                                                                                    {country.name}
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
-                                                                        <select
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                                            value={getAvailableStates(Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '').find(s => s.name === branch.state)?.isoCode || ''}
-                                                                            onChange={(e) => {
-                                                                                const countryCode = Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '';
-                                                                                const stateCode = e.target.value;
-                                                                                const allStates = getAvailableStates(countryCode);
-                                                                                const stateInfo = allStates.find(s => s.isoCode === stateCode);
-                                                                                handleManualBranchChange(branch.id, 'state', stateInfo?.name || '');
-                                                                                handleManualBranchChange(branch.id, 'city', '');
-                                                                            }}
-                                                                            disabled={!branch.country}
-                                                                        >
-                                                                            <option value="">Select State</option>
-                                                                            {getAvailableStates(Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '').map((state) => (
-                                                                                <option key={state.isoCode} value={state.isoCode}>
-                                                                                    {state.name}
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
-                                                                        {(() => {
-                                                                            const countryCode = Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '';
-                                                                            const allStates = getAvailableStates(countryCode);
-                                                                            const stateCode = allStates.find(s => s.name === branch.state)?.isoCode || '';
-                                                                            const cities = (countryCode && stateCode) ? City.getCitiesOfState(countryCode, stateCode) : [];
-
-                                                                            return cities.length > 0 ? (
-                                                                                <select
-                                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                                                    value={branch.city || ''}
-                                                                                    onChange={(e) => handleManualBranchChange(branch.id, 'city', e.target.value)}
-                                                                                    disabled={!branch.state}
-                                                                                >
-                                                                                    <option value="">Select City</option>
-                                                                                    {cities.map((city) => (
-                                                                                        <option key={city.name} value={city.name}>
-                                                                                            {city.name}
-                                                                                        </option>
-                                                                                    ))}
-                                                                                </select>
-                                                                            ) : (
-                                                                                <input
-                                                                                    type="text"
-                                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                                    value={branch.city || ''}
-                                                                                    onChange={(e) => handleManualBranchChange(branch.id, 'city', e.target.value)}
-                                                                                    placeholder="Enter city"
-                                                                                    disabled={!branch.state}
-                                                                                />
-                                                                            );
-                                                                        })()}
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                            value={branch.pincode || ''}
-                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'pincode', e.target.value)}
-                                                                            placeholder="Enter pincode"
-                                                                        />
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                            value={branch.contactPerson}
-                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'contactPerson', e.target.value)}
-                                                                        />
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Contact Number</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                            value={branch.contactNumber}
-                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'contactNumber', e.target.value)}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="md:col-span-2">
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
-                                                                        <input
-                                                                            type="email"
-                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                                            value={branch.email}
-                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'email', e.target.value)}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                                                            <span className="text-gray-400">{isExpanded ? '▲' : '▼'}</span>
                                                         </div>
-                                                    );
-                                                })}
-                                                <button
-                                                    onClick={handleAddManualBranch}
-                                                    className="w-full py-2 border-2 border-dashed border-gray-300 rounded-[4px] text-gray-500 font-medium hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center justify-center gap-2"
-                                                >
-                                                    <span>+</span> Add Another Branch
-                                                </button>
-                                            </div>
-                                        )}
+
+                                                        {isExpanded && (
+                                                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.referenceName}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'referenceName', e.target.value)}
+                                                                        placeholder="e.g. Warehouse, Main Office"
+                                                                    />
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 1</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.addressLine1 || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'addressLine1', e.target.value)}
+                                                                        placeholder="Enter address line 1"
+                                                                    />
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 2</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.addressLine2 || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'addressLine2', e.target.value)}
+                                                                        placeholder="Enter address line 2"
+                                                                    />
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 3</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.addressLine3 || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'addressLine3', e.target.value)}
+                                                                        placeholder="Enter address line 3"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
+                                                                    <select
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                        value={Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || ''}
+                                                                        onChange={(e) => {
+                                                                            const countryCode = e.target.value;
+                                                                            const countryInfo = Country.getCountryByCode(countryCode);
+                                                                            handleManualBranchChange(branch.id, 'country', countryInfo?.name || '');
+                                                                            handleManualBranchChange(branch.id, 'state', '');
+                                                                            handleManualBranchChange(branch.id, 'city', '');
+                                                                        }}
+                                                                    >
+                                                                        <option value="">Select Country</option>
+                                                                        {Country.getAllCountries().map((country) => (
+                                                                            <option key={country.isoCode} value={country.isoCode}>
+                                                                                {country.name}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
+                                                                    <select
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                        value={getAvailableStates(Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '').find(s => s.name === branch.state)?.isoCode || ''}
+                                                                        onChange={(e) => {
+                                                                            const countryCode = Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '';
+                                                                            const stateCode = e.target.value;
+                                                                            const allStates = getAvailableStates(countryCode);
+                                                                            const stateInfo = allStates.find(s => s.isoCode === stateCode);
+                                                                            handleManualBranchChange(branch.id, 'state', stateInfo?.name || '');
+                                                                            handleManualBranchChange(branch.id, 'city', '');
+                                                                        }}
+                                                                        disabled={!branch.country}
+                                                                    >
+                                                                        <option value="">Select State</option>
+                                                                        {getAvailableStates(Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '').map((state) => (
+                                                                            <option key={state.isoCode} value={state.isoCode}>
+                                                                                {state.name}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
+                                                                    {(() => {
+                                                                        const countryCode = Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '';
+                                                                        const allStates = getAvailableStates(countryCode);
+                                                                        const stateCode = allStates.find(s => s.name === branch.state)?.isoCode || '';
+                                                                        const cities = (countryCode && stateCode) ? City.getCitiesOfState(countryCode, stateCode) : [];
+
+                                                                        return cities.length > 0 ? (
+                                                                            <select
+                                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                                value={branch.city || ''}
+                                                                                onChange={(e) => handleManualBranchChange(branch.id, 'city', e.target.value)}
+                                                                                disabled={!branch.state}
+                                                                            >
+                                                                                <option value="">Select City</option>
+                                                                                {cities.map((city) => (
+                                                                                    <option key={city.name} value={city.name}>
+                                                                                        {city.name}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
+                                                                        ) : (
+                                                                            <input
+                                                                                type="text"
+                                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                                value={branch.city || ''}
+                                                                                onChange={(e) => handleManualBranchChange(branch.id, 'city', e.target.value)}
+                                                                                placeholder="Enter city"
+                                                                                disabled={!branch.state}
+                                                                            />
+                                                                        );
+                                                                    })()}
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.pincode || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'pincode', e.target.value)}
+                                                                        placeholder="Enter pincode"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.contactPerson}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'contactPerson', e.target.value)}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Contact Number</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.contactNumber}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'contactNumber', e.target.value)}
+                                                                    />
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
+                                                                    <input
+                                                                        type="email"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.email}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'email', e.target.value)}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            <button
+                                                onClick={handleAddManualBranch}
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-[4px] text-gray-500 font-medium hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <span>+</span> Add Another Branch
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
                                 // Registered - Existing Flow
-                                <div className="space-y-8">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No. <span className="text-red-500">*</span></label>
-                                        <div className="flex gap-4 items-start">
-                                            <div className="relative flex-1">
-
-                                                <input
-                                                    type="text"
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder={selectedGSTINs.length > 0 ? `${selectedGSTINs.length} selected... Type to add more` : "Enter or Select GSTIN"}
-                                                    value={gstInput}
-                                                    onChange={(e) => setGstInput(e.target.value)}
-                                                    onFocus={() => setShowGstDropdown(true)}
-                                                    onBlur={() => setTimeout(() => setShowGstDropdown(false), 200)}
-                                                />
-                                                {/* Dropdown Simulation */}
-                                                {showGstDropdown && (
-                                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 z-10 max-h-48 overflow-y-auto">
-                                                        {mockGSTINs.map(gst => (
-                                                            <div
-                                                                key={gst}
-                                                                className={`px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 text-sm ${selectedGSTINs.includes(gst) ? 'bg-indigo-50/50' : ''}`}
-                                                                onMouseDown={(e) => {
-                                                                    e.preventDefault(); // Prevent input blur
-                                                                    handleGstSelect(gst);
-                                                                }}
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={selectedGSTINs.includes(gst)}
-                                                                    readOnly
-                                                                    className="w-4 h-4 text-indigo-600 rounded"
-                                                                />
-                                                                <span className="text-gray-700">{gst}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex flex-col gap-1">
-                                                <button
-                                                    onClick={handleFetchBranchDetails}
-                                                    className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap"
-                                                >
-                                                    Fetch branch details
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
+                                <div className="space-y-8 pt-4">
                                     {/* Branch Details List */}
                                     {showBranchDetails && (
                                         <div className="space-y-4">
@@ -2794,98 +2626,98 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                             </span>
                                         </div>
                                         <div className="space-y-4">
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
-                                                    <MultiSelectDropdown
-                                                        options={tcsSections.map((tcs) => ({
-                                                            value: `${tcs.section} ${tcs.name}`,
-                                                            label: `${tcs.section} ${tcs.name} @ ${tcs.rate}`
-                                                        }))}
-                                                        selectedValues={statutoryDetails.tcsSections}
-                                                        onChange={(values) => {
-                                                            setStatutoryDetails({ ...statutoryDetails, tcsSections: values });
-                                                            if (values.length === 0) {
-                                                                setShowTcsInfo(false);
-                                                                setSelectedTcsInfo(null);
-                                                            } else if (!selectedTcsInfo || !values.includes(`${selectedTcsInfo.section} ${selectedTcsInfo.name}`)) {
-                                                                // If nothing selected or current info item removed, show first available
-                                                                const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === values[0]);
-                                                                if (tcsInfo) { setSelectedTcsInfo(tcsInfo); }
-                                                            }
-                                                        }}
-                                                        placeholder="Select TCS Sections"
-                                                    />
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
+                                                <MultiSelectDropdown
+                                                    options={tcsSections.map((tcs) => ({
+                                                        value: `${tcs.section} ${tcs.name}`,
+                                                        label: `${tcs.section} ${tcs.name} @ ${tcs.rate}`
+                                                    }))}
+                                                    selectedValues={statutoryDetails.tcsSections}
+                                                    onChange={(values) => {
+                                                        setStatutoryDetails({ ...statutoryDetails, tcsSections: values });
+                                                        if (values.length === 0) {
+                                                            setShowTcsInfo(false);
+                                                            setSelectedTcsInfo(null);
+                                                        } else if (!selectedTcsInfo || !values.includes(`${selectedTcsInfo.section} ${selectedTcsInfo.name}`)) {
+                                                            // If nothing selected or current info item removed, show first available
+                                                            const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === values[0]);
+                                                            if (tcsInfo) { setSelectedTcsInfo(tcsInfo); }
+                                                        }
+                                                    }}
+                                                    placeholder="Select TCS Sections"
+                                                />
 
-                                                    {statutoryDetails.tcsSections.length > 0 && (
-                                                        <div className="mt-3 space-y-2">
-                                                            {statutoryDetails.tcsSections.map((fullString) => {
-                                                                const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === fullString);
-                                                                const isCurrentlyViewed = selectedTcsInfo && `${selectedTcsInfo.section} ${selectedTcsInfo.name}` === fullString && showTcsInfo;
+                                                {statutoryDetails.tcsSections.length > 0 && (
+                                                    <div className="mt-3 space-y-2">
+                                                        {statutoryDetails.tcsSections.map((fullString) => {
+                                                            const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === fullString);
+                                                            const isCurrentlyViewed = selectedTcsInfo && `${selectedTcsInfo.section} ${selectedTcsInfo.name}` === fullString && showTcsInfo;
 
-                                                                return (
-                                                                    <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                                                        <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
-                                                                        <div className="flex items-center gap-1 ml-4">
-                                                                            <button
-                                                                                type="button"
-                                                                                className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                                                                                onClick={() => {
-                                                                                    if (isCurrentlyViewed) {
-                                                                                        setShowTcsInfo(false);
-                                                                                    } else {
-                                                                                        setSelectedTcsInfo(tcsInfo || null);
-                                                                                        setShowTcsInfo(true);
-                                                                                    }
-                                                                                }}
-                                                                                title="View Section Info"
-                                                                            >
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                                </svg>
-                                                                            </button>
-                                                                            <button
-                                                                                type="button"
-                                                                                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                                                                                onClick={() => {
-                                                                                    const newSections = statutoryDetails.tcsSections.filter(s => s !== fullString);
-                                                                                    setStatutoryDetails({ ...statutoryDetails, tcsSections: newSections });
-                                                                                    if (isCurrentlyViewed) {
-                                                                                        setShowTcsInfo(false);
-                                                                                        setSelectedTcsInfo(null);
-                                                                                    }
-                                                                                }}
-                                                                                title="Remove Section"
-                                                                            >
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                                                </svg>
-                                                                            </button>
-                                                                        </div>
+                                                            return (
+                                                                <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                                                    <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
+                                                                    <div className="flex items-center gap-1 ml-4">
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                                                            onClick={() => {
+                                                                                if (isCurrentlyViewed) {
+                                                                                    setShowTcsInfo(false);
+                                                                                } else {
+                                                                                    setSelectedTcsInfo(tcsInfo || null);
+                                                                                    setShowTcsInfo(true);
+                                                                                }
+                                                                            }}
+                                                                            title="View Section Info"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                            </svg>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                                            onClick={() => {
+                                                                                const newSections = statutoryDetails.tcsSections.filter(s => s !== fullString);
+                                                                                setStatutoryDetails({ ...statutoryDetails, tcsSections: newSections });
+                                                                                if (isCurrentlyViewed) {
+                                                                                    setShowTcsInfo(false);
+                                                                                    setSelectedTcsInfo(null);
+                                                                                }
+                                                                            }}
+                                                                            title="Remove Section"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                            </svg>
+                                                                        </button>
                                                                     </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
 
-                                                    {showTcsInfo && selectedTcsInfo && (
-                                                        <div className="p-4 bg-emerald-50/50 border-l-4 border-emerald-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
-                                                            <div className="flex items-start gap-3">
-                                                                <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                                <div className="flex-1">
-                                                                    <h4 className="text-sm font-semibold text-emerald-900 mb-1">Section Details</h4>
-                                                                    <div className="space-y-1 text-sm text-emerald-800">
-                                                                        <p><span className="font-medium">Section:</span> {selectedTcsInfo.section}</p>
-                                                                        <p><span className="font-medium">Name:</span> {selectedTcsInfo.name}</p>
-                                                                        <p><span className="font-medium">Rate:</span> {selectedTcsInfo.rate}</p>
-                                                                        <p className="mt-2 text-xs italic opacity-80">{selectedTcsInfo.description}</p>
-                                                                    </div>
+                                                {showTcsInfo && selectedTcsInfo && (
+                                                    <div className="p-4 bg-emerald-50/50 border-l-4 border-emerald-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
+                                                        <div className="flex items-start gap-3">
+                                                            <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                            <div className="flex-1">
+                                                                <h4 className="text-sm font-semibold text-emerald-900 mb-1">Section Details</h4>
+                                                                <div className="space-y-1 text-sm text-emerald-800">
+                                                                    <p><span className="font-medium">Section:</span> {selectedTcsInfo.section}</p>
+                                                                    <p><span className="font-medium">Name:</span> {selectedTcsInfo.name}</p>
+                                                                    <p><span className="font-medium">Rate:</span> {selectedTcsInfo.rate}</p>
+                                                                    <p className="mt-2 text-xs italic opacity-80">{selectedTcsInfo.description}</p>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -2909,97 +2741,97 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                             </span>
                                         </div>
                                         <div className="space-y-4">
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
-                                                    <MultiSelectDropdown
-                                                        options={tdsSections.map((tds) => ({
-                                                            value: `${tds.section} ${tds.name}`,
-                                                            label: `${tds.section} ${tds.name} @ ${tds.rate}`
-                                                        }))}
-                                                        selectedValues={statutoryDetails.tdsSections}
-                                                        onChange={(values) => {
-                                                            setStatutoryDetails({ ...statutoryDetails, tdsSections: values });
-                                                            if (values.length === 0) {
-                                                                setShowTdsInfo(false);
-                                                                setSelectedTdsInfo(null);
-                                                            } else if (!selectedTdsInfo || !values.includes(`${selectedTdsInfo.section} ${selectedTdsInfo.name}`)) {
-                                                                const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === values[0]);
-                                                                if (tdsInfo) { setSelectedTdsInfo(tdsInfo); }
-                                                            }
-                                                        }}
-                                                        placeholder="Select TDS Sections"
-                                                    />
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
+                                                <MultiSelectDropdown
+                                                    options={tdsSections.map((tds) => ({
+                                                        value: `${tds.section} ${tds.name}`,
+                                                        label: `${tds.section} ${tds.name} @ ${tds.rate}`
+                                                    }))}
+                                                    selectedValues={statutoryDetails.tdsSections}
+                                                    onChange={(values) => {
+                                                        setStatutoryDetails({ ...statutoryDetails, tdsSections: values });
+                                                        if (values.length === 0) {
+                                                            setShowTdsInfo(false);
+                                                            setSelectedTdsInfo(null);
+                                                        } else if (!selectedTdsInfo || !values.includes(`${selectedTdsInfo.section} ${selectedTdsInfo.name}`)) {
+                                                            const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === values[0]);
+                                                            if (tdsInfo) { setSelectedTdsInfo(tdsInfo); }
+                                                        }
+                                                    }}
+                                                    placeholder="Select TDS Sections"
+                                                />
 
-                                                    {statutoryDetails.tdsSections.length > 0 && (
-                                                        <div className="mt-3 space-y-2">
-                                                            {statutoryDetails.tdsSections.map((fullString) => {
-                                                                const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === fullString);
-                                                                const isCurrentlyViewed = selectedTdsInfo && `${selectedTdsInfo.section} ${selectedTdsInfo.name}` === fullString && showTdsInfo;
+                                                {statutoryDetails.tdsSections.length > 0 && (
+                                                    <div className="mt-3 space-y-2">
+                                                        {statutoryDetails.tdsSections.map((fullString) => {
+                                                            const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === fullString);
+                                                            const isCurrentlyViewed = selectedTdsInfo && `${selectedTdsInfo.section} ${selectedTdsInfo.name}` === fullString && showTdsInfo;
 
-                                                                return (
-                                                                    <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                                                        <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
-                                                                        <div className="flex items-center gap-1 ml-4">
-                                                                            <button
-                                                                                type="button"
-                                                                                className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-indigo-600 bg-indigo-100' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
-                                                                                onClick={() => {
-                                                                                    if (isCurrentlyViewed) {
-                                                                                        setShowTdsInfo(false);
-                                                                                    } else {
-                                                                                        setSelectedTdsInfo(tdsInfo || null);
-                                                                                        setShowTdsInfo(true);
-                                                                                    }
-                                                                                }}
-                                                                                title="View Section Info"
-                                                                            >
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                                </svg>
-                                                                            </button>
-                                                                            <button
-                                                                                type="button"
-                                                                                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                                                                                onClick={() => {
-                                                                                    const newSections = statutoryDetails.tdsSections.filter(s => s !== fullString);
-                                                                                    setStatutoryDetails({ ...statutoryDetails, tdsSections: newSections });
-                                                                                    if (isCurrentlyViewed) {
-                                                                                        setShowTdsInfo(false);
-                                                                                        setSelectedTdsInfo(null);
-                                                                                    }
-                                                                                }}
-                                                                                title="Remove Section"
-                                                                            >
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                                                </svg>
-                                                                            </button>
-                                                                        </div>
+                                                            return (
+                                                                <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                                                    <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
+                                                                    <div className="flex items-center gap-1 ml-4">
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-indigo-600 bg-indigo-100' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                                                            onClick={() => {
+                                                                                if (isCurrentlyViewed) {
+                                                                                    setShowTdsInfo(false);
+                                                                                } else {
+                                                                                    setSelectedTdsInfo(tdsInfo || null);
+                                                                                    setShowTdsInfo(true);
+                                                                                }
+                                                                            }}
+                                                                            title="View Section Info"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                            </svg>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                                            onClick={() => {
+                                                                                const newSections = statutoryDetails.tdsSections.filter(s => s !== fullString);
+                                                                                setStatutoryDetails({ ...statutoryDetails, tdsSections: newSections });
+                                                                                if (isCurrentlyViewed) {
+                                                                                    setShowTdsInfo(false);
+                                                                                    setSelectedTdsInfo(null);
+                                                                                }
+                                                                            }}
+                                                                            title="Remove Section"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                            </svg>
+                                                                        </button>
                                                                     </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
 
-                                                    {showTdsInfo && selectedTdsInfo && (
-                                                        <div className="p-4 bg-indigo-50/50 border-l-4 border-indigo-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
-                                                            <div className="flex items-start gap-3">
-                                                                <svg className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                                <div className="flex-1">
-                                                                    <h4 className="text-sm font-semibold text-indigo-900 mb-1">Section Details</h4>
-                                                                    <div className="space-y-1 text-sm text-indigo-800">
-                                                                        <p><span className="font-medium">Section:</span> {selectedTdsInfo.section}</p>
-                                                                        <p><span className="font-medium">Name:</span> {selectedTdsInfo.name}</p>
-                                                                        <p><span className="font-medium">Rate:</span> {selectedTdsInfo.rate}</p>
-                                                                        <p className="mt-2 text-xs italic opacity-80">{selectedTdsInfo.description}</p>
-                                                                    </div>
+                                                {showTdsInfo && selectedTdsInfo && (
+                                                    <div className="p-4 bg-indigo-50/50 border-l-4 border-indigo-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
+                                                        <div className="flex items-start gap-3">
+                                                            <svg className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                            <div className="flex-1">
+                                                                <h4 className="text-sm font-semibold text-indigo-900 mb-1">Section Details</h4>
+                                                                <div className="space-y-1 text-sm text-indigo-800">
+                                                                    <p><span className="font-medium">Section:</span> {selectedTdsInfo.section}</p>
+                                                                    <p><span className="font-medium">Name:</span> {selectedTdsInfo.name}</p>
+                                                                    <p><span className="font-medium">Rate:</span> {selectedTdsInfo.rate}</p>
+                                                                    <p className="mt-2 text-xs italic opacity-80">{selectedTdsInfo.description}</p>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -3609,7 +3441,7 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                 onUpload={handleCustomerExcelUploadFromModal}
                 isProcessing={isImporting}
                 dropdownOptions={{
-                    'Category': categories.map(c => ({ label: c.category, value: c.category })),
+                    'Category': Array.from(new Set(categories.map(c => c.full_path || [c.category, c.group, c.subgroup].filter(Boolean).join(' > ')))).map(c => ({ label: c, value: c })),
                     'Billing Currency': [
                         { label: 'Indian Rupee (INR)', value: 'INR' },
                         { label: 'US Dollar (USD)', value: 'USD' },
@@ -4940,7 +4772,7 @@ function ReceiptContent() {
                 httpClient.get<any[]>('/api/voucher-sales-new/'),
                 httpClient.get<any[]>('/api/customerportal/customer-master/')
             ]);
-            
+
             setCustomers(custResponse || []);
 
             if (!Array.isArray(salesResponse)) {

@@ -163,3 +163,112 @@ def test_atomic_validate_and_process_duplication_mocked():
         # Verify that it detected the duplicate and marked the record appropriately without failing/crashing
         assert res["status"] == "DUPLICATE"
         assert record.validation_status == "DUPLICATE"
+
+
+@pytest.mark.django_db
+def test_finalize_view_blocked_and_success():
+    """
+    Tests OCRStagingFinalizeView POST endpoint under converged and non-converged states.
+    """
+    from ocr_pipeline.views import OCRStagingFinalizeView
+    from rest_framework.test import APIRequestFactory, force_authenticate
+    from unittest.mock import patch, MagicMock
+    
+    factory = APIRequestFactory()
+    
+    # 1. Non-converged state -> Should return HTTP 400
+    with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_state:
+        mock_state.return_value = {
+            'expected_pages': 6,
+            'completed_pages': 2,
+            'failed_pages': 0,
+            'snapshot_complete': False,
+            'materialization_complete': False
+        }
+        
+        view = OCRStagingFinalizeView.as_view()
+        request = factory.post('/api/ocr-staging-finalize/', {'upload_session_id': 'session-123'}, format='json')
+        user = MagicMock()
+        user.branch_id = "tenant-123"
+        force_authenticate(request, user=user)
+        
+        response = view(request)
+        assert response.status_code == 400
+        assert response.data['status'] == 'BLOCKED'
+
+    # 2. Converged state -> Should proceed to processing
+    with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_state, \
+         patch('ocr_pipeline.views.get_save_eligible_rows') as mock_eligible, \
+         patch('ocr_pipeline.models.FinalizedSnapshot.objects.filter') as mock_snap:
+        
+        mock_state.return_value = {
+            'expected_pages': 6,
+            'completed_pages': 6,
+            'failed_pages': 0,
+            'snapshot_complete': True,
+            'materialization_complete': True
+        }
+        
+        # Mock zero records in session for simplicity of PATH A fallback
+        mock_eligible.return_value = []
+        mock_snap.return_value.order_by.return_value.first.return_value = None
+        
+        view = OCRStagingFinalizeView.as_view()
+        request = factory.post('/api/ocr-staging-finalize/', {'upload_session_id': 'session-123'}, format='json')
+        user = MagicMock()
+        user.branch_id = "tenant-123"
+        force_authenticate(request, user=user)
+        
+        response = view(request)
+        # Should succeed (HTTP 200) and return response summary
+        assert response.status_code == 200
+        assert response.data['success'] is True
+
+
+def test_finalize_worker_blocked_barrier():
+    """
+    Tests that FinalizeWorker blocks execution and raises ValueError if orchestration barrier is incomplete.
+    """
+    import asyncio
+    from vouchers.finalize_worker import FinalizeWorker
+    worker = FinalizeWorker()
+    
+    task = {
+        'id': 'task-123',
+        'task_type': 'FINALIZE',
+        'session_id': 'session-123',
+        'tenant_id': 'tenant-123',
+        'payload': {
+            'record_id': 123,
+            'job_id': 'job-123',
+            'failed': False
+        }
+    }
+    
+    with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_state, \
+         patch('ocr_pipeline.models.InvoiceTempOCR.objects.filter') as mock_rec_query:
+        
+        # Incomplete barrier state
+        mock_state.return_value = {
+            'expected_pages': 6,
+            'completed_pages': 2,
+            'failed_pages': 0,
+            'snapshot_complete': False,
+            'materialization_complete': False
+        }
+        
+        # Mock database query for record resolution
+        mock_rec_query.return_value.values.return_value.first.return_value = {
+            'upload_session_id': 'session-123',
+            'tenant_id': 'tenant-123'
+        }
+        
+        # Running handle_task should raise ValueError due to incomplete barrier
+        with pytest.raises(ValueError, match="Finalize blocked: orchestration barrier incomplete"):
+            asyncio.run(worker.handle_task(task))
+
+
+
+
+
+

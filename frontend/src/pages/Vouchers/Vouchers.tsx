@@ -6,12 +6,12 @@ import type { Page, VoucherType, Ledger, StockItem, Voucher, SalesPurchaseVouche
 import Icon from '../../components/Icon';
 import { apiService, httpClient } from '../../services';
 import { showError, showSuccess, showInfo, confirm } from '../../utils/toast';
-
 import InvoiceScannerModal from '../../components/InvoiceScannerModal';
 import BulkInvoiceUploadModal from '../../components/SmartInvoiceUploadModal';
 import TallyMasterScannerModal from '../../components/TallyMasterScannerModal';
 import SalesExcelUploadWorkflow from '../../components/SalesExcelUploadWorkflow';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import { useOcrWorkflowStore } from '../../store/ocrWorkflowStore';
 import SalesVoucher from './SalesVoucher';
 import DebitNoteVoucher from './DebitNoteVoucher';
 import PaymentVoucherSingle from './PaymentVoucherSingle';
@@ -41,7 +41,7 @@ interface VouchersPageProps {
   clearPrefilledData: () => void;
   onInvoiceUpload: (file: File, voucherType?: string) => void;
   companyDetails: CompanyDetails;
-  onNavigate: (page: Page) => void;
+  onNavigate: (page: Page, params?: any) => void;
   permissions: string[];
   viewVoucherData?: any;
   clearViewVoucherData?: () => void;
@@ -49,18 +49,41 @@ interface VouchersPageProps {
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
 const UPLOAD_OPTIONS_CONFIG: Record<string, string[]> = {
-  purchase: ["purchase_scan", "others"],
-  sales: ["sales_excel_upload", "others"],
-  payment: ["bank_upload", "others"],
-  receipt: ["bank_upload", "others"],
-  contra: ["others"],
-  journal: ["others"],
-  expenses: ["others"],
-  "credit note": ["others"],
-  "debit note": ["others"],
+  purchase: ["purchase_scan", "pending_purchase", "upload_for_excel"],
+  sales: ["sales_excel_upload", "upload_for_excel"],
+  payment: ["bank_upload", "upload_for_excel"],
+  receipt: ["bank_upload", "upload_for_excel"],
+  contra: ["upload_for_excel"],
+  journal: ["upload_for_excel"],
+  expenses: ["upload_for_excel"],
+  "credit note": ["upload_for_excel"],
+  "debit note": ["upload_for_excel"],
 };
 
+const normalizeStatutorySection = (str: string): string => {
+  if (!str) return '';
+  return str.replace(/[-\|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+};
 
+const findRate = (map: Record<string, number>, sectionStr: string): number => {
+  if (!sectionStr) return 0;
+  const normalizedSearch = normalizeStatutorySection(sectionStr);
+
+  // 1. Direct match
+  if (map[sectionStr] !== undefined) return map[sectionStr];
+
+  // 2. Part split by pipe if applicable
+  const part = sectionStr.includes('|') ? sectionStr.split('|')[1] : '';
+  if (part && map[part] !== undefined) return map[part];
+
+  // 3. Normalized matching
+  for (const key of Object.keys(map)) {
+    if (normalizeStatutorySection(key) === normalizedSearch || (part && normalizeStatutorySection(key) === normalizeStatutorySection(part))) {
+      return map[key];
+    }
+  }
+  return 0;
+};
 
 const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onNavigate, permissions = [], viewVoucherData, clearViewVoucherData }) => {
 
@@ -91,6 +114,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const isExistingVoucherRef = useRef(!!viewVoucherData);
   const [drillDownDetails, setDrillDownDetails] = useState<any>(null);
   const [drillDownLoading, setDrillDownLoading] = useState(false);
+  const [activeOcrSessionId, setActiveOcrSessionId] = useState<string | null>(null);
+  const [activeOcrFileHash, setActiveOcrFileHash] = useState<string | null>(null);
+  const [activeOcrFileName, setActiveOcrFileName] = useState<string | null>(null);
 
   useEffect(() => {
     if (availableVoucherTypes.length > 0 && !availableVoucherTypes.find(v => v.id === voucherType)) {
@@ -116,8 +142,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [isScannerMenuOpen, setIsScannerMenuOpen] = useState(false);
-  const [isOthersSubmenuOpen, setIsOthersSubmenuOpen] = useState(false);
-  const [isTallySubmenuOpen, setIsTallySubmenuOpen] = useState(false);
   const importMenuRef = useRef<HTMLDivElement>(null);
   const scannerMenuRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -221,8 +245,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const handleClickOutside = (event: MouseEvent) => {
       if (scannerMenuRef.current && !scannerMenuRef.current.contains(event.target as Node)) {
         setIsScannerMenuOpen(false);
-        setIsOthersSubmenuOpen(false);
-        setIsTallySubmenuOpen(false);
       }
       if (importMenuRef.current && !importMenuRef.current.contains(event.target as Node)) {
         setIsImportMenuOpen(false);
@@ -491,11 +513,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setLocalPrefilledData(prefilledData);
   }, [prefilledData]);
 
-  const handleClearPrefilledData = () => {
+  const handleClearPrefilledData = useCallback(() => {
     // Removed redundant clearViewVoucherData() that caused cyclic state wipe on edit mount
     clearPrefilledData();
     setLocalPrefilledData(null);
-  };
+  }, [clearPrefilledData]);
 
 
 
@@ -2637,12 +2659,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     let isTcs = false;
 
     if (vendorTaxType === 'TDS' && purchaseSelectedStatutorySection) {
-      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
-      rateDecimal = TDS_RATE_MAP[name] ?? 0;
+      rateDecimal = findRate(TDS_RATE_MAP, purchaseSelectedStatutorySection);
       isTcs = false;
     } else if (vendorTaxType === 'TCS' && purchaseSelectedStatutorySection) {
-      const name = purchaseSelectedStatutorySection.includes('|') ? purchaseSelectedStatutorySection.split('|')[1] : purchaseSelectedStatutorySection;
-      rateDecimal = TCS_RATE_MAP[name] ?? 0;
+      rateDecimal = findRate(TCS_RATE_MAP, purchaseSelectedStatutorySection);
       isTcs = true;
     } else {
       // Fallback for legacy data
@@ -2766,25 +2786,76 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   };
 
   useEffect(() => {
-    if (prefilledData) {
+    if (localPrefilledData) {
 
 
 
       // Keep current voucher type - don't change tabs, just populate form data
 
       if (voucherType === 'Purchase') {
-        const partyLedger = ledgers.find(l => l.name.toLowerCase() === (prefilledData.sellerName || '').toLowerCase());
+        const partyLedger = ledgers.find(l => l.name.toLowerCase() === (localPrefilledData.sellerName || '').toLowerCase());
         const newIsInterState = (partyLedger && partyLedger.state && companyDetails.state)
           ? partyLedger.state.toLowerCase() !== companyDetails.state.toLowerCase()
           : false;
 
-        setDate(formatDateForInput(prefilledData.invoiceDate) || getTodayDate());
-        setInvoiceNo(prefilledData.invoiceNumber || '');
-        setParty(prefilledData.sellerName || '');
+        setDate(formatDateForInput(localPrefilledData.invoiceDate) || getTodayDate());
+        setInvoiceNo(localPrefilledData.invoiceNumber || '');
+        setParty(localPrefilledData.sellerName || '');
         setIsInterState(newIsInterState);
 
-        if (prefilledData.lineItems && prefilledData.lineItems.length > 0) {
-          const newSimpleItems = prefilledData.lineItems.map(item => {
+        if (localPrefilledData.gstin) {
+          setGstin(localPrefilledData.gstin);
+        }
+        if (localPrefilledData.branch) {
+          setSelectedBranch(localPrefilledData.branch);
+        }
+        if (localPrefilledData.placeOfSupply) {
+          setBillFromState(localPrefilledData.placeOfSupply);
+        }
+        if (localPrefilledData.billFrom) {
+          setAddressFields(localPrefilledData.billFrom);
+        }
+        if (localPrefilledData.exchangeRate) {
+          setExchangeRate(String(localPrefilledData.exchangeRate));
+        }
+        if (localPrefilledData.tdsIncomeTax !== undefined && localPrefilledData.tdsIncomeTax !== null) {
+          setPurchaseTdsIt(localPrefilledData.tdsIncomeTax);
+        }
+        if (localPrefilledData.advanceAmount !== undefined && localPrefilledData.advanceAmount !== null) {
+          setPurchaseAdvancePaid(localPrefilledData.advanceAmount);
+        }
+        if (localPrefilledData.postingNote !== undefined && localPrefilledData.postingNote !== null) {
+          setPurchasePostingNote(localPrefilledData.postingNote);
+        }
+
+        // Transport/dispatch details
+        if (localPrefilledData.dispatchFrom) {
+          setPurchaseTransitReceivedIn(localPrefilledData.dispatchFrom);
+        }
+        if (localPrefilledData.modeOfTransport) {
+          setPurchaseTransitMode(localPrefilledData.modeOfTransport);
+        }
+        if (localPrefilledData.dispatchDate) {
+          setPurchaseTransitReceiptDate(formatDateForInput(localPrefilledData.dispatchDate) || getTodayDate());
+        }
+        if (localPrefilledData.dispatchTime) {
+          setPurchaseTransitReceiptTime(localPrefilledData.dispatchTime);
+        }
+        if (localPrefilledData.transporterId) {
+          setPurchaseTransitTransporterId(localPrefilledData.transporterId);
+        }
+        if (localPrefilledData.transporterName) {
+          setPurchaseTransitTransporterName(localPrefilledData.transporterName);
+        }
+        if (localPrefilledData.vehicleNo) {
+          setPurchaseTransitVehicleNo(localPrefilledData.vehicleNo);
+        }
+        if (localPrefilledData.lrGrConsignment) {
+          setPurchaseTransitLrGrConsignment(localPrefilledData.lrGrConsignment);
+        }
+
+        if (localPrefilledData.lineItems && localPrefilledData.lineItems.length > 0) {
+          const newSimpleItems = localPrefilledData.lineItems.map(item => {
             const stockItem = allItems.find(si => (si.name || si.item_name)?.toLowerCase() === (item.itemDescription || '').toLowerCase());
             const gstRate = stockItem?.gstRate || (stockItem as any)?.gst_rate || 18;
             const taxableAmount = item.quantity * item.rate;
@@ -2804,30 +2875,32 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setItems(newSimpleItems);
 
           // Also populate the sophisticated purchaseItems grid
-          const newPurchaseItems = prefilledData.lineItems.map((item, idx) => {
+          const newPurchaseItems = localPrefilledData.lineItems.map((item, idx) => {
             const stockItem = allItems.find(si => (si.name || si.item_name)?.toLowerCase() === (item.itemDescription || '').toLowerCase());
-            const gstRate = stockItem?.gstRate || (stockItem as any)?.gst_rate || 0;
-            const cessRate = stockItem?.cessRate || (stockItem as any)?.cess_rate || 0;
             const qty = item.quantity || 0;
             const rate = item.rate || 0;
-            const taxable = qty * rate;
-            const totalTax = taxable * (gstRate / 100);
-            const cessAmount = taxable * (cessRate / 100);
+            const taxable = item.taxableValue || item.amount || (qty * rate);
+            
+            const igst = item.igst !== undefined ? item.igst : (newIsInterState ? (taxable * 0.18) : 0);
+            const cgst = item.cgst !== undefined ? item.cgst : (newIsInterState ? 0 : (taxable * 0.09));
+            const sgst = item.sgst !== undefined ? item.sgst : (newIsInterState ? 0 : (taxable * 0.09));
+            const cess = item.cess !== undefined ? item.cess : 0;
+            const invoiceValue = item.invoiceValue !== undefined ? item.invoiceValue : (taxable + igst + cgst + sgst + cess);
 
             return {
               id: (Date.now() + idx).toString(),
               itemCode: stockItem?.item_code || stockItem?.code || '',
               itemName: stockItem?.name || stockItem?.item_name || item.itemDescription || '',
-              hsnSac: stockItem?.hsn_sac || stockItem?.hsn || '',
+              hsnSac: item.hsnCode || stockItem?.hsn_sac || stockItem?.hsn || '',
               qty: qty,
-              uom: stockItem?.uom || stockItem?.unit || '',
+              uom: stockItem?.uom || stockItem?.unit || item.uom || '',
               rate: rate,
               taxableValue: taxable,
-              igst: newIsInterState ? totalTax : 0,
-              cgst: newIsInterState ? 0 : totalTax / 2,
-              sgst: newIsInterState ? 0 : totalTax / 2,
-              cess: cessAmount,
-              invoiceValue: taxable + totalTax + cessAmount,
+              igst: igst,
+              cgst: cgst,
+              sgst: sgst,
+              cess: cess,
+              invoiceValue: invoiceValue,
               description: item.itemDescription || '',
               foreignRate: 0,
               foreignAmount: 0,
@@ -2841,8 +2914,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               sourcePoNo: null as string | null
             };
           });
-          if (prefilledData.sellerName) {
-            fetchVendorAdvances(prefilledData.sellerName);
+          if (localPrefilledData.sellerName) {
+            fetchVendorAdvances(localPrefilledData.sellerName);
           }
           setPurchaseItems(newPurchaseItems);
 
@@ -2851,33 +2924,135 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setPurchaseItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }]);
         }
       } else if (voucherType === 'Contra') {
-        setDate(formatDateForInput(prefilledData.invoiceDate) || getTodayDate());
-        setFromAccount(prefilledData.sellerName || '');
-        setToAccount(prefilledData.invoiceNumber || ''); // Use invoice number as to account
-        setSimpleAmount(prefilledData.totalAmount || 0);
+        setDate(formatDateForInput(localPrefilledData.invoiceDate) || getTodayDate());
+        setFromAccount(localPrefilledData.sellerName || '');
+        setToAccount(localPrefilledData.invoiceNumber || ''); // Use invoice number as to account
+        setSimpleAmount(localPrefilledData.totalAmount || 0);
       } else if (voucherType === 'Journal') {
-        setDate(formatDateForInput(prefilledData.invoiceDate) || getTodayDate());
+        setDate(formatDateForInput(localPrefilledData.invoiceDate) || getTodayDate());
         // For journal, we could create entries based on the invoice data
         setEntries([
-          { ledger: prefilledData.sellerName || '', note: '', refNo: '', debit: prefilledData.totalAmount || 0, credit: 0 },
-          { ledger: '', note: '', refNo: '', debit: 0, credit: prefilledData.totalAmount || 0 }
+          { ledger: localPrefilledData.sellerName || '', note: '', refNo: '', debit: localPrefilledData.totalAmount || 0, credit: 0 },
+          { ledger: '', note: '', refNo: '', debit: 0, credit: localPrefilledData.totalAmount || 0 }
         ]);
       }
 
-      clearPrefilledData();
+      handleClearPrefilledData();
     }
-  }, [prefilledData, clearPrefilledData, stockItems, ledgers, companyDetails.state, allItems]);
+  }, [localPrefilledData, handleClearPrefilledData, stockItems, ledgers, companyDetails.state, allItems, voucherType]);
 
   const setAddressFields = useCallback((addressData: any) => {
     if (typeof addressData === 'string') {
-      const parts = addressData.split(',').map(p => p.trim());
-      setBillFromAddress1(parts[0] || '');
-      setBillFromAddress2(parts[1] || '');
-      setBillFromAddress3(parts[2] || '');
-      setBillFromCity(parts[3] || '');
-      setBillFromPincode(parts[4] || '');
-      setBillFromState(parts[5] || '');
-      setBillFromCountry(parts[6] || 'India');
+      let cleanAddress = addressData.trim();
+      if (cleanAddress.startsWith('"') && cleanAddress.endsWith('"')) {
+        cleanAddress = cleanAddress.substring(1, cleanAddress.length - 1).trim();
+      } else if (cleanAddress.startsWith('"')) {
+        cleanAddress = cleanAddress.substring(1).trim();
+      } else if (cleanAddress.endsWith('"')) {
+        cleanAddress = cleanAddress.substring(0, cleanAddress.length - 1).trim();
+      }
+
+      const parts = cleanAddress.split(',').map(p => p.trim()).filter(Boolean);
+      let country = 'India';
+      let state = '';
+      let pincode = '';
+      let city = '';
+      let addressLines: string[] = [];
+
+      const indianStates = [
+        "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", 
+        "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", 
+        "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", 
+        "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Delhi", "Puducherry", 
+        "Jammu and Kashmir", "Ladakh", "Chandigarh", "Dadra and Nagar Haveli", "Daman and Diu", "Lakshadweep", "Andaman and Nicobar Islands"
+      ];
+
+      const commonCities = [
+        "coimbatore", "chennai", "bangalore", "mumbai", "delhi", "kolkata", "pune", "hyderabad", 
+        "ahmedabad", "surat", "jaipur", "lucknow", "kanpur", "nagpur", "patna", "indore", "thane", 
+        "bhopal", "gurgaon", "noida", "ghaziabad", "faridabad", "visakhapatnam", "vijayawada", 
+        "guntur", "nellore", "tirupati", "kurnool", "secunderabad", "warangal", "madurai", "trichy", 
+        "salem", "tiruppur", "erode", "vellore", "thoothukudi", "nagercoil", "kanchipuram", 
+        "thanjavur", "tirunelveli", "mysore", "hubli", "dharwad", "mangalore", "belgaum", "gulbarga", 
+        "davanagere", "bellary", "bijapur", "shimoga", "kochi", "trivandrum", "kozhikode", "thrissur", 
+        "kollam", "palakkad", "alappuzha", "kottayam", "kannur"
+      ];
+
+      const stateFallback = (cityName: string) => {
+        const c = cityName.toLowerCase().trim();
+        if (["coimbatore", "chennai", "madurai", "trichy", "salem", "tiruppur", "erode", "vellore", "thoothukudi", "nagercoil", "kanchipuram", "thanjavur", "tirunelveli"].some(x => c.includes(x))) return "Tamil Nadu";
+        if (["bangalore", "mysore", "hubli", "dharwad", "mangalore", "belgaum", "gulbarga", "davanagere", "bellary", "bijapur", "shimoga"].some(x => c.includes(x))) return "Karnataka";
+        if (["mumbai", "pune", "thane", "nagpur", "nashik", "aurangabad", "solapur"].some(x => c.includes(x))) return "Maharashtra";
+        if (["delhi", "new delhi"].some(x => c.includes(x))) return "Delhi";
+        if (["hyderabad", "secunderabad", "warangal"].some(x => c.includes(x))) return "Telangana";
+        if (["visakhapatnam", "vijayawada", "guntur", "nellore", "tirupati", "kurnool"].some(x => c.includes(x))) return "Andhra Pradesh";
+        if (["kochi", "trivandrum", "kozhikode", "thrissur", "kollam", "palakkad", "alappuzha", "kottayam", "kannur"].some(x => c.includes(x))) return "Kerala";
+        return "";
+      };
+
+      parts.forEach(part => {
+        const lowerPart = part.toLowerCase().replace(/[.\s"]/g, '');
+        
+        if (lowerPart === 'india') {
+          country = part;
+          return;
+        }
+
+        const pinMatch = part.match(/\b\d{6}\b/);
+        if (pinMatch) {
+          pincode = pinMatch[0];
+          return;
+        }
+
+        const matchedState = indianStates.find(s => s.toLowerCase().replace(/\s/g, '') === lowerPart);
+        if (matchedState) {
+          state = matchedState;
+          return;
+        }
+
+        addressLines.push(part);
+      });
+
+      if (addressLines.length > 0 && !city) {
+        const lastIndex = addressLines.length - 1;
+        const lastPart = addressLines[lastIndex].trim();
+        const lastPartLower = lastPart.toLowerCase().replace(/[.\s"]/g, '');
+
+        const isCommonCity = commonCities.includes(lastPartLower) || 
+                             commonCities.some(c => lastPartLower.includes(c));
+
+        const looksLikeStreet = lastPartLower.includes('road') || 
+                                lastPartLower.includes('rd') || 
+                                lastPartLower.includes('street') || 
+                                lastPartLower.includes('st') || 
+                                lastPartLower.includes('nagar') || 
+                                lastPartLower.includes('lane') || 
+                                lastPartLower.includes('building') || 
+                                lastPartLower.includes('plot') || 
+                                lastPartLower.includes('floor') || 
+                                lastPartLower.includes('no:');
+
+        if (isCommonCity && !looksLikeStreet) {
+          city = lastPart.replace(/[."]/g, '').trim();
+          addressLines.splice(lastIndex, 1);
+        } else if (addressLines.length > 1 && !looksLikeStreet) {
+          city = lastPart;
+          addressLines.splice(lastIndex, 1);
+        } else {
+          const matchedCity = commonCities.find(c => lastPartLower.includes(c));
+          if (matchedCity) {
+            city = matchedCity.toUpperCase();
+          }
+        }
+      }
+
+      setBillFromAddress1(addressLines[0] || '');
+      setBillFromAddress2(addressLines[1] || '');
+      setBillFromAddress3(addressLines[2] || '');
+      setBillFromCity(city);
+      setBillFromPincode(pincode);
+      setBillFromState(state || stateFallback(city) || '');
+      setBillFromCountry(country);
     } else if (addressData) {
       const a1 = addressData.addressLine1 || addressData.address_line_1 || '';
       const a2 = addressData.addressLine2 || addressData.address_line_2 || '';
@@ -2918,7 +3093,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     });
   }, [party, ledgers, companyDetails, invoiceInForeignCurrency]);
 
-  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions } = useMemo(() => {
+  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions, expenseLedgerOptions } = useMemo(() => {
     // Merge the prop ledgers with freshly-fetched ledgers so we always have the full set
     // The prop is the reliable source; freshLedgers supplements with any newly created ledgers
     const mergedMap = new Map<string, Ledger>();
@@ -3034,7 +3209,29 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       ...defaultLedgerNames.filter(n => !EXCLUDED_NAMES.includes(n.toLowerCase().trim()))
     ])).filter(Boolean) as string[];
 
-    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions };
+    // Expense Ledger dropdown: only Expenditure category ledgers
+    const expenseLedgerOptions = Array.from(new Set([
+      ...effectiveLedgers
+        .filter(l => {
+          if (!isRealLedgerLeaf(l)) return false;
+          const cat = (l.category || '').toLowerCase().trim();
+          return cat === 'expenditure' || cat === 'expense' || cat === 'expenses';
+        })
+        .map(l => l.name),
+      ...hierarchy
+        .filter(r => {
+          const cat = (r.major_group_1 || '').toLowerCase().trim();
+          return cat === 'expenditure' || cat === 'expense' || cat === 'expenses';
+        })
+        .map(r => r.ledger_1)
+        .filter(Boolean) as string[]
+    ])).filter(name => {
+      if (!name) return false;
+      const n = name.toLowerCase().trim();
+      return !['purchase account', 'sales account'].includes(n);
+    }) as string[];
+
+    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions, allLedgerOptions, purchaseLedgerOptions, expenseLedgerOptions };
   }, [ledgers, freshLedgers, hierarchy, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
@@ -3275,26 +3472,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
-  const handleCreateVendorFromInvoice = async (data: any) => {
-    try {
-      const response = await httpClient.post<any>('/api/purchase/vendors/create/', data);
-      if (response && response.status === 'CREATED') {
-        showSuccess('Vendor Created Successfully!');
-        setIsCreateVendorModalOpen(false);
-        setVendorValidationStatus('FOUND');
-        setVendorMatchedBy('Newly Created');
-        setIsVendorDisabled(true);
-        setParty(data.vendor_name);
-        setVendorId(response.vendor_id); // Set the newly created vendor ID
-        handlePartyChange(data.vendor_name, response.vendor_id);
-
-        // Refresh master data to include the new vendor
-        fetchRichData();
-      }
-    } catch (err: any) {
-      showError(`Failed to create vendor: ${err.message || 'Error'}`);
-    }
-  };
 
   const openTermsModal = () => {
     // Pre-fill draft fields from current vendor/customer's T&C data
@@ -3396,7 +3573,279 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const handleAddEntryRow = () => setEntries([...entries, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
   const handleRemoveEntryRow = (index: number) => entries.length > 2 && setEntries(entries.filter((_, i) => i !== index));
 
-  const handleSaveVoucher = async (shouldPrint = false) => {
+  const loadNextScanItem = async (currentHash: string) => {
+    if (!activeOcrSessionId) {
+      handleCloseVoucher();
+      return;
+    }
+    try {
+      const response: any = await httpClient.get(`/api/ocr-staging/?upload_session_id=${activeOcrSessionId}`);
+      const rows = response.data?.data || response.data || [];
+      const currentIndex = rows.findIndex((r: any) => r.file_hash === currentHash);
+
+      let nextRow = null;
+      for (let i = currentIndex + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.validationStatus !== 'VOUCHER_CREATED' && row.status !== 'FINALIZED' && !row.processed) {
+          nextRow = row;
+          break;
+        }
+      }
+
+      if (!nextRow) {
+        for (let i = 0; i < currentIndex; i++) {
+          const row = rows[i];
+          if (row.validationStatus !== 'VOUCHER_CREATED' && row.status !== 'FINALIZED' && !row.processed) {
+            nextRow = row;
+            break;
+          }
+        }
+      }
+
+      if (nextRow) {
+        setActiveOcrFileHash(nextRow.file_hash);
+        setActiveOcrFileName(nextRow.file_name || nextRow.file_path?.split('/').pop() || '');
+
+        const data = nextRow.extracted_data || {};
+        const invoice = data.invoice || data.header || data;
+        const items = data.items || data.line_items || [];
+
+        const prefilled: ExtractedInvoiceData = {
+          invoiceNumber: nextRow.invoice_number || nextRow.invoice_no || invoice.invoice_no || invoice.invoice_number || '',
+          sellerName: nextRow.vendor_name || invoice.vendor_name || '',
+          invoiceDate: nextRow.invoice_date || invoice.invoice_date || '',
+          gstin: nextRow.vendor_gstin || nextRow.gstin || invoice.vendor_gstin || invoice.gstin || '',
+          subtotal: Number(nextRow.total_taxable_value || invoice.total_taxable_value || invoice.taxable_value || 0),
+          cgstAmount: Number(nextRow.total_cgst || invoice.total_cgst || 0),
+          sgstAmount: Number(nextRow.total_sgst || invoice.total_sgst || 0),
+          igstAmount: Number(nextRow.total_igst || invoice.total_igst || 0),
+          totalAmount: Number(nextRow.total_amount || invoice.total_amount || invoice.invoice_total || 0),
+
+          placeOfSupply: nextRow.place_of_supply || invoice.place_of_supply || '',
+          branch: nextRow.branch || invoice.branch || '',
+          billFrom: nextRow.bill_from || invoice.bill_from || '',
+          billTo: nextRow.bill_to || invoice.bill_to || invoice.billing_address || '',
+
+          dispatchFrom: nextRow.dispatchFrom || nextRow.dispatch_from || invoice.dispatchFrom || invoice.dispatch_from || '',
+          modeOfTransport: nextRow.modeOfTransport || nextRow.mode_of_transport || invoice.modeOfTransport || invoice.mode_of_transport || '',
+          dispatchDate: nextRow.dispatchDate || nextRow.dispatch_date || invoice.dispatchDate || invoice.dispatch_date || '',
+          dispatchTime: nextRow.dispatchTime || nextRow.dispatch_time || invoice.dispatchTime || invoice.dispatch_time || '',
+          transporterId: nextRow.transporterId || nextRow.transporter_id || invoice.transporterId || invoice.transporter_id || '',
+          transporterName: nextRow.transporterName || nextRow.transporter_name || invoice.transporterName || invoice.transporter_name || '',
+          vehicleNo: nextRow.vehicleNo || nextRow.vehicle_no || invoice.vehicleNo || invoice.vehicle_no || '',
+          lrGrConsignment: nextRow.lrGrConsignment || nextRow.lr_gr_consignment || invoice.lrGrConsignment || invoice.lr_gr_consignment || '',
+
+          tdsIncomeTax: String(data.sections?.due_details?.tds_it || invoice.sections?.due_details?.tds_it || data.tds_it || nextRow.tds_it || invoice.tds_it || '0.00'),
+          advanceAmount: String(data.sections?.due_details?.advance_paid || invoice.sections?.due_details?.advance_paid || data.advance_amount || nextRow.advance_amount || invoice.advance_amount || '0.00'),
+          postingNote: data.sections?.due_details?.posting_note || invoice.sections?.due_details?.posting_note || data.posting_note || nextRow.posting_note || invoice.posting_note || '',
+
+          lineItems: items.map((it: any) => {
+            const qty = Number(it.qty || it.quantity || 1);
+            const rate = Number(it.rate || it.item_rate || it['Item Rate'] || 0);
+            const taxableValue = Number(it.taxable_value || it.taxableValue || it.taxable || it.total_amount || it.amount || (qty * rate));
+            const cgst = Number(it.cgst_amount !== undefined ? it.cgst_amount : (it.cgst !== undefined ? it.cgst : 0));
+            const sgst = Number(it.sgst_amount !== undefined ? it.sgst_amount : (it.sgst !== undefined ? it.sgst : 0));
+            const igst = Number(it.igst_amount !== undefined ? it.igst_amount : (it.igst !== undefined ? it.igst : 0));
+            const cess = Number(it.cess_amount !== undefined ? it.cess_amount : (it.cess !== undefined ? it.cess : 0));
+            
+            const rawInvVal = Number(it.invoice_value !== undefined ? it.invoice_value : (it.invoiceValue !== undefined ? it.invoiceValue : 0));
+            const invoiceValue = rawInvVal > 0 ? rawInvVal : (taxableValue + cgst + sgst + igst + cess);
+
+            return {
+              itemDescription: it.description || it['Item Name'] || it.Description || '',
+              hsnCode: it.hsn_sac || it.hsn || '',
+              quantity: qty,
+              rate: rate,
+              amount: taxableValue,
+              cgst,
+              sgst,
+              igst,
+              cess,
+              taxableValue,
+              invoiceValue
+            };
+          })
+        };
+
+        setLocalPrefilledData(prefilled);
+        showInfo(`Loaded next invoice for review: ${nextRow.vendor_name || 'Unknown Vendor'}`);
+      } else {
+        showSuccess("All invoices in the batch have been processed!");
+        handleCloseVoucher();
+      }
+    } catch (err) {
+      console.error("Error loading next scan item:", err);
+      handleCloseVoucher();
+    }
+  };
+
+  const fetchLatestStagingData = useCallback(async () => {
+    if (!activeOcrFileHash) return;
+    try {
+      console.log(`[VouchersPage] Fetching latest saved state for fileHash: ${activeOcrFileHash}`);
+      const response: any = await httpClient.get(`/api/ocr-staging/${activeOcrFileHash}/`);
+      const rows = response.data?.data || response.data || [];
+      const record = rows[0];
+      if (record) {
+        const data = record.extracted_data || {};
+        const invoice = data.invoice || data.header || data;
+        const items = data.items || data.line_items || [];
+
+        const prefilled: ExtractedInvoiceData = {
+          invoiceNumber: record.invoice_no || record.invoice_number || invoice.invoice_no || invoice.invoice_number || '',
+          sellerName: record.vendor_name || invoice.vendor_name || '',
+          invoiceDate: record.invoice_date || invoice.invoice_date || '',
+          gstin: record.vendor_gstin || record.gstin || invoice.vendor_gstin || invoice.gstin || '',
+          subtotal: Number(record.total_taxable_value || invoice.total_taxable_value || invoice.taxable_value || 0),
+          cgstAmount: Number(record.total_cgst || invoice.total_cgst || 0),
+          sgstAmount: Number(record.total_sgst || invoice.total_sgst || 0),
+          igstAmount: Number(record.total_igst || invoice.total_igst || 0),
+          totalAmount: Number(record.total_amount || invoice.total_amount || invoice.invoice_total || 0),
+
+          placeOfSupply: record.place_of_supply || invoice.place_of_supply || '',
+          branch: record.branch || invoice.branch || '',
+          billFrom: record.bill_from || invoice.bill_from || '',
+          billTo: record.bill_to || invoice.bill_to || invoice.billing_address || '',
+
+          dispatchFrom: record.dispatchFrom || record.dispatch_from || invoice.dispatchFrom || invoice.dispatch_from || '',
+          modeOfTransport: record.modeOfTransport || record.mode_of_transport || invoice.modeOfTransport || invoice.mode_of_transport || '',
+          dispatchDate: record.dispatchDate || record.dispatch_date || invoice.dispatchDate || invoice.dispatch_date || '',
+          dispatchTime: record.dispatchTime || record.dispatch_time || invoice.dispatchTime || invoice.dispatch_time || '',
+          transporterId: record.transporterId || record.transporter_id || invoice.transporterId || invoice.transporter_id || '',
+          transporterName: record.transporterName || record.transporter_name || invoice.transporterName || invoice.transporter_name || '',
+          vehicleNo: record.vehicleNo || record.vehicle_no || invoice.vehicleNo || invoice.vehicle_no || '',
+          lrGrConsignment: record.lrGrConsignment || record.lr_gr_consignment || invoice.lrGrConsignment || invoice.lr_gr_consignment || '',
+
+          tdsIncomeTax: String(data.sections?.due_details?.tds_it || invoice.sections?.due_details?.tds_it || data.tds_it || record.tds_it || invoice.tds_it || '0.00'),
+          advanceAmount: String(data.sections?.due_details?.advance_paid || invoice.sections?.due_details?.advance_paid || data.advance_amount || record.advance_amount || invoice.advance_amount || '0.00'),
+          postingNote: data.sections?.due_details?.posting_note || invoice.sections?.due_details?.posting_note || data.posting_note || record.posting_note || invoice.posting_note || '',
+
+          lineItems: items.map((it: any) => {
+            const qty = Number(it.qty || it.quantity || 1);
+            const rate = Number(it.rate || it.item_rate || it['Item Rate'] || 0);
+            const taxableValue = Number(it.taxable_value || it.taxableValue || it.taxable || it.total_amount || it.amount || (qty * rate));
+            const cgst = Number(it.cgst_amount !== undefined ? it.cgst_amount : (it.cgst !== undefined ? it.cgst : 0));
+            const sgst = Number(it.sgst_amount !== undefined ? it.sgst_amount : (it.sgst !== undefined ? it.sgst : 0));
+            const igst = Number(it.igst_amount !== undefined ? it.igst_amount : (it.igst !== undefined ? it.igst : 0));
+            const cess = Number(it.cess_amount !== undefined ? it.cess_amount : (it.cess !== undefined ? it.cess : 0));
+            
+            const rawInvVal = Number(it.invoice_value !== undefined ? it.invoice_value : (it.invoiceValue !== undefined ? it.invoiceValue : 0));
+            const invoiceValue = rawInvVal > 0 ? rawInvVal : (taxableValue + cgst + sgst + igst + cess);
+
+            return {
+              itemDescription: it.description || it['Item Name'] || it.Description || '',
+              hsnCode: it.hsn_sac || it.hsn || '',
+              quantity: qty,
+              rate: rate,
+              amount: taxableValue,
+              cgst,
+              sgst,
+              igst,
+              cess,
+              taxableValue,
+              invoiceValue
+            };
+          })
+        };
+
+        setLocalPrefilledData(prefilled);
+      }
+    } catch (err) {
+      console.error("[VouchersPage] Failed to fetch latest staging data:", err);
+    }
+  }, [activeOcrFileHash]);
+
+  useEffect(() => {
+    fetchLatestStagingData();
+  }, [activeOcrFileHash, fetchLatestStagingData]);
+
+  const handleSaveChanges = async () => {
+    if (!activeOcrFileHash) return;
+    try {
+      const billFromAddress = [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ');
+
+      const updated_data = {
+        invoice_no: invoiceNo,
+        invoice_date: date,
+        vendor_name: party,
+        gstin: gstin,
+        branch: selectedBranch,
+        place_of_supply: billFromState,
+        bill_from: billFromAddress,
+        total_taxable_value: purchaseItems.reduce((sum, item) => sum + (Number(item.taxableValue) || 0), 0),
+        total_cgst: purchaseItems.reduce((sum, item) => sum + (Number(item.cgst) || 0), 0),
+        total_sgst: purchaseItems.reduce((sum, item) => sum + (Number(item.sgst) || 0), 0),
+        total_igst: purchaseItems.reduce((sum, item) => sum + (Number(item.igst) || 0), 0),
+        total_cess: purchaseItems.reduce((sum, item) => sum + (Number(item.cess) || 0), 0),
+        total_amount: purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0),
+        sections: {
+          supplier_details: {
+            supplier_invoice_no: invoiceNo,
+            invoice_date: date,
+            vendor_name: party,
+            gstin: gstin,
+            branch: selectedBranch,
+            place_of_supply: billFromState,
+            bill_from: billFromAddress,
+            city: billFromCity,
+            state: billFromState,
+            pincode: billFromPincode,
+            country: billFromCountry
+          },
+          supply_details: {
+            purchase_order_no: purchaseOrderNo,
+            purchase_ledger: purchaseLedger,
+            description: purchaseDescription,
+            exchange_rate: exchangeRate ? Number(exchangeRate) : 1.0,
+          },
+          due_details: {
+            tds_it: purchaseTdsIt || 0,
+            advance_paid: purchaseAdvancePaid || 0,
+            posting_note: purchasePostingNote,
+            terms: purchaseTerms,
+          },
+          transit_details: {
+            mode: purchaseTransitMode,
+            received_in: purchaseTransitReceivedIn,
+            receipt_date: purchaseTransitReceiptDate || null,
+            receipt_time: purchaseTransitReceiptTime || null,
+            received_quantity: purchaseTransitReceivedQty,
+            uqc: purchaseTransitReceivedUqc,
+            delivery_type: purchaseTransitDeliveryType,
+            self_third_party: purchaseTransitSelfThirdParty,
+            transporter_id: purchaseTransitTransporterId,
+            transporter_name: purchaseTransitTransporterName,
+            vehicle_no: purchaseTransitVehicleNo,
+            lr_gr_consignment: purchaseTransitLrGrConsignment
+          },
+          items: purchaseItems.map((item) => ({
+            description: item.itemName || item.description || '',
+            hsn_sac: item.hsnSac || '',
+            qty: Number(item.qty || 0),
+            rate: Number(item.rate || 0),
+            total_amount: Number(item.taxableValue || 0),
+            cgst_amount: Number(item.cgst || 0),
+            sgst_amount: Number(item.sgst || 0),
+            igst_amount: Number(item.igst || 0),
+            cess_amount: Number(item.cess || 0),
+            invoice_value: Number(item.invoiceValue || 0)
+          }))
+        }
+      };
+
+      await httpClient.patch(`/api/ocr-staging/${activeOcrFileHash}/`, {
+        extracted_data: updated_data
+      });
+
+      showSuccess('Staged invoice changes saved successfully!');
+      await fetchLatestStagingData();
+    } catch (err: any) {
+      console.error('[VouchersPage] Failed to save staged changes:', err);
+      showError('Failed to save staged invoice changes: ' + (err.message || err));
+    }
+  };
+
+  const handleSaveVoucher = async (shouldPrint = false, saveAndNext = false) => {
     let voucher: Voucher | null = null;
     const isEditing = !!viewVoucherData;
     // reference_id on the fetched drillDownDetails is the actual VoucherContra/Journal/Expenses record ID.
@@ -3533,7 +3982,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
         // Optional: Handle file upload separately if needed, or if we switch to FormData later.
 
-        if (shouldPrint) {
+        if (activeOcrFileHash) {
+          // Update the staging row to VOUCHER_CREATED so it doesn't get finalized again
+          try {
+            await httpClient.patch(`/api/ocr-staging/${activeOcrFileHash}/`, {
+              status: 'VOUCHER_CREATED',
+              voucher_id: response?.id
+            });
+          } catch (e) {
+            console.error('Failed to update OCR staging status', e);
+          }
+          if (saveAndNext) {
+            await loadNextScanItem(activeOcrFileHash);
+          } else {
+            handleCloseVoucher();
+          }
+        } else if (shouldPrint) {
           const totals = calculatePurchaseTotals();
           setPostedPurchaseVoucherData({
             ...purchaseData,
@@ -3595,7 +4059,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           gstin: cnGstin,
           grn_ref_no: cnGrnRefNo,
           bill_from: [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', '),
-          ship_from: cnSameAsBillFrom 
+          ship_from: cnSameAsBillFrom
             ? [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ')
             : [shipFromAddress1, shipFromAddress2, shipFromAddress3, shipFromCity, shipFromPincode, shipFromState, shipFromCountry].filter(Boolean).join(', '),
           input_type: cnInputType.join(', '),
@@ -3793,7 +4257,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           response = await httpClient.post(`/api/vouchers/${apiPath}/`, voucher);
           showSuccess(`${voucherType} Voucher Saved Successfully!`);
         }
-        
+
         let party = 'N/A';
         if (voucherType === 'Expenses') {
           party = expenseRows.find(e => e.postTo)?.postTo?.split(' - ')[0] || 'N/A';
@@ -3809,9 +4273,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           'Contra': 'contra_voucher'
         };
 
-        const savedVoucher = { 
-          ...voucher, 
-          ...response, 
+        const savedVoucher = {
+          ...voucher,
+          ...response,
           id: genericVoucherId || response?.id || voucherId || Date.now().toString(),
           type: voucherType,
           party: party,
@@ -4440,7 +4904,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             cgstAmount: details.total_cgst || 0,
             sgstAmount: details.total_sgst || 0,
             igstAmount: details.total_igst || 0,
-            
+
             // ── Addresses ──
             billToAddress1: details.bill_to_address_1 || details.bill_to_address || '',
             billToAddress2: details.bill_to_address_2 || '',
@@ -4456,7 +4920,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             shipToState: details.ship_to_state || '',
             shipToPincode: details.ship_to_pincode || '',
             shipToCountry: details.ship_to_country || '',
-            
+
             // ── Extracted payment details ──
             stateCess: details.payment_details?.payment_state_cess || '0',
             tdsIncomeTax: details.payment_details?.payment_tds_income_tax || '0',
@@ -4593,24 +5057,24 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           if (details.gstin) setCnGstin(details.gstin);
           if (details.grn_ref_no) setCnGrnRefNo(details.grn_ref_no);
           if (details.bill_from) {
-             setCnBillFrom(details.bill_from);
-             setAddressFields(details.bill_from);
+            setCnBillFrom(details.bill_from);
+            setAddressFields(details.bill_from);
           }
           if (details.ship_from) {
-             setCnShipFrom(details.ship_from);
-             if (details.ship_from === details.bill_from) {
-                 setCnSameAsBillFrom(true);
-             } else {
-                 setCnSameAsBillFrom(false);
-                 const parts = typeof details.ship_from === 'string' ? details.ship_from.split(',').map((p: string) => p.trim()) : [];
-                 setShipFromAddress1(parts[0] || '');
-                 setShipFromAddress2(parts[1] || '');
-                 setShipFromAddress3(parts[2] || '');
-                 setShipFromCity(parts[3] || '');
-                 setShipFromPincode(parts[4] || '');
-                 setShipFromState(parts[5] || '');
-                 setShipFromCountry(parts[6] || 'India');
-             }
+            setCnShipFrom(details.ship_from);
+            if (details.ship_from === details.bill_from) {
+              setCnSameAsBillFrom(true);
+            } else {
+              setCnSameAsBillFrom(false);
+              const parts = typeof details.ship_from === 'string' ? details.ship_from.split(',').map((p: string) => p.trim()) : [];
+              setShipFromAddress1(parts[0] || '');
+              setShipFromAddress2(parts[1] || '');
+              setShipFromAddress3(parts[2] || '');
+              setShipFromCity(parts[3] || '');
+              setShipFromPincode(parts[4] || '');
+              setShipFromState(parts[5] || '');
+              setShipFromCountry(parts[6] || 'India');
+            }
           }
           if (details.input_type) {
             const inputTypeVal = typeof details.input_type === 'string'
@@ -4624,59 +5088,59 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           // item_details.line_items is the readable DB field (items is write_only)
           const lineItems = details.item_details?.line_items || details.item_details?.items || [];
           if (Array.isArray(lineItems) && lineItems.length > 0) {
-             setCnItems(lineItems.map((item: any, idx: number) => ({
-                id: item.id ? String(item.id) : String(idx + 1),
-                itemCode: item.item_code || item.itemCode || '',
-                itemName: item.item_name || item.itemName || '',
-                hsnSac: item.hsn_sac || item.hsnSac || '',
-                qty: parseFloat(String(item.quantity || item.qty || '0')),
-                uom: item.uom || '',
-                rate: parseFloat(String(item.rate || item.itemRate || '0')),
-                taxableValue: parseFloat(String(item.taxable_value || item.taxableValue || '0')),
-                foreignRate: parseFloat(String(item.foreign_rate || item.foreignRate || '0')),
-                foreignAmount: parseFloat(String(item.foreign_amount || item.foreignAmount || '0')),
-                igst: parseFloat(String(item.igst_amount || item.igst || '0')),
-                cgst: parseFloat(String(item.cgst_amount || item.cgst || '0')),
-                sgst: parseFloat(String(item.sgst_amount || item.sgst || '0')),
-                cess: parseFloat(String(item.cess_amount || item.cess || '0')),
-                invoiceValue: parseFloat(String(item.invoice_value || item.invoiceValue || '0')),
-                description: item.description || '',
-                salesLedger: item.sales_ledger || item.salesLedger || '',
-                poRate: item.poRate || null,
-                invoiceRate: item.invoiceRate || null,
-                rateMismatch: item.rateMismatch || false,
-                poQty: item.poQty || null,
-                invoiceQty: item.invoiceQty || null,
-                qtyMismatch: item.qtyMismatch || false,
-                grnQty: item.grnQty || null,
-                sourcePoNo: item.sourcePoNo || null,
-                salesInvoiceNo: item.sales_invoice_no || item.salesInvoiceNo || null,
-                financialAmount: parseFloat(String(item.financial_amount || item.financialAmount || '0'))
-             })));
+            setCnItems(lineItems.map((item: any, idx: number) => ({
+              id: item.id ? String(item.id) : String(idx + 1),
+              itemCode: item.item_code || item.itemCode || '',
+              itemName: item.item_name || item.itemName || '',
+              hsnSac: item.hsn_sac || item.hsnSac || '',
+              qty: parseFloat(String(item.quantity || item.qty || '0')),
+              uom: item.uom || '',
+              rate: parseFloat(String(item.rate || item.itemRate || '0')),
+              taxableValue: parseFloat(String(item.taxable_value || item.taxableValue || '0')),
+              foreignRate: parseFloat(String(item.foreign_rate || item.foreignRate || '0')),
+              foreignAmount: parseFloat(String(item.foreign_amount || item.foreignAmount || '0')),
+              igst: parseFloat(String(item.igst_amount || item.igst || '0')),
+              cgst: parseFloat(String(item.cgst_amount || item.cgst || '0')),
+              sgst: parseFloat(String(item.sgst_amount || item.sgst || '0')),
+              cess: parseFloat(String(item.cess_amount || item.cess || '0')),
+              invoiceValue: parseFloat(String(item.invoice_value || item.invoiceValue || '0')),
+              description: item.description || '',
+              salesLedger: item.sales_ledger || item.salesLedger || '',
+              poRate: item.poRate || null,
+              invoiceRate: item.invoiceRate || null,
+              rateMismatch: item.rateMismatch || false,
+              poQty: item.poQty || null,
+              invoiceQty: item.invoiceQty || null,
+              qtyMismatch: item.qtyMismatch || false,
+              grnQty: item.grnQty || null,
+              sourcePoNo: item.sourcePoNo || null,
+              salesInvoiceNo: item.sales_invoice_no || item.salesInvoiceNo || null,
+              financialAmount: parseFloat(String(item.financial_amount || item.financialAmount || '0'))
+            })));
           }
 
           if (details.due_details) {
-             setCnReverseGstTcs(details.due_details.reverse_gst_tcs || 'No');
-             setCnReverseGstTds(details.due_details.reverse_gst_tds || 'No');
-             setCnReverseIncomeTaxTcs(details.due_details.reverse_income_tax_tcs || 'No');
-             setCnReverseIncomeTaxTds(details.due_details.reverse_income_tax_tds || 'No');
-             setCnIncomeTaxTdsTcsAmount(String(details.due_details.income_tax_tds_tcs_amount || '0.00'));
-             setCnGstTdsTcsAmount(String(details.due_details.gst_tds_tcs_amount || '0.00'));
-             setCnAdvanceAmount(String(details.due_details.advance_amount || '0.00'));
-             setCnPayableAmount(String(details.due_details.payable_amount || '0.00'));
-             setCnTermsConditions(details.due_details.terms_conditions || '');
+            setCnReverseGstTcs(details.due_details.reverse_gst_tcs || 'No');
+            setCnReverseGstTds(details.due_details.reverse_gst_tds || 'No');
+            setCnReverseIncomeTaxTcs(details.due_details.reverse_income_tax_tcs || 'No');
+            setCnReverseIncomeTaxTds(details.due_details.reverse_income_tax_tds || 'No');
+            setCnIncomeTaxTdsTcsAmount(String(details.due_details.income_tax_tds_tcs_amount || '0.00'));
+            setCnGstTdsTcsAmount(String(details.due_details.gst_tds_tcs_amount || '0.00'));
+            setCnAdvanceAmount(String(details.due_details.advance_amount || '0.00'));
+            setCnPayableAmount(String(details.due_details.payable_amount || '0.00'));
+            setCnTermsConditions(details.due_details.terms_conditions || '');
           }
 
           if (details.transit_details) {
-             setCnTransitReceivedIn(details.transit_details.received_in || '');
-             setCnTransitMode(details.transit_details.mode_of_transport || 'Road');
-             if (details.transit_details.receipt_date) setCnTransitReceiptDate(details.transit_details.receipt_date);
-             setCnTransitReceiptTime(details.transit_details.receipt_time || '');
-             setCnTransitDeliveryType(details.transit_details.delivery_type || 'Self');
-             setCnTransitTransporterId(details.transit_details.transporter_id_gstin || '');
-             setCnTransitTransporterName(details.transit_details.transporter_name || '');
-             setCnTransitVehicleNo(details.transit_details.vehicle_no || '');
-             setCnTransitLrGrConsignment(details.transit_details.lr_gr_consignment_no || '');
+            setCnTransitReceivedIn(details.transit_details.received_in || '');
+            setCnTransitMode(details.transit_details.mode_of_transport || 'Road');
+            if (details.transit_details.receipt_date) setCnTransitReceiptDate(details.transit_details.receipt_date);
+            setCnTransitReceiptTime(details.transit_details.receipt_time || '');
+            setCnTransitDeliveryType(details.transit_details.delivery_type || 'Self');
+            setCnTransitTransporterId(details.transit_details.transporter_id_gstin || '');
+            setCnTransitTransporterName(details.transit_details.transporter_name || '');
+            setCnTransitVehicleNo(details.transit_details.vehicle_no || '');
+            setCnTransitLrGrConsignment(details.transit_details.lr_gr_consignment_no || '');
           }
         }
         else if (mappedType === 'Debit Note') {
@@ -4706,15 +5170,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setNarration(rawVoucher.narration || viewVoucherData.narration || '');
 
       if (mappedType === 'Sales') {
-          setLocalPrefilledData({
-            voucherId: voucherId,
-            invoiceNumber: rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '',
-            voucher_name: rawVoucher.voucher_name || rawVoucher.voucher_series || rawVoucher.sales_series || '',
-            invoiceDate: fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate(),
-            sellerName: fallbackParty,
-            totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
-            lineItems: [], // No detail on fallback
-          } as any);
+        setLocalPrefilledData({
+          voucherId: voucherId,
+          invoiceNumber: rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '',
+          voucher_name: rawVoucher.voucher_name || rawVoucher.voucher_series || rawVoucher.sales_series || '',
+          invoiceDate: fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate(),
+          sellerName: fallbackParty,
+          totalAmount: rawVoucher.total_amount || viewVoucherData.debit || viewVoucherData.credit || 0,
+          lineItems: [], // No detail on fallback
+        } as any);
       } else if (mappedType === 'Purchase') {
         setInvoiceNo(rawVoucher.voucher_no || rawVoucher.voucher_number || viewVoucherData.voucherNo || '');
         setSupplierInvoiceDate(fallbackDate ? new Date(fallbackDate).toISOString().split('T')[0] : getTodayDate());
@@ -4737,14 +5201,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
       }
       else if (mappedType === 'Journal') {
-         if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
+        if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
       }
       else if (mappedType === 'Expenses') {
-         if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
+        if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
       }
       else if (mappedType === 'Credit Note') {
-         if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setCnVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
-         if (fallbackParty) setCnCustomer(fallbackParty);
+        if (rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo) setCnVoucherNumber(rawVoucher.voucher_number || rawVoucher.voucher_no || viewVoucherData.voucherNo);
+        if (fallbackParty) setCnCustomer(fallbackParty);
       }
       else if (mappedType === 'Debit Note') {
         setLocalPrefilledData({
@@ -4790,6 +5254,30 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const renderPurchaseForm = () => {
     return (
       <div className="space-y-6">
+        {activeOcrFileHash && (
+          <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-5 flex items-center justify-between gap-4 transition-all">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-indigo-500/10 text-indigo-600 rounded-lg shrink-0 mt-0.5">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-indigo-900">Editing Extracted Scan Data</h4>
+                <p className="text-xs text-indigo-700 leading-relaxed">
+                  You are editing extracted data for <span className="font-mono bg-indigo-100 px-1 py-0.5 rounded text-indigo-800 break-all">{activeOcrFileName || activeOcrFileHash}</span>. Saving will create a purchase voucher and mark the scan row as finalized.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCloseVoucher}
+              className="px-4 py-2 text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors whitespace-nowrap"
+            >
+              BACK TO SCAN LIST
+            </button>
+          </div>
+        )}
         {/* Tabs Navigation */}
         <div className="flex border-b border-gray-200 overflow-x-auto">
           {(invoiceInForeignCurrency === 'Yes' ? [
@@ -10714,8 +11202,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // GST Rate options
   const gstRateOptions = [0, 0.5, 1.5, 3, 5, 7.5, 12, 18, 28, 40];
 
-  // Expenses and PostTo use the full allLedgerOptions (including hierarchy) so all master ledgers appear
-  const expenseLedgers = useMemo(() => allLedgerOptions.map(name => ({ name })), [allLedgerOptions]);
+  // Expenses uses filtered expenseLedgerOptions, PostTo uses the full allLedgerOptions (including hierarchy) so all master ledgers appear
+  const expenseLedgers = useMemo(() => expenseLedgerOptions.map(name => ({ name })), [expenseLedgerOptions]);
   const postToLedgers = useMemo(() => allLedgerOptions.map(name => ({ name })), [allLedgerOptions]);
 
 
@@ -11335,6 +11823,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   );
 
   const handleCloseVoucher = () => {
+    if (activeOcrFileHash) {
+      setActiveOcrFileHash(null);
+      setActiveOcrFileName(null);
+      setLocalPrefilledData(null);
+      setIsBulkUploadOpen(true);
+      return;
+    }
+
     setIsReadOnlyMode(false);
     setDrillDownDetails(null);
     if (clearViewVoucherData) clearViewVoucherData();
@@ -11444,7 +11940,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <div className="py-1" role="menu">
                         {(() => {
                           const currentVoucherType = voucherType.toLowerCase();
-                          const allowedOptions = UPLOAD_OPTIONS_CONFIG[currentVoucherType] || ["others"];
+                          const allowedOptions = UPLOAD_OPTIONS_CONFIG[currentVoucherType] || ["upload_for_excel"];
 
                           const UPLOAD_OPTION_META: Record<string, any> = {
                             purchase_scan: {
@@ -11454,6 +11950,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               onClick: () => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); },
                               className: `flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`,
                               extraLabel: isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>
+                            },
+                            pending_purchase: {
+                              id: 'pending_purchase',
+                              label: "Pending Purchase",
+                              icon: <Icon name="package" className="w-4 h-4 mr-3 text-purple-500" />,
+                              onClick: () => { onNavigate('Pending Purchases' as any); setIsScannerMenuOpen(false); },
+                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             },
                             bank_upload: {
                               id: 'bank_upload',
@@ -11469,13 +11972,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               onClick: () => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); },
                               className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             },
-                            others: {
-                              id: 'others',
-                              label: "Others",
-                              icon: <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />,
-                              onClick: () => setIsOthersSubmenuOpen(prev => !prev),
-                              className: "flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100",
-                              hasSubmenu: true
+                            upload_for_excel: {
+                              id: 'upload_for_excel',
+                              label: "UPLOAD FOR EXCEL",
+                              icon: <Icon name="document" className="w-4 h-4 mr-3 text-gray-500" />,
+                              onClick: () => {
+                                setExtractionMode('zoho');
+                                setScanType('bulk');
+                                setScannerFiles(null);
+                                setIsInvoiceScannerOpen(true);
+                                setIsScannerMenuOpen(false);
+                              },
+                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             }
                           };
 
@@ -11495,77 +12003,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                     {option.label}
                                     {option.extraLabel}
                                   </div>
-                                  {option.hasSubmenu && (
-                                    <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
-                                  )}
                                 </button>
-
-                                {key === 'others' && isOthersSubmenuOpen && (
-                                  <div className="bg-gray-50 py-1 shadow-inner">
-                                    <button
-                                      onClick={() => setIsTallySubmenuOpen(prev => !prev)}
-                                      className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                                      role="menuitem"
-                                    >
-                                      <div className="flex items-center">
-                                        <Icon name="document" className="w-3 h-3 mr-3" />
-                                        Tally
-                                      </div>
-                                      <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
-                                    </button>
-
-                                    {isTallySubmenuOpen && (
-                                      <div className="bg-gray-100/50 py-0.5 shadow-inner">
-                                        <button
-                                          onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                                          className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
-                                          role="menuitem"
-                                        >
-                                          <Icon name="plus" className="w-3 h-3 mr-2" />
-                                          Voucher
-                                        </button>
-                                        <button
-                                          onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                                          className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
-                                          role="menuitem"
-                                        >
-                                          <Icon name="masters" className="w-3 h-3 mr-2" />
-                                          Master
-                                        </button>
-                                      </div>
-                                    )}
-                                    <button
-                                      onClick={() => {
-                                        setExtractionMode('zoho');
-                                        setScanType('bulk');
-                                        setScannerFiles(null);
-                                        setIsInvoiceScannerOpen(true);
-                                        setIsScannerMenuOpen(false);
-                                        setIsOthersSubmenuOpen(false);
-                                      }}
-                                      className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                                      role="menuitem"
-                                    >
-                                      <Icon name="document" className="w-3 h-3 mr-3" />
-                                      Zoho
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setExtractionMode('sap');
-                                        setScanType('bulk');
-                                        setScannerFiles(null);
-                                        setIsInvoiceScannerOpen(true);
-                                        setIsScannerMenuOpen(false);
-                                        setIsOthersSubmenuOpen(false);
-                                      }}
-                                      className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                                      role="menuitem"
-                                    >
-                                      <Icon name="document" className="w-3 h-3 mr-3" />
-                                      SAP
-                                    </button>
-                                  </div>
-                                )}
                               </React.Fragment>
                             );
                           });
@@ -11766,10 +12204,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       Next
                     </button>
                   ) : (
-                    <div className="flex space-x-3 mt-4">
-                      <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
-                      <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                    </div>
+                    activeOcrFileHash ? (
+                      <div className="flex space-x-3 mt-4">
+                        <button onClick={handleSaveChanges} className="erp-button-primary bg-indigo-600 hover:bg-indigo-700">Save Changes</button>
+                        <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex space-x-3 mt-4">
+                        <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                        <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                        <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                      </div>
+                    )
                   )
                 )}
 
@@ -12571,16 +13017,106 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             <BulkInvoiceUploadModal
               voucherType={voucherType}
               isLimitReached={isLimitReached}
+              activeSessionId={activeOcrSessionId}
+              initialStep={activeOcrSessionId ? 'review' : 'upload'}
               onClose={() => {
                 setIsBulkUploadOpen(false);
+                setActiveOcrSessionId(null);
+                useOcrWorkflowStore.getState().clearWorkflow();
                 refetch(); // Refresh usage
               }}
-              onFinalized={(summary) => {
-                showSuccess(`Successfully processed ${summary.created} invoices!`);
+              onEditRow={(row: any) => {
                 setIsBulkUploadOpen(false);
-                // Optionally reload vouchers list or navigate
-                if (window.location.reload) {
-                  // We might want to refresh the page or the list
+                setActiveOcrFileHash(row.file_hash);
+                setActiveOcrFileName(row.file_name);
+                setActiveOcrSessionId(row.uploadSessionId || null);
+
+                const data = row.extracted_data || {};
+                const invoice = data.invoice || data.header || data;
+                const items = data.items || data.line_items || [];
+
+                const prefilled: ExtractedInvoiceData = {
+                  invoiceNumber: row.invoice_number || row.invoice_no || invoice.invoice_no || invoice.invoice_number || '',
+                  sellerName: row.vendor_name || invoice.vendor_name || '',
+                  invoiceDate: row.invoice_date || invoice.invoice_date || '',
+                  gstin: row.vendor_gstin || row.gstin || invoice.vendor_gstin || invoice.gstin || '',
+                  subtotal: Number(row.total_taxable_value || invoice.total_taxable_value || invoice.taxable_value || 0),
+                  cgstAmount: Number(row.total_cgst || invoice.total_cgst || 0),
+                  sgstAmount: Number(row.total_sgst || invoice.total_sgst || 0),
+                  igstAmount: Number(row.total_igst || invoice.total_igst || 0),
+                  totalAmount: Number(row.total_amount || invoice.total_amount || invoice.invoice_total || 0),
+
+                  placeOfSupply: row.place_of_supply || invoice.place_of_supply || '',
+                  branch: row.branch || invoice.branch || '',
+                  billFrom: row.bill_from || invoice.bill_from || '',
+                  billTo: row.bill_to || invoice.bill_to || invoice.billing_address || '',
+
+                  dispatchFrom: row.dispatchFrom || row.dispatch_from || invoice.dispatchFrom || invoice.dispatch_from || '',
+                  modeOfTransport: row.modeOfTransport || row.mode_of_transport || invoice.modeOfTransport || invoice.mode_of_transport || '',
+                  dispatchDate: row.dispatchDate || row.dispatch_date || invoice.dispatchDate || invoice.dispatch_date || '',
+                  dispatchTime: row.dispatchTime || row.dispatch_time || invoice.dispatchTime || invoice.dispatch_time || '',
+                  transporterId: row.transporterId || row.transporter_id || invoice.transporterId || invoice.transporter_id || '',
+                  transporterName: row.transporterName || row.transporter_name || invoice.transporterName || invoice.transporter_name || '',
+                  vehicleNo: row.vehicleNo || row.vehicle_no || invoice.vehicleNo || invoice.vehicle_no || '',
+                  lrGrConsignment: row.lrGrConsignment || row.lr_gr_consignment || invoice.lrGrConsignment || invoice.lr_gr_consignment || '',
+
+                  tdsIncomeTax: String(data.sections?.due_details?.tds_it || invoice.sections?.due_details?.tds_it || data.tds_it || row.tds_it || invoice.tds_it || '0.00'),
+                  advanceAmount: String(data.sections?.due_details?.advance_paid || invoice.sections?.due_details?.advance_paid || data.advance_amount || row.advance_amount || invoice.advance_amount || '0.00'),
+                  postingNote: data.sections?.due_details?.posting_note || invoice.sections?.due_details?.posting_note || data.posting_note || row.posting_note || invoice.posting_note || '',
+
+                  lineItems: items.map((it: any) => {
+                    const qty = Number(it.qty || it.quantity || 1);
+                    const rate = Number(it.rate || it.item_rate || it['Item Rate'] || 0);
+                    const taxableValue = Number(it.taxable_value || it.taxableValue || it.taxable || it.total_amount || it.amount || (qty * rate));
+                    const cgst = Number(it.cgst_amount !== undefined ? it.cgst_amount : (it.cgst !== undefined ? it.cgst : 0));
+                    const sgst = Number(it.sgst_amount !== undefined ? it.sgst_amount : (it.sgst !== undefined ? it.sgst : 0));
+                    const igst = Number(it.igst_amount !== undefined ? it.igst_amount : (it.igst !== undefined ? it.igst : 0));
+                    const cess = Number(it.cess_amount !== undefined ? it.cess_amount : (it.cess !== undefined ? it.cess : 0));
+                    
+                    const rawInvVal = Number(it.invoice_value !== undefined ? it.invoice_value : (it.invoiceValue !== undefined ? it.invoiceValue : 0));
+                    const invoiceValue = rawInvVal > 0 ? rawInvVal : (taxableValue + cgst + sgst + igst + cess);
+
+                    return {
+                      itemDescription: it.description || it['Item Name'] || it.Description || '',
+                      hsnCode: it.hsn_sac || it.hsn || '',
+                      quantity: qty,
+                      rate: rate,
+                      amount: taxableValue,
+                      cgst,
+                      sgst,
+                      igst,
+                      cess,
+                      taxableValue,
+                      invoiceValue
+                    };
+                  })
+                };
+
+                setLocalPrefilledData(prefilled);
+              }}
+              onFinalized={(summary) => {
+                const created = summary.created ?? 0;
+                const skipped = summary.skipped ?? 0;
+                const failed = summary.failed ?? 0;
+                // Extract the most specific error reason from the backend
+                const firstError = summary.errors?.[0]?.error ?? '';
+                const errorReason = firstError
+                  ? ` Reason: ${firstError.slice(0, 120)}`
+                  : '';
+                if (created > 0 && failed === 0) {
+                  showSuccess(`✅ Successfully saved ${created} invoice${created !== 1 ? 's' : ''} as Purchase Vouchers!`);
+                } else if (created > 0 && failed > 0) {
+                  showSuccess(`✅ Saved ${created} voucher${created !== 1 ? 's' : ''}. ${failed} had errors — check staging.`);
+                } else if (created === 0 && skipped > 0 && failed === 0) {
+                  showSuccess(`ℹ️ All ${skipped} invoice${skipped !== 1 ? 's' : ''} were already saved (duplicates skipped).`);
+                } else if (created === 0 && failed > 0) {
+                  showError(`⚠️ ${failed} invoice${failed !== 1 ? 's' : ''} could not be saved.${errorReason}`);
+                } else {
+                  showSuccess('Finalization complete.');
+                }
+                setIsBulkUploadOpen(false);
+                if (created > 0) {
+                  window.location.reload();
                 }
               }}
             />

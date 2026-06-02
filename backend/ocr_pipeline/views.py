@@ -16,6 +16,139 @@ from .zoho_adapter import get_zoho_adapter
 
 logger = logging.getLogger(__name__)
 
+# Helper to check blank/empty values
+def is_blank(val):
+    return val is None or not str(val).strip() or str(val).strip() in ['None', 'null', '—', 'MISSING']
+
+# Helper to extract fields for checks
+def extract_fields(record):
+    data = record.extracted_data or {}
+    inv_no = (
+        record.supplier_invoice_no or
+        data.get("invoice_no") or
+        data.get("supplier_invoice_no") or
+        data.get("header", {}).get("invoice_no") or
+        data.get("header", {}).get("invoice_number") or
+        data.get("sections", {}).get("supplier_details", {}).get("supplier_invoice_no")
+    )
+    gstin = (
+        record.gstin or
+        data.get("gstin") or
+        data.get("header", {}).get("gstin") or
+        data.get("header", {}).get("vendor_gstin") or
+        data.get("sections", {}).get("supplier_details", {}).get("gstin")
+    )
+    has_payload = bool(data and len(data) > 0)
+    return inv_no, gstin, has_payload
+
+# Helper to determine if a record is save-eligible
+def get_save_eligible_rows(upload_session_id, tenant_id=None):
+    """
+    Centralized helper for finalizing vouchers.
+    Returns: list of (InvoiceTempOCR, UI_Row_Dict)
+    ONLY rows where:
+      - vendor_status == "ALREADY_EXIST"
+      AND
+      - voucher_status == "NEED_TO_SAVE"
+      AND
+      - item_status == "ALREADY EXIST"
+    are eligible.
+    """
+    from vendors.vendor_validation_logic import build_session_vendor_map
+    
+    qs = InvoiceTempOCR.objects.filter(upload_session_id=upload_session_id)
+    if tenant_id:
+        qs = qs.filter(tenant_id=tenant_id)
+    records_list = list(qs)
+    
+    vendor_map = build_session_vendor_map(tenant_id, records_list)
+    view_instance = CleanOCRStagingView()
+    
+    eligible = []
+    
+    for r in records_list:
+        # Ignore sub-pages
+        if not (r.is_primary or r.group_id is None):
+            continue
+            
+        ui_row = view_instance._map_record_to_ui_row(r, vendor_map=vendor_map)
+        
+        effective_vendor_id = ui_row.get('vendor_id')
+        ui_validation_status = ui_row.get('validationStatus')
+        
+        # Determine vendor_status exactly as frontend does
+        has_effective_match = r.vendor_status in ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'] or effective_vendor_id
+        vendor_status_badge = 'ALREADY_EXIST' if has_effective_match else 'CREATE_VENDOR'
+        
+        # Determine voucher_status exactly as frontend does
+        if ui_validation_status in ['processing', 'PENDING', 'EXTRACTING', 'PROCESSING', 'SCANNING']:
+            voucher_status_badge = 'SCANNING'
+        elif ui_validation_status == 'EXTRACTION_FAILED':
+            voucher_status_badge = 'FAILED'
+        elif ui_validation_status == 'VOUCHER_CREATED':
+            voucher_status_badge = 'SAVED'
+        elif ui_validation_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
+            voucher_status_badge = 'ALREADY_EXIST'
+        elif effective_vendor_id or ui_validation_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR']:
+            voucher_status_badge = 'NEED_TO_SAVE'
+        else:
+            voucher_status_badge = 'WAIT'
+            
+        if vendor_status_badge == 'ALREADY_EXIST' and voucher_status_badge == 'NEED_TO_SAVE' and ui_row.get('item_status') == 'ALREADY EXIST':
+            eligible.append((r, ui_row))
+            
+    return eligible
+
+def get_pending_purchase_eligible_rows(upload_session_id, tenant_id=None):
+    from vendors.vendor_validation_logic import build_session_vendor_map
+    
+    qs = InvoiceTempOCR.objects.filter(upload_session_id=upload_session_id)
+    if tenant_id:
+        qs = qs.filter(tenant_id=tenant_id)
+    records_list = list(qs)
+    
+    vendor_map = build_session_vendor_map(tenant_id, records_list)
+    view_instance = CleanOCRStagingView()
+    
+    eligible = []
+    
+    for r in records_list:
+        if not (r.is_primary or r.group_id is None):
+            continue
+            
+        ui_row = view_instance._map_record_to_ui_row(r, vendor_map=vendor_map)
+        
+        effective_vendor_id = ui_row.get('vendor_id')
+        ui_validation_status = ui_row.get('validationStatus')
+        
+        has_effective_match = r.vendor_status in ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'] or effective_vendor_id
+        vendor_status_badge = 'ALREADY_EXIST' if has_effective_match else 'CREATE_VENDOR'
+        
+        if ui_validation_status in ['processing', 'PENDING', 'EXTRACTING', 'PROCESSING', 'SCANNING']:
+            voucher_status_badge = 'SCANNING'
+        elif ui_validation_status == 'EXTRACTION_FAILED':
+            voucher_status_badge = 'FAILED'
+        elif ui_validation_status == 'VOUCHER_CREATED':
+            voucher_status_badge = 'SAVED'
+        elif ui_validation_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
+            voucher_status_badge = 'ALREADY_EXIST'
+        elif effective_vendor_id or ui_validation_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR']:
+            voucher_status_badge = 'NEED_TO_SAVE'
+        else:
+            voucher_status_badge = 'WAIT'
+            
+        show_in_pending = False
+        if vendor_status_badge == 'ALREADY_EXIST' and voucher_status_badge == 'ALREADY_EXIST' and ui_row.get('item_status') == 'ALREADY EXIST':
+            pass
+        else:
+            show_in_pending = True
+
+        if show_in_pending:
+            eligible.append((r, ui_row))
+            
+    return eligible
+
+
 class CleanOCRStagingView(views.APIView):
     """
     Step 3: Fix API Response.
@@ -254,25 +387,36 @@ class CleanOCRStagingView(views.APIView):
             "estimated_delay_seconds": round(estimated_delay, 1)
         }, status=status.HTTP_202_ACCEPTED)
 
-    def _map_record_to_ui_row(self, record, norm_data=None):
+    def _map_record_to_ui_row(self, record, norm_data=None, vendor_map=None):
         """
         CENTRALIZED HYDRATION GATE.
         Ensures identical field mapping for both live polling and terminal snapshots.
+
+        vendor_map: Optional pre-built session-level canonical vendor resolution map
+            { (gstin_upper, norm_branch): { status, vendor_id, vendor_name, matched_by } }
+        When provided, NO live DB queries are performed for vendor matching.
+        This is the session-deterministic path — all rows with same GSTIN+branch receive
+        identical vendor resolution, eliminating race-condition status divergence.
         """
         r = record
         norm = norm_data or r.extracted_data or {}
         v_status = getattr(r, 'validation_status', "PENDING")
         v_id = getattr(r, 'vendor_id', None)
         v_status_record = getattr(r, 'status', "PROCESSING")
-        
+
         sections = norm.get("sections", {})
         supplier = sections.get("supplier_details", {})
         header = norm.get("header", {})
-        
-        # Real-time strict vendor matching gate
+
+        # ⚠️ IMMUTABILITY GUARD: Never touch validation_status if it is already DUPLICATE or NEED_TO_SAVE.
+        IMMUTABLE_STATUSES = {'DUPLICATE', 'NEED_TO_SAVE', 'VOUCHER_CREATED'}
         tenant_id = getattr(r, 'tenant_id', None)
         logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={getattr(r, 'id', None)} tenant_id={tenant_id} validation_status={v_status}")
-        if not v_id and tenant_id:
+
+        from .normalize import fix_encoding_corruption
+        vendor_name_val = fix_encoding_corruption(header.get("vendor_name") or supplier.get("vendor_name") or norm.get("vendor_name") or "—")
+
+        if tenant_id:
             gstin_val = (getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or norm.get("vendor_gstin") or "")
             if isinstance(gstin_val, str):
                 gstin_val = gstin_val.strip()
@@ -280,7 +424,7 @@ class CleanOCRStagingView(views.APIView):
                     gstin_val = ""
             else:
                 gstin_val = ""
-                
+
             branch_val = (getattr(r, 'branch', None) or header.get("branch") or supplier.get("branch") or norm.get("branch") or "")
             if isinstance(branch_val, str):
                 branch_val = branch_val.strip()
@@ -289,24 +433,70 @@ class CleanOCRStagingView(views.APIView):
             else:
                 branch_val = ""
 
-            if gstin_val:
-                from vendors.vendor_validation_logic import validate_vendor_strict
-                try:
-                    logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} gstin={gstin_val} branch={branch_val}")
-                    val_res = validate_vendor_strict(tenant_id, gstin_val, branch_val)
-                    logger.info(f"[VENDOR_VALIDATION_RESULT] id={getattr(r, 'id', None)} result={val_res}")
-                    if val_res.get('status') == 'EXISTING_VENDOR':
-                        v_id = val_res.get('vendor_id')
+            if v_id and v_status in IMMUTABLE_STATUSES:
+                logger.info(
+                    f"[SESSION_VENDOR_LOCK] record_id={getattr(r, 'id', None)} "
+                    f"vendor_id={v_id} (frozen DB value — skipping map lookup)"
+                )
+            elif gstin_val:
+                # ── SESSION-DETERMINISTIC VENDOR LOOKUP ──
+                # If a pre-built vendor_map is available (always preferred), use it.
+                val_res = None
+                if vendor_map is not None:
+                    from vendors.vendor_validation_logic import normalize_branch as _nb
+                    map_key = (gstin_val.strip().upper(), _nb(branch_val or "Main Branch"))
+                    map_entry = vendor_map.get(map_key)
+                    if map_entry:
+                        val_res = map_entry
+                        logger.info(
+                            f"[HYDRATION_READONLY_RENDER] record_id={getattr(r, 'id', None)} "
+                            f"gstin={gstin_val} branch={branch_val} "
+                            f"map_key={map_key} map_status={val_res.get('status')} "
+                            f"vendor_id={val_res.get('vendor_id')} source=session_vendor_map"
+                        )
+                    else:
+                        # GSTIN had no map entry — vendor not in master or GSTIN missing
+                        val_res = {"status": "CREATE_VENDOR", "vendor_id": None}
+                        logger.info(
+                            f"[HYDRATION_READONLY_RENDER] record_id={getattr(r, 'id', None)} "
+                            f"map_key={map_key} not found in session_vendor_map → CREATE_VENDOR"
+                        )
+                else:
+                    # Fallback to safe, read-only empty map
+                    logger.error(
+                        f"[VENDOR_VALIDATION_BYPASS_DETECTED] vendor_map is missing in hydration! "
+                        f"tenant_id={tenant_id} record_id={getattr(r, 'id', None)} gstin={gstin_val} branch={branch_val}"
+                    )
+                    val_res = {"status": "CREATE_VENDOR", "vendor_id": None}
+
+                if val_res and val_res.get('status') == 'EXISTING_VENDOR':
+                    v_id = val_res.get('vendor_id')
+                    if v_status not in IMMUTABLE_STATUSES:
                         if v_status in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
-                            v_status = 'READY'
-                        # Update database record in place so we don't need to re-validate in future
-                        if hasattr(r, 'save') and getattr(r, 'id', None):
-                            r.vendor_id = v_id
-                            if getattr(r, 'validation_status', None) in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
-                                r.validation_status = 'READY'
-                            r.save(update_fields=['vendor_id', 'validation_status'])
-                except Exception as db_err:
-                    logger.error(f"[REALTIME_VENDOR_SAVE_FAILED] id={getattr(r, 'id', None)} error={db_err}")
+                            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=vendor_validation source_layer=hydration destination_layer=ui_hydration function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+                            v_status = 'NEED_TO_SAVE'
+                    logger.info(
+                        f"[VENDOR_STATUS_ASSIGNED] record_id={getattr(r, 'id', None)} "
+                        f"vendor_id={v_id} validation_status={v_status} "
+                        f"source=session_vendor_map (read-only — DB not mutated)"
+                    )
+                    logger.info(f"[VALIDATION_STATE_STABLE] record_id={getattr(r, 'id', None)} result_status={val_res.get('status')}")
+                else:
+                    v_id = None
+                    if v_status not in IMMUTABLE_STATUSES:
+                        if v_status in ['FOUND', 'READY', 'RESOLVED']:
+                            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_VENDOR status_domain=vendor_validation source_layer=hydration destination_layer=ui_hydration function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+                            v_status = 'NEED_VENDOR'
+                    logger.info(
+                        f"[VENDOR_VALIDATION_RESULT] id={getattr(r, 'id', None)} "
+                        f"result_status={val_res.get('status') if val_res else 'None'} → no vendor_id assigned"
+                    )
+                    logger.info(f"[VALIDATION_STATE_STABLE] record_id={getattr(r, 'id', None)} result_status={val_res.get('status') if val_res else 'None'}")
+            else:
+                v_id = None
+                logger.info(
+                    f"[VENDOR_MATCH_FAILED] record_id={getattr(r, 'id', None)} reason=MISSING_GSTIN"
+                )
 
         # --- [PHASE 11.9] DETERMINISTIC STATE ENFORCEMENT ---
         # Requirement #2: Enforce PROCESSING, FINALIZED, FAILED, PARTIAL_FAILED
@@ -338,17 +528,31 @@ class CleanOCRStagingView(views.APIView):
 
         # Determine terminal validation status
         ui_status = v_status or "PENDING"
-        if is_failed: 
+        if v_status == 'DUPLICATE':
+            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=DUPLICATE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+            ui_status = 'DUPLICATE'
+        elif is_failed: 
+            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=EXTRACTION_FAILED status_domain=workflow_state source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
             ui_status = 'EXTRACTION_FAILED'
         elif is_finalized:
             if v_status == 'VOUCHER_CREATED' or v_status_record == 'VOUCHER_CREATED':
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=VOUCHER_CREATED status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = 'VOUCHER_CREATED'
+            elif v_status == 'NEED_TO_SAVE':
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+                ui_status = 'NEED_TO_SAVE'
             elif v_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'] or v_id:
-                ui_status = 'READY'
-            elif v_status in ['GSTIN_CONFLICT', 'DUPLICATE']:
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+                ui_status = 'NEED_TO_SAVE'
+            elif v_status in ['GSTIN_CONFLICT']:
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status={v_status} status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = v_status
             else:
+                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_VENDOR status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = 'NEED_VENDOR'
+
+        logger.info(f"[REVIEW_STATUS_HYDRATION] id={getattr(r, 'id', None)} v_status='{v_status}' ui_status='{ui_status}'")
+        logger.info(f"[HYDRATION_STATE_READ] id={getattr(r, 'id', None)} status_read={ui_status} source=HYDRATION")
 
         # Map to final deterministic status
         final_status = "PROCESSING"
@@ -372,7 +576,22 @@ class CleanOCRStagingView(views.APIView):
             norm.get("supplier_invoice_no") or 
             supplier.get("supplier_invoice_no") or ""
         )
-        items = norm.get("items") or header.get("items") or []
+        raw_items = norm.get("items") or header.get("items") or []
+
+        # [FORENSIC][RAW_OCR_ITEM_TAX] Add logging of raw OCR tax fields
+        for idx, item in enumerate(raw_items):
+            tax_fields = {k: v for k, v in item.items() if any(p in k.lower() for p in ['cgst', 'sgst', 'igst', 'cess', 'tax', 'gst', 'rate'])}
+            logger.info(f"[FORENSIC][RAW_OCR_ITEM_TAX] index={idx} desc='{item.get('description')}' tax_fields={tax_fields}")
+
+        from .normalize import get_normalized_items
+        items = get_normalized_items({"items": raw_items}, tenant_id=tenant_id)
+
+        # Validate extracted items using InventoryItemValidationService
+        from .inventory_validation import InventoryItemValidationService
+        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+
+        # [FORENSIC][NORMALIZED_TAX_DTO] Add logging of normalized tax DTO
+        logger.info(f"[FORENSIC][NORMALIZED_TAX_DTO] inv_val_item_status='{inv_val.get('item_status')}' missing_items={inv_val.get('missing_items')}")
 
         # [INVALID_HYBRID_STATUS_BLOCKED] Prevention logic
         if final_status == "FINALIZED" and ui_status == "EXTRACTION_FAILED":
@@ -385,6 +604,7 @@ class CleanOCRStagingView(views.APIView):
             "file_path": getattr(r, 'file_path', None),
             "tenant_id": getattr(r, 'tenant_id', None),
             "invoice_no": inv_no,
+            "page_no": norm.get("_page_no") or norm.get("page_no") or getattr(r, 'page_no', None),
             "invoice_status": norm.get("invoice_status") or ("MISSING" if not inv_no else "FOUND"),
             "invoice_date": norm.get("invoice_date") or header.get("invoice_date") or supplier.get("invoice_date") or "—",
             "total_amount": (
@@ -409,11 +629,13 @@ class CleanOCRStagingView(views.APIView):
             "status": final_status,
             "validationStatus": ui_status,
             "validation_status": ui_status,
-            "vendor_status": "EXISTS" if (ui_status in ["FOUND", "READY", "RESOLVED", "VOUCHER_CREATED", "DUPLICATE"] or v_id) else "NEW",
+            "vendor_status": "EXISTS" if v_id else "NEW",
+            "item_status": inv_val["item_status"],
+            "missing_items": inv_val["missing_items"],
             "processed": getattr(r, 'processed', False),
             "bill_from": bill_from,
             "bill_to": bill_to,
-            "items": items,
+            "items": inv_val["items"],
             "irn": getattr(r, 'irn', None) or norm.get("irn"),
             "ack_no": getattr(r, 'ack_no', None) or norm.get("ack_no"),
             "ack_date": getattr(r, 'ack_date', None) or norm.get("ack_date"),
@@ -428,6 +650,22 @@ class CleanOCRStagingView(views.APIView):
             "total_invoice_value": norm.get("total_invoice_value") or norm.get("invoice_total") or supplier.get("total_invoice_value") or "0.00",
         }
         
+        # ── [FIX] VOID/DEGRADED ROW HANDLING ──
+        # If the invoice has no valid identity and no items, it's a degraded row.
+        is_degraded = (not inv_no or str(inv_no).upper() == "MISSING") and not inv_val["items"]
+        if getattr(r, 'status', None) == 'partial_extraction' or norm.get('status') == 'partial_extraction':
+            is_degraded = True
+            
+        if is_degraded:
+            logger.info(f"[DEGRADED_ROW_HYDRATED] id={getattr(r, 'id', None)} replacing missing fields with N/A / Needs Review")
+            res["invoice_no"] = "N/A"
+            res["vendor_name"] = "OCR FAILED"
+            res["validationStatus"] = "Needs Review"
+            res["validation_status"] = "Needs Review"
+            res["status"] = "Needs Review"
+            res["vendor_status"] = "NEW"
+            ui_status = "Needs Review"
+ 
         # [PHASE 11.9] FORENSIC HSN HYDRATION LOG
         logger.info(f"[HSN_UI_HYDRATED] inv={inv_no} hsn_sac='{res.get('hsn_sac')}'")
         logger.info(f"[VENDOR_STATUS_MAPPING] id={getattr(r, 'id', None)} v_status={v_status} v_id={v_id} ui_status={ui_status}")
@@ -437,13 +675,54 @@ class CleanOCRStagingView(views.APIView):
                 "sections": sections,
                 "bill_from": bill_from,
                 "billing_address": bill_to,
-                "items": items,
+                "items": inv_val["items"],
+                "item_status": inv_val["item_status"],
+                "missing_items": inv_val["missing_items"],
                 **norm
             }
         res["created_at"] = getattr(r, 'created_at', None)
         res["voucher_type"] = getattr(r, 'voucher_type', 'PURCHASE')
         
+        # [RESUME_STAGING_FILTER]
+        # Hide: Vendor Already Exists + Voucher Already Exists
+        is_vendor_exists = res["vendor_status"] == "EXISTS"
+        is_voucher_exists = res["validationStatus"] in ["DUPLICATE", "VOUCHER_CREATED", "DUPLICATE_IN_BATCH", "DUPLICATE_INVOICE", "PENDING_PURCHASE"]
+        res["is_resume_pending"] = not (is_vendor_exists and is_voucher_exists)
+        
+        # ── Requirement 7: Mark completed explicitly ──
+        if is_voucher_exists:
+            res["is_saved"] = True
+            res["processing_state"] = "COMPLETED"
+        else:
+            res["is_saved"] = False
+            res["processing_state"] = res["status"]
+        
+        # [RESUME_REASON_LOGIC]
+        if not is_vendor_exists and not is_voucher_exists:
+            res["resume_reason"] = "Vendor + Voucher Pending"
+        elif is_vendor_exists and not is_voucher_exists:
+            res["resume_reason"] = "Voucher Pending"
+        elif not is_vendor_exists and is_voucher_exists:
+            res["resume_reason"] = "Vendor Pending"
+        else:
+            res["resume_reason"] = None
+        
         return res
+
+    def _log_final_api_response_rows(self, data, source):
+        if not isinstance(data, list):
+            return
+        for row in data:
+            if isinstance(row, dict):
+                logger.info(
+                    f"[FORENSIC_API_ROW] source={source} "
+                    f"invoice_no={row.get('invoice_no')} "
+                    f"vendor_id={row.get('vendor_id')} "
+                    f"vendor_status={row.get('vendor_status')} "
+                    f"validation_status={row.get('validation_status')} "
+                    f"gstin={row.get('gstin')} "
+                    f"branch={row.get('branch')}"
+                )
 
     def get(self, request, file_hash=None):
         t_poll_start = time.time()
@@ -464,6 +743,15 @@ class CleanOCRStagingView(views.APIView):
                 
         logger.info("[STAGING_QUERY_START] Polling /api/ocr-staging/")
         logger.info(f"[STAGING_QUERY_FILTERS] upload_session_id='{session_id}' tenant_id='{tenant_id}' job_id='{job_id}' status='ACTIVE'")
+
+        if not resume and session_id in ['None', 'null', 'undefined', '', None]:
+            logger.warning(f"[ORPHAN_POLL_BLOCKED] Rejected staging poll with session_id='{session_id}'")
+            return Response({
+                "status": "EMPTY_SESSION_TERMINAL",
+                "data": [],
+                "progress_percent": 100,
+                "hydration_pending": False
+            })
 
         # Compute is_processing state to prevent premature finalization when processing multiple files
         is_processing = False
@@ -511,6 +799,17 @@ class CleanOCRStagingView(views.APIView):
 
             if snapshots.exists():
                 mapped_data = []
+
+                # [SESSION_VENDOR_RESOLUTION] Build canonical vendor map ONCE from live DB records
+                # before iterating over snapshot rows. This guarantees all rows with the same
+                # GSTIN+branch receive identical vendor_id / validationStatus (session-deterministic).
+                _snap_db_records = list(
+                    InvoiceTempOCR.objects.filter(upload_session_id=session_id)
+                ) if session_id else []
+                from vendors.vendor_validation_logic import build_session_vendor_map
+                _snap_vendor_map = build_session_vendor_map(tenant_id, _snap_db_records)
+                logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=snapshot session={session_id} map_size={len(_snap_vendor_map)}")
+
                 for snapshot in snapshots:
                     snapshot_data = self._get_snapshot_data(snapshot)
                     raw_rows = snapshot_data.get('data', [])
@@ -545,8 +844,9 @@ class CleanOCRStagingView(views.APIView):
                             if not getattr(db_record, 'tenant_id', None) and tenant_id:
                                 db_record.tenant_id = tenant_id
                             dummy = db_record
+                            norm_source = db_record.extracted_data or row
                         else:
-                            # Create a dummy record object for the mapper
+                            norm_source = row
                             from types import SimpleNamespace
                             dummy = SimpleNamespace(**{
                                 'id': row.get('id'),
@@ -565,7 +865,10 @@ class CleanOCRStagingView(views.APIView):
                                 'branch': row.get('branch')
                             })
                             
-                        mapped = self._map_record_to_ui_row(dummy, norm_data=row)
+                        # Pass vendor_map so this row uses the deterministic session resolution.
+                        # SimpleNamespace dummies will still get the map — their gstin/branch fields
+                        # are set from the snapshot row data, so the lookup will work correctly.
+                        mapped = self._map_record_to_ui_row(dummy, norm_data=norm_source, vendor_map=_snap_vendor_map)
                         
                         inv_no = mapped.get('invoice_no', '')
                         vendor = mapped.get('vendor_name', '')
@@ -579,6 +882,12 @@ class CleanOCRStagingView(views.APIView):
                             logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='missing_vendor_warning'")
                         
                         # We absolutely preserve the DTO to enforce 100% hydration count consistency!
+                        if resume:
+                            # ── Requirement 7: Resume query MUST exclude completed rows ──
+                            if mapped.get("is_saved") or mapped.get("validationStatus") in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'] or mapped.get('processed'):
+                                logger.info(f"[RESUME_FILTER] Dropping stale completed row inv_no='{inv_no}'")
+                                continue
+                                
                         mapped_data.append(mapped)
                 
                 logger.info(f"[FINAL_HYDRATION_COUNT] count={len(mapped_data)}")
@@ -587,6 +896,7 @@ class CleanOCRStagingView(views.APIView):
                     logger.info("[STAGING_QUERY_EMPTY_REASON] Combined snapshots were found but all rows were empty or filtered out.")
                     
                 first_snap = snapshots.first()
+                self._log_final_api_response_rows(mapped_data, "snapshot")
                 return Response({
                     "status": "FINALIZED",
                     "data": mapped_data,
@@ -689,9 +999,15 @@ class CleanOCRStagingView(views.APIView):
                         if not records.exists():
                             records = InvoiceTempOCR.objects.filter(upload_session_id=session_id).order_by('created_at', 'id')
 
+                        # [SESSION_VENDOR_RESOLUTION] Build canonical map ONCE before loop
+                        records_list = list(records)
+                        from vendors.vendor_validation_logic import build_session_vendor_map
+                        _vendor_map = build_session_vendor_map(tenant_id, records_list)
+                        logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=redis_processing session={session_id} map_size={len(_vendor_map)}")
+
                         data = []
-                        for r in records:
-                            mapped = self._map_record_to_ui_row(r)
+                        for r in records_list:
+                            mapped = self._map_record_to_ui_row(r, vendor_map=_vendor_map)
                             norm = getattr(r, 'extracted_data', {}) or {}
                             page_role = norm.get('_page_role', '') or norm.get('page_role', '')
                             if page_role == 'PAGE_ROLE_CONTINUATION':
@@ -705,6 +1021,7 @@ class CleanOCRStagingView(views.APIView):
                             f"display_progress={display_progress:.1f}% source=redis_aggregated "
                             f"records_count={len(data)}"
                         )
+                        self._log_final_api_response_rows(data, "redis_progress")
                         return Response({
                             "status": "PROCESSING",
                             "data": data,
@@ -793,15 +1110,22 @@ class CleanOCRStagingView(views.APIView):
                 )
 
                 # [PROGRESSIVE_HYDRATION_FIX] Query staging records progressively
+                # [SESSION_VENDOR_RESOLUTION] Build canonical map ONCE before loop — state machine barrier path
+                records_list = list(records)
+                from vendors.vendor_validation_logic import build_session_vendor_map
+                _vendor_map = build_session_vendor_map(tenant_id, records_list)
+                logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=barrier session={session_id} map_size={len(_vendor_map)}")
+
                 data = []
-                for r in records:
-                    mapped = self._map_record_to_ui_row(r)
+                for r in records_list:
+                    mapped = self._map_record_to_ui_row(r, vendor_map=_vendor_map)
                     norm = getattr(r, 'extracted_data', {}) or {}
                     page_role = norm.get('_page_role', '') or norm.get('page_role', '')
                     if page_role == 'PAGE_ROLE_CONTINUATION':
                         continue
                     data.append(mapped)
 
+                self._log_final_api_response_rows(data, "barrier")
                 return Response({
                     "status": "PROCESSING",
                     "data": data,
@@ -840,20 +1164,29 @@ class CleanOCRStagingView(views.APIView):
         else:
             records = InvoiceTempOCR.objects.none()
 
+        # [SESSION_VENDOR_RESOLUTION] Build canonical vendor map ONCE for all rows — raw staging path
+        records_list = list(records)
+        _vendor_map_raw = {}
+        if session_id or records_list:
+            _eff_tenant = tenant_id
+            from vendors.vendor_validation_logic import build_session_vendor_map
+            _vendor_map_raw = build_session_vendor_map(_eff_tenant, records_list)
+            logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=raw_staging session={session_id} map_size={len(_vendor_map_raw)}")
+
         data = []
-        for r in records:
-            mapped = self._map_record_to_ui_row(r)
-            # [FIX] Do NOT filter out FAILED rows. The UI must see them so the user can manually review 
+        _resume_dedup_seen = set()
+
+        for r in records_list:
+            mapped = self._map_record_to_ui_row(r, vendor_map=_vendor_map_raw)
+            # [FIX] Do NOT filter out FAILED rows. The UI must see them so the user can manually review
             # instead of hanging in a blank screen.
-            # if mapped.get('status') == 'FAILED' or mapped.get('validationStatus') == 'EXTRACTION_FAILED':
-            #     continue
-                
+
             # --- NEW MALFORMED ROW SANITIZATION ---
             norm = getattr(r, 'extracted_data', {}) or {}
             inv_no = mapped.get('invoice_no', '')
             vendor = mapped.get('vendor_name', '')
             page_role = norm.get('_page_role', '') or norm.get('page_role', '')
-            
+
             # Log warnings instead of strictly dropping, to prevent hydration from returning rows=0
             # for documents with poor OCR but valid pipeline completion.
             if not inv_no or str(inv_no).strip().upper() == 'MISSING' or str(inv_no).strip() == '—':
@@ -870,8 +1203,48 @@ class CleanOCRStagingView(views.APIView):
                 mapped['_pipeline_warning'] = 'completely_empty_record'
                 # DO NOT drop the row! The frontend needs to know it processed and yielded nothing,
                 # otherwise the frontend assumes the row is still "in-flight" and retries forever.
-            
+
+            if resume:
+                if not mapped.get("is_resume_pending", True):
+                    logger.info(f"[RESUME_ROW_RESOLVED] id={mapped.get('id')} reason='is_resume_pending=False'")
+                    continue
+                
+                # [RESUME_STAGING_DEDUP] deduplicate by canonical key
+                _gstin = str(mapped.get('vendor_gstin') or "").strip().upper()
+                _branch = str(mapped.get('branch') or getattr(r, 'branch', '') or "").strip().upper()
+                _inv_no = str(mapped.get('invoice_number') or mapped.get('invoice_no') or "").strip().upper()
+                
+                if _gstin and _inv_no and _inv_no != "—" and _gstin != "—":
+                    resume_key = (_gstin, _branch, _inv_no)
+                    if resume_key in _resume_dedup_seen:
+                        logger.info(f"[RESUME_DEDUP_SKIPPED] id={mapped.get('id')} resume_key={resume_key} reason='already_exists_in_unresolved_set'")
+                        continue
+                    _resume_dedup_seen.add(resume_key)
+
             data.append(mapped)
+
+        # [VENDOR_STATE_CORRUPTION_DETECTOR] Verify no two rows with same GSTIN+branch got different statuses
+        _gstin_status_seen = {}
+        for row in data:
+            _row_gstin = (row.get('gstin') or "").strip().upper()
+            _row_branch = (row.get('branch') or "").strip()
+            _row_vid = row.get('vendor_id')
+            _row_vstatus = row.get('validationStatus')
+            if _row_gstin and _row_gstin not in ("—", "NONE"):
+                _identity_key = (_row_gstin, _row_branch)
+                if _identity_key in _gstin_status_seen:
+                    _prev_vid, _prev_vstatus = _gstin_status_seen[_identity_key]
+                    if _prev_vid != _row_vid or _prev_vstatus != _row_vstatus:
+                        logger.error(
+                            f"[VENDOR_STATE_CORRUPTION_DETECTED] "
+                            f"session={session_id} gstin={_row_gstin} branch={_row_branch} "
+                            f"row_id={row.get('id')} "
+                            f"current vendor_id={_row_vid} validationStatus={_row_vstatus} "
+                            f"vs prior vendor_id={_prev_vid} validationStatus={_prev_vstatus} "
+                            f"— DIVERGENT STATUS FOR SAME IDENTITY"
+                        )
+                else:
+                    _gstin_status_seen[_identity_key] = (_row_vid, _row_vstatus)
         
         poll_duration = time.time() - t_poll_start
         metrics.record_latency("api:poll_duration", poll_duration)
@@ -896,8 +1269,10 @@ class CleanOCRStagingView(views.APIView):
             terminal_reason = auth_state.get('terminal_reason', '')
             
             if terminal:
-                # If terminal, it's either COMPLETED or FAILED
-                if terminal_reason in ['FAILED', 'FAILED_DUPLICATE', 'ERROR'] or (not snapshot_complete and len(data) == 0):
+                # If terminal, it's either COMPLETED or FAILED or EMPTY_SESSION_TERMINAL
+                if terminal_reason == 'EMPTY_SESSION_TERMINAL':
+                    pipeline_status = 'EMPTY_SESSION_TERMINAL'
+                elif terminal_reason in ['FAILED', 'FAILED_DUPLICATE', 'ERROR'] or (not snapshot_complete and len(data) == 0):
                     pipeline_status = 'failed'
                 else:
                     pipeline_status = 'completed'
@@ -917,13 +1292,19 @@ class CleanOCRStagingView(views.APIView):
         )
         logger.info(f"[STAGING_ROWS_RETURNED] count={len(data)} session={session_to_check}")
         logger.info(f"[FRONTEND_ROWS_RECEIVED] count={len(data)} session={session_to_check}")
+        
+        if terminal:
+            logger.info(f"[LIFECYCLE_TERMINAL_STATE] session={session_to_check} tenant_id={tenant_id} state={pipeline_status}")
 
+        self._log_final_api_response_rows(data, "raw_staging")
         return Response({
             "status": pipeline_status.upper() if pipeline_status else "PROCESSING",
             "data": data,
             "pipeline_status": pipeline_status,
             "terminal": terminal,
             "hydration_pending": hydration_pending,
+            "completed": True if terminal else False,
+            "failed": True if pipeline_status == 'failed' else False,
             "poll_latency": round(poll_duration, 3)
         })
 
@@ -931,7 +1312,6 @@ class CleanOCRStagingView(views.APIView):
         """
         Step 3: Fix normalization on manual edits.
         """
-        from vendors.vendor_validation_logic import validate_vendor
         from .normalize import get_canonical_export_record
         from .grouping import run_grouping_logic
         
@@ -970,6 +1350,17 @@ class CleanOCRStagingView(views.APIView):
             
         updated_data = request.data.get('extracted_data')
         if not updated_data:
+            status_val = request.data.get('status')
+            voucher_id_val = request.data.get('voucher_id')
+            if status_val:
+                record.validation_status = status_val
+                if status_val == 'VOUCHER_CREATED':
+                    record.processed = True
+                    record.status = 'FINALIZED'
+                if voucher_id_val:
+                    record.voucher_id = voucher_id_val
+                record.save()
+                return Response({"success": True})
             return Response({'error': 'extracted_data required'}, status=400)
             
         try:
@@ -988,6 +1379,9 @@ class CleanOCRStagingView(views.APIView):
             
             # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
             normalized_patch = get_canonical_export_record(updated_data, tenant_id=record.tenant_id)
+            # Preserve the hierarchical 'sections' field so that nested objects (due_details, transit_details, etc.) are kept intact
+            if isinstance(normalized_patch, dict):
+                normalized_patch['sections'] = sections
             record.extracted_data = normalized_patch  # Store hierarchical data as-is (Sections intact)
             record.status = PipelineStatus.FINALIZED
             record.supplier_invoice_no = (
@@ -1013,7 +1407,9 @@ class CleanOCRStagingView(views.APIView):
             
             # Re-read the saved record to get accurate status
             record.refresh_from_db()
-            mapped = self._map_record_to_ui_row(record)
+            from vendors.vendor_validation_logic import build_session_vendor_map
+            _vendor_map_raw = build_session_vendor_map(record.tenant_id, [record])
+            mapped = self._map_record_to_ui_row(record, vendor_map=_vendor_map_raw)
             
             return Response({
                 "success": True, 
@@ -1024,6 +1420,9 @@ class CleanOCRStagingView(views.APIView):
                     updated_data.get('vendor_name') or ''
                 ),
                 "vendor_status": mapped.get("vendor_status") or ("EXISTS" if record.vendor_id else "NEW"),
+                "item_status": mapped.get("item_status") or "ALREADY EXIST",
+                "missing_items": mapped.get("missing_items") or [],
+                "items": mapped.get("items") or [],
                 "extracted_data": mapped.get("extracted_data") or {
                     "sections": record.extracted_data.get("sections", {}) if isinstance(record.extracted_data, dict) else {},
                     **(record.extracted_data if isinstance(record.extracted_data, dict) else {})
@@ -1356,70 +1755,162 @@ class OCRJobStatusView(views.APIView):
 class OCRStagingFinalizeView(views.APIView):
     """
     Finalize staged invoices into real Vouchers.
+    Handles two paths:
+      A) Automated: records already processed by finalize_worker (processed=True) → return persisted counts.
+      B) Manual: records still pending → run validate_and_process(auto_save=True) for each.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         tenant_id = request.user.branch_id
         upload_session_id = request.data.get('upload_session_id')
-        
+
+        logger.info(f"[FINALIZE_ENQUEUE_START] session={upload_session_id} tenant={tenant_id} source=API")
         logger.info(f"[FINALIZE_START] session={upload_session_id} tenant={tenant_id}")
+
+        if not upload_session_id:
+            return Response({'error': 'upload_session_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Requirement 1: HARD BLOCK finalize/save until orchestration convergence complete ──
+        from core.redis_orchestrator import orchestrator
+        auth_state = orchestrator.get_authoritative_session_state(upload_session_id)
         
-        # ── Step 1: Find processable records (READY/Matched Only - Exclude Duplicates) ──
-        # We include ANY record that has a vendor_id, even if status is NEED_VENDOR (syncing issue)
-        query = InvoiceTempOCR.objects.filter(
-            tenant_id=tenant_id,
-            processed=False
-        ).filter(
-            Q(validation_status__in=['READY', 'FOUND', 'RESOLVED', 'MATCHED_VENDOR', 'SUCCESS', 'NEEDS_ATTENTION', 'LOW_CONFIDENCE', 'NEED_VENDOR']) |
-            Q(vendor_id__isnull=False)
-        ).exclude(validation_status__in=['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'])
-        if upload_session_id:
-            query = query.filter(upload_session_id=upload_session_id)
-            
-        records_to_process = query.filter(Q(is_primary=True) | Q(group_id__isnull=True))
+        expected = auth_state.get('expected_pages', 0)
+        completed = auth_state.get('completed_pages', 0)
+        failed = auth_state.get('failed_pages', 0)
+        snapshot_complete = auth_state.get('snapshot_complete', False)
+        materialization_complete = auth_state.get('materialization_complete', False)
         
+        # Check convergence: Finalize must only run when completed + failed == expected.
+        is_converged = (expected > 0) and ((completed + failed) == expected) and snapshot_complete and materialization_complete
+        
+        if not is_converged:
+            logger.warning(
+                f"[FINALIZE_BLOCKED_BARRIER] session={upload_session_id} expected={expected} "
+                f"completed={completed} failed={failed} snapshot_complete={snapshot_complete} "
+                f"materialization_complete={materialization_complete}"
+            )
+            return Response({
+                'error': 'Finalize blocked: orchestration barrier incomplete.',
+                'status': 'BLOCKED',
+                'details': auth_state
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         summary = {
             'success': True,
-            'total': InvoiceTempOCR.objects.filter(tenant_id=tenant_id, upload_session_id=upload_session_id).count() if upload_session_id else 0,
+            'total': 0,
             'created': 0,
             'skipped': 0,
             'failed': 0,
             'errors': []
         }
-        
-        if not records_to_process.exists():
-            # Check if all records are already processed or if there are no records at all
-            total_count = InvoiceTempOCR.objects.filter(tenant_id=tenant_id, upload_session_id=upload_session_id).count() if upload_session_id else 0
-            if total_count > 0:
-                # Already processed or skipped
-                processed_count = InvoiceTempOCR.objects.filter(tenant_id=tenant_id, upload_session_id=upload_session_id, processed=True).count() if upload_session_id else 0
-                summary['created'] = processed_count
-                return Response(summary)
-            return Response({'error': 'No processable invoices found in staging.'}, status=400)
 
-        from .pipeline import validate_and_process
+        # Fetch all records in this session
+        all_records = list(InvoiceTempOCR.objects.filter(
+            tenant_id=tenant_id,
+            upload_session_id=upload_session_id
+        ))
+        if not all_records:
+            all_records = list(InvoiceTempOCR.objects.filter(
+                upload_session_id=upload_session_id
+            ))
+            
+        summary['total'] = len(all_records)
+        logger.info(f"[SESSION_ROW_SCOPE] session={upload_session_id} tenant={tenant_id} total_rows={len(all_records)}")
+
+        # ── Requirement 4: Fix ready-count calculation ──
+        eligible_tuples = get_save_eligible_rows(upload_session_id, tenant_id=tenant_id)
+        pending_tuples = get_pending_purchase_eligible_rows(upload_session_id, tenant_id=tenant_id)
+        ready_count = len(eligible_tuples)
+        pending_count = len(pending_tuples)
+        logger.info(f"[READY_COUNT_RECALCULATED] session={upload_session_id} ready_count={ready_count} pending_count={pending_count}")
+
+        # ── Requirement 5: Fix finalize candidate builder ──
+        # Get only the records from the eligible tuples
+        candidates = []
+        for r, ui_row in eligible_tuples + pending_tuples:
+            candidates.append(r)
+            logger.info(f"[FINALIZE_CANDIDATE_ACCEPTED] record_id={r.id}")
+
+        # ── Requirement 7: Fix partial save corruption ──
+        logger.info(f"[SAVE_PIPELINE_START] session={upload_session_id} candidates_count={len(candidates)}")
         
-        for record in records_to_process:
-            if record.processed:
-                continue
+        if len(candidates) > 0:
+            from .pipeline import validate_and_process
+            for record in candidates:
+                # Re-fetch/check DB record state to prevent concurrent mutations
+                db_rec = InvoiceTempOCR.objects.filter(id=record.id).first()
+                if not db_rec:
+                    continue
                 
-            try:
-                res = validate_and_process(record, auto_save=True)
-                if res.get('status') == 'VOUCHER_CREATED':
-                    summary['created'] += 1
-                elif res.get('status') in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
-                    summary['skipped'] += 1
-                else:
+                # Check eligibility again using the centralized helper
+                eligibility_check = get_save_eligible_rows(upload_session_id, tenant_id=tenant_id)
+                pending_check = get_pending_purchase_eligible_rows(upload_session_id, tenant_id=tenant_id)
+                eligible_ids = [t[0].id for t in eligibility_check] + [t[0].id for t in pending_check]
+                
+                if db_rec.id not in eligible_ids:
+                    logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={db_rec.id} no longer eligible")
+                    continue
+                
+                logger.info(f"[PURCHASE_DB_INSERT_START] record={db_rec.id} vendor_id={db_rec.vendor_id} validation_status={db_rec.validation_status}")
+                
+                # We wrap the save attempt in an atomic block and log every step
+                try:
+                    with transaction.atomic():
+                        logger.info(f"[SAVE_ELIGIBLE_ROW] Starting processing for record_id={db_rec.id}")
+                        res = validate_and_process(db_rec, auto_save=True)
+                        save_status = res.get('status') if isinstance(res, dict) else None
+                        
+                        if save_status == 'VOUCHER_CREATED':
+                            summary['created'] += 1
+                            logger.info(f"[VOUCHER_INSERT_SUCCESS] record={db_rec.id} voucher_id={res.get('voucher_id')}")
+                            # Mark the row as completed to prevent it from reappearing in resume staging
+                            db_rec.processed = True
+                            db_rec.validation_status = 'VOUCHER_CREATED'
+                            db_rec.status = 'COMPLETED'
+                            db_rec.save(update_fields=['processed', 'validation_status', 'status'])
+                        elif save_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
+                            summary['skipped'] += 1
+                            logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={db_rec.id} status={save_status}")
+                            # Duplicate is also skipped, handled correctly.
+                            db_rec.validation_status = 'DUPLICATE'
+                            db_rec.save(update_fields=['validation_status'])
+                        elif save_status == 'PENDING_PURCHASE':
+                            summary['created'] += 1
+                            logger.info(f"[PENDING_PURCHASE_CREATED] record={db_rec.id}")
+                        else:
+                            summary['failed'] += 1
+                            err_msg = res.get('validation_message') if isinstance(res, dict) else "Finalization failed"
+                            summary['errors'].append({
+                                'file': db_rec.file_path,
+                                'error': err_msg
+                            })
+                            logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={db_rec.id} status={save_status} err={err_msg}")
+                            # If not created, rollback explicit transaction context to discard partial updates
+                            transaction.set_rollback(True)
+                except Exception as e:
+                    logger.error(f"[FINALIZE_RECORD_FAILED] record={db_rec.id} error={e}", exc_info=True)
                     summary['failed'] += 1
-                    summary['errors'].append({'file': record.file_path, 'error': res.get('validation_message') or "Finalization failed"})
-            except Exception as e:
-                logger.error(f"[FINALIZE_RECORD_FAILED] record={record.id} error={e}", exc_info=True)
-                summary['failed'] += 1
-                summary['errors'].append({'file': record.file_path, 'error': str(e)})
+                    summary['errors'].append({'file': db_rec.file_path, 'error': str(e)})
+                    
+        if len(candidates) == 0:
+            # If no candidates, but total_in_session > 0, report what's already saved (Path A equivalent)
+            if summary['total'] > 0:
+                qs_base = InvoiceTempOCR.objects.filter(
+                    tenant_id=tenant_id, upload_session_id=upload_session_id
+                )
+                summary['created'] = qs_base.filter(validation_status='VOUCHER_CREATED').count()
+                summary['skipped'] = qs_base.filter(
+                    validation_status__in=['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']
+                ).count()
+                summary['failed'] = qs_base.filter(
+                    processed=True, validation_status='ERROR'
+                ).count()
+                logger.info(f"[FINALIZE_PATH_A_FALLBACK] session={upload_session_id} created={summary['created']} skipped={summary['skipped']} failed={summary['failed']}")
 
-        logger.info(f"[FINALIZE_SUCCESS] session={upload_session_id} created={summary['created']} skipped={summary['skipped']} failed={summary['failed']}")
+        logger.info(f"[SAVE_PIPELINE_COMPLETE] session={upload_session_id} created={summary['created']} skipped={summary['skipped']} failed={summary['failed']}")
         return Response(summary)
+
 
 class OCRStagingCancelView(views.APIView):
     """

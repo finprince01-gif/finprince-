@@ -272,6 +272,25 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     let data: any[] = [];
                     let entityCreditPeriod = 0;
 
+                    // Fetch pending expenses first so we can merge them regardless of type
+                    let mappedExpenses: PendingTransaction[] = [];
+                    try {
+                        const expenseData = await apiService.getPendingInvoices(selectedOpt.ledger_id);
+                        mappedExpenses = (expenseData || [])
+                            .filter((item: any) => (item.type || '').toLowerCase() === 'expense')
+                            .map((item: any) => ({
+                                date: item.date,
+                                referenceNumber: item.reference_number,
+                                amount: item.amount,
+                                payment: 0,
+                                dueStatus: item.due_status || 'Due',
+                                daysToDue: item.days_to_due,
+                                dueDate: item.due_date
+                            }));
+                    } catch (e) {
+                        console.error("Failed to fetch pending expenses:", e);
+                    }
+
                     if (selectedOpt.type === 'vendor') {
                         // Use the UNIFIED Vendor Transactions API (Procurement source)
                         const res: any = await httpClient.get(`/api/vendors/transactions/by_vendor/?vendor_id=${selectedOpt.portal_id || selectedOpt.id}`);
@@ -279,7 +298,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
                         console.log("!!! Vendor Pending Transactions (Procurement):", transactions);
 
-                        setPendingTransactions(transactions
+                        const mappedVendorTxns = transactions
                             .filter((t: any) => {
                                 const type = t.transaction_type?.toLowerCase();
                                 const s = (t.due_status || '').toLowerCase();
@@ -306,8 +325,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                     dueDate: t.due_date,
                                     daysToDue: t.credit_period_days
                                 };
-                            })
-                        );
+                            });
+
+                        setPendingTransactions([...mappedVendorTxns, ...mappedExpenses]);
                     } else if (selectedOpt.type === 'customer') {
                         // Use rich sales API for customers
                         data = await apiService.getRichCustomerSalesInvoices(selectedOpt.name);
@@ -354,7 +374,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             };
                         }).filter(t => t.dueStatus !== 'Not Due');
 
-                        setPendingTransactions(filteredData);
+                        setPendingTransactions([...filteredData, ...mappedExpenses]);
                     } else {
                         // Fallback to standard pending invoices for other ledgers
                         data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
@@ -366,11 +386,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 payment: 0,
                                 dueStatus: item.due_status,
                                 daysToDue: item.days_to_due,
-                                dueDate: item.due_date
+                                dueDate: item.due_date,
+                                type: item.type
                             }))
                             .filter(t => {
                                 const s = (t.dueStatus || '').toLowerCase();
-                                return s === 'due' || s === 'due today' || s === 'partially paid' || s === 'partially received';
+                                const isExp = (t.type || '').toLowerCase() === 'expense';
+                                return s === 'due' || s === 'due today' || s === 'partially paid' || s === 'partially received' || isExp;
                             });
                         setPendingTransactions(mapped);
                     }
@@ -416,13 +438,15 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                         amount: item.amount,
                         payNow: 0,
                         selected: false,
-                        due_status: item.due_status
+                        due_status: item.due_status,
+                        type: item.type
                     }));
                     setBulkTransactions(mapped.filter(item =>
                         item.due_status === 'Due' ||
                         item.due_status === 'Due Today' ||
                         item.due_status === 'Partially Paid' ||
-                        item.due_status === 'Partially Received'
+                        item.due_status === 'Partially Received' ||
+                        (item.type || '').toLowerCase() === 'expense'
                     ));
                 } catch (error) {
                     console.error('Error fetching bulk pending invoices:', error);
@@ -1258,22 +1282,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 }], false);
             }
 
-            // Increment the voucher series counter so the next number is ready (Skip if editing existing!)
+            // Refresh the voucher series counter so the next number is ready (Skip if editing existing!)
             const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === (selectedPaymentConfig || voucherType));
             if (savedConfig && savedConfig.enable_auto_numbering && !editingVoucherId) {
                 try {
-                    const res = await httpClient.post<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/increment-number/`, {});
-                    // Use the next number returned by the increment call
-                    setVoucherNumber(res.next_invoice_number || '');
+                    const res = await httpClient.get<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/next-number/`);
+                    setVoucherNumber(res.invoice_number || '');
                 } catch (e) {
-                    console.error('Failed to increment voucher number:', e);
-                    // Fallback: try refreshing manually if increment call response is unexpected
-                    try {
-                        const res = await httpClient.get<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/next-number/`);
-                        setVoucherNumber(res.invoice_number || '');
-                    } catch (err) {
-                        console.error('Failed to refresh voucher number:', err);
-                    }
+                    console.error('Failed to refresh voucher number:', e);
                 }
             }
 

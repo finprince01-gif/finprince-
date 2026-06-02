@@ -7,9 +7,11 @@ import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalD
 import { usePermissions } from '../../hooks/usePermissions';
 import { getCountries, getStates, getCities } from '../../utils/locationData';
 import SearchableDropdown from '../../components/SearchableDropdown';
-import { showError, showSuccess, confirm } from '../../utils/toast';
+import { showError, showSuccess, showInfo, confirm } from '../../utils/toast';
 import { handleApiError } from '../../utils/errorHandler';
 import MultiSelectDropdown from '../../components/MultiSelectDropdown';
+import { BulkImportFeedbackModal } from '../../components/BulkImportFeedbackModal';
+import Icon from '../../components/Icon';
 
 
 
@@ -171,6 +173,14 @@ const InventoryPage: React.FC = () => {
   const [isEditModeItem, setIsEditModeItem] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
+
+  // --- Item Excel Import State ---
+  const [isItemImportModalOpen, setIsItemImportModalOpen] = useState(false);
+  const [isItemImporting, setIsItemImporting] = useState(false);
+  const [itemImportSummary, setItemImportSummary] = useState<any>(null);
+  const [isExcelDropdownOpen, setIsExcelDropdownOpen] = useState(false);
+  const [inventoryCategoryOptions, setInventoryCategoryOptions] = useState<{ label: string, value: string }[]>([]);
+  const excelDropdownRef = React.useRef<HTMLDivElement>(null);
 
   // --- Dynamic Data State for Location ---
   const [vendors, setVendors] = useState<any[]>([]);
@@ -933,73 +943,80 @@ const InventoryPage: React.FC = () => {
 
   };
 
-  const handleEditLocation = () => {
-    if (!selectedLocation) return;
-    setLocationName(selectedLocation.name);
-    const predefinedType = locationTypes.find(t => t.value === selectedLocation.location_type);
+  const handleEditLocation = (loc?: any) => {
+    const target = loc || selectedLocation;
+    if (!target) return;
+    setLocationName(target.name);
+    const predefinedType = locationTypes.find(t => t.value === target.location_type);
     if (predefinedType) {
-      setLocationType(selectedLocation.location_type);
+      setLocationType(target.location_type);
       setIsCustomLocationType(false);
       setCustomLocationTypeValue('');
     } else {
       setLocationType('custom');
       setIsCustomLocationType(true);
-      setCustomLocationTypeValue(selectedLocation.location_type);
+      setCustomLocationTypeValue(target.location_type);
     }
-    setLocAddressLine1(selectedLocation.address_line1);
-    setLocAddressLine2(selectedLocation.address_line2 || '');
-    setLocAddressLine3(selectedLocation.address_line3 || '');
-    setLocCity(selectedLocation.city);
-    setLocState(selectedLocation.state);
-    setLocCountry(selectedLocation.country || 'India');
-    setLocPincode(selectedLocation.pincode);
-    setLocationGstin(selectedLocation.gstin || '');
+    setLocAddressLine1(target.address_line1);
+    setLocAddressLine2(target.address_line2 || '');
+    setLocAddressLine3(target.address_line3 || '');
+    setLocCity(target.city);
+    setLocState(target.state);
+    setLocCountry(target.country || 'India');
+    setLocPincode(target.pincode);
+    setLocationGstin(target.gstin || '');
     setVendorName('');
     setCustomerName('');
-    setLocationAddress(selectedLocation.location_address || '');
+    setLocationAddress(target.location_address || '');
     setIsEditModeLocation(true);
+    setIsViewModeLocation(false);
+    setSelectedLocation(target);
   };
 
-  const handleViewLocation = () => {
-    if (!selectedLocation) return;
-    setLocationName(selectedLocation.name);
-    const predefinedType = locationTypes.find(t => t.value === selectedLocation.location_type);
+  const handleViewLocation = (loc?: any) => {
+    const target = loc || selectedLocation;
+    if (!target) return;
+    setLocationName(target.name);
+    const predefinedType = locationTypes.find(t => t.value === target.location_type);
     if (predefinedType) {
-      setLocationType(selectedLocation.location_type);
+      setLocationType(target.location_type);
       setIsCustomLocationType(false);
       setCustomLocationTypeValue('');
     } else {
       setLocationType('custom');
       setIsCustomLocationType(true);
-      setCustomLocationTypeValue(selectedLocation.location_type);
+      setCustomLocationTypeValue(target.location_type);
     }
-    setLocAddressLine1(selectedLocation.address_line1);
-    setLocAddressLine2(selectedLocation.address_line2 || '');
-    setLocAddressLine3(selectedLocation.address_line3 || '');
-    setLocCity(selectedLocation.city);
-    setLocState(selectedLocation.state);
-    setLocCountry(selectedLocation.country || 'India');
-    setLocPincode(selectedLocation.pincode);
-    setLocationGstin(selectedLocation.gstin || '');
+    setLocAddressLine1(target.address_line1);
+    setLocAddressLine2(target.address_line2 || '');
+    setLocAddressLine3(target.address_line3 || '');
+    setLocCity(target.city);
+    setLocState(target.state);
+    setLocCountry(target.country || 'India');
+    setLocPincode(target.pincode);
+    setLocationGstin(target.gstin || '');
     setVendorName('');
     setCustomerName('');
-    setLocationAddress(selectedLocation.location_address || '');
+    setLocationAddress(target.location_address || '');
     setIsEditModeLocation(false); // read-only: NOT edit mode
     setIsViewModeLocation(true);
+    setSelectedLocation(target);
   };
 
-  const handleDeleteLocation = async () => {
-    if (!selectedLocation) return;
-    if (!await confirm(`Are you sure you want to delete "${selectedLocation.name}"?`)) return;
+  const handleDeleteLocation = async (locId?: number) => {
+    const targetId = locId || (selectedLocation ? selectedLocation.id : null);
+    if (!targetId) return;
+    const targetLoc = locId ? locations.find(l => l.id === locId) : selectedLocation;
+    const name = targetLoc ? targetLoc.name : 'this location';
+    if (!await confirm(`Are you sure you want to delete "${name}"?`)) return;
     try {
-      await httpClient.delete(`/api/inventory/locations/${selectedLocation.id}/`);
+      await httpClient.delete(`/api/inventory/locations/${targetId}/`);
       resetLocationForm();
       fetchLocations();
       showSuccess('Location deleted successfully');
     } catch (error: any) {
       handleApiError(error, 'Delete Location');
     }
-
   };
 
   const resetLocationForm = () => {
@@ -1053,8 +1070,134 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  const fetchInventoryCategoryOptions = async () => {
+    try {
+      const data = await httpClient.get<any[]>('/api/inventory/master-categories/');
+      const cats = Array.isArray(data) ? data : (data as any)?.results || [];
+      
+      let processed = cats.map((c: any) => {
+        let rawPath = c.full_path || [c.category, c.group, c.subgroup].filter(Boolean).join(' > ');
+        return {
+          ...c,
+          full_path: rawPath.replace(/\s*>\s*/g, ' > ').trim()
+        };
+      });
+
+      const uniquePaths = new Set();
+      processed = processed.filter((c: any) => {
+        if (c.is_active === false) return false;
+        const lowerPath = c.full_path.toLowerCase();
+        if (uniquePaths.has(lowerPath)) return false;
+        uniquePaths.add(lowerPath);
+        return true;
+      });
+
+      const DEFAULT_SYSTEM_CATEGORIES = [
+        'Raw Material', 'Work in Progress', 'Finished Goods',
+        'Stores and Spares', 'Packing Material', 'Stock in Trade',
+        'By-product', 'Scrap'
+      ];
+
+      const dbTopLevelNames = new Set(
+        processed.filter((c: any) => !c.group).map((c: any) => c.category.toLowerCase())
+      );
+
+      const virtualCategories = DEFAULT_SYSTEM_CATEGORIES
+        .filter(name => !dbTopLevelNames.has(name.toLowerCase()))
+        .map(name => ({
+          full_path: name
+        }));
+
+      const finalCats = [...virtualCategories, ...processed];
+
+      setInventoryCategoryOptions(
+        finalCats.map((c: any) => ({ label: c.full_path, value: c.full_path }))
+      );
+    } catch (e) {
+      console.error('Error fetching category options:', e);
+    }
+  };
+
+  const handleItemExcelDownload = async (type: 'template' | 'export') => {
+    try {
+      const endpoint = type === 'template'
+        ? `/api/inventory/excel/template/?t=${Date.now()}`
+        : `/api/inventory/excel/export/?t=${Date.now()}`;
+      showInfo(`Preparing ${type === 'template' ? 'template' : 'excel'}...`);
+
+      const response: any = await httpClient.get(endpoint, {}, {
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', type === 'template' ? 'inventory_item_import_template.xlsx' : 'inventory_items_export.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      showSuccess(`${type === 'template' ? 'Template' : 'Excel'} downloaded successfully!`);
+    } catch (error: any) {
+      handleApiError(error, 'Excel Download');
+    }
+  };
+
+  const handleItemExcelUploadFromModal = async (input: File | any[], isPreview: boolean = false) => {
+    setIsItemImporting(true);
+    try {
+      const formData = new FormData();
+      if (input instanceof File) {
+        formData.append('file', input);
+      } else {
+        formData.append('data', JSON.stringify(input));
+      }
+
+      const response = await httpClient.post<any>(
+        `/api/inventory/excel/upload/?dry_run=${isPreview}`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      if (response.summary) {
+        setItemImportSummary({
+          ...response.summary,
+          is_preview: response.is_preview
+        });
+      } else {
+        showSuccess(response.message || 'Items imported successfully!');
+        setIsItemImportModalOpen(false);
+      }
+
+      if (!isPreview) {
+        fetchInventoryItems();
+      }
+    } catch (error: any) {
+      handleApiError(error, 'Excel Upload');
+    } finally {
+      setIsItemImporting(false);
+    }
+  };
+
   useEffect(() => {
     fetchInventoryItems();
+  }, []);
+
+  useEffect(() => {
+    fetchInventoryCategoryOptions();
+  }, [categoryUpdateCount]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (excelDropdownRef.current && !excelDropdownRef.current.contains(event.target as Node)) {
+        setIsExcelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -1189,8 +1332,8 @@ const InventoryPage: React.FC = () => {
       rate: item.rate,
       rateUnit: item.rate_unit || item.rateUnit || item.uom,
       hsnCode: item.hsn_code || item.hsnCode,
-      gstRate: item.gst_rate || item.gstRate,
-      cessRate: item.cess_rate || item.cessRate,
+      gstRate: item.gst_rate ?? item.gstRate ?? '',
+      cessRate: item.cess_rate ?? item.cessRate ?? '',
       reorderLevel: item.reorder_level || item.reorderLevel,
       reorderLevel2: item.reorder_level_2 || item.reorderLevel2,
       isSaleable: item.is_saleable || item.isSaleable,
@@ -1213,7 +1356,7 @@ const InventoryPage: React.FC = () => {
         item_code: editFormData.itemCode,
         item_name: editFormData.itemName,
         description: editFormData.description || null,
-        category: editFormData.category || null,
+        category: (typeof editFormData.category === 'string' && editFormData.category.startsWith('system_')) ? null : (editFormData.category || null),
         category_path: editFormData.categoryPath || null,
         subgroup: editFormData.subgroup || null,
 
@@ -1228,9 +1371,9 @@ const InventoryPage: React.FC = () => {
         rate: editFormData.rate || 0,
         rate_unit: editFormData.rateUnit || editFormData.uom || 'nos',
 
-        hsn_code: editFormData.hsnCode || null,
-        gst_rate: editFormData.gstRate || null,
-        cess_rate: editFormData.cessRate || null,
+        hsn_code: (editFormData.hsnCode !== undefined && editFormData.hsnCode !== null && editFormData.hsnCode !== '') ? editFormData.hsnCode : null,
+        gst_rate: (editFormData.gstRate !== undefined && editFormData.gstRate !== null && editFormData.gstRate !== '') ? editFormData.gstRate : null,
+        cess_rate: (editFormData.cessRate !== undefined && editFormData.cessRate !== null && editFormData.cessRate !== '') ? editFormData.cessRate : null,
 
         reorder_level: editFormData.reorderLevel || null,
         reorder_level_2: editFormData.reorderLevel2 || null,
@@ -1272,9 +1415,11 @@ const InventoryPage: React.FC = () => {
     handleFormChange('hsnCode', value);
 
     const hsn = value.trim();
-    // Clear GST if HSN is too short
+    // Clear GST if HSN is too short — but only in new-item mode to avoid wiping existing values
     if (hsn.length < 4) {
-      setEditFormData((prev: any) => ({ ...prev, gstRate: '' }));
+      if (!editFormData?.isEditMode) {
+        setEditFormData((prev: any) => ({ ...prev, gstRate: '' }));
+      }
       lastFetchedHsn.current = '';
       return;
     }
@@ -1296,7 +1441,10 @@ const InventoryPage: React.FC = () => {
           setEditFormData((prev: any) => ({ ...prev, gstRate: response.igst }));
         }
       } catch {
-        setEditFormData((prev: any) => ({ ...prev, gstRate: '' }));
+        // Don't clear existing gstRate on API failure in edit mode — preserve the saved value
+        if (!editFormData?.isEditMode) {
+          setEditFormData((prev: any) => ({ ...prev, gstRate: '' }));
+        }
         lastFetchedHsn.current = '';
       }
     }, 500);
@@ -1328,31 +1476,56 @@ const InventoryPage: React.FC = () => {
     );
 
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="p-6 grid grid-cols-1 lg:grid-cols-5 gap-8">
         {/* Left Column - Create/Edit Form */}
-        <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
-          <h3 className="text-lg font-semibold text-gray-800 mb-6">
+        <div className="lg:col-span-2 border-r border-gray-200 pr-0 lg:pr-8">
+          <h3 className="section-title mb-4">
             {isViewModeLocation ? '👁 View Location' : isEditModeLocation ? 'Edit Location' : 'Create Location'}
           </h3>
           <form onSubmit={handleLocationSubmit} className="space-y-4">
-            <fieldset disabled={isViewModeLocation} className="contents">
-              {/* ... Location inputs ... */}
+            <fieldset disabled={isViewModeLocation} className="border-0 p-0 m-0 space-y-4">
+              {/* Location Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location Name <span className="text-red-500">*</span></label>
-                <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter location name" required />
+                <label className="label-text">Location Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={locationName}
+                  onChange={(e) => setLocationName(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm focus:outline-none"
+                  placeholder="Enter location name"
+                  required
+                />
               </div>
+
+              {/* Location Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location Type <span className="text-red-500">*</span></label>
-                <select value={locationType} onChange={(e) => {
-                  const value = e.target.value;
-                  setLocationType(value);
-                }} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <label className="label-text">Location Type <span className="text-red-500">*</span></label>
+                <select
+                  value={locationType}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setLocationType(value);
+                  }}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white focus:outline-none"
+                  required
+                >
                   <option value="">Select location type</option>
-                  {locationTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                  {locationTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
                 </select>
                 {isCustomLocationType && (
                   <div className="mt-3">
-                    <input type="text" value={customLocationTypeValue} onChange={(e) => setCustomLocationTypeValue(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter custom location type" required />
+                    <input
+                      type="text"
+                      value={customLocationTypeValue}
+                      onChange={(e) => setCustomLocationTypeValue(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm focus:outline-none"
+                      placeholder="Enter custom location type"
+                      required
+                    />
                   </div>
                 )}
               </div>
@@ -1360,7 +1533,9 @@ const InventoryPage: React.FC = () => {
               {/* Conditional fields based on location type */}
               {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location' || locationType === 'job_worker_location') && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{locationType === 'job_worker_location' ? 'Job Worker Name' : 'Vendor/Agent Name'} <span className="text-red-500">*</span></label>
+                  <label className="label-text">
+                    {locationType === 'job_worker_location' ? 'Job Worker Name' : 'Vendor/Agent Name'} <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={selectedVendorId || ''}
                     onChange={async (e) => {
@@ -1373,7 +1548,6 @@ const InventoryPage: React.FC = () => {
                       if (vId) {
                         try {
                           const details = await apiService.getVendorGSTDetails(vId);
-                          // Map to common structure
                           const mapped = Array.isArray(details) ? details.map((d: any) => ({
                             id: d.id,
                             reference_name: d.reference_name || 'Main Branch',
@@ -1391,22 +1565,24 @@ const InventoryPage: React.FC = () => {
                         setVendorAddresses([]);
                       }
                     }}
-                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white focus:outline-none"
                     required
                   >
                     <option value="">Select {locationType === 'job_worker_location' ? 'Job Worker' : 'Vendor/Agent'}</option>
                     {vendors
                       .filter(v => locationType !== 'job_worker_location' || (v.vendor_category || '').toLowerCase().includes('jobwork'))
                       .map(v => (
-                        <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</option>
+                        <option key={v.id} value={v.id}>
+                          {v.vendor_name} ({v.vendor_code})
+                        </option>
                       ))}
                   </select>
                 </div>
               )}
 
-              {(locationType === 'customer_location') && (
+              {locationType === 'customer_location' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name <span className="text-red-500">*</span></label>
+                  <label className="label-text">Customer Name <span className="text-red-500">*</span></label>
                   <select
                     value={selectedCustomerId || ''}
                     onChange={(e) => {
@@ -1434,12 +1610,14 @@ const InventoryPage: React.FC = () => {
                         setCustomerAddresses([]);
                       }
                     }}
-                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white focus:outline-none"
                     required
                   >
                     <option value="">Select customer</option>
                     {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.customer_name} ({c.customer_code})</option>
+                      <option key={c.id} value={c.id}>
+                        {c.customer_name} ({c.customer_code})
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1448,7 +1626,7 @@ const InventoryPage: React.FC = () => {
               {/* Location Address - conditional based on type */}
               {(locationType === 'company_premises' || locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location') && locationType === 'company_premises' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
+                  <label className="label-text">Location Address <span className="text-red-500">*</span></label>
                   <select
                     value={locationAddress}
                     onChange={(e) => {
@@ -1464,7 +1642,7 @@ const InventoryPage: React.FC = () => {
                         if (companyDetails.gstin) setLocationGstin(companyDetails.gstin);
                       }
                     }}
-                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white focus:outline-none"
                   >
                     <option value="">Select address</option>
                     {companyDetails?.address && companyDetails.address.split('\n').map((addrLine, idx) => (
@@ -1475,10 +1653,9 @@ const InventoryPage: React.FC = () => {
               )}
 
               {/* Location Address for other types */}
-              {/* Location Address for other types */}
-              {(locationType !== 'company_premises' && locationType !== '' && locationType !== 'custom' && !isCustomLocationType) && (
+              {locationType !== 'company_premises' && locationType !== '' && locationType !== 'custom' && !isCustomLocationType && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
+                  <label className="label-text">Location Address <span className="text-red-500">*</span></label>
                   <select
                     value={locationAddress}
                     onChange={(e) => {
@@ -1508,7 +1685,7 @@ const InventoryPage: React.FC = () => {
                         }
                       }
                     }}
-                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white focus:outline-none"
                   >
                     <option value="">Select address</option>
                     {/* Vendor Addresses */}
@@ -1526,18 +1703,16 @@ const InventoryPage: React.FC = () => {
               )}
 
               {/* Manual address entry for Customer Location */}
-              {(locationType === 'customer_location') && (
-                <>
-                  <div className="bg-indigo-50/50 border border-slate-200 rounded p-3 text-sm text-slate-700">
-                    📌 Manual Address Entry
-                  </div>
-                </>
+              {locationType === 'customer_location' && (
+                <div className="bg-indigo-50/50 border border-slate-200 rounded p-3 text-sm text-slate-700">
+                  📌 Manual Address Entry
+                </div>
               )}
 
               {/* Country & State */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="relative z-20">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Country <span className="text-red-500">*</span></label>
+                  <label className="label-text">Country <span className="text-red-500">*</span></label>
                   <SearchableDropdown
                     options={getCountries()}
                     value={locCountry}
@@ -1551,7 +1726,7 @@ const InventoryPage: React.FC = () => {
                   />
                 </div>
                 <div className="relative z-20">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
+                  <label className="label-text">State <span className="text-red-500">*</span></label>
                   <SearchableDropdown
                     options={getStates(locCountry)}
                     value={locState}
@@ -1569,7 +1744,7 @@ const InventoryPage: React.FC = () => {
               {/* City & Pincode */}
               <div className="grid grid-cols-2 gap-4 relative z-10">
                 <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
+                  <label className="label-text">City <span className="text-red-500">*</span></label>
                   <SearchableDropdown
                     options={getCities(locCountry, locState)}
                     value={locCity}
@@ -1580,73 +1755,180 @@ const InventoryPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Pincode <span className="text-red-500">*</span></label>
-                  <input type="text" value={locPincode} onChange={(e) => setLocPincode(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Pincode/Zip Code" required />
+                  <label className="label-text">Pincode <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={locPincode}
+                    onChange={(e) => setLocPincode(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm focus:outline-none"
+                    placeholder="Pincode/Zip Code"
+                    required
+                  />
                 </div>
               </div>
 
               {/* Address Lines */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
-                <input type="text" value={locAddressLine1} onChange={(e) => setLocAddressLine1(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Building/Street/Area" required />
+                <label className="label-text">Address Line 1 <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={locAddressLine1}
+                  onChange={(e) => setLocAddressLine1(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm focus:outline-none"
+                  placeholder="Building/Street/Area"
+                  required
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label><input type="text" value={locAddressLine2} onChange={(e) => setLocAddressLine2(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Landmark (Optional)" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 3</label><input type="text" value={locAddressLine3} onChange={(e) => setLocAddressLine3(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Additional Info (Optional)" /></div>
+                <div>
+                  <label className="label-text">Address Line 2</label>
+                  <input
+                    type="text"
+                    value={locAddressLine2}
+                    onChange={(e) => setLocAddressLine2(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm focus:outline-none"
+                    placeholder="Landmark (Optional)"
+                  />
+                </div>
+                <div>
+                  <label className="label-text">Address Line 3</label>
+                  <input
+                    type="text"
+                    value={locAddressLine3}
+                    onChange={(e) => setLocAddressLine3(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm focus:outline-none"
+                    placeholder="Additional Info (Optional)"
+                  />
+                </div>
               </div>
 
+              {/* GSTIN */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN (Optional)</label>
-                <input type="text" value={locationGstin} onChange={(e) => setLocationGstin(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter GSTIN (15 characters)" maxLength={15} />
+                <label className="label-text">GSTIN (Optional)</label>
+                <input
+                  type="text"
+                  value={locationGstin}
+                  onChange={(e) => setLocationGstin(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm focus:outline-none"
+                  placeholder="Enter GSTIN (15 characters)"
+                  maxLength={15}
+                />
               </div>
             </fieldset>
             <div className="flex gap-3 pt-4">
               {isViewModeLocation ? (
-                <button type="button" onClick={resetLocationForm} className="flex-1 px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] text-gray-700 bg-white hover:bg-gray-50">Close</button>
+                <button
+                  type="button"
+                  onClick={resetLocationForm}
+                  className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors duration-150"
+                >
+                  Close
+                </button>
               ) : (
                 <>
-                  <button type="submit" className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{isEditModeLocation ? 'Update Location' : 'Create Location'}</button>
-                  {isEditModeLocation && <button type="button" onClick={resetLocationForm} className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Cancel</button>}
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none transition-colors duration-150"
+                  >
+                    {isEditModeLocation ? 'Update Location' : 'Create Location'}
+                  </button>
+                  {isEditModeLocation && (
+                    <button
+                      type="button"
+                      onClick={resetLocationForm}
+                      className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors duration-150"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </>
               )}
             </div>
           </form>
         </div>
-        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Existing Locations</h3>
-            <input type="text" placeholder="Search locations..." value={locationSearchQuery} onChange={(e) => setLocationSearchQuery(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-[4px] leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
-          </div>
-          <div className="max-h-96 overflow-y-auto">
-            {loadingLocations ? <p className="text-gray-500 text-center py-8">Loading...</p> : filteredLocations.length === 0 ? <p className="text-gray-500 text-center py-8">No locations</p> : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0"><tr><th className="px-6 py-3 w-12"></th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th><th className="px-6 py-3 text-right"></th></tr></thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredLocations.map(loc => {
-                    const isSelected = selectedLocation?.id === loc.id;
-                    const typeOption = locationTypes.find(t => t.value === loc.location_type);
-                    const displayType = typeOption ? typeOption.label : loc.location_type;
 
-                    return (
-                      <tr key={loc.id} className={isSelected ? 'bg-indigo-50/50' : ''}>
-                        <td className="px-6 py-4"><input type="radio" checked={isSelected} onChange={() => setSelectedLocation(loc)} className="text-indigo-600 focus:ring-indigo-500" /></td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900 cursor-pointer" onClick={() => setSelectedLocation(loc)}>{loc.name}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500"><span className="px-2 font-semibold rounded-[4px] bg-indigo-100 text-indigo-800 text-xs">{displayType}</span></td>
-                        <td className="px-6 py-4 text-right">
-                          {isSelected && (
-                            <div className="inline-flex gap-2">
-                              <button onClick={handleViewLocation} className="text-white bg-gray-500 px-2 py-1 rounded text-xs hover:bg-gray-600">View</button>
-                              <button onClick={handleEditLocation} className="text-white bg-indigo-600 px-2 py-1 rounded text-xs">Edit</button>
-                              <button onClick={handleDeleteLocation} className="text-white bg-red-600 px-2 py-1 rounded text-xs">Del</button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
+        {/* Right Column - Existing Locations */}
+        <div className="lg:col-span-3">
+          <h3 className="section-title mb-4">Existing Locations</h3>
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Search locations..."
+              value={locationSearchQuery}
+              onChange={(e) => setLocationSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white focus:outline-none"
+            />
+          </div>
+          <div className="border border-slate-200 rounded-[4px] overflow-hidden">
+            <div className="max-h-[600px] overflow-y-auto">
+              {loadingLocations ? (
+                <p className="text-gray-500 text-center py-8 text-sm">Loading...</p>
+              ) : filteredLocations.length === 0 ? (
+                <p className="text-gray-500 text-center py-8 text-sm">No locations found.</p>
+              ) : (
+                <table className="erp-table min-w-full">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="table-header">Name</th>
+                      <th className="table-header">Type</th>
+                      <th className="table-header">Details</th>
+                      <th className="px-6 py-3 !text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredLocations.map(loc => {
+                      const isSelected = selectedLocation?.id === loc.id;
+                      const typeOption = locationTypes.find(t => t.value === loc.location_type);
+                      const displayType = typeOption ? typeOption.label : loc.location_type;
+                      const details = [loc.city, loc.state].filter(Boolean).join(', ') || '-';
+
+                      return (
+                        <tr
+                          key={loc.id}
+                          className={
+                            isSelected
+                              ? 'bg-indigo-50/40 hover:bg-indigo-50/50'
+                              : 'hover:bg-gray-50'
+                          }
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {loc.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {displayType}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {details}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap !text-center text-sm font-medium">
+                            <button
+                              onClick={() => handleViewLocation(loc)}
+                              className="text-gray-600 hover:text-gray-900 mr-4 font-bold text-xs"
+                            >
+                              VIEW
+                            </button>
+                            <button
+                              onClick={() => handleEditLocation(loc)}
+                              className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold text-xs"
+                            >
+                              EDIT
+                            </button>
+                            <button
+                              onClick={() => handleDeleteLocation(loc.id)}
+                              className="text-red-600 hover:text-red-900 font-bold text-xs"
+                            >
+                              DELETE
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -9384,9 +9666,41 @@ const InventoryPage: React.FC = () => {
           <div className="flex justify-between items-center mb-6">
             <h3 className="erp-section-title border-none pb-0 mb-0">Inventory Items</h3>
             <div className="flex gap-3">
-              <button className="erp-button-secondary">
-                📥 Upload Excel
-              </button>
+              <div className="relative" ref={excelDropdownRef}>
+                <button
+                  onClick={() => setIsExcelDropdownOpen(!isExcelDropdownOpen)}
+                  className="erp-button-secondary flex items-center gap-2 cursor-pointer"
+                >
+                  <Icon name="file-spreadsheet" className="w-4 h-4" /> UPLOAD
+                </button>
+                {isExcelDropdownOpen && (
+                  <div className="absolute right-0 z-[100] mt-2 w-52 bg-white border border-gray-200 rounded-[4px] shadow-lg py-1">
+                    <button
+                      onClick={() => { handleItemExcelDownload('template'); setIsExcelDropdownOpen(false); }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <Icon name="file-spreadsheet" className="w-4 h-4" /> DOWNLOAD TEMPLATE
+                    </button>
+                    <button
+                      onClick={() => { handleItemExcelDownload('export'); setIsExcelDropdownOpen(false); }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <Icon name="download" className="w-4 h-4" /> EXPORT ALL DATA
+                    </button>
+                    <div className="border-t border-gray-100 my-1"></div>
+                    <button
+                      onClick={() => {
+                        setItemImportSummary(null);
+                        setIsItemImportModalOpen(true);
+                        setIsExcelDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <Icon name="upload" className="w-4 h-4" /> UPLOAD EXCEL
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => {
                   setSelectedItemDetail({ isNew: true });
@@ -9420,7 +9734,7 @@ const InventoryPage: React.FC = () => {
                   <th>GST Rate</th>
                   <th>UOM</th>
                   <th>Rate</th>
-                  <th className="text-center">Action</th>
+                  <th className="!text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -9435,19 +9749,21 @@ const InventoryPage: React.FC = () => {
                       <td className="px-6 py-4 text-sm text-gray-500">{item.gstRate}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{item.uom}</td>
                       <td className="px-6 py-4 text-sm text-gray-900 font-medium">₹{item.rate}</td>
-                      <td className="px-6 py-4 text-center space-x-2">
-                        <button
-                          onClick={() => handleEditItemOpen(item)}
-                          className="inline-block px-3 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200 font-medium text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="inline-block px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 font-medium text-sm"
-                        >
-                          Delete
-                        </button>
+                      <td className="px-6 py-4 !text-center text-sm font-medium">
+                        <div className="flex justify-center items-center gap-4">
+                          <button
+                            onClick={() => handleEditItemOpen(item)}
+                            className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
+                          >
+                            EDIT
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
+                          >
+                            DELETE
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -9678,24 +9994,24 @@ const InventoryPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">GST Rate</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">GST Rate (%)</label>
                   <input
                     type="text"
-                    value={editFormData?.gstRate || ''}
+                    value={editFormData?.gstRate != null ? editFormData.gstRate : ''}
                     onChange={(e) => handleFormChange('gstRate', e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
-                    placeholder="Enter GST rate"
+                    placeholder="e.g. 18"
                     className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Cess Rate</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Cess Rate (%)</label>
                   <input
                     type="text"
-                    value={editFormData?.cessRate || ''}
+                    value={editFormData?.cessRate != null ? editFormData.cessRate : ''}
                     onChange={(e) => handleFormChange('cessRate', e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
-                    placeholder="Enter Cess rate"
+                    placeholder="e.g. 2"
                     className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
@@ -9992,7 +10308,7 @@ const InventoryPage: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GRN Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GRN Series Name</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <th className="px-6 py-3 !text-center text-xs font-medium text-gray-500 uppercase">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -10001,8 +10317,8 @@ const InventoryPage: React.FC = () => {
                       <td className="px-6 py-4 text-sm text-gray-900">{series.grnType || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{series.preview || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-900">{series.name || '-'}</td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex gap-2 justify-center">
+                      <td className="px-6 py-4 !text-center text-sm font-medium">
+                        <div className="flex justify-center items-center gap-4">
                           <button
                             onClick={() => {
                               setGrnSeriesName(series.name);
@@ -10014,10 +10330,10 @@ const InventoryPage: React.FC = () => {
                               setIsEditModeGRNSeries(true);
                               setSelectedGrnSeries(series);
                             }}
-                            className="text-white bg-indigo-600 px-3 py-1 rounded text-xs hover:bg-indigo-700"
+                            className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
                             title="Edit"
                           >
-                            ✎ Edit
+                            EDIT
                           </button>
                           <button
                             onClick={async () => {
@@ -10031,10 +10347,10 @@ const InventoryPage: React.FC = () => {
                                 }
                               }
                             }}
-                            className="text-white bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-700"
+                            className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
                             title="Delete"
                           >
-                            🗑 Delete
+                            DELETE
                           </button>
                         </div>
                       </td>
@@ -10273,7 +10589,7 @@ const InventoryPage: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue Slip Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue Slip Series Name</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <th className="px-6 py-3 !text-center text-xs font-medium text-gray-500 uppercase">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -10282,8 +10598,8 @@ const InventoryPage: React.FC = () => {
                       <td className="px-6 py-4 text-sm text-gray-900">{series.issueSlipType || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{series.preview || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-900">{series.name || '-'}</td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex gap-2 justify-center">
+                      <td className="px-6 py-4 !text-center text-sm font-medium">
+                        <div className="flex justify-center items-center gap-4">
                           <button
                             onClick={() => {
                               setIssueSlipSeriesName(series.name);
@@ -10295,10 +10611,10 @@ const InventoryPage: React.FC = () => {
                               setIsEditModeIssueSlipSeries(true);
                               setSelectedIssueSlipSeries(series);
                             }}
-                            className="text-white bg-indigo-600 px-3 py-1 rounded text-xs hover:bg-indigo-700"
+                            className="text-indigo-600 hover:text-indigo-900 font-bold text-xs uppercase"
                             title="Edit"
                           >
-                            ✎ Edit
+                            EDIT
                           </button>
                           <button
                             onClick={async () => {
@@ -10312,10 +10628,10 @@ const InventoryPage: React.FC = () => {
                                 }
                               }
                             }}
-                            className="text-white bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-700"
+                            className="text-red-600 hover:text-red-900 font-bold text-xs uppercase"
                             title="Delete"
                           >
-                            🗑 Delete
+                            DELETE
                           </button>
                         </div>
                       </td>
@@ -10490,6 +10806,22 @@ const InventoryPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Excel Import Modal */}
+      <BulkImportFeedbackModal
+        isOpen={isItemImportModalOpen}
+        onClose={() => setIsItemImportModalOpen(false)}
+        summary={itemImportSummary}
+        title="Inventory Item Bulk Import"
+        onUpload={handleItemExcelUploadFromModal}
+        isProcessing={isItemImporting}
+        onDownloadTemplate={() => handleItemExcelDownload('template')}
+        dropdownOptions={{
+          'UOM': unitOptions.map(u => ({ label: u.label, value: u.value })),
+          'Alternate UOM': unitOptions.map(u => ({ label: u.label, value: u.value })),
+          'Category Path': inventoryCategoryOptions
+        }}
+      />
     </div>
   );
 };

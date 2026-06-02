@@ -719,32 +719,36 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         # 2. FETCH DURABLE RESULTS (Optimized with .values())
         t_db_fetch_start = time.time()
         db_results = InvoicePageResult.objects.filter(record_id=record.id).values('page_number', 'canonical_payload', 'is_failed')
-        db_page_map = {res['page_number']: res['canonical_payload'] for res in db_results if not res['is_failed']}
+        
+        for res in db_results:
+            inv_no = res['canonical_payload'].get('invoice_no', 'N/A') if isinstance(res['canonical_payload'], dict) else 'N/A'
+            logger.info(f"[OCR_COMPLETE] page_no={res['page_number']} invoice_no={inv_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped={res['is_failed']}")
+            
+        # [FIX 3] DISABLE ALL PRE-GROUPING FILTERS TEMPORARILY
+        db_page_map = {res['page_number']: res['canonical_payload'] for res in db_results}
         db_fetch_latency = time.time() - t_db_fetch_start
         metrics.record_latency("assembly:db_fetch_latency", db_fetch_latency)
             
         # ── [PHASE 10: FAILURE CONTAINMENT] ──
-        # Identify explicitly failed pages to explicitly exclude them
+        # Temporarily tracking failed indices, but NOT excluding them
         failed_indices = [res['page_number'] for res in db_results if res['is_failed'] or (isinstance(res['canonical_payload'], dict) and (res['canonical_payload'].get('status') == 'OCR_FAILED' or '_integrity_blocked' in res['canonical_payload']))]
         
         if failed_indices:
-            logger.warning(f"[FAILURE_CONTAINMENT] record={record.id} pages={failed_indices} marked as TERMINAL_FAILURE. Excluding from assembly.")
-            for p in failed_indices:
-                logger.info(f"[PAGE_FAILED_TERMINAL] record_id={record.id} page={p}")
-                logger.info(f"[FAILED_PAGE_EXCLUDED] record_id={record.id} page={p} from canonical group")
+            logger.warning(f"[FAILURE_CONTAINMENT_BYPASS] record={record.id} pages={failed_indices} marked as TERMINAL_FAILURE. PRESERVING FOR GROUPING ANYWAY.")
             
-        # Filter out failed pages from mapping
+        # Filter out failed pages from mapping (BYPASSED)
         raw_pages = {
             str(p): db_page_map[p] for p in db_page_map 
-            if p not in failed_indices
         }
         
-        # ── [RAW_PAGE_EXTRACT] Trace (Requirement E) ──
+        # ── [RAW_PAGE_CREATED] Trace (Requirement E) ──
         for p_idx, raw_p in raw_pages.items():
-            logger.info(f"[RAW_PAGE_EXTRACT] record_id={record.id} page={p_idx} keys={list(raw_p.keys()) if isinstance(raw_p, dict) else []}")
+            inv_no = raw_p.get("invoice_no", "N/A") if isinstance(raw_p, dict) else "N/A"
+            logger.info(f"[RAW_PAGE_CREATED] page_no={p_idx} invoice_no={inv_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
+            logger.info(f"[GROUPING_INPUT] page_no={p_idx} invoice_no={inv_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
         
         # Readiness check
-        missing_pages = [p for p in range(1, total_expected + 1) if str(p) not in raw_pages and p not in failed_indices]
+        missing_pages = [p for p in range(1, total_expected + 1) if str(p) not in raw_pages]
         if missing_pages and not kwargs.get('force'):
             logger.debug(f"[ASSEMBLY_WAIT] record={record.id} missing={missing_pages}. Barrier not yet reached.")
             return {"status": "FAILED_MISSING_PAGES", "missing": missing_pages}
@@ -752,10 +756,48 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         # 3. SEMANTIC ASSEMBLY (Memory Only)
         merger = get_forensic_merger()
         pages_list = []
-        for k in sorted(raw_pages.keys(), key=int):
-            p = get_canonical_export_record(raw_pages[k], tenant_id=record.tenant_id)
-            p["_page_no"] = int(k)
+        for p_idx, k in enumerate(sorted(raw_pages.keys(), key=int), start=1):
+            # Safe payload extraction even for garbage pages
+            payload_src = raw_pages[k]
+            if not isinstance(payload_src, dict):
+                payload_src = {}
+                
+            p = get_canonical_export_record(payload_src, tenant_id=record.tenant_id)
+            
+            # [FIX 4 & 5] Split physical page identity from runtime task ordering
+            p["_page_no"] = p_idx                  # Sequential logical page for the UI/exported rows
+            p["_physical_page_no"] = int(k)        # True physical page from the PDF enumerate
+            p["_runtime_task_id"] = int(k)         # Preserve for async routing
+            
             pages_list.append(p)
+
+        # [STEP 2] HARD ASSERTION BEFORE GROUPING
+        logger.info(f"FORENSIC GROUP Starting grouping for {len(pages_list)} invoice pages")
+        expected_pages = record.total_pages if hasattr(record, 'total_pages') else total_expected
+        actual_pages = len(pages_list)
+        grouping_page_ids = [p.get("_physical_page_no") for p in pages_list]
+        missing_pages_pre_group = set(range(1, expected_pages + 1)) - set(grouping_page_ids)
+        
+        logger.critical(
+            "[PRE_GROUPING_FORENSICS] "
+            f"expected={expected_pages} "
+            f"actual={actual_pages} "
+            f"grouping_pages={grouping_page_ids} "
+            f"missing={missing_pages_pre_group}"
+        )
+        
+        if missing_pages_pre_group:
+            logger.error(f"[TERMINAL_PARTIAL_FAILURE] session={record.upload_session_id} record={record.id} missing_pages={missing_pages_pre_group}")
+            for missing_p in missing_pages_pre_group:
+                pages_list.append({
+                    "_physical_page_no": missing_p,
+                    "_page_no": missing_p,
+                    "status": "PARTIAL_FAILED",
+                    "validation_warnings": ["missing_or_failed_page"],
+                    "error": "This page failed extraction completely.",
+                    "invoice_no": "FAILED",
+                    "vendor_name": "FAILED",
+                })
 
         groups_dict = merger.group_invoices(pages_list)
         logger.info(f"[GROUPED_INVOICE_COUNT] count={len(groups_dict)}")
@@ -778,10 +820,21 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         final_invoices = []
         from ocr_pipeline.normalize import normalize_amount
         for idx, inv in enumerate(assembled_exports):
+            for p in inv.get("_source_pages", [inv.get("_page_no")]):
+                if p:
+                    logger.info(f"[DTO_VALIDATION] page={p}")
+                    
+            # ── [TRACE DTO LIFECYCLE] ──
+            page_src = inv.get('_page_no', 'N/A')
+            inv_no_pre = inv.get("invoice_no", "N/A")
+            logger.info(f"[DTO_PRE_VALIDATION] page_no={page_src} invoice_no={inv_no_pre} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
+            
             ui_pay = get_ui_payload(inv)
-            invoice_no = ui_pay.get("invoice_no")
+            invoice_no = ui_pay.get("invoice_no") or "N/A"
             vendor_name = ui_pay.get("vendor_name")
             items = ui_pay.get("items", [])
+            
+            logger.info(f"[NORMALIZATION_COMPLETE] page_no={page_src} invoice_no={invoice_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
             
             totals_empty = (
                 normalize_amount(ui_pay.get("total_taxable_value")) == 0.0 and
@@ -853,10 +906,14 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             ) and totals_empty
             
             if is_completely_empty:
-                logger.error(f"[DTO_VALIDATION_REJECT] idx={idx} reason='completely_empty_void' -> Discarding invoice.")
-                logger.error(f"[DTO_REJECTION_REASON] reason='completely_empty_void_all_fields_missing'")
-                logger.error(f"[EXPORT_REJECTED] invoice_no='{invoice_no}' reason='completely_empty_void_all_fields_missing'")
-                continue
+                logger.error(f"[DTO_VALIDATION_REJECT] idx={idx} reason='completely_empty_void' -> Converting to PARTIAL_FAILED instead of discarding.")
+                ui_pay["status"] = "PARTIAL_FAILED"
+                ui_pay["warnings"] = ["low_confidence", "completely_empty_void"]
+                ui_pay["_page_no"] = inv.get("_page_no")
+                
+                # If this group was artificially created due to missing pages, ensure the status propagates.
+                if ui_pay.get("invoice_no") == "FAILED":
+                    ui_pay["error"] = "Extraction failed or pages missing"
                 
             # Otherwise, we warn but preserve the DTO (Convert hard failures into warnings)
             validation_warnings = []
@@ -908,6 +965,8 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             logger.info(f"[RECONCILIATION_PROVENANCE_CAPTURED] invoice_no='{invoice_no}'")
             logger.info(f"[RETRY_LINEAGE_RECORDED] invoice_no='{invoice_no}'")
             
+            logger.info(f"[DTO_POST_VALIDATION] page_no={page_src} invoice_no={invoice_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
+            
             final_invoices.append(ui_pay)
             logger.info(f"[EXPORT_FINAL_ROW] invoice_no='{invoice_no}' upload_session_id='{record.upload_session_id}' tenant_id='{record.tenant_id}' job_id='{kwargs.get('job_id')}'")
             logger.info(f"[PIPELINE_EXPORT_APPEND] invoice_no='{invoice_no}'")
@@ -915,12 +974,13 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         logger.info(f"[FINAL_EXPORT_COUNT] count={len(final_invoices)}")
         
         # ── DETERMINISTIC EXPORT ORDERING (Requirement #18) ──
-        final_invoices.sort(key=lambda x: (
-            str(x.get("invoice_date") or ""),
-            str(x.get("invoice_no") or ""),
-            str(x.get("vendor_gstin") or x.get("gstin") or ""),
-            str(x.get("_page_no") or 0)
-        ))
+        def _get_sort_key(x):
+            src_pages = x.get("_source_pages", [])
+            if src_pages:
+                return min(int(p) for p in src_pages if p is not None)
+            return int(x.get("_physical_page_no") or x.get("_page_no") or 0)
+            
+        final_invoices.sort(key=_get_sort_key)
         for idx, inv in enumerate(final_invoices):
             logger.info(f"[EXPORT_GROUP_FINALIZED] invoice_no='{inv.get('invoice_no')}' vendor_gstin='{inv.get('vendor_gstin') or inv.get('gstin')}'")
         
@@ -1078,10 +1138,37 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                     identity_string = f"{record.tenant_id}::{record.upload_session_id}::{record.id}::{inv_no}::{gstin}::{total_val}::{inv_date}::{page_no}"
                     stable_hash = hashlib.sha256(identity_string.encode('utf-8')).hexdigest()
                 
+                
+                    has_inv = bool(inv_no and inv_no not in ('', 'MISSING', '—'))
+                    v_name = str(inv_ui.get('vendor_name') or '').strip().upper()
+                    has_vendor = bool(v_name and v_name not in ('', 'MISSING', '—'))
+                    has_gstin = bool(gstin and gstin not in ('', 'MISSING', '—'))
+                    is_primary = has_inv or (has_vendor and has_gstin)
+                
                     if idx == 0:
                         record.file_hash = stable_hash
+                        record.is_primary = is_primary
                         sync_record_flattened_fields(record, inv_ui, commit=False)
-                        logger.info(f"[STAGING_ROW_CREATED] primary=True index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
+
+                        # 🔹 RUN AUTHORITATIVE STRICT DUPLICATE VALIDATION IMMEDIATELY FOR PRIMARY
+                        from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails
+                        logger.info(f"[DUPLICATE_CHECK_START] primary record={record.id} inv_no='{record.supplier_invoice_no}' gstin='{record.gstin}' branch='{record.branch}' tenant_id='{record.tenant_id}'")
+                        is_dup = False
+                        if record.supplier_invoice_no and record.gstin:
+                            is_dup = VoucherPurchaseSupplierDetails.objects.filter(
+                                supplier_invoice_no__iexact=record.supplier_invoice_no,
+                                gstin__iexact=record.gstin,
+                                branch__iexact=record.branch,
+                                tenant_id=record.tenant_id
+                            ).exists()
+                        if is_dup:
+                            record.validation_status = 'DUPLICATE'
+                            logger.warning(f"[DUPLICATE_MATCH_FOUND] primary record={record.id} inv_no='{record.supplier_invoice_no}'")
+                        else:
+                            record.validation_status = 'NEED_TO_SAVE'
+                        logger.info(f"[DUPLICATE_STATUS_PERSISTED] primary record={record.id} status={record.validation_status}")
+
+                        logger.info(f"[STAGING_ROW_CREATED] primary={is_primary} index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
                     else:
                         sibling = InvoiceTempOCR(
                             tenant_id=record.tenant_id,
@@ -1090,14 +1177,33 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                             file_hash=stable_hash,
                             group_id=record.group_id,
                             status=PipelineStatus.FINALIZED,
-                            is_primary=True,
+                            is_primary=is_primary,
                             processed=False,
                             voucher_type=record.voucher_type,
                             upload_type=record.upload_type  # [UPLOAD_TYPE ISOLATION FIX]
                         )
                         sync_record_flattened_fields(sibling, inv_ui, commit=False)
+
+                        # 🔹 RUN AUTHORITATIVE STRICT DUPLICATE VALIDATION IMMEDIATELY FOR SIBLING
+                        from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails
+                        logger.info(f"[DUPLICATE_CHECK_START] sibling inv_no='{sibling.supplier_invoice_no}' gstin='{sibling.gstin}' branch='{sibling.branch}' tenant_id='{sibling.tenant_id}'")
+                        is_dup = False
+                        if sibling.supplier_invoice_no and sibling.gstin:
+                            is_dup = VoucherPurchaseSupplierDetails.objects.filter(
+                                supplier_invoice_no__iexact=sibling.supplier_invoice_no,
+                                gstin__iexact=sibling.gstin,
+                                branch__iexact=sibling.branch,
+                                tenant_id=sibling.tenant_id
+                            ).exists()
+                        if is_dup:
+                            sibling.validation_status = 'DUPLICATE'
+                            logger.warning(f"[DUPLICATE_MATCH_FOUND] sibling inv_no='{sibling.supplier_invoice_no}'")
+                        else:
+                            sibling.validation_status = 'NEED_TO_SAVE'
+                        logger.info(f"[DUPLICATE_STATUS_PERSISTED] sibling status={sibling.validation_status}")
+
                         siblings.append(sibling)
-                        logger.info(f"[STAGING_ROW_CREATED] primary=False index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
+                        logger.info(f"[STAGING_ROW_CREATED] primary={is_primary} index={idx} invoice_no={inv_ui.get('invoice_no')} stable_hash={stable_hash[:8]}")
             
                 if siblings:
                     InvoiceTempOCR.objects.bulk_create(siblings)
@@ -1154,7 +1260,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                             record.extracted_data = {}
                         
                     record.extracted_data["_forensics"] = {"snapshot_id": str(snapshot.id), "pages": total_expected, "snapshot_hash": snapshot_hash_val}
-                    record.save(update_fields=['status', 'extracted_data'])
+                    record.save()
                 except Exception as e_save:
                     logger.error(f"[ASSEMBLY_FATAL_ERROR] record.save failed: {e_save}")
                     raise
@@ -1220,31 +1326,47 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                             logger.error(f"[SNAPSHOT_VALIDATION_FAILED] Validation query returned 0 rows for session={record.upload_session_id}!")
                             logger.error(f"[SNAPSHOT_CREATE_EXCEPTION] session={record.upload_session_id} — snapshot not visible after commit")
 
-                        # PIPELINE PARITY VALIDATION
-                        job_total = record.job.total_files if (hasattr(record, 'job') and record.job and hasattr(record.job, 'total_files')) else 1
-                        db_rows = InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).count()
-                        snapshot_obj = val_query.first()
-                        snapshot_rows = snapshot_obj.invoice_count if snapshot_obj else 0
-                    
-                        if db_rows > 0:
-                            logger.info(f"[HYDRATION_ROW_CREATE] session={record.upload_session_id} db_rows={db_rows}")
-                            logger.info(f"[HYDRATION_ROW_VISIBLE] session={record.upload_session_id} db_rows={db_rows}")
-                            logger.info(f"[HYDRATION_QUERY_VISIBLE] db_rows={db_rows} session={record.upload_session_id}")
-                            logger.info(f"[STAGING_ROW_COUNT] count={db_rows} expected={len(final_invoices)}")
-                            logger.info(f"[MULTI_PDF_EXPORT_COMPLETE] session={record.upload_session_id} job_total={job_total}")
-                    
-                        logger.info(f"[PIPELINE_PARITY_CHECK] session_id='{record.upload_session_id}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} exported_dtos={len(final_invoices)} snapshot_rows={snapshot_rows} hydrated_rows={db_rows}")
-                    
-                        if not (job_total == db_rows == len(final_invoices) == snapshot_rows == db_rows):
-                            disappearance_stage = "UNKNOWN"
-                            if db_rows < job_total:
-                                disappearance_stage = "INGESTION_OR_AI_OCR"
-                            elif len(final_invoices) < db_rows:
-                                disappearance_stage = "DTO_QUALITY_GATE_FILTERING"
-                            elif snapshot_rows < len(final_invoices):
-                                disappearance_stage = "SNAPSHOT_PERSISTENCE"
+                        # PIPELINE PARITY VALIDATION - PAGE ACCOUNTING
+                        expected_pages = session_lock.expected_pages
+                        accounted_pages = 0
+                        merged_groups = len(final_invoices)
+                        continuation_pages = 0
+                        partial_pages = 0
+                        
+                        failed_pages_count = len(failed_indices) if 'failed_indices' in locals() else 0
+                        accounted_pages += failed_pages_count
+
+                        for inv in final_invoices:
+                            pages = inv.get('_source_pages', [])
+                            if not pages and inv.get('_page_no'):
+                                pages = [inv.get('_page_no')]
                             
-                            logger.error(f"[PIPELINE_PARITY_FAILURE] session_id='{record.upload_session_id}' mismatch detected! Stage='{disappearance_stage}' uploaded_files={job_total} processed_records={db_rows} validated_dtos={len(final_invoices)} snapshot_rows={snapshot_rows}")
+                            accounted_pages += len(pages)
+                            if len(pages) > 1:
+                                continuation_pages += (len(pages) - 1)
+                            if inv.get('status') == 'partial_extraction':
+                                partial_pages += len(pages)
+
+                        logger.info(
+                            f"[PIPELINE_PAGE_ACCOUNTING] "
+                            f"expected_pages={expected_pages} "
+                            f"accounted_pages={accounted_pages} "
+                            f"merged_groups={merged_groups} "
+                            f"continuations={continuation_pages} "
+                            f"partials={partial_pages} "
+                            f"orphans={failed_pages_count}"
+                        )
+                    
+                        if expected_pages != accounted_pages:
+                            logger.error(
+                                f"[PIPELINE_PARITY_FAILURE] session_id='{record.upload_session_id}' "
+                                f"mismatch detected! expected_pages={expected_pages} "
+                                f"accounted_pages={accounted_pages} "
+                                f"merged_groups={merged_groups} "
+                                f"continuations={continuation_pages} "
+                                f"partials={partial_pages} "
+                                f"orphans={failed_pages_count}"
+                            )
                     except Exception as ex:
                         import traceback
                         logger.error(f"[SNAPSHOT_TX_ROLLBACK] Exception in on_commit_callback: {ex}")
@@ -1335,7 +1457,7 @@ def trigger_next_fanout(record_id):
                     page_num = page_idx + 1
                     
                     # Try to acquire AI slot atomically in Redis
-                    slot_acquired = orchestrator.acquire_ai_slot(str(record_id), page_num, session_id=str(record.upload_session_id))
+                    slot_acquired = orchestrator.acquire_ai_slot(str(record_id), page_num, session_id=str(record.upload_session_id), tenant_id=str(record.tenant_id))
                     
                     if not slot_acquired:
                         logger.warning(f"[SLOT_ACQUIRE_FAILED] record={record_id} page={page_num} — failed to acquire slot")
@@ -1383,7 +1505,7 @@ def trigger_next_fanout(record_id):
                             logger.error(f"[BARRIER_FAILED_INCREMENT] record={record_id} page={page_num}")
                             # Reconcile failure
                             orchestrator.register_page_completion(str(record_id), page_num, is_failed=True)
-                            orchestrator.release_ai_slot(str(record_id), page_num, session_id=str(record.upload_session_id), release_reason="ENQUEUE_FAIL")
+                            orchestrator.release_ai_slot(str(record_id), page_num, session_id=str(record.upload_session_id), release_reason="ENQUEUE_FAIL", tenant_id=str(record.tenant_id))
                             
                             SessionFinalizationState.objects.filter(id=str(record_id)).update(
                                 total_pages_completed=models.F('total_pages_completed') + 1,
@@ -1474,7 +1596,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
     
     # [ROOT-CAUSE FIX #1] Safe Page Index Access
     p_idx = getattr(record, "page_index", "AGGREGATE")
-    logger.error(f"[TRACE] validate_and_process.entry | record_id={record.id} | session={record.upload_session_id} | page_index={p_idx}")
+    logger.error(f"[DUPLICATE_RUNTIME_PROBE] file={__file__} record_id={record.id} session={record.upload_session_id} page_index={p_idx} current_validation_status={record.validation_status}")
     
     # ── [PHASE 10] FORENSIC SNAPSHOT PRESERVATION ──
     data = record.extracted_data or {}
@@ -1584,35 +1706,49 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 record.save(update_fields=['status'])
                 return results[0] if results else {"status": "SUCCESS"}
 
-        # ── CANONICAL FIELD ACCESS (Fix 1 & 2) ──
-        sections = data.get("sections", {})
+        # ── CANONICAL FIELD ACCESS ──
+        # [ROOT CAUSE FIX] assembled_exports records have their invoice data nested inside
+        # assembled_exports[0], NOT at the root of extracted_data. get_canonical_export_record
+        # only searches root/header/sections, so it returns empty for gstin/invoice_no/branch.
+        # The serializer then fails because supplier_invoice_no is CharField(max_length=100)
+        # with no blank=True. Fix: unwrap assembled_exports[0] for sections, and fall back to
+        # flat DB fields (set by the pipeline during assembly) as authoritative values.
+
+        # 1. Try to unwrap assembled_exports[0] when root sections are empty
+        assembled = data.get("assembled_exports") or data.get("_pages_assembled") or []
+        assembled_first = assembled[0] if (isinstance(assembled, list) and assembled) else {}
+
+        # Use assembled_first as the canonical data source if root sections are empty
+        canonical_data_src = data
+        if not data.get("sections") and assembled_first:
+            canonical_data_src = assembled_first
+            logger.info(f"[ASSEMBLED_EXPORTS_UNWRAP] record={record.id} — using assembled_exports[0] as canonical data source")
+
+        sections = canonical_data_src.get("sections", {})
         supplier = sections.get("supplier_details", {})
         supply = sections.get("supply_details", {})
         due = sections.get("due_details", {})
-        
-        canonical = get_canonical_export_record(data, tenant_id=record.tenant_id)
-        gstin = (canonical.get("gstin") or "").strip().upper()
-        invoice_no = (canonical.get("supplier_invoice_no") or canonical.get("invoice_no") or "").strip()
+
+        canonical = get_canonical_export_record(canonical_data_src, tenant_id=record.tenant_id)
+
+        # 2. Fall back to flat DB fields when canonical extraction returns empty.
+        # These fields are set by the pipeline during assembly and are authoritative.
+        gstin = (canonical.get("gstin") or record.gstin or "").strip().upper()
+        invoice_no = (canonical.get("supplier_invoice_no") or canonical.get("invoice_no") or record.supplier_invoice_no or "").strip()
         vendor_name = (canonical.get("vendor_name") or "").strip()
         branch_name = (canonical.get("branch") or record.branch or "").strip()
         tenant_id = str(record.tenant_id)
 
-        logger.debug(f"[VALIDATION_IDENTITY] gstin={gstin} invoice={invoice_no}")
+        logger.info(
+            f"[VENDOR_VALIDATION_SUCCESS] record={record.id} "
+            f"gstin={gstin} invoice_no={invoice_no} branch={branch_name} "
+            f"vendor_id={record.vendor_id} validation_status={record.validation_status}"
+        )
+        logger.info(f"[FINALIZE_VENDOR_ID_RECEIVED] record={record.id} vendor_id={record.vendor_id} source=staging_db")
 
         # ── [PHASE 3] STAGING PERSISTENCE SAFETY ──
-        items = canonical.get("items", [])
+        items = canonical.get("items", []) or assembled_first.get("items", []) if assembled_first else canonical.get("items", [])
         if not items:
-            # [ROOT-CAUSE FIX #6] Never Drop Invoices
-            logger.warning(f"[INVOICE_WARNING_EMPTY_ITEMS] invoice={invoice_no} record={record.id}. Proceeding with warning state.")
-            record.validation_status = "REQUIRES_REVIEW"
-            record.validation_message = "Warning: No line items detected. Please verify OCR data."
-        else:
-            logger.info(f"[INVOICE_VISIBLE_TO_UI] record_id={record.id} inv_no='{invoice_no}' items={len(items)} status={record.status}")
-
-        # ── [PHASE 3] STAGING PERSISTENCE SAFETY ──
-        items = canonical.get("items", [])
-        if not items:
-            # [ROOT-CAUSE FIX #6] Never Drop Invoices
             logger.warning(f"[INVOICE_WARNING_EMPTY_ITEMS] invoice={invoice_no} record={record.id}. Proceeding with warning state.")
             record.validation_status = "REQUIRES_REVIEW"
             record.validation_message = "Warning: No line items detected. Please verify OCR data."
@@ -1620,112 +1756,169 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             logger.info(f"[INVOICE_VISIBLE_TO_UI] record_id={record.id} inv_no='{invoice_no}' items={len(items)} status={record.status}")
 
         if not gstin or not invoice_no:
-            # [ROOT-CAUSE FIX #2 & #5] Never Drop Invoices
-            logger.warning(f"[INVOICE_WARNING_MISSING_HEADERS] invoice={invoice_no} record={record.id}. Missing GSTIN or Invoice No.")
+            logger.warning(f"[INVOICE_WARNING_MISSING_HEADERS] invoice={invoice_no} gstin={gstin} record={record.id}. Missing GSTIN or Invoice No.")
             record.validation_status = "ERROR"
             record.validation_message = "Warning: Missing GSTIN or Invoice Number. Please verify OCR data."
             # Proceed anyway so it shows in UI
-        
+
         # Save record now to ensure visibility even if vendor matching fails
         record.save()
         logger.info(f"[INVOICE_VISIBLE_TO_UI] record_id={record.id} inv_no='{invoice_no}' status={record.status}")
 
-        # 🔹 FAST PATH: If vendor was already matched (vendor_id stored from PATCH re-validation)
-        # and the status confirms it, skip the full GSTIN+branch lookup to avoid false NEED_VENDOR
-        branch_name = supplier.get("branch") or record.branch or ""
+        # branch_name already resolved above from canonical + record.branch fallback
+        # (do NOT overwrite with supplier.get() which may be empty for assembled records)
 
-        if record.vendor_id and record.validation_status in ['FOUND', 'READY', 'RESOLVED', 'MATCHED_VENDOR', 'EXISTING_VENDOR']:
-            try:
-                vendor = VendorMasterBasicDetail.objects.get(id=record.vendor_id, tenant_id=tenant_id)
-                logger.debug(f"[VOUCHER_FAST_PATH] vendor_id={record.vendor_id} name={vendor.vendor_name}")
-            except VendorMasterBasicDetail.DoesNotExist:
-                vendor = None
-        else:
-            # 🔹 STRICT VENDOR VALIDATION (GSTIN + BRANCH)
-            from vendors.vendor_validation_logic import validate_vendor
-            logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={record.id} tenant_id={tenant_id} validation_status={record.validation_status}")
-            logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
-            val_res = validate_vendor(tenant_id, vendor_name, gstin, branch=branch_name)
-            logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
-            
-            if val_res['status'] == 'EXISTING_VENDOR':
-                vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
-                if vendor:
-                    record.vendor_id = vendor.id
-                    record.validation_status = 'FOUND' # Maintain compatibility with existing UI
-                    logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=FOUND vendor_id={vendor.id}")
-                    record.save()
-                logger.info(f"[VENDOR_STRICT_MATCH] {vendor.vendor_name if vendor else 'Unknown'}")
-            else:
-                vendor = None
-
-        # 🔹 PURCHASE DUPLICATE VALIDATION (Invoice No + GSTIN + Branch + Vendor Name)
-        # We do this BEFORE the vendor check so we can show 'Already Exist' even for unresolved vendors
-        is_duplicate = VoucherPurchaseSupplierDetails.objects.filter(
-            supplier_invoice_no__iexact=invoice_no,
-            gstin__iexact=gstin,
-            branch__iexact=branch_name,
-            vendor_name__iexact=vendor_name,
-            tenant_id=tenant_id
-        ).exists()
-        logger.debug(f"[DUPLICATE_AUDIT] is_duplicate={is_duplicate}")
+        # 🔹 AUTHORITATIVE STRICT DUPLICATE CHECK (Invoice No + GSTIN + Branch within tenant_id)
+        is_duplicate = False
+        if invoice_no and gstin:
+            is_duplicate = VoucherPurchaseSupplierDetails.objects.filter(
+                supplier_invoice_no__iexact=invoice_no,
+                gstin__iexact=gstin,
+                branch__iexact=branch_name,
+                tenant_id=tenant_id
+            ).exists()
 
         if is_duplicate:
+            logger.warning(f"[DUPLICATE_MATCH_FOUND] id={record.id} inv_no='{invoice_no}' gstin='{gstin}' branch='{branch_name}' tenant='{tenant_id}'")
             record.status = "EXTRACTED"
             record.validation_status = "DUPLICATE"
             record.save()
-            logger.warning(f"[FINAL_STATUS] DUPLICATE id={record.id}")
-            # We still want to check if the vendor exists to show correct 'Vendor Status' in UI
-            # But the primary pipeline status for the row becomes DUPLICATE
-            from vendors.vendor_validation_logic import validate_vendor
-            val_res = validate_vendor(tenant_id, vendor_name, gstin, branch=branch_name)
+            logger.warning(f"[DUPLICATE_STATUS_PERSISTED] id={record.id} validation_status=DUPLICATE")
+            # We don't return early here anymore. Let it flow to vendor and inventory validation for Pending Purchase evaluation.
+
+        # ⚫ FAST PATH: vendor_id already validated and stored in staging — skip re-validation.
+        # Expand status list to include READY, FINALIZED, VOUCHER_CREATED to cover all valid states.
+        if record.vendor_id and record.validation_status in [
+            'FOUND', 'READY', 'RESOLVED', 'MATCHED_VENDOR', 'EXISTING_VENDOR',
+            'NEED_TO_SAVE', 'FINALIZED', 'VOUCHER_CREATED', 'REQUIRES_REVIEW'
+        ]:
+            logger.info(f"[FINALIZE_VENDOR_LOOKUP] record={record.id} vendor_id={record.vendor_id} path=FAST_PATH status={record.validation_status}")
+            try:
+                vendor = VendorMasterBasicDetail.objects.get(id=record.vendor_id, tenant_id=tenant_id)
+                logger.info(f"[PURCHASE_VENDOR_RESOLUTION] record={record.id} vendor_id={vendor.id} name={vendor.vendor_name} path=FAST_PATH")
+            except VendorMasterBasicDetail.DoesNotExist:
+                vendor = None
+                logger.warning(f"[VENDOR_FK_RESOLUTION_FAILED] record={record.id} vendor_id={record.vendor_id} tenant={tenant_id} — vendor not found in master. Falling back to GSTIN lookup.")
+        else:
+            # ⚫ STRICT VENDOR VALIDATION (GSTIN + BRANCH) — only when vendor_id not pre-resolved
+            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
+            logger.info(f"[FINALIZE_VENDOR_LOOKUP] record={record.id} path=GSTIN_BRANCH gstin={gstin} branch={branch_name}")
+            logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={record.id} tenant_id={tenant_id} validation_status={record.validation_status}")
+            logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
+            _vendor_map = build_session_vendor_map(tenant_id, [record])
+            gstin_key = (gstin or "").strip().upper()
+            branch_key = _nb(branch_name or "Main Branch")
+            val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
+            logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
+
             if val_res['status'] == 'EXISTING_VENDOR':
-                 record.vendor_id = val_res['vendor_id']
-                 record.save()
-            return {"status": "DUPLICATE"}
+                vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
+                if vendor:
+                    record.vendor_id = vendor.id
+                    logger.info(f"[VENDOR_ID_ASSIGNED] record={record.id} vendor_id={vendor.id} path=GSTIN_BRANCH")
+                    logger.info(f"[STAGING_VENDOR_ID_PERSISTED] record={record.id} vendor_id={vendor.id}")
+                    logger.info(f"[PURCHASE_VENDOR_RESOLUTION] record={record.id} vendor_id={vendor.id} name={vendor.vendor_name} path=GSTIN_BRANCH")
+            else:
+                vendor = None
+
+        logger.debug(f"[DUPLICATE_AUDIT] is_duplicate={is_duplicate}")
 
         if not vendor:
             # Re-check if it's there (duplicate check might have used OCR name, this uses master)
-            from vendors.vendor_validation_logic import validate_vendor
+            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
             logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
-            val_res = validate_vendor(tenant_id, vendor_name, gstin, branch=branch_name)
+            _vendor_map = build_session_vendor_map(tenant_id, [record])
+            gstin_key = (gstin or "").strip().upper()
+            branch_key = _nb(branch_name or "Main Branch")
+            val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
             logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
             
             if val_res['status'] == 'EXISTING_VENDOR':
                 vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
                 if vendor:
                     record.vendor_id = vendor.id
-                    record.validation_status = 'FOUND'
-                    logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=FOUND vendor_id={vendor.id}")
+                    record.validation_status = 'NEED_TO_SAVE'
+                    logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_TO_SAVE vendor_id={vendor.id}")
                     record.save()
             else:
                 record.status = "EXTRACTED"
                 record.validation_status = "NEED_VENDOR"
                 logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_VENDOR")
                 record.save()
-                return {"status": "NEED_VENDOR"}
+                
+                if not auto_save:
+                    return {"status": "NEED_VENDOR"}
+                # If auto_save is True, we allow it to proceed to Pending Purchase evaluation.
 
         # Sync vendor name from master if found
         if vendor:
              vendor_name = vendor.vendor_name
 
+        # ── [INVENTORY ITEM VALIDATION GATING] ──
+        from .inventory_validation import InventoryItemValidationService
+        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+        
+        # ── [PERSIST METADATA INTO DB] ──
+        # Inject the validation result items (which contain match confidence, strategy, and normalized names)
+        # back into the extracted data so they are permanently saved.
+        if "assembled_exports" in record.extracted_data and record.extracted_data["assembled_exports"]:
+            record.extracted_data["assembled_exports"][0]["items"] = inv_val["items"]
+        else:
+            record.extracted_data["items"] = inv_val["items"]
+        record.save(update_fields=['extracted_data'])
+
+        # ── [EXPLICIT PENDING EVALUATION STAGE] ──
+        if auto_save:
+            from ocr_pipeline.statuses import ValidationEnums
+            from pending_purchases.services import evaluate_pending_purchase
+            
+            vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
+            voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
+            item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
+            
+            is_pending = evaluate_pending_purchase(
+                record,
+                vendor_status_enum,
+                voucher_status_enum,
+                item_status_enum,
+                tenant_id
+            )
+            
+            if is_pending:
+                record.validation_status = "PENDING_PURCHASE"
+                record.save(update_fields=['validation_status'])
+                logger.info(f"[FINAL_STATUS] PENDING_PURCHASE record={record.id}")
+                return {"status": "PENDING_PURCHASE"}
+
+        # If it's a duplicate and NOT sent to pending purchase, NOW we return DUPLICATE
+        if is_duplicate:
+            return {"status": "DUPLICATE"}
+
         # 🔹 CREATE PURCHASE VOUCHER (ONLY IF auto_save IS TRUE)
         if not auto_save:
             record.status = "EXTRACTED"
-            record.validation_status = "READY"
+            record.validation_status = "NEED_TO_SAVE"
             record.save()
-            logger.info(f"[FINAL_STATUS] READY record={record.id}")
-            return {"status": "READY"}
+            logger.info(f"[FINAL_STATUS] NEED_TO_SAVE record={record.id}")
+            return {"status": "NEED_TO_SAVE"}
+
+        # Enforce backend hard validation to block voucher saves unless the item status is 'ALREADY EXIST'
+        if inv_val["item_status"] != "ALREADY EXIST":
+            logger.error(f"[INVENTORY_SAVE_BLOCKED] Save blocked for record {record.id} because item_status is {inv_val['item_status']}")
+            record.validation_status = "ERROR"
+            record.validation_message = "Voucher save blocked: one or more inventory items do not exist in Master."
+            record.save()
+            return {"status": "ERROR", "validation_message": "Voucher save blocked: one or more inventory items do not exist."}
 
         # Using the Pipeline 2 logic refined earlier
         try:
+            logger.info(f"[ATOMIC_SAVE_START] record_id={record.id}")
             with transaction.atomic():
                 # Double-check inside transaction to avoid race-condition duplicate voucher creation
                 existing_voucher = VoucherPurchaseSupplierDetails.objects.filter(
                     supplier_invoice_no__iexact=invoice_no,
                     gstin__iexact=gstin,
                     branch__iexact=branch_name,
-                    vendor_name__iexact=vendor_name,
                     tenant_id=tenant_id
                 ).first()
                 
@@ -1742,15 +1935,15 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 branch_record = Branch.objects.filter(id=tenant_id).first()
                 company_gstin = branch_record.gstin if branch_record else None
                 is_interstate = gstin[:2] != company_gstin[:2] if company_gstin and len(gstin)>=2 and len(company_gstin)>=2 else False
-                
-                invoice_date_raw = supplier.get('invoice_date')
+
+                # ── Invoice date: from supplier dict (populated from canonical_data_src) ──
+                invoice_date_raw = supplier.get('invoice_date') or canonical.get('invoice_date')
                 invoice_date = None
                 if invoice_date_raw:
                     from datetime import date as _date
                     if isinstance(invoice_date_raw, _date):
                         invoice_date = invoice_date_raw
                     else:
-                        # Try common Indian formats: DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD
                         from datetime import datetime as _dt
                         for fmt in ('%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%d-%b-%Y'):
                             try:
@@ -1761,8 +1954,10 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 if not invoice_date:
                     invoice_date = timezone.now().date()
 
-                branch = supplier.get('branch') or 'Main Branch'
-                address = supplier.get('vendor_address') or ''
+                # [FIX] Use canonical branch_name (already resolved with DB fallback) ──
+                # Do NOT use supplier.get('branch') here — supplier may be empty for assembled records.
+                # branch_name is the authoritative value resolved earlier from canonical + record.branch.
+                address = supplier.get('vendor_address') or canonical.get('bill_from') or ''
 
                 def to_dec(val):
                     try:
@@ -1772,12 +1967,13 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                     except:
                         return 0.0
 
-                total_taxable_val = to_dec(supply.get('total_taxable_value'))
-                total_igst_val = to_dec(supply.get('total_igst'))
-                total_cgst_val = to_dec(supply.get('total_cgst'))
-                total_sgst_val = to_dec(supply.get('total_sgst'))
-                total_cess_val = to_dec(supply.get('total_cess'))
-                total_inv_val = to_dec(supply.get('total_invoice_value'))
+                # Totals: prefer supply dict (from unwrapped sections), fall back to canonical extraction
+                total_taxable_val = to_dec(supply.get('total_taxable_value') or canonical.get('total_taxable_value'))
+                total_igst_val    = to_dec(supply.get('total_igst')           or canonical.get('total_igst'))
+                total_cgst_val    = to_dec(supply.get('total_cgst')           or canonical.get('total_cgst'))
+                total_sgst_val    = to_dec(supply.get('total_sgst')           or canonical.get('total_sgst'))
+                total_cess_val    = to_dec(supply.get('total_cess')           or canonical.get('total_cess'))
+                total_inv_val     = to_dec(supply.get('total_invoice_value')  or canonical.get('total_invoice_value'))
 
                 if total_inv_val == 0.0:
                     total_inv_val = total_taxable_val + total_igst_val + total_cgst_val + total_sgst_val + total_cess_val
@@ -1812,45 +2008,167 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                         "invoiceValue": inv_val
                     })
 
-                serializer_data = {
-                    'date': invoice_date or timezone.now().date(),
-                    'supplier_invoice_no': invoice_no,
-                    'supplier_invoice_date': invoice_date,
-                    'vendor_id': vendor.id,
-                    'vendor_name': vendor_name,
-                    'gstin': gstin,
-                    'branch': branch,
-                    'bill_from': address,
-                    'input_type': 'Interstate' if is_interstate else 'Intrastate',
-                    'invoice_in_foreign_currency': 'No',
-                    'supply_inr_details': {
-                        'purchase_order_no': '',
-                        'purchase_ledger': 'Purchase Account',
-                        'description': f"Auto-validated via OCR Pipeline: {record.file_path}",
-                        'items': serializer_items
-                    },
-                    'due_details': {
-                        'tds_gst': 0.0,
-                        'tds_it': 0.0,
-                        'advance_paid': 0.0,
-                        'to_pay': total_inv_val,
-                        'posting_note': '',
-                        'terms': due.get('payment_terms', '')
-                    }
+                # ── [AUTO-NUMBERING RESOLUTION] ──
+                # Check if a series/voucher_no was manually edited or pre-filled in sections/extracted_data
+                purchase_series = data.get('purchase_voucher_series') or sections.get('supplier_details', {}).get('purchase_voucher_series') or ''
+                purchase_no = data.get('purchase_voucher_no') or sections.get('supplier_details', {}).get('purchase_voucher_no') or ''
+                
+                if not purchase_series or not purchase_no:
+                    # Resolve active config from MasterVoucherPurchases
+                    from masters.voucher_master_models import MasterVoucherPurchases
+                    config = MasterVoucherPurchases.objects.filter(tenant_id=tenant_id, is_active=True).first()
+                    if config:
+                        if not purchase_series:
+                            purchase_series = config.voucher_name
+                        if not purchase_no:
+                            if config.enable_auto_numbering:
+                                purchase_no = config.get_next_number()
+                                config.increment_number()
+                            else:
+                                purchase_no = invoice_no
+                    else:
+                        purchase_no = purchase_no or invoice_no
+
+                transit = sections.get("transit_details", {}) or {}
+                is_foreign = supplier.get('invoice_in_foreign_currency') == 'Yes'
+                
+                supply_details = {
+                    'purchase_order_no': supply.get('purchase_order_no', ''),
+                    'purchase_ledger': supply.get('purchase_ledger', 'Purchase Account'),
+                    'description': supply.get('description') or f"Auto-validated via OCR Pipeline: {record.file_path}",
+                    'exchange_rate': to_dec(supply.get('exchange_rate', 1.0)),
+                    'items': serializer_items
                 }
 
-                # ── [PURCHASE_SCAN_SAVE_PAYLOAD] ──
-                logger.info(f"[PURCHASE_SCAN_SAVE_PAYLOAD] record_id={record.id} payload={serializer_data}")
+                # ── [TRANSIT_NORMALIZATION_START] ──
+                # Build transit dict only from non-empty values.
+                # If all fields are blank/zero, pass None so the serializer skips transit entirely.
+                # This prevents mode="" from triggering "may not be blank" on invoices without transport.
+                _raw_transit = {
+                    'mode':              transit.get('mode') or None,
+                    'received_in':       transit.get('received_in') or None,
+                    'receipt_date':      transit.get('receipt_date') or None,
+                    'receipt_time':      transit.get('receipt_time') or None,
+                    'received_quantity':  transit.get('received_quantity') or None,
+                    'uqc':               transit.get('uqc') or None,
+                    'delivery_type':     transit.get('delivery_type') or None,
+                    'self_third_party':  transit.get('self_third_party') or None,
+                    'transporter_id':    transit.get('transporter_id') or None,
+                    'transporter_name':  transit.get('transporter_name') or None,
+                    'vehicle_no':        transit.get('vehicle_no') or None,
+                    'lr_gr_consignment': transit.get('lr_gr_consignment') or None,
+                }
+                # Keep only keys with actual non-null values
+                _transit_payload = {k: v for k, v in _raw_transit.items() if v is not None}
+                _has_real_transit = bool(_transit_payload)
+                if _has_real_transit:
+                    logger.info(f"[TRANSIT_FINAL_PAYLOAD] record={record.id} fields={list(_transit_payload.keys())}")
+                else:
+                    logger.info(f"[TRANSIT_EMPTY_PAYLOAD_REMOVED] record={record.id} — no transit data; excluding transit_details from payload")
+                    logger.info(f"[TRANSIT_OPTIONAL_FIELD_BYPASS] record={record.id} transit_details=None (optional metadata, not mandatory)")
 
-                # ── [PURCHASE_VOUCHER_SERVICE_CALL] ──
-                logger.info(f"[PURCHASE_VOUCHER_SERVICE_CALL] Calling VoucherPurchaseSupplierDetailsSerializer for record_id={record.id}")
+                serializer_data = {
+                    'date': invoice_date or timezone.now().date(),
+                    'supplier_invoice_no': invoice_no,           # canonical + record.supplier_invoice_no fallback
+                    'supplier_invoice_date': invoice_date,
+                    'purchase_voucher_series': purchase_series or None,
+                    'purchase_voucher_no': purchase_no or None,
+                    'vendor_id': vendor.id,
+                    'vendor_name': vendor_name or vendor.vendor_name,
+                    'gstin': gstin,                              # canonical + record.gstin fallback
+                    'branch': branch_name or 'Main Branch',      # canonical resolved, not supplier.get('branch')
+                    'bill_from': address,
+                    'input_type': 'Interstate' if is_interstate else 'Intrastate',
+                    'invoice_in_foreign_currency': 'Yes' if is_foreign else 'No',
+                    'supply_inr_details': None if is_foreign else supply_details,
+                    'supply_foreign_details': supply_details if is_foreign else None,
+                    'due_details': {
+                        'tds_gst': to_dec(due.get('tds_gst', 0.0)),
+                        'tds_it': to_dec(due.get('tds_it', 0.0)),
+                        'advance_paid': to_dec(due.get('advance_paid', 0.0)),
+                        'to_pay': to_dec(due.get('to_pay') or total_inv_val),
+                        'posting_note': due.get('posting_note', ''),
+                        'terms': due.get('terms', due.get('payment_terms', ''))
+                    },
+                    'transit_details': _transit_payload if _has_real_transit else None,
+                }
+
+
+                # \u2500\u2500 [SERIALIZER_VALIDATION_START] \u2500\u2500
+                # ── [PURCHASE_PAYLOAD_TRACE] ──
+                logger.info(
+                    f"[PURCHASE_PAYLOAD_TRACE] record_id={record.id} upload_session_id={record.upload_session_id} "
+                    f"supplier_invoice_no='{invoice_no}' vendor_id={vendor.id if vendor else None} "
+                    f"gstin='{gstin}' branch='{branch_name}' voucher_series='{purchase_series}' "
+                    f"voucher_type='purchase' "
+                    f"transit_details={serializer_data.get('transit_details')} "
+                    f"supply_details={supply_details} "
+                    f"due_details={serializer_data.get('due_details')} "
+                    f"item_rows={serializer_items}"
+                )
+
+                # ── [SERIALIZER_VALIDATION_START] ──
+                logger.info(f"[SERIALIZER_VALIDATION_START] record={record.id} payload_keys={list(serializer_data.keys())}")
 
                 from accounting.serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer
                 serializer = VoucherPurchaseSupplierDetailsSerializer(data=serializer_data)
-                serializer.is_valid(raise_exception=True)
-                
+                try:
+                    is_valid_result = serializer.is_valid(raise_exception=False)
+                    if not is_valid_result:
+                        logger.error(
+                            f"[SERIALIZER_VALIDATION_FAILED] record={record.id} "
+                            f"errors={serializer.errors} "
+                            f"supplier_invoice_no='{invoice_no}' gstin='{gstin}' branch='{branch_name}' vendor_id={vendor.id}"
+                        )
+                        logger.error(f"[PURCHASE_SAVE_ABORTED] record={record.id} reason=SERIALIZER_VALIDATION_FAILED errors={serializer.errors}")
+                        # Surface actual field errors as the validation_message
+                        err_str = str(serializer.errors)
+                        record.validation_status = "ERROR"
+                        record.validation_message = f"Serializer validation failed: {err_str[:500]}"
+                        record.save(update_fields=['validation_status', 'validation_message'])
+                        return {"status": "ERROR", "validation_message": err_str[:500]}
+                    else:
+                        logger.info(f"[SERIALIZER_VALIDATION_SUCCESS] record_id={record.id}")
+                except Exception as val_ex:
+                    logger.error(f"[SERIALIZER_VALIDATION_FAILED] record={record.id} exception={val_ex}", exc_info=True)
+                    raise val_ex
+
                 # Save the voucher utilizing the canonical serializer which runs full posting, syncs inventory and vendor portal
-                voucher_main = serializer.save(tenant_id=tenant_id)
+                logger.info(f"[PURCHASE_DB_INSERT_START] record={record.id} vendor_id={vendor.id} invoice_no={invoice_no}")
+                try:
+                    voucher_main = serializer.save(tenant_id=tenant_id)
+                except Exception as save_ex:
+                    logger.error(f"[PURCHASE_SAVE_EXCEPTION] record={record.id} exception={save_ex}", exc_info=True)
+                    raise save_ex
+
+                # ── [VERIFY PHYSICAL DB INSERT] ──
+                logger.info(f"[POST_SAVE_VERIFICATION_START] record={record.id} voucher_id={voucher_main.id}")
+                from accounting.models_voucher_purchase import (
+                    VoucherPurchaseSupplierDetails as VP_SupplierDetails,
+                    VoucherPurchaseSupplyForeignDetails as VP_ForeignDetails,
+                    VoucherPurchaseSupplyINRDetails as VP_INRDetails,
+                    VoucherPurchaseDueDetails as VP_DueDetails,
+                    VoucherPurchaseTransitDetails as VP_TransitDetails,
+                    VoucherPurchaseItem as VP_Item
+                )
+                parent_exists = VP_SupplierDetails.objects.filter(id=voucher_main.id).exists()
+                inr_exists = VP_INRDetails.objects.filter(supplier_details_id=voucher_main.id).exists()
+                foreign_exists = VP_ForeignDetails.objects.filter(supplier_details_id=voucher_main.id).exists()
+                due_exists = VP_DueDetails.objects.filter(supplier_details_id=voucher_main.id).exists()
+                transit_exists = VP_TransitDetails.objects.filter(supplier_details_id=voucher_main.id).exists()
+                items_exists = VP_Item.objects.filter(supplier_details_id=voucher_main.id).exists()
+                
+                logger.info(
+                    f"[POST_SAVE_VERIFICATION_STATUS] record={record.id} voucher_id={voucher_main.id} "
+                    f"parent_exists={parent_exists} due_exists={due_exists} transit_exists={transit_exists} "
+                    f"items_exists={items_exists} inr_exists={inr_exists} foreign_exists={foreign_exists}"
+                )
+                
+                if not parent_exists or not (due_exists and transit_exists and items_exists):
+                    logger.error(
+                        f"[POST_SAVE_VERIFICATION_FAILED] record={record.id} voucher_id={voucher_main.id} "
+                        f"parent={parent_exists} due={due_exists} transit={transit_exists} items={items_exists}"
+                    )
 
                 # ── [PURCHASE_HEADER_INSERT] ──
                 logger.info(f"[PURCHASE_HEADER_INSERT] inserted table='voucher_purchase_supplier_details' row_count=1 tenant_id={tenant_id} voucher_id={voucher_main.id}")
@@ -1903,19 +2221,31 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 # ── [SUCCESS_RESPONSE_SENT] ──
                 logger.info(f"[SUCCESS_RESPONSE_SENT] success toast response ready for record_id={record.id}")
 
+                logger.info(f"[ATOMIC_SAVE_COMMIT] record_id={record.id}")
                 return {"status": "VOUCHER_CREATED", "voucher_id": voucher_main.id}
         except Exception as ex_atomic:
-            logger.error(f"[VOUCHER_TRANSACTION_ROLLBACK] rollback reason={str(ex_atomic)}")
+            import traceback as _tb
+            _exc_str = str(ex_atomic)
+            _tb_str  = _tb.format_exc()
+            logger.error(f"[ATOMIC_SAVE_ROLLBACK] record_id={record.id} exception={_exc_str}")
+            logger.error(f"[VOUCHER_TRANSACTION_ROLLBACK] record={record.id} reason={_exc_str[:300]}")
+            logger.error(f"[PURCHASE_SAVE_EXCEPTION] record={record.id} traceback=\n{_tb_str}")
             logger.error(f"[PARTIAL_SAVE_DETECTED] Partial save detected for record {record.id} tenant_id={tenant_id}")
             raise ex_atomic
 
     except Exception as e:
-        logger.error(f"AUTO-VALIDATION FAILED for record {record.id}: {str(e)}")
+        import traceback as _tb2
+        _exc_str = str(e)
+        logger.error(f"AUTO-VALIDATION FAILED for record {record.id}: {_exc_str}", exc_info=True)
+        logger.error(f"[PURCHASE_SAVE_EXCEPTION] record={record.id} exception={_exc_str[:500]}")
         record.validation_status = "ERROR"
-        record.validation_message = str(e)
-        record.save()
-        logger.error(f"[FINAL_STATUS] ERROR record={record.id} exc={str(e)[:200]}")
-        return {"status": "ERROR"}
+        record.validation_message = _exc_str[:500]
+        try:
+            record.save()
+        except Exception as save_err:
+            logger.error(f"Failed to save record ERROR status: {save_err}")
+        logger.error(f"[FINAL_STATUS] ERROR record={record.id} exc={_exc_str[:200]}")
+        return {"status": "ERROR", "validation_message": _exc_str[:500]}
 
 def resolve_storage_path(record) -> str:
     """

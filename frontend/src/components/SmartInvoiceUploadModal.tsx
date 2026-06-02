@@ -11,9 +11,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { httpClient } from '../services/httpClient';
 import { apiService } from '../services/api';
+import { useOcrWorkflowStore } from '../store/ocrWorkflowStore';
 import { getXLSX } from '../utils/xlsx';
 import { showError, showSuccess, showInfo } from '../utils/toast';
-import CreateVendorModal from './CreateVendorModal';
+import CreateNewVendorFullModal from './CreateNewVendorFullModal';
+import { CreateNewInventoryItemModal } from './CreateNewInventoryItemModal';
 import Icon from './Icon';
 import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherSchema } from '../configs/schemaConfig';
 
@@ -55,6 +57,11 @@ interface ScanResult {
     group_id?: string;
     processed: boolean;
     _blocked?: boolean;
+    resume_reason?: string;
+    item_status?: string;
+    missing_items?: any[];
+    items?: any[];
+    _isSnapshot?: boolean;
 }
 
 interface FinalizeErrorItem {
@@ -334,10 +341,10 @@ const EditInvoiceModal: React.FC<{
             try {
                 // STEP 1: Fetch FULL Dynamic Schema + Data from DB (or use snapshot row directly)
                 const isSnapshot = String(row.id).startsWith('snap_') || !!row._isSnapshot;
-                
+
                 const schemaPromise = httpClient.get(`/api/voucher-schema/?type=${voucherType}`);
                 const rowPromise = isSnapshot ? Promise.resolve({ data: [row] }) : httpClient.get(`/api/ocr-staging/${row.id}/`);
-                
+
                 const [schemaRes, rowRes]: any = await Promise.all([schemaPromise, rowPromise]);
 
                 const fetchedSchema = schemaRes as VoucherSchema;
@@ -359,7 +366,7 @@ const EditInvoiceModal: React.FC<{
                     if (sectionName === 'items') {
                         let itmsRaw = raw.sections?.items || raw.items || raw.line_items || [];
                         if (!Array.isArray(itmsRaw)) itmsRaw = [];
-                        
+
                         normalizedSections['items'] = (itmsRaw.length > 0 ? itmsRaw : [{}]).map((item: any) => {
                             const normalizedItem: any = {};
                             fields.forEach((f: any) => {
@@ -576,7 +583,7 @@ const EditInvoiceModal: React.FC<{
                                             if (v !== null && v !== undefined) {
                                                 displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
                                             }
-                                            
+
                                             if (field.type === 'date' && displayVal) {
                                                 const parts = displayVal.split(/[-\/]/);
                                                 if (parts.length === 3) {
@@ -664,7 +671,6 @@ const EditInvoiceModal: React.FC<{
     );
 };
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Resolve Conflict Modal
 // ─────────────────────────────────────────────────────────────────────────────
@@ -680,6 +686,9 @@ interface BulkInvoiceUploadModalProps {
     onFinalized?: (result: FinalizeResult) => void;
     voucherType: string;
     isLimitReached?: boolean;
+    activeSessionId?: string;
+    initialStep?: string;
+    onEditRow?: (row: any) => void;
 }
 
 type ModalStep = 'upload' | 'scanning' | 'review' | 'finalizing' | 'done';
@@ -689,13 +698,47 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     onFinalized,
     voucherType = 'Purchase',
     isLimitReached = false,
+    onEditRow,
+    activeSessionId,
+    initialStep
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
 
-    // State
+    const {
+        step, setStep,
+        uploadSessionId: storeSessionId, setUploadSessionId: setStoreSessionId,
+        filterStatus, setFilterStatus
+    } = useOcrWorkflowStore();
 
-    const [step, setStep] = useState<ModalStep>('upload');
+    const initRef = useRef(false);
+
+    // Use activeSessionId/initialStep if provided, else use store, ONLY ON MOUNT
+    useEffect(() => {
+        if (!initRef.current) {
+            if (activeSessionId) {
+                setStoreSessionId(activeSessionId);
+            }
+            if (initialStep) {
+                setStep(initialStep as ModalStep);
+            }
+            initRef.current = true;
+        }
+    }, [activeSessionId, initialStep, setStoreSessionId, setStep]);
+
+    const uploadSessionId = storeSessionId || (activeSessionId as string) || '';
+    const setUploadSessionId = setStoreSessionId;
+
+    useEffect(() => {
+        if (!storeSessionId && !activeSessionId) {
+            const newId = (typeof window.crypto !== 'undefined' && typeof window.crypto.randomUUID === 'function') 
+                ? window.crypto.randomUUID() 
+                : Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+            setStoreSessionId(newId);
+        }
+    }, [storeSessionId, activeSessionId, setStoreSessionId]);
+
+    const [workflowState, setWorkflowState] = useState<"LIVE_UPLOAD" | "REVIEW" | "FINALIZING" | "FINALIZED">("LIVE_UPLOAD");
     const [isLoading, setIsLoading] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
@@ -721,26 +764,159 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const [dragOver, setDragOver] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [scanId, setScanId] = useState<string>('');
-    const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+    const useAllUnresolvedRef = useRef(false); // Moved up to use for routing state
+
+    // ── ISOLATED STORES FOR UPLOAD VS RESUME FLOWS ──
+    const [uploadRows, setUploadRows] = useState<ScanResult[]>([]);
+    const [resumeRows, setResumeRows] = useState<ScanResult[]>([]);
+    const [uploadSelectedHashes, setUploadSelectedHashes] = useState<Set<string>>(new Set());
+    const [resumeSelectedHashes, setResumeSelectedHashes] = useState<Set<string>>(new Set());
+
+    // Computed properties mapped to the active flow
+    const scanResults = useAllUnresolvedRef.current ? resumeRows : uploadRows;
+    const selectedHashes = useAllUnresolvedRef.current ? resumeSelectedHashes : uploadSelectedHashes;
+
+    const setScanResults = useCallback((val: React.SetStateAction<ScanResult[]>) => {
+        if (useAllUnresolvedRef.current) {
+            setResumeRows(val);
+        } else {
+            setUploadRows(val);
+        }
+    }, []);
+
+    const setSelectedHashes = useCallback((val: React.SetStateAction<Set<string>>) => {
+        if (useAllUnresolvedRef.current) {
+            setResumeSelectedHashes(val);
+        } else {
+            setUploadSelectedHashes(val);
+        }
+    }, []);
     const [scanProgress, setScanProgress] = useState(0);       // 0-100
     const [scanCurrentFile, setScanCurrentFile] = useState('');
     const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
-    const [filterStatus, setFilterStatus] = useState<'ready' | 'pending' | 'scanning'>('pending');
     const [groupPages, setGroupPages] = useState(true);
     const [showOnlyPending, setShowOnlyPending] = useState(true);
     const [finalizing, setFinalizing] = useState(false);
     const [resizing, setResizing] = useState<number | null>(null);
     const [resolvingRow, setResolvingRow] = useState<ScanResult | null>(null);
+    const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+    const [extractedVendorData, setExtractedVendorData] = useState<any>(null);
+    const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
+
+    const openCreateVendorModal = (row: ScanResult) => {
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] CREATE_VENDOR_BUTTON_CLICK');
+        setResolvingRow(row);
+        setSelectedInvoice(row);
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] setSelectedInvoice executed', row);
+
+        const sections = row.extracted_data?.sections || {};
+        const supplier = sections.supplier_details || row.extracted_data || {};
+        const rawItems = sections.items || row.extracted_data?.items || row.extracted_data?.line_items || [];
+        const supplier_items = rawItems.map((it: any) => ({
+            supplierItemCode: String(it['Item Code'] || it['item_code'] || it['Part No'] || ''),
+            supplierItemName: String(it['Item Name'] || it['item_name'] || it['Description'] || it['description'] || it['Item'] || ''),
+            hsnSac: String(it['HSN/SAC'] || it['hsn_sac'] || it['HSN Code'] || it['hsnSac'] || '')
+        }));
+
+        const prefData = {
+            vendor_name: row.vendor_name || supplier['vendor_name'] || supplier['Vendor Name'] || '',
+            gstin: row.vendor_gstin || supplier['gstin'] || supplier['GSTIN'] || '',
+            address: supplier['vendor_address'] || supplier['Address'] || supplier['address'] || '',
+            state: supplier['vendor_city'] || supplier['State'] || supplier['state'] || '',
+            branch: supplier['branch'] || row.branch || '',
+            vendor_category: supplier['vendor_category'] || supplier['Vendor Category'] || '',
+            supplier_items: supplier_items
+        };
+
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] PREFILLED_VENDOR_DATA', prefData);
+        setExtractedVendorData(prefData);
+        setIsCreateVendorModalOpen(true);
+        console.info('[FORENSIC][INVOICE_SCANNER_VENDOR_LIFECYCLE] CREATE_VENDOR_MODAL_OPEN', true);
+    };
+
+    const [isCreateItemModalOpen, setIsCreateItemModalOpen] = useState(false);
+    const [extractedItemData, setExtractedItemData] = useState<any>(null);
+    const [itemResolvingRow, setItemResolvingRow] = useState<ScanResult | null>(null);
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+    const toggleExpandRow = (rowId: string) => {
+        setExpandedRows(prev => {
+            const next = new Set(prev);
+            if (next.has(rowId)) {
+                next.delete(rowId);
+            } else {
+                next.add(rowId);
+            }
+            return next;
+        });
+    };
+
+    const openCreateItemModal = (row: ScanResult, item: any) => {
+        console.info('[FORENSIC][INVOICE_SCANNER_ITEM_LIFECYCLE] CREATE_ITEM_BUTTON_CLICK', item);
+        setItemResolvingRow(row);
+        
+        const prefData = {
+            item_code: item.item_code || '',
+            item_name: item.item_name || '',
+            hsn_code: item.hsn_code || '',
+            description: item.description || '',
+            gst_rate: item.gst_rate ?? '0.00',
+            rate: item.rate ?? '0.00',
+            uom: item.uom || 'nos',
+            cgst_rate: item.cgst_rate ?? 0.0,
+            sgst_rate: item.sgst_rate ?? 0.0,
+            igst_rate: item.igst_rate ?? 0.0,
+            cess_rate: item.cess_rate ?? 0.0,
+            computed_gst_rate: item.computed_gst_rate ?? 0.0,
+            taxable_value: item.taxable_value ?? 0.0,
+        };
+        
+        console.info('[FORENSIC][INVOICE_SCANNER_ITEM_LIFECYCLE] PREFILLED_ITEM_DATA', prefData);
+        setExtractedItemData(prefData);
+        setIsCreateItemModalOpen(true);
+    };
+
+    const handleRevalidateRow = async (row: ScanResult) => {
+        console.info('[FORENSIC][INVOICE_SCANNER_ITEM_LIFECYCLE] REVALIDATING_ROW_AFTER_ITEM_CREATION', row.file_hash);
+        setScanResults(prev => prev.map(r => r.file_hash === row.file_hash ? { ...r, validationStatus: 'PENDING' } : r));
+        try {
+            const result: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, {
+                extracted_data: row.extracted_data
+            });
+            setScanResults(prev => prev.map(r => {
+                if (r.file_hash !== row.file_hash) return r;
+                let newStatus: ValidationStatus = 'VENDOR_MISSING';
+                const s = result.status || '';
+                if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
+                else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
+                else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
+                else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
+                
+                return {
+                    ...r,
+                    validationStatus: newStatus,
+                    vendor_id: result.vendor_id ?? r.vendor_id,
+                    vendor_name: result.vendor_name || r.vendor_name,
+                    vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
+                    item_status: result.item_status || r.item_status,
+                    missing_items: result.missing_items || [],
+                    items: result.items || r.items,
+                };
+            }));
+            fetchResumeCounts();
+            showSuccess('Inventory item created and row re-validated successfully!');
+        } catch (err) {
+            console.error('[FORENSIC][INVOICE_SCANNER_ITEM_LIFECYCLE] Revalidation failed:', err);
+            fetchStagedInvoices();
+        }
+    };
+
     const [detailsRow, setDetailsRow] = useState<ScanResult | null>(null);
     const [estimatedExtractionTime, setEstimatedExtractionTime] = useState<number | null>(null);
     const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
     const [editingRow, setEditingRow] = useState<ScanResult | null>(null);
-    const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
 
-
-
-
-    // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
     // ULTIMATE MERGE LOGIC: Grouping by normalized Invoice No + GSTIN
     // ─────────────────────────────────────────────────────────────────────────────
     const mergedResults = React.useMemo(() => {
@@ -848,12 +1024,6 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     }, [scanResults, pollingIntervalRef2.current]); // Added a few more deps to ensure refresh
 
 
-    const [uploadSessionId] = useState(() => {
-        if (typeof window.crypto !== 'undefined' && typeof window.crypto.randomUUID === 'function') {
-            return window.crypto.randomUUID();
-        }
-        return Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
-    });
 
     // ── Resume Workflow State ──
     const [isCheckingUnresolved, setIsCheckingUnresolved] = useState(true);
@@ -865,15 +1035,14 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // Duplicate detection set
     const uploadedFilesSetRef = useRef<Set<string>>(new Set());
-    // Ref so fetchStagedInvoices (stable callback) can always read the latest value
-    const useAllUnresolvedRef = useRef(false);
+    // Ref already declared above
 
     // Listen for events from sub-modals to trigger workflows
     useEffect(() => {
         const handler = (e: any) => {
             const fileHash = e.detail;
             const row = scanResults.find(r => r.file_hash === fileHash);
-            if (row) setResolvingRow(row);
+            if (row) openCreateVendorModal(row);
         };
         window.addEventListener('re-open-create-vendor', handler);
         return () => window.removeEventListener('re-open-create-vendor', handler);
@@ -885,17 +1054,19 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             const rows = (res && Array.isArray(res.data)) ? res.data : (Array.isArray(res) ? res : []);
 
             if (rows.length > 0) {
-                const vendorNeededCount = rows.filter((r: any) =>
-                    !r.processed && (
-                        r.validation_status === 'NEED_VENDOR' ||
-                        r.validation_status === 'VENDOR_MISSING' ||
-                        r.validation_status === 'NOT_FOUND' ||
-                        (r.vendor_status === 'CREATE_VENDOR') ||
-                        (!r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'DUPLICATE', 'VOUCHER_CREATED'].includes(r.validation_status))
-                    )
-                ).length;
+                const vendorNeededCount = rows.filter((r: any) => {
+                    if (r.processed || r.validation_status === 'VOUCHER_CREATED' || r.validation_status === 'DUPLICATE') return false;
+                    const vendorMissing = !r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validation_status);
+                    const itemsMissing = r.item_status === 'CREATE ITEM';
+                    return vendorMissing || itemsMissing;
+                }).length;
 
-                const readyToFinalize = rows.length - vendorNeededCount;
+                const readyToFinalize = rows.filter((r: any) => {
+                    if (r.processed || r.validation_status === 'VOUCHER_CREATED' || r.validation_status === 'DUPLICATE') return false;
+                    const hasVendor = !!(r.vendor_id || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validation_status));
+                    const hasValidItems = r.item_status === 'ALREADY EXIST';
+                    return hasVendor && hasValidItems;
+                }).length;
 
                 setUnresolvedCount(vendorNeededCount);
                 setNeedsVendorCount(vendorNeededCount);
@@ -1019,9 +1190,10 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const POLL_INTERVAL_MS = 5000;
 
     /**
-     * Stop the active polling interval.
+     * Centralized Polling Manager: Stops all active polling intervals and SSE connections.
      */
-    const stopPolling = useCallback(() => {
+    const stopAllPolling = useCallback(() => {
+        console.log('[POLLING_STOPPED] Halting all polling mechanisms');
         if (pollingIntervalRef2.current) {
             clearInterval(pollingIntervalRef2.current);
             pollingIntervalRef2.current = null;
@@ -1030,8 +1202,13 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             clearTimeout(pollingTimeoutRef.current);
             pollingTimeoutRef.current = null;
         }
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
         retryCountRef.current = 0;
         setRetryCount(0);
+        stalledAt100Ref.current = null;
     }, []);
 
     /**
@@ -1055,6 +1232,18 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             setIsLoading(false);
             setFetchError(null);
             console.log("OCR API response:", res);
+            if (res) {
+                console.log("[FRONTEND_RECEIPT] raw API payload:", res);
+                const rowsToLog = Array.isArray(res) ? res : (res.data || []);
+                rowsToLog.forEach((row: any) => {
+                    console.log(
+                        `[FRONTEND_ROW_RECEIPT] ` +
+                        `invoice_no=${row.invoice_no || ''} ` +
+                        `vendor_id=${row.vendor_id || ''} ` +
+                        `vendor_status=${row.vendor_status || ''}`
+                    );
+                });
+            }
 
             // ── Handle both envelope {status, data:[]} and legacy plain array ──
             let rows: any[];
@@ -1081,7 +1270,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         total_amount: String(inv.total_amount || inv.invoice_total || '0.00'),
                         extracted_data: inv.extracted_data || inv,
                         validationStatus: (inv.validationStatus || inv.validation_status || 'READY') as ValidationStatus,
-                        vendor_status: inv.vendor_status || (inv.vendor_id ? 'EXISTS' : 'NEW'),
+                        vendor_status: (inv.vendor_id ? 'EXISTS' : (inv.vendor_status || 'NEW')) as VendorStatus,
                         processed: !!inv.processed,
                         _isSnapshot: true,
                         _isMerged: !!inv._isMerged,
@@ -1099,7 +1288,17 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 setIsLoading(false);
                 setStep('review');
                 return true; // Stop polling
-            } else if (res && (res.data !== undefined || res.status === 'PROCESSING')) {
+            } else if (res && (res.data !== undefined || res.status === 'PROCESSING' || res.status === 'EMPTY_SESSION_TERMINAL')) {
+                if (res.status === 'EMPTY_SESSION_TERMINAL') {
+                    console.log(`[EMPTY_SESSION_TERMINAL_DETECTED] session=${uploadSessionId}`);
+                    setScanProgress(100);
+                    setScanCurrentFile('No active records in this upload session');
+                    setIsLoading(false);
+                    setScanResults([]);
+                    setStep('review');
+                    return true;
+                }
+
                 // ── Update Progress (Fix #6) ──
                 if (res.progress_percent !== undefined) {
                     const pct = Math.round(res.progress_percent);
@@ -1299,7 +1498,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     total_sgst: totalSgst,
                     total_igst: totalIgst,
                     validationStatus: vStatus,
-                    vendor_status: (['READY', 'FOUND', 'MATCHED'].includes(vStatus) ? 'FOUND' : 'NEW') as VendorStatus,
+                    vendor_status: (r.vendor_id ? 'EXISTS' : (r.vendor_status || 'NEW')) as VendorStatus,
                     vendor_id: r.vendor_id,
                     branch: clean(r.branch, inv['branch'], inv['Branch']),
                     extracted_data: rawExtracted,
@@ -1312,13 +1511,60 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     _mergedCount: rawExtracted?._merged_count || 1,
                     group_id: r.group_id,
                     processed: !!r.processed,
+                    item_status: r.item_status || '',
+                    missing_items: r.missing_items || [],
+                    items: r.items || [],
                 };
                 return result;
             });
 
-            setScanResults(seeded);
+            setScanResults(prev => {
+                if (!useAllUnresolvedRef.current) {
+                    // Live Session: seeded is the exact authoritative state
+                    return seeded;
+                }
+
+                // Resume Staging: Deterministic Unresolved Identity Merge
+                const normalize = (s: any) => String(s || '').replace(/[^A-Z0-9]/g, '').trim().toUpperCase();
+
+                const getResumeKey = (r: ScanResult) => {
+                    const gstin = normalize(r.vendor_gstin || getCellValue(r, 'vendor_gstin'));
+                    const invNo = normalize(r.invoice_number || getCellValue(r, 'invoice_no') || r.invoice_number);
+                    const branch = normalize(r.branch || getCellValue(r, 'branch') || '');
+                    if (gstin && invNo) return `RES_${gstin}_${branch}_${invNo}`;
+                    return r.file_hash || String(r.id);
+                };
+
+                const next = [...prev];
+                const seenKeys = new Set<string>();
+
+                for (const incoming of seeded) {
+                    const rKey = getResumeKey(incoming);
+                    if (seenKeys.has(rKey)) {
+                        console.log(`[RESUME_DEDUP_SKIPPED] frontend skipping duplicate incoming row key=${rKey}`);
+                        continue;
+                    }
+                    seenKeys.add(rKey);
+
+                    const existingIndex = next.findIndex(r => getResumeKey(r) === rKey);
+                    if (existingIndex >= 0) {
+                        next[existingIndex] = incoming;
+                        console.log(`[RESUME_ROW_REPLACED] key=${rKey}`);
+                    } else {
+                        next.push(incoming);
+                        console.log(`[RESUME_ROW_APPENDED] key=${rKey}`);
+                    }
+                }
+
+                // Reconcile and remove resolved rows (present in prev but missing from authoritative seeded)
+                const finalRows = next.filter(r => {
+                    const keep = seenKeys.has(getResumeKey(r));
+                    if (!keep) console.log(`[RESUME_ROW_RESOLVED] key=${getResumeKey(r)} removed from staging`);
+                    return keep;
+                });
+                return finalRows;
+            });
             console.log("API count:", rows.length);
-            console.log("UI count:", seeded.length);
 
             // [BUG 2 FIX: PROGRESSIVE REVIEW UNLOCK] 
             // Unlock the review step progressively as soon as records exist in the session,
@@ -1343,7 +1589,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         try {
                             const patchResult: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
                             if (patchResult.status === 'READY') {
-                                setScanResults(prev => prev.map(r => 
+                                setScanResults(prev => prev.map(r =>
                                     (r.id === row.id && !r._isSnapshot) ? { ...r, ...patchResult, validationStatus: 'READY' } : r
                                 ));
                             }
@@ -1390,13 +1636,15 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             sid = useAllUnresolvedRef.current ? '' : uploadSessionId;
         }
 
-        if (sid === undefined || sid === null) {
-            console.error('Invalid sessionId passed to fetchStagedInvoices:', forcedSid);
-            return;
+        if (!sid || sid === 'null' || sid === 'undefined' || sid === 'None') {
+            if (!useAllUnresolvedRef.current) {
+                console.error('[ORPHAN_POLL_BLOCKED] Invalid sessionId passed to fetchStagedInvoices for live upload:', forcedSid, 'sid:', sid);
+                return;
+            }
         }
 
         // ── Stop any existing poll before starting a new one ──
-        stopPolling();
+        stopAllPolling();
         setFetchError(null);
         setRetryCount(0);
         retryCountRef.current = 0;
@@ -1410,7 +1658,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         // Replaces polling with push-based terminal state signaling.
         const startSSE = (session_id: string) => {
             if (eventSourceRef.current) eventSourceRef.current.close();
-            
+
             console.log(`[SSE_CONNECTED] session_id=${session_id}`);
             // Note: EventSource sends cookies by default if same-origin.
             const es = new EventSource(`/api/ocr-status-stream/${session_id}/`);
@@ -1420,7 +1668,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 try {
                     const data = JSON.parse(event.data);
                     console.log(`[SSE_EVENT] session=${session_id} status=${data.status}`);
-                    
+
                     if (data.status === 'FINALIZED' || data.status === 'FAILED') {
                         console.log(`[SESSION_FINALIZED_EVENT] session_id=${session_id} event=${data.status}`);
                         console.log('✅ TERMINAL STATE REACHED — HALTING SSE.');
@@ -1582,70 +1830,87 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         showSuccess(`Vendor resolved for ${filePath}`);
     };
 
-    const handleSaveVendor = async (vendorData: any) => {
-        if (!resolvingRow) return;
-
+    const handleSaveVendorSuccess = async (vendorName: string, vendorId: number, row: ScanResult) => {
+        console.info(`[FORENSIC][PURCHASE_SCAN_VENDOR_LIFECYCLE] Vendor created via canonical Vendor Master form. vendor_name="${vendorName}", vendor_id=${vendorId}, file_hash=${row.file_hash}`);
         try {
-            const res: any = await httpClient.post('/api/purchase/vendors/create/', vendorData);
+            // Fetch the created vendor's basic detail to get the canonical details
+            const basicDetail: any = await httpClient.get(`/api/vendors/basic-details/${vendorId}/`);
+            // Fetch GST details to get the GSTIN and branch
+            const gstDetails: any = await httpClient.get(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
+            const gstList = Array.isArray(gstDetails) ? gstDetails : (gstDetails.results || []);
 
-            if (res?.status === 'CREATED' && res?.vendor_id) {
-                showSuccess('Vendor Created! Re-validating invoice…');
+            const gstin = gstList?.[0]?.gstin || '';
+            const branch = gstList?.[0]?.reference_name || 'Main Branch';
+            const address = gstList?.[0]?.branch_address || '';
+            const state = basicDetail.state || '';
+            const vendorCategory = basicDetail.vendor_category || '';
 
-                // Merge the corrected vendor info into extracted_data so re-validation succeeds
-                const updatedExtracted = { ...resolvingRow.extracted_data };
-                const inv = updatedExtracted.invoice || updatedExtracted.header || updatedExtracted;
+            console.info(`[FORENSIC][PURCHASE_SCAN_VENDOR_LIFECYCLE] Retrieved newly created vendor details from backend. GSTIN="${gstin}", branch="${branch}", state="${state}", category="${vendorCategory}"`);
 
-                inv['Vendor Name'] = vendorData.vendor_name;
-                inv['GSTIN'] = vendorData.gstin;
-                inv['Bill From - Address Line 1'] = vendorData.address;
-                inv['Bill From - State'] = vendorData.state;
-                inv['Branch'] = vendorData.branch || 'Main Branch';
-                inv['Vendor Category'] = vendorData.vendor_category || '';
+            showInfo('Re-validating invoice…');
 
-                // Trigger backend re-validation with the corrected data
-                const patchRes: any = await httpClient.patch(
-                    `/api/ocr-staging/${resolvingRow.file_hash}/`,
-                    { extracted_data: updatedExtracted }
-                );
+            // Merge the corrected vendor info into extracted_data so re-validation succeeds
+            const updatedExtracted = { ...row.extracted_data };
+            const inv = updatedExtracted.invoice || updatedExtracted.header || updatedExtracted;
 
-                if (patchRes.success) {
-                    let newStatus: ValidationStatus = 'READY';
-                    const s = patchRes.status || '';
-                    if (s === 'DUPLICATE' || s === 'duplicate') {
-                        newStatus = 'DUPLICATE';
-                    } else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') {
-                        newStatus = 'GSTIN_CONFLICT';
-                    } else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR' || s === 'NEED_VENDOR') {
-                        newStatus = 'NEED_VENDOR';
-                    }
-
-                    // Update ONLY the specific row that was just resolved (strict per-row update)
-                    setScanResults(prev => prev.map(r =>
-                        r.file_hash === resolvingRow.file_hash
-                            ? {
-                                ...r,
-                                extracted_data: patchRes.extracted_data || updatedExtracted,
-                                validationStatus: newStatus,
-                                vendor_id: patchRes.vendor_id || res.vendor_id,
-                                vendor_name: patchRes.vendor_name || vendorData.vendor_name,
-                                vendor_gstin: vendorData.gstin,
-                                vendor_status: (patchRes.vendor_status === 'EXISTS' || patchRes.vendor_status === 'MATCHED' || patchRes.vendor_status === 'FOUND' || patchRes.vendor_id || res.vendor_id) ? 'FOUND' as VendorStatus : 'NEW' as VendorStatus,
-                            }
-                            : r
-                    ));
-                    fetchResumeCounts();
-                }
-                setResolvingRow(null);
-            } else {
-                showError(res?.error || 'Failed to create vendor');
+            inv['Vendor Name'] = vendorName;
+            inv['GSTIN'] = gstin;
+            if (address) {
+                inv['Bill From - Address Line 1'] = address;
             }
+            if (state) {
+                inv['Bill From - State'] = state;
+            }
+            inv['Branch'] = branch;
+            inv['Vendor Category'] = vendorCategory;
+
+            // Trigger backend re-validation with the corrected data
+            const patchRes: any = await httpClient.patch(
+                `/api/ocr-staging/${row.file_hash}/`,
+                { extracted_data: updatedExtracted }
+            );
+
+            if (patchRes.success) {
+                let newStatus: ValidationStatus = 'READY';
+                const s = patchRes.status || '';
+                if (s === 'DUPLICATE' || s === 'duplicate') {
+                    newStatus = 'DUPLICATE';
+                } else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') {
+                    newStatus = 'GSTIN_CONFLICT';
+                } else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR' || s === 'NEED_VENDOR') {
+                    newStatus = 'NEED_VENDOR';
+                }
+
+                console.info(`[FORENSIC][PURCHASE_SCAN_VENDOR_LIFECYCLE] Re-validation completed successfully. New status="${newStatus}", vendor_status="FOUND", file_hash=${row.file_hash}`);
+
+                // Update ONLY the specific row that was just resolved (strict per-row update)
+                setScanResults(prev => prev.map(r =>
+                    r.file_hash === row.file_hash
+                        ? {
+                            ...r,
+                            extracted_data: patchRes.extracted_data || updatedExtracted,
+                            validationStatus: newStatus,
+                            vendor_id: patchRes.vendor_id || vendorId,
+                            vendor_name: patchRes.vendor_name || vendorName,
+                            vendor_gstin: gstin || r.vendor_gstin,
+                            vendor_status: 'FOUND' as VendorStatus,
+                        }
+                        : r
+                ));
+                fetchResumeCounts();
+                showSuccess('Vendor details validated and invoice updated.');
+            } else {
+                console.warn(`[FORENSIC][PURCHASE_SCAN_VENDOR_LIFECYCLE] Re-validation returned patch success=false for file_hash=${row.file_hash}`);
+            }
+            setResolvingRow(null);
         } catch (err: any) {
-            const msg = err?.response?.data?.error || err?.message || 'Creation failed.';
-            showError(msg);
+            console.error('[FORENSIC][PURCHASE_SCAN_VENDOR_LIFECYCLE] Failed during post-creation validation refresh:', err);
+            showError('Failed to refresh invoice details after vendor creation.');
         }
     };
 
     const handleRescan = async (row: ScanResult) => {
+        const oldStatus = row.validationStatus;
         // Show loading state for the specific row
         setScanResults(prev => prev.map(r =>
             r.file_hash === row.file_hash ? { ...r, validationStatus: 'processing' as ValidationStatus } : r
@@ -1662,16 +1927,19 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 fetchStagedInvoices();
             } else {
                 showError(res.error || 'Rescan failed');
-                fetchStagedInvoices();
+                setScanResults(prev => prev.map(r =>
+                    r.file_hash === row.file_hash ? { ...r, validationStatus: oldStatus } : r
+                ));
             }
         } catch (err: any) {
             showError(err?.response?.data?.error || 'Network error during rescan');
-            fetchStagedInvoices();
+            setScanResults(prev => prev.map(r =>
+                r.file_hash === row.file_hash ? { ...r, validationStatus: oldStatus } : r
+            ));
         }
     };
 
-
-    const handleRemove = async (fileHash: string) => {
+const handleRemove = async (fileHash: string) => {
         try {
             const targetRow = scanResults.find(r => r.file_hash === fileHash);
             const isSnapshotRow = targetRow ? !!targetRow._isSnapshot : String(fileHash).startsWith('snap_');
@@ -1733,6 +2001,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     };
 
     const handleBack = () => {
+        if (workflowState === "FINALIZING") return;
         setStep('upload');
         if (useAllUnresolved) {
             setUseAllUnresolved(false);
@@ -1741,13 +2010,14 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         }
     };
 
-    // ── STEP 3 — FINALIZE ────────────────────────────────────────────────────
-
-    const canFinalize = (readyToFinalizeCount > 0 || scanResults.some(r => ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEEDS_ATTENTION', 'LOW_CONFIDENCE', 'DUPLICATE'].includes(r.validationStatus) && r.validationStatus !== 'VOUCHER_CREATED')) && !finalizing;
+    const canFinalize = (readyToFinalizeCount > 0 || needsVendorCount > 0 || scanResults.some(r => 
+        r.validationStatus !== 'VOUCHER_CREATED' &&
+        r.validationStatus !== 'DUPLICATE'
+    )) && !finalizing;
 
     const handleFinalize = async () => {
         if (!canFinalize) {
-            showError(`No valid invoices to finalize. You have ${needsVendorCount} invoices that still need vendor registration.`);
+            showError(`No valid invoices to finalize or move to pending.`);
             return;
         }
 
@@ -1756,35 +2026,45 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         const allReadyRows = scanResults.filter(r =>
             (r.vendor_id || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR'].includes(r.validationStatus)) &&
             r.validationStatus !== 'VOUCHER_CREATED' &&
-            r.validationStatus !== 'DUPLICATE'
+            r.validationStatus !== 'DUPLICATE' &&
+            r.item_status === 'ALREADY EXIST'
         );
         const allPendingRows = scanResults.filter(r =>
-            !r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'NEED_VENDOR'].includes(r.validationStatus)
+            (!r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'NEED_VENDOR'].includes(r.validationStatus)) ||
+            r.item_status === 'CREATE ITEM'
         );
         const validCount = readyToFinalizeCount > 0 ? readyToFinalizeCount : allReadyRows.length;
         const pendingCount = needsVendorCount > 0 ? needsVendorCount : allPendingRows.length;
 
-        if (validCount === 0) {
-            showError(`No matched invoices are ready to save. Please complete vendor registration for ${pendingCount} items first.`);
+        if (validCount === 0 && pendingCount === 0) {
+            showError(`No invoices are ready to process.`);
             return;
         }
 
-        if (pendingCount > 0 && validCount > 0) {
-            if (!window.confirm(`${validCount} invoice(s) are ready to save as vouchers.\n${pendingCount} invoice(s) still need attention and will remain here.\n\nSave the ${validCount} ready invoice(s) now?`)) {
+        if (validCount === 0 && pendingCount > 0) {
+            if (!window.confirm(`${pendingCount} invoice(s) still need attention. They will be moved to your Pending Purchases queue to be resolved later.\n\nMove them to Pending Purchases now?`)) {
+                return;
+            }
+        } else if (pendingCount > 0 && validCount > 0) {
+            if (!window.confirm(`${validCount} invoice(s) are ready to save as vouchers.\n${pendingCount} invoice(s) still need attention and will be moved to Pending Purchases.\n\nProceed now?`)) {
                 return;
             }
         }
 
+        if (workflowState === "FINALIZING") return;
+        setWorkflowState("FINALIZING");
         setFinalizing(true);
         setStep('finalizing');
 
+        console.log('[FINALIZE_STARTED] Halting polling and hydration');
+        stopAllPolling();
+
         try {
             const res: FinalizeResult = await httpClient.post('/api/ocr-staging-finalize/', {
-                upload_session_id: useAllUnresolved ? undefined : uploadSessionId
+                upload_session_id: uploadSessionId // Send uploadSessionId ALWAYS!
             });
 
             setFinalizeResult(res);
-            setStep('done');
 
             if (res.created > 0) {
                 showSuccess(res.message || `✅ ${res.created} voucher(s) created successfully!`);
@@ -1793,13 +2073,47 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 showError(`⚠️ ${res.failed} internal error(s) occurred.`);
             }
 
-            // Refresh staged invoices so the unresolved ones remain visible when user comes back
-            fetchStagedInvoices(undefined, false, vFilterRef.current);
+            if (res.skipped > 0) {
+                // If there are skipped/pending items left, stay on review screen and fetch them.
+                console.log('[SESSION_PARTIAL_TEARDOWN] Fetching remaining staging rows...');
+                setStep('review');
+                setWorkflowState("REVIEW");
+                // Fetch canonical backend state
+                fetchStagedInvoices(useAllUnresolvedRef.current ? undefined : uploadSessionId);
+            } else {
+                console.log('[SESSION_TEARDOWN_STARTED] Cleaning up live upload state');
+                // TEARDOWN ORCHESTRATION STATE BEFORE CLEARING upload_session_id
+                setUploadRows([]);
+                setResumeRows([]);
+                setUploadSelectedHashes(new Set());
+                setResumeSelectedHashes(new Set());
+                setScanProgress(0);
+
+                console.log('[SESSION_TEARDOWN_COMPLETED] Upload session cleared');
+
+                if (typeof window.crypto !== 'undefined' && typeof window.crypto.randomUUID === 'function') {
+                    setUploadSessionId(window.crypto.randomUUID());
+                } else {
+                    setUploadSessionId(Math.random().toString(36).substring(2, 11) + Date.now().toString(36));
+                }
+
+                if (useAllUnresolvedRef.current) {
+                    setUseAllUnresolved(false);
+                    useAllUnresolvedRef.current = false;
+                }
+
+                setWorkflowState("FINALIZED");
+                console.log('[LIVE_UPLOAD_RESET] Transitioning to clean upload state');
+                setStep('upload');
+                setWorkflowState("LIVE_UPLOAD");
+            }
+
             onFinalized?.(res);
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.message || 'Finalize failed.';
             showError(`❌ ${msg}`);
             setStep('review');
+            setWorkflowState("REVIEW");
         } finally {
             setFinalizing(false);
         }
@@ -1900,14 +2214,15 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         }
     };
 
-
-
-    // ── Render ────────────────────────────────────────────────────────────────
+// ── Render ────────────────────────────────────────────────────────────────
 
     const missingCount = mergedResults.filter(r => r.validationStatus === 'VENDOR_MISSING' || r.validationStatus === 'NOT_FOUND').length;
     const conflictCount = mergedResults.filter(r => r.validationStatus === 'GSTIN_CONFLICT').length;
     const resolvedCount = mergedResults.filter(r => r.validationStatus === 'RESOLVED').length;
-    const readyCount = mergedResults.filter(r => ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus)).length;
+    const readyCount = mergedResults.filter(r => 
+        ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus) && 
+        r.item_status === 'ALREADY EXIST'
+    ).length;
     const duplicatesCount = mergedResults.filter(r => ['DUPLICATE', 'DUPLICATE_IN_BATCH'].includes(r.validationStatus)).length;
     const errorCount = mergedResults.filter(r => r.validationStatus === 'VALIDATION_FAILED' || r.validationStatus === 'EXTRACTION_FAILED' || r.validationStatus === 'ERROR').length;
     // pendingCount: records still in async pipeline (show SCANNING spinner in banner)
@@ -1919,10 +2234,13 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     // Explicitly EXCLUDE records that are still in-flight (processing/PENDING/scanning)
     // so the counter stays 0 while AI workers are running.
     const IN_PROGRESS_STATUSES = new Set(['processing', 'PENDING', 'PROCESSING', 'scanning', 'EXTRACTING']);
-    const attentionNeededCount = mergedResults.filter(r =>
-        !IN_PROGRESS_STATUSES.has(r.validationStatus) &&
-        r.validationStatus !== 'VOUCHER_CREATED'
-    ).length;
+    const attentionNeededCount = mergedResults.filter(r => {
+        if (IN_PROGRESS_STATUSES.has(r.validationStatus)) return false;
+        if (r.validationStatus === 'VOUCHER_CREATED' || r.validationStatus === 'DUPLICATE') return false;
+        const vendorMissing = !r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus);
+        const itemsMissing = r.item_status === 'CREATE ITEM';
+        return vendorMissing || itemsMissing;
+    }).length;
 
     // Default filter on first load of review step
     useEffect(() => {
@@ -1943,100 +2261,37 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     return (
         <>
             {/* Resolve Section (Integrated into Edit modal or fallback to Create modal) */}
-            {resolvingRow && (() => {
-                if (resolvingRow.validationStatus === 'GSTIN_CONFLICT') {
-                    // This case is now handled by integrated EditInvoiceModal
-                    return null;
-                }
+            {isCreateVendorModalOpen && resolvingRow && (
+                <CreateNewVendorFullModal
+                    prefilledData={extractedVendorData}
+                    onClose={() => {
+                        setIsCreateVendorModalOpen(false);
+                        setResolvingRow(null);
+                    }}
+                    onVendorCreated={(vendorName, vendorId) => {
+                        setIsCreateVendorModalOpen(false);
+                        handleSaveVendorSuccess(vendorName, vendorId, resolvingRow);
+                    }}
+                />
+            )}
 
-                // Support hierarchical structure or flat structure
-                const sections = resolvingRow.extracted_data?.sections || {};
-                const supplier = sections.supplier_details || resolvingRow.extracted_data || {};
-
-                // Extract items for Supplier Items pre-filling
-                const rawItems = sections.items || resolvingRow.extracted_data?.items || resolvingRow.extracted_data?.line_items || [];
-                const supplier_items = rawItems.map((it: any) => ({
-                    supplierItemCode: it['Item Code'] || it['item_code'] || it['Part No'] || '',
-                    supplierItemName: it['Item Name'] || it['item_name'] || it['Description'] || it['description'] || '',
-                    hsnSac: it['HSN/SAC'] || it['hsn_sac'] || it['HSN Code'] || it['hsnSac'] || it['hsn_code'] || ''
-                }));
-
-                return (
-                    <CreateVendorModal
-                        initialData={{
-                            vendor_name: resolvingRow.vendor_name || supplier['vendor_name'] || supplier['Vendor Name'] || '',
-                            gstin: resolvingRow.vendor_gstin || supplier['gstin'] || supplier['GSTIN'] || '',
-                            address: supplier['vendor_address'] || supplier['Address'] || supplier['address'] || '',
-                            state: supplier['vendor_city'] || supplier['State'] || supplier['state'] || '',
-                            branch: supplier['branch'] || resolvingRow.branch || '',
-                            vendor_category: supplier['vendor_category'] || supplier['Vendor Category'] || '',
-                            supplier_items: supplier_items
-                        }}
-                        onClose={() => setResolvingRow(null)}
-                        onSave={handleSaveVendor}
-                    />
-                );
-            })()}
-
-            {/* Edit Modal */}
-            {editingRow && (
-                <EditInvoiceModal
-                    row={editingRow}
-                    voucherType={voucherType}
-                    onClose={() => setEditingRow(null)}
-                    onSave={(newData, revalidation) => {
-                        let updatedRow: ScanResult | null = null;
-                        setScanResults(prev => prev.map(r => {
-                            if (r.id !== editingRow.id) return r;
-                            // Map revalidation.status
-                            let newValidationStatus: ValidationStatus = r.validationStatus;
-                            if (revalidation) {
-                                if (revalidation.status === 'READY' || revalidation.status === 'FOUND' || revalidation.status === 'found') newValidationStatus = 'READY';
-                                else if (revalidation.status === 'DUPLICATE' || revalidation.status === 'duplicate') newValidationStatus = 'DUPLICATE';
-                                else if (revalidation.status === 'VENDOR_MISSING' || revalidation.status === 'NOT_FOUND' || revalidation.status === 'not_found') newValidationStatus = 'VENDOR_MISSING';
-                                else if (revalidation.status === 'GSTIN_CONFLICT' || revalidation.status === 'gstin_conflict') newValidationStatus = 'GSTIN_CONFLICT';
-                                else if (revalidation.status === 'VALIDATION_FAILED' || revalidation.status === 'validation_failed') newValidationStatus = 'VALIDATION_FAILED';
-                                else if (revalidation.status === 'EXTRACTION_FAILED') newValidationStatus = 'EXTRACTION_FAILED';
-                                else if (revalidation.status === 'error' || revalidation.status === 'ERROR') newValidationStatus = 'EXTRACTION_FAILED';
-                                else newValidationStatus = 'VENDOR_MISSING';
-                            }
-                            // Extract flattened fields for the table to refresh immediately
-                            const invoicePart = newData.invoice || newData.header || newData;
-                            const newInvNo = invoicePart['Supplier Invoice No'] || invoicePart['Supplier Invoice No.'] || invoicePart.invoice_number || r.invoice_number;
-                            const newInvDate = invoicePart['Voucher Date'] || invoicePart['Date'] || invoicePart.invoice_date || r.invoice_date;
-                            const newGstin = invoicePart['GSTIN'] || invoicePart.vendor_gstin || r.vendor_gstin;
-                            const newAmount = invoicePart['Total Invoice Value'] || invoicePart['Grand Total'] || invoicePart['Total Amount'] || invoicePart.total_amount || r.total_amount;
-
-                            const updated = {
-                                ...r,
-                                extracted_data: newData,
-                                validationStatus: newValidationStatus,
-                                invoice_number: newInvNo,
-                                invoice_date: newInvDate,
-                                vendor_gstin: newGstin,
-                                total_amount: newAmount,
-                                vendor_id: revalidation?.vendor_id ?? r.vendor_id,
-                                vendor_name: revalidation?.vendor_name || r.vendor_name,
-                                // Use backend's authoritative vendor_status (EXISTS→FOUND, NEW→MISSING)
-                                // falling back to status-based inference for legacy compatibility
-                                vendor_status: (
-                                    revalidation?.vendor_status === 'EXISTS' ||
-                                    revalidation?.status === 'READY' ||
-                                    revalidation?.status === 'FOUND' ||
-                                    revalidation?.status === 'found'
-                                ) ? 'FOUND' as VendorStatus : r.vendor_status,
-                            };
-                            if (newValidationStatus === 'VENDOR_MISSING') updatedRow = updated;
-                            return updated;
-                        }));
-                        // ✅ Auto-open Create Vendor immediately if revalidation says vendor is missing
-                        // so user doesn't need to click "Create Vendor" as a separate step
-                        if (updatedRow) {
-                            setTimeout(() => setResolvingRow(updatedRow), 150);
+            {isCreateItemModalOpen && itemResolvingRow && (
+                <CreateNewInventoryItemModal
+                    prefilledData={extractedItemData}
+                    onClose={() => {
+                        setIsCreateItemModalOpen(false);
+                        setItemResolvingRow(null);
+                    }}
+                    onItemCreated={(itemName, itemCode, itemId) => {
+                        setIsCreateItemModalOpen(false);
+                        if (itemResolvingRow) {
+                            handleRevalidateRow(itemResolvingRow);
                         }
                     }}
                 />
             )}
+
+            {/* Edit — handled by parent via onEditRow (opens canonical Purchase Voucher form) */}
 
             {/* Details Side Panel */}
             {detailsRow && (
@@ -2096,25 +2351,29 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                             </div>
                         </div>
 
-                        {/* Step Indicator */}
-                        <div className="flex items-center gap-1 mr-4">
-                            {(['upload', 'review', 'done'] as const).map((s, idx) => {
-                                const labels = ['1. Upload', '2. Review', '3. Save'];
-                                const active = step === s || (s === 'upload' && step === 'scanning') || (s === 'review' && step === 'finalizing');
-                                const done = (s === 'upload' && ['review', 'finalizing', 'done'].includes(step)) ||
-                                    (s === 'review' && step === 'done');
-                                return (
-                                    <React.Fragment key={s}>
-                                        {idx > 0 && (
-                                            <div className={`w-6 h-px ${done ? 'bg-white' : 'bg-white/30'}`} />
-                                        )}
-                                        <div className={`px-2 py-0.5 rounded text-xs font-semibold transition-all
-                                            ${done ? 'bg-emerald-400 text-white' : active ? 'bg-white text-indigo-700' : 'bg-white/20 text-white/70'}`}>
-                                            {done ? '✓' : labels[idx]}
-                                        </div>
-                                    </React.Fragment>
-                                );
-                            })}
+                        {/* Resume Toggle & Step Indicator */}
+                        <div className="flex items-center gap-4 mr-4">
+
+
+                            <div className="flex items-center gap-1">
+                                {(['upload', 'review', 'done'] as const).map((s, idx) => {
+                                    const labels = ['1. Upload', '2. Review', '3. Save'];
+                                    const active = step === s || (s === 'upload' && step === 'scanning') || (s === 'review' && step === 'finalizing');
+                                    const done = (s === 'upload' && ['review', 'finalizing', 'done'].includes(step)) ||
+                                        (s === 'review' && step === 'done');
+                                    return (
+                                        <React.Fragment key={s}>
+                                            {idx > 0 && (
+                                                <div className={`w-6 h-px ${done ? 'bg-white' : 'bg-white/30'}`} />
+                                            )}
+                                            <div className={`px-2 py-0.5 rounded text-xs font-semibold transition-all
+                                                ${done ? 'bg-emerald-400 text-white' : active ? 'bg-white text-indigo-700' : 'bg-white/20 text-white/70'}`}>
+                                                {done ? '✓' : labels[idx]}
+                                            </div>
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         <button
@@ -2135,42 +2394,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         {step === 'upload' && (
                             <div className="p-6 space-y-4">
 
-                                {/* ── Resume Previous Work (Tenant-wide) ── */}
-                                {showResumePrompt && (
-                                    <div className="bg-indigo-50 border-2 border-indigo-200 rounded-3xl p-5 flex items-start gap-4 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
-                                        <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 text-xl shadow-inner">📄</div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-black text-indigo-900 leading-tight">
-                                                Resume Previous Work?
-                                            </p>
-                                            <div className="text-xs text-indigo-700 mt-1 font-medium italic space-y-1">
-                                                {needsVendorCount > 0 && (
-                                                    <p className="text-orange-700 font-black flex items-center gap-1">
-                                                        ⚠️ {needsVendorCount} invoice{needsVendorCount !== 1 ? 's' : ''} require{needsVendorCount !== 1 ? '' : 's'} vendor registration.
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-3 mt-4">
-                                                <button
-                                                    onClick={() => {
-                                                        useAllUnresolvedRef.current = true;
-                                                        setUseAllUnresolved(true);
-                                                        setFilterStatus('pending');
-                                                        fetchStagedInvoices(null, false, 'create_vendor');
-                                                        setStep('review');
-                                                    }}
-                                                    className="px-5 py-2 bg-orange-500 text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-all active:scale-95 shadow-lg flex items-center gap-2"
-                                                >
-                                                    🔍 View Unresolved Vendors
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-
-
-                                <div
+<div
                                     onDrop={handleDrop}
                                     onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                                     onDragLeave={() => setDragOver(false)}
@@ -2243,26 +2467,6 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 </div>
                                             ))}
                                         </div>
-                                        {unresolvedCount > 0 && (
-                                            <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs font-medium text-indigo-700">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="flex-shrink-0 animate-pulse text-sm">⏳</span>
-                                                    <span>You have <strong>{unresolvedCount}</strong> other invoice{unresolvedCount !== 1 ? 's' : ''} already in the scanner pipeline.</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => {
-                                                        useAllUnresolvedRef.current = true;
-                                                        setUseAllUnresolved(true);
-                                                        setFilterStatus('pending');
-                                                        setStep('review');
-                                                        fetchStagedInvoices(null, false, 'create_vendor');
-                                                    }}
-                                                    className="px-3 py-1 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-1 active:scale-95"
-                                                >
-                                                    🚀 Resume Staged
-                                                </button>
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                             </div>
@@ -2314,13 +2518,12 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                         <div className="text-2xl">{attentionNeededCount}</div>
                                         <div className="text-[10px] uppercase opacity-70 tracking-wider">Need Attention</div>
                                         <div className="mt-1 text-[9px] text-amber-600/60 font-medium">
-                                            (from {mergedResults.filter(r => !r.processed && (r.validationStatus === 'NEED_VENDOR' || r.vendor_status === 'CREATE_VENDOR' || r.validationStatus === 'NOT_FOUND' || r.validationStatus === 'VENDOR_MISSING' || !r.vendor_id)).reduce((acc, r) => acc + (r._mergedCount || 1), 0)} physical files)
+                                            (from {mergedResults.filter(r => !r.processed && (r.validationStatus === 'NEED_VENDOR' || r.vendor_status === 'NEW' || r.vendor_status === 'CREATE_VENDOR' || r.validationStatus === 'NOT_FOUND' || r.validationStatus === 'VENDOR_MISSING' || !r.vendor_id)).reduce((acc, r) => acc + (r._mergedCount || 1), 0)} physical files)
                                         </div>
                                     </div>
                                 </div>
 
-
-                                {/* Footer Filter Toggle - removed for focus */}
+{/* Footer Filter Toggle - removed for focus */}
 
                                 {/* Banners */}
                                 {missingCount > 0 && (
@@ -2396,7 +2599,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 <input
                                                     type="checkbox"
                                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                    checked={selectedHashes.size > 0 && selectedHashes.size === scanResults.filter(row => row.vendor_status !== 'EXISTS').length}
+                                                    checked={selectedHashes.size > 0 && selectedHashes.size === scanResults.filter(row => !['EXISTS', 'FOUND', 'MATCHED'].includes(row.vendor_status || '')).length}
                                                     onChange={toggleSelectAll}
                                                 />
                                             </th>
@@ -2409,6 +2612,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             <th className="px-3 py-3 text-left">Branch</th>
                                             <th className="px-3 py-3 text-right">Amount</th>
                                             <th className="px-3 py-3 text-center">Vendor Status</th>
+                                            <th className="px-3 py-3 text-center">Item Status</th>
                                             <th className="px-3 py-3 text-center">Voucher Status</th>
                                             <th className="px-3 py-3 text-center">Action</th>
                                         </tr>
@@ -2440,26 +2644,43 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 const rowBranch = (row.extracted_data?.sections?.supplier_details?.branch || row.branch || "").toString().trim().toUpperCase();
                                                 const rowName = (row.extracted_data?.sections?.supplier_details?.vendor_name || row.vendor_name || "").toString().trim().toUpperCase();
 
-                                                const matchedOther = scanResults.find(r => {
-                                                    if (r.file_hash === row.file_hash) return false;
+                                                // [SIBLING_VENDOR_INFERENCE_BLOCKED] Each row uses ONLY its own backend validation.
+                                                // Borrowing vendor_id from sibling rows is explicitly disabled — it was the root
+                                                // cause of false "ALREADY EXIST" badges for vendors not in the master.
+                                                console.log(
+                                                    `[SIBLING_VENDOR_INFERENCE_BLOCKED]\n` +
+                                                    `record_id=${row.id}`
+                                                );
 
-                                                    const isRMatched = r.vendor_id || ["READY", "FOUND", "RESOLVED", "SUCCESS", "DUPLICATE"].includes(r.validationStatus);
-                                                    if (!isRMatched) return false;
+                                                // STRICTLY own row only — never inherit from siblings
+                                                const effectiveVendorId = row.vendor_id;
 
-                                                    const rGstin = (r.extracted_data?.sections?.supplier_details?.gstin || r.vendor_gstin || "").toString().trim().toUpperCase();
-                                                    const rBranch = (r.extracted_data?.sections?.supplier_details?.branch || r.branch || "").toString().trim().toUpperCase();
-                                                    const rName = (r.extracted_data?.sections?.supplier_details?.vendor_name || r.vendor_name || "").toString().trim().toUpperCase();
+                                                const hasEffectiveMatch = ['EXISTS', 'FOUND', 'MATCHED', 'RESOLVED'].includes(row.vendor_status || '');
+                                                const renderedBadge = hasEffectiveMatch ? 'ALREADY EXIST' : 'Create Vendor';
 
-                                                    if (rowGstin && rGstin && rowGstin === rGstin) return true;
-                                                    if (rowName && rName && rowName === rName && rowBranch === rBranch) return true;
-                                                    return false;
-                                                });
+                                                console.log(
+                                                    `[FRONTEND_VENDOR_RENDER_DECISION] ` +
+                                                    `invoice_no=${row.invoice_number || ''} ` +
+                                                    `displayed_badge=${renderedBadge} ` +
+                                                    `source_field_used=row.vendor_status ` +
+                                                    `vendor_status_val=${row.vendor_status || ''} ` +
+                                                    `vendor_id_val=${row.vendor_id || ''}`
+                                                );
 
-                                                const effectiveVendorId = row.vendor_id || matchedOther?.vendor_id;
-                                                const hasEffectiveMatch = !!effectiveVendorId || ["READY", "FOUND", "RESOLVED", "SUCCESS", "DUPLICATE", "VOUCHER_CREATED"].includes(row.validationStatus);
+                                                if (row.vendor_id && renderedBadge === 'Create Vendor') {
+                                                    console.error(
+                                                        `[VENDOR_UI_STATE_CORRUPTION] UI is rendering 'Create Vendor' even though vendor_id exists!\n` +
+                                                        `invoice_no=${row.invoice_number || ''}\n` +
+                                                        `vendor_id=${row.vendor_id}\n` +
+                                                        `vendor_status=${row.vendor_status || ''}\n` +
+                                                        `rendered_badge=${renderedBadge}\n` +
+                                                        `row_payload=${JSON.stringify(row)}`
+                                                    );
+                                                }
 
                                                 return (
-                                                    <tr key={idx} className={`group hover:bg-indigo-50/40 transition-colors ${row._isMerged ? 'bg-blue-50/30' : ''} ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' :
+                                                    <React.Fragment key={row.file_hash || row.id || idx}>
+                                                        <tr className={`group hover:bg-indigo-50/40 transition-colors ${row._isMerged ? 'bg-blue-50/30' : ''} ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' :
                                                         row.vendor_status === 'NEW' ? 'bg-amber-50/30' : ''
                                                         }`}>
                                                         <td className="px-3 py-3">
@@ -2518,7 +2739,44 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                             ) : hasEffectiveMatch ? (
                                                                 <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded">ALREADY EXIST</span>
                                                             ) : (
-                                                                <span className="bg-orange-100 text-orange-800 border border-orange-300 px-2 py-1 rounded">Create Vendor</span>
+                                                                <button
+                                                                    onClick={() => openCreateVendorModal(row)}
+                                                                    className="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white border border-orange-600 px-2 py-1 rounded cursor-pointer transition-colors"
+                                                                >
+                                                                    Create Vendor
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                        {/* Item Status */}
+                                                        <td className="px-2 py-3 text-center text-[10px] font-bold uppercase whitespace-nowrap">
+                                                            {(row.validationStatus === "processing" || row.validationStatus === "PENDING" || row.validationStatus === "EXTRACTING" || row.validationStatus === "PROCESSING" || row.validationStatus === "SCANNING") ? (
+                                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                                                                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> SCANNING
+                                                                </span>
+                                                            ) : row.item_status === 'ALREADY EXIST' ? (
+                                                                <div className="flex flex-col items-center gap-1">
+                                                                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 rounded inline-block">ALREADY EXIST</span>
+                                                                    {row.items && row.items.length > 0 && (
+                                                                        <button
+                                                                            onClick={() => toggleExpandRow(row.id)}
+                                                                            className="text-[9px] text-indigo-600 hover:text-indigo-800 font-bold underline focus:outline-none"
+                                                                        >
+                                                                            {expandedRows.has(row.id) ? 'Hide Items' : 'View Items'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            ) : row.item_status === 'CREATE ITEM' ? (
+                                                                <div className="flex flex-col items-center gap-1">
+                                                                    <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 rounded inline-block">CREATE ITEM</span>
+                                                                    <button
+                                                                        onClick={() => toggleExpandRow(row.id)}
+                                                                        className="text-[9px] text-indigo-600 hover:text-indigo-800 font-bold underline focus:outline-none"
+                                                                    >
+                                                                        {expandedRows.has(row.id) ? 'Hide Items' : 'Expand Items'}
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-gray-300">—</span>
                                                             )}
                                                         </td>
                                                         {/* Voucher Status */}
@@ -2546,7 +2804,15 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                 }}
                                                             >
                                                                 {!hasEffectiveMatch && ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) && (
-                                                                    <button onClick={() => setResolvingRow(row)} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase">
+                                                                    <button onClick={(e) => {
+                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] button onClick fired');
+                                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                                        const x = rect.left + rect.width / 2;
+                                                                        const y = rect.top + rect.height / 2;
+                                                                        const el = document.elementFromPoint(x, y);
+                                                                        console.log('[DIAGNOSTIC][CREATE_VENDOR] Element under coordinates (', x, ',', y, ') is:', el);
+                                                                        openCreateVendorModal(row);
+                                                                    }} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
                                                                         CREATE VENDOR
                                                                     </button>
                                                                 )}
@@ -2570,14 +2836,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                                         validationStatus: newStatus,
                                                                                         vendor_id: result.vendor_id ?? r.vendor_id,
                                                                                         vendor_name: result.vendor_name || r.vendor_name,
-                                                                                        // Sync vendor_status from PATCH response (Handle both legacy and modern codes)
-                                                                                        vendor_status: (result.vendor_status === 'EXISTS' || result.vendor_status === 'MATCHED')
-                                                                                            ? 'MATCHED' as VendorStatus
-                                                                                            : (result.vendor_status === 'NEW' || result.vendor_status === 'CREATE_VENDOR')
-                                                                                                ? 'CREATE_VENDOR' as VendorStatus
-                                                                                                : r.vendor_status,
+                                                                                        vendor_status: ((result.vendor_id ?? r.vendor_id) ? 'EXISTS' : (result.vendor_status || 'NEW')) as VendorStatus,
                                                                                     };
-                                                                                    if (newStatus === 'VENDOR_MISSING') setTimeout(() => setResolvingRow(updated), 150);
+                                                                                    if (newStatus === 'VENDOR_MISSING') setTimeout(() => openCreateVendorModal(updated), 150);
                                                                                     return updated;
                                                                                 }));
                                                                             } catch { fetchStagedInvoices(); }
@@ -2588,7 +2849,22 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                                                     </button>
                                                                 )}
-                                                                <button onClick={() => setEditingRow(row)} className="p-1 hover:bg-indigo-100 rounded text-indigo-600" title="Edit Data">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (onEditRow) {
+                                                                            // Enrich row with session context for Vouchers.tsx
+                                                                            onEditRow({
+                                                                                ...row,
+                                                                                uploadSessionId: uploadSessionId,
+                                                                                file_name: row.file_path?.split(/[\\/]/).pop() || row.file_path || '',
+                                                                            });
+                                                                        } else {
+                                                                            setEditingRow(row);
+                                                                        }
+                                                                    }}
+                                                                    className="p-1 hover:bg-indigo-100 rounded text-indigo-600"
+                                                                    title="Edit in Purchase Voucher"
+                                                                >
                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                     </svg>
@@ -2599,8 +2875,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                     </svg>
                                                                 </button>
 
-
-                                                                <button onClick={() => handleRemove(row.file_hash)} className="p-1 hover:bg-red-100 rounded text-red-600" title="Remove Invoice">
+<button onClick={() => handleRemove(row.file_hash)} className="p-1 hover:bg-red-100 rounded text-red-600" title="Remove Invoice">
                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                                     </svg>
@@ -2608,6 +2883,128 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                             </div>
                                                         </td>
                                                     </tr>
+
+                                                    {expandedRows.has(row.id) && (
+
+                                                        <tr className="bg-slate-50/30">
+
+                                                            <td colSpan={12} className="px-6 py-4">
+
+                                                                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+
+                                                                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+
+                                                                        <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Line Items Validation</span>
+
+                                                                        <span className="text-[10px] text-gray-500 font-mono">Total Items: {row.items?.length || 0}</span>
+
+                                                                    </div>
+
+                                                                    <table className="w-full text-left text-[11px]">
+
+                                                                        <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-150 uppercase text-[9px] tracking-wider">
+
+                                                                            <tr>
+
+                                                                                <th className="px-3 py-2 w-10 text-center">#</th>
+
+                                                                                <th className="px-3 py-2">Item Name</th>
+
+                                                                                <th className="px-3 py-2">HSN/SAC</th>
+
+                                                                                <th className="px-3 py-2">UOM</th>
+
+                                                                                <th className="px-3 py-2 text-right">Rate</th>
+
+                                                                                <th className="px-3 py-2 text-center">Item Status</th>
+
+                                                                                <th className="px-3 py-2 text-center">Action</th>
+
+                                                                            </tr>
+
+                                                                        </thead>
+
+                                                                        <tbody className="divide-y divide-slate-100">
+
+                                                                            {(row.items || []).map((item: any, itemIdx: number) => (
+
+                                                                                <tr key={itemIdx} className="hover:bg-indigo-50/20 transition-colors">
+
+                                                                                    <td className="px-3 py-2 text-center text-slate-400 font-bold">{itemIdx + 1}</td>
+
+                                                                                    <td className="px-3 py-2">
+
+                                                                                        <div className="flex flex-col">
+
+                                                                                            <span className="font-bold text-slate-900 leading-tight">{item.item_name}</span>
+
+                                                                                            {item.item_code && <span className="text-[9px] text-slate-400 font-mono mt-0.5">Code: {item.item_code}</span>}
+
+                                                                                        </div>
+
+                                                                                    </td>
+
+                                                                                    <td className="px-3 py-2 font-mono text-slate-600">{item.hsn_code || '—'}</td>
+
+                                                                                    <td className="px-3 py-2 text-slate-600 uppercase font-bold">{item.uom || '—'}</td>
+
+                                                                                    <td className="px-3 py-2 text-right text-slate-700 font-bold">₹{parseFloat(item.rate || 0).toFixed(2)}</td>
+
+                                                                                    <td className="px-3 py-2 text-center whitespace-nowrap">
+
+                                                                                        {item.item_status === 'ALREADY EXIST' ? (
+
+                                                                                            <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wider">ALREADY EXIST</span>
+
+                                                                                        ) : (
+
+                                                                                            <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wider text-amber-800">CREATE ITEM</span>
+
+                                                                                        )}
+
+                                                                                    </td>
+
+                                                                                    <td className="px-3 py-2 text-center">
+
+                                                                                        {item.item_status === 'CREATE ITEM' ? (
+
+                                                                                            <button
+
+                                                                                                onClick={() => openCreateItemModal(row, item)}
+
+                                                                                                className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white border border-amber-600 px-3 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
+
+                                                                                            >
+
+                                                                                                Create Item
+
+                                                                                            </button>
+
+                                                                                        ) : (
+
+                                                                                            <span className="text-gray-400">—</span>
+
+                                                                                        )}
+
+                                                                                    </td>
+
+                                                                                </tr>
+
+                                                                            ))}
+
+                                                                        </tbody>
+
+                                                                    </table>
+
+                                                                </div>
+
+                                                            </td>
+
+                                                        </tr>
+
+                                                    )}
+
+                                                    </React.Fragment>
                                                 )
                                             })}
                                     </tbody>
@@ -2662,21 +3059,6 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
                                     {step === 'upload' && (
                                         <div className="flex items-center gap-3">
-                                            {unresolvedCount > 0 && (
-                                                <button
-                                                    onClick={() => {
-                                                        useAllUnresolvedRef.current = true;
-                                                        setUseAllUnresolved(true);
-                                                        setFilterStatus('pending');
-                                                        setStep('review');
-                                                        fetchStagedInvoices(null, false, 'create_vendor');
-                                                    }}
-                                                    className="px-6 py-2.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-100 transition-all flex items-center gap-2 active:scale-95 whitespace-nowrap"
-                                                >
-                                                    🚀 Resume Staged ({unresolvedCount})
-                                                </button>
-                                            )}
-
                                             <button
                                                 onClick={handleScan}
                                                 disabled={selectedFiles.length === 0}

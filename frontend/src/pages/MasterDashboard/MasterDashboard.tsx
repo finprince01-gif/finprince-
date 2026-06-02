@@ -62,10 +62,10 @@ interface MasterDashboardPageProps {
     setCurrentPage: (page: MasterPage | 'BranchDetail') => void;
 }
 
-const MasterDashboardPage: React.FC<MasterDashboardPageProps> = ({ 
-    onLogout, 
-    currentPage, 
-    setCurrentPage 
+const MasterDashboardPage: React.FC<MasterDashboardPageProps> = ({
+    onLogout,
+    currentPage,
+    setCurrentPage
 }) => {
     const adminToken = getAccessToken();
     const adminPayload = decodeJWT(adminToken);
@@ -75,13 +75,13 @@ const MasterDashboardPage: React.FC<MasterDashboardPageProps> = ({
     const [stats, setStats] = useState<PlatformStats | null>(null);
     const [recentActivity, setRecentActivity] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
-    
+
     // Branch drill-down state
     const [selectedBranchForDetail, setSelectedBranchForDetail] = useState<any | null>(null);
 
     // Reporting & Filtering states
     const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
-    
+
     // Accounting Data State (for ReportsPage)
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
     const [entries, setEntries] = useState<any[]>([]); // New state for journal entries
@@ -246,7 +246,7 @@ const MasterDashboardPage: React.FC<MasterDashboardPageProps> = ({
             <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
                 {/* Navigation Header */}
                 <div className="flex items-center gap-4 mb-2">
-                    <button 
+                    <button
                         onClick={() => setCurrentPage('Dashboard')}
                         className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-900 hover:text-white transition-all shadow-sm"
                     >
@@ -259,18 +259,18 @@ const MasterDashboardPage: React.FC<MasterDashboardPageProps> = ({
 
                 <div className="bg-white px-8 py-4 rounded-2xl border border-gray-100 shadow-xl flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                         <Icon name="users" className="w-5 h-5 text-indigo-600" />
-                         <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Active Focus:</span>
-                         <span className="text-sm font-black text-slate-900 uppercase tracking-tight">{getSelectedBranchName()}</span>
-                         {isDataLoading && (
-                             <div className="ml-4 flex items-center gap-2">
-                                 <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div>
-                                 <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Syncing Records...</span>
-                             </div>
-                         )}
+                        <Icon name="users" className="w-5 h-5 text-indigo-600" />
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Active Focus:</span>
+                        <span className="text-sm font-black text-slate-900 uppercase tracking-tight">{getSelectedBranchName()}</span>
+                        {isDataLoading && (
+                            <div className="ml-4 flex items-center gap-2">
+                                <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div>
+                                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Syncing Records...</span>
+                            </div>
+                        )}
                     </div>
-                    <select 
-                        value={selectedBranchId} 
+                    <select
+                        value={selectedBranchId}
                         onChange={(e) => setSelectedBranchId(e.target.value)}
                         className="erp-input h-10 px-4 pr-10 text-[10px] font-black uppercase tracking-widest bg-slate-50 border-transparent hover:bg-white min-w-[280px]"
                     >
@@ -292,9 +292,9 @@ const MasterDashboardPage: React.FC<MasterDashboardPageProps> = ({
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
 
             <div className="bg-white rounded-[32px] border border-gray-100 shadow-2xl overflow-hidden min-h-[600px] p-8">
-                <SettingsPage 
-                    companyDetails={companyDetails} 
-                    onSave={(updated) => setCompanyDetails(updated)} 
+                <SettingsPage
+                    companyDetails={companyDetails}
+                    onSave={(updated) => setCompanyDetails(updated)}
                     tenantId={selectedBranchId}
                 />
             </div>
@@ -308,12 +308,12 @@ const MasterDashboardPage: React.FC<MasterDashboardPageProps> = ({
                 <BranchesPage />
             )}
             {currentPage === 'BranchDetail' && selectedBranchForDetail && (
-                <BranchDetail 
-                    branch={selectedBranchForDetail} 
+                <BranchDetail
+                    branch={selectedBranchForDetail}
                     onBack={() => {
                         setCurrentPage('Branches');
                         setSelectedBranchForDetail(null);
-                    }} 
+                    }}
                 />
             )}
             {currentPage === 'Reports' && renderReports()}

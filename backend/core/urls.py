@@ -19,8 +19,11 @@ from .reports_views import (
     StockSummaryExcelView, GSTReportExcelView
 )
 
+from .tools_api import NoteReminderViewSet
+
 router = routers.DefaultRouter()
 router.register('branches', BranchViewSet, basename='branches')
+router.register('tools/notes', NoteReminderViewSet, basename='tools-notes')
 
 urlpatterns = [
     path('auth/me/', MeView.as_view(), name='auth-me'),
