@@ -1132,7 +1132,7 @@ class ApiService {
 
         // Handle Debit Note Vouchers
         for (const voucher of debitNoteVouchers) {
-            const updateId = voucher.reference_id || voucher.id;
+            const updateId = (voucher as any).reference_id || voucher.id;
             if (updateId && !String(updateId).includes('T') && !String(updateId).includes('.')) {
                 promises.push(this.updateDebitNote(updateId, voucher));
             } else {
@@ -1306,7 +1306,7 @@ class ApiService {
             formData.append(key, value);
         });
         formData.append('file', file);
-        
+
         // Use postExternal to avoid sending local auth headers to AWS
         return httpClient.postExternal<any>(url, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }

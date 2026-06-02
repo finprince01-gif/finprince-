@@ -8,6 +8,7 @@ from rest_framework import status, permissions
 from django.http import HttpResponse
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
+from openpyxl.worksheet.datavalidation import DataValidation
 import io
 
 from .models import (
@@ -28,22 +29,23 @@ logger = logging.getLogger(__name__)
 # Column Definitions for Vendor Excel
 VENDOR_COLUMNS = [
     {"label": "Vendor Name", "key": "vendor_name", "required": True},
-    {"label": "Vendor Code", "key": "vendor_code", "required": False},
+    {"label": "Vendor Code", "key": "vendor_code", "required": True},
     {"label": "Category", "key": "category", "required": False},
     {"label": "PAN Number", "key": "pan_no", "required": False},
     {"label": "Contact Person", "key": "contact_person", "required": False},
     {"label": "Email Address", "key": "email", "required": True},
     {"label": "Contact Number", "key": "contact_no", "required": True},
     {"label": "Billing Currency", "key": "billing_currency", "required": False},
+    {"label": "Registration Type", "key": "registration_type", "required": False},
     {"label": "GSTIN", "key": "gstin", "required": False},
-    {"label": "Branch Name", "key": "reference_name", "required": False},
+    {"label": "Reference Name", "key": "reference_name", "required": False},
     {"label": "Address Line 1", "key": "branch_address_line1", "required": False},
     {"label": "Address Line 2", "key": "branch_address_line2", "required": False},
     {"label": "Address Line 3", "key": "branch_address_line3", "required": False},
-    {"label": "City", "key": "branch_city", "required": False},
-    {"label": "State", "key": "branch_state", "required": False},
+    {"label": "City", "key": "branch_city", "required": True},
+    {"label": "State", "key": "branch_state", "required": True},
     {"label": "Pincode", "key": "branch_pincode", "required": False},
-    {"label": "Country", "key": "branch_country", "required": False},
+    {"label": "Country", "key": "branch_country", "required": True},
     {"label": "Branch Contact Person", "key": "branch_contact_person", "required": False},
     {"label": "Branch Email Address", "key": "branch_email", "required": False},
     {"label": "Branch Contact Number", "key": "branch_contact_no", "required": False},
@@ -70,7 +72,6 @@ VENDOR_COLUMNS = [
     {"label": "Item Code", "key": "item_code", "required": False},
     {"label": "Item Name", "key": "item_name", "required": False},
     {"label": "HSN/SAC Code", "key": "hsn_code", "required": False},
-    {"label": "UOM", "key": "uom", "required": False},
     {"label": "Supplier Item Code", "key": "supplier_item_code", "required": False},
     {"label": "Supplier Item Name", "key": "supplier_item_name", "required": False},
     {"label": "Packing Notes", "key": "packing_notes", "required": False},
@@ -122,14 +123,15 @@ class VendorExcelTemplateDownloadView(APIView):
             ("Category", "Mandatory", "Text", "Must match an existing vendor category (e.g., Raw Material, Packing Material)."),
             ("Email Address", "Mandatory", "Email Format", "Primary communication email for sending purchase orders and notifications."),
             ("Contact Number", "Mandatory", "Numeric / Text", "Primary contact phone or mobile number."),
-            ("Vendor Code", "Optional", "Text", "Custom unique vendor identifier. Auto-generated if left empty."),
+            ("Vendor Code", "Mandatory", "Text", "Custom unique vendor identifier. VEN-XXXXXX format."),
             ("PAN Number", "Optional", "10 Characters", "Must be exactly 10 alphanumeric characters in standard PAN format (e.g., ABCDE1234F)."),
             ("Billing Currency", "Optional", "Text (e.g., INR, USD)", "Default billing currency for purchase orders. Defaults to INR if empty."),
             
             {"section": "2. BRANCH DETAILS"},
-            ("Branch Name", "Mandatory", "Text", "Name of the vendor's billing/shipping branch or location (e.g., Main Branch, Factory)."),
+            ("Reference Name", "Mandatory", "Text", "Name of the vendor's billing/shipping branch or location (e.g., Main Branch, Factory)."),
             ("Address Line 1", "Mandatory", "Text", "Flat/House no., building name, or street address."),
             ("Address Line 2", "Mandatory", "Text", "Locality, sector, area, or road name."),
+            ("Registration Type", "Optional", "Text", "Registration type of the vendor (e.g., Regular, Composition). Defaults to Regular."),
             ("GSTIN", "Optional", "15 Characters", "Must be exactly 15 alphanumeric characters in valid GSTIN format starting with state code."),
             ("Address Line 3, City, State, Pincode, Country", "Optional", "Text / Numeric", "Additional detailed address and geographical identifiers."),
             
@@ -228,6 +230,23 @@ class VendorExcelTemplateDownloadView(APIView):
         for row in range(2, 1001):
             for col in range(1, len(VENDOR_COLUMNS) + 1):
                 ws.cell(row=row, column=col).protection = Protection(locked=False)
+                
+        # Add Data Validation for Registration Type
+        reg_col_letter = None
+        for col_idx, col_def in enumerate(VENDOR_COLUMNS, 1):
+            if col_def["key"] == "registration_type":
+                from openpyxl.utils import get_column_letter
+                reg_col_letter = get_column_letter(col_idx)
+                break
+                
+        if reg_col_letter:
+            dv = DataValidation(type="list", formula1='"Regular,Composition,Special Economic Zone (SEZ),Unregistered"', allow_blank=True, showErrorMessage=True)
+            dv.error = 'Your entry is not in the list. Please select from the dropdown options.'
+            dv.errorTitle = 'Invalid Entry'
+            dv.prompt = 'Please select from the list'
+            dv.promptTitle = 'Registration Type'
+            ws.add_data_validation(dv)
+            dv.add(f'{reg_col_letter}2:{reg_col_letter}1000')
         
         wb.active = 0
         
@@ -272,8 +291,9 @@ class VendorExcelExportView(APIView):
                 "Email Address": vendor.email,
                 "Contact Number": vendor.contact_no,
                 "Billing Currency": vendor.billing_currency,
+                "Registration Type": gst.gst_registration_type.title() if gst and gst.gst_registration_type else "Regular",
                 "GSTIN": gst.gstin if gst else "",
-                "Branch Name": gst.reference_name if gst else "",
+                "Reference Name": gst.reference_name if gst else "",
                 "Address Line 1": gst.branch_address_line1 if gst else "",
                 "Address Line 2": gst.branch_address_line2 if gst else "",
                 "Address Line 3": gst.branch_address_line3 if gst else "",
@@ -332,12 +352,25 @@ class VendorExcelUploadView(APIView):
     def post(self, request):
         tenant_id = getattr(request.user, "tenant_id", None)
         username = getattr(request.user, "username", "system")
-        excel_file = request.FILES.get("file")
-        json_data = request.data.get("data")
         dry_run = request.query_params.get("dry_run") == "true"
         
+        excel_file = request.FILES.get("file")
+        json_data = request.data.get("data")
+
         if not excel_file and not json_data:
-            return Response({"error": "No file or data provided"}, status=400)
+            return Response({"error": "No file or JSON data provided"}, status=400)
+
+        # DEBUG: Save file to disk
+        if excel_file:
+            try:
+                import os
+                from django.conf import settings
+                with open(os.path.join(settings.BASE_DIR, 'debug_excel.xlsx'), 'wb') as f:
+                    for chunk in excel_file.chunks():
+                        f.write(chunk)
+                excel_file.seek(0)
+            except Exception as e:
+                print("Failed to save debug excel", e)
         
         try:
             records_to_process = []
@@ -361,6 +394,18 @@ class VendorExcelUploadView(APIView):
                     row_data = {}
                     for lbl, idx in header_index.items():
                         row_data[lbl] = row[idx-1]
+                    
+                    # Normalize: fix Reference Name if it got wrongly mapped to Bank Branch key due to header conflict
+                    # This happens because 'branch_name' normalizes to 'branchname', matching 'Reference Name'
+                    def _raw_empty(v):
+                        return not v or str(v).strip().lower() in ['', 'none', 'nan', 'null', 'n/a']
+                    
+                    if _raw_empty(row_data.get("Reference Name")):
+                        for _fallback in ["Bank Branch", "reference_name", "BranchName"]:
+                            if not _raw_empty(row_data.get(_fallback)):
+                                row_data["Reference Name"] = row_data[_fallback]
+                                break
+                    
                     records_to_process.append({"row_data": row_data, "row_index": row_idx})
             else:
                 if isinstance(json_data, str):
@@ -371,64 +416,98 @@ class VendorExcelUploadView(APIView):
 
             results = {"success": 0, "failed": 0, "errors": [], "successful_imports": []}
             
+            # Group hierarchical rows (subsequent rows with empty vendor basic details)
+            grouped_records = []
+            current_main_record = None
+
+            def _raw_empty(v):
+                return not v or str(v).strip().lower() in ['', 'none', 'nan', 'null', 'n/a']
+
+            for item in records_to_process:
+                r_data = item.get("row_data")
+                if not r_data: continue
+
+                v_code = r_data.get("Vendor Code") or r_data.get("vendor_code")
+                v_name = r_data.get("Vendor Name") or r_data.get("vendor_name")
+                email = r_data.get("Email Address") or r_data.get("email")
+
+                is_main = not (_raw_empty(v_code) and _raw_empty(v_name) and _raw_empty(email))
+
+                if is_main:
+                    if "extra_branches" not in r_data: r_data["extra_branches"] = []
+                    if "extra_banks" not in r_data: r_data["extra_banks"] = []
+                    if "products" not in r_data: r_data["products"] = []
+                    
+                    has_product = not _raw_empty(r_data.get("Item Code") or r_data.get("item_code") or r_data.get("Item Name") or r_data.get("item_name"))
+                    if has_product:
+                        # Extract product data from the main row to include in the products list
+                        r_data["products"].append({
+                            "Item Code": r_data.get("Item Code"),
+                            "Item Name": r_data.get("Item Name"),
+                            "HSN/SAC Code": r_data.get("HSN/SAC Code") or r_data.get("HSN/SAC") or r_data.get("hsn_code") or r_data.get("hsn_sac_code"),
+                            "UOM": r_data.get("UOM"),
+                            "Supplier Item Code": r_data.get("Supplier Item Code") or r_data.get("Supp Item Code"),
+                            "Supplier Item Name": r_data.get("Supplier Item Name") or r_data.get("Supp Item Name"),
+                            "Packing Notes": r_data.get("Packing Notes"),
+                        })
+                        
+                    current_main_record = item
+                    grouped_records.append(item)
+                else:
+                    if current_main_record:
+                        # Append to current main record
+                        has_branch = not _raw_empty(r_data.get("Reference Name") or r_data.get("branch_name") or r_data.get("reference_name") or r_data.get("City"))
+                        has_bank = not _raw_empty(r_data.get("Bank Account No") or r_data.get("bank_account_no") or r_data.get("Bank Name") or r_data.get("bank_name"))
+                        has_product = not _raw_empty(r_data.get("Item Code") or r_data.get("item_code") or r_data.get("Item Name") or r_data.get("item_name"))
+
+                        if has_branch: current_main_record["row_data"]["extra_branches"].append(r_data)
+                        if has_bank: current_main_record["row_data"]["extra_banks"].append(r_data)
+                        if has_product: current_main_record["row_data"]["products"].append(r_data)
+                    else:
+                        # No preceding main record, treat as main so it fails validation gracefully
+                        grouped_records.append(item)
+            
+            records_to_process = grouped_records
+
             for item in records_to_process:
                 row_data = item.get("row_data")
                 row_idx = item.get("row_index", "N/A")
                 
                 if not row_data: continue
                 
+                v_code = row_data.get("Vendor Code") or row_data.get("vendor_code")
                 v_name = row_data.get("Vendor Name") or row_data.get("vendor_name")
                 email = row_data.get("Email Address") or row_data.get("email")
                 contact = row_data.get("Contact Number") or row_data.get("contact_no")
                 
                 def is_empty(val):
-                    return not val or str(val).strip().lower() in ['n/a', 'none', 'nan', 'null', '']
+                    if not val: return True
+                    s = str(val).strip().lower()
+                    return s in ['n/a', 'none', 'nan', 'null', ''] or s.startswith('select ')
 
-                if is_empty(v_name) or is_empty(email) or is_empty(contact):
+                # === Comprehensive mandatory field check ===
+                # Collect ALL missing mandatory fields at once
+                mandatory_checks = [
+                    ("Vendor Code",    row_data.get("Vendor Code") or row_data.get("vendor_code")),
+                    ("Vendor Name",    row_data.get("Vendor Name") or row_data.get("vendor_name")),
+                    ("Email Address",  row_data.get("Email Address") or row_data.get("email")),
+                    ("Contact Number", row_data.get("Contact Number") or row_data.get("contact_no")),
+                    ("Category",       row_data.get("Category") or row_data.get("vendor_category")),
+                    ("PAN Number",     row_data.get("PAN Number") or row_data.get("pan_no")),
+                    ("Reference Name", (row_data.get("Reference Name") or row_data.get("branch_name")
+                                        or row_data.get("reference_name") or row_data.get("Bank Branch"))),
+                    ("Address Line 1", row_data.get("Address Line 1") or row_data.get("address_line_1")),
+                    ("Address Line 2", row_data.get("Address Line 2") or row_data.get("address_line_2")),
+                    ("Country",        row_data.get("Country") or row_data.get("branch_country")),
+                    ("State",          row_data.get("State") or row_data.get("branch_state")),
+                    ("City",           row_data.get("City") or row_data.get("branch_city")),
+                ]
+                missing_fields = [name for name, val in mandatory_checks if is_empty(val)]
+                if missing_fields:
                     results["failed"] += 1
                     results["errors"].append({
-                        "message": f"Row {row_idx}: Name, Email, or Contact is missing",
-                        "row_data": row_data,
-                        "row_index": row_idx
-                    })
-                    continue
-
-                # Mandatory Category Check
-                cat_name = row_data.get("Category") or row_data.get("vendor_category")
-                if is_empty(cat_name):
-                    results["failed"] += 1
-                    results["errors"].append({
-                        "message": f"Row {row_idx}: Category is mandatory. Please select a category.",
-                        "row_data": row_data,
-                        "row_index": row_idx
-                    })
-                    continue
-
-                branch = row_data.get("Branch Name") or row_data.get("branch_name")
-                if is_empty(branch):
-                    results["failed"] += 1
-                    results["errors"].append({
-                        "message": f"Row {row_idx}: Branch Name is mandatory",
-                        "row_data": row_data,
-                        "row_index": row_idx
-                    })
-                    continue
-
-                addr1 = row_data.get("Address Line 1") or row_data.get("address_line_1")
-                if is_empty(addr1):
-                    results["failed"] += 1
-                    results["errors"].append({
-                        "message": f"Row {row_idx}: Address Line 1 is mandatory",
-                        "row_data": row_data,
-                        "row_index": row_idx
-                    })
-                    continue
-
-                addr2 = row_data.get("Address Line 2") or row_data.get("address_line_2")
-                if is_empty(addr2):
-                    results["failed"] += 1
-                    results["errors"].append({
-                        "message": f"Row {row_idx}: Address Line 2 is mandatory",
+                        "message": f"Row {row_idx}: {', '.join(missing_fields)} is missing",
+                        "missing_fields": missing_fields,
                         "row_data": row_data,
                         "row_index": row_idx
                     })
@@ -440,7 +519,7 @@ class VendorExcelUploadView(APIView):
                     if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$', str(pan).strip().upper()):
                         results["failed"] += 1
                         results["errors"].append({
-                            "message": f"Row {row_idx}: Invalid PAN format",
+                            "message": f"Row {row_idx}: Invalid PAN format (must be AAAAA0000A)",
                             "row_data": row_data,
                             "row_index": row_idx
                         })
@@ -490,42 +569,62 @@ class VendorExcelUploadView(APIView):
                         vendor.save(update_fields=['ledger_id'])
                         
                         # 2. GST Details
-                        gstin = row_data.get("GSTIN") or row_data.get("gstin")
-                        if gstin or row_data.get("Branch Name") or row_data.get("reference_name"):
-                            VendorMasterGSTDetails.objects.create(  # type: ignore
-                                tenant_id=tenant_id,
-                                vendor_basic_detail=vendor,
-                                gstin=gstin,
-                                reference_name=row_data.get("Branch Name") or row_data.get("reference_name", "Main Branch"),
-                                branch_address_line1=row_data.get("Address Line 1") or row_data.get("branch_address_line1"),
-                                branch_address_line2=row_data.get("Address Line 2") or row_data.get("branch_address_line2"),
-                                branch_address_line3=row_data.get("Address Line 3") or row_data.get("branch_address_line3"),
-                                branch_city=row_data.get("City") or row_data.get("branch_city"),
-                                branch_state=row_data.get("State") or row_data.get("branch_state"),
-                                branch_pincode=row_data.get("Pincode") or row_data.get("branch_pincode"),
-                                branch_country=row_data.get("Country") or row_data.get("branch_country") or "India",
-                                branch_contact_person=row_data.get("Branch Contact Person") or row_data.get("branch_contact_person"),
-                                branch_email=row_data.get("Branch Email Address") or row_data.get("branch_email"),
-                                branch_contact_no=row_data.get("Branch Contact Number") or row_data.get("branch_contact_no"),
-                                created_by=username
-                            )
+                        all_branches = [row_data] + row_data.get("extra_branches", [])
+                        for branch_data in all_branches:
+                            gstin = branch_data.get("GSTIN") or branch_data.get("gstin") or ""
+                            if gstin or branch_data.get("Reference Name") or branch_data.get("reference_name"):
+                                    
+                                    raw_reg = str(branch_data.get("Registration Type") or branch_data.get("registration_type") or "regular").strip().lower()
+                                    reg_map = {
+                                        "regular": "regular",
+                                        "composition": "composition",
+                                        "special economic zone (sez)": "special_economic_zone",
+                                        "special economic zone": "special_economic_zone",
+                                        "unregistered": "unregistered",
+                                        "consumer": "consumer",
+                                        "overseas": "overseas",
+                                        "deemed export": "deemed_export"
+                                    }
+                                    
+                                    VendorMasterGSTDetails.objects.create(  # type: ignore
+                                        tenant_id=tenant_id,
+                                        vendor_basic_detail=vendor,
+                                        gstin=gstin,
+                                        gst_registration_type=reg_map.get(raw_reg, "regular"),
+                                    legal_name=vendor.vendor_name, # Default to vendor name if not provided
+                                    reference_name=branch_data.get("Reference Name") or branch_data.get("reference_name", "Main Branch"),
+                                    branch_address_line1=branch_data.get("Address Line 1") or branch_data.get("branch_address_line1"),
+                                    branch_address_line2=branch_data.get("Address Line 2") or branch_data.get("branch_address_line2"),
+                                    branch_address_line3=branch_data.get("Address Line 3") or branch_data.get("branch_address_line3"),
+                                    branch_city=branch_data.get("City") or branch_data.get("branch_city"),
+                                    branch_state=branch_data.get("State") or branch_data.get("branch_state"),
+                                    branch_pincode=branch_data.get("Pincode") or branch_data.get("branch_pincode"),
+                                    branch_country=branch_data.get("Country") or branch_data.get("branch_country") or "India",
+                                    branch_contact_person=branch_data.get("Branch Contact Person") or branch_data.get("branch_contact_person"),
+                                    branch_email=branch_data.get("Branch Email Address") or branch_data.get("branch_email"),
+                                    branch_contact_no=branch_data.get("Branch Contact Number") or branch_data.get("branch_contact_no"),
+                                    created_by=username
+                                )
                         
                         # 3. Banking Details
-                        acc_no = row_data.get("Bank Account No") or row_data.get("bank_account_no")
-                        if acc_no:
-                            VendorMasterBanking.objects.create(  # type: ignore
-                                tenant_id=tenant_id,
-                                vendor_basic_detail=vendor,
-                                bank_account_no=str(acc_no),
-                                bank_name=row_data.get("Bank Name") or row_data.get("bank_name"),
-                                ifsc_code=row_data.get("IFSC Code") or row_data.get("ifsc_code"),
-                                branch_name=row_data.get("Bank Branch") or row_data.get("branch_name"),
-                                swift_code=row_data.get("Swift Code") or row_data.get("swift_code"),
-                                vendor_branch=row_data.get("Associated Branch") or row_data.get("vendor_branch"),
-                                created_by=username
-                            )
-                        else:
-                            VendorMasterBanking.objects.create(tenant_id=tenant_id, vendor_basic_detail=vendor, created_by=username)  # type: ignore
+                        all_banks = [row_data] + row_data.get("extra_banks", [])
+                        for bank_data in all_banks:
+                            acc_no = bank_data.get("Bank Account No") or bank_data.get("bank_account_no")
+                            if acc_no:
+                                VendorMasterBanking.objects.create(  # type: ignore
+                                    tenant_id=tenant_id,
+                                    vendor_basic_detail=vendor,
+                                    bank_account_no=str(acc_no),
+                                    bank_name=bank_data.get("Bank Name") or bank_data.get("bank_name") or "",
+                                    ifsc_code=bank_data.get("IFSC Code") or bank_data.get("ifsc_code") or "",
+                                    branch_name=bank_data.get("Bank Branch") or bank_data.get("branch_name") or "",
+                                    swift_code=bank_data.get("Swift Code") or bank_data.get("swift_code") or "",
+                                    vendor_branch=bank_data.get("Associated Branch") or bank_data.get("vendor_branch") or "",
+                                    created_by=username
+                                )
+                            elif bank_data is row_data:
+                                # Create empty one only for the primary row if missing
+                                VendorMasterBanking.objects.create(tenant_id=tenant_id, vendor_basic_detail=vendor, created_by=username)  # type: ignore
  
                         # 4. TDS Details
                         VendorMasterTDS.objects.create(  # type: ignore

@@ -8942,6 +8942,12 @@ return (
                     ...VENDOR_SYSTEM_CATEGORIES.map(c => ({ label: c, value: c })),
                     ...categories.map(c => ({ label: c.category, value: c.category }))
                 ],
+                'Registration Type': [
+                    { label: 'Regular', value: 'Regular' },
+                    { label: 'Composition', value: 'Composition' },
+                    { label: 'Special Economic Zone (SEZ)', value: 'Special Economic Zone (SEZ)' },
+                    { label: 'Unregistered', value: 'Unregistered' }
+                ],
                 'TDS Section': Object.keys(TDS_RATES_MASTER).map(s => ({ label: s, value: s })),
                 'TCS Section': Object.keys(TCS_RATES_MASTER).map(s => ({ label: s, value: s })),
                 'Billing Currency': [
