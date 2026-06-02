@@ -2778,98 +2778,98 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                             </span>
                                         </div>
                                         <div className="space-y-4">
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
-                                                    <MultiSelectDropdown
-                                                        options={tcsSections.map((tcs) => ({
-                                                            value: `${tcs.section} ${tcs.name}`,
-                                                            label: `${tcs.section} ${tcs.name} @ ${tcs.rate}`
-                                                        }))}
-                                                        selectedValues={statutoryDetails.tcsSections}
-                                                        onChange={(values) => {
-                                                            setStatutoryDetails({ ...statutoryDetails, tcsSections: values });
-                                                            if (values.length === 0) {
-                                                                setShowTcsInfo(false);
-                                                                setSelectedTcsInfo(null);
-                                                            } else if (!selectedTcsInfo || !values.includes(`${selectedTcsInfo.section} ${selectedTcsInfo.name}`)) {
-                                                                // If nothing selected or current info item removed, show first available
-                                                                const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === values[0]);
-                                                                if (tcsInfo) { setSelectedTcsInfo(tcsInfo); }
-                                                            }
-                                                        }}
-                                                        placeholder="Select TCS Sections"
-                                                    />
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
+                                                <MultiSelectDropdown
+                                                    options={tcsSections.map((tcs) => ({
+                                                        value: `${tcs.section} ${tcs.name}`,
+                                                        label: `${tcs.section} ${tcs.name} @ ${tcs.rate}`
+                                                    }))}
+                                                    selectedValues={statutoryDetails.tcsSections}
+                                                    onChange={(values) => {
+                                                        setStatutoryDetails({ ...statutoryDetails, tcsSections: values });
+                                                        if (values.length === 0) {
+                                                            setShowTcsInfo(false);
+                                                            setSelectedTcsInfo(null);
+                                                        } else if (!selectedTcsInfo || !values.includes(`${selectedTcsInfo.section} ${selectedTcsInfo.name}`)) {
+                                                            // If nothing selected or current info item removed, show first available
+                                                            const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === values[0]);
+                                                            if (tcsInfo) { setSelectedTcsInfo(tcsInfo); }
+                                                        }
+                                                    }}
+                                                    placeholder="Select TCS Sections"
+                                                />
 
-                                                    {statutoryDetails.tcsSections.length > 0 && (
-                                                        <div className="mt-3 space-y-2">
-                                                            {statutoryDetails.tcsSections.map((fullString) => {
-                                                                const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === fullString);
-                                                                const isCurrentlyViewed = selectedTcsInfo && `${selectedTcsInfo.section} ${selectedTcsInfo.name}` === fullString && showTcsInfo;
+                                                {statutoryDetails.tcsSections.length > 0 && (
+                                                    <div className="mt-3 space-y-2">
+                                                        {statutoryDetails.tcsSections.map((fullString) => {
+                                                            const tcsInfo = tcsSections.find(t => `${t.section} ${t.name}` === fullString);
+                                                            const isCurrentlyViewed = selectedTcsInfo && `${selectedTcsInfo.section} ${selectedTcsInfo.name}` === fullString && showTcsInfo;
 
-                                                                return (
-                                                                    <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                                                        <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
-                                                                        <div className="flex items-center gap-1 ml-4">
-                                                                            <button
-                                                                                type="button"
-                                                                                className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                                                                                onClick={() => {
-                                                                                    if (isCurrentlyViewed) {
-                                                                                        setShowTcsInfo(false);
-                                                                                    } else {
-                                                                                        setSelectedTcsInfo(tcsInfo || null);
-                                                                                        setShowTcsInfo(true);
-                                                                                    }
-                                                                                }}
-                                                                                title="View Section Info"
-                                                                            >
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                                </svg>
-                                                                            </button>
-                                                                            <button
-                                                                                type="button"
-                                                                                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                                                                                onClick={() => {
-                                                                                    const newSections = statutoryDetails.tcsSections.filter(s => s !== fullString);
-                                                                                    setStatutoryDetails({ ...statutoryDetails, tcsSections: newSections });
-                                                                                    if (isCurrentlyViewed) {
-                                                                                        setShowTcsInfo(false);
-                                                                                        setSelectedTcsInfo(null);
-                                                                                    }
-                                                                                }}
-                                                                                title="Remove Section"
-                                                                            >
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                                                </svg>
-                                                                            </button>
-                                                                        </div>
+                                                            return (
+                                                                <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                                                    <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
+                                                                    <div className="flex items-center gap-1 ml-4">
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                                                            onClick={() => {
+                                                                                if (isCurrentlyViewed) {
+                                                                                    setShowTcsInfo(false);
+                                                                                } else {
+                                                                                    setSelectedTcsInfo(tcsInfo || null);
+                                                                                    setShowTcsInfo(true);
+                                                                                }
+                                                                            }}
+                                                                            title="View Section Info"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                            </svg>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                                            onClick={() => {
+                                                                                const newSections = statutoryDetails.tcsSections.filter(s => s !== fullString);
+                                                                                setStatutoryDetails({ ...statutoryDetails, tcsSections: newSections });
+                                                                                if (isCurrentlyViewed) {
+                                                                                    setShowTcsInfo(false);
+                                                                                    setSelectedTcsInfo(null);
+                                                                                }
+                                                                            }}
+                                                                            title="Remove Section"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                            </svg>
+                                                                        </button>
                                                                     </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
 
-                                                    {showTcsInfo && selectedTcsInfo && (
-                                                        <div className="p-4 bg-emerald-50/50 border-l-4 border-emerald-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
-                                                            <div className="flex items-start gap-3">
-                                                                <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                                <div className="flex-1">
-                                                                    <h4 className="text-sm font-semibold text-emerald-900 mb-1">Section Details</h4>
-                                                                    <div className="space-y-1 text-sm text-emerald-800">
-                                                                        <p><span className="font-medium">Section:</span> {selectedTcsInfo.section}</p>
-                                                                        <p><span className="font-medium">Name:</span> {selectedTcsInfo.name}</p>
-                                                                        <p><span className="font-medium">Rate:</span> {selectedTcsInfo.rate}</p>
-                                                                        <p className="mt-2 text-xs italic opacity-80">{selectedTcsInfo.description}</p>
-                                                                    </div>
+                                                {showTcsInfo && selectedTcsInfo && (
+                                                    <div className="p-4 bg-emerald-50/50 border-l-4 border-emerald-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
+                                                        <div className="flex items-start gap-3">
+                                                            <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                            <div className="flex-1">
+                                                                <h4 className="text-sm font-semibold text-emerald-900 mb-1">Section Details</h4>
+                                                                <div className="space-y-1 text-sm text-emerald-800">
+                                                                    <p><span className="font-medium">Section:</span> {selectedTcsInfo.section}</p>
+                                                                    <p><span className="font-medium">Name:</span> {selectedTcsInfo.name}</p>
+                                                                    <p><span className="font-medium">Rate:</span> {selectedTcsInfo.rate}</p>
+                                                                    <p className="mt-2 text-xs italic opacity-80">{selectedTcsInfo.description}</p>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -2893,97 +2893,97 @@ const CustomerContent: React.FC<CustomerContentProps> = ({ onNavigate, setPrefil
                                             </span>
                                         </div>
                                         <div className="space-y-4">
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
-                                                    <MultiSelectDropdown
-                                                        options={tdsSections.map((tds) => ({
-                                                            value: `${tds.section} ${tds.name}`,
-                                                            label: `${tds.section} ${tds.name} @ ${tds.rate}`
-                                                        }))}
-                                                        selectedValues={statutoryDetails.tdsSections}
-                                                        onChange={(values) => {
-                                                            setStatutoryDetails({ ...statutoryDetails, tdsSections: values });
-                                                            if (values.length === 0) {
-                                                                setShowTdsInfo(false);
-                                                                setSelectedTdsInfo(null);
-                                                            } else if (!selectedTdsInfo || !values.includes(`${selectedTdsInfo.section} ${selectedTdsInfo.name}`)) {
-                                                                const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === values[0]);
-                                                                if (tdsInfo) { setSelectedTdsInfo(tdsInfo); }
-                                                            }
-                                                        }}
-                                                        placeholder="Select TDS Sections"
-                                                    />
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
+                                                <MultiSelectDropdown
+                                                    options={tdsSections.map((tds) => ({
+                                                        value: `${tds.section} ${tds.name}`,
+                                                        label: `${tds.section} ${tds.name} @ ${tds.rate}`
+                                                    }))}
+                                                    selectedValues={statutoryDetails.tdsSections}
+                                                    onChange={(values) => {
+                                                        setStatutoryDetails({ ...statutoryDetails, tdsSections: values });
+                                                        if (values.length === 0) {
+                                                            setShowTdsInfo(false);
+                                                            setSelectedTdsInfo(null);
+                                                        } else if (!selectedTdsInfo || !values.includes(`${selectedTdsInfo.section} ${selectedTdsInfo.name}`)) {
+                                                            const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === values[0]);
+                                                            if (tdsInfo) { setSelectedTdsInfo(tdsInfo); }
+                                                        }
+                                                    }}
+                                                    placeholder="Select TDS Sections"
+                                                />
 
-                                                    {statutoryDetails.tdsSections.length > 0 && (
-                                                        <div className="mt-3 space-y-2">
-                                                            {statutoryDetails.tdsSections.map((fullString) => {
-                                                                const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === fullString);
-                                                                const isCurrentlyViewed = selectedTdsInfo && `${selectedTdsInfo.section} ${selectedTdsInfo.name}` === fullString && showTdsInfo;
+                                                {statutoryDetails.tdsSections.length > 0 && (
+                                                    <div className="mt-3 space-y-2">
+                                                        {statutoryDetails.tdsSections.map((fullString) => {
+                                                            const tdsInfo = tdsSections.find(t => `${t.section} ${t.name}` === fullString);
+                                                            const isCurrentlyViewed = selectedTdsInfo && `${selectedTdsInfo.section} ${selectedTdsInfo.name}` === fullString && showTdsInfo;
 
-                                                                return (
-                                                                    <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                                                        <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
-                                                                        <div className="flex items-center gap-1 ml-4">
-                                                                            <button
-                                                                                type="button"
-                                                                                className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-indigo-600 bg-indigo-100' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
-                                                                                onClick={() => {
-                                                                                    if (isCurrentlyViewed) {
-                                                                                        setShowTdsInfo(false);
-                                                                                    } else {
-                                                                                        setSelectedTdsInfo(tdsInfo || null);
-                                                                                        setShowTdsInfo(true);
-                                                                                    }
-                                                                                }}
-                                                                                title="View Section Info"
-                                                                            >
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                                </svg>
-                                                                            </button>
-                                                                            <button
-                                                                                type="button"
-                                                                                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                                                                                onClick={() => {
-                                                                                    const newSections = statutoryDetails.tdsSections.filter(s => s !== fullString);
-                                                                                    setStatutoryDetails({ ...statutoryDetails, tdsSections: newSections });
-                                                                                    if (isCurrentlyViewed) {
-                                                                                        setShowTdsInfo(false);
-                                                                                        setSelectedTdsInfo(null);
-                                                                                    }
-                                                                                }}
-                                                                                title="Remove Section"
-                                                                            >
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                                                </svg>
-                                                                            </button>
-                                                                        </div>
+                                                            return (
+                                                                <div key={fullString} className={`flex items-center justify-between p-2 rounded-[4px] border transition-all ${isCurrentlyViewed ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                                                    <span className="text-[13px] text-gray-700 font-medium truncate flex-1 pl-1">{fullString}</span>
+                                                                    <div className="flex items-center gap-1 ml-4">
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`p-1.5 rounded-full transition-colors ${isCurrentlyViewed ? 'text-indigo-600 bg-indigo-100' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                                                            onClick={() => {
+                                                                                if (isCurrentlyViewed) {
+                                                                                    setShowTdsInfo(false);
+                                                                                } else {
+                                                                                    setSelectedTdsInfo(tdsInfo || null);
+                                                                                    setShowTdsInfo(true);
+                                                                                }
+                                                                            }}
+                                                                            title="View Section Info"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                            </svg>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                                            onClick={() => {
+                                                                                const newSections = statutoryDetails.tdsSections.filter(s => s !== fullString);
+                                                                                setStatutoryDetails({ ...statutoryDetails, tdsSections: newSections });
+                                                                                if (isCurrentlyViewed) {
+                                                                                    setShowTdsInfo(false);
+                                                                                    setSelectedTdsInfo(null);
+                                                                                }
+                                                                            }}
+                                                                            title="Remove Section"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                            </svg>
+                                                                        </button>
                                                                     </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
 
-                                                    {showTdsInfo && selectedTdsInfo && (
-                                                        <div className="p-4 bg-indigo-50/50 border-l-4 border-indigo-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
-                                                            <div className="flex items-start gap-3">
-                                                                <svg className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                                <div className="flex-1">
-                                                                    <h4 className="text-sm font-semibold text-indigo-900 mb-1">Section Details</h4>
-                                                                    <div className="space-y-1 text-sm text-indigo-800">
-                                                                        <p><span className="font-medium">Section:</span> {selectedTdsInfo.section}</p>
-                                                                        <p><span className="font-medium">Name:</span> {selectedTdsInfo.name}</p>
-                                                                        <p><span className="font-medium">Rate:</span> {selectedTdsInfo.rate}</p>
-                                                                        <p className="mt-2 text-xs italic opacity-80">{selectedTdsInfo.description}</p>
-                                                                    </div>
+                                                {showTdsInfo && selectedTdsInfo && (
+                                                    <div className="p-4 bg-indigo-50/50 border-l-4 border-indigo-500 rounded-[4px] mt-3 animate-in fade-in slide-in-from-top-1">
+                                                        <div className="flex items-start gap-3">
+                                                            <svg className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                            <div className="flex-1">
+                                                                <h4 className="text-sm font-semibold text-indigo-900 mb-1">Section Details</h4>
+                                                                <div className="space-y-1 text-sm text-indigo-800">
+                                                                    <p><span className="font-medium">Section:</span> {selectedTdsInfo.section}</p>
+                                                                    <p><span className="font-medium">Name:</span> {selectedTdsInfo.name}</p>
+                                                                    <p><span className="font-medium">Rate:</span> {selectedTdsInfo.rate}</p>
+                                                                    <p className="mt-2 text-xs italic opacity-80">{selectedTdsInfo.description}</p>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <label className="flex items-center gap-2 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -4924,7 +4924,7 @@ function ReceiptContent() {
                 httpClient.get<any[]>('/api/voucher-sales-new/'),
                 httpClient.get<any[]>('/api/customerportal/customer-master/')
             ]);
-            
+
             setCustomers(custResponse || []);
 
             if (!Array.isArray(salesResponse)) {

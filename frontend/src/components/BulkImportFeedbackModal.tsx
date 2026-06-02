@@ -31,16 +31,29 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
     const [activeTab, setActiveTab] = useState<'all' | 'success' | 'failed'>('all');
     const [editingItem, setEditingItem] = useState<{ type: 'success' | 'error'; index: number; data: any } | null>(null);
     const [editingTab, setEditingTab] = useState<string>('Basic Details');
+    const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
     const isItem = title.toLowerCase().includes('item') || title.toLowerCase().includes('inventory');
 
     const getFieldValue = (data: any, key: string): any => {
         if (!data) return '';
         if (data[key] !== undefined) return data[key];
+        
+        // Special case: Reference Name <-> Bank Branch / reference_name can get mixed up by header parser
+        const FIELD_ALIASES: Record<string, string[]> = {
+            'Reference Name': ['branch_name', 'reference_name', 'BranchName', 'Bank Branch', 'Branch Name'],
+        };
+        const aliases = FIELD_ALIASES[key];
+        if (aliases) {
+            for (const alias of aliases) {
+                if (data[alias] !== undefined && data[alias] !== null && data[alias] !== '') return data[alias];
+            }
+        }
+        
         const cleanK = key.toLowerCase().replace(/[^a-z0-9]/g, '');
         for (const dk of Object.keys(data)) {
             const cleanDk = dk.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (cleanK === cleanDk || cleanDk.includes(cleanK) || cleanK.includes(cleanDk)) {
+            if (cleanK === cleanDk && cleanK !== '') {
                 return data[dk];
             }
         }
@@ -56,7 +69,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
         const cleanK = key.toLowerCase().replace(/[^a-z0-9]/g, '');
         for (const dk of Object.keys(data)) {
             const cleanDk = dk.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (cleanK === cleanDk || cleanDk.includes(cleanK) || cleanK.includes(cleanDk)) {
+            if (cleanK === cleanDk && cleanK !== '') {
                 data[dk] = val;
                 return;
             }
@@ -111,12 +124,121 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
     useEffect(() => {
         if (initialSummary) {
             const updatedSummary = { ...initialSummary };
-            if (updatedSummary.successful_imports) {
-                updatedSummary.successful_imports = updatedSummary.successful_imports.map((item: any) => ({
-                    ...item,
-                    isSelected: false // All start as false (Implicit ALL mode)
-                }));
-            }
+            
+            // Normalize helper for fuzzy matching
+            const norm = (s: any) => (s || '').toString().toLowerCase().replace(/[\s\-_()]/g, '');
+
+            // Frontend validation pass: move rows with invalid mandatory dropdowns to Failed
+            const newSuccessful: any[] = [];
+            const newErrors: any[] = [];
+            
+            const allItems = [
+                ...(updatedSummary.successful_imports || []),
+                ...(updatedSummary.errors || [])
+            ];
+            
+            allItems.forEach((item: any) => {
+                const data = { ...item.row_data }; // clone to avoid mutating initial data directly
+                const rowIdx = item.row_index;
+                const missingFields: string[] = item.missing_fields ? [...item.missing_fields] : [];
+                let existingMessage = item.message ? item.message : '';
+                
+                const checkDropdown = (key: string, required: boolean, validOptions: {value: string}[]) => {
+                    const val = getFieldValue(data, key);
+                    const valStr = val ? val.toString().trim().toLowerCase() : '';
+                    const isRawEmpty = !val || valStr === '' || valStr === 'n/a' || valStr === 'none' || valStr === 'nan' || valStr === 'null' || valStr.startsWith('select ');
+                    
+                    if (isRawEmpty) {
+                        if (required) missingFields.push(key);
+                        return;
+                    }
+                    
+                    const matched = validOptions.find(o => o.value?.toString().toLowerCase() === valStr || norm(o.value) === norm(valStr));
+                    if (!matched) {
+                        if (required) missingFields.push(key);
+                        setFieldValue(data, key, ''); // Clear invalid value
+                    } else {
+                        if (val !== matched.value) setFieldValue(data, key, matched.value); // Auto-correct
+                    }
+                };
+
+                const countryOptions = Country.getAllCountries().map(c => ({ value: c.name, isoCode: c.isoCode }));
+                
+                // Default Country to India if empty, to match backend behavior and allow state/city validation
+                if (!getFieldValue(data, 'Country')) {
+                    setFieldValue(data, 'Country', 'India');
+                }
+                
+                checkDropdown('Country', true, countryOptions);
+                
+                const countryNorm = norm(getFieldValue(data, 'Country'));
+                const country = countryOptions.find(c => norm(c.value) === countryNorm);
+                const stateOptions = country ? State.getStatesOfCountry(country.isoCode).map(s => ({ value: s.name, isoCode: s.isoCode })) : [];
+                checkDropdown('State', true, stateOptions);
+                
+                const stateNorm = norm(getFieldValue(data, 'State'));
+                const state = stateOptions.find(s => norm(s.value) === stateNorm);
+                const cityOptions = (country && state) ? City.getCitiesOfState(country.isoCode, state.isoCode).map(c => ({ value: c.name })) : [];
+                checkDropdown('City', true, cityOptions);
+                
+                // Validate generic dropdown options passed from props (e.g., Registration Type, Category, etc.)
+                if (dropdownOptions) {
+                    Object.entries(dropdownOptions).forEach(([key, options]) => {
+                        checkDropdown(key, false, options);
+                    });
+                }
+
+                // Validate products against inventory (Item Code / Item Name)
+                if (data['products'] && Array.isArray(data['products'])) {
+                    data['products'].forEach((prod: any, idx: number) => {
+                        const itemCode = prod['Item Code'];
+                        const itemName = prod['Item Name'];
+                        
+                        if (itemCode) {
+                            const match = dropdownOptions?.['Item Code']?.find((o: any) => 
+                                o.value?.toString().toLowerCase() === itemCode.toString().toLowerCase() || 
+                                o.label?.toString().toLowerCase() === itemCode.toString().toLowerCase()
+                            );
+                            if (!match) missingFields.push(`Product ${idx + 1} Item Code`);
+                        }
+                        
+                        if (itemName) {
+                            const match = dropdownOptions?.['Item Name']?.find((o: any) => 
+                                o.value?.toString().toLowerCase() === itemName.toString().toLowerCase() || 
+                                o.label?.toString().toLowerCase() === itemName.toString().toLowerCase()
+                            );
+                            if (!match) missingFields.push(`Product ${idx + 1} Item Name`);
+                        }
+                    });
+                }
+
+                if (missingFields.length > 0 || existingMessage) {
+                    let finalMessage = existingMessage;
+                    if (missingFields.length > 0) {
+                        const newMissingStr = `Row ${rowIdx}: ${missingFields.join(', ')} is invalid or missing`;
+                        finalMessage = finalMessage ? `${finalMessage} | ${newMissingStr}` : newMissingStr;
+                    }
+                    newErrors.push({
+                        ...item,
+                        message: finalMessage,
+                        missing_fields: missingFields,
+                        row_data: data,
+                        row_index: rowIdx
+                    });
+                } else {
+                    newSuccessful.push({
+                        ...item,
+                        row_data: data,
+                        isSelected: false
+                    });
+                }
+            });
+
+            updatedSummary.successful_imports = newSuccessful;
+            updatedSummary.errors = newErrors;
+            updatedSummary.success = newSuccessful.length;
+            updatedSummary.failed = newErrors.length;
+
             setSummary(updatedSummary);
         } else {
             setSummary(null);
@@ -178,22 +300,73 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
         // Validation before saving
         const isVendor = title.toLowerCase().includes('vendor');
         const isItem = title.toLowerCase().includes('item') || title.toLowerCase().includes('inventory');
-        const requiredFields = isVendor ?
-            ['Vendor Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2'] :
+        const requiredFields = isItem ? 
+            ['Item Code', 'Item Name', 'UOM', 'Purchase Price', 'Selling Price'] :
+            title.includes('Vendor') ? 
+            ['Vendor Code', 'Vendor Name', 'Category', 'PAN Number', 'Email Address', 'Contact Number', 'Reference Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'] :
             isItem ?
                 ['Item Code', 'Item Name', 'UOM'] :
-                ['Customer Name', 'Category', 'Email Address', 'Contact Number', 'Branch Name', 'Address Line 1', 'Address Line 2'];
+                ['Customer Name', 'Category', 'Email Address', 'Contact Number', 'Reference Name', 'Address Line 1', 'Address Line 2', 'Country', 'State', 'City'];
 
         const missing = requiredFields.filter(f => {
             const val = updatedData[f];
-            return !val || val.toString().trim() === '' || val.toString().toLowerCase() === 'n/a';
+            if (!val) return true;
+            const valStr = val.toString().trim().toLowerCase();
+            return valStr === '' || valStr === 'n/a' || valStr === 'none' || valStr === 'nan' || valStr === 'null' || valStr.startsWith('select ');
         });
 
         if (missing.length > 0) {
-            // Show error in modal instead of alert if possible, but for now blocking save
-            // The UI already shows red warnings, so we just prevent moving to success list
+            setValidationErrors(missing);
             return;
         }
+
+        // Validate PAN format for vendors
+        if (isVendor) {
+            const pan = updatedData['PAN Number'] || updatedData['pan_no'] || '';
+            const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+            if (!panRegex.test(pan.toString().trim().toUpperCase())) {
+                setValidationErrors([`Invalid PAN format: "${pan}". Must be in AAAAA0000A format (5 letters, 4 digits, 1 letter).`]);
+                return;
+            }
+        }
+        
+        // Validate products: check that Item Code and Item Name exist in inventory
+        const products = updatedData['products'];
+        if (products && Array.isArray(products)) {
+            const invalidProducts: string[] = [];
+            products.forEach((prod: any, idx: number) => {
+                const itemCode = prod['Item Code'];
+                const itemName = prod['Item Name'];
+                const norm = (s: any) => (s || '').toString().toLowerCase().replace(/[\s\-_()]/g, '');
+                
+                if (itemCode) {
+                    const match = dropdownOptions?.['Item Code']?.find((o: any) =>
+                        String(o.value).toLowerCase() === String(itemCode).toLowerCase() ||
+                        norm(o.value) === norm(itemCode) ||
+                        String(o.label).toLowerCase() === String(itemCode).toLowerCase() ||
+                        norm(o.label) === norm(itemCode)
+                    );
+                    if (!match) invalidProducts.push(`Product ${idx + 1} Item Code "${itemCode}" not found in inventory`);
+                }
+                
+                if (itemName) {
+                    const match = dropdownOptions?.['Item Name']?.find((o: any) =>
+                        String(o.value).toLowerCase() === String(itemName).toLowerCase() ||
+                        norm(o.value) === norm(itemName) ||
+                        String(o.label).toLowerCase() === String(itemName).toLowerCase() ||
+                        norm(o.label) === norm(itemName)
+                    );
+                    if (!match) invalidProducts.push(`Product ${idx + 1} Item Name "${itemName}" not found in inventory`);
+                }
+            });
+            
+            if (invalidProducts.length > 0) {
+                setValidationErrors(invalidProducts);
+                return;
+            }
+        }
+        
+        setValidationErrors([]);
 
         const newSummary = { ...summary };
         if (editingItem.type === 'error') {
@@ -224,6 +397,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
         setSelectedFile(null);
         setActiveTab('all');
         setEditingItem(null);
+        setValidationErrors([]);
         onClose();
     };
 
@@ -305,11 +479,11 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                     {
                                         title: 'Basic Details',
                                         fields: [
-                                            { label: 'VENDOR CODE', key: 'Vendor Code', placeholder: 'VEN-XXXXXX' },
+                                            { label: 'VENDOR CODE', key: 'Vendor Code', placeholder: 'VEN-XXXXXX', required: true },
                                             { label: 'VENDOR NAME', key: 'Vendor Name', placeholder: 'Enter vendor name', required: true },
                                             { label: 'VENDOR CATEGORY', key: 'Category', type: 'select', placeholder: 'SELECT CATEGORY', required: true },
                                             { label: 'BILLING CURRENCY', key: 'Billing Currency', type: 'select', placeholder: 'SELECT CURRENCY' },
-                                            { label: 'PAN NO.', key: 'PAN Number', placeholder: 'AAAAA0000A' },
+                                            { label: 'PAN NO.', key: 'PAN Number', placeholder: 'AAAAA0000A', required: true },
                                             { label: 'CONTACT PERSON', key: 'Contact Person', placeholder: 'Primary contact name' },
                                             { label: 'EMAIL ADDRESS', key: 'Email Address', placeholder: 'vendor@example.com', required: true },
                                             { label: 'CONTACT NO', key: 'Contact Number', placeholder: '+91 XXXXX XXXXX', required: true },
@@ -321,13 +495,13 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         title: 'GST & Address Details',
                                         fields: [
                                             { label: 'GSTIN', key: 'GSTIN', placeholder: '22AAAAA0000A1Z5' },
-                                            { label: 'BRANCH NAME', key: 'Branch Name', placeholder: 'Main Branch', required: true },
+                                            { label: 'REFERENCE NAME', key: 'Reference Name', placeholder: 'Main Branch', required: true },
                                             { label: 'ADDRESS LINE 1', key: 'Address Line 1', placeholder: 'Building/Street', required: true },
                                             { label: 'ADDRESS LINE 2', key: 'Address Line 2', placeholder: 'Area/Landmark', required: true },
                                             { label: 'ADDRESS LINE 3', key: 'Address Line 3', placeholder: 'Locality' },
-                                            { label: 'COUNTRY', key: 'Country', type: 'select', placeholder: 'SELECT COUNTRY' },
-                                            { label: 'STATE', key: 'State', type: 'select', placeholder: 'SELECT STATE' },
-                                            { label: 'CITY', key: 'City', type: 'select', placeholder: 'SELECT CITY' },
+                                            { label: 'COUNTRY', key: 'Country', type: 'select', placeholder: 'SELECT COUNTRY', required: true },
+                                            { label: 'STATE', key: 'State', type: 'select', placeholder: 'SELECT STATE', required: true },
+                                            { label: 'CITY', key: 'City', type: 'select', placeholder: 'SELECT CITY', required: true },
                                             { label: 'PINCODE', key: 'Pincode', placeholder: '600001' },
                                             { label: 'CONTACT PERSON', key: 'Branch Contact Person', placeholder: 'Branch contact name' },
                                             { label: 'EMAIL ADDRESS', key: 'Branch Email Address', placeholder: 'branch@example.com' },
@@ -377,7 +551,6 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                     { label: 'ITEM CODE', key: 'Item Code', placeholder: 'ITM-XXXX' },
                                                     { label: 'ITEM NAME', key: 'Item Name', placeholder: 'Item name' },
                                                     { label: 'HSN/SAC', key: 'HSN/SAC Code', placeholder: 'XXXX' },
-                                                    { label: 'UOM', key: 'UOM', type: 'select', placeholder: 'Select' },
                                                     { label: 'SUPPLIER ITEM CODE', key: 'Supplier Item Code', placeholder: 'Optional' },
                                                     { label: 'SUPPLIER ITEM NAME', key: 'Supplier Item Name', placeholder: 'Optional' },
                                                     { label: 'PACKING NOTES', key: 'Packing Notes', placeholder: 'Notes' },
@@ -424,13 +597,14 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                         title: 'GST & Address Details',
                                         fields: [
                                             { label: 'GSTIN', key: 'GSTIN', placeholder: '22AAAAA0000A1Z5' },
+                                            { label: 'REGISTRATION TYPE', key: 'Registration Type', type: 'select', placeholder: 'Select Type' },
                                             { label: 'BRANCH NAME', key: 'Branch Name', placeholder: 'Main Branch', required: true },
                                             { label: 'ADDRESS LINE 1', key: 'Address Line 1', placeholder: 'Building/Street', required: true },
                                             { label: 'ADDRESS LINE 2', key: 'Address Line 2', placeholder: 'Area/Landmark', required: true },
                                             { label: 'ADDRESS LINE 3', key: 'Address Line 3', placeholder: 'Locality' },
-                                            { label: 'COUNTRY', key: 'Country', type: 'select', placeholder: 'SELECT COUNTRY' },
-                                            { label: 'STATE', key: 'State', type: 'select', placeholder: 'SELECT STATE' },
-                                            { label: 'CITY', key: 'City', type: 'select', placeholder: 'SELECT CITY' },
+                                            { label: 'COUNTRY', key: 'Country', type: 'select', placeholder: 'SELECT COUNTRY', required: true },
+                                            { label: 'STATE', key: 'State', type: 'select', placeholder: 'SELECT STATE', required: true },
+                                            { label: 'CITY', key: 'City', type: 'select', placeholder: 'SELECT CITY', required: true },
                                             { label: 'PINCODE', key: 'Pincode', placeholder: '600001' },
                                             { label: 'CONTACT PERSON', key: 'Branch Contact Person', placeholder: 'Branch contact name' },
                                             { label: 'EMAIL ADDRESS', key: 'Branch Email Address', placeholder: 'branch@example.com' },
@@ -480,7 +654,6 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                     { label: 'ITEM CODE', key: 'Item Code', placeholder: 'ITM-XXXX' },
                                                     { label: 'ITEM NAME', key: 'Item Name', placeholder: 'Item name' },
                                                     { label: 'HSN/SAC CODE', key: 'HSN/SAC Code', placeholder: 'XXXX' },
-                                                    { label: 'UOM', key: 'UOM', type: 'select', placeholder: 'Select' },
                                                     {
                                                         label: title.toLowerCase().includes('vendor') ? 'SUPPLIER ITEM CODE' : 'CUSTOMER ITEM CODE',
                                                         key: title.toLowerCase().includes('vendor') ? 'Supplier Item Code' : 'Customer Item Code',
@@ -502,16 +675,45 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
 
                                 return (
                                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        {[editingItem.data, ...(activeSection.title === 'GST & Address Details' ? (editingItem.data.extra_branches || []) : activeSection.title === 'Banking Information' ? (editingItem.data.extra_banks || []) : [])].map((branchData: any, bIdx: number) => (
+                                            <div key={bIdx} className={bIdx > 0 ? "mt-12 pt-8 border-t border-dashed border-indigo-200 relative animate-in fade-in" : ""}>
+                                                {bIdx > 0 && (
+                                                    <div className="flex justify-between items-center mb-6">
+                                                        <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest">
+                                                            {activeSection.title === 'GST & Address Details' ? `Branch ${bIdx + 1}` : `Bank ${bIdx + 1}`}
+                                                        </h3>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (activeSection.title === 'GST & Address Details') {
+                                                                    const newBranches = [...(editingItem.data.extra_branches || [])];
+                                                                    newBranches.splice(bIdx - 1, 1);
+                                                                    editingItem.data.extra_branches = newBranches;
+                                                                } else if (activeSection.title === 'Banking Information') {
+                                                                    const newBanks = [...(editingItem.data.extra_banks || [])];
+                                                                    newBanks.splice(bIdx - 1, 1);
+                                                                    editingItem.data.extra_banks = newBanks;
+                                                                }
+                                                                setEditingItem({...editingItem});
+                                                            }}
+                                                            className="text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                                                            Remove {activeSection.title === 'GST & Address Details' ? 'Branch' : 'Bank'}
+                                                        </button>
+                                                    </div>
+                                                )}
                                         <div className="grid grid-cols-2 gap-x-12 gap-y-8">
                                             {activeSection.fields.map((field, fIdx) => {
                                                 const key = field.key;
-                                                const value = getFieldValue(editingItem.data, key);
+                                                const value = getFieldValue(branchData, key);
 
-                                                // Error/Warning Logic
-                                                const errorMessage = summary.errors[editingItem.index]?.message?.toLowerCase() || '';
-                                                const isMentionedInError = errorMessage.includes(key.toLowerCase().replace(/ /g, '_')) || errorMessage.includes(key.toLowerCase());
-                                                const isEmpty = !value || value.toString().trim() === '';
-                                                const hasWarning = field.required && isEmpty;
+                                                // Error/Warning Logic: only highlight fields from the error message for the main (first) branch
+                                                const errorMessage = editingItem.type === 'error' ? (summary.errors[editingItem.index]?.message?.toLowerCase() || '') : '';
+                                                const isMentionedInError = bIdx === 0 && (errorMessage.includes(key.toLowerCase()) || errorMessage.includes(field.label.toLowerCase()));
+
+                                                // Normalize helper: strips spaces, hyphens for fuzzy matching (e.g. 'Tamilnadu' matches 'Tamil Nadu')
+                                                const norm = (s: any) => (s || '').toString().toLowerCase().replace(/[\s\-_()]/g, '');
 
                                                 // Check if this field should be a dropdown
                                                 let fieldOptions = dropdownOptions?.[key] || dropdownOptions?.[key.toLowerCase()] || dropdownOptions?.[key.replace(/ /g, '_').toLowerCase()];
@@ -520,28 +722,56 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                 if (key === 'Country') {
                                                     fieldOptions = Country.getAllCountries().map(c => ({ label: c.name, value: c.name }));
                                                 } else if (key === 'State') {
-                                                    const selectedCountryName = getFieldValue(editingItem.data, 'Country');
-                                                    const country = Country.getAllCountries().find(c => c.name === selectedCountryName);
+                                                    const selectedCountryName = getFieldValue(branchData, 'Country');
+                                                    const countryNorm = norm(selectedCountryName);
+                                                    const country = Country.getAllCountries().find(c => norm(c.name) === countryNorm);
                                                     if (country) {
                                                         fieldOptions = State.getStatesOfCountry(country.isoCode).map(s => ({ label: s.name, value: s.name }));
                                                     }
                                                 } else if (key === 'City') {
-                                                    const selectedCountryName = getFieldValue(editingItem.data, 'Country');
-                                                    const selectedStateName = getFieldValue(editingItem.data, 'State');
-                                                    const country = Country.getAllCountries().find(c => c.name === selectedCountryName);
-                                                    const state = country ? State.getStatesOfCountry(country.isoCode).find(s => s.name === selectedStateName) : null;
+                                                    const selectedCountryName = getFieldValue(branchData, 'Country');
+                                                    const selectedStateName = getFieldValue(branchData, 'State');
+                                                    const countryNorm = norm(selectedCountryName);
+                                                    const stateNorm = norm(selectedStateName);
+                                                    const country = Country.getAllCountries().find(c => norm(c.name) === countryNorm);
+                                                    const state = country ? State.getStatesOfCountry(country.isoCode).find(s => norm(s.name) === stateNorm) : null;
                                                     if (country && state) {
                                                         fieldOptions = City.getCitiesOfState(country.isoCode, state.isoCode).map(c => ({ label: c.name, value: c.name }));
                                                     }
                                                 }
 
+                                                // isEmpty: check raw value, AND for select fields check if value is a valid option
+                                                const valStr = value ? value.toString().trim().toLowerCase() : '';
+                                                const isRawEmpty = !value || valStr === '' || valStr === 'n/a' || valStr === 'none' || valStr === 'nan' || valStr === 'null' || valStr.startsWith('select ');
+                                                const isSelectField = field.type === 'select' || !!fieldOptions;
+                                                // Fuzzy match: try exact first, then normalized (strips spaces)
+                                                const matchedOption = (isSelectField && fieldOptions && !isRawEmpty)
+                                                    ? (fieldOptions.find((o: any) => o.value?.toString().toLowerCase() === valStr)
+                                                        || fieldOptions.find((o: any) => norm(o.value) === norm(valStr)))
+                                                    : null;
+                                                const isNotInOptions = isSelectField && fieldOptions && fieldOptions.length > 0 && !matchedOption;
+                                                const isEmpty = isRawEmpty || (isSelectField && (!value || isNotInOptions));
+                                                const isInvalidPan = key === 'PAN Number' && !isEmpty && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(valStr.toUpperCase());
+                                                const hasWarning = (field.required && isEmpty) || isInvalidPan || isMentionedInError || validationErrors.includes(key);
+                                                const warningMessage = isInvalidPan ? 'Invalid PAN format (e.g. AAAAA0000A)' : 'This field is mandatory';
+                                                
+                                                // Auto-correct the stored value to properly-cased option value
+                                                if (matchedOption && value !== matchedOption.value) {
+                                                    setFieldValue(branchData, key, matchedOption.value);
+                                                }
+                                                // If value is invalid (not in options) and field is required, clear it so save is blocked
+                                                if (isNotInOptions && !isRawEmpty) {
+                                                    setFieldValue(branchData, key, '');
+                                                }
+
                                                 // Mutual exclusivity for TDS/TCS
                                                 const isTDS = key === 'TDS Section';
                                                 const isTCS = key === 'TCS Section';
-                                                const tdsValue = getFieldValue(editingItem.data, 'TDS Section');
-                                                const tcsValue = getFieldValue(editingItem.data, 'TCS Section');
+                                                const tdsValue = getFieldValue(branchData, 'TDS Section');
+                                                const tcsValue = getFieldValue(branchData, 'TCS Section');
                                                 const isFieldDisabled = (isTDS && !!tcsValue && tcsValue !== '' && (!tdsValue || tdsValue === '')) ||
                                                     (isTCS && !!tdsValue && tdsValue !== '' && (!tcsValue || tcsValue === ''));
+
 
                                                 return (
                                                     <div key={fIdx} className={`space-y-2.5 ${field.type === 'table' ? 'col-span-full' : ''}`}>
@@ -571,11 +801,35 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                     <td className="px-4 py-4 text-gray-400 font-bold">{rIdx + 1}</td>
                                                                                     {(field.columns || []).map((col: any) => {
                                                                                         const colOptions = dropdownOptions?.[col.key] || dropdownOptions?.[col.key.toLowerCase()];
+                                                                                        // Check if this cell's value is invalid (not found in options)
+                                                                                        const rawColVal = row[col.key] || '';
+                                                                                        let isColInvalid = false;
+                                                                                        if (colOptions && rawColVal) {
+                                                                                            const norm = (s: any) => (s || '').toString().toLowerCase().replace(/[\s\-_()]/g, '');
+                                                                                            const found = colOptions.find((o: any) =>
+                                                                                                String(o.value).toLowerCase() === String(rawColVal).toLowerCase() ||
+                                                                                                norm(o.value) === norm(rawColVal) ||
+                                                                                                String(o.label).toLowerCase() === String(rawColVal).toLowerCase() ||
+                                                                                                norm(o.label) === norm(rawColVal)
+                                                                                            );
+                                                                                            isColInvalid = !found;
+                                                                                        }
                                                                                         return (
                                                                                             <td key={col.key} className="px-2 py-2">
+                                                                                                {isColInvalid && (
+                                                                                                    <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-1">⚠ Not found in inventory</p>
+                                                                                                )}
                                                                                                 {col.type === 'select' || colOptions ? (
                                                                                                     <select
-                                                                                                        value={row[col.key] || ''}
+                                                                                                        value={(() => {
+                                                                                                            const raw = row[col.key] || '';
+                                                                                                            if (!raw) return '';
+                                                                                                            const exact = (colOptions || []).find((o: any) => String(o.value) === String(raw));
+                                                                                                            if (exact) return exact.value;
+                                                                                                            const norm = (s: any) => (s || '').toString().toLowerCase().replace(/[\s\-_()]/g, '');
+                                                                                                            const fuzzy = (colOptions || []).find((o: any) => norm(o.value) === norm(raw));
+                                                                                                            return fuzzy ? fuzzy.value : raw;
+                                                                                                        })()}
                                                                                                         onChange={(e) => {
                                                                                                             const newVal = e.target.value;
                                                                                                             const newProducts = [...(value || [{}])];
@@ -598,10 +852,10 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                                             }
 
                                                                                                             newProducts[rIdx] = updatedRow;
-                                                                                                            editingItem.data[key] = newProducts;
+                                                                                                            branchData[key] = newProducts;
                                                                                                             setEditingItem({ ...editingItem });
                                                                                                         }}
-                                                                                                        className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                                                                                        className={`w-full px-3 py-2 rounded-xl text-xs font-bold focus:ring-2 outline-none transition-all border ${isColInvalid ? 'bg-rose-50 border-rose-400 text-rose-700 focus:ring-rose-300' : 'bg-gray-50/50 border-gray-200 focus:ring-indigo-500/20 focus:border-indigo-500'}`}
                                                                                                     >
                                                                                                         <option value="">{col.placeholder || 'Select'}</option>
                                                                                                         {(colOptions || []).map((opt: any) => (
@@ -640,7 +894,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                                             }
 
                                                                                                             newProducts[rIdx] = updatedRow;
-                                                                                                            editingItem.data[key] = newProducts;
+                                                                                                            branchData[key] = newProducts;
                                                                                                             setEditingItem({ ...editingItem });
                                                                                                         }}
                                                                                                         className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
@@ -653,7 +907,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                                         <button
                                                                                             onClick={() => {
                                                                                                 const newProducts = (value || [{}]).filter((_: any, i: number) => i !== rIdx);
-                                                                                                editingItem.data[key] = newProducts.length ? newProducts : [{}];
+                                                                                                branchData[key] = newProducts.length ? newProducts : [{}];
                                                                                                 setEditingItem({ ...editingItem });
                                                                                             }}
                                                                                             className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
@@ -669,7 +923,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                 <button
                                                                     onClick={() => {
                                                                         const newProducts = [...(value || [{}]), {}];
-                                                                        editingItem.data[key] = newProducts;
+                                                                        branchData[key] = newProducts;
                                                                         setEditingItem({ ...editingItem });
                                                                     }}
                                                                     className="w-full py-3 bg-gray-50/50 hover:bg-indigo-50 text-indigo-600 text-xs font-black uppercase tracking-widest border-t border-gray-100 transition-all flex items-center justify-center gap-2"
@@ -687,7 +941,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                         <button
                                                                             key={opt}
                                                                             onClick={() => {
-                                                                                editingItem.data[key] = opt === 'YES';
+                                                                                branchData[key] = opt === 'YES';
                                                                                 setEditingItem({ ...editingItem }); // Trigger re-render
                                                                             }}
                                                                             className={`flex-1 py-3 px-6 rounded-xl text-xs font-black tracking-widest transition-all ${isActive
@@ -703,14 +957,14 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                         ) : field.type === 'select' || fieldOptions ? (
                                                             <div className="relative group">
                                                                 <select
-                                                                    value={value || ''}
+                                                                    value={matchedOption ? matchedOption.value : (isNotInOptions ? '' : (value || ''))}
                                                                     onChange={(e) => {
-                                                                        setFieldValue(editingItem.data, key, e.target.value);
+                                                                        setFieldValue(branchData, key, e.target.value);
                                                                         if (key === 'Country') {
-                                                                            setFieldValue(editingItem.data, 'State', '');
-                                                                            setFieldValue(editingItem.data, 'City', '');
+                                                                            setFieldValue(branchData, 'State', '');
+                                                                            setFieldValue(branchData, 'City', '');
                                                                         } else if (key === 'State') {
-                                                                            setFieldValue(editingItem.data, 'City', '');
+                                                                            setFieldValue(branchData, 'City', '');
                                                                         }
                                                                         setEditingItem({ ...editingItem });
                                                                     }}
@@ -736,7 +990,7 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                                 placeholder={field.placeholder}
                                                                 disabled={isFieldDisabled}
                                                                 onChange={(e) => {
-                                                                    setFieldValue(editingItem.data, key, e.target.value);
+                                                                    setFieldValue(branchData, key, e.target.value);
                                                                     setEditingItem({ ...editingItem });
                                                                 }}
                                                                 className={`w-full px-5 py-4 rounded-2xl text-sm font-bold transition-all focus:ring-4 outline-none ${isFieldDisabled
@@ -751,13 +1005,43 @@ export const BulkImportFeedbackModal: React.FC<BulkImportFeedbackModalProps> = (
                                                         {hasWarning && (
                                                             <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1 mt-1 animate-in slide-in-from-top-1">
                                                                 <Icon name={"exclamation-circle" as any} className="w-3 h-3" />
-                                                                This field is mandatory
+                                                                {warningMessage}
                                                             </p>
                                                         )}
                                                     </div>
                                                 );
                                             })}
                                         </div>
+                                            </div>
+                                        ))}
+                                        {activeSection.title === 'GST & Address Details' && (
+                                            <div className="mt-8 flex justify-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        editingItem.data.extra_branches = [...(editingItem.data.extra_branches || []), {}];
+                                                        setEditingItem({...editingItem});}}
+                                                    className="px-5 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 hover:text-indigo-700 transition-all flex items-center gap-2 border border-indigo-100 shadow-sm"
+                                                >
+                                                    <Icon name="plus" className="w-4 h-4" />
+                                                    ADD MANUAL BRANCH
+                                                </button>
+                                            </div>
+                                        )}
+                                        {activeSection.title === 'Banking Information' && (
+                                            <div className="mt-8 flex justify-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        editingItem.data.extra_banks = [...(editingItem.data.extra_banks || []), {}];
+                                                        setEditingItem({...editingItem});}}
+                                                    className="px-5 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 hover:text-indigo-700 transition-all flex items-center gap-2 border border-indigo-100 shadow-sm"
+                                                >
+                                                    <Icon name="plus" className="w-4 h-4" />
+                                                    ADD ANOTHER BANK
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })()}

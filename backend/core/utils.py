@@ -103,7 +103,7 @@ def match_headers(excel_headers, target_columns):
         "Contact Number": ["contactnumber", "phone", "phonenumber", "mobile", "tel", "contact_no"],
         "Billing Currency": ["currency", "billingcurrency"],
         "GSTIN": ["gstin", "gstnumber", "gst_no"],
-        "Branch Name": ["branch", "branchname", "reference_name"],
+        "Reference Name": ["branch", "branchname", "reference_name", "branch_name", "referencename"],
         "Address Line 1": ["address1", "addressline1", "address_line_1", "street"],
         "Address Line 2": ["address2", "addressline2", "address_line_2", "area"],
         "Address Line 3": ["address3", "addressline3", "address_line_3", "locality"],
@@ -142,12 +142,17 @@ def match_headers(excel_headers, target_columns):
     matched_indices = set()
     
     # Pre-clean target labels
+    # Two separate passes: keys first, then labels — labels always win over keys globally
     target_clean_to_label = {}
+    # Pass A: Add all key mappings (lower priority)
+    for col in target_columns:
+        lbl = col["label"]
+        if "key" in col:
+            target_clean_to_label[normalize_header(col["key"])] = lbl
+    # Pass B: Add all label mappings (higher priority — overwrites conflicting keys)
     for col in target_columns:
         lbl = col["label"]
         target_clean_to_label[normalize_header(lbl)] = lbl
-        if "key" in col:
-            target_clean_to_label[normalize_header(col["key"])] = lbl
             
     # Pass 1: Direct matches
     for clean_lbl, lbl in target_clean_to_label.items():
