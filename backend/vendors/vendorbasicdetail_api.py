@@ -184,6 +184,16 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Check for duplicate vendor code (excluding current vendor)
+        vendor_code = serializer.validated_data.get('vendor_code', instance.vendor_code)
+        if vendor_code and VendorBasicDetailDatabase.check_duplicate_vendor_code(
+            instance.tenant_id, vendor_code, exclude_id=instance.id
+        ):
+            return Response(
+                {'error': f'Vendor code "{vendor_code}" already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Check for duplicate email (excluding current vendor)
         email = serializer.validated_data.get('email', instance.email)
         if email and VendorBasicDetailDatabase.check_duplicate_email(

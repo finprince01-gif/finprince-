@@ -625,7 +625,7 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
 
         const dropdownFields = [
             'voucher_name', 'customer_name', 'customer_branch', 'gstin',
-            'place_of_supply', 'reverse_charge', 'invoice_type',
+            'place_of_supply', 'invoice_type',
             'bill_to_state', 'bill_to_country', 'ship_to_state', 'ship_to_country',
             'export_type', 'gst_export_type',
             'dispatch_from', 'mode_of_transport', 'delivery_type', 'rail_upto_port_delivery_type'
@@ -652,7 +652,6 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
                             col.key === 'gstin' ? gstinOptions :
                             ['place_of_supply', 'bill_to_state', 'ship_to_state'].includes(col.key) ? INDIA_STATE_CODES.map(s => s.name) :
                             ['bill_to_country', 'ship_to_country'].includes(col.key) ? ['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'United Arab Emirates', 'Singapore', 'Others'] :
-                            col.key === 'reverse_charge' ? ['Y', 'N'] :
                             col.key === 'invoice_type' ? GST_INVOICE_TYPES.map(t => t.label) :
                             ['export_type', 'gst_export_type'].includes(col.key) ? EXPORT_TYPES.map(t => t.label) :
                             col.key === 'dispatch_from' ? locations.map(l => l.name || l.location_name) :
@@ -833,10 +832,9 @@ const SalesEditModal: React.FC<SalesEditModalProps> = ({ invoice, index, onClose
                             {/* Row 5: GST Details */}
                             <div className="border-t pt-6">
                                 <h3 className="text-sm font-semibold text-gray-800 mb-4">GST Details</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {renderField(SALES_VOUCHER_KEY_MAP.get('place_of_supply')!)}
                                     {renderField(SALES_VOUCHER_KEY_MAP.get('invoice_type')!)}
-                                    {renderField(SALES_VOUCHER_KEY_MAP.get('reverse_charge')!)}
                                 </div>
                             </div>
                         </div>

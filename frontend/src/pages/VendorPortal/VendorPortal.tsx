@@ -8937,6 +8937,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 onEditImported={handleEditImportedVendor}
                 onUpload={handleVendorExcelUploadFromModal}
                 isProcessing={isImporting}
+                existingCodes={vendorList.map((v: any) => v.vendor_code).filter(Boolean)}
                 dropdownOptions={{
                     'Category': vendorCategoryOptions.map(c => ({ label: c, value: c })),
                     'Registration Type': [

@@ -468,6 +468,10 @@ class VendorExcelUploadView(APIView):
                         grouped_records.append(item)
             
             records_to_process = grouped_records
+            
+            # Cache for vendors created in this file (so multiple distinct named branches in same file link together)
+            file_vendors_cache = {}
+            file_vendors_code_cache = {}
 
             for item in records_to_process:
                 row_data = item.get("row_data")
@@ -539,23 +543,67 @@ class VendorExcelUploadView(APIView):
                 try:
                     # Use a nested transaction that we can rollback if dry_run
                     with transaction.atomic():
-                        # 1. Basic Details
-                        vendor = VendorMasterBasicDetail(
-                            tenant_id=tenant_id,
-                            vendor_name=v_name,
-                            vendor_code=row_data.get("Vendor Code") or row_data.get("vendor_code"),
-                            pan_no=pan,
-                            contact_person=row_data.get("Contact Person") or row_data.get("contact_person"),
-                            email=email,
-                            contact_no=str(contact),
-                            vendor_category=row_data.get("Category") or row_data.get("category"),
-                            billing_currency=row_data.get("Billing Currency") or row_data.get("billing_currency") or "INR",
-                            tcs_applicable=True if str(row_data.get("TCS Applicable") or row_data.get("tcs_applicable", "")).lower() in ['yes', 'true', '1'] else False,
-                            created_by=username
-                        )
+                        # Check DB for duplicate / soft-deleted vendor
+                        vendor = None
+                        v_name_lower = str(v_name).strip().lower()
                         
-                        vendor.generate_vendor_code()
-                        vendor.save()
+                        # Check cache first for same-file duplicates
+                        if v_code and v_code in file_vendors_code_cache:
+                            raise Exception(f"DUPLICATE ENTRY: Vendor Code '{v_code}' appears more than once in this file. Each vendor must have a unique code.")
+                        
+                        if not vendor:
+                            # Search by vendor code
+                            if v_code:
+                                existing_by_code = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, vendor_code=v_code).first()
+                                if existing_by_code:
+                                    if not existing_by_code.is_deleted:
+                                        raise Exception(f"DUPLICATE ENTRY: Vendor Code '{v_code}' already exists in the system. Please use a unique code or leave it blank.")
+                                    else:
+                                        # It's soft-deleted, we will reactivate it
+                                        vendor = existing_by_code
+
+                        if vendor:
+                            # Restore/reactivate soft-deleted vendor
+                            vendor.is_deleted = False
+                            vendor.is_active = True
+                            vendor.vendor_name = v_name
+                            vendor.vendor_code = v_code or vendor.vendor_code
+                            vendor.pan_no = pan
+                            vendor.contact_person = row_data.get("Contact Person") or row_data.get("contact_person")
+                            vendor.email = email
+                            vendor.contact_no = str(contact)
+                            vendor.vendor_category = row_data.get("Category") or row_data.get("category")
+                            vendor.billing_currency = row_data.get("Billing Currency") or row_data.get("billing_currency") or "INR"
+                            vendor.tcs_applicable = True if str(row_data.get("TCS Applicable") or row_data.get("tcs_applicable", "")).lower() in ['yes', 'true', '1'] else False
+                            vendor.updated_by = username
+                            vendor.save()
+                            
+                            # Clean up existing related records to prevent duplicate constraints or orphan records
+                            VendorMasterGSTDetails.objects.filter(vendor_basic_detail=vendor).delete()
+                            VendorMasterBanking.objects.filter(vendor_basic_detail=vendor).delete()
+                            VendorMasterTDS.objects.filter(vendor_basic_detail=vendor).delete()
+                            VendorMasterTerms.objects.filter(vendor_basic_detail=vendor).delete()
+                        else:
+                            # Create new vendor
+                            vendor = VendorMasterBasicDetail(
+                                tenant_id=tenant_id,
+                                vendor_name=v_name,
+                                vendor_code=v_code,
+                                pan_no=pan,
+                                contact_person=row_data.get("Contact Person") or row_data.get("contact_person"),
+                                email=email,
+                                contact_no=str(contact),
+                                vendor_category=row_data.get("Category") or row_data.get("category"),
+                                billing_currency=row_data.get("Billing Currency") or row_data.get("billing_currency") or "INR",
+                                tcs_applicable=True if str(row_data.get("TCS Applicable") or row_data.get("tcs_applicable", "")).lower() in ['yes', 'true', '1'] else False,
+                                created_by=username
+                            )
+                            vendor.generate_vendor_code()
+                            vendor.save()
+
+                        # Populate same-file cache
+                        file_vendors_cache[v_name_lower] = vendor
+                        file_vendors_code_cache[vendor.vendor_code] = vendor
                         
                         # Ledger creation
                         from accounting.utils_ledger import get_or_create_entity_ledger
@@ -586,13 +634,19 @@ class VendorExcelUploadView(APIView):
                                         "deemed export": "deemed_export"
                                     }
                                     
+                                    # Ensure reference_name is unique to prevent unique_together violations on empty/same gstin
+                                    ref_name = (branch_data.get("Reference Name") or branch_data.get("reference_name", "Main Branch")).strip()
+                                    gstin_cleaned = str(gstin).strip()
+                                    if VendorMasterGSTDetails.objects.filter(tenant_id=tenant_id, gstin=gstin_cleaned, reference_name__iexact=ref_name).exists():
+                                        ref_name = f"{ref_name} - {vendor.vendor_code}"
+                                    
                                     VendorMasterGSTDetails.objects.create(  # type: ignore
                                         tenant_id=tenant_id,
                                         vendor_basic_detail=vendor,
                                         gstin=gstin,
                                         gst_registration_type=reg_map.get(raw_reg, "regular"),
                                     legal_name=vendor.vendor_name, # Default to vendor name if not provided
-                                    reference_name=branch_data.get("Reference Name") or branch_data.get("reference_name", "Main Branch"),
+                                    reference_name=ref_name,
                                     branch_address_line1=branch_data.get("Address Line 1") or branch_data.get("branch_address_line1"),
                                     branch_address_line2=branch_data.get("Address Line 2") or branch_data.get("branch_address_line2"),
                                     branch_address_line3=branch_data.get("Address Line 3") or branch_data.get("branch_address_line3"),

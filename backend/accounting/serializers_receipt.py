@@ -711,20 +711,21 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
 
             for item in items:
                 # Deduplicate
-                ref_no = item.reference_number or item.advance_ref_no
-                dedup_key = f"{ref_no}_{item.amount}"
+                ref_no = getattr(item, 'reference_number', None) or getattr(item, 'advance_ref_no', None)
+                item_amt = getattr(item, 'received_amount', getattr(item, 'amount', getattr(item, 'allocated_amount', 0)))
+                dedup_key = f"{ref_no}_{item_amt}"
                 if dedup_key in seen_refs:
                     continue
                 seen_refs.add(dedup_key)
 
-                metadata = item.pending_transaction if hasattr(item, 'pending_transaction') and isinstance(item.pending_transaction, dict) else {}
+                metadata = getattr(item, 'pending_transaction', {}) if isinstance(getattr(item, 'pending_transaction', None), dict) else {}
                 metadata_name = metadata.get('customer_name')
                 
                 # Robust customer lookup
                 portal_customer = None
                 
                 # 1. Try by direct FK (pay_from_ledger stores the party)
-                item_party = getattr(item, 'pay_from_ledger', None) or receipt.pay_from_ledger
+                item_party = getattr(item, 'pay_from_ledger', None) or getattr(receipt, 'pay_from_ledger', None)
                 if item_party:
                     portal_customer = CustomerMasterCustomer.objects.filter(
                         tenant_id=receipt.tenant_id, 
@@ -732,7 +733,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     ).first()
                 
                 # 2. Try by ledger_id (most reliable for core engine)
-                if not portal_customer and hasattr(item, 'ledger_id_val') and item.ledger_id_val:
+                if not portal_customer and getattr(item, 'ledger_id_val', None):
                     portal_customer = CustomerMasterCustomer.objects.filter(
                         tenant_id=receipt.tenant_id, 
                         ledger_id=item.ledger_id_val
@@ -747,20 +748,20 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 
                 if portal_customer:
                     try:
-                        ref_no = metadata.get('invoiceNo') or metadata.get('sales_invoice_no')
-                        if not ref_no and item.reference_id and str(item.reference_id).isdigit():
+                        ref_no_resolved = metadata.get('invoiceNo') or metadata.get('sales_invoice_no')
+                        if not ref_no_resolved and getattr(item, 'reference_id', None) and str(getattr(item, 'reference_id', '')).isdigit():
                             from .models_voucher_sales import VoucherSalesInvoiceDetails
                             inv = VoucherSalesInvoiceDetails.objects.filter(id=item.reference_id, tenant_id=receipt.tenant_id).first()
                             if inv:
-                                ref_no = inv.sales_invoice_no
+                                ref_no_resolved = inv.sales_invoice_no
                         
-                        if not ref_no:
-                            ref_no = item.reference_id or receipt.voucher_number
+                        if not ref_no_resolved:
+                            ref_no_resolved = getattr(item, 'reference_id', None) or receipt.voucher_number
                         
-                        is_adv = (getattr(item, 'is_advance', False) or (getattr(item, 'reference_type', '').upper() == 'ADVANCE') or not getattr(item, 'reference_id', None))
+                        is_adv = (getattr(item, 'is_advance', False) or (str(getattr(item, 'reference_type', '')).upper() == 'ADVANCE') or not getattr(item, 'reference_id', None))
                         
                         # Use Resolved Ref No for linking, fallback to voucher number
-                        ref_no_to_use = ref_no or receipt.voucher_number
+                        ref_no_to_use = ref_no_resolved or receipt.voucher_number
 
 
                         CustomerTransaction.objects.update_or_create(
@@ -770,8 +771,8 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                             transaction_type='receipt',
                             defaults={
                                 'transaction_date': receipt.date,
-                                'amount': item.received_amount,
-                                'total_amount': item.received_amount,
+                                'amount': item_amt,
+                                'total_amount': item_amt,
                                 'payment_status': 'Advance' if is_adv else 'Partially Utilized',
                                 'reference_number': ref_no_to_use,
                                 'notes': receipt.narration

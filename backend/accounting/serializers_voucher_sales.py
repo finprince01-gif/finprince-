@@ -68,6 +68,10 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
     # Explicitly define to avoid "Not a valid string" error from ChoiceField/other weirdness
     reverse_charge = serializers.CharField(required=False, default='N', max_length=1)
     supporting_document = serializers.FileField(required=False, allow_null=True)
+    
+    # Explicitly define place_of_supply without max_length=2 to allow state names like "Tamil Nadu" 
+    # to be passed to validate_place_of_supply, which will then map them to the 2-digit code.
+    place_of_supply = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=100)
 
     class Meta:
         model = VoucherSalesInvoiceDetails
@@ -84,6 +88,116 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         ]
         read_only_fields = ('id', 'tenant_id', 'created_at', 'updated_at', 'posting_status', 'posting_error')
     
+    def validate_place_of_supply(self, value):
+        if not value:
+            return value
+        
+        val_str = str(value).strip().lower()
+        
+        state_to_code = {
+            'jammu and kashmir': '01', 'jammu & kashmir': '01', 'j&k': '01',
+            'himachal pradesh': '02',
+            'punjab': '03',
+            'chandigarh': '04',
+            'uttarakhand': '05', 'uttaranchal': '05',
+            'haryana': '06',
+            'delhi': '07',
+            'rajasthan': '08',
+            'uttar pradesh': '09', 'up': '09',
+            'bihar': '10',
+            'sikkim': '11',
+            'arunachal pradesh': '12',
+            'nagaland': '13',
+            'manipur': '14',
+            'mizoram': '15',
+            'tripura': '16',
+            'meghalaya': '17',
+            'assam': '18',
+            'west bengal': '19', 'wb': '19',
+            'jharkhand': '20',
+            'odisha': '21', 'orissa': '21',
+            'chhattisgarh': '22',
+            'madhya pradesh': '23', 'mp': '23',
+            'gujarat': '24',
+            'daman and diu': '25', 'daman & diu': '25',
+            'dadra and nagar haveli': '26', 'dadra & nagar haveli': '26',
+            'maharashtra': '27',
+            'andhra pradesh (old)': '28',
+            'karnataka': '29',
+            'goa': '30',
+            'lakshadweep': '31',
+            'kerala': '32',
+            'tamil nadu': '33', 'tamilnadu': '33', 'tn': '33',
+            'puducherry': '34', 'pondicherry': '34',
+            'andaman and nicobar islands': '35', 'andaman & nicobar islands': '35', 'andaman & nicobar': '35',
+            'telangana': '36',
+            'andhra pradesh': '37', 'ap': '37',
+            'ladakh': '38',
+            'other territory': '97',
+        }
+        
+        if val_str.isdigit() and len(val_str) <= 2:
+            return val_str.zfill(2)
+        
+        code = state_to_code.get(val_str)
+        if code:
+            return code
+            
+        import re
+        match = re.search(r'\b(\d{2})\b', val_str)
+        if match:
+            return match.group(1)
+            
+        return value[:2]
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        if rep.get('place_of_supply'):
+            code = str(rep['place_of_supply']).strip()
+            code_to_state = {
+                '01': 'Jammu and Kashmir',
+                '02': 'Himachal Pradesh',
+                '03': 'Punjab',
+                '04': 'Chandigarh',
+                '05': 'Uttarakhand',
+                '06': 'Haryana',
+                '07': 'Delhi',
+                '08': 'Rajasthan',
+                '09': 'Uttar Pradesh',
+                '10': 'Bihar',
+                '11': 'Sikkim',
+                '12': 'Arunachal Pradesh',
+                '13': 'Nagaland',
+                '14': 'Manipur',
+                '15': 'Mizoram',
+                '16': 'Tripura',
+                '17': 'Meghalaya',
+                '18': 'Assam',
+                '19': 'West Bengal',
+                '20': 'Jharkhand',
+                '21': 'Odisha',
+                '22': 'Chhattisgarh',
+                '23': 'Madhya Pradesh',
+                '24': 'Gujarat',
+                '25': 'Daman and Diu',
+                '26': 'Dadra and Nagar Haveli',
+                '27': 'Maharashtra',
+                '28': 'Andhra Pradesh (Old)',
+                '29': 'Karnataka',
+                '30': 'Goa',
+                '31': 'Lakshadweep',
+                '32': 'Kerala',
+                '33': 'Tamil Nadu',
+                '34': 'Puducherry',
+                '35': 'Andaman and Nicobar Islands',
+                '36': 'Telangana',
+                '37': 'Andhra Pradesh',
+                '38': 'Ladakh',
+                '97': 'Other Territory',
+            }
+            rep['place_of_supply'] = code_to_state.get(code, code)
+        return rep
+
     def validate_sales_invoice_no(self, value):
         """
         Ensures the invoice number is unique within the tenant.

@@ -136,6 +136,36 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'tenant_id', 'created_by', 'created_at', 'updated_at']
 
+    def validate_customer_code(self, value):
+        """Ensure customer code is unique per tenant if provided."""
+        if not value:
+            return value
+
+        request = self.context.get('request')
+        if not request or not hasattr(request, 'user'):
+            return value
+
+        tenant_id = getattr(request.user, 'tenant_id', None)
+        if not tenant_id:
+            return value
+
+        # Check uniqueness (case-insensitive)
+        queryset = CustomerMasterCustomer.objects.filter(
+            tenant_id=tenant_id,
+            customer_code__iexact=value,
+            is_deleted=False
+        )
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError(
+                f"Customer with code '{value}' already exists. Please use a different customer code."
+            )
+
+        return value
+
     def validate_pan_number(self, value):
         """Ensure PAN number is unique per tenant if provided."""
         if not value:
