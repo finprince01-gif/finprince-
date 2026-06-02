@@ -9,19 +9,19 @@ def validate_sales_customer_and_invoice(tenant_id, customer_name, gstin, branch=
     """
     if customer_name: customer_name = customer_name.strip()
     
-    # 0. Global Invoice Uniqueness Check (Tenant-wide)
-    if sales_invoice_no:
-        existing_invoice = VoucherSalesInvoiceDetails.objects.filter(
-            tenant_id=tenant_id,
-            sales_invoice_no__iexact=sales_invoice_no.strip()
-        ).first()
-        
-        if existing_invoice:
-            return {
-                "status": "DUPLICATE_INVOICE",
-                "message": f"Duplicate Invoice: '{sales_invoice_no}' already exists in the database for customer '{existing_invoice.customer_name}'.",
-                "customer_id": existing_invoice.customer_id
-            }
+    # 0. Global Invoice Uniqueness Check (Tenant-wide) - Bypassed because serializer automatically auto-increments
+    # if sales_invoice_no:
+    #     existing_invoice = VoucherSalesInvoiceDetails.objects.filter(
+    #         tenant_id=tenant_id,
+    #         sales_invoice_no__iexact=sales_invoice_no.strip()
+    #     ).first()
+    #     
+    #     if existing_invoice:
+    #         return {
+    #             "status": "DUPLICATE_INVOICE",
+    #             "message": f"Duplicate Invoice: '{sales_invoice_no}' already exists in the database for customer '{existing_invoice.customer_name}'.",
+    #             "customer_id": existing_invoice.customer_id
+    #         }
     # Deep clean GSTIN
     if gstin: gstin = "".join(re.findall(r'[A-Z0-9]', gstin.upper()))
     if branch: branch = branch.strip()
