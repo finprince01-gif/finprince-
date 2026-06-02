@@ -8,6 +8,9 @@ from rest_framework import status, permissions
 from django.http import HttpResponse
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.utils import get_column_letter
 import io
 
 from .database import (
@@ -36,6 +39,7 @@ CUSTOMER_COLUMNS = [
     {"label": "Email Address", "key": "email_address", "required": False},
     {"label": "Contact Number", "key": "contact_number", "required": False},
     {"label": "Billing Currency", "key": "billing_currency", "required": False},
+    {"label": "Registered", "key": "registered", "required": True},
     {"label": "GSTIN", "key": "gstin", "required": False},
     {"label": "GST TDS Applicable", "key": "gst_tds_applicable", "required": False},
     {"label": "Branch Name", "key": "branch_name", "required": False},
@@ -132,7 +136,8 @@ class CustomerExcelTemplateDownloadView(APIView):
             ("Branch Name", "Mandatory", "Text", "Name of the customer's billing/shipping branch or location (e.g., Main Branch, HQ)."),
             ("Address Line 1", "Mandatory", "Text", "Flat/House no., building name, or street address."),
             ("Address Line 2", "Mandatory", "Text", "Locality, sector, area, or road name."),
-            ("GSTIN", "Optional", "15 Characters", "Must be exactly 15 alphanumeric characters in valid GSTIN format starting with state code."),
+            ("Registered", "Mandatory", "Yes / No", "Specify Yes if customer is GST registered, No if unregistered."),
+            ("GSTIN", "Conditional", "15 Characters", "Mandatory if Registered is Yes. Must be exactly 15 alphanumeric characters in valid GSTIN format starting with state code."),
             ("Address Line 3, City, State, Pincode, Country", "Optional", "Text / Numeric", "Additional detailed address and geographical identifiers."),
             
             {"section": "3. PRODUCTS/SERVICES"},
@@ -226,10 +231,41 @@ class CustomerExcelTemplateDownloadView(APIView):
         # Enable sheet protection to prevent header modification
         ws.protection.sheet = True
         
+        registered_col_letter = None
+        gstin_col_letter = None
+
         # Unlock rows 2 to 1000 for data entry (up to 1000 records)
-        for row in range(2, 1001):
-            for col in range(1, len(CUSTOMER_COLUMNS) + 1):
-                ws.cell(row=row, column=col).protection = Protection(locked=False)
+        for col_idx, col_def in enumerate(CUSTOMER_COLUMNS, 1):
+            if col_def["key"] == "registered":
+                registered_col_letter = get_column_letter(col_idx)
+            if col_def["key"] == "gstin":
+                gstin_col_letter = get_column_letter(col_idx)
+                
+            for row in range(2, 1001):
+                ws.cell(row=row, column=col_idx).protection = Protection(locked=False)
+
+        if registered_col_letter:
+            # Dropdown for Registered
+            dv_registered = DataValidation(type="list", formula1='"Yes,No"', allow_blank=True)
+            dv_registered.error = 'Your entry is not in the list'
+            dv_registered.errorTitle = 'Invalid Entry'
+            dv_registered.prompt = 'Please select from the list'
+            dv_registered.promptTitle = 'Select Yes/No'
+            dv_registered.add(f'{registered_col_letter}2:{registered_col_letter}1000')
+            ws.add_data_validation(dv_registered)
+
+        if registered_col_letter and gstin_col_letter:
+            # Custom Data Validation for GSTIN based on Registered column
+            dv_gstin = DataValidation(type="custom", formula1=f'${registered_col_letter}2="Yes"', allow_blank=True)
+            dv_gstin.error = 'GSTIN cannot be entered when Registered is No'
+            dv_gstin.errorTitle = 'Invalid Entry'
+            dv_gstin.add(f'{gstin_col_letter}2:{gstin_col_letter}1000')
+            ws.add_data_validation(dv_gstin)
+            
+            # Conditional formatting to gray out GSTIN if Registered is "No"
+            gray_fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
+            rule = FormulaRule(formula=[f'${registered_col_letter}2="No"'], stopIfTrue=True, fill=gray_fill)
+            ws.conditional_formatting.add(f'{gstin_col_letter}2:{gstin_col_letter}1000', rule)
         
         wb.active = 0
         
@@ -275,6 +311,7 @@ class CustomerExcelExportView(APIView):
                 "Email Address": customer.email_address,
                 "Contact Number": customer.contact_number,
                 "Billing Currency": customer.billing_currency,
+                "Registered": "No" if (gst and gst.is_unregistered) else "Yes",
                 "GSTIN": gst.gstin if gst else "",
                 "GST TDS Applicable": "Yes" if customer.gst_tds_applicable else "No",
                 "Branch Name": gst.branch_reference_name if gst else "",
@@ -376,6 +413,60 @@ class CustomerExcelUploadView(APIView):
 
             results = {"success": 0, "failed": 0, "errors": [], "successful_imports": []}
             
+            # Group hierarchical rows (subsequent rows with empty customer basic details)
+            grouped_records = []
+            current_main_record = None
+
+            def _raw_empty(v):
+                return not v or str(v).strip().lower() in ['', 'none', 'nan', 'null', 'n/a']
+
+            for item in records_to_process:
+                r_data = item.get("row_data")
+                if not r_data: continue
+
+                c_code = r_data.get("Customer Code") or r_data.get("customer_code")
+                c_name = r_data.get("Customer Name") or r_data.get("customer_name") or r_data.get("name") or r_data.get("Name")
+                email = r_data.get("Email Address") or r_data.get("email_address") or r_data.get("email_id") or r_data.get("email") or r_data.get("Email ID") or r_data.get("Email")
+
+                is_main = not (_raw_empty(c_code) and _raw_empty(c_name) and _raw_empty(email))
+
+                if is_main:
+                    if "extra_branches" not in r_data: r_data["extra_branches"] = []
+                    if "extra_banks" not in r_data: r_data["extra_banks"] = []
+                    if "products" not in r_data: r_data["products"] = []
+                    
+                    has_product = not _raw_empty(r_data.get("Item Code") or r_data.get("item_code") or r_data.get("Item Name") or r_data.get("item_name"))
+                    if has_product:
+                        r_data["products"].append({
+                            "Item Code": r_data.get("Item Code"),
+                            "Item Name": r_data.get("Item Name"),
+                            "HSN/SAC Code": r_data.get("HSN/SAC Code") or r_data.get("HSN/SAC") or r_data.get("hsn_code") or r_data.get("hsn_sac_code"),
+                            "UOM": r_data.get("UOM"),
+                            "Customer Item Code": r_data.get("Customer Item Code") or r_data.get("Cust Item Code") or r_data.get("cust_item_code"),
+                            "Customer Item Name": r_data.get("Customer Item Name") or r_data.get("Cust Item Name") or r_data.get("cust_item_name"),
+                            "Packing Notes": r_data.get("Packing Notes"),
+                        })
+                        
+                    current_main_record = item
+                    grouped_records.append(item)
+                else:
+                    if current_main_record:
+                        # Append to current main record
+                        has_branch = not _raw_empty(r_data.get("Branch Name") or r_data.get("branch_name") or r_data.get("City"))
+                        has_bank = not _raw_empty(r_data.get("Bank Account No") or r_data.get("bank_account_no") or r_data.get("Bank Name") or r_data.get("bank_name"))
+                        has_product = not _raw_empty(r_data.get("Item Code") or r_data.get("item_code") or r_data.get("Item Name") or r_data.get("item_name"))
+
+                        if has_branch: current_main_record["row_data"]["extra_branches"].append(r_data)
+                        if has_bank: current_main_record["row_data"]["extra_banks"].append(r_data)
+                        if has_product: current_main_record["row_data"]["products"].append(r_data)
+                    else:
+                        grouped_records.append(item)
+            
+            records_to_process = grouped_records
+
+            # Cache for customers created in this file (so multiple distinct named branches in same file link together)
+            file_customers_cache = {}
+
             for item in records_to_process:
                 row_data = item.get("row_data")
                 row_idx = item.get("row_index", "N/A")
@@ -387,7 +478,7 @@ class CustomerExcelUploadView(APIView):
                     s = str(val).strip().lower()
                     return s in ['', 'none', 'n/a', 'nan', 'null', 'n / a']
 
-                c_name = row_data.get("Customer Name") or row_data.get("customer_name")
+                c_name = row_data.get("Customer Name") or row_data.get("customer_name") or row_data.get("name") or row_data.get("Name")
                 if is_empty(c_name):
                     results["failed"] += 1
                     results["errors"].append({
@@ -407,7 +498,7 @@ class CustomerExcelUploadView(APIView):
                     })
                     continue
 
-                email = row_data.get("Email Address") or row_data.get("email_address") or row_data.get("email")
+                email = row_data.get("Email Address") or row_data.get("email_address") or row_data.get("email_id") or row_data.get("email") or row_data.get("Email ID") or row_data.get("Email")
                 if is_empty(email):
                     results["failed"] += 1
                     results["errors"].append({
@@ -417,7 +508,7 @@ class CustomerExcelUploadView(APIView):
                     })
                     continue
 
-                contact = row_data.get("Contact Number") or row_data.get("contact_number") or row_data.get("contact")
+                contact = row_data.get("Contact Number") or row_data.get("contact_number") or row_data.get("contact") or row_data.get("Contact No") or row_data.get("contact_no") or row_data.get("Phone") or row_data.get("phone")
                 if is_empty(contact):
                     results["failed"] += 1
                     results["errors"].append({
@@ -457,6 +548,43 @@ class CustomerExcelUploadView(APIView):
                     })
                     continue
                 
+                # Check main record for Country, State, City
+                country = row_data.get("Country") or row_data.get("country")
+                if is_empty(country):
+                    results["failed"] += 1
+                    results["errors"].append({"message": f"Row {row_idx}: Country is mandatory", "row_data": row_data, "row_index": row_idx})
+                    continue
+                    
+                state = row_data.get("State") or row_data.get("state")
+                if is_empty(state):
+                    results["failed"] += 1
+                    results["errors"].append({"message": f"Row {row_idx}: State is mandatory", "row_data": row_data, "row_index": row_idx})
+                    continue
+                    
+                city = row_data.get("City") or row_data.get("city")
+                if is_empty(city):
+                    results["failed"] += 1
+                    results["errors"].append({"message": f"Row {row_idx}: City is mandatory", "row_data": row_data, "row_index": row_idx})
+                    continue
+
+                # Check extra branches
+                branch_invalid = False
+                for b_idx, branch_data in enumerate(row_data.get("extra_branches", [])):
+                    for field_name in ["Branch Name", "Address Line 1", "Address Line 2", "Country", "State", "City"]:
+                        val = branch_data.get(field_name) or branch_data.get(field_name.lower().replace(' ', '_'))
+                        if is_empty(val):
+                            results["failed"] += 1
+                            results["errors"].append({
+                                "message": f"Row {row_idx}: Branch {b_idx + 1} {field_name} is mandatory",
+                                "row_data": row_data,
+                                "row_index": row_idx
+                            })
+                            branch_invalid = True
+                            break
+                    if branch_invalid: break
+                
+                if branch_invalid: continue
+                
                 # Validation
                 pan = row_data.get("PAN Number") or row_data.get("pan_number")
                 if pan:
@@ -469,8 +597,28 @@ class CustomerExcelUploadView(APIView):
                         })
                         continue
                 
+                registered = row_data.get("Registered") or row_data.get("registered")
+                if is_empty(registered):
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "message": f"Row {row_idx}: Registered is mandatory (Yes/No)",
+                        "row_data": row_data,
+                        "row_index": row_idx
+                    })
+                    continue
+
+                is_registered = str(registered).strip().lower() not in ['no', 'false', '0']
+                
                 gstin = row_data.get("GSTIN") or row_data.get("gstin")
-                if gstin:
+                if is_registered:
+                    if is_empty(gstin):
+                        results["failed"] += 1
+                        results["errors"].append({
+                            "message": f"Row {row_idx}: GSTIN is mandatory when Registered is Yes",
+                            "row_data": row_data,
+                            "row_index": row_idx
+                        })
+                        continue
                     if not re.match(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$', str(gstin).strip().upper()):
                         results["failed"] += 1
                         results["errors"].append({
@@ -479,118 +627,152 @@ class CustomerExcelUploadView(APIView):
                             "row_index": row_idx
                         })
                         continue
+                else:
+                    if not is_empty(gstin):
+                        row_data["GSTIN"] = ""
+                        gstin = ""
                 
                 try:
                     # Use a nested transaction that we can rollback if dry_run
                     with transaction.atomic():
                         # 1. Basic Details
                         import random, string
-                        cust_code = row_data.get("Customer Code") or f"CUST-{''.join(random.choices(string.ascii_uppercase + string.digits, k=6))}"
+                        cust_code = row_data.get("Customer Code")
                         
-                        cat_name = row_data.get("Category", "Regular")
-                        cat, _ = CustomerMasterCategory.objects.get_or_create(
-                            tenant_id=tenant_id,
-                            category=cat_name,
-                            defaults={'is_active': True}
-                        )
+                        customer = None
+                        c_name_lower = str(c_name).strip().lower()
                         
-                        customer = CustomerMasterCustomerBasicDetails.objects.create(
-                            tenant_id=tenant_id,
-                            customer_name=c_name,
-                            customer_code=cust_code,
-                            pan_number=row_data.get("PAN Number"),
-                            contact_person=row_data.get("Contact Person"),
-                            email_address=row_data.get("Email Address"),
-                            contact_number=row_data.get("Contact Number"),
-                            billing_currency=row_data.get("Billing Currency", "INR"),
-                            is_also_vendor=True if str(row_data.get("Is Also Vendor", "")).lower() in ['yes', 'true', '1'] else False,
-                            gst_tds_applicable=True if str(row_data.get("GST TDS Applicable", "")).lower() in ['yes', 'true', '1'] else False,
-                            customer_category=cat,
-                            created_by=username
-                        )
-                        
-                        # Ledger creation
-                        ledger_code = f"CUST-LED-{getattr(customer, 'id', None)}"
-                        ledger = MasterLedger.objects.create(  # type: ignore
-                            tenant_id=tenant_id,
-                            name=c_name,
-                            group='Sundry Debtors',
-                            code=ledger_code,
-                        )
-                        customer.ledger_id = ledger.id
-                        customer.save(update_fields=['ledger_id'])
-                        
-                        # 2. GST Details
-                        gstin = row_data.get("GSTIN")
-                        if gstin or row_data.get("Branch Name"):
-                            CustomerMasterCustomerGSTDetails.objects.create(  # type: ignore
-                                tenant_id=tenant_id,
-                                customer_basic_detail=customer,
-                                gstin=gstin,
-                                branch_reference_name=row_data.get("Branch Name", "Main Branch"),
-                                address_line_1=row_data.get("Address Line 1"),
-                                address_line_2=row_data.get("Address Line 2"),
-                                address_line_3=row_data.get("Address Line 3"),
-                                city=row_data.get("City"),
-                                state=row_data.get("State"),
-                                pincode=row_data.get("Pincode"),
-                                country=row_data.get("Country") or row_data.get("country") or "India",
-                                branch_contact_person=row_data.get("Branch Contact Person") or row_data.get("branch_contact_person"),
-                                branch_email=row_data.get("Branch Email Address") or row_data.get("branch_email"),
-                                branch_contact_number=row_data.get("Branch Contact Number") or row_data.get("branch_contact_number"),
-                                created_by=username
-                            )
+                        # Check cache first for same-file duplicates
+                        if c_name_lower in file_customers_cache:
+                            customer = file_customers_cache[c_name_lower]
                         else:
-                            CustomerMasterCustomerGSTDetails.objects.create(  # type: ignore
+                            # Check DB
+                            if cust_code:
+                                customer = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, customer_code=cust_code).first()
+                            if not customer:
+                                customer = CustomerMasterCustomerBasicDetails.objects.filter(tenant_id=tenant_id, customer_name__iexact=str(c_name).strip()).first()
+                        
+                        is_new_customer = False
+                        if not customer:
+                            is_new_customer = True
+                            if not cust_code:
+                                cust_code = f"CUST-{''.join(random.choices(string.ascii_uppercase + string.digits, k=6))}"
+                            
+                            cat_name_val = row_data.get("Category", "Regular")
+                            cat, _ = CustomerMasterCategory.objects.get_or_create(
                                 tenant_id=tenant_id,
-                                customer_basic_detail=customer,
-                                is_unregistered=True,
+                                category=cat_name_val,
+                                defaults={'is_active': True}
+                            )
+                            
+                            customer = CustomerMasterCustomerBasicDetails.objects.create(
+                                tenant_id=tenant_id,
+                                customer_name=row_data.get("Customer Name") or row_data.get("customer_name") or row_data.get("name") or row_data.get("Name"),
+                                customer_code=cust_code,
+                                pan_number=row_data.get("PAN Number"),
+                                contact_person=row_data.get("Contact Person"),
+                                email_address=row_data.get("Email Address") or row_data.get("email_address") or row_data.get("email_id") or row_data.get("email") or row_data.get("Email ID") or row_data.get("Email"),
+                                contact_number=row_data.get("Contact Number") or row_data.get("contact_number") or row_data.get("contact") or row_data.get("Contact No") or row_data.get("contact_no") or row_data.get("Phone") or row_data.get("phone"),
+                                billing_currency=row_data.get("Billing Currency", "INR"),
+                                is_also_vendor=True if str(row_data.get("Is Also Vendor", "")).lower() in ['yes', 'true', '1'] else False,
+                                gst_tds_applicable=True if str(row_data.get("GST TDS Applicable", "")).lower() in ['yes', 'true', '1'] else False,
+                                customer_category=cat,
                                 created_by=username
                             )
                             
+                            # Ledger creation
+                            ledger_code = f"CUST-LED-{getattr(customer, 'id', random.randint(1000, 9999))}"
+                            ledger = MasterLedger.objects.create(  # type: ignore
+                                tenant_id=tenant_id,
+                                name=c_name,
+                                group='Sundry Debtors',
+                                code=ledger_code,
+                            )
+                            customer.ledger_id = ledger.id
+                            customer.save(update_fields=['ledger_id'])
+                            
+                            file_customers_cache[c_name_lower] = customer
+                        
+                        # 2. GST Details
+                        all_branches = [row_data] + row_data.get("extra_branches", [])
+                        for branch_data in all_branches:
+                            gstin = branch_data.get("GSTIN")
+                            registered_str = str(branch_data.get("Registered") or branch_data.get("registered") or "").strip().lower()
+                            is_unregistered = registered_str in ['no', 'false', '0']
+                            branch_ref = branch_data.get("Branch Name", "Main Branch")
+
+                            if is_new_customer or not CustomerMasterCustomerGSTDetails.objects.filter(
+                                tenant_id=tenant_id, customer_basic_detail=customer, branch_reference_name__iexact=branch_ref
+                            ).exists():
+                                CustomerMasterCustomerGSTDetails.objects.create(  # type: ignore
+                                    tenant_id=tenant_id,
+                                    customer_basic_detail=customer,
+                                    gstin=gstin if not is_unregistered else None,
+                                    is_unregistered=is_unregistered,
+                                    branch_reference_name=branch_ref,
+                                    address_line_1=branch_data.get("Address Line 1"),
+                                    address_line_2=branch_data.get("Address Line 2"),
+                                    address_line_3=branch_data.get("Address Line 3"),
+                                    city=branch_data.get("City"),
+                                    state=branch_data.get("State"),
+                                    pincode=branch_data.get("Pincode"),
+                                    country=branch_data.get("Country") or branch_data.get("country") or "India",
+                                    branch_contact_person=branch_data.get("Branch Contact Person") or branch_data.get("branch_contact_person"),
+                                    branch_email=branch_data.get("Branch Email Address") or branch_data.get("branch_email"),
+                                    branch_contact_number=branch_data.get("Branch Contact Number") or branch_data.get("branch_contact_number"),
+                                    created_by=username
+                                )
+                            
                         # 3. Banking Details
-                        acc_no = row_data.get("Bank Account No")
-                        if acc_no:
-                            CustomerMasterCustomerBanking.objects.create(  # type: ignore
+                        all_banks = [row_data] + row_data.get("extra_banks", [])
+                        for bank_data in all_banks:
+                            acc_no = bank_data.get("Bank Account No")
+                            if acc_no:
+                                if is_new_customer or not CustomerMasterCustomerBanking.objects.filter(
+                                    tenant_id=tenant_id, customer_basic_detail=customer, account_number=acc_no
+                                ).exists():
+                                    CustomerMasterCustomerBanking.objects.create(  # type: ignore
+                                        tenant_id=tenant_id,
+                                        customer_basic_detail=customer,
+                                        account_number=acc_no,
+                                        bank_name=bank_data.get("Bank Name"),
+                                        ifsc_code=bank_data.get("IFSC Code"),
+                                        branch_name=bank_data.get("Bank Branch"),
+                                        swift_code=bank_data.get("Swift Code"),
+                                        associated_branches=[bank_data.get("Associated Branch")] if bank_data.get("Associated Branch") else [],
+                                        created_by=username
+                                    )
+                            elif bank_data is row_data and is_new_customer:
+                                CustomerMasterCustomerBanking.objects.create(tenant_id=tenant_id, customer_basic_detail=customer, created_by=username)  # type: ignore
+ 
+                        # 4. TDS Details (Only create if new customer or doesn't exist)
+                        if is_new_customer or not CustomerMasterCustomerTDS.objects.filter(tenant_id=tenant_id, customer_basic_detail=customer).exists():
+                            CustomerMasterCustomerTDS.objects.create(  # type: ignore
                                 tenant_id=tenant_id,
                                 customer_basic_detail=customer,
-                                account_number=acc_no,
-                                bank_name=row_data.get("Bank Name"),
-                                ifsc_code=row_data.get("IFSC Code"),
-                                branch_name=row_data.get("Bank Branch"),
-                                swift_code=row_data.get("Swift Code"),
-                                associated_branches=[row_data.get("Associated Branch")] if row_data.get("Associated Branch") else [],
+                                msme_no=row_data.get("MSME No"),
+                                fssai_no=row_data.get("FSSAI No"),
+                                iec_code=row_data.get("IEC Code"),
+                                tds_section=row_data.get("TDS Section"),
+                                tcs_section=row_data.get("TCS Section"),
+                                tcs_enabled=True if str(row_data.get("TCS Enabled", "")).lower() in ['yes', 'true', '1'] else False,
                                 created_by=username
                             )
-                        else:
-                            CustomerMasterCustomerBanking.objects.create(tenant_id=tenant_id, customer_basic_detail=customer, created_by=username)  # type: ignore
- 
-                        # 4. TDS Details
-                        CustomerMasterCustomerTDS.objects.create(  # type: ignore
-                            tenant_id=tenant_id,
-                            customer_basic_detail=customer,
-                            msme_no=row_data.get("MSME No"),
-                            fssai_no=row_data.get("FSSAI No"),
-                            iec_code=row_data.get("IEC Code"),
-                            tds_section=row_data.get("TDS Section"),
-                            tcs_section=row_data.get("TCS Section"),
-                            tcs_enabled=True if str(row_data.get("TCS Enabled", "")).lower() in ['yes', 'true', '1'] else False,
-                            created_by=username
-                        )
                         
-                        # Update terms & conditions
-                        CustomerMasterCustomerTermsCondition.objects.create(  # type: ignore
-                            tenant_id=tenant_id,
-                            customer_basic_detail=customer,
-                            credit_period=row_data.get("Credit Period"),
-                            credit_terms=row_data.get("Credit Terms"),
-                            penalty_terms=row_data.get("Penalty Terms"),
-                            delivery_terms=row_data.get("Delivery Terms"),
-                            warranty_details=row_data.get("Warranty Details"),
-                            force_majeure=row_data.get("Force Majeure"),
-                            dispute_terms=row_data.get("Dispute Terms"),
-                            created_by=username
-                        )
+                        # 5. Terms & conditions (Only create if new customer or doesn't exist)
+                        if is_new_customer or not CustomerMasterCustomerTermsCondition.objects.filter(tenant_id=tenant_id, customer_basic_detail=customer).exists():
+                            CustomerMasterCustomerTermsCondition.objects.create(  # type: ignore
+                                tenant_id=tenant_id,
+                                customer_basic_detail=customer,
+                                credit_period=row_data.get("Credit Period"),
+                                credit_terms=row_data.get("Credit Terms"),
+                                penalty_terms=row_data.get("Penalty Terms"),
+                                delivery_terms=row_data.get("Delivery Terms"),
+                                warranty_details=row_data.get("Warranty Details"),
+                                force_majeure=row_data.get("Force Majeure"),
+                                dispute_terms=row_data.get("Dispute Terms"),
+                                created_by=username
+                            )
                         
                         # 6. Products/Services
                         products = row_data.get("products", [])
@@ -616,18 +798,21 @@ class CustomerExcelUploadView(APIView):
                             if hsn and not str(hsn).replace(" ", "").isdigit():
                                 raise Exception(f"Invalid HSN/SAC Code: '{hsn}'. HSN codes must be numeric.")
 
-                            CustomerMasterCustomerProductService.objects.create(  # type: ignore
-                                tenant_id=tenant_id,
-                                customer_basic_detail=customer,
-                                item_code=item_code,
-                                item_name=p.get("Item Name") or p.get("item_name"),
-                                hsn_code=hsn,
-                                uom=p.get("UOM") or p.get("uom"),
-                                customer_item_code=p.get("Customer Item Code") or p.get("Cust Item Code") or p.get("cust_item_code") or p.get("customer_item_code"),
-                                customer_item_name=p.get("Customer Item Name") or p.get("Cust Item Name") or p.get("cust_item_name") or p.get("customer_item_name"),
-                                packing_notes=p.get("Packing Notes") or p.get("packing_notes"),
-                                created_by=username
-                            )
+                            if is_new_customer or not CustomerMasterCustomerProductService.objects.filter(
+                                tenant_id=tenant_id, customer_basic_detail=customer, item_code=item_code
+                            ).exists():
+                                CustomerMasterCustomerProductService.objects.create(  # type: ignore
+                                    tenant_id=tenant_id,
+                                    customer_basic_detail=customer,
+                                    item_code=item_code,
+                                    item_name=p.get("Item Name") or p.get("item_name"),
+                                    hsn_code=hsn,
+                                    uom=p.get("UOM") or p.get("uom"),
+                                    customer_item_code=p.get("Customer Item Code") or p.get("Cust Item Code") or p.get("cust_item_code") or p.get("customer_item_code"),
+                                    customer_item_name=p.get("Customer Item Name") or p.get("Cust Item Name") or p.get("cust_item_name") or p.get("customer_item_name"),
+                                    packing_notes=p.get("Packing Notes") or p.get("packing_notes"),
+                                    created_by=username
+                                )
                         
                         results["successful_imports"].append({
                             "id": None if dry_run else getattr(customer, 'id', None),

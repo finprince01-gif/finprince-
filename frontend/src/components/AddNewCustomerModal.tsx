@@ -105,7 +105,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
 
     // GST Details
     const [isUnregistered, setIsUnregistered] = useState(false);
-    const [addMultipleBranches, setAddMultipleBranches] = useState(false);
+
     const [gstInput, setGstInput] = useState('');
     const [selectedGSTINs, setSelectedGSTINs] = useState<string[]>([]);
     const [showGstDropdown, setShowGstDropdown] = useState(false);
@@ -231,7 +231,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
             contact_number: '', billing_currency: '', is_also_vendor: false, gst_tds_applicable: false,
         });
         setIsUnregistered(false);
-        setAddMultipleBranches(false);
+
         setGstInput(''); setSelectedGSTINs([]); setShowGstDropdown(false);
         setShowBranchDetails(false);
         setExpandedBranches([1]);
@@ -474,7 +474,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                 <select value={formData.customer_category} onChange={e => setFormData(p => ({ ...p, customer_category: e.target.value }))}
                                     className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white">
                                     <option value="">Select Category</option>
-                                    {categories.map(cat => (
+                                    {Array.from(new Map(categories.map(cat => [cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > '), cat])).values()).map(cat => (
                                         <option key={cat.id} value={cat.id}>
                                             {cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')}
                                         </option>
@@ -543,7 +543,7 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                             <div className="flex justify-center">
                                 <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors">
                                     <input type="checkbox" checked={isUnregistered}
-                                        onChange={e => { setIsUnregistered(e.target.checked); setShowBranchDetails(false); setSelectedGSTINs([]); setRegisteredBranches([]); setUnregisteredBranches([emptyUnregBranch(1)]); setExpandedBranches([1]); setAddMultipleBranches(false); }}
+                                        onChange={e => { setIsUnregistered(e.target.checked); setShowBranchDetails(false); setSelectedGSTINs([]); setRegisteredBranches([]); setUnregisteredBranches([emptyUnregBranch(1)]); setExpandedBranches([1]); }}
                                         className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
                                     <span className="text-sm font-semibold text-gray-700">Customer is Unregistered</span>
                                 </label>
@@ -569,28 +569,15 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                         </div>
                                     </div>
 
-                                    {/* Add Multiple Branches */}
-                                    <div className="flex items-center gap-6">
-                                        <label className="text-sm font-semibold text-gray-700">Add Multiple Branches</label>
-                                        <div className="flex bg-gray-100 p-1 rounded-[4px]">
-                                            <button type="button" onClick={() => setAddMultipleBranches(true)}
-                                                className={`px-4 py-1 text-xs font-medium rounded transition-colors ${addMultipleBranches ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
-                                                Yes
-                                            </button>
-                                            <button type="button" onClick={() => setAddMultipleBranches(false)}
-                                                className={`px-4 py-1 text-xs font-medium rounded transition-colors ${!addMultipleBranches ? 'bg-white text-gray-800 ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}>
-                                                No
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Single branch (NO) */}
-                                    {!addMultipleBranches ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Single branch */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             {([
                                                 { field: 'addressLine1', label: 'Address Line 1', required: true, span2: true },
                                                 { field: 'addressLine2', label: 'Address Line 2', span2: true },
                                                 { field: 'addressLine3', label: 'Address Line 3', span2: true },
+                                                { field: 'contactPerson', label: 'Contact Person', required: false, span2: false },
+                                                { field: 'contactNumber', label: 'Contact Number', required: true, span2: false },
+                                                { field: 'email', label: 'Email Address', required: true, span2: false },
                                             ] as { field: string; label: string; required?: boolean; span2: boolean }[]).map(({ field, label, required, span2 }) => (
                                                 <div key={field} className={span2 ? 'md:col-span-2' : ''}>
                                                     <label className="block text-sm font-semibold text-gray-700 mb-2">{label} {required && <span className="text-red-500">*</span>}</label>
@@ -659,116 +646,6 @@ const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClo
                                                     placeholder="Enter pincode" />
                                             </div>
                                         </div>
-                                    ) : (
-                                        // Multiple branches – accordion cards
-                                        <div className="space-y-4">
-                                            {unregisteredBranches.map((branch, index) => {
-                                                const isExpanded = expandedBranches.includes(branch.id);
-                                                const { countryCode, states, stateCode, cities } = getBranchGeo(branch);
-                                                return (
-                                                    <div key={branch.id} className="border border-gray-200 rounded-[4px] overflow-hidden bg-white">
-                                                        <div className="flex items-center justify-between px-6 py-4 bg-gray-50 cursor-pointer hover:bg-gray-100"
-                                                            onClick={() => toggleBranchExpand(branch.id)}>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="w-6 h-6 flex items-center justify-center bg-white border border-gray-200 rounded text-xs font-semibold text-gray-600">{index + 1}</span>
-                                                                <span className="font-semibold text-gray-800">{branch.referenceName || `Branch ${index + 1}`}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-3">
-                                                                {unregisteredBranches.length > 1 && (
-                                                                    <button type="button" onClick={e => { e.stopPropagation(); setUnregisteredBranches(p => p.filter(b => b.id !== branch.id)); }}
-                                                                        className="text-xs text-red-500 hover:text-red-700">Remove</button>
-                                                                )}
-                                                                <span className="text-gray-400">{isExpanded ? '▲' : '▼'}</span>
-                                                            </div>
-                                                        </div>
-                                                        {isExpanded && (
-                                                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                                <div className="md:col-span-2">
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
-                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
-                                                                        value={branch.referenceName}
-                                                                        onChange={e => handleManualBranchChange(branch.id, 'referenceName', e.target.value)}
-                                                                        placeholder="e.g. Warehouse, Main Office" />
-                                                                </div>
-                                                                {(['addressLine1', 'addressLine2', 'addressLine3'] as const).map(f => (
-                                                                    <div key={f} className="md:col-span-2">
-                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address Line {f.slice(-1)}</label>
-                                                                        <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
-                                                                            value={(branch as any)[f]}
-                                                                            onChange={e => handleManualBranchChange(branch.id, f, e.target.value)}
-                                                                            placeholder={`Enter address line ${f.slice(-1)}`} />
-                                                                    </div>
-                                                                ))}
-                                                                <div>
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
-                                                                    <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
-                                                                        value={countryCode}
-                                                                        onChange={e => { const ci = Country.getCountryByCode(e.target.value); handleManualBranchChange(branch.id, 'country', ci?.name || ''); handleManualBranchChange(branch.id, 'state', ''); handleManualBranchChange(branch.id, 'city', ''); }}>
-                                                                        <option value="">Select Country</option>
-                                                                        {Country.getAllCountries().map(c => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
-                                                                    </select>
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
-                                                                    <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
-                                                                        value={stateCode} disabled={!countryCode}
-                                                                        onChange={e => { const si = states.find(s => s.isoCode === e.target.value); handleManualBranchChange(branch.id, 'state', si?.name || ''); handleManualBranchChange(branch.id, 'city', ''); }}>
-                                                                        <option value="">Select State</option>
-                                                                        {states.map(s => <option key={s.isoCode} value={s.isoCode}>{s.name}</option>)}
-                                                                    </select>
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
-                                                                    {cities.length > 0 ? (
-                                                                        <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
-                                                                            value={branch.city || ''} disabled={!branch.state}
-                                                                            onChange={e => handleManualBranchChange(branch.id, 'city', e.target.value)}>
-                                                                            <option value="">Select City</option>
-                                                                            {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                                                        </select>
-                                                                    ) : (
-                                                                        <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
-                                                                            value={branch.city || ''} disabled={!branch.state}
-                                                                            onChange={e => handleManualBranchChange(branch.id, 'city', e.target.value)}
-                                                                            placeholder="Enter city" />
-                                                                    )}
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
-                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
-                                                                        value={branch.pincode}
-                                                                        onChange={e => handleManualBranchChange(branch.id, 'pincode', e.target.value)}
-                                                                        placeholder="Enter pincode" />
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
-                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
-                                                                        value={branch.contactPerson}
-                                                                        onChange={e => handleManualBranchChange(branch.id, 'contactPerson', e.target.value)} />
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Contact Number</label>
-                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
-                                                                        value={branch.contactNumber}
-                                                                        onChange={e => handleManualBranchChange(branch.id, 'contactNumber', e.target.value)} />
-                                                                </div>
-                                                                <div className="md:col-span-2">
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
-                                                                    <input type="email" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
-                                                                        value={branch.email}
-                                                                        onChange={e => handleManualBranchChange(branch.id, 'email', e.target.value)} />
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                            <button type="button" onClick={handleAddManualBranch}
-                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-[4px] text-gray-500 font-medium hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center justify-center gap-2">
-                                                <span>+</span> Add Another Branch
-                                            </button>
-                                        </div>
-                                    )}
                                 </div>
                             ) : (
                                 // ─── REGISTERED PATH ───
