@@ -287,13 +287,21 @@ class AssemblyWorker(BaseWorker):
             is_failed_assembly = True
         else:
             # [FIX 4] Evaluate final status ONLY from current authoritative states
+            strict_mode = payload.get('strict_mode', True)
             if final_f > 0:
-                final_status = "PARTIAL_FAILED"
+                if strict_mode:
+                    logger.error(f"[ASSEMBLY_ABORTED] record={record_id} reason=strict_mode_failed_page")
+                    final_status = "FAILED"
+                    is_failed_assembly = True
+                else:
+                    final_status = "PARTIAL_FAILED"
+                    is_failed_assembly = False
             elif final_p > 0:
-                final_status = "PARTIAL"
+                final_status = "PARTIAL_FAILED"
+                is_failed_assembly = False
             else:
-                final_status = res_status or "SUCCESS"
-            is_failed_assembly = False
+                final_status = "READY_FOR_REVIEW"
+                is_failed_assembly = False
 
         if not is_failed_assembly:
             logger.info(f"[ASSEMBLY_SUCCESS] record={record_id} status={final_status} res_status={res_status}")

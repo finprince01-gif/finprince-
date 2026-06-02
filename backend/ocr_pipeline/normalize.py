@@ -594,7 +594,86 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
     
     return record
 
-def get_normalized_items(invoice: Any) -> List[Dict[str, Any]]:
+def resolve_uom(raw_uom: str, tenant_id: str = None) -> str:
+    """
+    Resolves a raw UOM string to a standard symbol from the database (InventoryUnit model).
+    If the database is empty for the tenant, it seeds standard units dynamically
+    so that we don't have hardcoded mapping lists in our resolver.
+    """
+    if not raw_uom:
+        return "nos"
+        
+    uom_clean = str(raw_uom).strip().lower()
+    
+    # Try importing model locally to avoid circular dependencies
+    try:
+        from inventory.models import InventoryUnit
+        
+        # Check if units exist for this tenant, if not, seed standard ones
+        if tenant_id and not InventoryUnit.objects.filter(tenant_id=tenant_id).exists():
+            standard_units = [
+                {"name": "Numbers", "symbol": "nos"},
+                {"name": "Kilograms", "symbol": "kg"},
+                {"name": "Grams", "symbol": "gm"},
+                {"name": "Meters", "symbol": "m"},
+                {"name": "Centimeters", "symbol": "cm"},
+                {"name": "Liters", "symbol": "l"},
+                {"name": "Milliliters", "symbol": "ml"},
+                {"name": "Box", "symbol": "box"},
+                {"name": "Pouch", "symbol": "pch"},
+                {"name": "Set", "symbol": "set"},
+                {"name": "Pieces", "symbol": "pcs"},
+                {"name": "Dozen", "symbol": "doz"},
+                {"name": "Bag", "symbol": "bag"},
+                {"name": "Bundle", "symbol": "bdl"},
+                {"name": "Can", "symbol": "can"},
+                {"name": "Bottle", "symbol": "btl"},
+            ]
+            for u in standard_units:
+                InventoryUnit.objects.create(tenant_id=tenant_id, name=u["name"], symbol=u["symbol"])
+                
+        # Query active units
+        q = InventoryUnit.objects.filter(is_active=True)
+        if tenant_id:
+            q = q.filter(tenant_id=tenant_id)
+            
+        units = list(q)
+        # Try matching by symbol or name
+        for unit in units:
+            if unit.symbol.lower() == uom_clean or unit.name.lower() == uom_clean:
+                return unit.symbol
+    except Exception as e:
+        logger.warning(f"[UOM_RESOLVER_DB_ERROR] {e}")
+        
+    # Fallback mappings if DB query fails or has no match
+    FALLBACK_MAP = {
+        "kg": "kg", "kgs": "kg", "kilogram": "kg", "kilograms": "kg",
+        "gm": "gm", "grams": "gm", "gram": "gm",
+        "m": "m", "meter": "m", "meters": "m",
+        "cm": "cm", "centimeters": "cm", "centimeter": "cm",
+        "l": "l", "liter": "l", "liters": "l",
+        "ml": "ml", "milliliter": "ml", "milliliters": "ml",
+        "box": "box", "boxes": "box",
+        "pch": "pch", "pouch": "pch", "pouches": "pch",
+        "set": "set", "sets": "set",
+        "pcs": "pcs", "piece": "pcs", "pieces": "pcs",
+        "doz": "doz", "dozen": "doz", "dozens": "doz",
+        "bag": "bag", "bags": "bag",
+        "bdl": "bdl", "bundle": "bdl", "bundles": "bdl",
+        "can": "can", "cans": "can",
+        "btl": "btl", "bottle": "btl", "bottles": "btl",
+        "nos": "nos", "number": "nos", "numbers": "nos", "unit": "nos", "units": "nos",
+    }
+    return FALLBACK_MAP.get(uom_clean, uom_clean)
+
+def snap_to_standard_gst_rate(rate: float) -> float:
+    standard_rates = [0.0, 0.25, 1.5, 2.5, 3.0, 5.0, 6.0, 9.0, 12.0, 14.0, 18.0, 28.0]
+    for r in standard_rates:
+        if abs(rate - r) < 0.2:
+            return r
+    return round(rate, 2)
+
+def get_normalized_items(invoice: Any, tenant_id: str = None) -> List[Dict[str, Any]]:
     """
     CANONICAL ITEM NORMALIZER.
     """
@@ -609,18 +688,119 @@ def get_normalized_items(invoice: Any) -> List[Dict[str, Any]]:
         desc = (item.get("description") or item.get("desc") or item.get("particulars") or item.get("item_name") or item.get("Item Name") or "")
         if not desc: continue
         
-        normalized_items.append({
+        taxable = normalize_amount(item.get("taxable_value") or item.get("amount") or item.get("Taxable Value"))
+        qty = normalize_amount(item.get("qty") or item.get("quantity") or item.get("Qty") or 1.0)
+        
+        ig_amt = normalize_amount(item.get("igst") or item.get("igst_amount") or item.get("IGST"))
+        cg_amt = normalize_amount(item.get("cgst") or item.get("cgst_amount") or item.get("CGST"))
+        sg_amt = normalize_amount(item.get("sgst") or item.get("sgst_amount") or item.get("SGST/UTGST"))
+        ce_amt = normalize_amount(item.get("cess") or item.get("cess_amount") or item.get("CESS") or item.get("cess_val"))
+
+        def extract_rate_from_keys(prefix):
+            pattern = re.compile(rf'(?i){prefix}\s*@\s*([\d.]+)\s*%')
+            for k in item.keys():
+                match = pattern.search(k)
+                if match:
+                    try:
+                        return float(match.group(1))
+                    except:
+                        pass
+            return 0.0
+
+        def parse_tax_rate(val):
+            if val is None:
+                return 0.0
+            if isinstance(val, (int, float)):
+                return float(val)
+            raw = str(val).strip()
+            raw = raw.replace("%", "").strip()
+            try:
+                cleaned = re.sub(r'[^\d.-]', '', raw)
+                return float(cleaned) if cleaned else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+
+        def get_tax_rate(key_prefix, tax_amount):
+            rate_from_key = extract_rate_from_keys(key_prefix)
+            if rate_from_key > 0.0:
+                return rate_from_key
+
+            for suffix in ["_rate", "_pct", "_percent", "_%", "_tax_rate", "_percentage"]:
+                val = (
+                    item.get(f"{key_prefix}{suffix}") or 
+                    item.get(f"{key_prefix.upper()}{suffix.upper()}") or 
+                    item.get(f"{key_prefix.upper()}{suffix}") or
+                    item.get(f"{key_prefix}{suffix.upper()}")
+                )
+                if val is not None:
+                    parsed = parse_tax_rate(val)
+                    if parsed > 0.0:
+                        return parsed
+            if taxable > 0 and tax_amount > 0:
+                return (tax_amount / taxable) * 100
+            return 0.0
+
+        ig_rate = snap_to_standard_gst_rate(get_tax_rate("igst", ig_amt))
+        cg_rate = snap_to_standard_gst_rate(get_tax_rate("cgst", cg_amt))
+        sg_rate = snap_to_standard_gst_rate(get_tax_rate("sgst", sg_amt))
+        ce_rate = round(get_tax_rate("cess", ce_amt), 2)
+
+        # Check for direct GST rate extraction keys
+        gst_direct_rate = 0.0
+        for suffix in ["gst_rate", "gst_pct", "gst_percent", "gst_percentage", "gst_%", "tax_rate", "tax_pct", "tax_percent", "tax_percentage", "tax_%", "GST_RATE", "GST_PCT", "GST_PERCENT", "GST_PERCENTAGE"]:
+            val = item.get(suffix)
+            if val is not None:
+                parsed = parse_tax_rate(val)
+                if parsed > 0.0:
+                    gst_direct_rate = snap_to_standard_gst_rate(parsed)
+                    break
+
+        # Precise GST snap logic for computed_gst_rate
+        computed_gst = 0.0
+        if ig_rate > 0:
+            computed_gst = ig_rate
+        elif cg_rate > 0 or sg_rate > 0:
+            computed_gst = cg_rate + sg_rate
+        elif gst_direct_rate > 0:
+            computed_gst = gst_direct_rate
+        else:
+            # fallback rate estimation from amount
+            if taxable > 0:
+                if ig_amt > 0:
+                    computed_gst = snap_to_standard_gst_rate((ig_amt / taxable) * 100)
+                elif cg_amt > 0 or sg_amt > 0:
+                    computed_gst = snap_to_standard_gst_rate(((cg_amt + sg_amt) / taxable) * 100)
+
+        # Base rate (Unit Price) derived from taxable_value / qty if unspecified or 0
+        raw_rate = normalize_amount(item.get("rate") or item.get("unit_price") or item.get("Item Rate"))
+        if raw_rate <= 0 and qty > 0:
+            derived_rate = round(taxable / qty, 2)
+        else:
+            derived_rate = raw_rate
+
+        normalized_item = {
             "description": desc,
             "hsn_sac": str(item.get("hsn_sac") or item.get("hsn_code") or item.get("HSN/SAC") or item.get("hsn") or item.get("sac") or ""),
-            "qty": normalize_amount(item.get("qty") or item.get("quantity") or item.get("Qty")),
-            "uom": str(item.get("uom") or item.get("unit") or item.get("UOM") or ""),
-            "rate": normalize_amount(item.get("rate") or item.get("unit_price") or item.get("Item Rate")),
-            "taxable_value": normalize_amount(item.get("taxable_value") or item.get("amount") or item.get("Taxable Value")),
-            "igst": normalize_amount(item.get("igst") or item.get("igst_amount") or item.get("IGST")),
-            "cgst": normalize_amount(item.get("cgst") or item.get("cgst_amount") or item.get("CGST")),
-            "sgst": normalize_amount(item.get("sgst") or item.get("sgst_amount") or item.get("SGST/UTGST")),
-            "total_amount": normalize_amount(item.get("total_amount") or item.get("Invoice Value"))
-        })
+            "qty": qty,
+            "uom": resolve_uom(item.get("uom") or item.get("unit") or item.get("UOM") or "", tenant_id=tenant_id),
+            "rate": derived_rate,
+            "taxable_value": taxable,
+            "igst": ig_amt,
+            "cgst": cg_amt,
+            "sgst": sg_amt,
+            "total_amount": normalize_amount(item.get("total_amount") or item.get("Invoice Value")),
+            "igst_rate": ig_rate,
+            "cgst_rate": cg_rate,
+            "sgst_rate": sg_rate,
+            "cess_rate": ce_rate,
+            "computed_gst_rate": computed_gst,
+        }
+        # Copy other custom/original keys to prevent loss of fields (like item_code, etc.)
+        for k, v in item.items():
+            if k not in normalized_item:
+                normalized_item[k] = v
+
+        normalized_items.append(normalized_item)
         
     return merge_item_continuations(normalized_items)
 
@@ -669,7 +849,7 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
     logger.info(f"[DTO_PRE_VALIDATION] record_id={invoice.get('record_id')} keys={list(invoice.keys())}")
 
     raw_header = get_normalized_export_record(invoice, tenant_id=tenant_id)
-    raw_items = get_normalized_items(invoice)
+    raw_items = get_normalized_items(invoice, tenant_id=tenant_id)
     
     canonical_items = []
     for item in raw_items:
@@ -685,7 +865,11 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
                 igst=normalize_amount(item.get("igst", 0.0)),
                 cgst=normalize_amount(item.get("cgst", 0.0)),
                 sgst=normalize_amount(item.get("sgst", 0.0)),
-                total_amount=normalize_amount(item.get("total_amount", 0.0))
+                total_amount=normalize_amount(item.get("total_amount", 0.0)),
+                igst_rate=normalize_amount(item.get("igst_rate", 0.0)),
+                cgst_rate=normalize_amount(item.get("cgst_rate", 0.0)),
+                sgst_rate=normalize_amount(item.get("sgst_rate", 0.0)),
+                cess_rate=normalize_amount(item.get("cess_rate", 0.0))
             )
             canonical_items.append(c_item)
         except Exception as ie:

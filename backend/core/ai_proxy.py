@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 # Ensure environment variables are loaded (especially for GEMINI_API_KEY)
 load_dotenv(override=True)
 
+AI_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
 logger = logging.getLogger(__name__)
 
 def safe_extract_json(text: str) -> Optional[str]:
@@ -119,7 +121,7 @@ class APIKeyManager:
     def _recheck_key(self, api_key: str):
         client = genai.Client(api_key=api_key)
         try:
-            client.models.generate_content(model='gemini-2.0-flash', contents="test")
+            client.models.generate_content(model=AI_MODEL_NAME, contents="test")
             self.unhealthy_keys.discard(api_key)
         except Exception:
             pass
@@ -262,8 +264,12 @@ rate_limiter = RateLimiter()
 concurrency_governor = DistributedConcurrencyManager(max_concurrent=int(os.getenv('AI_GLOBAL_CONCURRENCY', '25')))
 
 def validate_ai_on_startup() -> bool:
+    if not os.getenv('GEMINI_MODEL'):
+        raise SystemExit("[FATAL] GEMINI_MODEL config missing.")
     api_key_manager._sync_keys()
-    return bool(api_key_manager.api_keys)
+    if not api_key_manager.api_keys:
+        raise SystemExit("[FATAL] GEMINI_API_KEY missing.")
+    return True
 
 def process_ai_request(request_data: dict) -> dict:
     from core.observability import observability, metrics
@@ -381,6 +387,27 @@ class ProviderSaturatedError(Exception):
     """Raised when the AI provider or local concurrency limits are saturated."""
     pass
 
+def is_retryable_ai_error(e: Exception) -> bool:
+    """
+    Implements global retry classification (Phase 2).
+    """
+    err_str = str(e).lower()
+    # Non-retryable
+    if any(k in err_str for k in [
+        "400", "401", "403", "404", "model not found",
+        "invalid api key", "api key not valid", "malformed",
+        "invalid_argument", "permission_denied", "unauthenticated",
+        "quota_disabled", "billing not enabled"
+    ]):
+        return False
+    # Retryable
+    if any(k in err_str for k in [
+        "429", "500", "502", "503", "timeout", "connection reset", 
+        "capacity", "too many requests"
+    ]):
+        return True
+    return True # default transient
+
 def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     """
     Production-grade retry logic with exponential backoff and jitter.
@@ -390,60 +417,42 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     - Retry ONLY: transient network failures, rate limits, 5xx provider failures.
     """
     import random
+    from core.observability import observability
+    
     MAX_ATTEMPTS = 5
     base_delay = 1
     
-    # [PHASE 3: MULTI-PROVIDER FALLBACK ROUTING]
-    fallback_models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
-    current_model_idx = 0
+    tenant_id = request_data.get('tenant_id') or request_data.get('metadata', {}).get('tenant_id')
+    record_id = request_data.get('record_id') or request_data.get('metadata', {}).get('record_id')
+    page_number = request_data.get('page_number') or request_data.get('page_index')
     
+    current_model = AI_MODEL_NAME
     last_error = None
     attempt = 0
     
+    logger.info(f"[AI_MODEL_SELECTED] tenant_id={tenant_id} record_id={record_id} page_number={page_number} model_name={current_model}")
+    
     while attempt < MAX_ATTEMPTS:
-        current_model = fallback_models[current_model_idx]
         try:
             return _call_gemini_single(prompt, request_data, api_key, current_model, f"Attempt {attempt+1}", "local")
         except Exception as e:
             last_error = e
-            err_str = str(e).lower()
+            retryable = is_retryable_ai_error(e)
             
-            # Non-retryable errors (Terminal Auth, IP, Quota Disabled, Malformed)
-            terminal_keywords = [
-                "invalid_argument", "permission_denied", "unauthenticated", 
-                "invalid api key", "api key not valid", "quota_disabled",
-                "billing not enabled", "ip space", "malformed"
-            ]
+            logger.info(f"[AI_ERROR_CLASSIFIED] tenant_id={tenant_id} record_id={record_id} page_number={page_number} model_name={current_model} retryable={retryable} error={str(e)[:100]}")
             
-            if any(k in err_str for k in terminal_keywords):
-                logger.error(f"[AI_TERMINAL_ERROR] {e} - Matching keyword: {next((k for k in terminal_keywords if k in err_str), 'unknown')}")
+            if not retryable:
+                logger.error(f"[AI_TERMINAL_FAILURE] tenant_id={tenant_id} record_id={record_id} page_number={page_number} model_name={current_model} error={str(e)[:100]}")
                 raise TerminalTaskError(str(e))
             
-            # Retryable errors (429 Rate Limits, 5xx, timeouts)
-            if '429' in err_str or 'too many requests' in err_str or 'capacity' in err_str:
-                # [PHASE 3 FAILOVER] Try the next provider model instead of failing immediately
-                if current_model_idx < len(fallback_models) - 1:
-                    current_model_idx += 1
-                    next_model = fallback_models[current_model_idx]
-                    logger.warning(f"[PROVIDER_FAILOVER] {current_model} saturated (429). Failing over to {next_model}.")
-                    from core.observability import observability
-                    observability.ai_metric(event="AI_PROVIDER_FAILOVER", from_model=current_model, to_model=next_model)
-                    continue # Try next model immediately without sleeping
-                else:
-                    logger.warning(f"[PROVIDER_SATURATED_EXHAUSTED] All fallback models saturated. Raising ProviderSaturatedError.")
-                    raise ProviderSaturatedError(str(e))
-                
-            # Default fallback for unhandled exceptions is to assume transient network issue
             if attempt < MAX_ATTEMPTS - 1:
                 delay = (base_delay * (2 ** attempt)) + (random.random() * 0.5)
                 logger.warning(f"[AI_RETRY] {current_model} Attempt {attempt+1} failed: {e}. Retrying in {delay:.2f}s...")
-                from core.observability import observability
                 observability.ai_metric(event="AI_RETRY", attempt=attempt+1, error=str(e)[:100])
                 time.sleep(delay)
                 attempt += 1
             else:
                 logger.error(f"[AI_EXHAUSTED] All {MAX_ATTEMPTS} attempts failed on {current_model}: {e}")
-                from core.observability import observability
                 observability.ai_metric(event="AI_EXHAUSTED", error=str(e)[:100])
                 raise e
     

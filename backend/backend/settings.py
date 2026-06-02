@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'ocr_pipeline',
     'gst_reconciliation',
     'bank_upload',           # Bank Statement Upload & Staging Module
+    'pending_purchases',
 ]
 
 MIDDLEWARE = [

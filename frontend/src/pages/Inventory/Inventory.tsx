@@ -1356,7 +1356,7 @@ const InventoryPage: React.FC = () => {
         item_code: editFormData.itemCode,
         item_name: editFormData.itemName,
         description: editFormData.description || null,
-        category: editFormData.category || null,
+        category: (typeof editFormData.category === 'string' && editFormData.category.startsWith('system_')) ? null : (editFormData.category || null),
         category_path: editFormData.categoryPath || null,
         subgroup: editFormData.subgroup || null,
 

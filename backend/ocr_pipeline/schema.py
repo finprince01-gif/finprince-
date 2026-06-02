@@ -14,6 +14,10 @@ class CanonicalInvoiceItem(BaseModel):
     cgst: float = 0.0
     sgst: float = 0.0
     total_amount: float = 0.0
+    igst_rate: float = 0.0
+    cgst_rate: float = 0.0
+    sgst_rate: float = 0.0
+    cess_rate: float = 0.0
 
 class CanonicalInvoiceSchema(BaseModel):
     """

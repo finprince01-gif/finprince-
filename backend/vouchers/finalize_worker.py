@@ -169,9 +169,14 @@ class FinalizeWorker(BaseWorker):
                     try:
                         record_obj = InvoiceTempOCR.objects.filter(id=record_id).first()
                         if record_obj:
-                            from ocr_pipeline.views import get_save_eligible_rows
-                            eligible_tuples = get_save_eligible_rows(canonical_session_id, tenant_id)
-                            eligible = str(record_obj.id) in [str(t[0].id) for t in eligible_tuples]
+                            from ocr_pipeline.views import get_save_eligible_rows, get_pending_purchase_eligible_rows
+                            eligible_save_tuples = get_save_eligible_rows(canonical_session_id, tenant_id)
+                            eligible_pending_tuples = get_pending_purchase_eligible_rows(canonical_session_id, tenant_id=tenant_id)
+                            
+                            eligible_save_ids = [str(t[0].id) for t in eligible_save_tuples]
+                            eligible_pending_ids = [str(t[0].id) for t in eligible_pending_tuples]
+                            
+                            eligible = str(record_obj.id) in eligible_save_ids or str(record_obj.id) in eligible_pending_ids
                             reason = None if eligible else "NOT_ELIGIBLE_VIA_HELPER"
                             if not eligible:
                                 logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={record_id} reason={reason}")

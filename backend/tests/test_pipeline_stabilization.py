@@ -165,6 +165,7 @@ def test_atomic_validate_and_process_duplication_mocked():
         assert record.validation_status == "DUPLICATE"
 
 
+@pytest.mark.django_db
 def test_finalize_view_blocked_and_success():
     """
     Tests OCRStagingFinalizeView POST endpoint under converged and non-converged states.
@@ -197,7 +198,7 @@ def test_finalize_view_blocked_and_success():
 
     # 2. Converged state -> Should proceed to processing
     with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_state, \
-         patch('ocr_pipeline.models.InvoiceTempOCR.objects.filter') as mock_query, \
+         patch('ocr_pipeline.views.get_save_eligible_rows') as mock_eligible, \
          patch('ocr_pipeline.models.FinalizedSnapshot.objects.filter') as mock_snap:
         
         mock_state.return_value = {
@@ -209,7 +210,7 @@ def test_finalize_view_blocked_and_success():
         }
         
         # Mock zero records in session for simplicity of PATH A fallback
-        mock_query.return_value = []
+        mock_eligible.return_value = []
         mock_snap.return_value.order_by.return_value.first.return_value = None
         
         view = OCRStagingFinalizeView.as_view()

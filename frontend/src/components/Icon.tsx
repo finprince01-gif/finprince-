@@ -1,6 +1,6 @@
 import React from 'react';
 
-type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'banking' | 'bank' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'history' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'chevron-left' | 'chevron-right' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt' | 'file-text' | 'file-spreadsheet' | 'bar-chart-2' | 'edit-3' | 'user-plus' | 'trash-2' | 'alert-circle' | 'loader' | 'arrow-left' | 'arrow-right' | 'refresh' | 'link' | 'calendar' | 'skip-forward' | 'info' | 'eye' | 'eye-off' | 'more-vertical' | 'key' | 'slash' | 'location' | 'calculator' | 'bell';
+type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'banking' | 'bank' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'history' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'chevron-left' | 'chevron-right' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt' | 'file-text' | 'file-spreadsheet' | 'bar-chart-2' | 'edit-3' | 'user-plus' | 'trash-2' | 'alert-circle' | 'loader' | 'arrow-left' | 'arrow-right' | 'refresh' | 'link' | 'calendar' | 'skip-forward' | 'info' | 'eye' | 'eye-off' | 'more-vertical' | 'key' | 'slash' | 'location' | 'calculator' | 'bell' | 'package';
 
 
 interface IconProps {
@@ -263,6 +263,13 @@ const Icon: React.FC<IconProps> = ({ name, className = '', size, style }) => {
     ),
     bell: (
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    ),
+    package: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <polyline strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} points="3.27 6.96 12 12.01 20.73 6.96" />
+        <line strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} x1="12" y1="22.08" x2="12" y2="12" />
+      </>
     ),
 
   };
