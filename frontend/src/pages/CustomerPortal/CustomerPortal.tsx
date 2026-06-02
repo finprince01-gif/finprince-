@@ -6387,7 +6387,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                         postFrom: transType as TransactionType,
                         referenceNo: row.voucher_number || row.narration || 'N/A',
                         ledger: transType,
-                        status: 'Not Due' as SalesStatus,
+                        status: (transType === 'Receipt' ? 'Not Utilized' : 'Not Due') as SalesStatus,
                         debit: parseFloat(row.debit || 0),
                         credit: parseFloat(row.credit || 0),
                         runningBalance: 0,
@@ -6404,7 +6404,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                 (entry.voucherNo || '').toString().toLowerCase(),
                 entry.date || '',
                 Number(entry.debit || 0).toFixed(2),
-                Number(entry.credit || 0).toFixed(2)
+                Number(entry.credit || 0).toFixed(2),
+                (entry.referenceNo || '').toString().toLowerCase()
             ].join('|');
 
             const mergedTransactions: LedgerEntry[] = [];
@@ -6456,9 +6457,36 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
     };
 
     const processedEntries = useMemo(() => {
+        // Deduplicate ledgerEntries for display & balance calculations (excluding referenceNo)
+        const seen = new Set<string>();
+        const localDedupeKey = (entry: LedgerEntry) => [
+            entry.postFrom,
+            (entry.voucherNo || '').toString().toLowerCase(),
+            entry.date || '',
+            Number(entry.debit || 0).toFixed(2),
+            Number(entry.credit || 0).toFixed(2)
+        ].join('|');
+
+        // Sort by ID descending so that newer/allocated entries are processed first and kept,
+        // while the older general 'ADVANCE' entries are discarded from the displayed ledger.
+        const sortedForDedupe = [...ledgerEntries].sort((a, b) => {
+            const idA = parseInt(a.id.toString().replace('T-', '').replace('L-', '')) || 0;
+            const idB = parseInt(b.id.toString().replace('T-', '').replace('L-', '')) || 0;
+            return idB - idA;
+        });
+
+        const dedupedEntries: LedgerEntry[] = [];
+        sortedForDedupe.forEach(entry => {
+            const key = localDedupeKey(entry);
+            if (!seen.has(key)) {
+                seen.add(key);
+                dedupedEntries.push(entry);
+            }
+        });
+
         // 1. Build Reference Balance Map to determine real-time status
         const refBalances: Record<string, { total: number, paid: number }> = {};
-        ledgerEntries.forEach(entry => {
+        dedupedEntries.forEach(entry => {
             const ref = entry.referenceNo?.trim()?.toLowerCase();
             if (!ref || ref === '-' || ref === 'n/a') return;
             if (!refBalances[ref]) refBalances[ref] = { total: 0, paid: 0 };
@@ -6471,12 +6499,12 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
         });
 
         let balance = 0;
-        return [...ledgerEntries].sort((a, b) => {
+        return [...dedupedEntries].sort((a, b) => {
             const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
             if (dateDiff !== 0) return dateDiff;
-            // Fallback for same date: compare IDs (handling 'T-' prefix)
-            const idA = parseInt(a.id.toString().replace('T-', '')) || 0;
-            const idB = parseInt(b.id.toString().replace('T-', '')) || 0;
+            // Fallback for same date: compare IDs (handling 'T-' and 'L-' prefixes)
+            const idA = parseInt(a.id.toString().replace('T-', '').replace('L-', '')) || 0;
+            const idB = parseInt(b.id.toString().replace('T-', '').replace('L-', '')) || 0;
             return idA - idB;
         }).map(entry => {
             balance += (entry.debit || 0) - (entry.credit || 0);
@@ -6660,7 +6688,22 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
             (!e.originalInv?.reference_number ||
                 ['ADVANCE', '', '-', 'N/A'].includes(e.originalInv.reference_number.toUpperCase().trim())
             )
-        );
+        ).map(e => {
+            // Calculate remaining balance by finding all other allocation entries for the same voucher No
+            const allocations = (ledgerEntries || []).filter(item => 
+                item.postFrom === 'Receipt' &&
+                item.voucherNo === e.voucherNo &&
+                item.id !== e.id &&
+                item.referenceNo &&
+                !['ADVANCE', '', '-', 'N/A'].includes(item.referenceNo.toUpperCase().trim())
+            );
+            const totalAllocated = allocations.reduce((sum, item) => sum + (item.credit || 0), 0);
+            const remaining = Math.max(0, (e.credit || 0) - totalAllocated);
+            return {
+                ...e,
+                remainingAmount: remaining
+            };
+        }).filter(e => e.remainingAmount > 0);
 
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -6737,7 +6780,7 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                                                         {adv.date.split('-').reverse().join('-')}
                                                     </td>
                                                     <td className="px-4 py-3 text-right text-gray-900 font-bold">
-                                                        ₹{adv.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        ₹{adv.remainingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                     </td>
                                                 </tr>
                                             ))}
@@ -6748,8 +6791,8 @@ function CustomerLedgerView({ customer, onBack, onNavigate, setPrefilledVoucherD
                         ) : (
                             <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                                 <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                                <p className="text-sm text-gray-500 font-medium">No linked advance receipts found</p>
-                                <p className="text-[10px] text-gray-400 mt-1">Receipts matching reference "{row.refNo}" will appear here.</p>
+                                <p className="text-sm text-gray-500 font-medium">No unutilized advance receipts available for this customer.</p>
+                                <p className="text-[10px] text-gray-400 mt-1">Unallocated advance receipts will appear here.</p>
                             </div>
                         )}
                         <div className="mt-8 flex gap-3">

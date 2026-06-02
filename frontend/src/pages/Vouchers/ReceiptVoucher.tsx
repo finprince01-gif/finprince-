@@ -211,7 +211,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             name: c.customer_name || c.name,
             group: 'Sundry Debtors',
             isPortal: true,
-            type: 'customer'
+            type: 'customer',
+            ledger_id: c.ledger_id
         }));
 
         const vendOptions = portalVendors.map(v => ({
@@ -219,7 +220,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
             name: v.vendor_name || v.name,
             group: 'Sundry Creditors',
             isPortal: true,
-            type: 'vendor'
+            type: 'vendor',
+            ledger_id: v.ledger_id
         }));
 
         const ledgerOptions = allLedgers
@@ -567,7 +569,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 if (!name) return null;
                 const normalized = name.trim().toLowerCase();
                 const found = receiveFromOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
-                if (found) return found.id;
+                if (found) return found.ledger_id || found.id;
                 return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
             };
 

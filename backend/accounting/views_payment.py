@@ -382,6 +382,50 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
                 customer_id=pf_c, vendor_id=pf_v
             )
 
+            # Create AdvanceAllocation since entire amount is unallocated
+            AdvanceAllocation.objects.create(
+                tenant_id=tenant_id,
+                transaction=instance,
+                type='payment_single',
+                reference_id='ADVANCE',
+                reference_number=v_num,
+                reference_type='ADVANCE',
+                pay_from_ledger=pay_from_ledger,
+                pay_to_ledger=pay_to_ledger,
+                allocated_amount=entered_amount,
+                amount=entered_amount,
+                original_amount=entered_amount,
+                is_advance=True,
+                advance_ref_no=v_num,
+                ref_no=data.get('ref_no', ''),
+                posting_note=data.get('posting_note', ''),
+                vouch_amount=entered_amount,
+                ledger_id_val=pt_l or pf_l,
+                party_customer_id=pt_c or pf_c,
+                party_vendor_id=pt_v or pf_v,
+                pay_from_ledger_id_val=pf_l,
+                pay_from_customer_id_val=pf_c,
+                pay_from_vendor_id_val=pf_v,
+                pay_to_ledger_id_val=pt_l,
+                pay_to_customer_id_val=pt_c,
+                pay_to_vendor_id_val=pt_v
+            )
+            # Mirror to Vendor and Customer Portals, and legacy Voucher
+            try:
+                PaymentVoucherSerializer(context={'request': request})._mirror_to_vendor_portal(instance)
+            except Exception as e:
+                print(f"!!! Failed to mirror to vendor portal in save_amount_only: {e}")
+
+            try:
+                PaymentVoucherSerializer(context={'request': request})._mirror_to_customer_portal(instance)
+            except Exception as e:
+                print(f"!!! Failed to mirror to customer portal in save_amount_only: {e}")
+
+            try:
+                PaymentVoucherSerializer(context={'request': request})._mirror_to_generic_voucher(instance)
+            except Exception as e:
+                print(f"!!! Failed to mirror to generic voucher in save_amount_only: {e}")
+
         return Response({
             'message': 'Amount saved successfully', 
             'id': instance.id, 

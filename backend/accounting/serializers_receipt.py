@@ -210,6 +210,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
 
     def create(self, validated_data):
         from django.db import transaction as db_transaction
+        from accounting.models import AdvanceAllocation, PendingTransaction
         request = self.context.get('request')
         tenant_id = request.user.branch_id if request and hasattr(request.user, 'tenant_id') else None
         
@@ -455,6 +456,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         
     def update(self, instance, validated_data):
         from django.db import transaction as db_transaction
+        from accounting.models import AdvanceAllocation, PendingTransaction
         with db_transaction.atomic():
             items_data = validated_data.pop('items', None)
             
@@ -692,15 +694,13 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
     def _mirror_to_customer_portal(self, receipt):
         """Cross-database sync to Customer Portal table (customer_transaction)"""
         from .models import TransactionAllocation
-        from customerportal.models import CustomerTransaction as CustomerTxnPortal
+        from customerportal.models import CustomerTransaction, CustomerMasterCustomer
         try:
-            CustomerTxnPortal.objects.filter(
+            CustomerTransaction.objects.filter(
                 tenant_id=receipt.tenant_id,
                 transaction_number__startswith=f"{receipt.voucher_number}-",
                 transaction_type__in=['payment', 'receipt']
             ).delete()
-
-            from customerportal.models import CustomerTransaction, CustomerMasterCustomer
             
             seen_refs = set()
             items = list(receipt.get_items())

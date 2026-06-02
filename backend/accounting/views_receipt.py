@@ -78,6 +78,7 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
         EXTRA isolated action: Save ONLY the entered amount to the vouchers table.
         Does NOT create allocations, advances, or use mapping logic.
         """
+        from accounting.models import AdvanceAllocation, PendingTransaction
         data = request.data
         tenant_id = getattr(request.user, 'tenant_id', None) or request.headers.get('X-Branch-Id')
         
@@ -222,7 +223,6 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
                 )
 
             # Mark this Receipt as an advance so it appears in Allocation views
-            from accounting.models import AdvanceAllocation
             AdvanceAllocation.objects.create(
                 tenant_id=tenant_id,
                 transaction=instance,
