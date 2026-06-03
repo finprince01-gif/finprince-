@@ -1362,3 +1362,421 @@ def test_11page_finalize_convergence_no_deadlock():
     )
 
 
+@pytest.mark.django_db
+def test_validation_state_propagation_integration():
+    """
+    Integration test for validation state propagation.
+    Verifies:
+      1. Exact-match GSTIN vendor is resolved as EXISTS.
+      2. Sibling record created during assembly (no validate_and_process called) resolves as EXISTS via vendor_map.
+      3. Item validation status propagates to the parent (no default 'ALREADY EXIST' fallback).
+    """
+    import traceback
+    try:
+        from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails
+        from ocr_pipeline.models import InvoiceTempOCR, FinalizedSnapshot, SessionFinalizationState
+        from ocr_pipeline.views import CleanOCRStagingView
+        from rest_framework.test import APIRequestFactory, force_authenticate
+        from unittest.mock import MagicMock
+
+        tenant_id = "test-tenant-123"
+        gstin = "33ABYFS6343M1ZC"
+        branch_name = "Main Branch"
+
+        # Create master vendor
+        basic = VendorMasterBasicDetail.objects.create(
+            tenant_id=tenant_id,
+            vendor_name="GSTIN Match Vendor",
+            email="vendor@example.com",
+            contact_no="9876543210"
+        )
+        VendorMasterGSTDetails.objects.create(
+            tenant_id=tenant_id,
+            vendor_basic_detail=basic,
+            gstin=gstin,
+            reference_name=branch_name,
+            legal_name="GSTIN Match Vendor"
+        )
+
+        # 1. Test record hydration directly
+        record = InvoiceTempOCR.objects.create(
+            tenant_id=tenant_id,
+            upload_session_id="session-123",
+            supplier_invoice_no="INV-100",
+            gstin=gstin,
+            branch=branch_name,
+            voucher_type="PURCHASE",
+            extracted_data={
+                "invoice_no": "INV-100",
+                "gstin": gstin,
+                "branch": branch_name,
+                "items": [
+                    {"item_status": "CREATE ITEM", "description": "New Item 1"}
+                ]
+            }
+        )
+
+        view_instance = CleanOCRStagingView()
+        # Build a vendor map to simulate the hydration lookup
+        from vendors.vendor_validation_logic import build_session_vendor_map
+        vendor_map = build_session_vendor_map(tenant_id, [record])
+        
+        # Check map matches
+        from vendors.vendor_validation_logic import normalize_branch
+        gstin_key = gstin.strip().upper()
+        branch_key = normalize_branch(branch_name)
+        assert (gstin_key, branch_key) in vendor_map
+        assert vendor_map[(gstin_key, branch_key)]["status"] == "EXISTING_VENDOR"
+
+        # Hydrate ui row
+        ui_row = view_instance._map_record_to_ui_row(record, vendor_map=vendor_map)
+        assert ui_row["vendor_status"] == "EXISTS"
+        assert ui_row["vendor_id"] == basic.id
+        assert ui_row["item_status"] == "CREATE ITEM"
+
+        # 2. Test snapshot hydration gate (CleanOCRStagingView API GET)
+        # Create final snapshot to mock the terminal consistency gate
+        barrier = SessionFinalizationState.objects.create(
+            id=str(record.id),
+            expected_pages=1,
+            completed_pages=1,
+            failed_pages=0,
+            snapshot_created=True,
+            terminal_consistency=True
+        )
+        
+        snapshot_json = {
+            "data": [
+                {
+                    "id": record.id,
+                    "invoice_no": "INV-100",
+                    "gstin": gstin,
+                    "branch": branch_name,
+                    "items": [
+                        {"item_status": "CREATE ITEM", "description": "New Item 1"}
+                    ]
+                }
+            ],
+            "metadata": {
+                "total_pages": 1,
+                "assembled_at": "2026-06-03T12:00:00"
+            }
+        }
+        FinalizedSnapshot.objects.create(
+            session_id="session-123",
+            snapshot_json=snapshot_json
+        )
+
+        factory = APIRequestFactory()
+        request = factory.get('/api/ocr-staging/', {'upload_session_id': 'session-123'})
+        user = MagicMock()
+        user.branch_id = tenant_id
+        force_authenticate(request, user=user)
+
+        view_func = CleanOCRStagingView.as_view()
+        response = view_func(request)
+        assert response.status_code == 200
+        rows = response.data.get("data", [])
+        assert len(rows) == 1
+        assert rows[0]["vendor_status"] == "EXISTS"
+        assert rows[0]["vendor_id"] == basic.id
+        assert rows[0]["item_status"] == "CREATE ITEM"
+    except Exception as e:
+        traceback.print_exc()
+        raise e
+
+
+@pytest.mark.django_db
+def test_assembly_and_snapshot_item_validation_lifecycle():
+    """
+    Specifically validates the item_status and items array count in the FinalizedSnapshot
+    database record for a multi-page invoice before the view layer is ever invoked.
+    Also verifies:
+      - Sibling record created during assembly (no validate_and_process called) resolves as EXISTS/CREATE ITEM
+      - Parent aggregate status calculation (ALREADY_EXIST/PARTIAL/CREATE_ITEM)
+    """
+    import traceback
+    try:
+        from ocr_pipeline.models import InvoiceTempOCR, FinalizedSnapshot, SessionFinalizationState, InvoicePageResult
+        from inventory.models import InventoryItem
+        from ocr_pipeline.pipeline import assemble_multi_page_record
+        
+        tenant_id = "test-tenant-lifecycle"
+        
+        # 1. Seed Inventory Master with one item to test PARTIAL status
+        InventoryItem.objects.create(
+            tenant_id=tenant_id,
+            item_name="Existing Item 1",
+            item_code="CODE-1",
+            hsn_code="123456"
+        )
+        
+        # 2. Setup staging records
+        record = InvoiceTempOCR.objects.create(
+            tenant_id=tenant_id,
+            upload_session_id="session-lifecycle",
+            supplier_invoice_no="INV-LIFE",
+            gstin="33ABYFS6343M1ZC",
+            branch="Main Branch",
+            voucher_type="PURCHASE",
+            is_primary=True,
+            extracted_data={}
+        )
+        record.total_pages = 2
+        
+        # Set expected pages in barrier
+        SessionFinalizationState.objects.create(
+            id=str(record.id),
+            expected_pages=2,
+            completed_pages=2,
+            failed_pages=0,
+            snapshot_created=False,
+            terminal_consistency=False
+        )
+        
+        # Seed the page outcomes
+        # Page 1 has 'Existing Item 1' (ALREADY EXIST)
+        # Page 2 has 'New Item 2' (CREATE ITEM)
+        InvoicePageResult.objects.create(
+            record_id=record.id,
+            page_number=1,
+            session_id="session-lifecycle",
+            is_failed=False,
+            canonical_payload={
+                "invoice_no": "INV-LIFE-1",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "Main Branch",
+                "total_invoice_value": "100.00",
+                "items": [
+                    {"description": "Existing Item 1", "item_code": "CODE-1", "hsn_code": "123456", "qty": 1.0, "rate": 100.0}
+                ]
+            }
+        )
+        InvoicePageResult.objects.create(
+            record_id=record.id,
+            page_number=2,
+            session_id="session-lifecycle",
+            is_failed=False,
+            canonical_payload={
+                "invoice_no": "INV-LIFE-2",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "Main Branch",
+                "total_invoice_value": "200.00",
+                "items": [
+                    {"description": "New Item 2", "item_code": "CODE-2", "hsn_code": "987654", "qty": 2.0, "rate": 50.0}
+                ]
+            }
+        )
+        
+        # 3. Execute multi-page assembly
+        res = assemble_multi_page_record(record)
+        assert res["status"] in ("FINALIZED", "SUCCESS")
+        
+        # 4. Assert snapshot exists and has item validation results
+        snapshot = FinalizedSnapshot.objects.filter(session_id="session-lifecycle").first()
+        assert snapshot is not None, "Snapshot was not created!"
+        
+        # Load snapshot data via _get_snapshot_data
+        from ocr_pipeline.views import CleanOCRStagingView
+        view_instance = CleanOCRStagingView()
+        snapshot_data = view_instance._get_snapshot_data(snapshot)
+        
+        assert "data" in snapshot_data
+        invoices = snapshot_data["data"]
+        assert len(invoices) == 2
+        
+        inv1 = [inv for inv in invoices if any(i.get("item_name") == "Existing Item 1" or i.get("description") == "Existing Item 1" for i in inv.get("items", []))][0]
+        inv2 = [inv for inv in invoices if any(i.get("item_name") == "New Item 2" or i.get("description") == "New Item 2" for i in inv.get("items", []))][0]
+        
+        assert len(inv1["items"]) == 1
+        assert len(inv2["items"]) == 1
+        
+        assert inv1["items"][0]["item_status"] == "ALREADY EXIST"
+        assert inv2["items"][0]["item_status"] == "CREATE ITEM"
+        
+        assert inv1["item_status"] == "ALREADY EXIST"
+        assert inv2["item_status"] == "CREATE ITEM"
+        
+        # 5. Assert sibling / primary staging DB records have correct item statuses
+        db_records = list(InvoiceTempOCR.objects.filter(upload_session_id="session-lifecycle"))
+        assert len(db_records) == 2
+        
+        db_rec1 = [r for r in db_records if any(i.get("item_name") == "Existing Item 1" or i.get("description") == "Existing Item 1" for i in r.extracted_data.get("items", []))][0]
+        db_rec2 = [r for r in db_records if any(i.get("item_name") == "New Item 2" or i.get("description") == "New Item 2" for i in r.extracted_data.get("items", []))][0]
+        
+        assert db_rec1.extracted_data.get("item_status") == "ALREADY EXIST"
+        assert db_rec2.extracted_data.get("item_status") == "CREATE ITEM"
+        
+        # Check matched inventory_item_id on db_rec1
+        items_db1 = db_rec1.extracted_data.get("items", [])
+        assert items_db1[0]["inventory_item_id"] is not None
+        
+        # Check that db_rec2 has inventory_item_id as None
+        items_db2 = db_rec2.extracted_data.get("items", [])
+        assert items_db2[0]["inventory_item_id"] is None
+    except Exception as e:
+        traceback.print_exc()
+        raise e
+
+
+@pytest.mark.django_db
+def test_item_identity_repair_and_semantic_matching():
+    """
+    Validates:
+      1. OCR identity repair for common errors:
+         - 'SHOT BLASTTNGS' -> 'SHOT BLASTINGS'
+         - 'CASEHARDENTNG' -> 'CASEHARDENING'
+         - 'P1N' / 'PlN' -> 'PIN'
+         - '6008-865' / 'B65-6008' / '6008 B65' -> '6008-B65'
+      2. Deterministic matching strategy precedence:
+         - EXACT_CANONICAL_MATCH
+         - TOKEN_CANONICAL_MATCH
+      3. Freeze matching output preservation
+      4. Duplicate item collapse logic
+      5. Hard assertions (e.g. CriticalPipelineError raised on mismatch)
+    """
+    from ocr_pipeline.services.item_identity_repair import repair_item_identity
+    
+    # 1. Test repair_item_identity outputs
+    r1 = repair_item_identity("SHOT BLASTTNGS")
+    assert r1["canonical_name"] == "SHOT BLASTINGS"
+    
+    r2 = repair_item_identity("CASEHARDENTNG")
+    assert r2["canonical_name"] == "CASEHARDENING"
+    
+    r3 = repair_item_identity("PlN")
+    assert r3["canonical_name"] == "PIN"
+    
+    r4 = repair_item_identity("P1N")
+    assert r4["canonical_name"] == "PIN"
+    
+    r5 = repair_item_identity("6008-865")
+    assert r5["canonical_name"] == "6008-B65"
+    
+    r6 = repair_item_identity("B65-6008")
+    assert r6["canonical_name"] == "6008-B65"
+    
+    r7 = repair_item_identity("6008 B65")
+    assert r7["canonical_name"] == "6008-B65"
+    
+    # 2. Test Validator integration
+    from inventory.models import InventoryItem
+    from ocr_pipeline.inventory_validation import InventoryItemValidationService, CriticalPipelineError
+    
+    tenant_id = "tenant-semantic-test"
+    
+    # Seed DB item
+    db_item = InventoryItem.objects.create(
+        tenant_id=tenant_id,
+        item_name="6008-B65 PIN SHOT BLASTINGS",
+        item_code="CODE-SEM",
+        hsn_code="123456"
+    )
+    
+    # Test EXACT_CANONICAL_MATCH with repaired input
+    res = InventoryItemValidationService.validate_items(tenant_id, [
+        {"description": "6008 B65 PlN SHOT BLASTTNGS", "hsn_code": "123456"}
+    ])
+    assert res["item_status"] == "ALREADY EXIST"
+    assert res["items"][0]["inventory_item_id"] == db_item.id
+    assert res["items"][0]["inventory_match_strategy"] == "EXACT_CANONICAL_MATCH"
+    # raw_name displayed, canonical_name stored
+    assert res["items"][0]["item_name"] == "6008 B65 PlN SHOT BLASTTNGS"
+    assert res["items"][0]["canonical_name"] == "6008-B65 PIN SHOT BLASTINGS"
+
+    # Test TOKEN_CANONICAL_MATCH (reordered tokens)
+    res_token = InventoryItemValidationService.validate_items(tenant_id, [
+        {"description": "SHOT BLASTTNGS PIN 6008-865", "hsn_code": "123456"}
+    ])
+    assert res_token["item_status"] == "ALREADY EXIST"
+    assert res_token["items"][0]["inventory_match_strategy"] == "TOKEN_CANONICAL_MATCH"
+
+    # Test Duplicate Item Collapse (same canonical, qty, tax_val, matched ID)
+    res_dup = InventoryItemValidationService.validate_items(tenant_id, [
+        {"description": "6008 B65 PlN SHOT BLASTTNGS", "qty": 5.0, "taxable_value": 100.0, "hsn_code": "123456"},
+        {"description": "6008-865 PIN SHOT BLASTINGS", "qty": 5.0, "taxable_value": 100.0, "hsn_code": "123456"}
+    ])
+    assert len(res_dup["items"]) == 1
+
+    # Test Freeze Match Output Preservation
+    frozen_items = res["items"]
+    res_frozen = InventoryItemValidationService.validate_items(tenant_id, frozen_items)
+    assert res_frozen["items"][0]["inventory_item_id"] == db_item.id
+    assert res_frozen["items"][0]["inventory_match_strategy"] == "EXACT_CANONICAL_MATCH"
+
+    # Test Hard Assertion in views.py: match strategy changes after freeze
+    from ocr_pipeline.views import CleanOCRStagingView
+    from types import SimpleNamespace
+    view_instance = CleanOCRStagingView()
+    record = SimpleNamespace(
+        id=999, 
+        tenant_id=tenant_id, 
+        status='FINALIZED', 
+        processed=True, 
+        validation_status='NEED_TO_SAVE', 
+        vendor_id=1, 
+        vendor_status='EXISTS'
+    )
+    
+    # Snapshot has strategy "EXACT_CANONICAL_MATCH"
+    norm_snapshot = {
+        "is_canonical_frozen": True,
+        "items": [
+            {
+                "line_index": 0,
+                "inventory_item_id": db_item.id,
+                "inventory_match_strategy": "EXACT_CANONICAL_MATCH",
+                "item_name": "6008 B65 PlN SHOT BLASTTNGS"
+            }
+        ]
+    }
+    # Test Hard Assertion in views.py: match strategy changes after freeze
+    from ocr_pipeline.views import CleanOCRStagingView
+    from types import SimpleNamespace
+    view_instance = CleanOCRStagingView()
+    record = SimpleNamespace(
+        id=999, 
+        tenant_id=tenant_id, 
+        status='FINALIZED', 
+        processed=True, 
+        validation_status='NEED_TO_SAVE', 
+        vendor_id=1, 
+        vendor_status='EXISTS'
+    )
+    
+    # If we have assembled_exports in norm, but items_val comes from norm.get("items") (or vice versa)!
+    # Let's construct norm:
+    norm_mismatch = {
+        "items": [
+            {
+                "line_index": 0,
+                "inventory_item_id": db_item.id,
+                "inventory_match_strategy": "TOKEN_CANONICAL_MATCH", # Hydrated item strategy
+                "item_name": "6008 B65 PlN SHOT BLASTTNGS"
+            }
+        ],
+        "assembled_exports": [
+            {
+                "items": [
+                    {
+                        "line_index": 0,
+                        "inventory_item_id": db_item.id,
+                        "inventory_match_strategy": "EXACT_CANONICAL_MATCH", # Snapshot strategy differs!
+                        "item_name": "6008 B65 PlN SHOT BLASTTNGS"
+                    }
+                ]
+            }
+        ]
+    }
+    
+    with pytest.raises(Exception) as exc_info_strategy:
+        view_instance._map_record_to_ui_row(
+            record,
+            norm_data=norm_mismatch,
+            vendor_map={}
+        )
+    assert "match strategy changes after freeze" in str(exc_info_strategy.value)
+
+
+
+

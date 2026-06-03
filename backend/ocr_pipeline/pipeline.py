@@ -37,6 +37,10 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
+class CriticalPipelineError(ValueError):
+    """Exception raised when critical invariants of the pipeline are violated."""
+    pass
+
 def acquire_redis_lock(lock_name: str, expiry_s: int = 60) -> bool:
     from core.redis_orchestrator import orchestrator
     if not orchestrator.redis:
@@ -943,6 +947,22 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             vendor_name = ui_pay.get("vendor_name")
             items = ui_pay.get("items", [])
             
+            # Run item validation during assembly before final freeze
+            try:
+                from .inventory_validation import InventoryItemValidationService
+                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items)
+                ui_pay["items"] = inv_val["items"]
+                ui_pay["item_status"] = inv_val["item_status"]
+                ui_pay["missing_items"] = inv_val["missing_items"]
+                items = inv_val["items"]  # Update local reference for scoring/warnings
+                logger.info(
+                    f"[ITEM_EXTRACTION_RESULT] session={record.upload_session_id} "
+                    f"invoice_no={invoice_no} item_count={len(items)} "
+                    f"item_status={inv_val['item_status']} missing_count={len(inv_val['missing_items'])}"
+                )
+            except Exception as e_val:
+                logger.error(f"[ITEM_VALIDATION_ASSEMBLY_FAILED] error={e_val}")
+            
             logger.info(f"[NORMALIZATION_COMPLETE] page_no={page_src} invoice_no={invoice_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
             
             totals_empty = (
@@ -1141,6 +1161,29 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                 job_id=kwargs.get('job_id')
             )
             return {"status": "SUCCESS_EMPTY_EXPORT", "invoice_count": 0}
+
+        # PHASE 2: PRINT REAL STRUCTURES - before snapshot freeze
+        for idx, inv_ui in enumerate(final_invoices):
+            logger.critical(
+                "[FORENSIC_ITEMS_STRUCTURE]\n%s",
+                json.dumps(inv_ui.get("items"), indent=2, default=str)
+            )
+            # PHASE 1: TRACE ONE FAILING ROW ONLY - before snapshot freeze
+            logger.critical(
+                "[FORENSIC_ITEMS_LIFECYCLE] [BEFORE_SNAPSHOT_FREEZE] record_id=%s invoice_no=%s item_count=%d item_status=%s payload_keys=%s",
+                inv_ui.get("id"), inv_ui.get("invoice_no"), len(inv_ui.get("items", [])), inv_ui.get("item_status"), list(inv_ui.keys())
+            )
+            # PHASE 6: BEFORE SNAPSHOT CHECKPOINT
+            inv_items = inv_ui.get("items") or []
+            logger.critical(
+                "[CANONICAL_ITEM_CHECKPOINT] record_id=%s item_count=%d validated_item_count=%d item_status=%s payload_keys=%s",
+                inv_ui.get("id") or record.id, len(inv_items), len(inv_items), inv_ui.get("item_status"), list(inv_ui.keys())
+            )
+            # Phase 5 Assertion check before snapshot freeze
+            if len(inv_items) > 0 and inv_ui.get("item_status") is None:
+                raise CriticalPipelineError(
+                    f"Item status lost despite extracted items before snapshot freeze: record_id={inv_ui.get('id') or record.id}"
+                )
 
         # 4. JSON SERIALIZATION & COMPRESSION (Phase 8: Snapshot Storage Hardening)
         try:
@@ -2096,6 +2139,68 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             logger.warning(f"[DUPLICATE_STATUS_PERSISTED] id={record.id} validation_status=DUPLICATE")
             # We don't return early here anymore. Let it flow to vendor and inventory validation for Pending Purchase evaluation.
 
+        # ── [INVENTORY ITEM VALIDATION GATING] ──
+        # PHASE 2: PRINT REAL STRUCTURES - before validation
+        logger.critical(
+            "[FORENSIC_ITEMS_STRUCTURE]\n%s",
+            json.dumps(items, indent=2, default=str)
+        )
+        # PHASE 1: TRACE ONE FAILING ROW ONLY - before validation
+        logger.critical(
+            "[FORENSIC_ITEMS_LIFECYCLE] [BEFORE_VALIDATION] record_id=%s invoice_no=%s item_count=%d item_status=%s payload_keys=%s",
+            record.id, invoice_no, len(items), (record.extracted_data or {}).get("item_status"), list((record.extracted_data or {}).keys())
+        )
+
+        from .inventory_validation import InventoryItemValidationService
+        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+
+        # PHASE 2: PRINT REAL STRUCTURES - after validation
+        logger.critical(
+            "[FORENSIC_ITEMS_STRUCTURE]\n%s",
+            json.dumps(inv_val.get("items"), indent=2, default=str)
+        )
+        # PHASE 1: TRACE ONE FAILING ROW ONLY - after validation
+        logger.critical(
+            "[FORENSIC_ITEMS_LIFECYCLE] [AFTER_VALIDATION] record_id=%s invoice_no=%s item_count=%d item_status=%s payload_keys=%s",
+            record.id, invoice_no, len(inv_val.get("items", [])), inv_val.get("item_status"), list(inv_val.keys())
+        )
+
+        # PHASE 5: ADD HARD ASSERTIONS
+        raw_item_count = len(items)
+        item_status = inv_val.get("item_status")
+        if raw_item_count > 0 and item_status is None:
+            raise CriticalPipelineError(
+                f"Item status lost despite extracted items: record_id={record.id} raw_item_count={raw_item_count}"
+            )
+        
+        # [CANONICAL FORENSIC LOG] DTO validation state after item validation
+        logger.info(
+            f"[DTO_VALIDATION_STATE] "
+            f"record_id={record.id} "
+            f"vendor_status={'EXISTS' if record.vendor_id else 'NEW'} "
+            f"vendor_id={record.vendor_id} "
+            f"voucher_status={'ALREADY_EXIST' if is_duplicate else 'NEED_TO_SAVE'} "
+            f"item_status={inv_val.get('item_status', 'UNKNOWN')}"
+        )
+        
+        # ── [PERSIST METADATA INTO DB] ──
+        # Always update validation results (item_status, missing_items, items) to ensure propagation.
+        # Log if DTO is canonically frozen.
+        if (record.extracted_data or {}).get("is_canonical_frozen"):
+            logger.info(f"[CANONICAL_FREEZE_VAL_UPDATE] Updating validation metadata on frozen DTO for record {record.id}")
+            
+        if not isinstance(record.extracted_data, dict):
+            record.extracted_data = {}
+        record.extracted_data["item_status"] = inv_val["item_status"]
+        record.extracted_data["missing_items"] = inv_val["missing_items"]
+        record.extracted_data["items"] = inv_val["items"]  # Enforce dto.items
+        
+        if "assembled_exports" in record.extracted_data and record.extracted_data["assembled_exports"]:
+            record.extracted_data["assembled_exports"][0]["items"] = inv_val["items"]
+            record.extracted_data["assembled_exports"][0]["item_status"] = inv_val["item_status"]
+            record.extracted_data["assembled_exports"][0]["missing_items"] = inv_val["missing_items"]
+        record.save(update_fields=['extracted_data'])
+
         # ⚫ FAST PATH: vendor_id already validated and stored in staging — skip re-validation.
         # Expand status list to include READY, FINALIZED, VOUCHER_CREATED to cover all valid states.
         if record.vendor_id and record.validation_status in [
@@ -2125,11 +2230,26 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
                 if vendor:
                     record.vendor_id = vendor.id
+                    record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
+                    logger.info(
+                        f"[VENDOR_VALIDATION_RESULT] "
+                        f"gstin={gstin_key} "
+                        f"matched_vendor_id={vendor.id} "
+                        f"assigned_status=EXISTING_VENDOR "
+                        f"record_id={record.id}"
+                    )
                     logger.info(f"[VENDOR_ID_ASSIGNED] record={record.id} vendor_id={vendor.id} path=GSTIN_BRANCH")
                     logger.info(f"[STAGING_VENDOR_ID_PERSISTED] record={record.id} vendor_id={vendor.id}")
                     logger.info(f"[PURCHASE_VENDOR_RESOLUTION] record={record.id} vendor_id={vendor.id} name={vendor.vendor_name} path=GSTIN_BRANCH")
             else:
                 vendor = None
+                logger.info(
+                    f"[VENDOR_VALIDATION_RESULT] "
+                    f"gstin={gstin_key} "
+                    f"matched_vendor_id=None "
+                    f"assigned_status=CREATE_VENDOR "
+                    f"record_id={record.id}"
+                )
 
         logger.debug(f"[DUPLICATE_AUDIT] is_duplicate={is_duplicate}")
 
@@ -2147,12 +2267,27 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
                 if vendor:
                     record.vendor_id = vendor.id
+                    record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
                     record.validation_status = 'NEED_TO_SAVE'
+                    logger.info(
+                        f"[VENDOR_VALIDATION_RESULT] "
+                        f"gstin={gstin_key} "
+                        f"matched_vendor_id={vendor.id} "
+                        f"assigned_status=EXISTING_VENDOR "
+                        f"record_id={record.id}"
+                    )
                     logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_TO_SAVE vendor_id={vendor.id}")
                     record.save()
             else:
                 record.status = "EXTRACTED"
                 record.validation_status = "NEED_VENDOR"
+                logger.info(
+                    f"[VENDOR_VALIDATION_RESULT] "
+                    f"gstin={gstin_key} "
+                    f"matched_vendor_id=None "
+                    f"assigned_status=CREATE_VENDOR "
+                    f"record_id={record.id}"
+                )
                 logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_VENDOR")
                 record.save()
                 
@@ -2164,57 +2299,8 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         if vendor:
              vendor_name = vendor.vendor_name
 
-        # ── [INVENTORY ITEM VALIDATION GATING] ──
-        # Stage 5 Forensic Trace: inventory_item_validation
-        try:
-            import json
-            is_summary_only_inv = len(items) > 0 and all(
-                any(kw in str(itm.get("description") or itm.get("item_name") or "").lower() for kw in [
-                    "services", "total", "subtotal", "sub-total", "summary",
-                    "carried forward", "brought forward",
-                    "rounded off", "round off", "rounding", "adjustment",
-                    "output cgst", "output sgst", "output igst",
-                    "input cgst", "input sgst", "input igst",
-                    "cgst @", "sgst @", "igst @",
-                    "tax summary", "amount chargeable", "declaration",
-                    "less round", "add round", "bank charges", "net amount",
-                    "e & o.e", "balance",
-                ])
-                for itm in items
-            )
-            pre_val_inv_info = {
-                "invoice_no": str(record.supplier_invoice_no or ""),
-                "inventory_items": items,
-                "vendor_status": str(record.vendor_id or ""),
-                "validation_status": str(record.validation_status or ""),
-                "is_canonicalized": bool("assembled_exports" in record.extracted_data or record.is_primary),
-                "is_summary_only": is_summary_only_inv,
-                "dto_memory_id": str(id(record.extracted_data)),
-                "validation_stage_name": "inventory_item_validation"
-            }
-            logger.info(f"[FORENSIC_PRE_VALIDATION]\n{json.dumps(pre_val_inv_info, indent=2, default=str)}")
-        except Exception as le:
-            logger.warning(f"[FORENSIC_PRE_VALIDATION_LOG_ERR] {le}")
-
-        from .inventory_validation import InventoryItemValidationService
-        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
-        
-        # ── [PERSIST METADATA INTO DB] ──
-        # Inject the validation result items (which contain match confidence, strategy, and normalized names)
-        # back into the extracted data so they are permanently saved.
-        # But ONLY if the DTO is not canonically frozen (to preserve absolute immutability).
-        if not (record.extracted_data or {}).get("is_canonical_frozen"):
-            record.extracted_data["item_status"] = inv_val["item_status"]
-            record.extracted_data["missing_items"] = inv_val["missing_items"]
-            if "assembled_exports" in record.extracted_data and record.extracted_data["assembled_exports"]:
-                record.extracted_data["assembled_exports"][0]["items"] = inv_val["items"]
-                record.extracted_data["assembled_exports"][0]["item_status"] = inv_val["item_status"]
-                record.extracted_data["assembled_exports"][0]["missing_items"] = inv_val["missing_items"]
-            else:
-                record.extracted_data["items"] = inv_val["items"]
-            record.save(update_fields=['extracted_data'])
-        else:
-            logger.info(f"[CANONICAL_FREEZE_BYPASS_DTO_MUTATION] Skipping extracted_data update for frozen DTO of record {record.id}")
+        # Validation has been performed earlier in validate_and_process_entry
+        pass
 
         # ── [EXPLICIT PENDING EVALUATION STAGE] ──
         if auto_save:
