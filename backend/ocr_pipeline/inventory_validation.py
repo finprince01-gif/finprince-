@@ -94,7 +94,7 @@ class InventoryItemValidationService:
         if not items:
             logger.warning(f"[INVENTORY_VAL_EMPTY_ITEMS] No items provided for validation under tenant_id={tenant_id}")
             return {
-                "item_status": "ALREADY EXIST",
+                "item_status": None,
                 "missing_items": [],
                 "validation_results": [],
                 "items": []
@@ -208,7 +208,15 @@ class InventoryItemValidationService:
                 "item_status": status
             })
 
-        voucher_status = "ALREADY EXIST" if all_matched else "CREATE ITEM"
+        if not items_dto:
+            logger.critical(f"[CRITICAL_PIPELINE_ERROR] Empty/missing items on validation for tenant {tenant_id}")
+            raise ValueError("CRITICAL: Missing canonical items on validation")
+        else:
+            has_create_item = any(i.get("item_status") in ("CREATE ITEM", "CREATE_ITEM") for i in items_dto)
+            if has_create_item:
+                voucher_status = "CREATE ITEM"
+            else:
+                voucher_status = "ALREADY EXIST"
         
         logger.info(
             f"[INVENTORY_VAL_COMPLETE] tenant_id={tenant_id} "

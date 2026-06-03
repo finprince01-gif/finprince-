@@ -398,8 +398,34 @@ class CleanOCRStagingView(views.APIView):
         v_id = getattr(r, 'vendor_id', None)
         v_status_record = getattr(r, 'status', "PROCESSING")
         tenant_id = getattr(r, 'tenant_id', None)
+        # [CANONICAL VENDOR RESOLUTION] Also check record.vendor_status DB field
+        db_vendor_status = getattr(r, 'vendor_status', 'PENDING')
 
-        logger.info(f"[HYDRATION_READONLY] Entering read-only hydration for record_id={getattr(r, 'id', None)} tenant_id={tenant_id}")
+        # [VENDOR MAP RESOLUTION] If vendor_map provided and no vendor_id, try to resolve from GSTIN+branch
+        if not v_id and vendor_map:
+            try:
+                from vendors.vendor_validation_logic import normalize_branch as _nb
+                gstin_key = (getattr(r, 'gstin', None) or norm.get('gstin') or '').strip().upper()
+                branch_raw = (getattr(r, 'branch', None) or norm.get('branch') or '')
+                branch_key = _nb(branch_raw or 'Main Branch')
+                if gstin_key:
+                    vendor_map_result = vendor_map.get((gstin_key, branch_key))
+                    if vendor_map_result and vendor_map_result.get('status') == 'EXISTING_VENDOR':
+                        v_id = vendor_map_result.get('vendor_id')
+                        logger.info(
+                            f"[VENDOR_VALIDATION_RESULT] gstin={gstin_key} "
+                            f"matched_vendor_id={v_id} "
+                            f"assigned_status=EXISTING_VENDOR "
+                            f"record_id={getattr(r, 'id', None)}"
+                        )
+            except Exception as _vme:
+                logger.warning(f"[HYDRATION_VENDOR_MAP_LOOKUP_FAILED] record_id={getattr(r, 'id', None)} error={_vme}")
+
+        logger.info(
+            f"[HYDRATION_READONLY] Entering read-only hydration for record_id={getattr(r, 'id', None)} "
+            f"tenant_id={tenant_id} vendor_id={v_id} validation_status={v_status} "
+            f"db_vendor_status={db_vendor_status}"
+        )
         logger.info(f"[HYDRATION_REVALIDATION_BLOCKED] Bypassed validation run for record_id={getattr(r, 'id', None)}")
 
         sections = norm.get("sections", {})
@@ -470,9 +496,50 @@ class CleanOCRStagingView(views.APIView):
         )
         
         # Read pre-validated item status and missing items from DTO
-        item_status = norm.get("item_status") or "ALREADY EXIST"
+        # [CANONICAL FIX] Do NOT default item_status to "ALREADY EXIST" — that is a fake fallback
+        # that contradicts child item validation results. Only use what's actually persisted.
+        item_status_raw = norm.get("item_status")
+        # Also check assembled_exports[0] which is where validated item_status is stored
+        if not item_status_raw:
+            _ae = norm.get("assembled_exports") or []
+            if _ae and isinstance(_ae, list) and _ae[0]:
+                item_status_raw = _ae[0].get("item_status")
+        item_status = item_status_raw or None  # Never default to ALREADY EXIST
+
+        # [ITEM AGGREGATE FIX] Derive aggregate item_status from child items when explicit status is absent
         missing_items = norm.get("missing_items") or []
         items_val = norm.get("items") or []
+        # Also check assembled_exports for items
+        if not items_val:
+            _ae = norm.get("assembled_exports") or []
+            if _ae and isinstance(_ae, list) and _ae[0]:
+                items_val = _ae[0].get("items") or []
+
+        if not item_status and items_val:
+            # Derive aggregate from child item statuses
+            child_statuses = [itm.get("item_status") or itm.get("validation_status") for itm in items_val if isinstance(itm, dict)]
+            child_statuses = [s for s in child_statuses if s]  # Filter None/empty
+            if child_statuses:
+                has_create = any(s in ("CREATE ITEM", "CREATE_ITEM") for s in child_statuses)
+                has_exists = any(s in ("ALREADY EXIST", "ALREADY_EXIST") for s in child_statuses)
+                if has_create:
+                    item_status = "CREATE ITEM"
+                else:
+                    item_status = "ALREADY EXIST"
+                logger.info(
+                    f"[ITEM_AGGREGATE_DERIVED] record_id={getattr(r, 'id', None)} "
+                    f"child_count={len(child_statuses)} child_statuses={child_statuses} "
+                    f"derived_aggregate={item_status}"
+                )
+
+        logger.info(
+            f"[DTO_VALIDATION_STATE] "
+            f"record_id={getattr(r, 'id', None)} "
+            f"vendor_id={v_id} "
+            f"vendor_status={'EXISTS' if v_id or db_vendor_status in ['EXISTS','FOUND','MATCHED','RESOLVED'] else 'NEW'} "
+            f"validation_status={v_status} "
+            f"item_status={item_status}"
+        )
 
         res = {
             "id": getattr(r, 'id', None),
@@ -505,13 +572,16 @@ class CleanOCRStagingView(views.APIView):
             "status": final_status,
             "validationStatus": ui_status,
             "validation_status": ui_status,
-            "vendor_status": "EXISTS" if v_id else "NEW",
+            # [CANONICAL FIX] vendor_status: use vendor_id first, then record.vendor_status DB field
+            # record.vendor_status stores values like 'EXISTS','FOUND','MATCHED','RESOLVED','PENDING','NEW'
+            "vendor_status": "EXISTS" if (v_id or db_vendor_status in ('EXISTS', 'FOUND', 'MATCHED', 'RESOLVED')) else "NEW",
             "item_status": item_status,
             "missing_items": missing_items,
             "processed": getattr(r, 'processed', False),
             "bill_from": bill_from,
             "bill_to": bill_to,
             "items": items_val,
+            "line_items": items_val,
             "irn": getattr(r, 'irn', None) or norm.get("irn"),
             "ack_no": getattr(r, 'ack_no', None) or norm.get("ack_no"),
             "ack_date": getattr(r, 'ack_date', None) or norm.get("ack_date"),
@@ -536,7 +606,8 @@ class CleanOCRStagingView(views.APIView):
             res["validationStatus"] = "Needs Review"
             res["validation_status"] = "Needs Review"
             res["status"] = final_status
-            res["vendor_status"] = "NEW"
+            # [CANONICAL FIX] Preserve vendor resolution even on degraded records
+            res["vendor_status"] = "EXISTS" if (v_id or db_vendor_status in ('EXISTS', 'FOUND', 'MATCHED', 'RESOLVED')) else "NEW"
             ui_status = "Needs Review"
  
         res["extracted_data"] = {
@@ -544,6 +615,7 @@ class CleanOCRStagingView(views.APIView):
                 "bill_from": bill_from,
                 "billing_address": bill_to,
                 "items": items_val,
+                "line_items": items_val,
                 "item_status": item_status,
                 "missing_items": missing_items,
                 **norm
@@ -571,6 +643,16 @@ class CleanOCRStagingView(views.APIView):
         else:
             res["resume_reason"] = None
 
+        # [FORENSIC LOG] Final API response state for this record
+        logger.info(
+            f"[API_RESPONSE_STATE] "
+            f"record_id={getattr(r, 'id', None)} "
+            f"vendor_status={res['vendor_status']} "
+            f"voucher_status={res['validationStatus']} "
+            f"item_status={res['item_status']} "
+            f"vendor_id={v_id} "
+            f"gstin={res.get('gstin')}"
+        )
         logger.info(f"[READONLY_HYDRATION_CONFIRMED] Completed readonly hydration for record_id={getattr(r, 'id', None)} validation_status={ui_status}")
         return res
 
@@ -673,7 +755,25 @@ class CleanOCRStagingView(views.APIView):
                 snapshots = FinalizedSnapshot.objects.filter(session_id=prim_rec.upload_session_id).order_by('created_at', 'id')
 
             mapped_data = []
+            # [CANONICAL FIX] Build session-level vendor map once for all snapshot rows
+            # This ensures vendor resolution is available even for sibling records
+            # that were created during assembly and never had validate_and_process called
             _snap_vendor_map = {}
+            try:
+                all_db_records = list(InvoiceTempOCR.objects.filter(upload_session_id=session_id))
+                if not all_db_records:
+                    all_db_records = list(InvoiceTempOCR.objects.filter(upload_session_id=prim_rec.upload_session_id))
+                if all_db_records:
+                    from vendors.vendor_validation_logic import build_session_vendor_map
+                    _snap_vendor_map = build_session_vendor_map(tenant_id, all_db_records)
+                    logger.info(
+                        f"[SNAPSHOT_HYDRATION_STATE] "
+                        f"session={session_id} "
+                        f"vendor_map_pairs={len(_snap_vendor_map)} "
+                        f"db_records={len(all_db_records)}"
+                    )
+            except Exception as _vme:
+                logger.warning(f"[SNAPSHOT_VENDOR_MAP_FAILED] session={session_id} error={_vme}")
 
             for snapshot in snapshots:
                 snapshot_data = self._get_snapshot_data(snapshot)
@@ -693,18 +793,73 @@ class CleanOCRStagingView(views.APIView):
                     if db_record:
                         if not getattr(db_record, 'tenant_id', None) and tenant_id:
                             db_record.tenant_id = tenant_id
+                        # [CANONICAL FIX] Enrich db_record.vendor_id from vendor_map if currently None
+                        # Sibling records created during assembly never had validate_and_process called
+                        # so vendor_id is None even when GSTIN matches a master vendor.
+                        if not getattr(db_record, 'vendor_id', None) and _snap_vendor_map:
+                            try:
+                                from vendors.vendor_validation_logic import normalize_branch as _nb
+                                gstin_key = (getattr(db_record, 'gstin', None) or '').strip().upper()
+                                branch_key = _nb(getattr(db_record, 'branch', None) or 'Main Branch')
+                                vmap_result = _snap_vendor_map.get((gstin_key, branch_key))
+                                if vmap_result and vmap_result.get('status') == 'EXISTING_VENDOR':
+                                    db_record.vendor_id = vmap_result.get('vendor_id')
+                                    # Also persist vendor_status in DB if not set
+                                    if getattr(db_record, 'vendor_status', 'PENDING') == 'PENDING':
+                                        db_record.vendor_status = 'EXISTS'
+                                    logger.info(
+                                        f"[VENDOR_VALIDATION_RESULT] "
+                                        f"gstin={gstin_key} "
+                                        f"matched_vendor_id={db_record.vendor_id} "
+                                        f"assigned_status=EXISTING_VENDOR "
+                                        f"record_id={db_record.id} source=snapshot_hydration"
+                                    )
+                            except Exception as _ve:
+                                logger.warning(f"[HYDRATION_ENRICH_FAILED] record_id={db_record.id} error={_ve}")
                         norm_source = db_record.extracted_data or row
                         dummy = db_record
+                        logger.info(
+                            f"[SNAPSHOT_HYDRATION_STATE] "
+                            f"record_id={db_record.id} "
+                            f"vendor_status={getattr(db_record, 'vendor_status', 'PENDING')} "
+                            f"vendor_id={getattr(db_record, 'vendor_id', None)} "
+                            f"validation_status={getattr(db_record, 'validation_status', 'PENDING')} "
+                            f"item_status={(db_record.extracted_data or {}).get('item_status', 'NOT_SET')}"
+                        )
                     else:
+                        # [CANONICAL FIX] Resolve vendor from vendor_map for snapshot-only rows
+                        resolved_vendor_id = row.get('vendor_id')
+                        resolved_vendor_status = 'PENDING'
+                        if not resolved_vendor_id and _snap_vendor_map and gstin_val:
+                            try:
+                                from vendors.vendor_validation_logic import normalize_branch as _nb
+                                gstin_key = gstin_val.strip().upper()
+                                branch_key = _nb(row.get('branch') or 'Main Branch')
+                                vmap_result = _snap_vendor_map.get((gstin_key, branch_key))
+                                if vmap_result and vmap_result.get('status') == 'EXISTING_VENDOR':
+                                    resolved_vendor_id = vmap_result.get('vendor_id')
+                                    resolved_vendor_status = 'EXISTS'
+                                    logger.info(
+                                        f"[VENDOR_VALIDATION_RESULT] "
+                                        f"gstin={gstin_key} "
+                                        f"matched_vendor_id={resolved_vendor_id} "
+                                        f"assigned_status=EXISTING_VENDOR source=snapshot_row_fallback"
+                                    )
+                            except Exception as _ve2:
+                                logger.warning(f"[HYDRATION_SNAP_VENDOR_FAILED] inv_no={inv_no} error={_ve2}")
                         norm_source = row
                         from types import SimpleNamespace
+                        _snap_val_status = row.get('validation_status')
+                        if not _snap_val_status:
+                            _snap_val_status = 'NEED_TO_SAVE' if resolved_vendor_id else 'NEED_VENDOR'
                         dummy = SimpleNamespace(**{
                             'id': row.get('id'),
                             'tenant_id': tenant_id,
                             'status': 'FINALIZED',
                             'processed': True,
-                            'validation_status': row.get('validation_status') or 'NEED_VENDOR',
-                            'vendor_id': row.get('vendor_id'),
+                            'validation_status': _snap_val_status,
+                            'vendor_id': resolved_vendor_id,
+                            'vendor_status': resolved_vendor_status,
                             'supplier_invoice_no': inv_no,
                             'gstin': gstin_val,
                             'irn': row.get('irn'),
@@ -714,8 +869,33 @@ class CleanOCRStagingView(views.APIView):
                             'voucher_type': row.get('voucher_type'),
                             'branch': row.get('branch')
                         })
+                        logger.info(
+                            f"[SNAPSHOT_HYDRATION_STATE] "
+                            f"record_id={row.get('id')} inv_no={inv_no} "
+                            f"vendor_status={resolved_vendor_status} "
+                            f"vendor_id={resolved_vendor_id} "
+                            f"validation_status={_snap_val_status} "
+                            f"item_status={row.get('item_status', 'NOT_SET')} source=snapshot_fallback"
+                        )
 
                     mapped = self._map_record_to_ui_row(dummy, norm_data=norm_source, vendor_map=_snap_vendor_map)
+
+                    # [HYDRATION_ITEM_VERIFY]
+                    snapshot_item_count = len(row.get("items", []))
+                    hydrated_item_count = len(mapped.get("items", []))
+                    h_item_status = mapped.get("item_status")
+                    logger.info(
+                        f"[HYDRATION_ITEM_VERIFY] "
+                        f"record_id={dummy.id} "
+                        f"snapshot_item_count={snapshot_item_count} "
+                        f"hydrated_item_count={hydrated_item_count} "
+                        f"item_status={h_item_status}"
+                    )
+                    if snapshot_item_count != hydrated_item_count:
+                        logger.critical(
+                            f"[CRITICAL] Hydration item count mismatch for record_id={dummy.id}! "
+                            f"snapshot={snapshot_item_count} hydrated={hydrated_item_count}"
+                        )
 
                     if resume:
                         if mapped.get("is_saved") or mapped.get("validationStatus") in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'] or mapped.get('processed'):

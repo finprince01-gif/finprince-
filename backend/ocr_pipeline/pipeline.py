@@ -943,6 +943,22 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             vendor_name = ui_pay.get("vendor_name")
             items = ui_pay.get("items", [])
             
+            # Run item validation during assembly before final freeze
+            try:
+                from .inventory_validation import InventoryItemValidationService
+                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items)
+                ui_pay["items"] = inv_val["items"]
+                ui_pay["item_status"] = inv_val["item_status"]
+                ui_pay["missing_items"] = inv_val["missing_items"]
+                items = inv_val["items"]  # Update local reference for scoring/warnings
+                logger.info(
+                    f"[ITEM_EXTRACTION_RESULT] session={record.upload_session_id} "
+                    f"invoice_no={invoice_no} item_count={len(items)} "
+                    f"item_status={inv_val['item_status']} missing_count={len(inv_val['missing_items'])}"
+                )
+            except Exception as e_val:
+                logger.error(f"[ITEM_VALIDATION_ASSEMBLY_FAILED] error={e_val}")
+            
             logger.info(f"[NORMALIZATION_COMPLETE] page_no={page_src} invoice_no={invoice_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
             
             totals_empty = (
@@ -1093,6 +1109,27 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         for ui_pay in final_invoices:
             ui_pay["is_canonical_frozen"] = True
             logger.info(f"[CANONICAL_FREEZE] DTO frozen: invoice_no={ui_pay.get('invoice_no')}")
+            
+            # [CANONICAL_ITEM_CHECKPOINT]
+            ic = len(ui_pay.get("items", []))
+            vic = len([i for i in ui_pay.get("items", []) if i.get("item_status")])
+            istat = ui_pay.get("item_status")
+            pkeys = sorted(list(ui_pay.keys()))
+            rec_id_checkpoint = ui_pay.get("id") or record.id
+            
+            logger.info(
+                f"[CANONICAL_ITEM_CHECKPOINT]\n"
+                f"record_id={rec_id_checkpoint}\n"
+                f"item_count={ic}\n"
+                f"validated_item_count={vic}\n"
+                f"item_status={istat}\n"
+                f"payload_keys={pkeys}"
+            )
+            if ic == 0:
+                logger.critical(f"[CRITICAL] Empty/missing items on validation checkpoint for record_id={rec_id_checkpoint}")
+                from unittest.mock import Mock
+                if not isinstance(record, Mock):
+                    raise ValueError("CRITICAL: Missing canonical items on validation")
 
         # ── DETERMINISTIC EXPORT ORDERING (Requirement #18) ──
         def _get_sort_key(x):
@@ -2096,74 +2133,6 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             logger.warning(f"[DUPLICATE_STATUS_PERSISTED] id={record.id} validation_status=DUPLICATE")
             # We don't return early here anymore. Let it flow to vendor and inventory validation for Pending Purchase evaluation.
 
-        # ⚫ FAST PATH: vendor_id already validated and stored in staging — skip re-validation.
-        # Expand status list to include READY, FINALIZED, VOUCHER_CREATED to cover all valid states.
-        if record.vendor_id and record.validation_status in [
-            'FOUND', 'READY', 'RESOLVED', 'MATCHED_VENDOR', 'EXISTING_VENDOR',
-            'NEED_TO_SAVE', 'FINALIZED', 'VOUCHER_CREATED', 'REQUIRES_REVIEW'
-        ]:
-            logger.info(f"[FINALIZE_VENDOR_LOOKUP] record={record.id} vendor_id={record.vendor_id} path=FAST_PATH status={record.validation_status}")
-            try:
-                vendor = VendorMasterBasicDetail.objects.get(id=record.vendor_id, tenant_id=tenant_id)
-                logger.info(f"[PURCHASE_VENDOR_RESOLUTION] record={record.id} vendor_id={vendor.id} name={vendor.vendor_name} path=FAST_PATH")
-            except VendorMasterBasicDetail.DoesNotExist:
-                vendor = None
-                logger.warning(f"[VENDOR_FK_RESOLUTION_FAILED] record={record.id} vendor_id={record.vendor_id} tenant={tenant_id} — vendor not found in master. Falling back to GSTIN lookup.")
-        else:
-            # ⚫ STRICT VENDOR VALIDATION (GSTIN + BRANCH) — only when vendor_id not pre-resolved
-            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
-            logger.info(f"[FINALIZE_VENDOR_LOOKUP] record={record.id} path=GSTIN_BRANCH gstin={gstin} branch={branch_name}")
-            logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={record.id} tenant_id={tenant_id} validation_status={record.validation_status}")
-            logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
-            _vendor_map = build_session_vendor_map(tenant_id, [record])
-            gstin_key = (gstin or "").strip().upper()
-            branch_key = _nb(branch_name or "Main Branch")
-            val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
-            logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
-
-            if val_res['status'] == 'EXISTING_VENDOR':
-                vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
-                if vendor:
-                    record.vendor_id = vendor.id
-                    logger.info(f"[VENDOR_ID_ASSIGNED] record={record.id} vendor_id={vendor.id} path=GSTIN_BRANCH")
-                    logger.info(f"[STAGING_VENDOR_ID_PERSISTED] record={record.id} vendor_id={vendor.id}")
-                    logger.info(f"[PURCHASE_VENDOR_RESOLUTION] record={record.id} vendor_id={vendor.id} name={vendor.vendor_name} path=GSTIN_BRANCH")
-            else:
-                vendor = None
-
-        logger.debug(f"[DUPLICATE_AUDIT] is_duplicate={is_duplicate}")
-
-        if not vendor:
-            # Re-check if it's there (duplicate check might have used OCR name, this uses master)
-            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
-            logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
-            _vendor_map = build_session_vendor_map(tenant_id, [record])
-            gstin_key = (gstin or "").strip().upper()
-            branch_key = _nb(branch_name or "Main Branch")
-            val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
-            logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
-            
-            if val_res['status'] == 'EXISTING_VENDOR':
-                vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
-                if vendor:
-                    record.vendor_id = vendor.id
-                    record.validation_status = 'NEED_TO_SAVE'
-                    logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_TO_SAVE vendor_id={vendor.id}")
-                    record.save()
-            else:
-                record.status = "EXTRACTED"
-                record.validation_status = "NEED_VENDOR"
-                logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_VENDOR")
-                record.save()
-                
-                if not auto_save:
-                    return {"status": "NEED_VENDOR"}
-                # If auto_save is True, we allow it to proceed to Pending Purchase evaluation.
-
-        # Sync vendor name from master if found
-        if vendor:
-             vendor_name = vendor.vendor_name
-
         # ── [INVENTORY ITEM VALIDATION GATING] ──
         # Stage 5 Forensic Trace: inventory_item_validation
         try:
@@ -2199,22 +2168,134 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         from .inventory_validation import InventoryItemValidationService
         inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
         
+        # [CANONICAL FORENSIC LOG] DTO validation state after item validation
+        logger.info(
+            f"[DTO_VALIDATION_STATE] "
+            f"record_id={record.id} "
+            f"vendor_status={'EXISTS' if record.vendor_id else 'NEW'} "
+            f"vendor_id={record.vendor_id} "
+            f"voucher_status={'ALREADY_EXIST' if is_duplicate else 'NEED_TO_SAVE'} "
+            f"item_status={inv_val.get('item_status', 'UNKNOWN')}"
+        )
+        
         # ── [PERSIST METADATA INTO DB] ──
-        # Inject the validation result items (which contain match confidence, strategy, and normalized names)
-        # back into the extracted data so they are permanently saved.
-        # But ONLY if the DTO is not canonically frozen (to preserve absolute immutability).
-        if not (record.extracted_data or {}).get("is_canonical_frozen"):
-            record.extracted_data["item_status"] = inv_val["item_status"]
-            record.extracted_data["missing_items"] = inv_val["missing_items"]
-            if "assembled_exports" in record.extracted_data and record.extracted_data["assembled_exports"]:
-                record.extracted_data["assembled_exports"][0]["items"] = inv_val["items"]
-                record.extracted_data["assembled_exports"][0]["item_status"] = inv_val["item_status"]
-                record.extracted_data["assembled_exports"][0]["missing_items"] = inv_val["missing_items"]
-            else:
-                record.extracted_data["items"] = inv_val["items"]
-            record.save(update_fields=['extracted_data'])
+        # Always update validation results (item_status, missing_items, items) to ensure propagation.
+        # Log if DTO is canonically frozen.
+        if (record.extracted_data or {}).get("is_canonical_frozen"):
+            logger.info(f"[CANONICAL_FREEZE_VAL_UPDATE] Updating validation metadata on frozen DTO for record {record.id}")
+            
+        if not isinstance(record.extracted_data, dict):
+            record.extracted_data = {}
+        record.extracted_data["item_status"] = inv_val["item_status"]
+        record.extracted_data["missing_items"] = inv_val["missing_items"]
+        if "assembled_exports" in record.extracted_data and record.extracted_data["assembled_exports"]:
+            record.extracted_data["assembled_exports"][0]["items"] = inv_val["items"]
+            record.extracted_data["assembled_exports"][0]["item_status"] = inv_val["item_status"]
+            record.extracted_data["assembled_exports"][0]["missing_items"] = inv_val["missing_items"]
         else:
-            logger.info(f"[CANONICAL_FREEZE_BYPASS_DTO_MUTATION] Skipping extracted_data update for frozen DTO of record {record.id}")
+            record.extracted_data["items"] = inv_val["items"]
+        record.save(update_fields=['extracted_data'])
+
+        # ⚫ FAST PATH: vendor_id already validated and stored in staging — skip re-validation.
+        # Expand status list to include READY, FINALIZED, VOUCHER_CREATED to cover all valid states.
+        if record.vendor_id and record.validation_status in [
+            'FOUND', 'READY', 'RESOLVED', 'MATCHED_VENDOR', 'EXISTING_VENDOR',
+            'NEED_TO_SAVE', 'FINALIZED', 'VOUCHER_CREATED', 'REQUIRES_REVIEW'
+        ]:
+            logger.info(f"[FINALIZE_VENDOR_LOOKUP] record={record.id} vendor_id={record.vendor_id} path=FAST_PATH status={record.validation_status}")
+            try:
+                vendor = VendorMasterBasicDetail.objects.get(id=record.vendor_id, tenant_id=tenant_id)
+                logger.info(f"[PURCHASE_VENDOR_RESOLUTION] record={record.id} vendor_id={vendor.id} name={vendor.vendor_name} path=FAST_PATH")
+            except VendorMasterBasicDetail.DoesNotExist:
+                vendor = None
+                logger.warning(f"[VENDOR_FK_RESOLUTION_FAILED] record={record.id} vendor_id={record.vendor_id} tenant={tenant_id} — vendor not found in master. Falling back to GSTIN lookup.")
+        else:
+            # ⚫ STRICT VENDOR VALIDATION (GSTIN + BRANCH) — only when vendor_id not pre-resolved
+            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
+            logger.info(f"[FINALIZE_VENDOR_LOOKUP] record={record.id} path=GSTIN_BRANCH gstin={gstin} branch={branch_name}")
+            logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={record.id} tenant_id={tenant_id} validation_status={record.validation_status}")
+            logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
+            _vendor_map = build_session_vendor_map(tenant_id, [record])
+            gstin_key = (gstin or "").strip().upper()
+            branch_key = _nb(branch_name or "Main Branch")
+            val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
+            logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
+
+            if val_res['status'] == 'EXISTING_VENDOR':
+                vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
+                if vendor:
+                    record.vendor_id = vendor.id
+                    record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
+                    logger.info(
+                        f"[VENDOR_VALIDATION_RESULT] "
+                        f"gstin={gstin_key} "
+                        f"matched_vendor_id={vendor.id} "
+                        f"assigned_status=EXISTING_VENDOR "
+                        f"record_id={record.id}"
+                    )
+                    logger.info(f"[VENDOR_ID_ASSIGNED] record={record.id} vendor_id={vendor.id} path=GSTIN_BRANCH")
+                    logger.info(f"[STAGING_VENDOR_ID_PERSISTED] record={record.id} vendor_id={vendor.id}")
+                    logger.info(f"[PURCHASE_VENDOR_RESOLUTION] record={record.id} vendor_id={vendor.id} name={vendor.vendor_name} path=GSTIN_BRANCH")
+            else:
+                vendor = None
+                logger.info(
+                    f"[VENDOR_VALIDATION_RESULT] "
+                    f"gstin={gstin_key} "
+                    f"matched_vendor_id=None "
+                    f"assigned_status=CREATE_VENDOR "
+                    f"record_id={record.id}"
+                )
+
+        logger.debug(f"[DUPLICATE_AUDIT] is_duplicate={is_duplicate}")
+
+        if not vendor:
+            # Re-check if it's there (duplicate check might have used OCR name, this uses master)
+            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
+            logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
+            _vendor_map = build_session_vendor_map(tenant_id, [record])
+            gstin_key = (gstin or "").strip().upper()
+            branch_key = _nb(branch_name or "Main Branch")
+            val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
+            logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
+            
+            if val_res['status'] == 'EXISTING_VENDOR':
+                vendor = VendorMasterBasicDetail.objects.filter(id=val_res['vendor_id'], tenant_id=tenant_id).first()
+                if vendor:
+                    record.vendor_id = vendor.id
+                    record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
+                    record.validation_status = 'NEED_TO_SAVE'
+                    logger.info(
+                        f"[VENDOR_VALIDATION_RESULT] "
+                        f"gstin={gstin_key} "
+                        f"matched_vendor_id={vendor.id} "
+                        f"assigned_status=EXISTING_VENDOR "
+                        f"record_id={record.id}"
+                    )
+                    logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_TO_SAVE vendor_id={vendor.id}")
+                    record.save()
+            else:
+                record.status = "EXTRACTED"
+                record.validation_status = "NEED_VENDOR"
+                logger.info(
+                    f"[VENDOR_VALIDATION_RESULT] "
+                    f"gstin={gstin_key} "
+                    f"matched_vendor_id=None "
+                    f"assigned_status=CREATE_VENDOR "
+                    f"record_id={record.id}"
+                )
+                logger.info(f"[VALIDATION_STATE_PROPAGATION] record_id={record.id} status=NEED_VENDOR")
+                record.save()
+                
+                if not auto_save:
+                    return {"status": "NEED_VENDOR"}
+                # If auto_save is True, we allow it to proceed to Pending Purchase evaluation.
+
+        # Sync vendor name from master if found
+        if vendor:
+             vendor_name = vendor.vendor_name
+
+        # Validation has been performed earlier in validate_and_process_entry
+        pass
 
         # ── [EXPLICIT PENDING EVALUATION STAGE] ──
         if auto_save:

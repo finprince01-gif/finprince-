@@ -1362,3 +1362,457 @@ def test_11page_finalize_convergence_no_deadlock():
     )
 
 
+@pytest.mark.django_db
+def test_validation_state_propagation_integration():
+    """
+    Integration test for validation state propagation.
+    Verifies:
+      1. Exact-match GSTIN vendor is resolved as EXISTS.
+      2. Sibling record created during assembly (no validate_and_process called) resolves as EXISTS via vendor_map.
+      3. Item validation status propagates to the parent (no default 'ALREADY EXIST' fallback).
+    """
+    import traceback
+    try:
+        from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails
+        from ocr_pipeline.models import InvoiceTempOCR, FinalizedSnapshot, SessionFinalizationState
+        from ocr_pipeline.views import CleanOCRStagingView
+        from rest_framework.test import APIRequestFactory, force_authenticate
+        from unittest.mock import MagicMock
+
+        tenant_id = "test-tenant-123"
+        gstin = "33ABYFS6343M1ZC"
+        branch_name = "Main Branch"
+
+        # Create master vendor
+        basic = VendorMasterBasicDetail.objects.create(
+            tenant_id=tenant_id,
+            vendor_name="GSTIN Match Vendor",
+            email="vendor@example.com",
+            contact_no="9876543210"
+        )
+        VendorMasterGSTDetails.objects.create(
+            tenant_id=tenant_id,
+            vendor_basic_detail=basic,
+            gstin=gstin,
+            reference_name=branch_name,
+            legal_name="GSTIN Match Vendor"
+        )
+
+        # 1. Test record hydration directly
+        record = InvoiceTempOCR.objects.create(
+            tenant_id=tenant_id,
+            upload_session_id="session-123",
+            supplier_invoice_no="INV-100",
+            gstin=gstin,
+            branch=branch_name,
+            voucher_type="PURCHASE",
+            extracted_data={
+                "invoice_no": "INV-100",
+                "gstin": gstin,
+                "branch": branch_name,
+                "items": [
+                    {"item_status": "CREATE ITEM", "description": "New Item 1"}
+                ]
+            }
+        )
+
+        view_instance = CleanOCRStagingView()
+        # Build a vendor map to simulate the hydration lookup
+        from vendors.vendor_validation_logic import build_session_vendor_map
+        vendor_map = build_session_vendor_map(tenant_id, [record])
+        
+        # Check map matches
+        from vendors.vendor_validation_logic import normalize_branch
+        gstin_key = gstin.strip().upper()
+        branch_key = normalize_branch(branch_name)
+        assert (gstin_key, branch_key) in vendor_map
+        assert vendor_map[(gstin_key, branch_key)]["status"] == "EXISTING_VENDOR"
+
+        # Hydrate ui row
+        ui_row = view_instance._map_record_to_ui_row(record, vendor_map=vendor_map)
+        assert ui_row["vendor_status"] == "EXISTS"
+        assert ui_row["vendor_id"] == basic.id
+        assert ui_row["item_status"] == "CREATE ITEM"
+
+        # 2. Test snapshot hydration gate (CleanOCRStagingView API GET)
+        # Create final snapshot to mock the terminal consistency gate
+        barrier = SessionFinalizationState.objects.create(
+            id=str(record.id),
+            expected_pages=1,
+            completed_pages=1,
+            failed_pages=0,
+            snapshot_created=True,
+            terminal_consistency=True
+        )
+        
+        snapshot_json = {
+            "data": [
+                {
+                    "id": record.id,
+                    "invoice_no": "INV-100",
+                    "gstin": gstin,
+                    "branch": branch_name,
+                    "items": [
+                        {"item_status": "CREATE ITEM", "description": "New Item 1"}
+                    ]
+                }
+            ],
+            "metadata": {
+                "total_pages": 1,
+                "assembled_at": "2026-06-03T12:00:00"
+            }
+        }
+        FinalizedSnapshot.objects.create(
+            session_id="session-123",
+            snapshot_json=snapshot_json
+        )
+
+        factory = APIRequestFactory()
+        request = factory.get('/api/ocr-staging/', {'upload_session_id': 'session-123'})
+        user = MagicMock()
+        user.branch_id = tenant_id
+        force_authenticate(request, user=user)
+
+        view_func = CleanOCRStagingView.as_view()
+        response = view_func(request)
+        assert response.status_code == 200
+        rows = response.data.get("data", [])
+        assert len(rows) == 1
+        assert rows[0]["vendor_status"] == "EXISTS"
+        assert rows[0]["vendor_id"] == basic.id
+        assert rows[0]["item_status"] == "CREATE ITEM"
+    except Exception as e:
+        traceback.print_exc()
+        raise e
+
+
+@pytest.mark.django_db
+def test_assembly_and_snapshot_item_validation_lifecycle():
+    """
+    Specifically validates the item_status and items array count in the FinalizedSnapshot
+    database record for a multi-page invoice before the view layer is ever invoked.
+    Also verifies:
+      - Sibling record created during assembly (no validate_and_process called) resolves as EXISTS/CREATE ITEM
+      - Parent aggregate status calculation (ALREADY_EXIST/PARTIAL/CREATE_ITEM)
+    """
+    import traceback
+    try:
+        from ocr_pipeline.models import InvoiceTempOCR, FinalizedSnapshot, SessionFinalizationState, InvoicePageResult
+        from inventory.models import InventoryItem
+        from ocr_pipeline.pipeline import assemble_multi_page_record
+        
+        tenant_id = "test-tenant-lifecycle"
+        
+        # 1. Seed Inventory Master with one item to test PARTIAL status
+        InventoryItem.objects.create(
+            tenant_id=tenant_id,
+            item_name="Existing Item 1",
+            item_code="CODE-1",
+            hsn_code="123456"
+        )
+        
+        # 2. Setup staging records
+        record = InvoiceTempOCR.objects.create(
+            tenant_id=tenant_id,
+            upload_session_id="session-lifecycle",
+            supplier_invoice_no="INV-LIFE",
+            gstin="33ABYFS6343M1ZC",
+            branch="Main Branch",
+            voucher_type="PURCHASE",
+            is_primary=True,
+            extracted_data={}
+        )
+        record.total_pages = 2
+        
+        # Set expected pages in barrier
+        SessionFinalizationState.objects.create(
+            id=str(record.id),
+            expected_pages=2,
+            completed_pages=2,
+            failed_pages=0,
+            snapshot_created=False,
+            terminal_consistency=False
+        )
+        
+        # Seed the page outcomes
+        # Page 1 has 'Existing Item 1' (ALREADY EXIST)
+        # Page 2 has 'New Item 2' (CREATE ITEM)
+        InvoicePageResult.objects.create(
+            record_id=record.id,
+            page_number=1,
+            session_id="session-lifecycle",
+            is_failed=False,
+            canonical_payload={
+                "invoice_no": "INV-LIFE-1",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "Main Branch",
+                "total_invoice_value": "100.00",
+                "items": [
+                    {"description": "Existing Item 1", "item_code": "CODE-1", "hsn_code": "123456", "qty": 1.0, "rate": 100.0}
+                ]
+            }
+        )
+        InvoicePageResult.objects.create(
+            record_id=record.id,
+            page_number=2,
+            session_id="session-lifecycle",
+            is_failed=False,
+            canonical_payload={
+                "invoice_no": "INV-LIFE-2",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "Main Branch",
+                "total_invoice_value": "200.00",
+                "items": [
+                    {"description": "New Item 2", "item_code": "CODE-2", "hsn_code": "987654", "qty": 2.0, "rate": 50.0}
+                ]
+            }
+        )
+        
+        # 3. Execute multi-page assembly
+        res = assemble_multi_page_record(record)
+        assert res["status"] in ("FINALIZED", "SUCCESS")
+        
+        # 4. Assert snapshot exists and has item validation results
+        snapshot = FinalizedSnapshot.objects.filter(session_id="session-lifecycle").first()
+        assert snapshot is not None, "Snapshot was not created!"
+        
+        # Load snapshot data via _get_snapshot_data
+        from ocr_pipeline.views import CleanOCRStagingView
+        view_instance = CleanOCRStagingView()
+        snapshot_data = view_instance._get_snapshot_data(snapshot)
+        
+        assert "data" in snapshot_data
+        invoices = snapshot_data["data"]
+        assert len(invoices) == 2
+        
+        inv1 = [inv for inv in invoices if any(i.get("item_name") == "Existing Item 1" or i.get("description") == "Existing Item 1" for i in inv.get("items", []))][0]
+        inv2 = [inv for inv in invoices if any(i.get("item_name") == "New Item 2" or i.get("description") == "New Item 2" for i in inv.get("items", []))][0]
+        
+        assert len(inv1["items"]) == 1
+        assert len(inv2["items"]) == 1
+        
+        assert inv1["items"][0]["item_status"] == "ALREADY EXIST"
+        assert inv2["items"][0]["item_status"] == "CREATE ITEM"
+        
+        assert inv1["item_status"] == "ALREADY EXIST"
+        assert inv2["item_status"] == "CREATE ITEM"
+        
+        # 5. Assert sibling / primary staging DB records have correct item statuses
+        db_records = list(InvoiceTempOCR.objects.filter(upload_session_id="session-lifecycle"))
+        assert len(db_records) == 2
+        
+        db_rec1 = [r for r in db_records if any(i.get("item_name") == "Existing Item 1" or i.get("description") == "Existing Item 1" for i in r.extracted_data.get("items", []))][0]
+        db_rec2 = [r for r in db_records if any(i.get("item_name") == "New Item 2" or i.get("description") == "New Item 2" for i in r.extracted_data.get("items", []))][0]
+        
+        assert db_rec1.extracted_data.get("item_status") == "ALREADY EXIST"
+        assert db_rec2.extracted_data.get("item_status") == "CREATE ITEM"
+        
+        # Check matched inventory_item_id on db_rec1
+        items_db1 = db_rec1.extracted_data.get("items", [])
+        assert items_db1[0]["inventory_item_id"] is not None
+        
+        # Check that db_rec2 has inventory_item_id as None
+        items_db2 = db_rec2.extracted_data.get("items", [])
+        assert items_db2[0]["inventory_item_id"] is None
+    except Exception as e:
+        traceback.print_exc()
+        raise e
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.anyio
+async def test_forensic_item_lifecycle_integrity_assertions():
+    """
+    Verifies the newly added forensic lifecycle barriers:
+    1. ValueError on empty canonical items during assembly / freeze.
+    2. validated_items_ready assertion in finalize worker.
+    3. Hydration item verify logging.
+    """
+    from ocr_pipeline.models import InvoiceTempOCR, FinalizedSnapshot, SessionFinalizationState, InvoicePageResult
+    from ocr_pipeline.pipeline import assemble_multi_page_record
+    from ocr_pipeline.views import CleanOCRStagingView
+    from vouchers.finalize_worker import FinalizeWorker
+    import logging
+    import asyncio
+    from unittest.mock import patch, MagicMock
+
+    import uuid
+    tenant_id = f"test-tenant-barrier-{uuid.uuid4()}"
+    session_id = f"session-barrier-{uuid.uuid4()}"
+    file_hash_val = f"hash-{uuid.uuid4()}"
+
+    loop = asyncio.get_running_loop()
+
+    def setup_data():
+        # Setup database staging row with NO items to trigger the ValueError
+        record = InvoiceTempOCR.objects.create(
+            tenant_id=tenant_id,
+            upload_session_id=session_id,
+            file_hash=file_hash_val,
+            supplier_invoice_no="INV-EMPTY",
+            gstin="33ABYFS6343M1ZC",
+            branch="Main Branch",
+            voucher_type="PURCHASE",
+            is_primary=True,
+            extracted_data={"items": []} # Empty items list
+        )
+        record.total_pages = 1
+        record.save()
+
+        SessionFinalizationState.objects.create(
+            id=str(record.id),
+            expected_pages=1,
+            completed_pages=1,
+            failed_pages=0,
+            snapshot_created=False,
+            terminal_consistency=True
+        )
+
+        InvoicePageResult.objects.create(
+            record_id=record.id,
+            page_number=1,
+            session_id=session_id,
+            is_failed=False,
+            canonical_payload={
+                "invoice_no": "INV-EMPTY",
+                "items": []
+            }
+        )
+        return record.id
+
+    record_id = await loop.run_in_executor(None, setup_data)
+
+    # Calling assemble_multi_page_record on a real DB record with empty items must raise ValueError caught by exception block returning ERROR (Task 7)
+    def run_assembly():
+        rec = InvoiceTempOCR.objects.get(id=record_id)
+        return assemble_multi_page_record(rec, final_invoices=[{
+            "invoice_no": "INV-EMPTY",
+            "items": []
+        }])
+
+    res_assemble = await loop.run_in_executor(None, run_assembly)
+    assert res_assemble["status"] == "ERROR"
+    assert "Missing canonical items on validation" in res_assemble["error"]
+
+    # Let's seed the record with a valid item and item_status so we can test the other barriers
+    def update_record_and_create_snap():
+        rec = InvoiceTempOCR.objects.get(id=record_id)
+        rec.extracted_data = {
+            "items": [{"description": "Item 1", "item_code": "C1", "hsn_code": "123", "qty": 1.0, "rate": 10.0, "item_status": "CREATE ITEM"}],
+            "item_status": "CREATE ITEM"
+        }
+        rec.save()
+
+        FinalizedSnapshot.objects.create(
+            session_id=session_id,
+            tenant_id=tenant_id,
+            snapshot_json={"data": [{
+                "id": rec.id,
+                "invoice_no": "INV-EMPTY",
+                "items": [{"description": "Item 1", "item_code": "C1", "hsn_code": "123", "qty": 1.0, "rate": 10.0, "item_status": "CREATE ITEM"}],
+                "item_status": "CREATE ITEM"
+            }]}
+        )
+
+    await loop.run_in_executor(None, update_record_and_create_snap)
+
+    # Verify hydration consistency logs (Task 5)
+    view_instance = CleanOCRStagingView()
+    with patch('ocr_pipeline.views.logger') as mock_logger:
+        # Get mapped row
+        dummy = MagicMock()
+        dummy.id = record_id
+        dummy.tenant_id = tenant_id
+        dummy.validation_status = "NEED_TO_SAVE"
+        dummy.vendor_id = "V1"
+        dummy.vendor_status = "EXISTS"
+        
+        # Test normal case (counts match)
+        row_matching = {
+            "id": record_id,
+            "items": [{"description": "Item 1", "item_code": "C1", "item_status": "CREATE ITEM"}]
+        }
+        view_instance._map_record_to_ui_row(dummy, norm_data=row_matching)
+        
+        # Test mismatch case (emits CRITICAL)
+        row_mismatch = {
+            "id": record_id,
+            "items": []
+        }
+        mapped_mismatch = view_instance._map_record_to_ui_row(dummy, norm_data=row_mismatch)
+        
+        # Trigger hydration flow check manually or call _get_snapshot_data path
+        # row mismatch check
+        # We want to check if mock_logger.critical is called when counts mismatch
+        # Create a simple view response call
+        request = MagicMock()
+        request.user.branch_id = tenant_id
+        request.query_params.get.side_effect = lambda key, default=None: session_id if key == 'upload_session_id' else None
+        
+        # Let's mock _get_snapshot_data to return a mismatch
+        with patch.object(CleanOCRStagingView, '_get_snapshot_data') as mock_get_snap_data:
+            mock_get_snap_data.return_value = {
+                "data": [{
+                    "id": record_id,
+                    "invoice_no": "INV-EMPTY",
+                    "items": [{"item_code": "C1"}], # length 1
+                    "item_status": "CREATE ITEM"
+                }]
+            }
+            # Let's mock _map_record_to_ui_row to return items=empty (length 0)
+            with patch.object(CleanOCRStagingView, '_map_record_to_ui_row') as mock_map:
+                mock_map.return_value = {
+                    "id": record_id,
+                    "items": [], # length 0
+                    "item_status": "CREATE ITEM"
+                }
+                def run_view_get():
+                    return view_instance.get(request, file_hash=f"snap_{session_id}")
+                
+                res = await loop.run_in_executor(None, run_view_get)
+                print("DEBUG_RESPONSE_STATUS:", res.status_code)
+                print("DEBUG_RESPONSE_DATA:", res.data)
+                # Assert critical logging was called due to count mismatch
+                mock_logger.critical.assert_called()
+
+    # Verify finalize worker barrier (Task 3)
+    # If validated_items_ready is False (e.g. items are missing / invalid status in staging row), handle_task must fail.
+    # Let's temporarily clear staging record items and status
+    def clear_staging_items():
+        rec = InvoiceTempOCR.objects.get(id=record_id)
+        rec.extracted_data = {
+            "items": [],
+            "item_status": None
+        }
+        rec.save()
+
+    await loop.run_in_executor(None, clear_staging_items)
+
+    worker = FinalizeWorker()
+    task = {
+        'task_type': 'FINALIZE',
+        'id': 'task-barrier-test',
+        'session_id': session_id,
+        'tenant_id': tenant_id,
+        'payload': {
+            'record_id': record_id,
+            'job_id': 'job-barrier-test',
+            'failed': False
+        }
+    }
+
+    with pytest.raises(AssertionError) as excinfo_fin:
+        # Mock orchestrator to let it think convergence is completed
+        with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_auth:
+            mock_auth.return_value = {
+                "expected_pages": 1,
+                "completed_pages": 1,
+                "failed_pages": 0,
+                "snapshot_complete": True,
+                "materialization_complete": True
+            }
+            await worker.handle_task(task)
+    assert "validated_items_ready is False" in str(excinfo_fin.value)
+
+
+
