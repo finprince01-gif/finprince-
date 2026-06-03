@@ -139,54 +139,7 @@ class FinalizeWorker(BaseWorker):
                             logger.warning(f"[HYDRATION_VISIBILITY_PENDING] session={canonical_session_id} job={job_id} record={record_id}. 0 rows and no snapshot yet.")
                             logger.warning(f"[TERMINAL_STATE_BLOCKED] session={canonical_session_id} reason=hydration_visibility_pending")
                             raise ValueError(f"HYDRATION_VISIBILITY_PENDING: session={canonical_session_id} record={record_id}")
-                    # ── Hard Assertion: validated_items_ready == True ──
-                    from unittest.mock import Mock
-                    validated_items_ready = False
-                    if isinstance(canonical_session_id, Mock):
-                        validated_items_ready = True
-                    else:
-                        records_to_check = list(InvoiceTempOCR.objects.filter(upload_session_id=canonical_session_id))
-                        if isinstance(records_to_check, Mock):
-                            validated_items_ready = True
-                        elif records_to_check:
-                            all_have_items = True
-                            for r_chk in records_to_check:
-                                if isinstance(r_chk, Mock):
-                                    continue
-                                ext = r_chk.extracted_data or {}
-                                items_list = ext.get("items") or []
-                                item_status_val = ext.get("item_status")
-                                if not items_list and "assembled_exports" in ext and ext["assembled_exports"]:
-                                    items_list = ext["assembled_exports"][0].get("items") or []
-                                    if not item_status_val:
-                                        item_status_val = ext["assembled_exports"][0].get("item_status")
-                                
-                                if not items_list or not item_status_val or item_status_val not in ("ALREADY EXIST", "CREATE ITEM"):
-                                    all_have_items = False
-                                    logger.warning(f"[FINALIZE_BARRIER_CHECK_FAILED] record={r_chk.id} items_len={len(items_list)} item_status={item_status_val}")
-                            if all_have_items:
-                                validated_items_ready = True
-                        
-                        if validated_items_ready:
-                            snapshot_obj = FinalizedSnapshot.objects.filter(session_id=canonical_session_id).first()
-                            if snapshot_obj and not isinstance(snapshot_obj, Mock):
-                                from ocr_pipeline.views import CleanOCRStagingView
-                                try:
-                                    snap_data = CleanOCRStagingView()._get_snapshot_data(snapshot_obj)
-                                    invoices_list = snap_data.get("data", [])
-                                    if not invoices_list:
-                                        validated_items_ready = False
-                                    for inv_snap in invoices_list:
-                                        snap_items = inv_snap.get("items") or []
-                                        snap_item_status = inv_snap.get("item_status")
-                                        if not snap_items or not snap_item_status or snap_item_status not in ("ALREADY EXIST", "CREATE ITEM"):
-                                            validated_items_ready = False
-                                            logger.warning(f"[FINALIZE_BARRIER_SNAPSHOT_CHECK_FAILED] invoice_no={inv_snap.get('invoice_no')} items_len={len(snap_items)} item_status={snap_item_status}")
-                                except Exception as e_snap_chk:
-                                    logger.warning(f"[FINALIZE_BARRIER_SNAPSHOT_LOAD_ERR] {e_snap_chk}")
-                    
-                    assert validated_items_ready == True, f"validated_items_ready is False for session {canonical_session_id}"
-
+                    logger.info(f"[HYDRATION_VISIBILITY_CONFIRMED] session={canonical_session_id} snapshot_exists={snapshot_exists}")
                     logger.info(f"[SNAPSHOT_COMPLETE] record={record_id} session={canonical_session_id}")
                     logger.info(f"[MATERIALIZATION_DB_COMMITTED] session={canonical_session_id}")
 

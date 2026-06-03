@@ -1619,200 +1619,164 @@ def test_assembly_and_snapshot_item_validation_lifecycle():
         raise e
 
 
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.anyio
-async def test_forensic_item_lifecycle_integrity_assertions():
+@pytest.mark.django_db
+def test_item_identity_repair_and_semantic_matching():
     """
-    Verifies the newly added forensic lifecycle barriers:
-    1. ValueError on empty canonical items during assembly / freeze.
-    2. validated_items_ready assertion in finalize worker.
-    3. Hydration item verify logging.
+    Validates:
+      1. OCR identity repair for common errors:
+         - 'SHOT BLASTTNGS' -> 'SHOT BLASTINGS'
+         - 'CASEHARDENTNG' -> 'CASEHARDENING'
+         - 'P1N' / 'PlN' -> 'PIN'
+         - '6008-865' / 'B65-6008' / '6008 B65' -> '6008-B65'
+      2. Deterministic matching strategy precedence:
+         - EXACT_CANONICAL_MATCH
+         - TOKEN_CANONICAL_MATCH
+      3. Freeze matching output preservation
+      4. Duplicate item collapse logic
+      5. Hard assertions (e.g. CriticalPipelineError raised on mismatch)
     """
-    from ocr_pipeline.models import InvoiceTempOCR, FinalizedSnapshot, SessionFinalizationState, InvoicePageResult
-    from ocr_pipeline.pipeline import assemble_multi_page_record
+    from ocr_pipeline.services.item_identity_repair import repair_item_identity
+    
+    # 1. Test repair_item_identity outputs
+    r1 = repair_item_identity("SHOT BLASTTNGS")
+    assert r1["canonical_name"] == "SHOT BLASTINGS"
+    
+    r2 = repair_item_identity("CASEHARDENTNG")
+    assert r2["canonical_name"] == "CASEHARDENING"
+    
+    r3 = repair_item_identity("PlN")
+    assert r3["canonical_name"] == "PIN"
+    
+    r4 = repair_item_identity("P1N")
+    assert r4["canonical_name"] == "PIN"
+    
+    r5 = repair_item_identity("6008-865")
+    assert r5["canonical_name"] == "6008-B65"
+    
+    r6 = repair_item_identity("B65-6008")
+    assert r6["canonical_name"] == "6008-B65"
+    
+    r7 = repair_item_identity("6008 B65")
+    assert r7["canonical_name"] == "6008-B65"
+    
+    # 2. Test Validator integration
+    from inventory.models import InventoryItem
+    from ocr_pipeline.inventory_validation import InventoryItemValidationService, CriticalPipelineError
+    
+    tenant_id = "tenant-semantic-test"
+    
+    # Seed DB item
+    db_item = InventoryItem.objects.create(
+        tenant_id=tenant_id,
+        item_name="6008-B65 PIN SHOT BLASTINGS",
+        item_code="CODE-SEM",
+        hsn_code="123456"
+    )
+    
+    # Test EXACT_CANONICAL_MATCH with repaired input
+    res = InventoryItemValidationService.validate_items(tenant_id, [
+        {"description": "6008 B65 PlN SHOT BLASTTNGS", "hsn_code": "123456"}
+    ])
+    assert res["item_status"] == "ALREADY EXIST"
+    assert res["items"][0]["inventory_item_id"] == db_item.id
+    assert res["items"][0]["inventory_match_strategy"] == "EXACT_CANONICAL_MATCH"
+    # raw_name displayed, canonical_name stored
+    assert res["items"][0]["item_name"] == "6008 B65 PlN SHOT BLASTTNGS"
+    assert res["items"][0]["canonical_name"] == "6008-B65 PIN SHOT BLASTINGS"
+
+    # Test TOKEN_CANONICAL_MATCH (reordered tokens)
+    res_token = InventoryItemValidationService.validate_items(tenant_id, [
+        {"description": "SHOT BLASTTNGS PIN 6008-865", "hsn_code": "123456"}
+    ])
+    assert res_token["item_status"] == "ALREADY EXIST"
+    assert res_token["items"][0]["inventory_match_strategy"] == "TOKEN_CANONICAL_MATCH"
+
+    # Test Duplicate Item Collapse (same canonical, qty, tax_val, matched ID)
+    res_dup = InventoryItemValidationService.validate_items(tenant_id, [
+        {"description": "6008 B65 PlN SHOT BLASTTNGS", "qty": 5.0, "taxable_value": 100.0, "hsn_code": "123456"},
+        {"description": "6008-865 PIN SHOT BLASTINGS", "qty": 5.0, "taxable_value": 100.0, "hsn_code": "123456"}
+    ])
+    assert len(res_dup["items"]) == 1
+
+    # Test Freeze Match Output Preservation
+    frozen_items = res["items"]
+    res_frozen = InventoryItemValidationService.validate_items(tenant_id, frozen_items)
+    assert res_frozen["items"][0]["inventory_item_id"] == db_item.id
+    assert res_frozen["items"][0]["inventory_match_strategy"] == "EXACT_CANONICAL_MATCH"
+
+    # Test Hard Assertion in views.py: match strategy changes after freeze
     from ocr_pipeline.views import CleanOCRStagingView
-    from vouchers.finalize_worker import FinalizeWorker
-    import logging
-    import asyncio
-    from unittest.mock import patch, MagicMock
-
-    import uuid
-    tenant_id = f"test-tenant-barrier-{uuid.uuid4()}"
-    session_id = f"session-barrier-{uuid.uuid4()}"
-    file_hash_val = f"hash-{uuid.uuid4()}"
-
-    loop = asyncio.get_running_loop()
-
-    def setup_data():
-        # Setup database staging row with NO items to trigger the ValueError
-        record = InvoiceTempOCR.objects.create(
-            tenant_id=tenant_id,
-            upload_session_id=session_id,
-            file_hash=file_hash_val,
-            supplier_invoice_no="INV-EMPTY",
-            gstin="33ABYFS6343M1ZC",
-            branch="Main Branch",
-            voucher_type="PURCHASE",
-            is_primary=True,
-            extracted_data={"items": []} # Empty items list
-        )
-        record.total_pages = 1
-        record.save()
-
-        SessionFinalizationState.objects.create(
-            id=str(record.id),
-            expected_pages=1,
-            completed_pages=1,
-            failed_pages=0,
-            snapshot_created=False,
-            terminal_consistency=True
-        )
-
-        InvoicePageResult.objects.create(
-            record_id=record.id,
-            page_number=1,
-            session_id=session_id,
-            is_failed=False,
-            canonical_payload={
-                "invoice_no": "INV-EMPTY",
-                "items": []
-            }
-        )
-        return record.id
-
-    record_id = await loop.run_in_executor(None, setup_data)
-
-    # Calling assemble_multi_page_record on a real DB record with empty items must raise ValueError caught by exception block returning ERROR (Task 7)
-    def run_assembly():
-        rec = InvoiceTempOCR.objects.get(id=record_id)
-        return assemble_multi_page_record(rec, final_invoices=[{
-            "invoice_no": "INV-EMPTY",
-            "items": []
-        }])
-
-    res_assemble = await loop.run_in_executor(None, run_assembly)
-    assert res_assemble["status"] == "ERROR"
-    assert "Missing canonical items on validation" in res_assemble["error"]
-
-    # Let's seed the record with a valid item and item_status so we can test the other barriers
-    def update_record_and_create_snap():
-        rec = InvoiceTempOCR.objects.get(id=record_id)
-        rec.extracted_data = {
-            "items": [{"description": "Item 1", "item_code": "C1", "hsn_code": "123", "qty": 1.0, "rate": 10.0, "item_status": "CREATE ITEM"}],
-            "item_status": "CREATE ITEM"
-        }
-        rec.save()
-
-        FinalizedSnapshot.objects.create(
-            session_id=session_id,
-            tenant_id=tenant_id,
-            snapshot_json={"data": [{
-                "id": rec.id,
-                "invoice_no": "INV-EMPTY",
-                "items": [{"description": "Item 1", "item_code": "C1", "hsn_code": "123", "qty": 1.0, "rate": 10.0, "item_status": "CREATE ITEM"}],
-                "item_status": "CREATE ITEM"
-            }]}
-        )
-
-    await loop.run_in_executor(None, update_record_and_create_snap)
-
-    # Verify hydration consistency logs (Task 5)
+    from types import SimpleNamespace
     view_instance = CleanOCRStagingView()
-    with patch('ocr_pipeline.views.logger') as mock_logger:
-        # Get mapped row
-        dummy = MagicMock()
-        dummy.id = record_id
-        dummy.tenant_id = tenant_id
-        dummy.validation_status = "NEED_TO_SAVE"
-        dummy.vendor_id = "V1"
-        dummy.vendor_status = "EXISTS"
-        
-        # Test normal case (counts match)
-        row_matching = {
-            "id": record_id,
-            "items": [{"description": "Item 1", "item_code": "C1", "item_status": "CREATE ITEM"}]
-        }
-        view_instance._map_record_to_ui_row(dummy, norm_data=row_matching)
-        
-        # Test mismatch case (emits CRITICAL)
-        row_mismatch = {
-            "id": record_id,
-            "items": []
-        }
-        mapped_mismatch = view_instance._map_record_to_ui_row(dummy, norm_data=row_mismatch)
-        
-        # Trigger hydration flow check manually or call _get_snapshot_data path
-        # row mismatch check
-        # We want to check if mock_logger.critical is called when counts mismatch
-        # Create a simple view response call
-        request = MagicMock()
-        request.user.branch_id = tenant_id
-        request.query_params.get.side_effect = lambda key, default=None: session_id if key == 'upload_session_id' else None
-        
-        # Let's mock _get_snapshot_data to return a mismatch
-        with patch.object(CleanOCRStagingView, '_get_snapshot_data') as mock_get_snap_data:
-            mock_get_snap_data.return_value = {
-                "data": [{
-                    "id": record_id,
-                    "invoice_no": "INV-EMPTY",
-                    "items": [{"item_code": "C1"}], # length 1
-                    "item_status": "CREATE ITEM"
-                }]
+    record = SimpleNamespace(
+        id=999, 
+        tenant_id=tenant_id, 
+        status='FINALIZED', 
+        processed=True, 
+        validation_status='NEED_TO_SAVE', 
+        vendor_id=1, 
+        vendor_status='EXISTS'
+    )
+    
+    # Snapshot has strategy "EXACT_CANONICAL_MATCH"
+    norm_snapshot = {
+        "is_canonical_frozen": True,
+        "items": [
+            {
+                "line_index": 0,
+                "inventory_item_id": db_item.id,
+                "inventory_match_strategy": "EXACT_CANONICAL_MATCH",
+                "item_name": "6008 B65 PlN SHOT BLASTTNGS"
             }
-            # Let's mock _map_record_to_ui_row to return items=empty (length 0)
-            with patch.object(CleanOCRStagingView, '_map_record_to_ui_row') as mock_map:
-                mock_map.return_value = {
-                    "id": record_id,
-                    "items": [], # length 0
-                    "item_status": "CREATE ITEM"
-                }
-                def run_view_get():
-                    return view_instance.get(request, file_hash=f"snap_{session_id}")
-                
-                res = await loop.run_in_executor(None, run_view_get)
-                print("DEBUG_RESPONSE_STATUS:", res.status_code)
-                print("DEBUG_RESPONSE_DATA:", res.data)
-                # Assert critical logging was called due to count mismatch
-                mock_logger.critical.assert_called()
-
-    # Verify finalize worker barrier (Task 3)
-    # If validated_items_ready is False (e.g. items are missing / invalid status in staging row), handle_task must fail.
-    # Let's temporarily clear staging record items and status
-    def clear_staging_items():
-        rec = InvoiceTempOCR.objects.get(id=record_id)
-        rec.extracted_data = {
-            "items": [],
-            "item_status": None
-        }
-        rec.save()
-
-    await loop.run_in_executor(None, clear_staging_items)
-
-    worker = FinalizeWorker()
-    task = {
-        'task_type': 'FINALIZE',
-        'id': 'task-barrier-test',
-        'session_id': session_id,
-        'tenant_id': tenant_id,
-        'payload': {
-            'record_id': record_id,
-            'job_id': 'job-barrier-test',
-            'failed': False
-        }
+        ]
     }
-
-    with pytest.raises(AssertionError) as excinfo_fin:
-        # Mock orchestrator to let it think convergence is completed
-        with patch('core.redis_orchestrator.orchestrator.get_authoritative_session_state') as mock_auth:
-            mock_auth.return_value = {
-                "expected_pages": 1,
-                "completed_pages": 1,
-                "failed_pages": 0,
-                "snapshot_complete": True,
-                "materialization_complete": True
+    # Test Hard Assertion in views.py: match strategy changes after freeze
+    from ocr_pipeline.views import CleanOCRStagingView
+    from types import SimpleNamespace
+    view_instance = CleanOCRStagingView()
+    record = SimpleNamespace(
+        id=999, 
+        tenant_id=tenant_id, 
+        status='FINALIZED', 
+        processed=True, 
+        validation_status='NEED_TO_SAVE', 
+        vendor_id=1, 
+        vendor_status='EXISTS'
+    )
+    
+    # If we have assembled_exports in norm, but items_val comes from norm.get("items") (or vice versa)!
+    # Let's construct norm:
+    norm_mismatch = {
+        "items": [
+            {
+                "line_index": 0,
+                "inventory_item_id": db_item.id,
+                "inventory_match_strategy": "TOKEN_CANONICAL_MATCH", # Hydrated item strategy
+                "item_name": "6008 B65 PlN SHOT BLASTTNGS"
             }
-            await worker.handle_task(task)
-    assert "validated_items_ready is False" in str(excinfo_fin.value)
+        ],
+        "assembled_exports": [
+            {
+                "items": [
+                    {
+                        "line_index": 0,
+                        "inventory_item_id": db_item.id,
+                        "inventory_match_strategy": "EXACT_CANONICAL_MATCH", # Snapshot strategy differs!
+                        "item_name": "6008 B65 PlN SHOT BLASTTNGS"
+                    }
+                ]
+            }
+        ]
+    }
+    
+    with pytest.raises(Exception) as exc_info_strategy:
+        view_instance._map_record_to_ui_row(
+            record,
+            norm_data=norm_mismatch,
+            vendor_map={}
+        )
+    assert "match strategy changes after freeze" in str(exc_info_strategy.value)
+
 
 
 

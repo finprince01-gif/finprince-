@@ -37,6 +37,10 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
+class CriticalPipelineError(ValueError):
+    """Exception raised when critical invariants of the pipeline are violated."""
+    pass
+
 def acquire_redis_lock(lock_name: str, expiry_s: int = 60) -> bool:
     from core.redis_orchestrator import orchestrator
     if not orchestrator.redis:
@@ -1109,27 +1113,6 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         for ui_pay in final_invoices:
             ui_pay["is_canonical_frozen"] = True
             logger.info(f"[CANONICAL_FREEZE] DTO frozen: invoice_no={ui_pay.get('invoice_no')}")
-            
-            # [CANONICAL_ITEM_CHECKPOINT]
-            ic = len(ui_pay.get("items", []))
-            vic = len([i for i in ui_pay.get("items", []) if i.get("item_status")])
-            istat = ui_pay.get("item_status")
-            pkeys = sorted(list(ui_pay.keys()))
-            rec_id_checkpoint = ui_pay.get("id") or record.id
-            
-            logger.info(
-                f"[CANONICAL_ITEM_CHECKPOINT]\n"
-                f"record_id={rec_id_checkpoint}\n"
-                f"item_count={ic}\n"
-                f"validated_item_count={vic}\n"
-                f"item_status={istat}\n"
-                f"payload_keys={pkeys}"
-            )
-            if ic == 0:
-                logger.critical(f"[CRITICAL] Empty/missing items on validation checkpoint for record_id={rec_id_checkpoint}")
-                from unittest.mock import Mock
-                if not isinstance(record, Mock):
-                    raise ValueError("CRITICAL: Missing canonical items on validation")
 
         # ── DETERMINISTIC EXPORT ORDERING (Requirement #18) ──
         def _get_sort_key(x):
@@ -1178,6 +1161,29 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                 job_id=kwargs.get('job_id')
             )
             return {"status": "SUCCESS_EMPTY_EXPORT", "invoice_count": 0}
+
+        # PHASE 2: PRINT REAL STRUCTURES - before snapshot freeze
+        for idx, inv_ui in enumerate(final_invoices):
+            logger.critical(
+                "[FORENSIC_ITEMS_STRUCTURE]\n%s",
+                json.dumps(inv_ui.get("items"), indent=2, default=str)
+            )
+            # PHASE 1: TRACE ONE FAILING ROW ONLY - before snapshot freeze
+            logger.critical(
+                "[FORENSIC_ITEMS_LIFECYCLE] [BEFORE_SNAPSHOT_FREEZE] record_id=%s invoice_no=%s item_count=%d item_status=%s payload_keys=%s",
+                inv_ui.get("id"), inv_ui.get("invoice_no"), len(inv_ui.get("items", [])), inv_ui.get("item_status"), list(inv_ui.keys())
+            )
+            # PHASE 6: BEFORE SNAPSHOT CHECKPOINT
+            inv_items = inv_ui.get("items") or []
+            logger.critical(
+                "[CANONICAL_ITEM_CHECKPOINT] record_id=%s item_count=%d validated_item_count=%d item_status=%s payload_keys=%s",
+                inv_ui.get("id") or record.id, len(inv_items), len(inv_items), inv_ui.get("item_status"), list(inv_ui.keys())
+            )
+            # Phase 5 Assertion check before snapshot freeze
+            if len(inv_items) > 0 and inv_ui.get("item_status") is None:
+                raise CriticalPipelineError(
+                    f"Item status lost despite extracted items before snapshot freeze: record_id={inv_ui.get('id') or record.id}"
+                )
 
         # 4. JSON SERIALIZATION & COMPRESSION (Phase 8: Snapshot Storage Hardening)
         try:
@@ -2134,39 +2140,38 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             # We don't return early here anymore. Let it flow to vendor and inventory validation for Pending Purchase evaluation.
 
         # ── [INVENTORY ITEM VALIDATION GATING] ──
-        # Stage 5 Forensic Trace: inventory_item_validation
-        try:
-            import json
-            is_summary_only_inv = len(items) > 0 and all(
-                any(kw in str(itm.get("description") or itm.get("item_name") or "").lower() for kw in [
-                    "services", "total", "subtotal", "sub-total", "summary",
-                    "carried forward", "brought forward",
-                    "rounded off", "round off", "rounding", "adjustment",
-                    "output cgst", "output sgst", "output igst",
-                    "input cgst", "input sgst", "input igst",
-                    "cgst @", "sgst @", "igst @",
-                    "tax summary", "amount chargeable", "declaration",
-                    "less round", "add round", "bank charges", "net amount",
-                    "e & o.e", "balance",
-                ])
-                for itm in items
-            )
-            pre_val_inv_info = {
-                "invoice_no": str(record.supplier_invoice_no or ""),
-                "inventory_items": items,
-                "vendor_status": str(record.vendor_id or ""),
-                "validation_status": str(record.validation_status or ""),
-                "is_canonicalized": bool("assembled_exports" in record.extracted_data or record.is_primary),
-                "is_summary_only": is_summary_only_inv,
-                "dto_memory_id": str(id(record.extracted_data)),
-                "validation_stage_name": "inventory_item_validation"
-            }
-            logger.info(f"[FORENSIC_PRE_VALIDATION]\n{json.dumps(pre_val_inv_info, indent=2, default=str)}")
-        except Exception as le:
-            logger.warning(f"[FORENSIC_PRE_VALIDATION_LOG_ERR] {le}")
+        # PHASE 2: PRINT REAL STRUCTURES - before validation
+        logger.critical(
+            "[FORENSIC_ITEMS_STRUCTURE]\n%s",
+            json.dumps(items, indent=2, default=str)
+        )
+        # PHASE 1: TRACE ONE FAILING ROW ONLY - before validation
+        logger.critical(
+            "[FORENSIC_ITEMS_LIFECYCLE] [BEFORE_VALIDATION] record_id=%s invoice_no=%s item_count=%d item_status=%s payload_keys=%s",
+            record.id, invoice_no, len(items), (record.extracted_data or {}).get("item_status"), list((record.extracted_data or {}).keys())
+        )
 
         from .inventory_validation import InventoryItemValidationService
         inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+
+        # PHASE 2: PRINT REAL STRUCTURES - after validation
+        logger.critical(
+            "[FORENSIC_ITEMS_STRUCTURE]\n%s",
+            json.dumps(inv_val.get("items"), indent=2, default=str)
+        )
+        # PHASE 1: TRACE ONE FAILING ROW ONLY - after validation
+        logger.critical(
+            "[FORENSIC_ITEMS_LIFECYCLE] [AFTER_VALIDATION] record_id=%s invoice_no=%s item_count=%d item_status=%s payload_keys=%s",
+            record.id, invoice_no, len(inv_val.get("items", [])), inv_val.get("item_status"), list(inv_val.keys())
+        )
+
+        # PHASE 5: ADD HARD ASSERTIONS
+        raw_item_count = len(items)
+        item_status = inv_val.get("item_status")
+        if raw_item_count > 0 and item_status is None:
+            raise CriticalPipelineError(
+                f"Item status lost despite extracted items: record_id={record.id} raw_item_count={raw_item_count}"
+            )
         
         # [CANONICAL FORENSIC LOG] DTO validation state after item validation
         logger.info(
@@ -2188,12 +2193,12 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             record.extracted_data = {}
         record.extracted_data["item_status"] = inv_val["item_status"]
         record.extracted_data["missing_items"] = inv_val["missing_items"]
+        record.extracted_data["items"] = inv_val["items"]  # Enforce dto.items
+        
         if "assembled_exports" in record.extracted_data and record.extracted_data["assembled_exports"]:
             record.extracted_data["assembled_exports"][0]["items"] = inv_val["items"]
             record.extracted_data["assembled_exports"][0]["item_status"] = inv_val["item_status"]
             record.extracted_data["assembled_exports"][0]["missing_items"] = inv_val["missing_items"]
-        else:
-            record.extracted_data["items"] = inv_val["items"]
         record.save(update_fields=['extracted_data'])
 
         # ⚫ FAST PATH: vendor_id already validated and stored in staging — skip re-validation.

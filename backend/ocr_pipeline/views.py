@@ -522,7 +522,9 @@ class CleanOCRStagingView(views.APIView):
             if child_statuses:
                 has_create = any(s in ("CREATE ITEM", "CREATE_ITEM") for s in child_statuses)
                 has_exists = any(s in ("ALREADY EXIST", "ALREADY_EXIST") for s in child_statuses)
-                if has_create:
+                if has_create and has_exists:
+                    item_status = "PARTIAL"
+                elif has_create:
                     item_status = "CREATE ITEM"
                 else:
                     item_status = "ALREADY EXIST"
@@ -531,6 +533,74 @@ class CleanOCRStagingView(views.APIView):
                     f"child_count={len(child_statuses)} child_statuses={child_statuses} "
                     f"derived_aggregate={item_status}"
                 )
+
+        # PHASE 2: PRINT REAL STRUCTURES - after hydration
+        logger.critical(
+            "[FORENSIC_ITEMS_STRUCTURE]\n%s",
+            json.dumps(items_val, indent=2, default=str)
+        )
+        # PHASE 1: TRACE ONE FAILING ROW ONLY - after hydration
+        logger.critical(
+            "[FORENSIC_ITEMS_LIFECYCLE] [AFTER_HYDRATION] record_id=%s invoice_no=%s item_count=%d item_status=%s payload_keys=%s",
+            getattr(r, 'id', None), inv_no, len(items_val), item_status, list(norm.keys())
+        )
+
+        # PHASE 6: HYDRATION ITEM VERIFY CHECKPOINT
+        snapshot_count = len(norm.get("items", []))
+        if not norm.get("items"):
+            _ae = norm.get("assembled_exports") or []
+            if _ae and isinstance(_ae, list) and _ae[0]:
+                snapshot_count = len(_ae[0].get("items", []))
+                
+        logger.critical(
+            "[HYDRATION_ITEM_VERIFY] record_id=%s snapshot_item_count=%d hydrated_item_count=%d item_status=%s",
+            getattr(r, 'id', None), snapshot_count, len(items_val), item_status
+        )
+        if snapshot_count != len(items_val):
+            logger.critical(
+                "[CRITICAL_HYDRATION_MISMATCH] record_id=%s snapshot_item_count=%d hydrated_item_count=%d",
+                getattr(r, 'id', None), snapshot_count, len(items_val)
+            )
+            from ocr_pipeline.pipeline import CriticalPipelineError
+            raise CriticalPipelineError("Hydration lost canonical items")
+            
+        if snapshot_count > 0 and len(items_val) == 0:
+            from ocr_pipeline.pipeline import CriticalPipelineError
+            raise CriticalPipelineError("Hydration lost canonical items")
+
+        # Phase 6: check if strategy changes or hydrated item differs from snapshot frozen item
+        snapshot_items = None
+        _ae = norm.get("assembled_exports") or []
+        if _ae and isinstance(_ae, list) and _ae[0]:
+            snapshot_items = _ae[0].get("items") or []
+        if not snapshot_items:
+            snapshot_items = norm.get("items") or []
+        if snapshot_items:
+            snapshot_items_map = {
+                itm.get("line_index"): itm 
+                for itm in snapshot_items 
+                if isinstance(itm, dict) and itm.get("line_index") is not None
+            }
+            for itm in items_val:
+                l_idx = itm.get("line_index")
+                if l_idx in snapshot_items_map:
+                    snap_itm = snapshot_items_map[l_idx]
+                    # 1. match strategy changes after freeze
+                    if itm.get("inventory_match_strategy") != snap_itm.get("inventory_match_strategy"):
+                        logger.critical(
+                            f"[STRATEGY_CHANGED_AFTER_FREEZE] line={l_idx} "
+                            f"before={snap_itm.get('inventory_match_strategy')} after={itm.get('inventory_match_strategy')}"
+                        )
+                        from ocr_pipeline.pipeline import CriticalPipelineError
+                        raise CriticalPipelineError("match strategy changes after freeze")
+                    # 2. hydrated item differs from snapshot frozen item
+                    if itm.get("inventory_item_id") != snap_itm.get("inventory_item_id"):
+                        logger.critical(
+                            f"[HYDRATED_ITEM_MISMATCH] line={l_idx} key=inventory_item_id "
+                            f"before={snap_itm.get('inventory_item_id')} after={itm.get('inventory_item_id')}"
+                        )
+                        from ocr_pipeline.pipeline import CriticalPipelineError
+                        raise CriticalPipelineError("hydrated item differs from snapshot frozen item")
 
         logger.info(
             f"[DTO_VALIDATION_STATE] "
@@ -880,23 +950,6 @@ class CleanOCRStagingView(views.APIView):
 
                     mapped = self._map_record_to_ui_row(dummy, norm_data=norm_source, vendor_map=_snap_vendor_map)
 
-                    # [HYDRATION_ITEM_VERIFY]
-                    snapshot_item_count = len(row.get("items", []))
-                    hydrated_item_count = len(mapped.get("items", []))
-                    h_item_status = mapped.get("item_status")
-                    logger.info(
-                        f"[HYDRATION_ITEM_VERIFY] "
-                        f"record_id={dummy.id} "
-                        f"snapshot_item_count={snapshot_item_count} "
-                        f"hydrated_item_count={hydrated_item_count} "
-                        f"item_status={h_item_status}"
-                    )
-                    if snapshot_item_count != hydrated_item_count:
-                        logger.critical(
-                            f"[CRITICAL] Hydration item count mismatch for record_id={dummy.id}! "
-                            f"snapshot={snapshot_item_count} hydrated={hydrated_item_count}"
-                        )
-
                     if resume:
                         if mapped.get("is_saved") or mapped.get("validationStatus") in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'] or mapped.get('processed'):
                             continue
@@ -904,6 +957,18 @@ class CleanOCRStagingView(views.APIView):
                     mapped_data.append(mapped)
 
             logger.info(f"[STAGING_POLL] session={session_id} records={len(mapped_data)} terminal=True pipeline_status=completed hydration_pending=False")
+            # PHASE 2: PRINT REAL STRUCTURES - before API response
+            for row in mapped_data:
+                logger.critical(
+                    "[FORENSIC_ITEMS_STRUCTURE]\n%s",
+                    json.dumps(row.get("items"), indent=2, default=str)
+                )
+                # PHASE 1: TRACE ONE FAILING ROW ONLY - before API response
+                logger.critical(
+                    "[FORENSIC_ITEMS_LIFECYCLE] [BEFORE_API_RESPONSE] record_id=%s invoice_no=%s item_count=%d item_status=%s payload_keys=%s",
+                    row.get("id"), row.get("invoice_no"), len(row.get("items", [])), row.get("item_status"), list(row.keys())
+                )
+
             self._log_final_api_response_rows(mapped_data, "snapshot")
             
             return Response({
