@@ -487,19 +487,27 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             total_extra_adv = top_adv_amt + remainder_adv
 
             if total_extra_adv > 0:
+                # Ensure the advance ref number is never empty or generically 'ADVANCE'
+                # so get_allocated_amount() can uniquely track this advance without cross-contaminating others.
+                surplus_adv_ref = top_adv_ref if (top_adv_ref and top_adv_ref != 'ADVANCE') else voucher.voucher_number
                 AdvanceAllocation.objects.create(
                     tenant_id=tenant_id,
                     transaction=voucher,
                     type=mode,
                     reference_id='ADVANCE',
                     reference_type='ADVANCE',
-                    reference_number=top_adv_ref or voucher.voucher_number,
+                    reference_number=surplus_adv_ref,
+                    # pay_from is the bank/cash ledger; pay_to is the vendor/party ledger.
+                    # Setting pay_to_ledger is critical so get_advances_by_ledger() can
+                    # find this advance when filtering by the vendor's ledger ID for the
+                    # Purchase Voucher Due Details panel.
                     pay_from_ledger=pay_from_ledger,
+                    pay_to_ledger=first_pay_to,
                     allocated_amount=total_extra_adv,
                     amount=total_extra_adv, # Physical column
                     original_amount=total_extra_adv,
                     is_advance=True,
-                    advance_ref_no=top_adv_ref or voucher.voucher_number,
+                    advance_ref_no=surplus_adv_ref,
                     ref_no=v_ref_no_provided,
                     posting_note=v_posting_note,
                     vouch_amount=voucher.vouch_amount,
@@ -508,6 +516,11 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     pay_from_ledger_id_val=pf_l_id,
                     pay_from_customer_id_val=pf_c_id,
                     pay_from_vendor_id_val=pf_v_id,
+
+                    # Vendor/party side
+                    pay_to_ledger_id_val=pt_l_id,
+                    pay_to_customer_id_val=pt_c_id,
+                    pay_to_vendor_id_val=pt_v_id,
 
                     # Party sync
                     ledger_id_val=pt_l_id or pf_l_id,
@@ -542,6 +555,10 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     item_data.get('advance_ref_no') or
                     it_adv_ref
                 )
+                # For ADVANCE items, ensure the ref number is never empty or 'ADVANCE' so
+                # get_allocated_amount() can uniquely track this advance.
+                if it_type == 'ADVANCE' and (not det_ref or det_ref == 'ADVANCE'):
+                    det_ref = v_num_to_use
                 det_party = it_pending_raw.get('party_name') or it_pending_raw.get('vendor_name')
                 det_date = it_pending_raw.get('date') or it_pending_raw.get('invoice_date')
 
@@ -560,7 +577,8 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     allocated_amount=it_amt,
                     amount=it_amt,
                     is_advance=(it_type == 'ADVANCE'),
-                    advance_ref_no=it_adv_ref,
+                    # For ADVANCE type, ensure advance_ref_no is never empty so tracking works
+                    advance_ref_no=(it_adv_ref or det_ref) if it_type == 'ADVANCE' else it_adv_ref,
                     ref_no=item_data.get('ref_no', v_ref_no_provided),
                     narration=item_data.get('narration') or v_narr_provided,
                     posting_note=(
@@ -670,8 +688,11 @@ class PaymentVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
 
                     if it_type == 'ADVANCE':
                         item_data['is_advance'] = True
-                        if not item_data.get('advance_ref_no'):
-                            item_data['advance_ref_no'] = item_data.get('reference_id') or 'ADVANCE'
+                        adv_ref = item_data.get('advance_ref_no') or item_data.get('reference_id')
+                        if not adv_ref or adv_ref == 'ADVANCE':
+                            item_data['advance_ref_no'] = instance.voucher_number
+                        else:
+                            item_data['advance_ref_no'] = adv_ref
 
                     target_model.objects.create(
                         tenant_id=instance.tenant_id,

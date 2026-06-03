@@ -315,6 +315,9 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 remainder_adv = max(Decimal('0.00'), final_total - sum_items)
 
             if remainder_adv > 0:
+                # Ensure the advance ref number is never empty or generically 'ADVANCE'
+                # so get_allocated_amount() can uniquely track this advance.
+                surplus_adv_ref = top_adv_ref if (top_adv_ref and top_adv_ref != 'ADVANCE') else receipt.voucher_number
                 AdvanceAllocation.objects.create(
                     tenant_id=tenant_id,
                     transaction=receipt,
@@ -328,7 +331,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     amount=remainder_adv, # Physical column
                     original_amount=remainder_adv,
                     is_advance=True,
-                    advance_ref_no=receipt.voucher_number,
+                    advance_ref_no=surplus_adv_ref,
                     ref_no=v_ref_no_provided,
                     posting_note=v_posting_note,
                     vouch_amount=receipt.vouch_amount,
@@ -373,6 +376,14 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                 det_party = it_pending_raw.get('party_name') or it_pending_raw.get('customer_name')
                 det_date = it_pending_raw.get('date') or it_pending_raw.get('invoice_date')
 
+                # For ADVANCE items, ensure the ref number is never empty.
+                # If the user did not enter a ref number (or frontend sent 'ADVANCE'),
+                # default to the receipt voucher number so every advance gets a unique, 
+                # stable reference key. Sharing 'ADVANCE' as a reference_number across 
+                # many receipts causes get_allocated_amount() to cross-contaminate allocations.
+                if it_type == 'ADVANCE' and (not det_ref or det_ref == 'ADVANCE'):
+                    det_ref = v_num_to_use
+
                 # Resolve Item Ledger
                 it_party_ledger = _resolve_ledger(it_party_raw, tenant_id) if it_party_raw else customer_ledger
                 p_l_id, p_c_id, p_v_id = self._get_party_ids(it_party_ledger) if it_party_ledger else (None, None, None)
@@ -386,7 +397,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
                     transaction=receipt,
                     type=mode,
                     reference_id=str(it_ref_id) if it_ref_id else None,
-                    reference_number=det_ref or str(it_ref_id) or v_num_to_use,
+                    reference_number=det_ref or v_num_to_use,
                     reference_type=it_type,
                     pay_from_ledger=it_party_ledger,
                     pay_to_ledger=receipt.pay_to_ledger,
@@ -535,8 +546,11 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
 
                     if it_type == 'ADVANCE':
                         item_data['is_advance'] = True
-                        if not item_data.get('advance_ref_no'):
-                            item_data['advance_ref_no'] = item_data.get('reference_id') or 'ADVANCE'
+                        adv_ref = item_data.get('advance_ref_no') or item_data.get('reference_id')
+                        if not adv_ref or adv_ref == 'ADVANCE':
+                            item_data['advance_ref_no'] = instance.voucher_number
+                        else:
+                            item_data['advance_ref_no'] = adv_ref
 
                     target_model.objects.create(
                         tenant_id=instance.tenant_id,
