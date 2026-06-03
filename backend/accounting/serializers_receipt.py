@@ -216,6 +216,7 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
         
         # 1. Extract and Remove Non-DB Fields
         items_data = validated_data.pop('items', [])
+        top_adv_ref = validated_data.pop('advance_ref_no', None)
         receive_in_raw = validated_data.pop('receive_in', None)
         customer_raw = validated_data.pop('customer', None)
         total_p_provided = validated_data.pop('total_amount', None)
@@ -304,8 +305,17 @@ class ReceiptVoucherSerializer(SafeModelSerializerMixin, serializers.ModelSerial
             # 7. Create Items and Allocations
             mode = 'receipt_bulk' if len(items_data) > 1 else 'receipt_single'
             
-            # Calculate sum of allocated items
-            sum_items = sum(_safe_decimal(i.get('received_amount', i.get('amount', 0))) for i in items_data)
+            # Calculate sum of allocated items correctly handling serializer field aliases
+            sum_items = Decimal('0')
+            for i in items_data:
+                item_amt = _safe_decimal(
+                    i.get('amount_applied') or 
+                    i.get('received_amount') or 
+                    i.get('amount') or 
+                    0
+                )
+                sum_items += item_amt
+
             
             # If total_amount > sum of items, allocate the remainder as an advance
             remainder_adv = Decimal('0.00')
