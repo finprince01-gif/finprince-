@@ -565,16 +565,26 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }
         
         try {
-            const findLedgerId = (name: string) => {
+            const findLedgerId = (name: string, isReceiveFrom: boolean = false) => {
                 if (!name) return null;
                 const normalized = name.trim().toLowerCase();
-                const found = receiveFromOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
-                if (found) return found.ledger_id || found.id;
-                return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
+                
+                if (isReceiveFrom) {
+                    const found = receiveFromOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
+                    if (found) {
+                        if (found.id && typeof found.id === 'string' && found.id.startsWith('portal-')) return found.id;
+                        return found.ledger_id || found.id;
+                    }
+                } else {
+                    const inOption = receiveInLedgers.find(o => (o.name || '').trim().toLowerCase() === normalized);
+                    if (inOption) return inOption.id;
+                }
+                
+                return allLedgers.find(l => (l.name || '').trim().toLowerCase() === normalized)?.id;
             };
 
-            const receiveFromId = findLedgerId(receiveFrom);
-            const receiveInId = findLedgerId(receiveIn);
+            const receiveFromId = findLedgerId(receiveFrom, true);
+            const receiveInId = findLedgerId(receiveIn, false);
 
             if (!receiveFromId || !receiveInId) {
                 showError("Please select valid 'Receive In' and 'Receive From' accounts.");
@@ -980,29 +990,36 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }
 
         try {
-            const findLedgerId = (name: string) => {
+            const findLedgerId = (name: string, isReceiveFrom: boolean = false) => {
                 if (!name) return null;
                 const normalized = name.trim().toLowerCase();
 
-                // 1. Check regular ledgers
-                const ledger = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
+                if (isReceiveFrom) {
+                    // Try to find the exact option they selected
+                    const option = receiveFromOptions.find(o => (o.name || '').trim().toLowerCase() === normalized);
+                    if (option) {
+                        // Return portal-cust-X or portal-vend-X so backend resolves perfectly
+                        if (option.id && typeof option.id === 'string' && option.id.startsWith('portal-')) {
+                            return option.id;
+                        }
+                        return option.id; // Fallback to ledger id
+                    }
+                } else {
+                    const inOption = receiveInLedgers.find(o => (o.name || '').trim().toLowerCase() === normalized);
+                    if (inOption) return inOption.id;
+                }
+
+                // Fallback: Check regular ledgers by name
+                const ledger = allLedgers.find(l => (l.name || '').trim().toLowerCase() === normalized);
                 if (ledger) return ledger.id;
-
-                // 2. Check portal customers
-                const portalCust = portalCustomers.find(c => (c.customer_name || c.name || '').trim().toLowerCase() === normalized);
-                if (portalCust) return portalCust.customer_name || portalCust.name; // Send name to backend for resolution
-
-                // 3. Check portal vendors
-                const portalVend = portalVendors.find(v => (v.vendor_name || v.name || '').trim().toLowerCase() === normalized);
-                if (portalVend) return portalVend.vendor_name || portalVend.name;
 
                 return null;
             };
 
-            const receiveInId = findLedgerId(receiveIn);
+            const receiveInId = findLedgerId(receiveIn, false);
 
             if (activeTab === 'single') {
-                const receiveFromId = findLedgerId(receiveFrom);
+                const receiveFromId = findLedgerId(receiveFrom, true);
                 if (!receiveInId || !receiveFromId) {
                     showError("Please select valid 'Receive In' and 'Receive From' accounts.");
                     return;

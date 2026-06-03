@@ -735,16 +735,23 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         }
 
         try {
-            const findLedgerId = (name: string) => {
+            const findLedgerId = (name: string, isPayTo: boolean = false) => {
                 if (!name) return null;
                 const normalized = name.trim().toLowerCase();
-                const found = payToOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
-                if (found) return found.ledger_id || found.id;
-                return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
+                
+                if (isPayTo) {
+                    const found = payToOptions.find(opt => (opt.name || '').trim().toLowerCase() === normalized);
+                    if (found) {
+                        if (found.id && typeof found.id === 'string' && found.id.startsWith('portal-')) return found.id;
+                        return found.ledger_id || found.id;
+                    }
+                }
+                
+                return allLedgers.find(l => (l.name || '').trim().toLowerCase() === normalized)?.id;
             };
 
-            const payToId = findLedgerId(payTo);
-            const payFromId = findLedgerId(payFrom);
+            const payToId = findLedgerId(payTo, true);
+            const payFromId = findLedgerId(payFrom, false);
 
             if (!payToId || !payFromId) {
                 showError("Please select valid 'Pay From' and 'Pay To' accounts.");
@@ -1090,15 +1097,22 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         }
 
         try {
-            const findLedgerId = (name: string) => {
+            const findLedgerId = (name: string, isPayTo: boolean = false) => {
                 if (!name) return null;
                 const normalized = name.trim().toLowerCase();
-                const found = payToOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
-                if (found) return found.ledger_id || found.id;
-                return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
+                
+                if (isPayTo) {
+                    const found = payToOptions.find(opt => (opt.name || '').trim().toLowerCase() === normalized);
+                    if (found) {
+                        if (found.id && typeof found.id === 'string' && found.id.startsWith('portal-')) return found.id;
+                        return found.ledger_id || found.id;
+                    }
+                }
+                
+                return allLedgers.find(l => (l.name || '').trim().toLowerCase() === normalized)?.id;
             };
 
-            const payFromId = findLedgerId(payFrom);
+            const payFromId = findLedgerId(payFrom, false);
             if (!payFromId) {
                 showError('Please select a "Pay From" account.');
                 return;
