@@ -479,13 +479,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
     // Populate from AI Extraction
     useEffect(() => {
-        if (prefilledData && allLedgers.length > 0) {
+        if (prefilledData) {
             // Helper to find exact ledger name from allLedgers (case-insensitive)
             const findLedgerName = (name: string) => {
                 if (!name) return '';
                 const normalized = name.trim().toLowerCase();
                 const found = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
-                return found ? found.name : '';
+                // Return exact match from ledgers list if found, otherwise return the provided name as fallback
+                return found ? found.name : name.trim();
             };
 
             if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);

@@ -643,6 +643,32 @@ class ApiService {
                 response = await httpClient.get<any>(`/api/vouchers/journal/${id}/`, undefined, options);
                 response.type = 'Journal';
                 fetchedAsDetail = true;
+            } else if (normalizedSource === 'payment' || normalizedSource === 'payment_voucher') {
+                try {
+                    response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                } catch (e) {
+                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                    if (generic && generic.reference_id) {
+                        response = await httpClient.get<any>(`/api/vouchers/payment/${generic.reference_id}/`, undefined, options);
+                    } else {
+                        response = generic;
+                    }
+                }
+                response.type = 'Payment';
+                fetchedAsDetail = true;
+            } else if (normalizedSource === 'receipt' || normalizedSource === 'receipt_voucher') {
+                try {
+                    response = await httpClient.get<any>(`/api/vouchers/receipts/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                } catch (e) {
+                    const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                    if (generic && generic.reference_id) {
+                        response = await httpClient.get<any>(`/api/vouchers/receipts/${generic.reference_id}/`, undefined, options);
+                    } else {
+                        response = generic;
+                    }
+                }
+                response.type = 'Receipt';
+                fetchedAsDetail = true;
             } else if (normalizedSource === 'credit_note_voucher' || normalizedSource === 'credit note' || normalizedSource === 'credit_note') {
                 try {
                     const genericVoucher = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, options);
@@ -669,12 +695,30 @@ class ApiService {
         } catch (e: any) {
             // Fallback for legacy calls where JournalEntry stored Transaction ID instead of generic Voucher ID
             if (e?.response?.status === 404) {
-                if (normalizedSource === 'receipt') {
-                    response = await httpClient.get<any>(`/api/vouchers/receipts/${id}/`, undefined, options);
+                if (normalizedSource === 'receipt' || normalizedSource === 'receipt_voucher') {
+                    try {
+                        response = await httpClient.get<any>(`/api/vouchers/receipts/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                    } catch (e) {
+                        const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                        if (generic && generic.reference_id) {
+                            response = await httpClient.get<any>(`/api/vouchers/receipts/${generic.reference_id}/`, undefined, options);
+                        } else {
+                            response = generic;
+                        }
+                    }
                     response.type = 'Receipt';
                     fetchedAsDetail = true;
-                } else if (normalizedSource === 'payment') {
-                    response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, options);
+                } else if (normalizedSource === 'payment' || normalizedSource === 'payment_voucher') {
+                    try {
+                        response = await httpClient.get<any>(`/api/vouchers/payment/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                    } catch (e) {
+                        const generic = await httpClient.get<any>(`/api/vouchers/${id}/`, undefined, { ...options, skipErrorNotification: true });
+                        if (generic && generic.reference_id) {
+                            response = await httpClient.get<any>(`/api/vouchers/payment/${generic.reference_id}/`, undefined, options);
+                        } else {
+                            response = generic;
+                        }
+                    }
                     response.type = 'Payment';
                     fetchedAsDetail = true;
                 } else if (normalizedSource === 'expense' || normalizedSource === 'expenses' || normalizedSource === 'expense_voucher') {
