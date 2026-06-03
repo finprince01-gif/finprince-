@@ -2,8 +2,18 @@ import logging
 import re
 from typing import List, Dict, Any
 from difflib import SequenceMatcher
+import hashlib
+import json
+import time
 
 logger = logging.getLogger(__name__)
+
+def get_dto_hash(dto: dict) -> str:
+    clean_dto = {k: v for k, v in dto.items() if k not in ["validation_revision", "validation_warnings", "_lineage", "is_canonical_frozen", "status", "visible_in_ui", "requires_manual_review", "_integrity_blocked"]}
+    try:
+        return hashlib.sha256(json.dumps(clean_dto, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+    except Exception:
+        return str(hash(frozenset(str(x) for x in clean_dto.items())))
 
 def normalize_gstin(gstin: Any) -> str:
     """Non-destructive GSTIN normalization (Requirement #1)."""
@@ -110,7 +120,7 @@ class ZohoIntegrityEnforcer:
             return False, "Failed OCR page (DO NOT MERGE)"
         
         # ── NEW HEADER DETECTED RULE ──
-        curr_role = self.classify_page(curr.get("_raw_text", ""), curr.get("items", []), invoice_data=curr)
+        curr_role = self.classify_page(ocr_text, curr.get("items", []), invoice_data=curr)
         if curr_role == "PAGE_ROLE_PRIMARY":
             logger.warning(f"[INVOICE_BOUNDARY_DETECTED] Split: New invoice header detected on page")
             return False, "New header detected (FORCE PRIMARY)"
@@ -174,32 +184,61 @@ class ZohoIntegrityEnforcer:
         
         # Item Validity Check
         has_real_items = False
+        real_item_count = 0
         for itm in items:
             q = self._to_float(itm.get("quantity") or itm.get("qty") or itm.get("Qty"))
             r = self._to_float(itm.get("rate") or itm.get("Item Rate"))
+            # Real inventory rows must have positive quantity and positive rate
             if q > 0 and r > 0:
                 has_real_items = True
-                break
+                real_item_count += 1
+        
+        # First page structural confidence
+        is_first_page = False
+        if invoice_data:
+            page_no = invoice_data.get("_page_no") or invoice_data.get("_physical_page_no")
+            try:
+                if int(page_no) == 1:
+                    is_first_page = True
+            except:
+                pass
+
+        # Check if continuation summary page using forensic_merger's helper
+        is_summary_only = False
+        try:
+            from ocr_pipeline.forensic_merger import get_forensic_merger
+            is_summary_only = get_forensic_merger().is_continuation_summary_page(invoice_data or {})
+        except Exception:
+            pass
+
+        # Primary page structural/content confidence
+        is_primary_confident = False
+        if is_first_page:
+            is_primary_confident = True
+        elif has_header_keywords and has_real_items:
+            is_primary_confident = True
+        elif has_real_items and anchor_count >= 2:
+            is_primary_confident = True
+        elif real_item_count >= 2 and anchor_count >= 1:
+            is_primary_confident = True
         
         # ── CLASSIFICATION LOGIC ──
         role = "PAGE_ROLE_UNKNOWN" # Default: Unknown is NOT continuation
 
         if "continued_to_page" in markers:
             role = "PAGE_ROLE_PRIMARY"
-        elif any(m in ["total_invoice_value", "rounded_off", "authorised_signatory"] for m in markers):
+        elif any(m in ["total_invoice_value", "rounded_off", "authorised_signatory"] for m in markers) or is_summary_only:
             role = "PAGE_ROLE_TOTALS"
         elif any(m in ["tax_summary", "gst_summary"] for m in markers):
             role = "PAGE_ROLE_TAX_SUMMARY"
         elif any(m in markers for m in ["continued", "carry_forward", "page_2", "page_2_of_3", "item_table_continues", "subtotal_carried_forward", "carried_forward", "brought_forward"]):
             role = "PAGE_ROLE_CONTINUATION"
-        elif anchor_count >= 1:
-            # [ROOT-CAUSE FIX] Even if item extraction failed, if we see identity anchors ("Tax Invoice", etc)
-            # it is a primary page, NOT a continuation.
+        elif is_primary_confident:
             role = "PAGE_ROLE_PRIMARY"
         elif has_real_items:
             role = "PAGE_ROLE_CONTINUATION"
             
-        logger.info(f"[PAGE_ROLE_DECISION] anchors={anchor_count} matched={matched_keywords} has_items={has_real_items} role={role}")
+        logger.info(f"[PAGE_ROLE_DECISION] anchors={anchor_count} matched={matched_keywords} has_items={has_real_items} role={role} is_first_page={is_first_page} is_summary_only={is_summary_only}")
         if role == "PAGE_ROLE_PRIMARY":
             logger.info(f"[PRIMARY_SELECTED] anchors={anchor_count}")
         
@@ -218,6 +257,20 @@ class ZohoIntegrityEnforcer:
             return report
 
         for idx, inv in enumerate(final_invoices):
+            # Check validation revision to avoid duplicate validation execution
+            current_hash = get_dto_hash(inv)
+            val_rev = inv.get("validation_revision")
+            if val_rev and isinstance(val_rev, dict) and val_rev.get("hash") == current_hash:
+                logger.info(f"[VALIDATION_SKIPPED_ALREADY_VALIDATED] Skip verify for invoice {inv.get('invoice_no')} hash {current_hash}")
+                cached_failures = val_rev.get("failures", [])
+                if cached_failures:
+                    report["failures"].extend(cached_failures)
+                    report["validation"] = "FAIL"
+                    report["ready_for_zoho"] = False
+                continue
+
+            failures_start_idx = len(report["failures"])
+
             # ── [PHASE 11.9] SEMANTIC VALIDATION ──
             v_name = str(inv.get("vendor_name") or "").strip()
             v_inv_no = str(inv.get("invoice_no") or "").strip()
@@ -232,7 +285,7 @@ class ZohoIntegrityEnforcer:
                 logger.warning(f"[INTEGRITY_WARNING] {err}")
                 report["failures"].append(err)
                 # [PHASE 11.9] Tolerant Mode: We don't fail the whole batch for warnings
-                # [FIX] VOID != FAILED. Treat as degraded visible rows instead of fatal rejection.
+                # [FIX] VOID != FAILED. Treat as degraded visible rows instead of partial extraction, NOT failing batch.
                 if not v_name and not v_inv_no and not v_items:
                      logger.warning(f"[DEGRADED_INVOICE_VISIBLE] idx={idx} Invoice is a total void. Treating as partial extraction, NOT failing batch.")
                      inv["status"] = "partial_extraction"
@@ -251,6 +304,19 @@ class ZohoIntegrityEnforcer:
                 inv["_integrity_blocked"] = True
             else:
                 logger.info(f"[INVOICE_RECONCILIATION_SUCCESS] invoice={v_inv_no}")
+
+            # Capture failures specific to this invoice and save validation revision
+            inv_failures = report["failures"][failures_start_idx:]
+            prev_version = 0
+            if val_rev and isinstance(val_rev, dict):
+                prev_version = val_rev.get("version", 0)
+
+            inv["validation_revision"] = {
+                "hash": current_hash,
+                "version": prev_version + 1,
+                "timestamp": time.time(),
+                "failures": inv_failures
+            }
         
         return report
 

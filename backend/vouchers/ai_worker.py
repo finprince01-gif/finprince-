@@ -169,28 +169,27 @@ class AIWorker(BaseWorker):
                 except Exception as rel_err:
                     logger.error(f"[SLOT_RELEASE_IDEMPOTENCY_FAIL] record={record_id} page={page_idx} error={rel_err}")
 
-                # We MUST push to assembly queue so the barrier state advances
-                from .message_factory import message_factory
-                from core.sqs import queue_service
-                from copy import deepcopy
-
-                assembly_payload = {
-                    "record_id": record_id,
-                    "page_index": page_idx,
-                    "item_id": payload.get('item_id') or task.get('item_id'),
-                    "job_id": job_id,
-                    "result": {"status": "SKIPPED_DUPLICATE", "_db_persisted": True, "is_failed": False}
-                }
-                assembly_msg = message_factory.create_message(
-                    task_type="ASSEMBLY",
-                    tenant_id=tenant_id,
-                    session_id=session_id,
-                    payload=assembly_payload,
-                    correlation_id=correlation_id,
-                    page_number=page_idx
+                from ocr_pipeline.models import InvoicePageResult
+                from vouchers.coordinator import terminalize_page_state
+                existing = InvoicePageResult.objects.filter(record_id=record_id, page_number=page_idx).first()
+                payload_val = existing.canonical_payload if existing else {}
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    self.executor,
+                    lambda: terminalize_page_state(
+                        record_id=record_id,
+                        page_number=page_idx,
+                        session_id=session_id,
+                        is_failed=False,
+                        canonical_payload=payload_val,
+                        worker_id="AIWorkerIdempotencySkip",
+                        queue_source="ai_queue",
+                        tenant_id=tenant_id,
+                        correlation_id=correlation_id,
+                        job_id=job_id,
+                        item_id=payload.get('item_id') or task.get('item_id')
+                    )
                 )
-                logger.info(f"[IDEMPOTENCY_FORWARD] record_id={record_id} msg_id={assembly_msg['id']}")
-                queue_service.push(deepcopy(assembly_msg), queue_type='assembly')
                 return
         except Exception as e:
             logger.error(f"[IDEMPOTENCY_CHECK_FAIL] {e}")
@@ -317,24 +316,29 @@ class AIWorker(BaseWorker):
             if record_id:
                 try:
                     from ocr_pipeline.models import SessionFinalizationState, InvoicePageResult
+                    from vouchers.coordinator import log_forensic_trace
 
                     def _fail_db():
-                        res_obj, created = InvoicePageResult.objects.update_or_create(
-                            record_id=record_id,
-                            page_number=page_idx,
-                            defaults={
-                                'session_id': session_id,
-                                'canonical_payload': {'status': 'OCR_FAILED', 'error': f"UNHANDLED: {str(e)}"},
-                                'is_failed': True,
-                            }
-                        )
-                        if not res_obj.counted_in_barrier:
-                            SessionFinalizationState.objects.filter(id=str(record_id)).update(
-                                ai_completed_pages=models.F('ai_completed_pages') + 1,
-                                updated_at=timezone.now()
+                        log_forensic_trace("unhandled_fail_db_BEFORE", record_id, f"page={page_idx}")
+                        try:
+                            from vouchers.coordinator import terminalize_page_state
+                            terminalize_page_state(
+                                record_id=str(record_id),
+                                page_number=page_idx,
+                                session_id=session_id,
+                                is_failed=True,
+                                canonical_payload={'status': 'OCR_FAILED', 'error': f"UNHANDLED: {str(e)}"},
+                                worker_id="AIWorker",
+                                queue_source="ai_queue",
+                                tenant_id=tenant_id,
+                                correlation_id=correlation_id,
+                                job_id=payload.get('job_id') or task.get('job_id'),
+                                item_id=payload.get('item_id') or task.get('item_id')
                             )
-                            res_obj.counted_in_barrier = True
-                            res_obj.save(update_fields=['counted_in_barrier'])
+                            log_forensic_trace("unhandled_fail_db_AFTER", record_id, f"page={page_idx}")
+                        except Exception as inner_db_err:
+                            logger.critical(f"[FAIL_DB_CONVERGENCE_FAILED] record={record_id} page={page_idx} error={inner_db_err}\ntrace={traceback.format_exc()}")
+                            raise
                             
                         # Note: Slot is released in finally block
                         
@@ -348,31 +352,6 @@ class AIWorker(BaseWorker):
                 except Exception as db_err:
                     logger.critical(f"[DB_BARRIER_FAIL] record={record_id} page={page_idx}: {db_err}")
 
-            # Always forward failure notification to Assembly so barrier doesn't deadlock
-            try:
-                from .message_factory import message_factory
-                from copy import deepcopy
-
-                assembly_payload = {
-                    "record_id": record_id,
-                    "page_index": page_idx,
-                    "item_id": payload.get('item_id') or task.get('item_id'),
-                    "job_id": payload.get('job_id') or task.get('job_id'),
-                    "result": {"_db_persisted": False, "is_failed": True, "error": str(e)}
-                }
-                assembly_msg = message_factory.create_message(
-                    task_type="ASSEMBLY",
-                    tenant_id=tenant_id,
-                    session_id=session_id,
-                    payload=assembly_payload,
-                    correlation_id=correlation_id,
-                    page_number=page_idx
-                )
-                logger.info(f"[CONTEXT_TRACE_ASSEMBLY] job_id={assembly_payload['job_id']} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={assembly_msg['trace_id']}")
-                queue_service.push(deepcopy(assembly_msg), queue_type='assembly')
-                logger.info(f"[DOWNSTREAM_ENQUEUE_SUCCESS] target_queue=assembly msg_id={assembly_msg['id']} is_failed=True")
-            except Exception as q_err:
-                logger.error(f"[DOWNSTREAM_ENQUEUE_FAILED] target_queue=assembly error={q_err}")
             raise
 
     async def _process_result(self, task, result):
@@ -410,6 +389,11 @@ class AIWorker(BaseWorker):
                     if not parsed:
                         raise ValueError("StructuredParseError: parsed output is empty")
                     logger.info(f"[PARSER_VARIABLE_INIT] record={record_id} page={page_idx} stage=process_result")
+                    try:
+                        from ocr_pipeline.extraction import log_forensic_page_dto
+                        log_forensic_page_dto(parsed, session_id, record_id, page_idx, raw_reply)
+                    except Exception as le:
+                        logger.warning(f"[FORENSIC_PAGE_DTO_LOG_ERR] {le}")
                     
                     # [PHASE 5: DTO CONTEXT PROPAGATION]
                     # Ensure canonical context survives the async boundary.
@@ -430,8 +414,19 @@ class AIWorker(BaseWorker):
                         canonical_payload['job_id'] = str(job_id)
                     canonical_payload['upload_session_id'] = str(session_id)
                     canonical_payload['tenant_id'] = str(tenant_id)
+
+                    # Preserve all underscore keys from task payload (e.g. _pdf_ocr_text)
+                    for k, v in payload.items():
+                        if k.startswith("_") and k not in canonical_payload:
+                            canonical_payload[k] = v
+
+                    # Ensure both _pdf_ocr_text and _raw_text are populated with the OCR text
+                    ocr_text_val = canonical_payload.get('_pdf_ocr_text') or canonical_payload.get('_raw_text')
+                    if ocr_text_val:
+                        canonical_payload['_pdf_ocr_text'] = ocr_text_val
+                        canonical_payload['_raw_text'] = ocr_text_val
                     
-                    is_failed = not self._is_dto_valid(canonical_payload)
+                    is_failed = not self._is_dto_valid(canonical_payload, is_final=True)
                     if is_failed:
                         # [FIX] Do NOT emit AI_PAGE_SUCCESS for terminal page failures
                         logger.warning(f"[DEGRADED_PAGE_FAILED] record={record_id} page={page_idx} marked as FAILED for barrier.")
@@ -454,23 +449,28 @@ class AIWorker(BaseWorker):
 
             def _persist():
                 from core.redis_orchestrator import orchestrator
-                with transaction.atomic():
-                    res_obj, created = InvoicePageResult.objects.update_or_create(
-                        record_id=record_id,
+                from vouchers.coordinator import log_forensic_trace, terminalize_page_state
+                
+                log_forensic_trace("persist_db_BEFORE", record_id, f"page={page_idx} is_failed={is_failed}")
+                try:
+                    session_id = task.get('session_id') or task.get('upload_session_id') or 'unknown'
+                    terminalize_page_state(
+                        record_id=str(record_id),
                         page_number=page_idx,
-                        defaults={
-                            'canonical_payload': canonical_payload,
-                            'is_failed': is_failed,
-                            # [FIX] task is a normalized message — session_id is at root, NOT upload_session_id
-                            'session_id': task.get('session_id') or task.get('upload_session_id') or 'unknown'
-                        }
+                        session_id=session_id,
+                        is_failed=is_failed,
+                        canonical_payload=canonical_payload,
+                        worker_id="AIWorker",
+                        queue_source="ai_queue",
+                        tenant_id=tenant_id,
+                        correlation_id=correlation_id,
+                        job_id=job_id,
+                        item_id=item_id
                     )
-                    if not res_obj.counted_in_barrier:
-                        SessionFinalizationState.objects.filter(id=str(record_id)).update(
-                            ai_completed_pages=models.F('ai_completed_pages') + 1
-                        )
-                        res_obj.counted_in_barrier = True
-                        res_obj.save(update_fields=['counted_in_barrier'])
+                    log_forensic_trace("persist_db_AFTER", record_id, f"page={page_idx} is_failed={is_failed} (saved)")
+                except Exception as inner_db_err:
+                    logger.critical(f"[PERSIST_DB_FAILED] record={record_id} page={page_idx} error={inner_db_err}\ntrace={traceback.format_exc()}")
+                    raise
 
                 # [FIX] Do NOT call update_session_status(PROCESSING, 0.0) here.
                 # That overwrites legitimate progress set by assembly_worker back to 0%.
@@ -486,8 +486,10 @@ class AIWorker(BaseWorker):
                         # AI stage spans 20% - 70% of total progress
                         pct = 20.0 + (ai_done / expected) * 50.0
                         pct = min(pct, 70.0)  # never exceed 70% until assembly confirms
-                        logger.info(f"[AI_PAGE_PROGRESS] record={record_id} page={page_idx} ai_done={ai_done}/{expected} progress={pct:.1f}%")
+                        
+                        log_forensic_trace("redis_progress_update_BEFORE", record_id, f"progress={pct:.1f}%")
                         orchestrator.update_session_status(str(record_id), "PROCESSING", progress=pct)
+                        log_forensic_trace("redis_progress_update_AFTER", record_id, f"progress={pct:.1f}%")
                 except Exception as _prog_err:
                     logger.warning(f"[AI_PROGRESS_HINT_FAIL] {_prog_err}")
 
@@ -501,52 +503,52 @@ class AIWorker(BaseWorker):
 
             await self._update_task_status(task, is_failed)
 
-        # Push to Assembly — ALWAYS forward so assembly barrier can complete
-        from .message_factory import message_factory
-        from copy import deepcopy
-
-        assembly_payload = {
-            "record_id": record_id,
-            "page_index": page_idx,
-            "item_id": item_id,
-            "job_id": job_id,
-            "result": {"_db_persisted": True, "is_failed": is_failed}
-        }
-        assembly_msg = message_factory.create_message(
-            task_type="ASSEMBLY",
-            tenant_id=tenant_id,
-            session_id=session_id,
-            payload=assembly_payload,
-            correlation_id=correlation_id,
-            page_number=page_idx
-        )
-        assembly_msg_copy = deepcopy(assembly_msg)
-
-        logger.info(f"[ASSEMBLY_MESSAGE_EMITTED] record={record_id} page={page_idx} correlation_id={correlation_id} worker_role=AI is_failed={is_failed}")
-        logger.info(f"[CONTEXT_TRACE_ASSEMBLY] job_id={job_id} record_id={record_id} session_id={session_id} tenant_id={tenant_id} trace_id={assembly_msg_copy['trace_id']}")
-        try:
-            queue_service.push(assembly_msg_copy, queue_type='assembly')
-            logger.info(f"[DOWNSTREAM_ENQUEUE_SUCCESS] target_queue=assembly msg_id={assembly_msg_copy['id']}")
-        except Exception as e:
-            logger.error(f"[DOWNSTREAM_ENQUEUE_FAILED] target_queue=assembly error={e}")
-            raise
-        logger.info(f"[AI_WORKER_DONE] record={record_id} page={page_idx} -> ASSEMBLY_QUEUED")
+        pass
 
 
-    def _is_dto_valid(self, payload):
+    def _is_dto_valid(self, payload, is_final=False):
         record_id = payload.get('record_id') or "unknown"
         logger.info(f"[DTO_PRE_VALIDATION] record={record_id} keys={list(payload.keys())}")
-        required = ['vendor_name', 'invoice_no', 'items']
+        required = ['vendor_name', 'invoice_no']
         missing = [f for f in required if not payload.get(f)]
+        if 'items' not in payload or payload.get('items') is None:
+            missing.append('items')
         if missing:
             logger.error(f"[DTO_VALIDATION_ERROR] record={record_id} missing_fields={missing} "
                          f"extracted_sample={json.dumps({k: payload.get(k) for k in payload.keys() if not k.startswith('_')}, default=str)[:500]}")
-            has_identity = any(payload.get(k) for k in ['vendor_name', 'invoice_no', 'gstin'])
-            has_items = len(payload.get('items', [])) > 0
-            if not has_identity and not has_items:
-                logger.critical(f"[DTO_TERMINAL_VOID] record={record_id} No identity and no items. Rejecting.")
-                return False
-            logger.warning(f"[DTO_PARTIAL_VALID] record={record_id} Preserving partial extraction despite missing {missing}")
+            if is_final:
+                logger.critical(f"[DTO_TERMINAL_VOID] record={record_id} Missing required fields {missing}. Rejecting DTO_PARTIAL_VALID.")
+            else:
+                logger.warning(f"[PAGE_STATUS] record={record_id} status=RETRYABLE_INVALID reason=missing_fields_{missing}")
+            return False
+
+        # Semantic DTO validation: allow continuation / summary / footer pages for staging, log as allowed.
+        items = payload.get('items') or []
+        generic_keywords = [
+            "services", "total", "subtotal", "sub-total", "summary",
+            "carried forward", "brought forward",
+            "rounded off", "round off", "rounding", "adjustment",
+            "output cgst", "output sgst", "output igst",
+            "input cgst", "input sgst", "input igst",
+            "cgst @", "sgst @", "igst @",
+            "tax summary", "amount chargeable", "declaration",
+            "less round", "add round", "bank charges", "net amount",
+            "e & o.e", "balance",
+        ]
+        
+        has_summary_rows = False
+        has_real_items = False
+        for itm in items:
+            desc = str(itm.get("description") or itm.get("item_name") or "").lower()
+            is_summary = any(kw in desc for kw in generic_keywords)
+            if is_summary:
+                has_summary_rows = True
+            else:
+                has_real_items = True
+
+        if not has_real_items and has_summary_rows:
+            logger.info(f"[CONTINUATION_PAGE_ALLOWED] page={record_id} is a summary-only/footer page, allowed to proceed to assembly staging.")
+
         logger.info(f"[DTO_POST_VALIDATION] record={record_id} valid=True")
         return True
 

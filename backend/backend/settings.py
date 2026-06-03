@@ -442,6 +442,11 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'vouchers': {
+            'handlers': ['console', 'file_debug'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
     },
 }
 

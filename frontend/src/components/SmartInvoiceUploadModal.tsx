@@ -25,7 +25,7 @@ import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherS
 
 // VendorStatus: Frontend display states + backend canonical values (EXISTS/NEW)
 type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR' | 'EXISTS' | 'NEW' | 'MATCHED' | 'CREATE_VENDOR';
-type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE' | 'DUPLICATE_IN_BATCH' | 'SUCCESS' | 'FAILED' | 'NEED_VENDOR' | 'INCOMPLETE' | 'EXTRACTING' | 'SCANNING' | 'PROCESSING';
+type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE' | 'DUPLICATE_IN_BATCH' | 'SUCCESS' | 'FAILED' | 'NEED_VENDOR' | 'INCOMPLETE' | 'EXTRACTING' | 'SCANNING' | 'PROCESSING' | 'NEED_TO_SAVE' | 'PENDING_PURCHASE';
 
 interface ScanResult {
     id: string;
@@ -2010,10 +2010,10 @@ const handleRemove = async (fileHash: string) => {
         }
     };
 
-    const canFinalize = (readyToFinalizeCount > 0 || needsVendorCount > 0 || scanResults.some(r => 
+    const canFinalize = scanResults.some(r => 
         r.validationStatus !== 'VOUCHER_CREATED' &&
         r.validationStatus !== 'DUPLICATE'
-    )) && !finalizing;
+    ) && !finalizing;
 
     const handleFinalize = async () => {
         if (!canFinalize) {
@@ -2024,17 +2024,29 @@ const handleRemove = async (fileHash: string) => {
         // Count READY rows from ALL scan results (not just the visible filtered table).
         // This fixes the bug where being on 'Pending' tab hid READY rows, causing a false "0 ready" error.
         const allReadyRows = scanResults.filter(r =>
-            (r.vendor_id || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR'].includes(r.validationStatus)) &&
+            (r.vendor_id || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR', 'NEED_TO_SAVE'].includes(r.validationStatus)) &&
             r.validationStatus !== 'VOUCHER_CREATED' &&
             r.validationStatus !== 'DUPLICATE' &&
             r.item_status === 'ALREADY EXIST'
         );
         const allPendingRows = scanResults.filter(r =>
-            (!r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'NEED_VENDOR'].includes(r.validationStatus)) ||
+            (!r.vendor_id && !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'NEED_VENDOR', 'NEED_TO_SAVE'].includes(r.validationStatus)) ||
             r.item_status === 'CREATE ITEM'
         );
-        const validCount = readyToFinalizeCount > 0 ? readyToFinalizeCount : allReadyRows.length;
-        const pendingCount = needsVendorCount > 0 ? needsVendorCount : allPendingRows.length;
+        const validCount = allReadyRows.length;
+        const pendingCount = allPendingRows.length;
+
+        console.log('[FINALIZE_CONFIRMATION_CHECK] Diagnosing finalize session scoping:', {
+            uploadSessionId,
+            useAllUnresolved: useAllUnresolvedRef.current,
+            scanResultsCount: scanResults.length,
+            allReadyRowsCount: allReadyRows.length,
+            allPendingRowsCount: allPendingRows.length,
+            readyToFinalizeCountState: readyToFinalizeCount,
+            needsVendorCountState: needsVendorCount,
+            calculatedValidCount: validCount,
+            calculatedPendingCount: pendingCount
+        });
 
         if (validCount === 0 && pendingCount === 0) {
             showError(`No invoices are ready to process.`);
@@ -2080,6 +2092,7 @@ const handleRemove = async (fileHash: string) => {
                 setWorkflowState("REVIEW");
                 // Fetch canonical backend state
                 fetchStagedInvoices(useAllUnresolvedRef.current ? undefined : uploadSessionId);
+                fetchResumeCounts();
             } else {
                 console.log('[SESSION_TEARDOWN_STARTED] Cleaning up live upload state');
                 // TEARDOWN ORCHESTRATION STATE BEFORE CLEARING upload_session_id
@@ -2106,6 +2119,7 @@ const handleRemove = async (fileHash: string) => {
                 console.log('[LIVE_UPLOAD_RESET] Transitioning to clean upload state');
                 setStep('upload');
                 setWorkflowState("LIVE_UPLOAD");
+                fetchResumeCounts();
             }
 
             onFinalized?.(res);
@@ -2220,7 +2234,7 @@ const handleRemove = async (fileHash: string) => {
     const conflictCount = mergedResults.filter(r => r.validationStatus === 'GSTIN_CONFLICT').length;
     const resolvedCount = mergedResults.filter(r => r.validationStatus === 'RESOLVED').length;
     const readyCount = mergedResults.filter(r => 
-        ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus) && 
+        ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE'].includes(r.validationStatus) && 
         r.item_status === 'ALREADY EXIST'
     ).length;
     const duplicatesCount = mergedResults.filter(r => ['DUPLICATE', 'DUPLICATE_IN_BATCH'].includes(r.validationStatus)).length;
@@ -2621,7 +2635,7 @@ const handleRemove = async (fileHash: string) => {
                                         {(groupPages ? mergedResults : scanResults)
                                             .filter(r => {
                                                 // If we are on the 'Ready' tab, only show Ready/Found/Success
-                                                if (filterStatus === 'ready') return ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus);
+                                                if (filterStatus === 'ready') return ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE'].includes(r.validationStatus);
 
                                                 // If we are on the 'Pending' tab:
                                                 if (filterStatus === 'pending') {
@@ -2789,7 +2803,7 @@ const handleRemove = async (fileHash: string) => {
                                                                 <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
                                                             ) : row.validationStatus === "DUPLICATE" ? (
                                                                 <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
-                                                            ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR'].includes(row.validationStatus)) ? (
+                                                            ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR', 'NEED_TO_SAVE'].includes(row.validationStatus)) ? (
                                                                 <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
                                                             ) : (
                                                                 <span className="bg-gray-100 text-gray-400 border border-gray-200 px-2 py-1 rounded">Wait</span>

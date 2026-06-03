@@ -577,25 +577,10 @@ class RedisOrchestrator:
             db_failed = sum(s.failed_pages for s in states)
             logger.info(f"[BARRIER_STATE_READ] session={session_id} source=DB expected={db_expected} completed={db_completed} failed={db_failed}")
 
-            redis_completed = 0
-            redis_failed = 0
-            for rid in record_ids:
-                try:
-                    s_key = f"assembly:{rid}:page_states"
-                    page_states = self.redis.hgetall(s_key) or {}
-                    rc = sum(1 for s in page_states.values() if s == "SUCCESS")
-                    rf = sum(1 for s in page_states.values() if s == "FAILED")
-                    redis_completed += rc
-                    redis_failed += rf
-                    logger.info(f"[REDIS_KEY_READ] record={rid} redis_completed={rc} redis_failed={rf}")
-                except Exception as e:
-                    logger.warning(f"[REDIS_KEY_READ_FAIL] record={rid} error={e}")
-
-            # Use whichever is higher (monotonic guarantee)
-            completed = max(db_completed, redis_completed)
-            failed = max(db_failed, redis_failed)
+            completed = db_completed
+            failed = db_failed
             expected = db_expected
-            logger.info(f"[BARRIER_STATE_AGGREGATED] session={session_id} source=REDIS_FIRST expected={expected} completed={completed} failed={failed}")
+            logger.info(f"[BARRIER_STATE_AGGREGATED] session={session_id} source=DB_ONLY_CANONICAL_CONVERGENCE expected={expected} completed={completed} failed={failed}")
             
             # [EMPTY_SESSION_CONVERGENCE_BRANCH]
             # If there are no records, or expected/completed/failed are all 0, it's an empty session
@@ -698,20 +683,11 @@ class RedisOrchestrator:
             # Use terminal_count (completed + failed + recovered + partial + continuation) 
             # Or simplified: if total_ready >= expected from get_barrier_state.
             # We already computed expected. Let's get total_ready across all records.
-            total_redis_ready = 0
-            for rid in record_ids:
-                try:
-                    s_key = f"assembly:{rid}:page_states"
-                    num_pages = self.redis.hlen(s_key) or 0
-                    total_redis_ready += num_pages
-                except:
-                    pass
-
-            terminal_count = max(db_completed + db_failed, total_redis_ready)
+            terminal_count = db_completed + db_failed
 
             barrier_complete = (
                 (terminal_count >= expected) and expected > 0
-            ) or redis_all_terminal or redis_hydration_ready or hard_ingestion_failed
+            ) or hard_ingestion_failed
 
             snapshot_count = FinalizedSnapshot.objects.filter(session_id=session_id).count()
             # [FIX] Read snapshot_complete from DB state as well, to allow finalize_worker

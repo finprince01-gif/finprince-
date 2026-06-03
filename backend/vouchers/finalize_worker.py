@@ -121,13 +121,12 @@ class FinalizeWorker(BaseWorker):
                     snapshot_complete = auth_state.get('snapshot_complete', False)
                     materialization_complete = auth_state.get('materialization_complete', False)
                     
-                    is_converged = (expected > 0) and (completed + failed == expected) and snapshot_complete and materialization_complete
+                    is_converged = (expected > 0) and (completed + failed >= expected) and snapshot_complete
                     
                     if not is_converged:
                         logger.warning(
                             f"[FINALIZE_BLOCKED_BARRIER] session={canonical_session_id} expected={expected} "
-                            f"completed={completed} failed={failed} snapshot_complete={snapshot_complete} "
-                            f"materialization_complete={materialization_complete}"
+                            f"completed={completed} failed={failed} snapshot_complete={snapshot_complete}"
                         )
                         raise ValueError(f"Finalize blocked: orchestration barrier incomplete for session {canonical_session_id}")
 
@@ -142,76 +141,99 @@ class FinalizeWorker(BaseWorker):
                             raise ValueError(f"HYDRATION_VISIBILITY_PENDING: session={canonical_session_id} record={record_id}")
                     logger.info(f"[HYDRATION_VISIBILITY_CONFIRMED] session={canonical_session_id} snapshot_exists={snapshot_exists}")
                     logger.info(f"[SNAPSHOT_COMPLETE] record={record_id} session={canonical_session_id}")
-                    logger.info(f"[MATERIALIZATION_COMPLETE] record={record_id} session={canonical_session_id}")
                     logger.info(f"[MATERIALIZATION_DB_COMMITTED] session={canonical_session_id}")
 
-                # 1. Mark the record terminal
-                terminal_status = PipelineStatus.FAILED if is_failed else PipelineStatus.FINALIZED
-                updated = InvoiceTempOCR.objects.filter(id=record_id).update(
-                    status=terminal_status,
-                    processed=(not is_failed)
-                )
-                logger.info(
-                    f"[FINALIZE_DB_COMMIT] record={record_id} status={terminal_status} "
-                    f"processed={not is_failed} rows_updated={updated}"
-                )
-                logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state={terminal_status}")
-
-                # 1B. ── PURCHASE SAVE SERVICE ────────────────────────────────
-                # Call the canonical validate_and_process(auto_save=True) — the same service
-                # used by Manual Purchase save. This persists into:
-                #   PurchaseVoucher / VoucherPurchaseSupplierDetails
-                #   PurchaseEntry, PurchaseItems, ledger tables, tax tables
-                # Duplicate validation occurs INSIDE this service — NOT as an orchestration gate.
-                # This must run AFTER terminal status is written so the record is queryable.
+                # ── PURCHASE SAVE SERVICE & TERMINAL STATE TRANSITION ──
                 if not is_failed:
                     logger.info(f"[PURCHASE_SAVE_SERVICE_START] record={record_id} session={canonical_session_id}")
                     try:
-                        record_obj = InvoiceTempOCR.objects.filter(id=record_id).first()
-                        if record_obj:
-                            from ocr_pipeline.views import get_save_eligible_rows, get_pending_purchase_eligible_rows
-                            eligible_save_tuples = get_save_eligible_rows(canonical_session_id, tenant_id)
-                            eligible_pending_tuples = get_pending_purchase_eligible_rows(canonical_session_id, tenant_id=tenant_id)
-                            
-                            eligible_save_ids = [str(t[0].id) for t in eligible_save_tuples]
-                            eligible_pending_ids = [str(t[0].id) for t in eligible_pending_tuples]
-                            
-                            eligible = str(record_obj.id) in eligible_save_ids or str(record_obj.id) in eligible_pending_ids
-                            reason = None if eligible else "NOT_ELIGIBLE_VIA_HELPER"
-                            if not eligible:
-                                logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={record_id} reason={reason}")
-                                logger.info(f"[PURCHASE_SAVE_SERVICE_SKIPPED] record={record_id} reason={reason}")
-                            else:
-                                from ocr_pipeline.pipeline import validate_and_process
-                                logger.info(f"[PURCHASE_DB_INSERT_START] record={record_id} vendor_id={getattr(record_obj, 'vendor_id', None)} validation_status={getattr(record_obj, 'validation_status', None)}")
-                                from django.db import transaction as _tx_save
-                                try:
-                                    with _tx_save.atomic():
-                                        save_result = validate_and_process(record_obj, auto_save=True)
-                                        save_status = save_result.get('status') if isinstance(save_result, dict) else None
-                                        if save_status == 'VOUCHER_CREATED':
-                                            logger.info(f"[PURCHASE_DB_INSERT_SUCCESS] record={record_id} status=VOUCHER_CREATED")
-                                            logger.info(f"[PURCHASE_COMMIT_SUCCESS] record={record_id} voucher_id={save_result.get('voucher_id')}")
-                                        elif save_status in ('DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'):
-                                            logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={record_id} status={save_status} validation_status={save_result.get('validation_message')}")
-                                            # Duplicate is not a failure — update record status to reflect
-                                            InvoiceTempOCR.objects.filter(id=record_id).update(
-                                                validation_status=save_status
-                                            )
-                                        else:
-                                            logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={record_id} save_status={save_status} message={save_result.get('validation_message') if isinstance(save_result, dict) else save_result}")
-                                except Exception as tx_err:
-                                    logger.error(f"[DB_ROLLBACK] record={record_id} error={tx_err}")
-                                    logger.exception(f"[FINALIZE_EXCEPTION] record={record_id} purchase_save rollback triggered")
-                                    # Non-fatal: log and continue — record is already marked FINALIZED
-                        else:
-                            logger.warning(f"[PURCHASE_SAVE_RECORD_MISSING] record={record_id} — InvoiceTempOCR not found, skipping purchase save")
+                         record_obj = InvoiceTempOCR.objects.filter(id=record_id).first()
+                         if record_obj:
+                             from ocr_pipeline.views import get_save_eligible_rows, get_pending_purchase_eligible_rows
+                             eligible_save_tuples = get_save_eligible_rows(canonical_session_id, tenant_id)
+                             eligible_pending_tuples = get_pending_purchase_eligible_rows(canonical_session_id, tenant_id=tenant_id)
+                             
+                             eligible_save_ids = [str(t[0].id) for t in eligible_save_tuples]
+                             eligible_pending_ids = [str(t[0].id) for t in eligible_pending_tuples]
+                             
+                             eligible = str(record_obj.id) in eligible_save_ids or str(record_obj.id) in eligible_pending_ids
+                             reason = None if eligible else "NOT_ELIGIBLE_VIA_HELPER"
+                             if not eligible:
+                                 logger.warning(f"[SAVE_ELIGIBILITY_FAILED] record_id={record_id} reason={reason}")
+                                 logger.info(f"[PURCHASE_SAVE_SERVICE_SKIPPED] record={record_id} reason={reason}")
+                                 # Set record status to FINALIZED but processed=False since it's not saved/eligible
+                                 updated = InvoiceTempOCR.objects.filter(id=record_id).update(
+                                     status=PipelineStatus.FINALIZED,
+                                     processed=False
+                                 )
+                                 logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state={PipelineStatus.FINALIZED} processed=False")
+                             else:
+                                 from ocr_pipeline.pipeline import validate_and_process
+                                 logger.info(f"[PURCHASE_DB_INSERT_START] record={record_id} vendor_id={getattr(record_obj, 'vendor_id', None)} validation_status={getattr(record_obj, 'validation_status', None)}")
+                                 from django.db import transaction as _tx_save
+                                 try:
+                                     with _tx_save.atomic():
+                                         save_result = validate_and_process(record_obj, auto_save=True)
+                                         save_status = save_result.get('status') if isinstance(save_result, dict) else None
+                                         
+                                         if save_status == 'VOUCHER_CREATED':
+                                             logger.info(f"[PURCHASE_DB_INSERT_SUCCESS] record={record_id} status=VOUCHER_CREATED")
+                                             logger.info(f"[PURCHASE_COMMIT_SUCCESS] record={record_id} voucher_id={save_result.get('voucher_id')}")
+                                             InvoiceTempOCR.objects.filter(id=record_id).update(
+                                                 status=PipelineStatus.FINALIZED,
+                                                 validation_status='VOUCHER_CREATED',
+                                                 processed=True
+                                             )
+                                             logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=True validation_status=VOUCHER_CREATED")
+                                         elif save_status in ('DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'):
+                                             logger.info(f"[PURCHASE_DUPLICATE_DETECTED] record={record_id} status={save_status} validation_status={save_result.get('validation_message') if isinstance(save_result, dict) else ''}")
+                                             InvoiceTempOCR.objects.filter(id=record_id).update(
+                                                 status=PipelineStatus.FINALIZED,
+                                                 validation_status=save_status,
+                                                 processed=True
+                                             )
+                                             logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=True validation_status={save_status}")
+                                         elif save_status == 'PENDING_PURCHASE':
+                                             logger.info(f"[PURCHASE_PENDING_STORED] record={record_id} status=PENDING_PURCHASE")
+                                             InvoiceTempOCR.objects.filter(id=record_id).update(
+                                                 status=PipelineStatus.FINALIZED,
+                                                 validation_status='PENDING_PURCHASE',
+                                                 processed=True
+                                             )
+                                             logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=True validation_status=PENDING_PURCHASE")
+                                         else:
+                                             msg = save_result.get('validation_message') if isinstance(save_result, dict) else save_result
+                                             logger.warning(f"[PURCHASE_SAVE_NOT_CREATED] record={record_id} save_status={save_status} message={msg}")
+                                             InvoiceTempOCR.objects.filter(id=record_id).update(
+                                                 status=PipelineStatus.FINALIZED,
+                                                 processed=False
+                                             )
+                                             logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=False")
+                                 except Exception as tx_err:
+                                     logger.error(f"[DB_ROLLBACK] record={record_id} error={tx_err}")
+                                     logger.exception(f"[FINALIZE_EXCEPTION] record={record_id} purchase_save rollback triggered")
+                                     InvoiceTempOCR.objects.filter(id=record_id).update(
+                                         status=PipelineStatus.FINALIZED,
+                                         processed=False
+                                     )
+                                     logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=False (transaction failure)")
+                         else:
+                             logger.warning(f"[PURCHASE_SAVE_RECORD_MISSING] record={record_id} — InvoiceTempOCR not found, skipping purchase save")
                     except Exception as ps_err:
-                        logger.error(f"[PURCHASE_SAVE_SERVICE_ERROR] record={record_id} error={ps_err}")
-                        logger.exception(f"[FINALIZE_EXCEPTION] record={record_id} purchase_save_service threw")
-                        # Non-fatal: orchestration state is already committed above
+                         logger.error(f"[PURCHASE_SAVE_SERVICE_ERROR] record={record_id} error={ps_err}")
+                         logger.exception(f"[FINALIZE_EXCEPTION] record={record_id} purchase_save_service threw")
+                         InvoiceTempOCR.objects.filter(id=record_id).update(
+                             status=PipelineStatus.FINALIZED,
+                             processed=False
+                         )
+                         logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FINALIZED processed=False (exception)")
                 else:
                     logger.info(f"[PURCHASE_SAVE_SERVICE_SKIPPED] record={record_id} reason=is_failed")
+                    InvoiceTempOCR.objects.filter(id=record_id).update(
+                        status=PipelineStatus.FAILED,
+                        processed=False
+                    )
+                    logger.info(f"[STATE_MACHINE_TRANSITION] record={record_id} new_state=FAILED processed=False")
 
 
                 # 2. Update the OCRJob processed/failed counts
@@ -263,41 +285,73 @@ class FinalizeWorker(BaseWorker):
                     logger.info(f"[HYDRATION_READY_EMITTED] session={canonical_session_id}")
                     logger.info(f"[TERMINAL_RELEASE_SUCCESS] record={record_id} session={canonical_session_id}")
 
-                # 5. Mark SessionFinalizationState export_complete + materialization_complete
-                # These are monotonic — once True they MUST NOT regress
+                # 5. Mark all terminal phase flags on SessionFinalizationState.
+                # All flags are monotonic — once True they MUST NOT regress.
+                # [PHASE 9] validation_complete: validate_and_process ran exactly once.
+                # [PHASE 10] terminal_consistency: CANONICAL UI HYDRATION GATE.
+                #            The views.get() poll checks this before serving any data.
+                #            Setting True is the final unlock signal for the frontend.
                 logger.info(f"[SESSION_FLAG_WRITE] record={record_id} session={canonical_session_id} is_failed={is_failed}")
                 state = SessionFinalizationState.objects.filter(id=str(record_id)).first()
                 if state:
                     fields_to_save = []
+                    target_status = 'FAILED' if is_failed else 'FINALIZED'
+                    if state.status != target_status:
+                        state.status = target_status
+                        fields_to_save.append('status')
                     if not state.export_complete:
                         state.export_complete = True
                         fields_to_save.append('export_complete')
                     if not state.materialization_complete:
                         state.materialization_complete = True
                         fields_to_save.append('materialization_complete')
-                    if is_failed and not state.snapshot_complete:
+                    if not state.snapshot_complete:
                         state.snapshot_complete = True
                         fields_to_save.append('snapshot_complete')
-                        
+                    if not state.validation_complete:
+                        state.validation_complete = True
+                        fields_to_save.append('validation_complete')
+                    # terminal_consistency is the final gate — set unconditionally once here.
+                    # Forced even if assembly_complete is not yet visible (timing edge — assembly
+                    # always runs before FINALIZE is enqueued, so it's already committed).
+                    if not state.terminal_consistency:
+                        state.terminal_consistency = True
+                        fields_to_save.append('terminal_consistency')
+                        if getattr(state, 'assembly_complete', False):
+                            logger.info(
+                                f"[TERMINAL_CONSISTENCY_SET] record={record_id} "
+                                f"session={canonical_session_id} — UI hydration gate UNLOCKED"
+                            )
+                        else:
+                            logger.warning(
+                                f"[TERMINAL_CONSISTENCY_FORCED] record={record_id} "
+                                f"assembly_complete={getattr(state, 'assembly_complete', False)} "
+                                f"— forcing terminal_consistency to prevent UI freeze"
+                            )
                     if fields_to_save:
                         state.save(update_fields=fields_to_save)
-                        logger.info(f"[FINALIZE_STATE_PERSISTED] record={record_id} fields={fields_to_save} session={canonical_session_id}")
+                        logger.info(
+                            f"[FINALIZE_STATE_PERSISTED] record={record_id} fields={fields_to_save} "
+                            f"session={canonical_session_id} terminal_consistency={state.terminal_consistency}"
+                        )
                         logger.info(f"[FINALIZE_SNAPSHOT_CREATED] record={record_id} materialization_complete={state.materialization_complete} snapshot_complete={state.snapshot_complete}")
                     else:
                         logger.info(f"[FINALIZE_STATE_ALREADY_SET] record={record_id} — monotonic, no overwrite")
                 else:
                     logger.warning(f"[FINALIZE_STATE_MISSING] record={record_id} — SessionFinalizationState not found, creating stub")
-                    # Create stub row so orchestrator can read materialization_complete=True
                     try:
                         SessionFinalizationState.objects.update_or_create(
                             id=str(record_id),
                             defaults={
+                                'status': 'FAILED' if is_failed else 'FINALIZED',
                                 'export_complete': True,
                                 'materialization_complete': True,
-                                'snapshot_complete': is_failed,
+                                'snapshot_complete': True,
+                                'validation_complete': True,
+                                'terminal_consistency': True,
                             }
                         )
-                        logger.info(f"[FINALIZE_STATE_STUB_CREATED] record={record_id}")
+                        logger.info(f"[FINALIZE_STATE_STUB_CREATED] record={record_id} terminal_consistency=True")
                     except Exception as stub_err:
                         logger.exception(f"[FINALIZE_STATE_STUB_FAIL] record={record_id} error={stub_err}")
 

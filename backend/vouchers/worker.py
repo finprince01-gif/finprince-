@@ -255,73 +255,11 @@ def update_job_progress(job_id):
         logger.error(f"[TELEMETRY_ERROR] Job {job_id}: {e}")
 
 def check_session_completion(record_id, total_pages, page_idx, item_id=None):
-    """Barrier to trigger document assembly only when all pages reach a terminal state."""
-    try:
-        from django.utils import timezone
-        record_obj = InvoiceTempOCR.objects.filter(id=record_id).only('upload_session_id', 'file_hash').first()
-        if not record_obj: return
-        
-        session_id = record_obj.upload_session_id
-        finalized_key = f"finalized_pages_set:{session_id}_{record_id}"
-        terminal_key = f"terminal_pages_set:{session_id}_{record_id}"
-        
-        done_count = redis_client.get_client().scard(finalized_key)
-        terminal_count = redis_client.get_client().scard(terminal_key)
-
-        logger.info(f"[BARRIER_CHECK] record={record_id} terminal={terminal_count}/{total_pages} finalized={done_count}/{total_pages}")
-
-        if terminal_count < total_pages:
-            return  # Barrier not reached
-
-        # Assembly Singleton Lock
-        assembly_lock = f"lock:assembly:{record_id}"
-        if not redis_client.get_client().set(assembly_lock, "1", nx=True, ex=300):
-            return
-
-        try:
-            # Check durability: do we have all pages in DB or Redis?
-            present_in_db = InvoicePageResult.objects.filter(record_id=record_id).count()
-            if present_in_db < done_count:
-                logger.warning(f"[ASSEMBLY_DEFERRED] DB pages {present_in_db} < finalized {done_count}")
-                return
-
-            logger.info(f"[ASSEMBLY_START] record={record_id} session={session_id}")
-            res = assemble_multi_page_record(record_obj)
-            
-            final_status = JobStatus.COMPLETED if res.get('status') != 'ERROR' else JobStatus.FAILED
-            
-            # [BARRIER_FIX] Update Redis Orchestrator to ensure terminal status is visible to frontend polling
-            try:
-                from core.redis_orchestrator import orchestrator
-                final_redis_status = "HYDRATION_READY" if final_status == JobStatus.COMPLETED else "FAILED"
-                orchestrator.update_session_status(
-                    str(record_id), final_redis_status, progress=100.0,
-                    extra_data={"hydration_ready": (final_status == JobStatus.COMPLETED)}
-                )
-                if session_id and session_id not in ('unknown', 'system'):
-                    orchestrator.update_session_status(
-                        str(session_id), final_redis_status, progress=100.0,
-                        extra_data={"hydration_ready": (final_status == JobStatus.COMPLETED)}
-                    )
-                    logger.info(f"[SESSION_TERMINAL_STATUS] session={session_id} status={final_redis_status}")
-            except Exception as e:
-                logger.error(f"[BARRIER_ORCHESTRATOR_ERR] {e}")
-
-            if item_id:
-                InvoiceProcessingItem.objects.filter(id=item_id).update(status=final_status)
-                if final_status in [JobStatus.COMPLETED, JobStatus.FAILED]:
-                    item = InvoiceProcessingItem.objects.filter(id=item_id).first()
-                    if item:
-                        update_job_progress(item.job_id)
-                        logger.info(f"[SESSION_COMPLETED] job={item.job_id} status={final_status}")
-                logger.info(f"[PAGE_LIFECYCLE] record={record_id} STAGE='ASSEMBLY_COMPLETE' status={final_status}")
+    """[LEGACY] Deactivated to prevent redundant legacy assembly execution paths."""
+    logger.info(f"[LEGACY_ASSEMBLY_BYPASS] check_session_completion called for record={record_id} page={page_idx} - skipping execution")
+    return
 
 
-        finally:
-            redis_client.get_client().delete(assembly_lock)
-
-    except Exception as e:
-        logger.error(f"[BARRIER_CRASH] {e}")
 
 class IngestionWorker(BaseWorker):
     def __init__(self): super().__init__("ingestion_queue")

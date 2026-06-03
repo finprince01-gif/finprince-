@@ -428,6 +428,44 @@ class SessionFinalizationState(models.Model):
     materialization_complete = models.BooleanField(default=False)
     snapshot_complete = models.BooleanField(default=False)
 
+    # [MIGRATION 0023] Phase convergence flags
+    assembly_complete = models.BooleanField(default=False)
+    continuation_merge_complete = models.BooleanField(default=False)
+    hydration_ready = models.BooleanField(default=False)
+    terminal_consistency = models.BooleanField(default=False)
+    validation_complete = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        """
+        IMMUTABILITY ENFORCEMENT: Once SessionFinalizationState reaches terminal status,
+        block any subsequent attempts to save or modify.
+        """
+        if self.pk is not None:
+            try:
+                db_state = SessionFinalizationState.objects.filter(pk=self.pk).values(
+                    'status', 'snapshot_created', 'export_complete', 'materialization_complete', 'snapshot_complete'
+                ).first()
+                if db_state:
+                    db_status = db_state.get('status')
+                    db_export = db_state.get('export_complete')
+                    db_materialize = db_state.get('materialization_complete')
+                    db_snapshot = db_state.get('snapshot_complete')
+                    db_snapshot_created = db_state.get('snapshot_created')
+                    
+                    terminal_statuses = {'FINALIZED', 'FAILED', 'COMPLETED'}
+                    is_final = (
+                        db_status in terminal_statuses
+                        or (db_export and db_materialize and db_snapshot)
+                    )
+                    if is_final:
+                        raise RuntimeError(f"Post-finalization mutation blocked on SessionFinalizationState {self.pk}")
+            except Exception as e:
+                if isinstance(e, RuntimeError):
+                    raise
+                import logging
+                logging.getLogger(__name__).warning(f"[SESSION_STATE_SAVE_GUARD_FAILED] {e}")
+        super().save(*args, **kwargs)
+
     class Meta:
         db_table = 'session_finalization_states'
 
@@ -512,9 +550,66 @@ class InvoiceTempOCR(models.Model):
         This is the last-line-of-defense guard regardless of which code path runs.
         """
         import logging
+        import inspect
+        import json
+        from django.utils import timezone
         _log = logging.getLogger(__name__)
 
+        # Auto-update validation_revision in extracted_data before save
+        if self.extracted_data is not None:
+            if isinstance(self.extracted_data, dict):
+                try:
+                    from ocr_pipeline.integrity_enforcer import get_dto_hash
+                    current_hash = get_dto_hash(self.extracted_data)
+                    val_rev = self.extracted_data.get("validation_revision")
+                    if not val_rev or not isinstance(val_rev, dict) or val_rev.get("hash") != current_hash:
+                        prev_version = 0
+                        if val_rev and isinstance(val_rev, dict):
+                            prev_version = val_rev.get("version", 0)
+                        self.extracted_data["validation_revision"] = {
+                            "hash": current_hash,
+                            "version": prev_version + 1,
+                            "timestamp": timezone.now().isoformat(),
+                            "failures": []
+                        }
+                except Exception as _rev_err:
+                    _log.warning(f"[VAL_REV_AUTO_UPDATE_FAILED] {_rev_err}")
+
         if self.pk is not None:
+            # ── [PHASE 4: CANONICAL IMMUTABILITY GUARD] ──
+            try:
+                db_record = InvoiceTempOCR.objects.filter(pk=self.pk).values('status', 'processed', 'validation_status', 'extracted_data').first()
+                if db_record:
+                    db_status = db_record.get('status')
+                    db_processed = db_record.get('processed')
+                    db_val_status = db_record.get('validation_status')
+                    db_extracted = db_record.get('extracted_data') or {}
+                    
+                    terminal_statuses = {'FINALIZED', 'FAILED', 'COMPLETED'}
+                    if db_status in terminal_statuses:
+                        raise RuntimeError(f"Post-finalization mutation blocked: record {self.pk} is in terminal state '{db_status}'")
+                    
+                    is_db_finalized = db_status in ('FINALIZED', 'FAILED') or db_processed is True or db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE')
+                    
+                    if is_db_finalized:
+                        # Prevent status/processed oscillation
+                        if self.status not in ('FINALIZED', 'FAILED'):
+                            _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted status regression from {db_status} to {self.status} for record={self.pk}")
+                            self.status = db_status
+                        if not self.processed and db_processed:
+                            _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted processed regression from True to False for record={self.pk}")
+                            self.processed = True
+                        if self.validation_status != db_val_status and db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE'):
+                            _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted validation_status regression from {db_val_status} to {self.validation_status} for record={self.pk}")
+                            self.validation_status = db_val_status
+                        if self.extracted_data != db_extracted:
+                            _log.warning(f"[IMMUTABILITY_GUARD_BLOCKED] Attempted post-finalization DTO mutation for record={self.pk}")
+                            self.extracted_data = db_extracted
+            except Exception as _imm_err:
+                if isinstance(_imm_err, RuntimeError):
+                    raise
+                _log.warning(f"[IMMUTABILITY_GUARD_FAILED] record={self.pk} error={_imm_err}")
+
             current_status = self.validation_status
             # Fetch actual DB value to check — only if we're about to write something weaker
             if current_status in self.OVERWRITE_BLOCKED_STATUSES:
@@ -530,6 +625,52 @@ class InvoiceTempOCR(models.Model):
                         self.validation_status = db_val
                 except Exception as _e:
                     _log.warning(f"[IMMUTABILITY_CHECK_FAILED] id={self.pk} error={_e}")
+
+            # [FORENSIC_STATUS_MUTATION] Tracing
+            try:
+                db_record = InvoiceTempOCR.objects.filter(pk=self.pk).values('status', 'validation_status', 'vendor_status').first()
+                if db_record:
+                    changes = []
+                    for field in ('status', 'validation_status', 'vendor_status'):
+                        old_val = db_record.get(field)
+                        new_val = getattr(self, field)
+                        if old_val != new_val:
+                            changes.append((field, old_val, new_val))
+                    if changes:
+                        mutation_stage = "unknown"
+                        for frame in inspect.stack():
+                            func = frame.function
+                            if func not in ('save', 'inner', 'wrapper', '_persist', '_handle_task_inner', '_update_task_status'):
+                                mutation_stage = func
+                                break
+                        for field, old_val, new_val in changes:
+                            mutation_info = {
+                                "invoice_no": str(self.supplier_invoice_no or ""),
+                                "field_name": field,
+                                "old_value": str(old_val),
+                                "new_value": str(new_val),
+                                "mutation_stage": mutation_stage,
+                                "dto_memory_id": str(id(self.extracted_data)),
+                                "timestamp": timezone.now().isoformat()
+                            }
+                            _log.info(f"[FORENSIC_STATUS_MUTATION]\n{json.dumps(mutation_info, indent=2, default=str)}")
+            except Exception as e:
+                _log.warning(f"[FORENSIC_STATUS_MUTATION_TRACING_FAILED] error={e}")
+
+        # [FORENSIC_DB_PERSISTENCE] Tracing
+        try:
+            operation_type = "INSERT" if self.pk is None else "UPDATE"
+            payload_str = json.dumps(self.extracted_data, default=str) if self.extracted_data else "{}"
+            persist_info = {
+                "invoice_no": str(self.supplier_invoice_no or ""),
+                "operation_type": operation_type,
+                "payload_size_bytes": len(payload_str),
+                "dto_memory_id": str(id(self.extracted_data)),
+                "timestamp": timezone.now().isoformat()
+            }
+            _log.info(f"[FORENSIC_DB_PERSISTENCE]\n{json.dumps(persist_info, indent=2, default=str)}")
+        except Exception as e:
+            _log.warning(f"[FORENSIC_DB_PERSISTENCE_TRACING_FAILED] error={e}")
 
         _log.info(
             f"[DUPLICATE_RUNTIME_PROBE] file={__file__} "

@@ -7,6 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('ocr_pipeline', '0006_sessionfinalizationstate'),
+        ('vouchers', '0001_initial'),
     ]
 
     operations = [
