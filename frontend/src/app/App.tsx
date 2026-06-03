@@ -1464,7 +1464,7 @@ const App: React.FC = () => {
   // (Additional guard: if access token says 'master' but we're here, redirect away)
   const currentToken = getAccessToken();
   const tokenDomain = getUserTypeFromToken(currentToken);
-  if (tokenDomain === 'master' && isLoggedIn) {
+  if (tokenDomain === 'master' && isLoggedIn && !currentPath.startsWith('/master')) {
     // Token says master but we're on a company path — redirect
     window.history.replaceState({}, '', '/master/dashboard');
     setCurrentPath('/master/dashboard');

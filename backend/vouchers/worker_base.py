@@ -587,21 +587,22 @@ class BaseWorker(ABC):
                         loop = asyncio.get_running_loop()
                         await loop.run_in_executor(None, save_failed_page)
                         
-                        # Enqueue assembly failure task so assembly barrier doesn't wait
-                        from vouchers.message_factory import message_factory
-                        from copy import deepcopy
-                        assembly_msg = message_factory.create_message(
-                            task_type="ASSEMBLY",
-                            tenant_id=tenant_id,
-                            session_id=session_id,
-                            payload={"record_id": record_id, "page_index": page_num}
+                        # Use global coordinator to check and trigger assembly if appropriate
+                        from vouchers.coordinator import check_and_trigger_assembly, log_forensic_trace
+                        log_forensic_trace("check_and_trigger_assembly_worker_base_BEFORE", record_id)
+                        loop = asyncio.get_running_loop()
+                        await loop.run_in_executor(
+                            None,
+                            lambda: check_and_trigger_assembly(
+                                record_id=record_id,
+                                tenant_id=tenant_id,
+                                session_id=session_id,
+                                correlation_id=correlation_id,
+                                job_id=job_id,
+                                item_id=task.get('item_id')
+                            )
                         )
-                        assembly_msg_copy = deepcopy(assembly_msg)
-                        try:
-                            queue_service.push(assembly_msg_copy, queue_type='assembly')
-                            logger.info(f"[DOWNSTREAM_ENQUEUE_SUCCESS] target_queue=assembly msg_id={assembly_msg_copy['id']}")
-                        except Exception as e:
-                            logger.error(f"[DOWNSTREAM_ENQUEUE_FAILED] target_queue=assembly error={e}")
+                        log_forensic_trace("check_and_trigger_assembly_worker_base_AFTER", record_id)
                             
                 if handle:
                     loop = asyncio.get_running_loop()

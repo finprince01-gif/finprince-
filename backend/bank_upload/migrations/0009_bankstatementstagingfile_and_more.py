@@ -10,6 +10,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.AlterModelTable(
+            name='bankstatementtemp',
+            table='bank_statement_temp_rows',
+        ),
         migrations.CreateModel(
             name='BankStatementStagingFile',
             fields=[
@@ -26,9 +30,5 @@ class Migration(migrations.Migration):
                 'db_table': 'bank_statement_temp',
                 'ordering': ['-uploaded_at'],
             },
-        ),
-        migrations.AlterModelTable(
-            name='bankstatementtemp',
-            table='bank_statement_temp_rows',
         ),
     ]

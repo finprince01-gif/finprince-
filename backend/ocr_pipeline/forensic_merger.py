@@ -253,126 +253,198 @@ class ForensicMerger:
         consumed_page_indices = set()
 
         logger.info(f"[FORENSIC GROUP] Starting grouping for {len(invoices)} invoice pages")
+        logger.info(f"[GROUPING_START] total_pages={len(invoices)}")
 
-        # Deterministic groups map: merge_key -> list of invoices
-        deterministic_groups = {}
-        
-        for curr_idx, curr in enumerate(invoices):
+        # ── 1. PAGE CLASSIFICATION BEFORE GROUPING ──
+        from .integrity_enforcer import detect_continuation_markers
+        for i, curr in enumerate(invoices):
             # [MANDATORY HYDRATION] (Requirement #1)
             hydrate_identity_fields(curr)
             
+            # Pre-classify each page
+            curr_ocr = curr.get("_pdf_ocr_text") or curr.get("_raw_text") or ""
+            role = enforcer.classify_page(curr_ocr, curr.get("items", []), invoice_data=curr)
+            
+            # Apply summary page heuristic explicitly
+            if self.is_continuation_summary_page(curr):
+                role = "PAGE_ROLE_SUMMARY"
+                
+            # REQUIRED RELATIONAL CHECK:
+            if i > 0:
+                prev = invoices[i - 1]
+                
+                prev_inv = str(prev.get("invoice_no") or "").strip().upper()
+                curr_inv = str(curr.get("invoice_no") or "").strip().upper()
+                prev_gstin = str(prev.get("gstin") or prev.get("vendor_gstin") or "").strip().upper()
+                curr_gstin = str(curr.get("gstin") or curr.get("vendor_gstin") or "").strip().upper()
+                
+                same_invoice = (curr_inv == prev_inv and curr_inv not in ("", "MISSING", "N/A"))
+                same_gstin = (curr_gstin == prev_gstin and curr_gstin not in ("", "MISSING", "N/A"))
+                same_session = (prev.get("upload_session_id") == curr.get("upload_session_id"))
+                same_pdf = (prev.get("record_id") == curr.get("record_id") or prev.get("file_path") == curr.get("file_path"))
+                
+                # Check if previous page contains continuation markers or was primary/continuation
+                prev_ocr = prev.get("_pdf_ocr_text") or prev.get("_raw_text") or ""
+                prev_has_continuation = (
+                    prev.get("_page_role") in ["PAGE_ROLE_PRIMARY", "PAGE_ROLE_CONTINUATION"] or
+                    len(detect_continuation_markers(prev_ocr)) > 0
+                )
+                
+                # Current page lacks real inventory density
+                has_real_items = False
+                for itm in curr.get("items", []):
+                    q = enforcer._to_float(itm.get("quantity") or itm.get("qty") or itm.get("Qty"))
+                    r = enforcer._to_float(itm.get("rate") or itm.get("Item Rate"))
+                    if q > 0 and r > 0:
+                        has_real_items = True
+                        break
+                lacks_real_density = not has_real_items
+                
+                # Current page mainly contains totals/tax summaries
+                is_summary_or_totals = (
+                    role in ["PAGE_ROLE_TOTALS", "PAGE_ROLE_TAX_SUMMARY", "PAGE_ROLE_SUMMARY"] or
+                    self.is_continuation_summary_page(curr)
+                )
+                
+                if same_invoice and same_gstin and same_session and same_pdf and prev_has_continuation and lacks_real_density and is_summary_or_totals:
+                    logger.info(f"[MULTIPAGE_ROLE_DECISION] Relational override applied: page_no={curr.get('_page_no')} -> PAGE_ROLE_CONTINUATION")
+                    role = "PAGE_ROLE_CONTINUATION"
+                
+            curr["_page_role"] = role
+            
+            curr_inv = str(curr.get("invoice_no") or "").strip() or "MISSING"
+            curr_gstin = str(curr.get("gstin") or curr.get("vendor_gstin") or "").strip().upper() or "MISSING"
+            logger.info(f"[PAGE_ROLE_CLASSIFIED] page_no={curr.get('_page_no')} page_role={role} invoice_no={curr_inv} gstin={curr_gstin}")
+
+        # ── 2. DOCUMENT GROUPING & CONTINUATION ATTACHMENT ──
+        for curr_idx, curr in enumerate(invoices):
             curr_page_no = curr.get("_page_no")
             if curr_page_no in consumed_page_indices:
                 continue
-
+                
+            role = curr.get("_page_role")
             curr_inv = str(curr.get("invoice_no") or "").strip() or "MISSING"
             curr_gstin = str(curr.get("gstin") or curr.get("vendor_gstin") or "").strip().upper() or "MISSING"
-            curr_vendor = str(curr.get("vendor_name") or "").strip().upper() or "MISSING"
-            curr_date = str(curr.get("invoice_date") or "").strip() or "MISSING"
-            curr_tenant = str(curr.get("tenant_id") or "").strip() or "MISSING"
             
-            # ── DETERMINISTIC MERGE KEY (Requirement #11) ──
-            # [FIX 6] CORRECT: gstin + invoice_no + invoice_date + branch
-            # Page identity must always remain unique if invoice_no is MISSING to prevent false collapse
-            if curr_inv == "MISSING":
-                merge_key = f"{curr_tenant}_{curr_gstin}_MISSING_{curr_date}_page_{curr_page_no}"
-            else:
-                merge_key = f"{curr_tenant}_{curr_gstin}_{curr_inv}_{curr_date}"
-                
-            is_deterministic = (curr_inv != "MISSING")
-            
-            # [DEDUPE_EVALUATION] and [FILTER_DECISION]
-            logger.info(f"[DEDUPE_EVALUATION] page_no={curr_page_no} invoice_no={curr_inv} merge_key={merge_key} dedupe_key={merge_key} filter_reason=None dropped=False")
-            logger.info(f"[FILTER_DECISION] page_no={curr_page_no} invoice_no={curr_inv} merge_key={merge_key} dedupe_key={merge_key} filter_reason=None dropped=False")
-            
-            # [GROUP_PRECHECK] (Requirement #7)
-            logger.info(f"[GROUP_PRECHECK] page={curr_page_no} inv={curr_inv} gstin={curr_gstin} vendor={curr_vendor} hydrated={bool(curr_inv != 'MISSING' or curr_gstin != 'MISSING')}")
-
-            matched = False
-            
-            # 1. Deterministic Key Match
-            if is_deterministic and merge_key in deterministic_groups:
-                logger.info(f"[MERGE_DECISION] candidate_page={curr_page_no} decision='MERGE' reason='Deterministic key match ({merge_key})'")
-                deterministic_groups[merge_key].append(curr)
-                consumed_page_indices.add(curr_page_no)
-                self.log_trace(deterministic_groups[merge_key][0], curr, "merge", "Deterministic key match")
-                matched = True
-                continue
-
-            # 2. Sequential / Semantic Fallback (if key matching fails or lacks identity)
-            for group_idx, group in enumerate(final_groups):
-                prev = group[0]
-                
-                # ── 1. SAFETY SPLIT GUARD (Requirement #6) ──
-                # If group is large and metadata starts diverging, force split.
-                if len(group) >= 3:
-                    inv_nos = {str(p.get("invoice_no") or "").strip() for p in group if p.get("invoice_no")}
-                    gstins = {str(p.get("gstin") or "").strip() for p in group if p.get("gstin")}
-                    if (curr_inv != "MISSING" and curr_inv not in inv_nos) or (curr_gstin != "MISSING" and curr_gstin not in gstins):
-                        logger.info(f"[SAFETY_SPLIT_GUARD] Diversity detected in group {group_idx}. Forcing SPLIT for page {curr_page_no}")
-                        continue
-
-                # ── 2. WEIGHTED MERGE DECISION ──
-                should, reason = enforcer.should_merge(prev, curr)
-                
-                logger.info(
-                    f"[MERGE_DECISION] candidate_page={curr_page_no} current_group={[p.get('_page_no') for p in group]} "
-                    f"decision={'MERGE' if should else 'SPLIT'} reason='{reason}'"
-                )
-
-                if not should:
+            # CONTINUATION ATTACHMENT (attach to nearest PREVIOUS valid group)
+            if role in ["PAGE_ROLE_CONTINUATION", "PAGE_ROLE_SUMMARY", "PAGE_ROLE_TOTALS", "PAGE_ROLE_TAX_SUMMARY"]:
+                if final_groups:
+                    # Attach to the most recent group (since pages are ordered by page_no)
+                    target_group = final_groups[-1]
+                    
+                    logger.info(f"[CONTINUATION_PAGE_ATTACHED] page_no={curr_page_no} attached_to_group={len(final_groups)-1} role={role}")
+                    
+                    # Inherit metadata from the primary page of this group
+                    primary_page = target_group[0]
+                    curr["invoice_no"] = primary_page.get("invoice_no")
+                    curr["gstin"] = primary_page.get("gstin")
+                    curr["vendor_name"] = primary_page.get("vendor_name")
+                    curr["invoice_date"] = primary_page.get("invoice_date")
+                    curr["tenant_id"] = primary_page.get("tenant_id")
+                    
+                    target_group.append(curr)
+                    consumed_page_indices.add(curr_page_no)
+                    
+                    self.log_trace(primary_page, curr, "merge", "Continuation attachment")
                     continue
-
-                # MERGE VALIDATED
-                group.append(curr)
-                consumed_page_indices.add(curr_page_no)
-                matched = True
+                else:
+                    logger.warning(f"[ORPHAN_CONTINUATION] page_no={curr_page_no} has no previous group to attach to. Treating as primary.")
+                    role = "PAGE_ROLE_PRIMARY" # Fallback if it's the very first page
+                    curr["_page_role"] = role
+            
+            # PRIMARY_PAGE GROUPING
+            if role == "PAGE_ROLE_PRIMARY" or role == "PAGE_ROLE_UNKNOWN":
+                curr_date = str(curr.get("invoice_date") or "").strip() or "MISSING"
+                curr_tenant = str(curr.get("tenant_id") or "").strip() or "MISSING"
                 
-                if len(group) > 1:
-                    logger.info(f"[MULTIPAGE_GROUP_CONFIRMED] inv={curr_inv} pages={len(group)} reason='{reason}'")
+                matched = False
                 
-                self.log_trace(prev, curr, "merge", reason)
-                
-                # If this group was previously tracked deterministically, ensure the new page doesn't corrupt it
-                break
-
-            if not matched:
-                logger.info(f"[NEW_INVOICE_CREATED] inv='{curr_inv}' gstin={curr_gstin} page={curr_page_no}")
-                new_group = [curr]
-                final_groups.append(new_group)
-                consumed_page_indices.add(curr_page_no)
-                if is_deterministic:
-                    deterministic_groups[merge_key] = new_group
+                # Check semantic fallback with existing groups
+                for group_idx, group in enumerate(final_groups):
+                    prev = group[0]
+                    should, reason = enforcer.should_merge(prev, curr)
+                    if should:
+                        logger.info(f"[MERGE_DECISION] candidate_page={curr_page_no} decision='MERGE' reason='{reason}'")
+                        group.append(curr)
+                        consumed_page_indices.add(curr_page_no)
+                        matched = True
+                        break
+                        
+                if not matched:
+                    logger.info(f"[NEW_INVOICE_CREATED] inv='{curr_inv}' gstin={curr_gstin} page={curr_page_no}")
+                    new_group = [curr]
+                    final_groups.append(new_group)
+                    consumed_page_indices.add(curr_page_no)
+                    logger.info(f"[DOCUMENT_GROUP_CREATED] group_key={len(final_groups)-1} pages=[{curr_page_no}]")
+                    logger.info(f"[GROUP_KEY_CREATED] group_key=GRP_{len(final_groups)-1}_{curr_inv} invoice_no={curr_inv} pages=[{curr_page_no}]")
 
         logger.info(f"[FORENSIC GROUP DONE] {len(invoices)} pages -> {len(final_groups)} distinct groups")
 
-        # ── 3. PRIMARY PAGE GUARANTEE (Requirement #3) ──
+        # ── 3. FINAL GROUP RECONSTRUCTION & CLEANUP ──
         validated_groups = {}
         for i, group in enumerate(final_groups):
-            # Assign roles based on final group context
-            for inv in group:
-                inv["_page_role"] = enforcer.classify_page(inv.get("_raw_text", ""), inv.get("items", []), invoice_data=inv)
-            
+            # Check if all pages in the group are continuation summary pages
+            is_group_cont_summary = all(self.is_continuation_summary_page(p) for p in group)
+                    
+            if is_group_cont_summary:
+                logger.info(
+                    f"[CONTINUATION_PAGE_REJECTED] Group {i} consisting of pages "
+                    f"{[p.get('_page_no') for p in group]} rejected: all pages are continuation-summary-only."
+                )
+                logger.info(f"[RECORD_CREATION_BLOCKED] reason=continuation_page group_key={i}")
+                for p in group:
+                    logger.info(
+                        f"[SUMMARY_ROW_DROPPED] page={p.get('_page_no')} "
+                        f"reason='isolated continuation summary page' items={[itm.get('description') or itm.get('item_name') for itm in p.get('items', [])]}"
+                    )
+                continue
+
             primary_count = sum(1 for p in group if p.get("_page_role") == "PAGE_ROLE_PRIMARY")
             logger.info(f"[PRIMARY_CHECK] group={i} size={len(group)} primary_count={primary_count}")
+            
+            # Compute a deterministic canonical hash for the group
+            import hashlib
+            physical_pages = sorted(list(set(p.get("_physical_page_no") for p in group if p.get("_physical_page_no") is not None)))
+            page_str = ",".join(map(str, physical_pages))
+            record_id_str = str(group[0].get("record_id") or "")
+            group_hash = hashlib.sha256(f"{record_id_str}:{page_str}".encode('utf-8')).hexdigest()[:16]
+            key_id = f"GRP_HASH_{group_hash}"
+            
+            logger.info(f"[GROUP_FINALIZED] group_key={key_id} final_item_count=PENDING pages_merged={len(group)}")
             
             # Collect valid invoice numbers from all pages in the group
             group_inv_nos = [str(p.get('invoice_no') or '').strip() for p in group]
             valid_inv_nos = [n for n in group_inv_nos if n and n.upper() != 'MISSING']
             
             if not valid_inv_nos:
-                # Instead of discarding, we preserve it as a new invoice (Requirement #3 & #8)
                 logger.warning(f"[PAGE_PRESERVED] Group {i} has no valid invoice_no across {len(group)} pages but we will preserve it safely.")
-                key = f"GRP_{i}_UNKNOWN_{i}"
+                key = f"{key_id}_UNKNOWN"
                 validated_groups[key] = group
                 continue
 
             # Use unique key to avoid collision
-            key = f"GRP_{i}_{valid_inv_nos[0]}"
+            key = f"{key_id}_{valid_inv_nos[0]}"
             validated_groups[key] = group
             
             for p in group:
                 logger.info(f"[PAGE_NOT_DISCARDED] Preserving page {p.get('_page_no')} in group {key}")
+
+        # [FORENSIC_GROUPING]
+        import json
+        for key, group in validated_groups.items():
+            first_page = group[0] if group else {}
+            grouped_pages = [p.get("_page_no") for p in group]
+            dto_memory_ids = [str(id(p)) for p in group]
+            grouping_info = {
+                "group_key": str(key),
+                "upload_session_id": str(first_page.get("upload_session_id") or ""),
+                "physical_file_id": str(first_page.get("record_id") or ""),
+                "grouped_pages": grouped_pages,
+                "invoice_no": str(first_page.get("invoice_no") or first_page.get("supplier_invoice_no") or ""),
+                "gstin": str(first_page.get("vendor_gstin") or first_page.get("gstin") or ""),
+                "dto_memory_ids": dto_memory_ids
+            }
+            logger.info(f"[FORENSIC_GROUPING]\n{json.dumps(grouping_info, indent=2, default=str)}")
 
         return validated_groups
 
@@ -433,7 +505,7 @@ class ForensicMerger:
         Step 1: Detect Copy Type via Regex in raw text.
         Returns: 'original', 'duplicate', 'triplicate', 'transport_copy', or 'continuation'.
         """
-        raw_text = str(inv.get("_raw_text") or "").upper()
+        raw_text = str(inv.get("_pdf_ocr_text") or inv.get("_raw_text") or "").upper()
         
         # Check for standard copy types
         for type_name, pattern in self.copy_patterns.items():
@@ -443,7 +515,7 @@ class ForensicMerger:
         # Check for continuation roles
         from .integrity_enforcer import get_integrity_enforcer
         enforcer = get_integrity_enforcer()
-        role = enforcer.classify_page(inv.get("_raw_text", ""), inv.get("items", []))
+        role = enforcer.classify_page(inv.get("_pdf_ocr_text") or inv.get("_raw_text") or "", inv.get("items", []))
         
         if role == "PAGE_ROLE_PRIMARY":
             return "original"
@@ -452,19 +524,87 @@ class ForensicMerger:
             
         return "page_result"
 
+    def is_continuation_summary_page(self, inv: Dict[str, Any]) -> bool:
+        """
+        [FORENSIC] Lightweight page-role heuristic to identify isolated continuation summary pages.
+        Targets mathematically redundant continuation-summary-only footer pages.
+        Covers:
+          - Rounded Off / Round Off rows
+          - Tax ledger rows: Output CGST @9%, Output SGST @9%, Output IGST @18%
+          - Services / Amount Chargeable / Declaration / Authorised Signatory pages
+        """
+        items = inv.get("items", [])
+
+        # Heuristic A: Blank page (no items) is always a footer/blank
+        if not items:
+            return True
+
+        # Expanded generic term set — includes GST ledger rows that appear on summary pages.
+        # Using substring matching (any(kw in desc)) for robustness against OCR noise.
+        generic_keywords = [
+            "services", "total", "subtotal", "sub-total", "summary",
+            "carried forward", "brought forward",
+            "rounded off", "round off", "rounding", "adjustment",
+            "output cgst", "output sgst", "output igst",
+            "input cgst", "input sgst", "input igst",
+            "cgst @", "sgst @", "igst @",
+            "tax summary", "amount chargeable", "declaration",
+            "less round", "add round", "bank charges", "net amount",
+            "e & o.e", "balance",
+        ]
+
+        all_generic = True
+        for itm in items:
+            desc = str(itm.get("description") or itm.get("item_name") or "").strip().lower()
+            is_generic = any(kw in desc for kw in generic_keywords)
+            if not is_generic:
+                all_generic = False
+                break
+
+        # Heuristic B: Lacks invoice-start metadata (invoice_no missing / MISSING)
+        invoice_no = str(inv.get("invoice_no") or "").strip().upper()
+        lacks_metadata = not invoice_no or invoice_no in ("", "MISSING", "—")
+
+        # Heuristic C: Raw OCR text contains known continuation/footer phrases
+        raw_text = str(inv.get("_pdf_ocr_text") or inv.get("_raw_text") or "").lower()
+        continuation_keywords = [
+            "continued to page", "rounded off", "tax summary",
+            "output cgst", "output sgst", "authorised signatory",
+            "carried forward", "brought forward", "round off",
+            "rounding adjustment", "amount chargeable in words",
+            "e & o.e", "declaration",
+        ]
+        has_continuation_keywords = any(kw in raw_text for kw in continuation_keywords)
+
+        # A page is continuation-summary if ALL items are generic AND
+        # it either lacks header metadata OR has continuation footer phrases.
+        is_cont = all_generic and (has_continuation_keywords or lacks_metadata)
+
+        if is_cont:
+            logger.info(
+                f"[CONTINUATION_PAGE_HEURISTIC] page={inv.get('_page_no')} "
+                f"all_generic={all_generic} lacks_metadata={lacks_metadata} "
+                f"has_keywords={has_continuation_keywords} -> CLASSIFIED AS CONTINUATION_SUMMARY_PAGE"
+            )
+        return is_cont
+
     def deduplicate_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        [FORENSIC] Deterministic Item Deduplication.
-        Dedupes if (description, amount, rate) are identical, regardless of page_no.
+        [FORENSIC] Deterministic Item Deduplication & Multi-page Summary Cleanup.
+        Dedupes cross-page duplicate items and filters out fake summary/totals
+        or rounding rows commonly found on continuation pages of multi-page invoices.
         """
         if not items:
             return []
+
+        # 1. Trace pre-dedupe item states
+        logger.info(f"[FORENSIC_PRE_DEDUPE] item_count={len(items)} descriptions={[itm.get('description') or itm.get('item_name') for itm in items]}")
 
         seen_keys = set()
         unique_items = []
         
         for itm in items:
-            desc = str(itm.get("description") or "").strip().lower()
+            desc = str(itm.get("description") or itm.get("item_name") or "").strip().lower()
             amt = self._to_float(itm.get("taxable_value") or itm.get("amount"))
             rate = self._to_float(itm.get("rate") or 0.0)
             
@@ -477,7 +617,68 @@ class ForensicMerger:
             else:
                 logger.info(f"[ITEM_DEDUPE_GUARD] Dropping cross-page duplicate item: desc='{desc[:20]}' amt={amt} rate={rate}")
                 
-        return unique_items
+        # Post-deduplication cleaning of fake summary and round-off rows
+        # 1. Drop 'Rounded Off' / 'Round Off' rows as they are represented in header level
+        non_roundoff_items = []
+        for itm in unique_items:
+            desc = str(itm.get("description") or itm.get("item_name") or "").strip().lower()
+            if desc in ["rounded off", "round off", "rounding adjustment", "rounding off", "round_off", "adjustment"]:
+                logger.info(f"[ITEM_CLEANUP_GUARD] Dropping 'Rounded Off' item: {itm}")
+                continue
+            non_roundoff_items.append(itm)
+
+        if not non_roundoff_items:
+            logger.info(f"[FORENSIC_POST_DEDUPE] item_count=0 descriptions=[]")
+            logger.info(f"[FINAL_INVENTORY_ITEMS] item_count=0 descriptions=[]")
+            return unique_items
+
+        # 2. Drop generic summary rows ('Services' or 'Total') whose value/qty is a sum of other items
+        final_items = []
+        for idx, itm in enumerate(non_roundoff_items):
+            desc = str(itm.get("description") or itm.get("item_name") or "").strip().lower()
+            
+            if desc in ["services", "total", "subtotal", "sub-total", "summary", "carried forward", "brought forward"]:
+                other_items = [x for i, x in enumerate(non_roundoff_items) if i != idx]
+                if other_items:
+                    sum_taxable = sum(self._to_float(x.get("taxable_value") or x.get("amount")) for x in other_items)
+                    sum_qty = sum(self._to_float(x.get("qty") or x.get("quantity")) for x in other_items)
+                    
+                    itm_taxable = self._to_float(itm.get("taxable_value") or itm.get("amount"))
+                    itm_qty = self._to_float(itm.get("qty") or itm.get("quantity"))
+                    
+                    taxable_matches = abs(itm_taxable - sum_taxable) <= 2.0
+                    qty_matches = itm_qty > 0 and abs(itm_qty - sum_qty) <= 0.1
+                    
+                    if taxable_matches or qty_matches:
+                        logger.info(
+                            f"[ITEM_CLEANUP_GUARD] Dropping generic summary item '{desc}' "
+                            f"itm_taxable={itm_taxable} sum_other_taxable={sum_taxable} "
+                            f"itm_qty={itm_qty} sum_other_qty={sum_qty}"
+                        )
+                        continue
+            final_items.append(itm)
+
+        # 3. Double-Layer Safety Net: If remaining items consist ONLY of generic summary rows, drop them entirely!
+        has_real_item = False
+        for itm in final_items:
+            desc = str(itm.get("description") or itm.get("item_name") or "").strip().lower()
+            if desc not in ["services", "total", "subtotal", "sub-total", "summary", "carried forward", "brought forward"]:
+                has_real_item = True
+                break
+        
+        explicitly_dropped = False
+        if not has_real_item and final_items:
+            logger.info(f"[CONTINUATION_PAGE_REJECTED] Dropping item set because it only contains generic summary rows: {[itm.get('description') or itm.get('item_name') for itm in final_items]}")
+            for itm in final_items:
+                logger.info(f"[SUMMARY_ROW_DROPPED] item={itm.get('description') or itm.get('item_name')} reason='standalone generic summary item without real items'")
+            final_items = []
+            explicitly_dropped = True
+
+        ret_items = final_items if (final_items or explicitly_dropped) else unique_items
+        logger.info(f"[FORENSIC_POST_DEDUPE] item_count={len(ret_items)} descriptions={[itm.get('description') or itm.get('item_name') for itm in ret_items]}")
+        logger.info(f"[FINAL_INVENTORY_ITEMS] item_count={len(ret_items)} descriptions={[itm.get('description') or itm.get('item_name') for itm in ret_items]}")
+
+        return ret_items
 
 
     def merge_group(self, group: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -486,7 +687,45 @@ class ForensicMerger:
             return {}
 
         import copy
+        import json
         group = copy.deepcopy(group) # Deepcopy to prevent DTO leakage during in-place merges
+
+        # [FORENSIC_PRE_MERGE]
+        try:
+            sorted_group = sorted(group, key=lambda x: x.get("_page_no", 0))
+            page_a = sorted_group[0] if len(sorted_group) > 0 else {}
+            page_b = sorted_group[1] if len(sorted_group) > 1 else {}
+            
+            # Check total for page A
+            total_a = page_a.get('header', {}).get('total_amount') or page_a.get('header', {}).get('total_invoice_value') or page_a.get('total_invoice_value')
+            page_a_has_final_total = False
+            if total_a is not None:
+                try:
+                    page_a_has_final_total = float(str(total_a).replace(',', '')) > 0.0
+                except ValueError:
+                    pass
+                    
+            # Check total for page B
+            total_b = page_b.get('header', {}).get('total_amount') or page_b.get('header', {}).get('total_invoice_value') or page_b.get('total_invoice_value')
+            page_b_has_final_total = False
+            if total_b is not None:
+                try:
+                    page_b_has_final_total = float(str(total_b).replace(',', '')) > 0.0
+                except ValueError:
+                    pass
+            
+            pre_merge_info = {
+                "invoice_no": str(page_a.get("invoice_no") or page_a.get("supplier_invoice_no") or ""),
+                "page_a_items": page_a.get("items", []),
+                "page_b_items": page_b.get("items", []) if page_b else [],
+                "page_a_has_final_total": page_a_has_final_total,
+                "page_b_has_final_total": page_b_has_final_total,
+                "merge_reason": "Relational multi-page continuation merge" if page_b else "Single-page pass-through",
+                "dto_memory_ids": [str(id(p)) for p in sorted_group]
+            }
+            logger.info(f"[FORENSIC_PRE_MERGE]\n{json.dumps(pre_merge_info, indent=2, default=str)}")
+        except Exception as le:
+            logger.warning(f"[FORENSIC_PRE_MERGE_LOG_ERR] {le}")
 
         # [MERGE_GROUP_TRACE] (Requirement #5)
         for p in group:
@@ -498,7 +737,7 @@ class ForensicMerger:
         for inv in group:
             # [MANDATORY HYDRATION] (Requirement #1)
             hydrate_identity_fields(inv)
-            role = enforcer.classify_page(inv.get("_raw_text", ""), inv.get("items", []), invoice_data=inv)
+            role = enforcer.classify_page(inv.get("_pdf_ocr_text") or inv.get("_raw_text") or "", inv.get("items", []), invoice_data=inv)
             inv["_page_role"] = role
 
         # ── [MULTIPAGE_MERGE_APPLIED] Telemetry ──
@@ -562,6 +801,42 @@ class ForensicMerger:
         # Deduplicate and handle variations
         merged_invoice["items"] = self.deduplicate_items(all_raw_items)
         
+        # [FORENSIC_CANONICAL_DTO]
+        try:
+            after_cleanup = merged_invoice["items"]
+            removed_items = []
+            for item in all_raw_items:
+                if item not in after_cleanup:
+                    removed_items.append(item)
+            
+            generic_keywords = [
+                "services", "total", "subtotal", "sub-total", "summary",
+                "carried forward", "brought forward",
+                "rounded off", "round off", "rounding", "adjustment",
+                "output cgst", "output sgst", "output igst",
+                "input cgst", "input sgst", "input igst",
+                "cgst @", "sgst @", "igst @",
+                "tax summary", "amount chargeable", "declaration",
+                "less round", "add round", "bank charges", "net amount",
+                "e & o.e", "balance",
+            ]
+            contains_only_summary_rows = len(after_cleanup) > 0 and all(
+                any(kw in str(itm.get("description") or itm.get("item_name") or "").lower() for kw in generic_keywords)
+                for itm in after_cleanup
+            )
+            
+            post_merge_info = {
+                "invoice_no": str(merged_invoice.get("invoice_no") or merged_invoice.get("supplier_invoice_no") or ""),
+                "canonical_items_before_cleanup": all_raw_items,
+                "canonical_items_after_cleanup": after_cleanup,
+                "removed_items": removed_items,
+                "contains_only_summary_rows": contains_only_summary_rows,
+                "dto_memory_id": str(id(merged_invoice))
+            }
+            logger.info(f"[FORENSIC_CANONICAL_DTO]\n{json.dumps(post_merge_info, indent=2, default=str)}")
+        except Exception as le:
+            logger.warning(f"[FORENSIC_CANONICAL_DTO_LOG_ERR] {le}")
+
         # Recompute totals defensively (Requirement #6)
         self.recompute_totals_if_needed(merged_invoice)
         

@@ -89,7 +89,7 @@ def get_save_eligible_rows(upload_session_id, tenant_id=None):
             voucher_status_badge = 'SAVED'
         elif ui_validation_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
             voucher_status_badge = 'ALREADY_EXIST'
-        elif effective_vendor_id or ui_validation_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR']:
+        elif effective_vendor_id or ui_validation_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR', 'NEED_TO_SAVE']:
             voucher_status_badge = 'NEED_TO_SAVE'
         else:
             voucher_status_badge = 'WAIT'
@@ -132,7 +132,7 @@ def get_pending_purchase_eligible_rows(upload_session_id, tenant_id=None):
             voucher_status_badge = 'SAVED'
         elif ui_validation_status in ['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']:
             voucher_status_badge = 'ALREADY_EXIST'
-        elif effective_vendor_id or ui_validation_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR']:
+        elif effective_vendor_id or ui_validation_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR', 'NEED_TO_SAVE']:
             voucher_status_badge = 'NEED_TO_SAVE'
         else:
             voucher_status_badge = 'WAIT'
@@ -390,120 +390,31 @@ class CleanOCRStagingView(views.APIView):
     def _map_record_to_ui_row(self, record, norm_data=None, vendor_map=None):
         """
         CENTRALIZED HYDRATION GATE.
-        Ensures identical field mapping for both live polling and terminal snapshots.
-
-        vendor_map: Optional pre-built session-level canonical vendor resolution map
-            { (gstin_upper, norm_branch): { status, vendor_id, vendor_name, matched_by } }
-        When provided, NO live DB queries are performed for vendor matching.
-        This is the session-deterministic path — all rows with same GSTIN+branch receive
-        identical vendor resolution, eliminating race-condition status divergence.
+        PURELY READ-ONLY. NEVER validates, NEVER vendor matches, NEVER inventory matches.
         """
         r = record
-        norm = norm_data or r.extracted_data or {}
+        norm = norm_data or getattr(r, 'extracted_data', None) or {}
         v_status = getattr(r, 'validation_status', "PENDING")
         v_id = getattr(r, 'vendor_id', None)
         v_status_record = getattr(r, 'status', "PROCESSING")
+        tenant_id = getattr(r, 'tenant_id', None)
+
+        logger.info(f"[HYDRATION_READONLY] Entering read-only hydration for record_id={getattr(r, 'id', None)} tenant_id={tenant_id}")
+        logger.info(f"[HYDRATION_REVALIDATION_BLOCKED] Bypassed validation run for record_id={getattr(r, 'id', None)}")
 
         sections = norm.get("sections", {})
         supplier = sections.get("supplier_details", {})
         header = norm.get("header", {})
 
-        # ⚠️ IMMUTABILITY GUARD: Never touch validation_status if it is already DUPLICATE or NEED_TO_SAVE.
-        IMMUTABLE_STATUSES = {'DUPLICATE', 'NEED_TO_SAVE', 'VOUCHER_CREATED'}
-        tenant_id = getattr(r, 'tenant_id', None)
-        logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={getattr(r, 'id', None)} tenant_id={tenant_id} validation_status={v_status}")
-
         from .normalize import fix_encoding_corruption
         vendor_name_val = fix_encoding_corruption(header.get("vendor_name") or supplier.get("vendor_name") or norm.get("vendor_name") or "—")
 
-        if tenant_id:
-            gstin_val = (getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or norm.get("vendor_gstin") or "")
-            if isinstance(gstin_val, str):
-                gstin_val = gstin_val.strip()
-                if gstin_val in ["", "—", "None", "null"]:
-                    gstin_val = ""
-            else:
-                gstin_val = ""
-
-            branch_val = (getattr(r, 'branch', None) or header.get("branch") or supplier.get("branch") or norm.get("branch") or "")
-            if isinstance(branch_val, str):
-                branch_val = branch_val.strip()
-                if branch_val in ["", "—", "None", "null"]:
-                    branch_val = ""
-            else:
-                branch_val = ""
-
-            if v_id and v_status in IMMUTABLE_STATUSES:
-                logger.info(
-                    f"[SESSION_VENDOR_LOCK] record_id={getattr(r, 'id', None)} "
-                    f"vendor_id={v_id} (frozen DB value — skipping map lookup)"
-                )
-            elif gstin_val:
-                # ── SESSION-DETERMINISTIC VENDOR LOOKUP ──
-                # If a pre-built vendor_map is available (always preferred), use it.
-                val_res = None
-                if vendor_map is not None:
-                    from vendors.vendor_validation_logic import normalize_branch as _nb
-                    map_key = (gstin_val.strip().upper(), _nb(branch_val or "Main Branch"))
-                    map_entry = vendor_map.get(map_key)
-                    if map_entry:
-                        val_res = map_entry
-                        logger.info(
-                            f"[HYDRATION_READONLY_RENDER] record_id={getattr(r, 'id', None)} "
-                            f"gstin={gstin_val} branch={branch_val} "
-                            f"map_key={map_key} map_status={val_res.get('status')} "
-                            f"vendor_id={val_res.get('vendor_id')} source=session_vendor_map"
-                        )
-                    else:
-                        # GSTIN had no map entry — vendor not in master or GSTIN missing
-                        val_res = {"status": "CREATE_VENDOR", "vendor_id": None}
-                        logger.info(
-                            f"[HYDRATION_READONLY_RENDER] record_id={getattr(r, 'id', None)} "
-                            f"map_key={map_key} not found in session_vendor_map → CREATE_VENDOR"
-                        )
-                else:
-                    # Fallback to safe, read-only empty map
-                    logger.error(
-                        f"[VENDOR_VALIDATION_BYPASS_DETECTED] vendor_map is missing in hydration! "
-                        f"tenant_id={tenant_id} record_id={getattr(r, 'id', None)} gstin={gstin_val} branch={branch_val}"
-                    )
-                    val_res = {"status": "CREATE_VENDOR", "vendor_id": None}
-
-                if val_res and val_res.get('status') == 'EXISTING_VENDOR':
-                    v_id = val_res.get('vendor_id')
-                    if v_status not in IMMUTABLE_STATUSES:
-                        if v_status in ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'PENDING']:
-                            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=vendor_validation source_layer=hydration destination_layer=ui_hydration function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
-                            v_status = 'NEED_TO_SAVE'
-                    logger.info(
-                        f"[VENDOR_STATUS_ASSIGNED] record_id={getattr(r, 'id', None)} "
-                        f"vendor_id={v_id} validation_status={v_status} "
-                        f"source=session_vendor_map (read-only — DB not mutated)"
-                    )
-                    logger.info(f"[VALIDATION_STATE_STABLE] record_id={getattr(r, 'id', None)} result_status={val_res.get('status')}")
-                else:
-                    v_id = None
-                    if v_status not in IMMUTABLE_STATUSES:
-                        if v_status in ['FOUND', 'READY', 'RESOLVED']:
-                            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_VENDOR status_domain=vendor_validation source_layer=hydration destination_layer=ui_hydration function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
-                            v_status = 'NEED_VENDOR'
-                    logger.info(
-                        f"[VENDOR_VALIDATION_RESULT] id={getattr(r, 'id', None)} "
-                        f"result_status={val_res.get('status') if val_res else 'None'} → no vendor_id assigned"
-                    )
-                    logger.info(f"[VALIDATION_STATE_STABLE] record_id={getattr(r, 'id', None)} result_status={val_res.get('status') if val_res else 'None'}")
-            else:
-                v_id = None
-                logger.info(
-                    f"[VENDOR_MATCH_FAILED] record_id={getattr(r, 'id', None)} reason=MISSING_GSTIN"
-                )
-
-        # --- [PHASE 11.9] DETERMINISTIC STATE ENFORCEMENT ---
-        # Requirement #2: Enforce PROCESSING, FINALIZED, FAILED, PARTIAL_FAILED
-        # Requirement #3: Block hydration for incomplete records
-        
+        # Determine terminal validation status without DB queries
         is_finalized = v_status_record in ['FINALIZED', 'VOUCHER_CREATED', 'COMPLETED', 'EXTRACTED'] or getattr(r, 'processed', False)
         is_failed = v_status_record in ['FAILED', 'ERROR']
+        
+        if is_finalized:
+            logger.info(f"[IMMUTABLE_FINALIZED_DTO] Read-only snapshot mapped for finalized record_id={getattr(r, 'id', None)}")
         
         if not is_finalized and not is_failed:
              # Check if we have absolutely no extracted data yet
@@ -514,7 +425,6 @@ class CleanOCRStagingView(views.APIView):
                      has_extracted_data = True
 
              if not has_extracted_data:
-                 # [FORENSIC] Return placeholder to block premature hydration only for completely empty records
                  return {
                      "processing": True, 
                      "id": getattr(r, 'id', None),
@@ -526,46 +436,28 @@ class CleanOCRStagingView(views.APIView):
                      "validationStatus": "PROCESSING"
                  }
 
-        # Determine terminal validation status
         ui_status = v_status or "PENDING"
         if v_status == 'DUPLICATE':
-            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=DUPLICATE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
             ui_status = 'DUPLICATE'
         elif is_failed: 
-            logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=EXTRACTION_FAILED status_domain=workflow_state source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
             ui_status = 'EXTRACTION_FAILED'
         elif is_finalized:
             if v_status == 'VOUCHER_CREATED' or v_status_record == 'VOUCHER_CREATED':
-                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=VOUCHER_CREATED status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = 'VOUCHER_CREATED'
             elif v_status == 'NEED_TO_SAVE':
-                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = 'NEED_TO_SAVE'
-            elif v_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'] or v_id:
-                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_TO_SAVE status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+            elif (v_status in ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'] or v_id) and v_status != 'PENDING_PURCHASE':
                 ui_status = 'NEED_TO_SAVE'
-            elif v_status in ['GSTIN_CONFLICT']:
-                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status={v_status} status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
+            elif v_status in ['GSTIN_CONFLICT', 'PENDING_PURCHASE']:
                 ui_status = v_status
             else:
-                logger.info(f"[STATUS_MAPPING_TRACE] original_status={v_status} mapped_status=NEED_VENDOR status_domain=voucher_validation source_layer=hydration destination_layer=frontend function_name=_map_record_to_ui_row record_id={getattr(r, 'id', None)}")
                 ui_status = 'NEED_VENDOR'
 
-        logger.info(f"[REVIEW_STATUS_HYDRATION] id={getattr(r, 'id', None)} v_status='{v_status}' ui_status='{ui_status}'")
-        logger.info(f"[HYDRATION_STATE_READ] id={getattr(r, 'id', None)} status_read={ui_status} source=HYDRATION")
-
-        # Map to final deterministic status
         final_status = "PROCESSING"
         if is_finalized: final_status = "FINALIZED"
         elif is_failed: final_status = "FAILED"
         
-        sections = norm.get("sections", {})
-        supplier = sections.get("supplier_details", {})
-        header = norm.get("header", {})
-        
-        from .normalize import fix_encoding_corruption
         branch = fix_encoding_corruption(str(getattr(r, 'branch', None) or header.get("branch") or supplier.get("branch") or norm.get("branch") or "—"))
-        
         bill_from = fix_encoding_corruption(norm.get("bill_from", ""))
         bill_to = fix_encoding_corruption(norm.get("bill_to", "") or norm.get("billing_address", ""))
         inv_no = (
@@ -576,27 +468,11 @@ class CleanOCRStagingView(views.APIView):
             norm.get("supplier_invoice_no") or 
             supplier.get("supplier_invoice_no") or ""
         )
-        raw_items = norm.get("items") or header.get("items") or []
-
-        # [FORENSIC][RAW_OCR_ITEM_TAX] Add logging of raw OCR tax fields
-        for idx, item in enumerate(raw_items):
-            tax_fields = {k: v for k, v in item.items() if any(p in k.lower() for p in ['cgst', 'sgst', 'igst', 'cess', 'tax', 'gst', 'rate'])}
-            logger.info(f"[FORENSIC][RAW_OCR_ITEM_TAX] index={idx} desc='{item.get('description')}' tax_fields={tax_fields}")
-
-        from .normalize import get_normalized_items
-        items = get_normalized_items({"items": raw_items}, tenant_id=tenant_id)
-
-        # Validate extracted items using InventoryItemValidationService
-        from .inventory_validation import InventoryItemValidationService
-        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
-
-        # [FORENSIC][NORMALIZED_TAX_DTO] Add logging of normalized tax DTO
-        logger.info(f"[FORENSIC][NORMALIZED_TAX_DTO] inv_val_item_status='{inv_val.get('item_status')}' missing_items={inv_val.get('missing_items')}")
-
-        # [INVALID_HYBRID_STATUS_BLOCKED] Prevention logic
-        if final_status == "FINALIZED" and ui_status == "EXTRACTION_FAILED":
-             logger.error(f"[INVALID_HYBRID_STATUS_BLOCKED] inv={inv_no} final_status=FINALIZED but ui_status=EXTRACTION_FAILED. Correcting to FAILED.")
-             final_status = "FAILED"
+        
+        # Read pre-validated item status and missing items from DTO
+        item_status = norm.get("item_status") or "ALREADY EXIST"
+        missing_items = norm.get("missing_items") or []
+        items_val = norm.get("items") or []
 
         res = {
             "id": getattr(r, 'id', None),
@@ -622,7 +498,7 @@ class CleanOCRStagingView(views.APIView):
                 norm.get("total_amount") or "0.00"
             ),
             "branch": branch,
-            "vendor_name": fix_encoding_corruption(header.get("vendor_name") or supplier.get("vendor_name") or norm.get("vendor_name") or "—"),
+            "vendor_name": vendor_name_val,
             "vendor_gstin": getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or norm.get("vendor_gstin") or "—",
             "gstin": getattr(r, 'gstin', None) or header.get("gstin") or norm.get("gstin") or supplier.get("gstin") or "—",
             "vendor_id": v_id,
@@ -630,12 +506,12 @@ class CleanOCRStagingView(views.APIView):
             "validationStatus": ui_status,
             "validation_status": ui_status,
             "vendor_status": "EXISTS" if v_id else "NEW",
-            "item_status": inv_val["item_status"],
-            "missing_items": inv_val["missing_items"],
+            "item_status": item_status,
+            "missing_items": missing_items,
             "processed": getattr(r, 'processed', False),
             "bill_from": bill_from,
             "bill_to": bill_to,
-            "items": inv_val["items"],
+            "items": items_val,
             "irn": getattr(r, 'irn', None) or norm.get("irn"),
             "ack_no": getattr(r, 'ack_no', None) or norm.get("ack_no"),
             "ack_date": getattr(r, 'ack_date', None) or norm.get("ack_date"),
@@ -650,46 +526,35 @@ class CleanOCRStagingView(views.APIView):
             "total_invoice_value": norm.get("total_invoice_value") or norm.get("invoice_total") or supplier.get("total_invoice_value") or "0.00",
         }
         
-        # ── [FIX] VOID/DEGRADED ROW HANDLING ──
-        # If the invoice has no valid identity and no items, it's a degraded row.
-        is_degraded = (not inv_no or str(inv_no).upper() == "MISSING") and not inv_val["items"]
+        is_degraded = (not inv_no or str(inv_no).upper() == "MISSING") and not items_val
         if getattr(r, 'status', None) == 'partial_extraction' or norm.get('status') == 'partial_extraction':
             is_degraded = True
             
         if is_degraded:
-            logger.info(f"[DEGRADED_ROW_HYDRATED] id={getattr(r, 'id', None)} replacing missing fields with N/A / Needs Review")
             res["invoice_no"] = "N/A"
             res["vendor_name"] = "OCR FAILED"
             res["validationStatus"] = "Needs Review"
             res["validation_status"] = "Needs Review"
-            res["status"] = "Needs Review"
+            res["status"] = final_status
             res["vendor_status"] = "NEW"
             ui_status = "Needs Review"
  
-        # [PHASE 11.9] FORENSIC HSN HYDRATION LOG
-        logger.info(f"[HSN_UI_HYDRATED] inv={inv_no} hsn_sac='{res.get('hsn_sac')}'")
-        logger.info(f"[VENDOR_STATUS_MAPPING] id={getattr(r, 'id', None)} v_status={v_status} v_id={v_id} ui_status={ui_status}")
-        logger.info(f"[FRONTEND_VENDOR_STATUS] id={getattr(r, 'id', None)} vendor_status={res.get('vendor_status')} validationStatus={res.get('validationStatus')}")
-        
         res["extracted_data"] = {
                 "sections": sections,
                 "bill_from": bill_from,
                 "billing_address": bill_to,
-                "items": inv_val["items"],
-                "item_status": inv_val["item_status"],
-                "missing_items": inv_val["missing_items"],
+                "items": items_val,
+                "item_status": item_status,
+                "missing_items": missing_items,
                 **norm
             }
         res["created_at"] = getattr(r, 'created_at', None)
         res["voucher_type"] = getattr(r, 'voucher_type', 'PURCHASE')
         
-        # [RESUME_STAGING_FILTER]
-        # Hide: Vendor Already Exists + Voucher Already Exists
         is_vendor_exists = res["vendor_status"] == "EXISTS"
         is_voucher_exists = res["validationStatus"] in ["DUPLICATE", "VOUCHER_CREATED", "DUPLICATE_IN_BATCH", "DUPLICATE_INVOICE", "PENDING_PURCHASE"]
         res["is_resume_pending"] = not (is_vendor_exists and is_voucher_exists)
         
-        # ── Requirement 7: Mark completed explicitly ──
         if is_voucher_exists:
             res["is_saved"] = True
             res["processing_state"] = "COMPLETED"
@@ -697,7 +562,6 @@ class CleanOCRStagingView(views.APIView):
             res["is_saved"] = False
             res["processing_state"] = res["status"]
         
-        # [RESUME_REASON_LOGIC]
         if not is_vendor_exists and not is_voucher_exists:
             res["resume_reason"] = "Vendor + Voucher Pending"
         elif is_vendor_exists and not is_voucher_exists:
@@ -706,7 +570,8 @@ class CleanOCRStagingView(views.APIView):
             res["resume_reason"] = "Vendor Pending"
         else:
             res["resume_reason"] = None
-        
+
+        logger.info(f"[READONLY_HYDRATION_CONFIRMED] Completed readonly hydration for record_id={getattr(r, 'id', None)} validation_status={ui_status}")
         return res
 
     def _log_final_api_response_rows(self, data, source):
@@ -729,20 +594,6 @@ class CleanOCRStagingView(views.APIView):
         session_id = request.query_params.get('upload_session_id')
         tenant_id = getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None) or '88fe4389-58a9-4244-9878-8a4e646898bd'
         resume = request.query_params.get('resume') == 'true'
-        
-        from core.observability import metrics, observability
-        metrics.increment_counter("api:poll_request")
-        
-        # Log exact query filters as requested (Requirements B and C)
-        job_id = request.query_params.get('job_id')
-        if not job_id and session_id:
-            from vouchers.models import BulkInvoiceJob
-            job = BulkInvoiceJob.objects.filter(upload_session_id=session_id).order_by('-created_at').first()
-            if job:
-                job_id = job.id
-                
-        logger.info("[STAGING_QUERY_START] Polling /api/ocr-staging/")
-        logger.info(f"[STAGING_QUERY_FILTERS] upload_session_id='{session_id}' tenant_id='{tenant_id}' job_id='{job_id}' status='ACTIVE'")
 
         if not resume and session_id in ['None', 'null', 'undefined', '', None]:
             logger.warning(f"[ORPHAN_POLL_BLOCKED] Rejected staging poll with session_id='{session_id}'")
@@ -753,560 +604,155 @@ class CleanOCRStagingView(views.APIView):
                 "hydration_pending": False
             })
 
-        # Compute is_processing state to prevent premature finalization when processing multiple files
-        is_processing = False
-        records_exist = False
+        # Resolve primary record_id
+        prim_rec = None
         if session_id:
-            records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id)
-            if not records.exists():
-                records = InvoiceTempOCR.objects.filter(upload_session_id=session_id)
-            records_exist = records.exists()
-            if records_exist:
-                is_processing = records.filter(status__in=[
-                    'PENDING', 'INGESTED', 'INGESTING',
-                    PipelineStatus.QUEUED, PipelineStatus.PROCESSING, PipelineStatus.EXTRACTING, 
-                    PipelineStatus.ASSEMBLING, PipelineStatus.FINALIZING
-                ]).exists()
-
-        # [PHASE 16] CHECK TERMINAL STATE DIRECTLY FROM REDIS BEFORE BLOCKING ON is_processing
-        terminal_from_redis = False
-        if session_id:
-            from core.redis_orchestrator import orchestrator
-            auth_state = orchestrator.get_authoritative_session_state(session_id)
-            terminal_from_redis = auth_state.get('terminal', False)
-
-        # ── 1. CHECK FOR IMMUTABLE SNAPSHOT (PHASE 4) ──
-        if session_id and (not is_processing or terminal_from_redis) and records_exist:
-            from .models import FinalizedSnapshot
-            snapshots = FinalizedSnapshot.objects.filter(session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
-            
-            # Anti-Race Condition Guard (Requirement 6):
-            # If the snapshot is not found but the Bulk Invoice Job is already completed/finalized,
-            # wait up to 150ms and query again in case the database transaction is committing right now.
-            if not snapshots.exists():
-                from vouchers.models import BulkInvoiceJob
-                job = BulkInvoiceJob.objects.filter(upload_session_id=session_id).first()
-                if job and job.status in ['COMPLETED', 'FINALIZED', 'PARTIAL']:
-                    logger.warning(f"[STAGING_QUERY_RETRY] Job={job.id} is {job.status} but Snapshot is missing. Sleeping 150ms...")
-                    time.sleep(0.150)
-                    snapshots = FinalizedSnapshot.objects.filter(session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
-
-            # Resilient Tenant Fallback (Requirement 5):
-            # If still not found by tenant, query by session_id only. 
-            # This completely heals any mismatch between upload time tenant ID and GET request tenant ID.
-            if not snapshots.exists():
-                snapshots = FinalizedSnapshot.objects.filter(session_id=session_id).order_by('created_at', 'id')
-
-            if snapshots.exists():
-                mapped_data = []
-
-                # [SESSION_VENDOR_RESOLUTION] Build canonical vendor map ONCE from live DB records
-                # before iterating over snapshot rows. This guarantees all rows with the same
-                # GSTIN+branch receive identical vendor_id / validationStatus (session-deterministic).
-                _snap_db_records = list(
-                    InvoiceTempOCR.objects.filter(upload_session_id=session_id)
-                ) if session_id else []
-                from vendors.vendor_validation_logic import build_session_vendor_map
-                _snap_vendor_map = build_session_vendor_map(tenant_id, _snap_db_records)
-                logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=snapshot session={session_id} map_size={len(_snap_vendor_map)}")
-
-                for snapshot in snapshots:
-                    snapshot_data = self._get_snapshot_data(snapshot)
-                    raw_rows = snapshot_data.get('data', [])
-                    
-                    # [PHASE 11.9] Re-map snapshot rows to ensure UI key consistency
-                    for row in raw_rows:
-                        # Try to resolve actual database record from InvoiceTempOCR to preserve live edits & valid statuses
-                        inv_no = row.get('invoice_no')
-                        gstin_val = row.get('gstin')
-                        
-                        db_record = None
-                        if session_id:
-                            # Strict match by session, invoice_no and gstin
-                            db_record = InvoiceTempOCR.objects.filter(
-                                upload_session_id=session_id,
-                                supplier_invoice_no=inv_no,
-                                gstin=gstin_val
-                            ).first()
-                            
-                            # Fallback match by session and invoice_no
-                            if not db_record and inv_no:
-                                db_record = InvoiceTempOCR.objects.filter(
-                                    upload_session_id=session_id,
-                                    supplier_invoice_no=inv_no
-                                ).first()
-                        
-                        if not db_record and row.get('id'):
-                            db_record = InvoiceTempOCR.objects.filter(id=row.get('id')).first()
-                            
-                        if db_record:
-                            # Ensure the DB record has tenant_id if it's somehow missing (defensive)
-                            if not getattr(db_record, 'tenant_id', None) and tenant_id:
-                                db_record.tenant_id = tenant_id
-                            dummy = db_record
-                            norm_source = db_record.extracted_data or row
-                        else:
-                            norm_source = row
-                            from types import SimpleNamespace
-                            dummy = SimpleNamespace(**{
-                                'id': row.get('id'),
-                                'tenant_id': tenant_id,
-                                'status': 'FINALIZED',
-                                'processed': True,
-                                'validation_status': row.get('validation_status') or 'NEED_VENDOR',
-                                'vendor_id': row.get('vendor_id'),
-                                'supplier_invoice_no': inv_no,
-                                'gstin': gstin_val,
-                                'irn': row.get('irn'),
-                                'ack_no': row.get('ack_no'),
-                                'ack_date': row.get('ack_date'),
-                                'created_at': row.get('created_at'),
-                                'voucher_type': row.get('voucher_type'),
-                                'branch': row.get('branch')
-                            })
-                            
-                        # Pass vendor_map so this row uses the deterministic session resolution.
-                        # SimpleNamespace dummies will still get the map — their gstin/branch fields
-                        # are set from the snapshot row data, so the lookup will work correctly.
-                        mapped = self._map_record_to_ui_row(dummy, norm_data=norm_source, vendor_map=_snap_vendor_map)
-                        
-                        inv_no = mapped.get('invoice_no', '')
-                        vendor = mapped.get('vendor_name', '')
-                        
-                        # Log non-destructive warnings instead of discarding rows
-                        if mapped.get('status') == 'FAILED' or mapped.get('validationStatus') == 'EXTRACTION_FAILED':
-                            logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='status_failed_warning'")
-                        if not inv_no or str(inv_no).strip().upper() == 'MISSING' or str(inv_no).strip() == '—':
-                            logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='missing_invoice_no_warning'")
-                        if not vendor or str(vendor).strip().upper() == 'MISSING' or str(vendor).strip() == '—':
-                            logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='missing_vendor_warning'")
-                        
-                        # We absolutely preserve the DTO to enforce 100% hydration count consistency!
-                        if resume:
-                            # ── Requirement 7: Resume query MUST exclude completed rows ──
-                            if mapped.get("is_saved") or mapped.get("validationStatus") in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'] or mapped.get('processed'):
-                                logger.info(f"[RESUME_FILTER] Dropping stale completed row inv_no='{inv_no}'")
-                                continue
-                                
-                        mapped_data.append(mapped)
-                
-                logger.info(f"[FINAL_HYDRATION_COUNT] count={len(mapped_data)}")
-                logger.info(f"[STAGING_QUERY_RESULT_COUNT] count={len(mapped_data)} (from combined snapshots)")
-                if len(mapped_data) == 0:
-                    logger.info("[STAGING_QUERY_EMPTY_REASON] Combined snapshots were found but all rows were empty or filtered out.")
-                    
-                first_snap = snapshots.first()
-                self._log_final_api_response_rows(mapped_data, "snapshot")
-                return Response({
-                    "status": "FINALIZED",
-                    "data": mapped_data,
-                    "snapshot_id": first_snap.id,
-                    "version": first_snap.snapshot_version,
-                    "finalized_at": first_snap.finalized_at
-                })
-            else:
-                logger.info(f"[STAGING_QUERY_EMPTY_REASON] Snapshot not found for session_id={session_id}")
-
-        # ── 2. REDIS-BACKED ORCHESTRATION STATUS (PHASE 3D) ──
-        # [PROGRESS_PROPAGATION_FIX] Workers write Redis status under session:{record_id},
-        # NOT under session:{upload_session_id}. We must resolve record IDs for this session
-        # and aggregate their Redis statuses to get the real progress.
-        if session_id:
-            from core.redis_orchestrator import orchestrator
-
-            def _get_aggregated_redis_status_for_session(sess_id):
-                """
-                [FORENSIC_FIX] Aggregate Redis status across all record_ids in this session.
-                Workers write to session:{record_id}. The upload_session_id key is never written.
-                """
-                try:
-                    record_ids_qs = InvoiceTempOCR.objects.filter(
-                        upload_session_id=sess_id
-                    ).values_list('id', flat=True)
-                    record_ids = [str(rid) for rid in record_ids_qs]
-                    logger.info(
-                        f"[PROGRESS_AGGREGATION] session={sess_id} "
-                        f"resolving record_ids={record_ids} for Redis aggregation"
-                    )
-                    if not record_ids:
-                        # No records yet — session may still be bootstrapping
-                        logger.info(f"[PROGRESS_AGGREGATION] session={sess_id} no record_ids found in DB yet")
-                        return None
-
-                    statuses = []
-                    progresses = []
-                    for rid in record_ids:
-                        rs = orchestrator.get_session_status(rid)
-                        st = rs.get('status', 'UNKNOWN') if rs else 'UNKNOWN'
-                        prog = float(rs.get('progress', 0.0)) if rs else 0.0
-                        statuses.append(st)
-                        progresses.append(prog)
-                        logger.info(
-                            f"[PROGRESS_RECORD_STATUS] session={sess_id} "
-                            f"record_id={rid} redis_status={st} redis_progress={prog:.1f}%"
-                        )
-
-                    # Aggregate: use the MAX progress, dominant status
-                    agg_progress = max(progresses) if progresses else 0.0
-                    TERMINAL_STATES = {"HYDRATION_READY", "FINALIZED", "COMPLETED", "FAILED", "ERROR", "PARTIAL_FAILED"}
-                    PROCESSING_STATES = {"AI_PROCESSING", "ASSEMBLY_PENDING", "ASSEMBLY_COMPLETE",
-                                         "PROCESSING", "INGESTION_COMPLETE", "INGESTION_STARTED",
-                                         "INGESTING", "INGESTED", "FINALIZING", "SNAPSHOTTING"}
-                    terminal_statuses = [s for s in statuses if s in TERMINAL_STATES]
-                    processing_statuses = [s for s in statuses if s in PROCESSING_STATES]
-
-                    if terminal_statuses:
-                        agg_status = terminal_statuses[0]  # FINALIZED/FAILED take priority
-                    elif processing_statuses:
-                        agg_status = processing_statuses[0]
-                    else:
-                        agg_status = statuses[0] if statuses else 'UNKNOWN'
-
-                    logger.info(
-                        f"[PROGRESS_AGGREGATION_RESULT] session={sess_id} "
-                        f"agg_status={agg_status} agg_progress={agg_progress:.1f}% "
-                        f"all_statuses={statuses} all_progresses={progresses}"
-                    )
-                    return {"status": agg_status, "progress": agg_progress}
-                except Exception as _agg_err:
-                    logger.warning(f"[PROGRESS_AGGREGATION_ERROR] session={sess_id} error={_agg_err}")
-                    return None
-
-            redis_status = _get_aggregated_redis_status_for_session(session_id)
-            if redis_status:
-                redis_st = redis_status.get('status', '')
-                # Normalize legacy/raw states to the canonical set checked below
-                _PROCESSING_LIKE = {
-                    "PROCESSING", "INGESTING", "INGESTED", "AI_PROCESSING",
-                    "ASSEMBLY_PENDING", "ASSEMBLY_COMPLETE", "INGESTION_COMPLETE",
-                    "INGESTION_STARTED", "FINALIZING", "SNAPSHOTTING"
-                }
-                if redis_st in _PROCESSING_LIKE:
-                    # Check for stale state regression
-                    has_snapshots = False
-                    try:
-                        from .models import FinalizedSnapshot
-                        has_snapshots = FinalizedSnapshot.objects.filter(session_id=session_id).exists()
-                    except:
-                        pass
-
-                    if has_snapshots:
-                        logger.warning(f"[STALE_STATE_DETECTED] session={session_id} redis={redis_st} but snapshots exist! Overriding.")
-                        # Fall through to snapshot hydration
-                    else:
-                        # [PROGRESSIVE_HYDRATION_FIX] Query staging records progressively
-                        records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
-                        if not records.exists():
-                            records = InvoiceTempOCR.objects.filter(upload_session_id=session_id).order_by('created_at', 'id')
-
-                        # [SESSION_VENDOR_RESOLUTION] Build canonical map ONCE before loop
-                        records_list = list(records)
-                        from vendors.vendor_validation_logic import build_session_vendor_map
-                        _vendor_map = build_session_vendor_map(tenant_id, records_list)
-                        logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=redis_processing session={session_id} map_size={len(_vendor_map)}")
-
-                        data = []
-                        for r in records_list:
-                            mapped = self._map_record_to_ui_row(r, vendor_map=_vendor_map)
-                            norm = getattr(r, 'extracted_data', {}) or {}
-                            page_role = norm.get('_page_role', '') or norm.get('page_role', '')
-                            if page_role == 'PAGE_ROLE_CONTINUATION':
-                                continue
-                            data.append(mapped)
-
-                        display_progress = min(99.0, float(redis_status.get('progress', 0.0)))
-                        logger.info(
-                            f"[PROGRESS_SERIALIZER] session={session_id} "
-                            f"redis_progress={redis_status.get('progress', 0.0):.1f}% "
-                            f"display_progress={display_progress:.1f}% source=redis_aggregated "
-                            f"records_count={len(data)}"
-                        )
-                        self._log_final_api_response_rows(data, "redis_progress")
-                        return Response({
-                            "status": "PROCESSING",
-                            "data": data,
-                            "progress_percent": display_progress,
-                            "source": "redis_aggregated"
-                        })
-                elif redis_st in ("HYDRATION_READY", "FINALIZED", "PARTIAL_FAILED", "FAILED", "EXPORTED", "COMPLETED"):
-                    # [FIX] Terminal status written by finalize_worker must break polling immediately.
-                    # Previously only PROCESSING was handled — FINALIZED was silently ignored.
-                    logger.info(f"[STAGING_REDIS_TERMINAL] session={session_id} status={redis_st} — proceeding to snapshot/DB hydration")
-                    # Fall through to snapshot + DB hydration below (do not return early)
-
-        is_purchase_flow = False
-        
-        # ── 3. STATE MACHINE BARRIER (PHASE 3) ──
-        if session_id:
-            records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id)
-            
-            # Resilient Tenant Fallback for Staging records:
-            if not records.exists():
-                records_fb = InvoiceTempOCR.objects.filter(upload_session_id=session_id)
-                if records_fb.exists():
-                    logger.warning(f"[TENANT_MISMATCH_RECOVERED] Found staging records by session_id={session_id} but tenant_id was different (query tenant={tenant_id}, records tenant={records_fb.first().tenant_id})")
-                    records = records_fb
-
-            is_purchase_flow = records.filter(upload_type='PURCHASE').exists()
-
-            # [FIX] Requirement #3: Include PENDING in is_processing list to block premature hydration
-            is_processing = records.filter(status__in=[
-                'PENDING', 'INGESTED', 'INGESTING',
-                PipelineStatus.QUEUED, PipelineStatus.PROCESSING, PipelineStatus.EXTRACTING, 
-                PipelineStatus.ASSEMBLING, PipelineStatus.FINALIZING
-            ]).exists()
-            
-            # [HYDRATION_FIX]
-            # Restrict review UI hydration to finalized, validated DTOs to prevent placeholder row leaks and edit-screen schema errors.
-            # We MUST wait for terminal orchestration convergence or materialization.
-            
-            if not terminal_from_redis and (is_processing or records.count() == 0):
-                empty_reason = "No staging records exist for this session yet." if records.count() == 0 else "Staging records are still in progress/processing."
-                logger.info(f"[STAGING_QUERY_RESULT_COUNT] count=0 (is_processing={is_processing} count={records.count()})")
-                logger.info(f"[STAGING_QUERY_EMPTY_REASON] {empty_reason}")
-
-                # [PURCHASE_SCAN_PROGRESS_FIX] Read real Redis progress instead of hardcoding 0.
-                # Previously this barrier always returned progress_percent=0, disconnecting
-                # the frontend from actual backend extraction progress (18.75%, 25%, etc.).
-                barrier_progress = 0.0
-                try:
-                    # [PROGRESS_PROPAGATION_FIX] Workers write to session:{record_id}, NOT session:{session_id}.
-                    # Re-use the aggregated helper defined above in the Redis section.
-                    # If the helper ran and gave us a result, use it; otherwise re-run.
-                    _agg = None
-                    try:
-                        _agg = _get_aggregated_redis_status_for_session(session_id)
-                    except NameError:
-                        # Helper not in scope (early return path skipped that block)
-                        from core.redis_orchestrator import orchestrator as _orch
-                        _rec_ids = list(
-                            InvoiceTempOCR.objects.filter(upload_session_id=session_id)
-                            .values_list('id', flat=True)
-                        )
-                        _progresses = []
-                        for _rid in _rec_ids:
-                            _rs = _orch.get_session_status(str(_rid))
-                            if _rs:
-                                _progresses.append(float(_rs.get('progress', 0.0)))
-                        if _progresses:
-                            _agg = {"progress": max(_progresses)}
-
-                    if _agg:
-                        raw_progress = _agg.get('progress', 0.0)
-                        barrier_progress = min(99.0, float(raw_progress or 0.0))
-                        logger.info(
-                            f"[PURCHASE_SCAN_BARRIER_PROGRESS] session={session_id} "
-                            f"redis_progress={raw_progress} barrier_progress={barrier_progress} "
-                            f"source=record_id_aggregated"
-                        )
-                    else:
-                        logger.info(f"[PURCHASE_SCAN_BARRIER_PROGRESS] session={session_id} no Redis data found, using 0")
-                except Exception as _prog_err:
-                    logger.warning(f"[PURCHASE_SCAN_BARRIER_PROGRESS_ERROR] session={session_id} err={_prog_err}")
-
-                logger.info(
-                    f"[PROGRESS_SERIALIZER] session={session_id} "
-                    f"barrier_progress={barrier_progress:.1f}% source=barrier_gate"
-                )
-
-                # [PROGRESSIVE_HYDRATION_FIX] Query staging records progressively
-                # [SESSION_VENDOR_RESOLUTION] Build canonical map ONCE before loop — state machine barrier path
-                records_list = list(records)
-                from vendors.vendor_validation_logic import build_session_vendor_map
-                _vendor_map = build_session_vendor_map(tenant_id, records_list)
-                logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=barrier session={session_id} map_size={len(_vendor_map)}")
-
-                data = []
-                for r in records_list:
-                    mapped = self._map_record_to_ui_row(r, vendor_map=_vendor_map)
-                    norm = getattr(r, 'extracted_data', {}) or {}
-                    page_role = norm.get('_page_role', '') or norm.get('page_role', '')
-                    if page_role == 'PAGE_ROLE_CONTINUATION':
-                        continue
-                    data.append(mapped)
-
-                self._log_final_api_response_rows(data, "barrier")
-                return Response({
-                    "status": "PROCESSING",
-                    "data": data,
-                    "progress_percent": barrier_progress,
-                    "source": "barrier"
-                })
-                
-
-        # ── 4. FALLBACK: RAW STAGING HYDRATION ──
-        if file_hash:
+            prim_rec = InvoiceTempOCR.objects.filter(upload_session_id=session_id).order_by('id').first()
+        elif file_hash:
             if str(file_hash).isdigit():
-                records = InvoiceTempOCR.objects.filter(id=int(file_hash), tenant_id=tenant_id)
-                if not records.exists():
-                    records_fb = InvoiceTempOCR.objects.filter(id=int(file_hash))
-                    if records_fb.exists():
-                        logger.warning(f"[TENANT_MISMATCH_RECOVERED] Raw staging records recovery by id={file_hash}")
-                        records = records_fb
+                prim_rec = InvoiceTempOCR.objects.filter(id=int(file_hash)).first()
             else:
-                records = InvoiceTempOCR.objects.filter(Q(file_hash=file_hash) | Q(upload_session_id=file_hash), tenant_id=tenant_id)
-                if not records.exists():
-                    records_fb = InvoiceTempOCR.objects.filter(Q(file_hash=file_hash) | Q(upload_session_id=file_hash))
-                    if records_fb.exists():
-                        logger.warning(f"[TENANT_MISMATCH_RECOVERED] Raw staging records recovery by file_hash={file_hash}")
-                        records = records_fb
-        elif session_id:
-            records = InvoiceTempOCR.objects.filter(upload_session_id=session_id, tenant_id=tenant_id).order_by('created_at', 'id')
+                prim_rec = InvoiceTempOCR.objects.filter(Q(file_hash=file_hash) | Q(upload_session_id=file_hash)).first()
+
+        if not prim_rec:
+            # Bootstrapping or no records found yet
+            return Response({
+                "status": "PROCESSING",
+                "data": [],
+                "pipeline_status": "processing",
+                "terminal": False,
+                "hydration_pending": True,
+                "completed": False,
+                "failed": False,
+                "progress_percent": 0.0,
+                "poll_latency": round(time.time() - t_poll_start, 3)
+            })
+
+        # Fetch database barrier state
+        from ocr_pipeline.models import SessionFinalizationState, FinalizedSnapshot
+        barrier_state = SessionFinalizationState.objects.filter(id=str(prim_rec.id)).first()
+
+        if not barrier_state:
+            # Still bootstrapping
+            return Response({
+                "status": "PROCESSING",
+                "data": [],
+                "pipeline_status": "processing",
+                "terminal": False,
+                "hydration_pending": True,
+                "completed": False,
+                "failed": False,
+                "progress_percent": 0.0,
+                "poll_latency": round(time.time() - t_poll_start, 3)
+            })
+
+        # Fetch progress percent from DB
+        expected = barrier_state.expected_pages or 1
+        completed = (barrier_state.completed_pages or 0) + (barrier_state.failed_pages or 0)
+        progress_percent = min(99.0, (completed / expected) * 100.0)
+
+        # Check for failure status
+        if barrier_state.status == 'FAILED' or (barrier_state.status == 'FINALIZED' and barrier_state.failed_pages > 0 and not barrier_state.terminal_consistency):
+            logger.info(f"[LIFECYCLE_TERMINAL_STATE] session={session_id} tenant_id={tenant_id} state=failed")
+            return Response({
+                "status": "FAILED",
+                "data": [],
+                "pipeline_status": "failed",
+                "terminal": True,
+                "hydration_pending": False,
+                "completed": True,
+                "failed": True,
+                "progress_percent": 100.0,
+                "poll_latency": round(time.time() - t_poll_start, 3)
+            })
+
+        # If terminal consistency is TRUE, read exclusively from FinalizedSnapshot
+        if barrier_state.terminal_consistency:
+            snapshots = FinalizedSnapshot.objects.filter(session_id=session_id).order_by('created_at', 'id')
+            if not snapshots.exists():
+                snapshots = FinalizedSnapshot.objects.filter(session_id=prim_rec.upload_session_id).order_by('created_at', 'id')
+
+            mapped_data = []
+            _snap_vendor_map = {}
+
+            for snapshot in snapshots:
+                snapshot_data = self._get_snapshot_data(snapshot)
+                raw_rows = snapshot_data.get('data', [])
+                for row in raw_rows:
+                    inv_no = row.get('invoice_no')
+                    gstin_val = row.get('gstin')
+
+                    db_record = InvoiceTempOCR.objects.filter(
+                        upload_session_id=session_id,
+                        supplier_invoice_no=inv_no
+                    ).first()
+
+                    if not db_record and row.get('id'):
+                        db_record = InvoiceTempOCR.objects.filter(id=row.get('id')).first()
+
+                    if db_record:
+                        if not getattr(db_record, 'tenant_id', None) and tenant_id:
+                            db_record.tenant_id = tenant_id
+                        norm_source = db_record.extracted_data or row
+                        dummy = db_record
+                    else:
+                        norm_source = row
+                        from types import SimpleNamespace
+                        dummy = SimpleNamespace(**{
+                            'id': row.get('id'),
+                            'tenant_id': tenant_id,
+                            'status': 'FINALIZED',
+                            'processed': True,
+                            'validation_status': row.get('validation_status') or 'NEED_VENDOR',
+                            'vendor_id': row.get('vendor_id'),
+                            'supplier_invoice_no': inv_no,
+                            'gstin': gstin_val,
+                            'irn': row.get('irn'),
+                            'ack_no': row.get('ack_no'),
+                            'ack_date': row.get('ack_date'),
+                            'created_at': row.get('created_at'),
+                            'voucher_type': row.get('voucher_type'),
+                            'branch': row.get('branch')
+                        })
+
+                    mapped = self._map_record_to_ui_row(dummy, norm_data=norm_source, vendor_map=_snap_vendor_map)
+
+                    if resume:
+                        if mapped.get("is_saved") or mapped.get("validationStatus") in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE'] or mapped.get('processed'):
+                            continue
+
+                    mapped_data.append(mapped)
+
+            logger.info(f"[STAGING_POLL] session={session_id} records={len(mapped_data)} terminal=True pipeline_status=completed hydration_pending=False")
+            self._log_final_api_response_rows(mapped_data, "snapshot")
             
-            # Resilient Tenant Fallback for Fallback Raw Hydration:
-            if not records.exists():
-                records_fb = InvoiceTempOCR.objects.filter(upload_session_id=session_id).order_by('created_at', 'id')
-                if records_fb.exists():
-                    logger.warning(f"[TENANT_MISMATCH_RECOVERED] Raw staging records recovery by session_id={session_id}")
-                    records = records_fb
-        elif resume:
-            records = InvoiceTempOCR.objects.filter(tenant_id=tenant_id, processed=False).order_by('-created_at', '-id')
-        else:
-            records = InvoiceTempOCR.objects.none()
+            return Response({
+                "status": "FINALIZED",
+                "data": mapped_data,
+                "pipeline_status": "completed",
+                "terminal": True,
+                "hydration_pending": False,
+                "completed": True,
+                "failed": False,
+                "progress_percent": 100.0,
+                "poll_latency": round(time.time() - t_poll_start, 3)
+            })
 
-        # [SESSION_VENDOR_RESOLUTION] Build canonical vendor map ONCE for all rows — raw staging path
-        records_list = list(records)
-        _vendor_map_raw = {}
-        if session_id or records_list:
-            _eff_tenant = tenant_id
-            from vendors.vendor_validation_logic import build_session_vendor_map
-            _vendor_map_raw = build_session_vendor_map(_eff_tenant, records_list)
-            logger.info(f"[SESSION_VENDOR_MAP_BUILD] path=raw_staging session={session_id} map_size={len(_vendor_map_raw)}")
-
-        data = []
-        _resume_dedup_seen = set()
-
-        for r in records_list:
-            mapped = self._map_record_to_ui_row(r, vendor_map=_vendor_map_raw)
-            # [FIX] Do NOT filter out FAILED rows. The UI must see them so the user can manually review
-            # instead of hanging in a blank screen.
-
-            # --- NEW MALFORMED ROW SANITIZATION ---
-            norm = getattr(r, 'extracted_data', {}) or {}
-            inv_no = mapped.get('invoice_no', '')
-            vendor = mapped.get('vendor_name', '')
-            page_role = norm.get('_page_role', '') or norm.get('page_role', '')
-
-            # Log warnings instead of strictly dropping, to prevent hydration from returning rows=0
-            # for documents with poor OCR but valid pipeline completion.
-            if not inv_no or str(inv_no).strip().upper() == 'MISSING' or str(inv_no).strip() == '—':
-                logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='missing_invoice_no_warning'")
-            if not vendor or str(vendor).strip().upper() == 'MISSING' or str(vendor).strip() == '—':
-                logger.warning(f"[PIPELINE_FILTER_REASON] inv_no='{inv_no}' reason='missing_vendor_warning'")
-            if page_role == 'PAGE_ROLE_CONTINUATION':
-                # We do drop continuation pages from the primary staging view to prevent UI clutter
-                continue
-            # --------------------------------------
-
-            if not mapped.get('invoice_no') and not mapped.get('items'):
-                logger.warning(f"[ROW_FILTER_WARNING] reason='completely_empty_record' record={r.id}")
-                mapped['_pipeline_warning'] = 'completely_empty_record'
-                # DO NOT drop the row! The frontend needs to know it processed and yielded nothing,
-                # otherwise the frontend assumes the row is still "in-flight" and retries forever.
-
-            if resume:
-                if not mapped.get("is_resume_pending", True):
-                    logger.info(f"[RESUME_ROW_RESOLVED] id={mapped.get('id')} reason='is_resume_pending=False'")
-                    continue
-                
-                # [RESUME_STAGING_DEDUP] deduplicate by canonical key
-                _gstin = str(mapped.get('vendor_gstin') or "").strip().upper()
-                _branch = str(mapped.get('branch') or getattr(r, 'branch', '') or "").strip().upper()
-                _inv_no = str(mapped.get('invoice_number') or mapped.get('invoice_no') or "").strip().upper()
-                
-                if _gstin and _inv_no and _inv_no != "—" and _gstin != "—":
-                    resume_key = (_gstin, _branch, _inv_no)
-                    if resume_key in _resume_dedup_seen:
-                        logger.info(f"[RESUME_DEDUP_SKIPPED] id={mapped.get('id')} resume_key={resume_key} reason='already_exists_in_unresolved_set'")
-                        continue
-                    _resume_dedup_seen.add(resume_key)
-
-            data.append(mapped)
-
-        # [VENDOR_STATE_CORRUPTION_DETECTOR] Verify no two rows with same GSTIN+branch got different statuses
-        _gstin_status_seen = {}
-        for row in data:
-            _row_gstin = (row.get('gstin') or "").strip().upper()
-            _row_branch = (row.get('branch') or "").strip()
-            _row_vid = row.get('vendor_id')
-            _row_vstatus = row.get('validationStatus')
-            if _row_gstin and _row_gstin not in ("—", "NONE"):
-                _identity_key = (_row_gstin, _row_branch)
-                if _identity_key in _gstin_status_seen:
-                    _prev_vid, _prev_vstatus = _gstin_status_seen[_identity_key]
-                    if _prev_vid != _row_vid or _prev_vstatus != _row_vstatus:
-                        logger.error(
-                            f"[VENDOR_STATE_CORRUPTION_DETECTED] "
-                            f"session={session_id} gstin={_row_gstin} branch={_row_branch} "
-                            f"row_id={row.get('id')} "
-                            f"current vendor_id={_row_vid} validationStatus={_row_vstatus} "
-                            f"vs prior vendor_id={_prev_vid} validationStatus={_prev_vstatus} "
-                            f"— DIVERGENT STATUS FOR SAME IDENTITY"
-                        )
-                else:
-                    _gstin_status_seen[_identity_key] = (_row_vid, _row_vstatus)
-        
-        poll_duration = time.time() - t_poll_start
-        metrics.record_latency("api:poll_duration", poll_duration)
-            
-        logger.info(f"[STAGING_QUERY_RESULT_COUNT] count={len(data)} (raw staging)")
-        if len(data) == 0:
-            logger.info("[STAGING_QUERY_EMPTY_REASON] No staging rows returned because records were empty or filtered out.")
-
-        # ── [PHASE 15] AUTHORITATIVE ORCHESTRATOR INFERENCE ──
-        # 'completed' → frontend stops polling. Use ONLY when Orchestrator explicitly grants it.
-        from core.redis_orchestrator import orchestrator
-        session_to_check = request.query_params.get('upload_session_id') or session_id
-        
-        pipeline_status = 'processing'
-        terminal = False
-        hydration_pending = True
-        
-        if session_to_check:
-            auth_state = orchestrator.get_authoritative_session_state(session_to_check)
-            terminal = auth_state.get('terminal', False)
-            snapshot_complete = auth_state.get('snapshot_complete', False)
-            terminal_reason = auth_state.get('terminal_reason', '')
-            
-            if terminal:
-                # If terminal, it's either COMPLETED or FAILED or EMPTY_SESSION_TERMINAL
-                if terminal_reason == 'EMPTY_SESSION_TERMINAL':
-                    pipeline_status = 'EMPTY_SESSION_TERMINAL'
-                elif terminal_reason in ['FAILED', 'FAILED_DUPLICATE', 'ERROR'] or (not snapshot_complete and len(data) == 0):
-                    pipeline_status = 'failed'
-                else:
-                    pipeline_status = 'completed'
-                hydration_pending = False
-            else:
-                pipeline_status = 'processing'
-                hydration_pending = True
-                logger.info(f"[FRONTEND_HYDRATION_WAIT] session={session_to_check} waiting for authoritative terminal state")
-                
-        if terminal and snapshot_complete and len(data) == 0:
-            logger.error(f"[EMPTY_HYDRATION_ILLEGAL_STATE] session={session_to_check} terminal=True snapshot_complete=True but returning 0 rows!")
-            
-        logger.info(
-            f"[STAGING_POLL] session={session_to_check} "
-            f"records={len(data)} terminal={terminal} "
-            f"pipeline_status={pipeline_status} hydration_pending={hydration_pending}"
-        )
-        logger.info(f"[STAGING_ROWS_RETURNED] count={len(data)} session={session_to_check}")
-        logger.info(f"[FRONTEND_ROWS_RECEIVED] count={len(data)} session={session_to_check}")
-        
-        if terminal:
-            logger.info(f"[LIFECYCLE_TERMINAL_STATE] session={session_to_check} tenant_id={tenant_id} state={pipeline_status}")
-
-        self._log_final_api_response_rows(data, "raw_staging")
+        # Otherwise, block pre-convergence hydration
+        logger.info(f"[STAGING_POLL] session={session_id} records=0 terminal=False pipeline_status=processing hydration_pending=True")
         return Response({
-            "status": pipeline_status.upper() if pipeline_status else "PROCESSING",
-            "data": data,
-            "pipeline_status": pipeline_status,
-            "terminal": terminal,
-            "hydration_pending": hydration_pending,
-            "completed": True if terminal else False,
-            "failed": True if pipeline_status == 'failed' else False,
-            "poll_latency": round(poll_duration, 3)
+            "status": "PROCESSING",
+            "data": [],
+            "pipeline_status": "processing",
+            "terminal": False,
+            "hydration_pending": True,
+            "completed": False,
+            "failed": False,
+            "progress_percent": progress_percent,
+            "poll_latency": round(time.time() - t_poll_start, 3)
         })
+
+
 
     def patch(self, request, file_hash=None):
         """
@@ -1824,6 +1270,14 @@ class OCRStagingFinalizeView(views.APIView):
         ready_count = len(eligible_tuples)
         pending_count = len(pending_tuples)
         logger.info(f"[READY_COUNT_RECALCULATED] session={upload_session_id} ready_count={ready_count} pending_count={pending_count}")
+
+        # Enforce and verify strict session isolation by comparing current session vs global staging tables
+        global_unresolved_count = InvoiceTempOCR.objects.filter(tenant_id=tenant_id, processed=False).count()
+        logger.info(
+            f"[FINALIZE_SESSION_ISOLATION_CHECK] session={upload_session_id} tenant={tenant_id} "
+            f"session_total_rows={len(all_records)} session_ready_count={ready_count} "
+            f"session_pending_count={pending_count} global_unresolved_count={global_unresolved_count}"
+        )
 
         # ── Requirement 5: Fix finalize candidate builder ──
         # Get only the records from the eligible tuples

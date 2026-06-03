@@ -526,4 +526,14 @@ class AIServiceProxy:
 
         return process_ai_request(request_data)
 
+    def get_stats(self) -> dict:
+        """Get service statistics"""
+        return {
+            'total_requests': 0,
+            'cache_hits': 0,
+            'circuit_breaker_open': circuit_breaker.is_open(),
+            'api_keys_total': len(api_key_manager.api_keys),
+            'api_keys_unhealthy': len(api_key_manager.unhealthy_keys),
+        }
+
 ai_service = AIServiceProxy()

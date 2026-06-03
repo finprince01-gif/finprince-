@@ -77,9 +77,11 @@ class HttpClient {
             (config) => {
                 const endpoint = config.url || '';
                 const isMasterAPI = endpoint.startsWith('/api/master/');
+                const isMasterPath = window.location.pathname.startsWith('/master');
+                const useMasterAuth = isMasterAPI || isMasterPath;
                 
                 // Prioritize domain-specific access tokens
-                const token = isMasterAPI ? getMasterAccessToken() : getCompanyAccessToken();
+                const token = useMasterAuth ? getMasterAccessToken() : getCompanyAccessToken();
                 
                 if (token && !isAnonymousEndpoint(endpoint)) {
                     config.headers.Authorization = `Bearer ${token}`;
@@ -97,6 +99,8 @@ class HttpClient {
                 const status = error.response?.status;
                 const endpoint = originalRequest.url || '';
                 const isMasterAPI = endpoint.startsWith('/api/master/');
+                const isMasterPath = window.location.pathname.startsWith('/master');
+                const useMasterAuth = isMasterAPI || isMasterPath;
 
                 // 1. Handle Deactivations / Security Intercepts (401/403)
                 const errorData = error.response?.data || {};
@@ -128,7 +132,7 @@ class HttpClient {
                     this.isRefreshing = true;
 
                     try {
-                        const newAccess = await this.performRefresh(isMasterAPI);
+                        const newAccess = await this.performRefresh(useMasterAuth);
                         this.isRefreshing = false;
                         this.processQueue(null, newAccess);
                         

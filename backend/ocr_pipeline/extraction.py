@@ -19,6 +19,63 @@ from ocr_pipeline.models import AICache
 from django.db.models import F
 logger = logging.getLogger(__name__)
 
+def log_forensic_page_dto(result, upload_session_id, physical_file_id, page_number, raw_text):
+    if not isinstance(result, dict):
+        return
+    header = result.get('header', {}) or {}
+    items = result.get('items', []) or []
+    
+    # Heuristics
+    generic_keywords = [
+        "services", "total", "subtotal", "sub-total", "summary",
+        "carried forward", "brought forward",
+        "rounded off", "round off", "rounding", "adjustment",
+        "output cgst", "output sgst", "output igst",
+        "input cgst", "input sgst", "input igst",
+        "cgst @", "sgst @", "igst @",
+        "tax summary", "amount chargeable", "declaration",
+        "less round", "add round", "bank charges", "net amount",
+        "e & o.e", "balance",
+    ]
+    has_summary_rows = any(any(kw in str(itm.get("description") or itm.get("item_name") or "").lower() for kw in generic_keywords) for itm in items)
+    has_real_items = any(not any(kw in str(itm.get("description") or itm.get("item_name") or "").lower() for kw in generic_keywords) for itm in items)
+    
+    total_amount = header.get('total_amount') or header.get('total_invoice_value')
+    has_final_total = False
+    if total_amount is not None:
+        try:
+            has_final_total = float(str(total_amount).replace(',', '')) > 0.0
+        except ValueError:
+            pass
+            
+    continuation_keywords = [
+        "continued to page", "rounded off", "tax summary",
+        "output cgst", "output sgst", "authorised signatory",
+        "carried forward", "brought forward", "round off",
+        "rounding adjustment", "amount chargeable in words",
+        "e & o.e", "declaration",
+    ]
+    raw_text_lower = str(raw_text or "").lower()
+    has_continuation_marker = any(kw in raw_text_lower for kw in continuation_keywords)
+    
+    dto_info = {
+        "upload_session_id": str(upload_session_id or ""),
+        "physical_file_id": str(physical_file_id or ""),
+        "page_number": int(page_number or 0),
+        "invoice_no": str(header.get("invoice_no") or ""),
+        "gstin": str(header.get("vendor_gstin") or header.get("gstin") or ""),
+        "invoice_date": str(header.get("invoice_date") or ""),
+        "vendor_name": str(header.get("vendor_name") or ""),
+        "raw_items": items,
+        "raw_item_count": len(items),
+        "has_real_items": has_real_items,
+        "has_summary_rows": has_summary_rows,
+        "has_final_total": has_final_total,
+        "has_continuation_marker": has_continuation_marker,
+        "dto_memory_id": str(id(result))
+    }
+    logger.info(f"[FORENSIC_PAGE_DTO]\n{json.dumps(dto_info, indent=2, default=str)}")
+
 MOCK_EXTRACTION_MODE = os.getenv('MOCK_EXTRACTION_MODE', 'false').lower() == 'true'
 
 _JSON_QUARANTINE_LOG = logging.getLogger("AIJsonQuarantine")
@@ -334,6 +391,10 @@ Return a JSON object with a "pages" key containing a list of {count} results in 
                 p_res["_pdf_ocr_text"] = batch_data[i]['ocr_text']
                 # Cache individual results
                 _set_cached_ai_result(batch_data[i]['ocr_text'], p_res)
+                try:
+                    log_forensic_page_dto(p_res, upload_session_id, record_id, idx + 1, batch_data[i]['ocr_text'])
+                except Exception as le:
+                    logger.warning(f"[FORENSIC_PAGE_DTO_LOG_ERR] {le}")
                 final_results[idx] = p_res
             return final_results
         except Exception as e:
@@ -453,6 +514,10 @@ Failure to extract ANY field that is visible on the document is unacceptable.
         cached_res = _get_cached_ai_result(page_ocr_text)
         if cached_res:
             logger.info(f"[AI_CACHE_HIT] record={record_id} page={page_idx+1}")
+            try:
+                log_forensic_page_dto(cached_res, upload_session_id, record_id, page_idx + 1, page_ocr_text)
+            except Exception as le:
+                logger.warning(f"[FORENSIC_PAGE_DTO_LOG_ERR] {le}")
             return cached_res
 
         # Ensure ONLY this page's OCR text is included. 
@@ -579,6 +644,10 @@ Failure to extract ANY field that is visible on the document is unacceptable.
                 "_pdf_ocr_text": page_ocr_text
             }
             logger.info(f"[MOCK_EXTRACTION] record={record_id} page={page_idx+1}")
+            try:
+                log_forensic_page_dto(mock_payload, upload_session_id, record_id, page_idx + 1, page_ocr_text)
+            except Exception as le:
+                logger.warning(f"[FORENSIC_PAGE_DTO_LOG_ERR] {le}")
             return mock_payload
 
         if not wait_for_result:
@@ -665,6 +734,10 @@ Failure to extract ANY field that is visible on the document is unacceptable.
             
             # 2. Save to Cache
             _set_cached_ai_result(page_ocr_text, result)
+            try:
+                log_forensic_page_dto(result, upload_session_id, record_id, page_idx + 1, page_ocr_text)
+            except Exception as le:
+                logger.warning(f"[FORENSIC_PAGE_DTO_LOG_ERR] {le}")
             
             return result
         except json.JSONDecodeError as jde:
@@ -880,10 +953,12 @@ Failure to extract ANY field that is visible on the document is unacceptable.
 
     if doc: doc.close()
 
-    # ── STEP 4: PAGE-BY-PAGE ISOLATION (Root Cause Fix) ──
     pages_map = {}
     for i in range(page_count):
-        page_result = results_map.get(i) or {"status": "OCR_FAILED", "_error": "MISSING_RESULT"}
+        if not wait_for_result:
+            page_result = results_map.get(i) or {"status": "queued", "_error": "PENDING_WINDOW"}
+        else:
+            page_result = results_map.get(i) or {"status": "OCR_FAILED", "_error": "MISSING_RESULT"}
         page_result["_page_no"] = i + 1
         pages_map[str(i+1)] = page_result
 

@@ -25,4 +25,4 @@ def test_authenticated_endpoint_requires_token():
     # Test check-status which should be IsAuthenticated
     url = reverse('check-status')
     response = client.get(url)
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

@@ -1,20 +1,61 @@
 # Manually fixed migration: 0012
-# - Removes AddField ops for columns already in session_finalization_states
-# - Removes CreateModel for poison_pdfs (table already exists)
+# - Conditionally creates poison_pdfs table and session_finalization_states columns if missing
+# - Conditionally adds missing columns to invoice_ocr_temp
 # - Only creates export_tasks (genuinely missing)
 
 import uuid
 from django.db import migrations, models
 
+def create_poison_pdfs_if_missing(apps, schema_editor):
+    db_table = 'poison_pdfs'
+    connection = schema_editor.connection
+    table_names = connection.introspection.table_names()
+    if db_table not in table_names:
+        PoisonPDF = apps.get_model('ocr_pipeline', 'PoisonPDF')
+        schema_editor.create_model(PoisonPDF)
+
+def add_columns_if_missing(apps, schema_editor):
+    db_table = 'session_finalization_states'
+    connection = schema_editor.connection
+    table_names = connection.introspection.table_names()
+    if db_table in table_names:
+        columns = [f.name for f in connection.introspection.get_table_description(connection.cursor(), db_table)]
+        SessionFinalizationState = apps.get_model('ocr_pipeline', 'SessionFinalizationState')
+        
+        fields_to_add = ['ai_completed_pages', 'completed_pages', 'expected_pages', 'failed_pages']
+        for field_name in fields_to_add:
+            if field_name not in columns:
+                field_obj = SessionFinalizationState._meta.get_field(field_name)
+                schema_editor.add_field(SessionFinalizationState, field_obj)
+
+def add_missing_columns_to_invoice_ocr_temp(apps, schema_editor):
+    db_table = 'invoice_ocr_temp'
+    connection = schema_editor.connection
+    table_names = connection.introspection.table_names()
+    if db_table in table_names:
+        columns = [f.name for f in connection.introspection.get_table_description(connection.cursor(), db_table)]
+        
+        fields_to_add = {
+            'upload_type': "VARCHAR(50) DEFAULT 'UNKNOWN' NOT NULL",
+            'workflow_version': "BIGINT DEFAULT 0 NOT NULL",
+            'irn': "VARCHAR(255) NULL",
+            'ack_no': "VARCHAR(255) NULL",
+            'ack_date': "VARCHAR(255) NULL",
+        }
+        
+        with connection.cursor() as cursor:
+            for field_name, sql_def in fields_to_add.items():
+                if field_name not in columns:
+                    cursor.execute(f"ALTER TABLE invoice_ocr_temp ADD COLUMN {field_name} {sql_def}")
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('ocr_pipeline', '0011_finalizedsnapshot_s3_key_and_more'),
     ]
 
     operations = [
-        # PoisonPDF table already exists in DB - use SeparateDatabaseAndState to register model
         migrations.SeparateDatabaseAndState(
             database_operations=[],
             state_operations=[
@@ -37,7 +78,7 @@ class Migration(migrations.Migration):
                 ),
             ]
         ),
-        # session_finalization_states columns already exist - register in state only
+        migrations.RunPython(create_poison_pdfs_if_missing, reverse_code=migrations.RunPython.noop),
         migrations.SeparateDatabaseAndState(
             database_operations=[],
             state_operations=[
@@ -63,7 +104,8 @@ class Migration(migrations.Migration):
                 ),
             ]
         ),
-        # export_tasks does NOT exist - create it for real
+        migrations.RunPython(add_columns_if_missing, reverse_code=migrations.RunPython.noop),
+        migrations.RunPython(add_missing_columns_to_invoice_ocr_temp, reverse_code=migrations.RunPython.noop),
         migrations.CreateModel(
             name='ExportTask',
             fields=[

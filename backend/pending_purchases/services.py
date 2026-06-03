@@ -16,6 +16,10 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
     logger.info(f"[PENDING_EVAL_ENTER] record={record.id} session={record.upload_session_id}")
     logger.info(f"[PENDING_STATUS_TRACE] record={record.id} vendor={vendor_status} voucher={voucher_status} item={item_status}")
     
+    if voucher_status == ValidationEnums.VOUCHER_STATUS_EXISTING:
+        logger.info(f"[PENDING_SKIP] record={record.id} is a duplicate voucher (VOUCHER_STATUS_EXISTING)")
+        return False
+
     if (vendor_status == ValidationEnums.VENDOR_STATUS_EXISTING and
         voucher_status == ValidationEnums.VOUCHER_STATUS_EXISTING and
         item_status == ValidationEnums.ITEM_STATUS_EXISTING):
