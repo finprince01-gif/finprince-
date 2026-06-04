@@ -34,11 +34,27 @@ class InventoryItemValidationService:
             return ""
         s = str(val).strip().upper()
         
-        # OCR character substitutions
-        s = s.replace("O", "0")
-        s = s.replace("L", "1")
-        s = s.replace("I", "1")
-        s = s.replace("RN", "M")
+        # Split into tokens by whitespace, normalize each token using classifier
+        from ocr_pipeline.services.item_identity_repair import classify_token
+        
+        tokens = s.split()
+        normalized_tokens = []
+        for token in tokens:
+            token_type = classify_token(token)
+            norm_token = token
+            if token_type == "INDUSTRIAL":
+                # Apply numeric substitutions
+                norm_token = norm_token.replace("O", "0")
+                norm_token = norm_token.replace("L", "1")
+                norm_token = norm_token.replace("I", "1")
+                norm_token = norm_token.replace("S", "5")
+                norm_token = norm_token.replace("Z", "2")
+            
+            norm_token = norm_token.replace("RN", "M")
+            logger.info(f"[SAFE_NORMALIZATION_BOUNDARY] Token='{token}' Type='{token_type}' Raw='{token}' Normalized='{norm_token}'")
+            normalized_tokens.append(norm_token)
+            
+        s = " ".join(normalized_tokens)
         
         # Punctuation and symbol cleanup
         s = re.sub(r'[^A-Z0-9\s]', ' ', s)
@@ -147,44 +163,68 @@ class InventoryItemValidationService:
             existing_canonical = item.get("canonical_name")
             existing_confidence = item.get("inventory_match_confidence")
             
-            if existing_match_id is not None and existing_strategy not in (None, "CREATE_ITEM"):
-                # Preserve existing matched metadata
+            is_frozen = (item.get("is_canonical_frozen") == True or item.get("_is_canonical_frozen") == True)
+            
+            # Compute current match
+            computed_match = None
+            computed_priority = 0
+            computed_score = 0.0
+            computed_strategy = "CREATE_ITEM"
+            
+            for db_item in tenant_inventory:
+                score, strategy = cls._evaluate_candidate(ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens, db_item)
+                
+                strat_priority = {
+                    "EXACT_CANONICAL_MATCH": 5,
+                    "TOKEN_CANONICAL_MATCH": 4,
+                    "HSN_NAME_MATCH": 3,
+                    "FUZZY_CANONICAL_MATCH": 2,
+                    "NONE": 0
+                }.get(strategy, 0)
+                
+                if strat_priority > 0:
+                    if (strat_priority > computed_priority) or (strat_priority == computed_priority and score > computed_score):
+                        computed_match = db_item
+                        computed_priority = strat_priority
+                        computed_score = score
+                        computed_strategy = strategy
+
+            if computed_match:
+                computed_status = "ALREADY EXIST"
+                computed_matched_id = computed_match.id
+            else:
+                computed_status = "CREATE ITEM"
+                computed_matched_id = None
+                computed_strategy = "CREATE_ITEM"
+                computed_score = 0.0
+
+            if is_frozen:
+                # Check for mutation on frozen item
+                existing_conf_val = float(existing_confidence) if existing_confidence is not None else 0.0
+                strategy_mutated = (existing_strategy != computed_strategy)
+                identity_mutated = (existing_match_id != computed_matched_id)
+                confidence_mutated = (existing_conf_val != float(computed_score))
+                
+                if strategy_mutated or identity_mutated or confidence_mutated:
+                    logger.error(f"[IMMUTABILITY_ENFORCED] Attempted mutation on frozen item='{ocr_name_raw}'")
+                    raise CriticalPipelineError(
+                        f"Attempted mutation on frozen item='{ocr_name_raw}': "
+                        f"strategy: {existing_strategy} -> {computed_strategy}, "
+                        f"identity: {existing_match_id} -> {computed_matched_id}, "
+                        f"confidence: {existing_confidence} -> {computed_score}"
+                    )
+                
                 matched_id = existing_match_id
                 best_strategy = existing_strategy
                 best_score = float(existing_confidence or 100.0)
                 canonical_name = existing_canonical or canonical_name
-                status = "ALREADY EXIST"
-                best_match = next((db for db in tenant_inventory if db.id == matched_id), None)
-                logger.info(f"[ITEM_MATCH_FROZEN] tenant_id={tenant_id} item='{ocr_name_raw}' strategy={best_strategy} id={matched_id}")
+                status = "ALREADY EXIST" if matched_id else "CREATE ITEM"
             else:
-                for db_item in tenant_inventory:
-                    score, strategy = cls._evaluate_candidate(ocr_code, ocr_hsn, ocr_name_norm, ocr_tokens, db_item)
-                    
-                    strat_priority = {
-                        "EXACT_CANONICAL_MATCH": 5,
-                        "TOKEN_CANONICAL_MATCH": 4,
-                        "HSN_NAME_MATCH": 3,
-                        "FUZZY_CANONICAL_MATCH": 2,
-                        "NONE": 0
-                    }.get(strategy, 0)
-                    
-                    if strat_priority > 0:
-                        # Deterministic matching strategies precedence (Phase 3)
-                        if (strat_priority > best_priority) or (strat_priority == best_priority and score > best_score):
-                            best_match = db_item
-                            best_priority = strat_priority
-                            best_score = score
-                            best_strategy = strategy
-
-                if best_match:
-                    status = "ALREADY EXIST"
-                    matched_id = best_match.id
-                else:
-                    status = "CREATE ITEM"
-                    matched_id = None
-                    all_matched = False
-                    best_strategy = "CREATE_ITEM"
-                    best_score = 0.0
+                # Non-frozen path
+                matched_id = computed_matched_id
+                best_strategy = computed_strategy
+                best_score = computed_score
+                status = computed_status
 
             # Phase 5: Forensic logging for every item
             logger.info(f"[ITEM_IDENTITY_REPAIR] raw='{ocr_name_raw}' canonical='{canonical_name}' repairs={repair_res.get('repair_operations')}")

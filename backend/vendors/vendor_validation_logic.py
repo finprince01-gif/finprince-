@@ -4,6 +4,47 @@ from .models import VendorMasterBasicDetail, VendorMasterGSTDetails
 
 logger = logging.getLogger(__name__)
 
+DIGIT_REPAIRS = {
+    'O': '0', 'I': '1', 'L': '1', 'S': '5', 'B': '8'
+}
+LETTER_REPAIRS = {
+    '0': 'O', '1': 'I', '5': 'S', '8': 'B', '2': 'Z'
+}
+
+def canonicalize_gstin_ocr(raw_gstin: str) -> str:
+    """
+    Enforces 15-character GSTIN structure and performs position-aware character repair.
+    """
+    if not raw_gstin:
+        return ""
+    
+    # Strip whitespace and convert to uppercase
+    gstin = "".join(str(raw_gstin).split()).upper()
+    
+    if len(gstin) == 15:
+        repaired = []
+        for i, char in enumerate(gstin):
+            if i in (0, 1): # Positions 1-2: digits
+                repaired.append(DIGIT_REPAIRS.get(char, char))
+            elif i in (2, 3, 4, 5, 6): # Positions 3-7: letters
+                repaired.append(LETTER_REPAIRS.get(char, char))
+            elif i in (7, 8, 9, 10): # Positions 8-11: digits
+                repaired.append(DIGIT_REPAIRS.get(char, char))
+            elif i == 11: # Position 12: letter
+                repaired.append(LETTER_REPAIRS.get(char, char))
+            elif i == 12: # Position 13: letter or digit
+                repaired.append(char)
+            elif i == 13: # Position 14: letter
+                repaired.append(LETTER_REPAIRS.get(char, char))
+            elif i == 14: # Position 15: digit
+                repaired.append(DIGIT_REPAIRS.get(char, char))
+        canonical = "".join(repaired)
+    else:
+        canonical = gstin
+        
+    logger.info(f"[GSTIN_CANONICALIZATION] Raw='{raw_gstin}' Canonical='{canonical}'")
+    return canonical
+
 def normalize_branch(branch_name):
     """
     STRICT Normalization rules for Branch/Location:
@@ -40,7 +81,7 @@ def resolve_vendor_for_gstin_branch(tenant_id, gstin, branch, record_id=None, ve
     )
 
     # 4. VERIFY GSTIN NORMALIZATION
-    v_gstin = (gstin or "").strip().upper()
+    v_gstin = canonicalize_gstin_ocr(gstin)
     v_branch = normalize_branch(branch or "Main Branch")
     
     logger.info(
@@ -261,7 +302,14 @@ def build_session_vendor_map(tenant_id, records):
             norm.get('branch') or ""
         )
 
-        gstin_clean = str(gstin_raw).strip().upper()
+        gstin_raw_str = str(gstin_raw).strip()
+        gstin_clean = canonicalize_gstin_ocr(gstin_raw_str)
+
+        # Save raw and canonical in record extracted_data (without mutating original GSTIN)
+        if hasattr(r, 'extracted_data') and isinstance(r.extracted_data, dict):
+            r.extracted_data['raw_gstin'] = gstin_raw_str
+            r.extracted_data['canonical_gstin'] = gstin_clean
+
         branch_norm = normalize_branch(branch_raw or "Main Branch")
 
         if not gstin_clean or gstin_clean in ("", "—", "NONE", "NULL"):

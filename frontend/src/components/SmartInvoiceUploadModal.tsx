@@ -1090,6 +1090,24 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         fetchResumeCounts();
     }, [fetchResumeCounts]);
 
+    // ── Re-hydration guard: fires once when entering review step with a valid session ──
+    // This restores the scan list after "Back to Scan List" navigation, which
+    // unmounts/remounts BulkInvoiceUploadModal with empty local state.
+    const hasFetchedForReviewRef = useRef(false);
+    useEffect(() => {
+        const sid = uploadSessionId || activeSessionId;
+        if (step === 'review' && sid && !hasFetchedForReviewRef.current) {
+            hasFetchedForReviewRef.current = true;
+            console.log("[FORENSIC][RE-HYDRATION] Restoring scan list on review mount. session_id =", sid);
+            fetchStagedInvoices(sid);
+        }
+        // Reset flag when leaving review step so next entry re-fetches
+        if (step !== 'review') {
+            hasFetchedForReviewRef.current = false;
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [step, uploadSessionId, activeSessionId]); // intentionally omit fetchStagedInvoices to prevent ref-change loops
+
     // ── Live countdown timer ──────────────────────────────────────────────────
     useEffect(() => {
         if (step === 'scanning' && estimatedExtractionTime !== null) {

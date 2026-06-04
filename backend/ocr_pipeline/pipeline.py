@@ -2124,9 +2124,11 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         # 🔹 AUTHORITATIVE STRICT DUPLICATE CHECK (Invoice No + GSTIN + Branch within tenant_id)
         is_duplicate = False
         if invoice_no and gstin:
+            from vendors.vendor_validation_logic import canonicalize_gstin_ocr
+            canonical_gst = canonicalize_gstin_ocr(gstin)
             is_duplicate = VoucherPurchaseSupplierDetails.objects.filter(
                 supplier_invoice_no__iexact=invoice_no,
-                gstin__iexact=gstin,
+                gstin__iexact=canonical_gst,
                 branch__iexact=branch_name,
                 tenant_id=tenant_id
             ).exists()
@@ -2216,12 +2218,12 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 logger.warning(f"[VENDOR_FK_RESOLUTION_FAILED] record={record.id} vendor_id={record.vendor_id} tenant={tenant_id} — vendor not found in master. Falling back to GSTIN lookup.")
         else:
             # ⚫ STRICT VENDOR VALIDATION (GSTIN + BRANCH) — only when vendor_id not pre-resolved
-            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
+            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb, canonicalize_gstin_ocr
             logger.info(f"[FINALIZE_VENDOR_LOOKUP] record={record.id} path=GSTIN_BRANCH gstin={gstin} branch={branch_name}")
             logger.info(f"[PURCHASE_SCAN_VENDOR_VALIDATION_CALL] id={record.id} tenant_id={tenant_id} validation_status={record.validation_status}")
             logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
             _vendor_map = build_session_vendor_map(tenant_id, [record])
-            gstin_key = (gstin or "").strip().upper()
+            gstin_key = canonicalize_gstin_ocr(gstin)
             branch_key = _nb(branch_name or "Main Branch")
             val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
             logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")
@@ -2255,10 +2257,10 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
 
         if not vendor:
             # Re-check if it's there (duplicate check might have used OCR name, this uses master)
-            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb
+            from vendors.vendor_validation_logic import build_session_vendor_map, normalize_branch as _nb, canonicalize_gstin_ocr
             logger.info(f"[EXISTING_VENDOR_VALIDATION_CALL] tenant_id={tenant_id} name={vendor_name} gstin={gstin} branch={branch_name}")
             _vendor_map = build_session_vendor_map(tenant_id, [record])
-            gstin_key = (gstin or "").strip().upper()
+            gstin_key = canonicalize_gstin_ocr(gstin)
             branch_key = _nb(branch_name or "Main Branch")
             val_res = _vendor_map.get((gstin_key, branch_key)) or {"status": "CREATE_VENDOR", "vendor_id": None}
             logger.info(f"[VENDOR_VALIDATION_RESULT] record_id={record.id} result={val_res}")

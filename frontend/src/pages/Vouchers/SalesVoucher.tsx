@@ -2148,19 +2148,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     payment_payable: parseNum(paymentPayable),
                     posting_note: paymentPostingNote,
                     terms_conditions: termsConditions,
-                    advance_references: JSON.stringify(
-                        advanceReferences
-                            .filter(ref => ref.appliedNow) // only send applied advances
-                            .map(ref => ({
-                                ...ref,
-                                // Provide explicit numeric allocatedNow so write_allocations
-                                // doesn't need to infer it from the boolean appliedNow flag
-                                allocatedNow: parseNum(ref.amount),
-                                appliedNow: parseNum(ref.amount), // numeric amount, not boolean
-                                // Ensure refNo always has a usable value
-                                refNo: ref.refNo || `ADV-${ref.id}`,
-                            }))
-                    )
+                    advance_references: JSON.stringify(advanceReferences)
                 },
 
                 // Dispatch Details
@@ -2313,7 +2301,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 is_ecommerce_sales: isEcommerceSales === 'Yes',
                 items: itemRows.filter(row => row.selected !== false).map(row => ({ item_code: row.itemCode, item_name: row.itemName, hsn_sac: row.hsnSac, qty: parseNum(row.qty), uom: row.uom, item_rate: parseNum(row.itemRate), taxable_value: parseNum(row.taxableValue), igst: parseNum(row.igst), cgst: parseNum(row.cgst), sgst: parseNum(row.sgst), cess: parseNum(row.cess), invoice_value: parseNum(row.invoiceValue), sales_ledger: row.salesLedger, description: row.description, alternate_unit: row.alternateUnit })),
                 foreign_items: stateType === 'export' ? foreignItemRows.filter(row => row.selected !== false).map(row => ({ description: row.description, quantity: parseNum(row.qty), uqc: row.uom, rate: parseNum(row.itemRate), amount: parseNum(row.invoiceValue) })) : [],
-                payment_details: { payment_taxable_value: calculateTotals().taxableValue, payment_igst: calculateTotals().igst, payment_cgst: calculateTotals().cgst, payment_sgst: calculateTotals().sgst, payment_cess: calculateTotals().cess, payment_state_cess: parseNum(paymentStateCess), payment_invoice_value: calculateTotals().invoiceValue, payment_tds_income_tax: parseNum(paymentTdsIncomeTax), payment_tds_gst: parseNum(paymentTdsGst), payment_advance: parseNum(paymentAdvance), payment_payable: parseNum(paymentPayable), posting_note: paymentPostingNote, terms_conditions: termsConditions, advance_references: JSON.stringify(advanceReferences.filter(ref => ref.appliedNow).map(ref => ({ ...ref, allocatedNow: parseNum(ref.amount), appliedNow: parseNum(ref.amount), refNo: ref.refNo || `ADV-${ref.id}` }))) },
+                payment_details: { payment_taxable_value: calculateTotals().taxableValue, payment_igst: calculateTotals().igst, payment_cgst: calculateTotals().cgst, payment_sgst: calculateTotals().sgst, payment_cess: calculateTotals().cess, payment_state_cess: parseNum(paymentStateCess), payment_invoice_value: calculateTotals().invoiceValue, payment_tds_income_tax: parseNum(paymentTdsIncomeTax), payment_tds_gst: parseNum(paymentTdsGst), payment_advance: parseNum(paymentAdvance), payment_payable: parseNum(paymentPayable), posting_note: paymentPostingNote, terms_conditions: termsConditions, advance_references: JSON.stringify(advanceReferences) },
                 dispatch_details: { dispatch_from: dispatchFrom, mode_of_transport: modeOfTransport, dispatch_date: formatDate(dispatchDate), dispatch_time: formatDate(dispatchTime), delivery_type: deliveryType, self_third_party: selfThirdParty, transporter_id: transporterId, transporter_name: transporterName, vehicle_no: vehicleNo, lr_gr_consignment: lrGrConsignment, dispatch_document: dispatchDocument },
                 eway_bill_details: ewayValidationEntries.map(entry => ({ eway_bill_available: entry.available === 'Yes', eway_bill_no: entry.ewayBillNo || '', eway_bill_date: formatDate(entry.date || ''), validity_period: entry.validityPeriod || '', distance: entry.distance || '', irn, ack_no: ackNo, ack_date: formatDate(ackDate) }))
             };
