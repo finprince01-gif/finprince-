@@ -1778,5 +1778,108 @@ def test_item_identity_repair_and_semantic_matching():
     assert "match strategy changes after freeze" in str(exc_info_strategy.value)
 
 
+def test_language_token_preservation():
+    """
+    Asserts that language tokens (e.g. 'LATHE') are never mutated
+    by character repair or normalization.
+    """
+    from ocr_pipeline.services.item_identity_repair import repair_item_identity
+    from ocr_pipeline.inventory_validation import InventoryItemValidationService
+
+    # 1. Assert repair_item_identity preserves LATHE
+    res = repair_item_identity("LATHE")
+    assert res["canonical_name"] == "LATHE"
+
+    # 2. Assert normalize_string preserves LATHE
+    norm = InventoryItemValidationService.normalize_string("LATHE")
+    assert norm == "LATHE"
+
+
+def test_industrial_token_normalization():
+    """
+    Asserts that industrial tokens (e.g. '6008-B65') containing numeric / digit lookalikes
+    are correctly repaired and normalized.
+    """
+    from ocr_pipeline.services.item_identity_repair import repair_item_identity
+    from ocr_pipeline.inventory_validation import InventoryItemValidationService
+
+    # 1. Assert repair_item_identity repairs lookalikes in industrial token context
+    res = repair_item_identity("60O8-B6S")
+    assert res["canonical_name"] == "6008-B65"
+
+    # 2. Assert normalize_string repairs lookalikes in industrial token context
+    norm = InventoryItemValidationService.normalize_string("60O8-B6S")
+    assert norm == "6008 B65"
+
+
+def test_duplicate_industrial_group_collapse():
+    """
+    Asserts that duplicate adjacent or non-adjacent industrial token sequences
+    are collapsed correctly.
+    """
+    from ocr_pipeline.services.item_identity_repair import collapse_duplicate_industrial_groups
+
+    # Collapses identical duplicate industrial tokens like 6008-B65 and PIN
+    raw = "6008-B65 6008-B65 PIN PIN"
+    collapsed = collapse_duplicate_industrial_groups(raw)
+    assert collapsed == "6008-B65 PIN"
+
+
+def test_gstin_canonicalization_repair():
+    """
+    Asserts that GSTIN canonicalization enforces structure and repairs corrupted formats.
+    """
+    from vendors.vendor_validation_logic import canonicalize_gstin_ocr
+
+    # Corrupted GSTIN: 33A8ACA57I8R1ZD -> should repair 8->B at pos 4, I->1 at pos 10
+    corrupted = "33A8ACA57I8R1ZD"
+    repaired = canonicalize_gstin_ocr(corrupted)
+    assert repaired == "33ABACA5718R1ZD"
+
+
+@pytest.mark.django_db
+def test_immutability_post_finalization():
+    """
+    Asserts that once is_canonical_frozen = True, item validations raise CriticalPipelineError
+    if any item attributes (strategy, identity, confidence) are mutated.
+    """
+    from ocr_pipeline.inventory_validation import InventoryItemValidationService
+    from core.models import Tenant
+    from inventory.models import InventoryItem
+    from ocr_pipeline.inventory_validation import CriticalPipelineError
+
+    tenant_id = "test-tenant-immutability"
+    tenant = Tenant.objects.create(id=tenant_id, name="Test Tenant")
+    db_item = InventoryItem.objects.create(
+        tenant_id=tenant_id,
+        item_name="6008-B65 PIN",
+        item_code="6008-B65",
+        hsn_code="8466"
+    )
+
+    # Base valid item
+    item = {
+        "line_index": 0,
+        "item_name": "6008-B65 PIN",
+        "inventory_item_id": db_item.id,
+        "inventory_match_strategy": "EXACT_CANONICAL_MATCH",
+        "inventory_match_confidence": 100.0,
+        "canonical_name": "6008-B65 PIN",
+        "is_canonical_frozen": True
+    }
+
+    # 1. Validation with identical attributes passes
+    res = InventoryItemValidationService.validate_items(tenant_id, [item])
+    assert len(res["items"]) == 1
+
+    # 2. Validation with mutated strategy throws CriticalPipelineError
+    mutated_strategy_item = item.copy()
+    mutated_strategy_item["inventory_match_strategy"] = "TOKEN_CANONICAL_MATCH"
+    with pytest.raises(CriticalPipelineError) as exc_info:
+        InventoryItemValidationService.validate_items(tenant_id, [mutated_strategy_item])
+    assert "Attempted mutation on frozen item" in str(exc_info.value)
+
+
+
 
 

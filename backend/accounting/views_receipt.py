@@ -222,7 +222,22 @@ class ReceiptVoucherViewSet(viewsets.ModelViewSet):
                     customer_id=pt_c, vendor_id=pt_v
                 )
 
-
+            # Mark this Receipt as an advance so it appears in Allocation views
+            AdvanceAllocation.objects.create(
+                tenant_id=tenant_id,
+                transaction=instance,
+                type='receipt',
+                reference_id='ADVANCE',
+                reference_number=v_num,
+                reference_type='ADVANCE',
+                pay_from_ledger=receive_from_ledger,
+                pay_to_ledger=receive_in_ledger,
+                allocated_amount=entered_amount,
+                amount=entered_amount,
+                original_amount=entered_amount,
+                is_advance=True,
+                advance_ref_no=v_num
+            )
 
             # Create a legacy Voucher record required for DayBook visibility
             from accounting.models import Voucher

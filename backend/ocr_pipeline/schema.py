@@ -30,6 +30,8 @@ class CanonicalInvoiceSchema(BaseModel):
     invoice_date: str = "" # Format: DD-MM-YYYY
     vendor_name: str = ""
     gstin: str = ""
+    raw_gstin: str = ""
+    canonical_gstin: str = ""
     branch: str = ""
     hsn_sac: str = ""
     

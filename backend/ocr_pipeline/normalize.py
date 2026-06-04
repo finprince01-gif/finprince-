@@ -465,11 +465,14 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
         logger.warning(f"[TENANT_ISOLATION_WARN] Extracted GSTIN '{gstin_val}' matches tenant GSTIN '{tenant_gstin}'. Wiping vendor GSTIN to prevent contamination.")
         gstin_val = ""
 
+    from vendors.vendor_validation_logic import canonicalize_gstin_ocr
     record = {
         "invoice_no": fix_encoding_corruption(str(get_strict(["invoice_no", "invoice_number", "bill_no", "supplier_invoice_no"])[0])),
         "invoice_date": normalize_date(get_strict(["invoice_date", "date", "bill_date", "supplier_invoice_date"])[0]),
         "vendor_name": vendor_name_val,
         "gstin": gstin_val,
+        "raw_gstin": gstin_val,
+        "canonical_gstin": canonicalize_gstin_ocr(gstin_val),
         "branch": fix_encoding_corruption(str(branch)),
         "bill_from": fix_encoding_corruption(str(bill_from)),
         "bill_to": fix_encoding_corruption(str(bill_to)),
@@ -881,6 +884,8 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
         "invoice_date": str(raw_header.get("invoice_date", "")),
         "vendor_name": str(raw_header.get("vendor_name", "")),
         "gstin": str(raw_header.get("gstin", "")),
+        "raw_gstin": str(raw_header.get("raw_gstin", "")),
+        "canonical_gstin": str(raw_header.get("canonical_gstin", "")),
         "branch": str(raw_header.get("branch", "")),
         "bill_from": str(raw_header.get("bill_from", "")),
         "bill_to": str(raw_header.get("bill_to", "")),

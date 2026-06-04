@@ -1508,7 +1508,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setCnVoucherNumber(res.next_invoice_number);
         return res.assigned_number;
       }
-    } catch (e) { console.error('GET_VOUCHER_ERROR:', e);
+    } catch (e) {
       console.error('Failed to increment Credit Note number', e);
     }
     return cnVoucherNumber;
@@ -1905,7 +1905,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setVoucherNumber(res.next_invoice_number);
         return res.assigned_number;
       }
-    } catch (e) { console.error('GET_VOUCHER_ERROR:', e);
+    } catch (e) {
       console.error('Failed to increment purchase number', e);
     }
     return voucherNumber;
@@ -3989,7 +3989,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               status: 'VOUCHER_CREATED',
               voucher_id: response?.id
             });
-          } catch (e) { console.error('GET_VOUCHER_ERROR:', e);
+          } catch (e) {
             console.error('Failed to update OCR staging status', e);
           }
           if (saveAndNext) {
@@ -4815,9 +4815,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const genericVoucherPk = viewVoucherData.voucher_pk || rawVoucher.voucher_pk;
 
     let voucherId: any;
-    if (referenceIdFromReport && ['Expenses', 'Contra', 'Journal', 'Credit Note', 'Debit Note', 'Payment', 'Receipt'].includes(mappedType)) {
+    if (referenceIdFromReport && ['Expenses', 'Contra', 'Journal', 'Credit Note', 'Debit Note'].includes(mappedType)) {
       // Use the specific model ID directly — avoids the wrong-ID 404
-      // For Payment: reference_id = PaymentVoucher PK (stored by _mirror_to_generic_voucher)
       voucherId = referenceIdFromReport;
     } else {
       voucherId = viewVoucherData.sourceId || viewVoucherData.source_id
@@ -4834,7 +4833,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
     setDrillDownLoading(true);
-    httpClient.get<any>("/api/vouchers/" + (source === "receipt" || source === "receipts" ? "receipts" : source === "journal" ? "journal" : source === "contra" ? "contra" : "payment") + "/" + voucherId + "/").catch(e => httpClient.get<any>("/api/vouchers/" + voucherId + "/").then(g => g?.reference_id ? httpClient.get<any>("/api/vouchers/" + (source === "receipt" || source === "receipts" ? "receipts" : source === "journal" ? "journal" : source === "contra" ? "contra" : "payment") + "/" + g.reference_id + "/") : Promise.reject(e))).then((details: any) => {
+    apiService.getVoucher(voucherId, {}, source).then(details => {
       if (details) {
         setDrillDownDetails({ ...details, _mappedType: mappedType, _rawEntry: viewVoucherData });
         // Also hydrate form fields for when user clicks Edit
@@ -4963,25 +4962,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           // For Payment: sellerName = Paid To (Vendor), account = Paid From (Bank)
           const isReceipt = mappedType === 'Receipt';
 
-          // Resolve pay_from name from all possible field names
-          const payFromName = details.pay_from || details.paid_from || details.account || details.pay_from_name || '';
-          // Resolve pay_to name from all possible field names
-          const payToName = details.party || details.vendor_name || details.customer_name
-            || details.pay_to_name || details.items?.[0]?.vendor_name || details.items?.[0]?.customer_name || '';
-
           setLocalPrefilledData({
             voucherId: voucherId,
             invoiceNumber: details.voucher_number || details.voucher_no || '',
             invoiceDate: details.date ? new Date(details.date).toISOString().split('T')[0] : getTodayDate(),
-            // sellerName → PayTo (vendor/customer), account/pay_from → PayFrom (bank/cash)
-            sellerName: isReceipt ? payFromName : payToName,
-            pay_from: isReceipt ? payToName : payFromName,
-            account: isReceipt ? payToName : payFromName,
-            totalAmount: parseFloat(details.total_amount || details.total_payment || details.amount || 0),
+            sellerName: isReceipt
+              ? (details.party || details.customer_name || details.items?.[0]?.customer_name || '')
+              : (details.party || details.vendor_name || details.items?.[0]?.vendor_name || ''),
+            account: isReceipt
+              ? (details.receive_in || details.account || details.pay_to_name || '')
+              : (details.paid_from || details.account || details.pay_from_name || ''),
+            totalAmount: parseFloat(details.total_amount || details.amount || 0),
             narration: details.narration || '',
             reference_number: details.ref_no || '',
             voucher_type: details.voucher_type || details.type || '',
-            items: details.items || [],
           } as any);
         }
         else if (mappedType === 'Contra') {
@@ -11833,6 +11827,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setActiveOcrFileHash(null);
       setActiveOcrFileName(null);
       setLocalPrefilledData(null);
+      // Restore the OCR workflow step to 'review' so the modal re-opens to the scan list
+      // (not the upload step). The session ID is already in activeOcrSessionId.
+      if (activeOcrSessionId) {
+        useOcrWorkflowStore.getState().setUploadSessionId(activeOcrSessionId);
+        useOcrWorkflowStore.getState().setStep('review');
+      }
       setIsBulkUploadOpen(true);
       return;
     }
@@ -13035,7 +13035,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 setIsBulkUploadOpen(false);
                 setActiveOcrFileHash(row.file_hash);
                 setActiveOcrFileName(row.file_name);
-                setActiveOcrSessionId(row.uploadSessionId || null);
+                // Prefer session ID from the row; fall back to the Zustand store (already set during this session)
+                const resolvedSessionId = row.uploadSessionId || useOcrWorkflowStore.getState().uploadSessionId || null;
+                setActiveOcrSessionId(resolvedSessionId);
 
                 const data = row.extracted_data || {};
                 const invoice = data.invoice || data.header || data;
@@ -13136,9 +13138,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 };
 
 export default VouchersPage;
-
-
-
 
 
 

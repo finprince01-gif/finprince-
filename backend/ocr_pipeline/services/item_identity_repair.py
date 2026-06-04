@@ -4,6 +4,46 @@ from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+def classify_token(token: str) -> str:
+    """
+    Classifies a token as LANGUAGE or INDUSTRIAL.
+    If pure alphabetic or high alphabetic ratio (> 80% letters): LANGUAGE
+    Otherwise: INDUSTRIAL
+    """
+    if not token:
+        return "LANGUAGE"
+    token_upper = token.upper()
+    if token_upper in ("PIN", "P1N", "PLN", "NOS", "N0S", "KG", "KGS"):
+        return "INDUSTRIAL"
+    letters_count = sum(c.isalpha() for c in token)
+    ratio = letters_count / len(token)
+    if ratio > 0.8:
+        return "LANGUAGE"
+    return "INDUSTRIAL"
+
+def collapse_duplicate_industrial_groups(name: str) -> str:
+    """
+    Collapses duplicate adjacent/non-adjacent identical industrial token sequences.
+    """
+    tokens = name.split()
+    seen_industrial = set()
+    new_tokens = []
+    
+    for t in tokens:
+        t_clean = re.sub(r'[^A-Z0-9]', '', t.upper())
+        token_type = classify_token(t_clean)
+        if token_type == "INDUSTRIAL":
+            t_norm = t.upper()
+            if t_norm in seen_industrial:
+                continue
+            seen_industrial.add(t_norm)
+        new_tokens.append(t)
+        
+    collapsed = " ".join(new_tokens)
+    if collapsed != name:
+        logger.info(f"[DUPLICATE_COLLAPSE] Raw='{name}' Collapsed='{collapsed}'")
+    return collapsed
+
 def repair_item_identity(raw_item_name: str) -> Dict[str, Any]:
     """
     Centralized OCR-safe character and numeric structure repair engine.
@@ -71,6 +111,8 @@ def repair_item_identity(raw_item_name: str) -> Dict[str, Any]:
             orig_token = token
             token_upper = token.upper()
             
+        token_type = classify_token(token_upper)
+        
         # C. Predominantly alphabetic token character substitution
         letters_count = sum(c.isalpha() for c in token)
         digits_count = sum(c.isdigit() for c in token)
@@ -97,8 +139,8 @@ def repair_item_identity(raw_item_name: str) -> Dict[str, Any]:
                 orig_token = token
                 token_upper = token.upper()
                 
-        # D. Predominantly numeric/alphanumeric code character substitution
-        elif digits_count > letters_count or (digits_count > 0 and len(token) <= 4):
+        # D. Predominantly numeric/alphanumeric code character substitution (INDUSTRIAL ONLY)
+        elif token_type == "INDUSTRIAL" and (digits_count > letters_count or (digits_count > 0 and len(token) <= 4)):
             # Replace alphabetic lookalikes in predominantly numeric/code word
             new_token = ""
             for char in token:
@@ -118,9 +160,12 @@ def repair_item_identity(raw_item_name: str) -> Dict[str, Any]:
                 orig_token = token
                 token_upper = token.upper()
                 
+        logger.info(f"[SAFE_NORMALIZATION_BOUNDARY] Token='{orig_token}' Type='{token_type}' Raw='{orig_token}' Normalized='{token}'")
         repaired_tokens.append(token)
         
     name = " ".join(repaired_tokens)
+    # Collapse duplicate industrial token sequences
+    name = collapse_duplicate_industrial_groups(name)
     
     # 4. Numeric structure repair (e.g. 6008-B65 / B65-6008 / 6008 B65 -> 6008-B65)
     # Match 6008 (or corrupted equivalents 60O8, 600B, etc.) and B65 (or corrupted 865, B6S, etc.)
