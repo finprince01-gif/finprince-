@@ -1355,12 +1355,12 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
             addEntry(fromAcc, 0, amount, toAcc, `${v.id}-1`);
             addEntry(toAcc, amount, 0, fromAcc, `${v.id}-2`);
 
-          } else if (v.type === 'debit_note' || v.type === 'Debit Note' || v.type === 'DEBIT_NOTE') {
+          } else if ((v.type as string) === 'debit_note' || v.type === 'Debit Note' || (v.type as string) === 'DEBIT_NOTE') {
             // Debit Note: Debit the vendor
             const partyName = getVoucherParty(v);
             addEntry(partyName, amount, 0, 'Purchase Return', v.id);
             
-          } else if (v.type === 'credit_note' || v.type === 'Credit Note' || v.type === 'CREDIT_NOTE') {
+          } else if ((v.type as string) === 'credit_note' || v.type === 'Credit Note' || (v.type as string) === 'CREDIT_NOTE') {
             // Credit Note: Credit the customer
             const partyName = getVoucherParty(v);
             addEntry(partyName, 0, amount, 'Sales Return', v.id);
@@ -1418,75 +1418,77 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     let runningBalance = 0;
     return filteredVouchers.map(v => {
       let debit = 0, credit = 0, particulars = '';
+      const vType = v.type as string;
 
-      switch (v.type) {
+      const vAny = v as any;
+      switch (vType) {
         case 'Purchase':
           // Vendor (party/pay_to) is CREDITED when we purchase on credit
           // Purchase account is DEBITED
-          if (v.party === name) {
+          if (vAny.party === name) {
             // This ledger is the Vendor/Supplier — they are the CREDITOR
-            credit = Number(v.total) || 0;
+            credit = Number(vAny.total) || 0;
             particulars = 'Purchases';
-          } else if ('account' in v && v.account === name) {
-            debit = Number(v.total) || 0;
-            particulars = v.party;
+          } else if ('account' in vAny && vAny.account === name) {
+            debit = Number(vAny.total) || 0;
+            particulars = vAny.party;
           }
           break;
         case 'Sales':
           // Customer (party) is DEBITED — they owe us money
           // Sales account is CREDITED
-          if (v.party === name) {
-            debit = Number(v.total) || 0;
+          if (vAny.party === name) {
+            debit = Number(vAny.total) || 0;
             particulars = 'Sales';
-          } else if ('account' in v && v.account === name) {
-            credit = Number(v.total) || 0;
-            particulars = v.party;
+          } else if ('account' in vAny && vAny.account === name) {
+            credit = Number(vAny.total) || 0;
+            particulars = vAny.party;
           }
           break;
         case 'Payment':
           // Payment: Pay FROM cash/bank (CREDIT cash) → Pay TO vendor (DEBIT vendor, reduces liability)
           // v.party = vendor (pay_to), v.account = cash/bank (pay_from)
-          if (v.party === name) {
+          if (vAny.party === name) {
             // This is the Vendor ledger — being DEBITED (liability reduced)
-            debit = Number(v.amount) || 0;
-            particulars = v.account || 'Cash/Bank';
-          } else if (v.account === name) {
+            debit = Number(vAny.amount) || 0;
+            particulars = vAny.account || 'Cash/Bank';
+          } else if (vAny.account === name) {
             // This is the Cash/Bank ledger — being CREDITED (money goes out)
-            credit = Number(v.amount) || 0;
-            particulars = v.party || 'Vendor';
+            credit = Number(vAny.amount) || 0;
+            particulars = vAny.party || 'Vendor';
           }
           break;
         case 'Receipt':
           // Receipt: Receive INTO cash/bank (DEBIT cash) ← FROM customer (CREDIT customer)
           // v.party = customer (receive_from), v.account = cash/bank (receive_into)
-          if (v.party === name) {
+          if (vAny.party === name) {
             // Customer ledger — being CREDITED (receivable settled)
-            credit = Number(v.amount) || 0;
-            particulars = v.account || 'Cash/Bank';
-          } else if (v.account === name) {
+            credit = Number(vAny.amount) || 0;
+            particulars = vAny.account || 'Cash/Bank';
+          } else if (vAny.account === name) {
             // Cash/Bank ledger — being DEBITED (money comes in)
-            debit = Number(v.amount) || 0;
-            particulars = v.party || 'Customer';
+            debit = Number(vAny.amount) || 0;
+            particulars = vAny.party || 'Customer';
           }
           break;
         case 'Contra':
           // Contra: Transfer between cash/bank accounts
           // fromAccount is CREDITED (money leaves), toAccount is DEBITED (money arrives)
-          if (v.fromAccount === name) {
-            credit = Number(v.amount) || 0;
-            particulars = v.toAccount;
-          } else if (v.toAccount === name) {
-            debit = Number(v.amount) || 0;
-            particulars = v.fromAccount;
+          if (vAny.fromAccount === name) {
+            credit = Number(vAny.amount) || 0;
+            particulars = vAny.toAccount;
+          } else if (vAny.toAccount === name) {
+            debit = Number(vAny.amount) || 0;
+            particulars = vAny.fromAccount;
           }
           break;
         case 'Journal':
-          if (v.entries && Array.isArray(v.entries)) {
-            const entry = v.entries.find(e => e.ledger === name);
+          if (vAny.entries && Array.isArray(vAny.entries)) {
+            const entry = vAny.entries.find((e: any) => e.ledger === name);
             if (entry) {
               debit = Number(entry.debit) || 0;
               credit = Number(entry.credit) || 0;
-              particulars = v.entries.filter(e => e.ledger !== name).map(e => e.ledger).join(', ') || 'Journal Entry';
+              particulars = vAny.entries.filter((e: any) => e.ledger !== name).map((e: any) => e.ledger).join(', ') || 'Journal Entry';
             }
           }
           break;
@@ -1496,8 +1498,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           // Debit Note: reduces vendor liability
           // Vendor (party) is DEBITED (liability reduced — they owe us less)
           // Purchase Return A/c is CREDITED
-          if (v.party === name) {
-            debit = Number(v.total) || Number(v.amount) || 0;
+          if ((v as any).party === name) {
+            debit = Number((v as any).total) || Number((v as any).amount) || 0;
             particulars = 'Purchase Return / Debit Note';
           }
           break;
@@ -1507,8 +1509,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           // Credit Note: reduces customer receivable
           // Customer (party) is CREDITED (they owe us less)
           // Sales Return A/c is DEBITED
-          if (v.party === name) {
-            credit = Number(v.total) || Number(v.amount) || 0;
+          if ((v as any).party === name) {
+            credit = Number((v as any).total) || Number((v as any).amount) || 0;
             particulars = 'Sales Return / Credit Note';
           }
           break;
@@ -1678,8 +1680,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       if (v.type === 'Payment') { const vn = (v as any).party || 'Vendor', cn = (v as any).account || 'Cash/Bank'; if (vn === name) push(v.date, cn, v.type, vNo, amt, 0); if (cn === name) push(v.date, vn, v.type, vNo, 0, amt); }
       else if (v.type === 'Receipt') { const cn = (v as any).party || 'Customer', an = (v as any).account || 'Cash/Bank'; if (cn === name) push(v.date, an, v.type, vNo, 0, amt); if (an === name) push(v.date, cn, v.type, vNo, amt, 0); }
       else if (v.type === 'Contra') { const fa = (v as any).fromAccount || 'Account', ta = (v as any).toAccount || 'Account'; if (fa === name) push(v.date, ta, v.type, vNo, 0, amt); if (ta === name) push(v.date, fa, v.type, vNo, amt, 0); }
-      else if (v.type === 'debit_note' || v.type === 'Debit Note' || v.type === 'DEBIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Purchase Return', 'Debit Note', vNo, amt, 0); }
-      else if (v.type === 'credit_note' || v.type === 'Credit Note' || v.type === 'CREDIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Sales Return', 'Credit Note', vNo, 0, amt); }
+      else if ((v.type as string) === 'debit_note' || v.type === 'Debit Note' || (v.type as string) === 'DEBIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Purchase Return', 'Debit Note', vNo, amt, 0); }
+      else if ((v.type as string) === 'credit_note' || v.type === 'Credit Note' || (v.type as string) === 'CREDIT_NOTE') { const p = getVoucherParty(v); if (p === name) push(v.date, 'Sales Return', 'Credit Note', vNo, 0, amt); }
       else if ('entries' in v && Array.isArray((v as any).entries)) {
         (v as any).entries.forEach((e: any) => { if (e.ledger === name) { const cp = (v as any).entries.filter((x: any) => x !== e).map((x: any) => x.ledger).join(', ') || 'Journal'; push(v.date, cp, v.type, vNo, Number(e.debit) || 0, Number(e.credit) || 0); } });
       } else { const p = getVoucherParty(v); if (p === name) { const s = v.type === 'Sales'; push(v.date, s ? 'Sales' : 'Purchases', v.type, vNo, s ? amt : 0, s ? 0 : amt); } }
@@ -1790,7 +1792,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
 
     const activeLedgerName = drillDownLedger?.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
     const activeLedger = ledgers?.find(l => l.name === activeLedgerName);
-    const cpStr = activeLedger?.additional_data?.credit_period || activeLedger?.extended_data?.credit_period || activeLedger?.credit_period || '0';
+    const cpStr = activeLedger?.additional_data?.credit_period || (activeLedger as any)?.extended_data?.credit_period || activeLedger?.creditPeriod || (activeLedger as any)?.credit_period || '0';
     let cp = parseInt(String(cpStr), 10) || 0;
     if (cp === 0 && drillDownData.length > 0) {
         cp = drillDownData[0]?.ledger_credit_period || 0;
@@ -2170,7 +2172,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       if (amount > 0 && e.date) {
                         const activeLedgerNameForStatus = drillDownLedger?.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
                         const activeLedgerForStatus = ledgers?.find((l: any) => l.name === activeLedgerNameForStatus);
-                        const cpStrStatus = activeLedgerForStatus?.additional_data?.credit_period || activeLedgerForStatus?.credit_period || '0';
+                        const cpStrStatus = activeLedgerForStatus?.additional_data?.credit_period || (activeLedgerForStatus as any)?.credit_period || activeLedgerForStatus?.creditPeriod || '0';
                         const cpStatus = parseInt(String(cpStrStatus), 10) || (drillDownData[0]?.ledger_credit_period || 0);
                         const invDate = new Date(e.date);
                         const today = new Date();
@@ -2324,7 +2326,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                       if (amount > 0 && e.date) {
                         const activeLedgerNameForStatus = drillDownLedger?.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
                         const activeLedgerForStatus = ledgers?.find((l: any) => l.name === activeLedgerNameForStatus);
-                        const cpStrStatus = activeLedgerForStatus?.additional_data?.credit_period || activeLedgerForStatus?.credit_period || '0';
+                        const cpStrStatus = activeLedgerForStatus?.additional_data?.credit_period || (activeLedgerForStatus as any)?.credit_period || activeLedgerForStatus?.creditPeriod || '0';
                         const cpStatus = parseInt(String(cpStrStatus), 10) || (drillDownData[0]?.ledger_credit_period || 0);
                         const invDate = new Date(e.date);
                         const today = new Date();

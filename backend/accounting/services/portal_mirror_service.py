@@ -128,7 +128,20 @@ def mirror_sales_to_portal(sales_header):
             if adv_refs and isinstance(adv_refs, list):
                 for idx, ref in enumerate(adv_refs):
                     # Filter strictly by 'appliedNow' or 'selected' flag
-                    is_selected = ref.get('appliedNow') is True or ref.get('selected') is True
+                    # Frontend sometimes sends appliedNow as a numeric amount, so handle truthy/numeric > 0
+                    applied_now = ref.get('appliedNow')
+                    selected = ref.get('selected')
+                    
+                    is_selected = False
+                    if selected is True or applied_now is True:
+                        is_selected = True
+                    elif applied_now:
+                        try:
+                            if float(applied_now) > 0:
+                                is_selected = True
+                        except (ValueError, TypeError):
+                            pass
+                    
                     allocated_amt = ref.get('amount') or ref.get('allocated_amount') or 0
                     
                     if is_selected and float(allocated_amt) > 0:

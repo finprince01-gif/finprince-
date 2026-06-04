@@ -191,8 +191,10 @@ const AdvanceAllocationModal: React.FC<AdvanceAllocationModalProps> = ({ isOpen,
             e.rawVoucher.reference_number.toUpperCase() === 'ADVANCE' ||
             e.rawVoucher.reference_number.trim() === '' ||
             e.rawVoucher.reference_number === '-' ||
-            e.rawVoucher.reference_type?.toUpperCase() === 'ADVANCE' ||
-            e.rawVoucher.reference_number === e.voucherNo
+            e.rawVoucher.reference_number === e.voucherNo ||
+            (e.rawVoucher.reference_type?.toUpperCase() === 'ADVANCE' && 
+             e.rawVoucher.transaction_number && 
+             e.rawVoucher.transaction_number.startsWith(e.rawVoucher.reference_number + '-'))
         )
     ).filter(e => e.status !== 'Utilized' && e.status !== 'Paid') // Only show those that still have balance
         .map(e => {
