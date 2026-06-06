@@ -1,0 +1,2346 @@
+[
+    {
+        "run_number": 1,
+        "session_id": "19f7c5a7-375c-45cd-95f2-6010f18a5446",
+        "job_id": 682,
+        "record_id": 1005501,
+        "duration_seconds": 89.55167484283447,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202125-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABACA571BR1ZD",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33CKJPS6256F1ZW",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431A1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216t25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005501,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005502,
+                "invoice_no": "5081/25-26",
+                "gstin": "33ABACA571BR1ZD",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005503,
+                "invoice_no": "4913/25-26",
+                "gstin": "33CKJPS6256F1ZW",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005504,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS63431A1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005505,
+                "invoice_no": "4216t25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005506,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005507,
+                "invoice_no": "3528/25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005508,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005509,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV238OD1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "af655005-d921-4618-8be2-07719e68f561",
+            "invoice_count": 9,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/19f7c5a7-375c-45cd-95f2-6010f18a5446_1780723499.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABACA571BR1ZD",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33CKJPS6256F1ZW",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431A1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216t25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 0
+                },
+                {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    },
+    {
+        "run_number": 2,
+        "session_id": "d3c3be8d-cb09-4ffc-8875-e4092631b5f9",
+        "job_id": 683,
+        "record_id": 1005510,
+        "duration_seconds": 81.47128391265869,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202125-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "vendor_name": "SRIVISHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005510,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005511,
+                "invoice_no": "5081/25-26",
+                "gstin": "",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005512,
+                "invoice_no": "4913/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005513,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS63431M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005514,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005515,
+                "invoice_no": "3528/25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005516,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005517,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV238OD1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "670d895d-70cd-4bdc-8e85-3c975f01d11c",
+            "invoice_count": 8,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/d3c3be8d-cb09-4ffc-8875-e4092631b5f9_1780723582.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    },
+    {
+        "run_number": 3,
+        "session_id": "4fc6eed4-d8a6-4506-9f59-817ac5fccddc",
+        "job_id": 684,
+        "record_id": 1005518,
+        "duration_seconds": 93.64535570144653,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431MA1ZC",
+                    "vendor_name": "SRIViSHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216125-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "1920t25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005518,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005519,
+                "invoice_no": "5081/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005520,
+                "invoice_no": "4913/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005521,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS63431MA1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005522,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005523,
+                "invoice_no": "4216125-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005524,
+                "invoice_no": "1920t25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005525,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005526,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV238OD1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "9a843536-eb3a-48cb-8987-709098e640f4",
+            "invoice_count": 9,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/4fc6eed4-d8a6-4506-9f59-817ac5fccddc_1780723676.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431MA1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 3
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216125-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 0
+                },
+                {
+                    "invoice_no": "1920t25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    },
+    {
+        "run_number": 4,
+        "session_id": "0a8737d8-7afb-4727-930c-c45d644db3ed",
+        "job_id": 685,
+        "record_id": 1005527,
+        "duration_seconds": 181.56357669830322,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": false,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": null,
+                    "gstin": null,
+                    "vendor_name": null,
+                    "invoice_date": null
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": null,
+                    "gstin": null,
+                    "vendor_name": null,
+                    "invoice_date": null
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYPS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": null,
+                    "gstin": null,
+                    "vendor_name": null,
+                    "invoice_date": null
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": null,
+                    "gstin": null,
+                    "vendor_name": null,
+                    "invoice_date": null
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216125-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2023"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005527,
+                "invoice_no": null,
+                "gstin": null,
+                "branch": null,
+                "is_primary": false,
+                "group_id": null,
+                "status": "EXTRACTING"
+            }
+        ],
+        "snapshot": {
+            "id": null,
+            "invoice_count": 0,
+            "s3_key": null,
+            "invoices": []
+        }
+    },
+    {
+        "run_number": 5,
+        "session_id": "45f203a4-2618-424e-90c4-b6475c97504d",
+        "job_id": 686,
+        "record_id": 1005528,
+        "duration_seconds": 87.49356508255005,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABACS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS6343IA1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005528,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005529,
+                "invoice_no": "5081/25-26",
+                "gstin": "33ABACS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005530,
+                "invoice_no": "4913/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005531,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS6343IA1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005532,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005533,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS63431M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005534,
+                "invoice_no": "3528/25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005535,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005536,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV238OD1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "1b98805a-572e-4dba-b5bb-9f6b817cc5bd",
+            "invoice_count": 9,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/45f203a4-2618-424e-90c4-b6475c97504d_1780723946.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABACS6343M1ZC",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS6343IA1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 0
+                },
+                {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    },
+    {
+        "run_number": 6,
+        "session_id": "7e4f2585-61e8-450d-a25f-e8f23a9bfd2d",
+        "job_id": 687,
+        "record_id": 1005537,
+        "duration_seconds": 85.44144749641418,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202125-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6233J1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343F1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "vendor_name": "SRIVISHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005537,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005538,
+                "invoice_no": "5081/25-26",
+                "gstin": "33ABYFS6233J1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005539,
+                "invoice_no": "4913/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005540,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS63431M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005541,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005542,
+                "invoice_no": "3528/25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005543,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005544,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "ebbb055f-a70b-4d9e-b86d-10b1162c2ba3",
+            "invoice_count": 8,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/7e4f2585-61e8-450d-a25f-e8f23a9bfd2d_1780724031.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6233J1ZC",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 3
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    },
+    {
+        "run_number": 7,
+        "session_id": "34987c11-d1d1-43aa-b04d-2379dc6f6c92",
+        "job_id": 688,
+        "record_id": 1005545,
+        "duration_seconds": 115.58566570281982,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6343M1ZJ",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343F1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "vendor_name": "SRIVISHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216t25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005545,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005546,
+                "invoice_no": "5081/25-26",
+                "gstin": "33ABYFS6343M1ZJ",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005547,
+                "invoice_no": "4913/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005548,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS63431M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005549,
+                "invoice_no": "4216t25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005550,
+                "invoice_no": "3528/25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005551,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005552,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "e323c986-d6a9-4b43-9abd-7d052d4d76f6",
+            "invoice_count": 8,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/34987c11-d1d1-43aa-b04d-2379dc6f6c92_1780724146.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6343M1ZJ",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216t25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    },
+    {
+        "run_number": 8,
+        "session_id": "88de0608-a980-4971-97ab-b801f502350b",
+        "job_id": 689,
+        "record_id": 1005553,
+        "duration_seconds": 89.47306895256042,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33CKJPS6256F1ZW",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343G1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431A1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216125-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005553,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005554,
+                "invoice_no": "5081/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005555,
+                "invoice_no": "4913/25-26",
+                "gstin": "33CKJPS6256F1ZW",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005556,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS63431A1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005557,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005558,
+                "invoice_no": "4216125-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005559,
+                "invoice_no": "3528/25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005560,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005561,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "2a7eeb09-c57d-49a3-84ab-8799ef6f9863",
+            "invoice_count": 9,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/88de0608-a980-4971-97ab-b801f502350b_1780724234.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 5
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33CKJPS6256F1ZW",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431A1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216125-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 0
+                },
+                {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    },
+    {
+        "run_number": 9,
+        "session_id": "7af0e3b0-98d3-4fce-9720-334c93d4b034",
+        "job_id": 690,
+        "record_id": 1005562,
+        "duration_seconds": 91.42064595222473,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6253J1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343Q1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "vendor_name": "SRIViSHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216t25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005562,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005563,
+                "invoice_no": "5081/25-26",
+                "gstin": "33ABYFS6253J1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005564,
+                "invoice_no": "4913/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005565,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS63431M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005566,
+                "invoice_no": "4216t25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005567,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005568,
+                "invoice_no": "3528/25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005569,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005570,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "ddb4d2ae-1cce-4db0-ba1d-31a5027bf0c2",
+            "invoice_count": 9,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/7af0e3b0-98d3-4fce-9720-334c93d4b034_1780724327.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6253J1ZC",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 3
+                },
+                {
+                    "invoice_no": "4216t25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 0
+                },
+                {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    },
+    {
+        "run_number": 10,
+        "session_id": "4302b05b-0f05-4e7e-8c51-3a1909c23ffb",
+        "job_id": 691,
+        "record_id": 1005571,
+        "duration_seconds": 101.55378842353821,
+        "barrier_status": "UPLOADED",
+        "snapshot_created": true,
+        "pages": [
+            {
+                "page_number": 1,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 2,
+                "raw": {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "29-09-2025"
+                }
+            },
+            {
+                "page_number": 3,
+                "raw": {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6231J1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-09-2025"
+                }
+            },
+            {
+                "page_number": 4,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33CKJPS6256F1ZW",
+                    "vendor_name": "SRI VISHNU HEAT TREA-I-ERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 5,
+                "raw": {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "19-09-2025"
+                }
+            },
+            {
+                "page_number": 6,
+                "raw": {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "01-09-2025"
+                }
+            },
+            {
+                "page_number": 7,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 8,
+                "raw": {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "25-08-2025"
+                }
+            },
+            {
+                "page_number": 9,
+                "raw": {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "vendor_name": "SRI VISHNU HEAT TREATERS",
+                    "invoice_date": "31-07-2025"
+                }
+            },
+            {
+                "page_number": 10,
+                "raw": {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "26-08-2025"
+                }
+            },
+            {
+                "page_number": 11,
+                "raw": {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "vendor_name": "MARUTHI ENGINEERING SERVICES",
+                    "invoice_date": "04-09-2025"
+                }
+            }
+        ],
+        "grouped_records": [
+            {
+                "id": 1005571,
+                "invoice_no": "5202/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005572,
+                "invoice_no": "5081/25-26",
+                "gstin": "33ABYFS6231J1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005573,
+                "invoice_no": "4913/25-26",
+                "gstin": "33CKJPS6256F1ZW",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005574,
+                "invoice_no": "4464/25-26",
+                "gstin": "33ABYFS63431M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005575,
+                "invoice_no": "4216/25-26",
+                "gstin": "33ABYFS6343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005576,
+                "invoice_no": "3528/25-26",
+                "gstin": "33ABYF56343M1ZC",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005577,
+                "invoice_no": "S 058",
+                "gstin": "33ABAPV2380D1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            },
+            {
+                "id": 1005578,
+                "invoice_no": "S 060",
+                "gstin": "33ABAPV238OD1ZY",
+                "branch": "COIMBATORE",
+                "is_primary": true,
+                "group_id": null,
+                "status": "FINALIZED"
+            }
+        ],
+        "snapshot": {
+            "id": "d8cd6ce6-61d0-4f6d-b495-b708160d0efc",
+            "invoice_count": 8,
+            "s3_key": "snapshots/local/88fe4389-58a9-4244-9878-8a4e646898bd/4302b05b-0f05-4e7e-8c51-3a1909c23ffb_1780724429.json.gz",
+            "invoices": [
+                {
+                    "invoice_no": "5202/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "29-09-2025",
+                    "item_count": 4
+                },
+                {
+                    "invoice_no": "5081/25-26",
+                    "gstin": "33ABYFS6231J1ZC",
+                    "invoice_date": "25-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4913/25-26",
+                    "gstin": "33CKJPS6256F1ZW",
+                    "invoice_date": "19-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4464/25-26",
+                    "gstin": "33ABYFS63431M1ZC",
+                    "invoice_date": "01-09-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "4216/25-26",
+                    "gstin": "33ABYFS6343M1ZC",
+                    "invoice_date": "25-08-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "3528/25-26",
+                    "gstin": "33ABYF56343M1ZC",
+                    "invoice_date": "31-07-2025",
+                    "item_count": 2
+                },
+                {
+                    "invoice_no": "S 058",
+                    "gstin": "33ABAPV2380D1ZY",
+                    "invoice_date": "26-08-2025",
+                    "item_count": 1
+                },
+                {
+                    "invoice_no": "S 060",
+                    "gstin": "33ABAPV238OD1ZY",
+                    "invoice_date": "04-09-2025",
+                    "item_count": 1
+                }
+            ]
+        }
+    }
+]

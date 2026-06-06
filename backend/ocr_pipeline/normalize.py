@@ -16,7 +16,7 @@ def log_schema_drift_detected(field: str, expected_type: str, actual_type: str):
 # ── OCR & MAPPING CONSTANTS ──────────────────────────────────────────────────
 _OCR_DIGIT_MAP = str.maketrans({
     'o': '0', 'O': '0',
-    'l': '1', 'I': '1',
+    'l': '1', 'I': '1', 'L': '1',
     'S': '5', 'Z': '2',
     'G': '6', 'B': '8',
 })
@@ -465,13 +465,33 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
         logger.warning(f"[TENANT_ISOLATION_WARN] Extracted GSTIN '{gstin_val}' matches tenant GSTIN '{tenant_gstin}'. Wiping vendor GSTIN to prevent contamination.")
         gstin_val = ""
 
+    # Run GSTIN Ownership Classifier
+    from ocr_pipeline.gstin_classifier import GSTINOwnershipClassifier
+    raw_text = ""
+    if isinstance(invoice, dict):
+        raw_text = invoice.get("_pdf_ocr_text") or invoice.get("_raw_text") or ""
+    
+    extracted_data_dict = {}
+    if isinstance(invoice, dict):
+        extracted_data_dict = {
+            "gstin": gstin_val,
+            "vendor_gstin": get_strict(["vendor_gstin", "supplier_gstin"])[0],
+            "buyer_gstin": get_strict(["buyer_gstin", "bill_to_gstin"])[0],
+            "consignee_gstin": get_strict(["consignee_gstin", "ship_to_gstin"])[0],
+            "vendor_name": vendor_name_val
+        }
+    
+    classification = GSTINOwnershipClassifier.classify_gstins(raw_text, extracted_data_dict, tenant_id)
+    if classification.get("vendor_gstin"):
+        gstin_val = classification["vendor_gstin"]
+
     from vendors.vendor_validation_logic import canonicalize_gstin_ocr
     record = {
         "invoice_no": fix_encoding_corruption(str(get_strict(["invoice_no", "invoice_number", "bill_no", "supplier_invoice_no"])[0])),
         "invoice_date": normalize_date(get_strict(["invoice_date", "date", "bill_date", "supplier_invoice_date"])[0]),
         "vendor_name": vendor_name_val,
         "gstin": gstin_val,
-        "raw_gstin": gstin_val,
+        "raw_gstin": classification.get("raw_vendor_gstin") or gstin_val,
         "canonical_gstin": canonicalize_gstin_ocr(gstin_val),
         "branch": fix_encoding_corruption(str(branch)),
         "bill_from": fix_encoding_corruption(str(bill_from)),
@@ -488,6 +508,19 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
         "ack_no": str(get_strict(["ack_no"])[0]).strip(),
         "ack_date": normalize_date(get_strict(["ack_date"])[0]),
         "hsn_sac": str(get_strict(["hsn_sac", "hsn", "sac"])[0]).strip(),
+        
+        # Explicit GSTIN Role Fields
+        "vendor_gstin": classification.get("vendor_gstin") or "",
+        "buyer_gstin": classification.get("buyer_gstin") or "",
+        "consignee_gstin": classification.get("consignee_gstin") or "",
+        "ship_to_gstin": classification.get("ship_to_gstin") or "",
+        "bill_to_gstin": classification.get("bill_to_gstin") or "",
+        "raw_vendor_gstin": classification.get("raw_vendor_gstin") or "",
+        "raw_buyer_gstin": classification.get("raw_buyer_gstin") or "",
+        "raw_consignee_gstin": classification.get("raw_consignee_gstin") or "",
+        "canonical_vendor_gstin": classification.get("canonical_vendor_gstin") or "",
+        "canonical_buyer_gstin": classification.get("canonical_buyer_gstin") or "",
+        "canonical_consignee_gstin": classification.get("canonical_consignee_gstin") or "",
     }
 
     # ── [TOTALS & POS OCR REGION EXTRACTION FALLBACK] (Requirement D) ──
@@ -854,31 +887,7 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
     raw_header = get_normalized_export_record(invoice, tenant_id=tenant_id)
     raw_items = get_normalized_items(invoice, tenant_id=tenant_id)
     
-    canonical_items = []
-    for item in raw_items:
-        # Map to CanonicalInvoiceItem using snake_case keys from raw_items
-        try:
-            c_item = CanonicalInvoiceItem(
-                description=str(item.get("description", "")),
-                hsn_sac=str(item.get("hsn_sac", "")),
-                qty=normalize_amount(item.get("qty", 0.0)),
-                uom=str(item.get("uom", "")),
-                rate=normalize_amount(item.get("rate", 0.0)),
-                taxable_value=normalize_amount(item.get("taxable_value", 0.0)),
-                igst=normalize_amount(item.get("igst", 0.0)),
-                cgst=normalize_amount(item.get("cgst", 0.0)),
-                sgst=normalize_amount(item.get("sgst", 0.0)),
-                total_amount=normalize_amount(item.get("total_amount", 0.0)),
-                igst_rate=normalize_amount(item.get("igst_rate", 0.0)),
-                cgst_rate=normalize_amount(item.get("cgst_rate", 0.0)),
-                sgst_rate=normalize_amount(item.get("sgst_rate", 0.0)),
-                cess_rate=normalize_amount(item.get("cess_rate", 0.0))
-            )
-            canonical_items.append(c_item)
-        except Exception as ie:
-            logger.error(f"[DTO_ITEM_COERCION_FAIL] item={item} error={ie}")
-
-    # Create Canonical Schema Instance
+    # Create raw/intermediate schema dict first
     schema_data = {
         "invoice_no": str(raw_header.get("invoice_no", "")),
         "invoice_date": str(raw_header.get("invoice_date", "")),
@@ -900,11 +909,24 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
         "irn": str(raw_header.get("irn", "")),
         "ack_no": str(raw_header.get("ack_no", "")),
         "ack_date": str(raw_header.get("ack_date", "")),
-        "items": canonical_items,
+        
+        # Explicit GSTIN Role Fields
+        "vendor_gstin": str(raw_header.get("vendor_gstin", "")),
+        "buyer_gstin": str(raw_header.get("buyer_gstin", "")),
+        "consignee_gstin": str(raw_header.get("consignee_gstin", "")),
+        "ship_to_gstin": str(raw_header.get("ship_to_gstin", "")),
+        "bill_to_gstin": str(raw_header.get("bill_to_gstin", "")),
+        "raw_vendor_gstin": str(raw_header.get("raw_vendor_gstin", "")),
+        "raw_buyer_gstin": str(raw_header.get("raw_buyer_gstin", "")),
+        "raw_consignee_gstin": str(raw_header.get("raw_consignee_gstin", "")),
+        "canonical_vendor_gstin": str(raw_header.get("canonical_vendor_gstin", "")),
+        "canonical_buyer_gstin": str(raw_header.get("canonical_buyer_gstin", "")),
+        "canonical_consignee_gstin": str(raw_header.get("canonical_consignee_gstin", "")),
+
+        "items": [copy.deepcopy(item) for item in raw_items],
         "warnings": invoice.get("_warning_flags", []) if isinstance(invoice, dict) else []
     }
     
-    # ── [PHASE 11.9] HSN/SAC HYDRATION GATE ──
     # Promote HSN/SAC from the first item if missing in header
     primary_item = raw_items[0] if raw_items else {}
     logger.info(f"[HSN_TRACE_INPUT] primary_item_keys={list(primary_item.keys())}")
@@ -919,13 +941,47 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
         logger.info(f"[HSN_CANONICALIZED] value='{schema_data['hsn_sac']}' source=primary_item")
     else:
         logger.info(f"[HSN_CANONICALIZED] value='{schema_data['hsn_sac']}' source=header")
+        
+    # ── Run Pre-processing Canonicalization Layer ──
+    from ocr_pipeline.canonicalizer import DocumentIdentityCanonicalizer
+    schema_data = DocumentIdentityCanonicalizer.canonicalize_invoice(schema_data)
+    
+    # Map raw_items in schema_data to CanonicalInvoiceItem
+    canonical_items = []
+    for item in schema_data.get("items", []):
+        try:
+            c_item = CanonicalInvoiceItem(
+                description=str(item.get("description", "")),
+                hsn_sac=str(item.get("hsn_sac", "")),
+                qty=normalize_amount(item.get("qty", 0.0)),
+                uom=str(item.get("uom", "")),
+                rate=normalize_amount(item.get("rate", 0.0)),
+                taxable_value=normalize_amount(item.get("taxable_value", 0.0)),
+                igst=normalize_amount(item.get("igst", 0.0)),
+                cgst=normalize_amount(item.get("cgst", 0.0)),
+                sgst=normalize_amount(item.get("sgst", 0.0)),
+                total_amount=normalize_amount(item.get("total_amount", 0.0)),
+                igst_rate=normalize_amount(item.get("igst_rate", 0.0)),
+                cgst_rate=normalize_amount(item.get("cgst_rate", 0.0)),
+                sgst_rate=normalize_amount(item.get("sgst_rate", 0.0)),
+                cess_rate=normalize_amount(item.get("cess_rate", 0.0)),
+                raw_item_name=str(item.get("raw_item_name", "")),
+                canonical_item_name=str(item.get("canonical_item_name", "")),
+                raw_hsn=str(item.get("raw_hsn", "")),
+                canonical_hsn=str(item.get("canonical_hsn", ""))
+            )
+            canonical_items.append(c_item)
+        except Exception as ie:
+            logger.error(f"[DTO_ITEM_COERCION_FAIL] item={item} error={ie}")
+
+    schema_data["items"] = canonical_items
     
     try:
         canonical_obj = CanonicalInvoiceSchema(**schema_data)
         logger.info(f"[DTO_POST_VALIDATION] record_id={invoice.get('record_id')} status=VALID")
     except Exception as se:
         logger.error(f"[DTO_VALIDATION_ERROR] record_id={invoice.get('record_id')} error={se} payload={json.dumps(schema_data, default=str)[:1000]}")
-        # [FIX] Ensure Pydantic items are converted back to dicts so they serialize correctly
+        # Ensure Pydantic items are converted back to dicts so they serialize correctly
         if "items" in schema_data:
             schema_data["items"] = [
                 i.dict() if hasattr(i, "dict") else (i.model_dump() if hasattr(i, "model_dump") else i)
@@ -952,10 +1008,17 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
         canonical_record = schema_data
 
     # Preserve internal lifecycle fields (underscore fields)
+    # ── [CRITICAL FIX] ──
+    # Guard was previously `k not in canonical_record`, which failed for Pydantic
+    # fields like `_pdf_ocr_text: Optional[str] = None` — these ARE in canonical_record
+    # (serialized as None) so the real value from `invoice` was silently dropped.
+    # Changed to `not canonical_record.get(k)` so any falsy/None Pydantic default
+    # is overwritten by the actual non-empty input value (e.g. OCR text).
     if isinstance(invoice, dict):
         for k, v in invoice.items():
-            if k.startswith("_") and k not in canonical_record:
+            if k.startswith("_") and not canonical_record.get(k):
                 canonical_record[k] = v
+
                 
     output_hash = hashlib.md5(json.dumps(canonical_record, sort_keys=True, default=str).encode()).hexdigest()
     logger.info(f"[NORMALIZATION_OUTPUT_HASH] {output_hash}")

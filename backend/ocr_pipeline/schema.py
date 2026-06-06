@@ -18,6 +18,12 @@ class CanonicalInvoiceItem(BaseModel):
     cgst_rate: float = 0.0
     sgst_rate: float = 0.0
     cess_rate: float = 0.0
+    
+    # Phase 2 Identity stabilization fields
+    raw_item_name: str = ""
+    canonical_item_name: str = ""
+    raw_hsn: str = ""
+    canonical_hsn: str = ""
 
 class CanonicalInvoiceSchema(BaseModel):
     """
@@ -34,6 +40,27 @@ class CanonicalInvoiceSchema(BaseModel):
     canonical_gstin: str = ""
     branch: str = ""
     hsn_sac: str = ""
+    
+    # Phase 4 Canonical GSTIN fields
+    vendor_gstin: str = ""
+    buyer_gstin: str = ""
+    consignee_gstin: str = ""
+    ship_to_gstin: str = ""
+    bill_to_gstin: str = ""
+    raw_vendor_gstin: str = ""
+    raw_buyer_gstin: str = ""
+    raw_consignee_gstin: str = ""
+    canonical_vendor_gstin: str = ""
+    canonical_buyer_gstin: str = ""
+    canonical_consignee_gstin: str = ""
+    
+    # Phase 1 & 3 Identity stabilization fields
+    raw_invoice_no: str = ""
+    canonical_invoice_no: str = ""
+    raw_invoice_date: str = ""
+    canonical_invoice_date: str = ""
+    raw_vendor_name: str = ""
+    canonical_vendor_name: str = ""
     
     # Address & Logistics
     bill_from: str = ""
