@@ -41,6 +41,76 @@ class CriticalPipelineError(ValueError):
     """Exception raised when critical invariants of the pipeline are violated."""
     pass
 
+def trace_item_checkpoint(record_id, invoice_no, page_number, stage, item_count, item_status, snapshot_item_count=None):
+    from core.redis_orchestrator import orchestrator
+    
+    # 1. Log the checkpoint
+    logger.info(
+        f"[{stage}] record_id={record_id} invoice_no={invoice_no} page_number={page_number} "
+        f"item_count={item_count} item_status={item_status} snapshot_item_count={snapshot_item_count}"
+    )
+    
+    # 2. Redis tracking for transitions
+    redis_key = f"item_trace:{record_id}"
+    
+    # Let's define the order of stages to determine transition:
+    stages_order = [
+        "ITEM_TRACE_EXTRACTED",
+        "ITEM_TRACE_AFTER_VALIDATION",
+        "ITEM_TRACE_AFTER_ASSEMBLY",
+        "ITEM_TRACE_BEFORE_SNAPSHOT",
+        "ITEM_TRACE_AFTER_SNAPSHOT",
+        "ITEM_TRACE_AFTER_HYDRATION"
+    ]
+    
+    # Let's save the current stage item count in Redis
+    try:
+        if not orchestrator.redis:
+            orchestrator._connect()
+        r = orchestrator.redis
+        if r:
+            # Get all previously recorded counts
+            all_counts = r.hgetall(redis_key)
+            all_counts = {k.decode('utf-8') if isinstance(k, bytes) else k: int(v) for k, v in all_counts.items()}
+        else:
+            all_counts = {}
+    except Exception as re_err:
+        logger.error(f"[REDIS_TRACE_ERROR] {re_err}")
+        all_counts = {}
+        
+    # Find the previous recorded stage in the order
+    current_idx = stages_order.index(stage) if stage in stages_order else -1
+    previous_stage = None
+    previous_item_count = 0
+    
+    for idx in range(current_idx - 1, -1, -1):
+        prev_stg = stages_order[idx]
+        if prev_stg in all_counts:
+            previous_stage = prev_stg
+            previous_item_count = all_counts[prev_stg]
+            break
+            
+    # Save current item count to Redis
+    try:
+        if r:
+            r.hset(redis_key, stage, str(item_count))
+            r.expire(redis_key, 86400) # Expire in 1 day
+    except Exception as re_err:
+        logger.error(f"[REDIS_TRACE_SAVE_ERROR] {re_err}")
+        
+    # Check for loss transition: previous_item_count > 0 and current_item_count == 0
+    if previous_stage and previous_item_count > 0 and item_count == 0:
+        logger.critical(
+            f"[ITEM_LOSS_DETECTED] "
+            f"record_id={record_id} "
+            f"invoice_no={invoice_no} "
+            f"previous_stage={previous_stage} "
+            f"current_stage={stage} "
+            f"previous_item_count={previous_item_count} "
+            f"current_item_count={item_count}"
+        )
+
+
 def acquire_redis_lock(lock_name: str, expiry_s: int = 60) -> bool:
     from core.redis_orchestrator import orchestrator
     if not orchestrator.redis:
@@ -449,57 +519,61 @@ def run_ocr_pipeline(file_bytes: bytes = None, record: InvoiceTempOCR = None, wa
         # ── [PHASE 18] BARRIER INITIALIZATION ──
         # Initialize the deterministic assembly barrier for this record.
         # This ensures that even if AI tasks finish extremely fast, the barrier knows how many to expect.
-        state, created = SessionFinalizationState.objects.get_or_create(
-            id=str(record.id),
-            defaults={
-                'expected_pages': total_pages,
-                'total_pages_expected': total_pages, # Legacy
-                'completed_pages': 0,
-                'failed_pages': 0,
-                'ai_completed_pages': 0,
-                'snapshot_created': False
-            }
-        )
-        if not created:
-            # If it already existed (e.g. from a retry or stub row), just update expected_pages
-            # Do NOT reset snapshot_created, export_complete, or materialization_complete!
-            state.expected_pages = total_pages
-            state.total_pages_expected = total_pages
-            state.save(update_fields=['expected_pages', 'total_pages_expected'])
-
-        logger.info(f"[ASSEMBLY_BARRIER_CREATED] record={record.id} expected={total_pages}")
-        
-        if not record.extracted_data:
-            # ── [RECOVERY_IDEMPOTENCY_FIX] ──
-            # If the record is already past OCR stage, do NOT re-enqueue AI tasks.
-            in_flight_statuses = [
-                PipelineStatus.EXTRACTING, 
-                PipelineStatus.ASSEMBLING, 
-                PipelineStatus.FINALIZING, 
-                PipelineStatus.FINALIZED
-            ]
-            if record.status in in_flight_statuses and not is_reusable:
-                 logger.info(f"[PIPELINE_RECOVERY_SKIP] record={record.id} already in stage {record.status}. Bypassing re-extraction.")
-                 return {"status": "ENQUEUED"}
-
-            # PHASE 3: Transition to EXTRACTING
-            record.status = PipelineStatus.EXTRACTING
-            record.save(update_fields=['status'])
-
-            extracted = extract_invoice(
-                client=None, 
-                file_bytes=file_bytes, 
-                voucher_type=record.voucher_type or 'Purchase',
-                public_ip="0.0.0.0",
-                user_id='system',
-                tenant_id=str(record.tenant_id or 'system'),
-                wait_for_result=wait_for_ai,
-                record_id=record.id,
-                item_id=item_id,
-                upload_session_id=record.upload_session_id,
-                job_id=job_id,
-                file_path=file_path
+        with transaction.atomic():
+            state, created = SessionFinalizationState.objects.get_or_create(
+                id=str(record.id),
+                defaults={
+                    'expected_pages': total_pages,
+                    'total_pages_expected': total_pages, # Legacy
+                    'completed_pages': 0,
+                    'failed_pages': 0,
+                    'ai_completed_pages': 0,
+                    'snapshot_created': False
+                }
             )
+            # Row lock to serialize with trigger_next_fanout calls
+            state = SessionFinalizationState.objects.select_for_update().get(id=str(record.id))
+            
+            if not created:
+                # If it already existed (e.g. from a retry or stub row), just update expected_pages
+                # Do NOT reset snapshot_created, export_complete, or materialization_complete!
+                state.expected_pages = total_pages
+                state.total_pages_expected = total_pages
+                state.save(update_fields=['expected_pages', 'total_pages_expected'])
+
+            logger.info(f"[ASSEMBLY_BARRIER_CREATED] record={record.id} expected={total_pages}")
+            
+            if not record.extracted_data:
+                # ── [RECOVERY_IDEMPOTENCY_FIX] ──
+                # If the record is already past OCR stage, do NOT re-enqueue AI tasks.
+                in_flight_statuses = [
+                    PipelineStatus.EXTRACTING, 
+                    PipelineStatus.ASSEMBLING, 
+                    PipelineStatus.FINALIZING, 
+                    PipelineStatus.FINALIZED
+                ]
+                if record.status in in_flight_statuses and not is_reusable:
+                     logger.info(f"[PIPELINE_RECOVERY_SKIP] record={record.id} already in stage {record.status}. Bypassing re-extraction.")
+                     return {"status": "ENQUEUED"}
+
+                # PHASE 3: Transition to EXTRACTING
+                record.status = PipelineStatus.EXTRACTING
+                record.save(update_fields=['status'])
+
+                extracted = extract_invoice(
+                    client=None, 
+                    file_bytes=file_bytes, 
+                    voucher_type=record.voucher_type or 'Purchase',
+                    public_ip="0.0.0.0",
+                    user_id='system',
+                    tenant_id=str(record.tenant_id or 'system'),
+                    wait_for_result=wait_for_ai,
+                    record_id=record.id,
+                    item_id=item_id,
+                    upload_session_id=record.upload_session_id,
+                    job_id=job_id,
+                    file_path=file_path
+                )
             
             if not wait_for_ai:
                 # ── [PHASE 10: ASYNC INTEGRITY GATE] ──
@@ -963,6 +1037,19 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             except Exception as e_val:
                 logger.error(f"[ITEM_VALIDATION_ASSEMBLY_FAILED] error={e_val}")
             
+            try:
+                trace_item_checkpoint(
+                    record_id=str(record.id),
+                    invoice_no=invoice_no,
+                    page_number=page_src,
+                    stage="ITEM_TRACE_AFTER_VALIDATION",
+                    item_count=len(ui_pay.get("items", [])),
+                    item_status=ui_pay.get("item_status"),
+                    snapshot_item_count=None
+                )
+            except Exception as trace_err:
+                logger.error(f"[TRACE_ERR] ITEM_TRACE_AFTER_VALIDATION: {trace_err}")
+            
             logger.info(f"[NORMALIZATION_COMPLETE] page_no={page_src} invoice_no={invoice_no} merge_key=N/A dedupe_key=N/A filter_reason=None dropped=False")
             
             totals_empty = (
@@ -1137,6 +1224,20 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         
         logger.info(f"[ASSEMBLY_PAGE_MERGED] record={record.id} invoices={len(final_invoices)}")
 
+        for ui_pay in final_invoices:
+            try:
+                trace_item_checkpoint(
+                    record_id=str(record.id),
+                    invoice_no=ui_pay.get("invoice_no") or "N/A",
+                    page_number=ui_pay.get("_page_no"),
+                    stage="ITEM_TRACE_AFTER_ASSEMBLY",
+                    item_count=len(ui_pay.get("items", [])),
+                    item_status=ui_pay.get("item_status"),
+                    snapshot_item_count=None
+                )
+            except Exception as trace_err:
+                logger.error(f"[TRACE_ERR] ITEM_TRACE_AFTER_ASSEMBLY: {trace_err}")
+
         # Snapshot persistence must use len(final_invoices) (Root Cause #3)
         export_rows_count = len(final_invoices)
         logger.info(f"[SNAPSHOT_ROW_COUNT] count={export_rows_count}")
@@ -1184,6 +1285,19 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                 raise CriticalPipelineError(
                     f"Item status lost despite extracted items before snapshot freeze: record_id={inv_ui.get('id') or record.id}"
                 )
+            
+            try:
+                trace_item_checkpoint(
+                    record_id=str(inv_ui.get("id") or record.id),
+                    invoice_no=inv_ui.get("invoice_no") or "N/A",
+                    page_number=inv_ui.get("_page_no"),
+                    stage="ITEM_TRACE_BEFORE_SNAPSHOT",
+                    item_count=len(inv_items),
+                    item_status=inv_ui.get("item_status"),
+                    snapshot_item_count=len(inv_items)
+                )
+            except Exception as trace_err:
+                logger.error(f"[TRACE_ERR] ITEM_TRACE_BEFORE_SNAPSHOT: {trace_err}")
 
         # 4. JSON SERIALIZATION & COMPRESSION (Phase 8: Snapshot Storage Hardening)
         try:
@@ -1437,7 +1551,6 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                         logger.warning(f"[SNAPSHOT_S3_KEY_TOO_LONG] length={len(s3_key)}")
                 except Exception as ve:
                     logger.exception(f"[SNAPSHOT_VALIDATION_ERROR] {ve}")
-
                 try:
                     snapshot = FinalizedSnapshot.objects.create(
                         session_id=record.upload_session_id,
@@ -1447,8 +1560,27 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                         invoice_count=len(final_invoices),
                         finalized_at=timezone.now()
                     )
+                    # Forensic logging of GSTIN snapshot state
+                    for inv in final_invoices:
+                        logger.info(
+                            f"[GSTIN_SNAPSHOT] record_id={record.id} "
+                            f"gstin={inv.get('gstin')} status={record.status}"
+                        )
                     logger.info(f"[SNAPSHOT_ROW_CREATED] session={record.upload_session_id} snapshot_id={snapshot.id}")
                     logger.info(f"[SNAPSHOT_DB_FLUSH] session={record.upload_session_id} tenant={record.tenant_id}")
+                    for inv in final_invoices:
+                        try:
+                            trace_item_checkpoint(
+                                record_id=str(inv.get("id") or record.id),
+                                invoice_no=inv.get("invoice_no") or "N/A",
+                                page_number=inv.get("_page_no"),
+                                stage="ITEM_TRACE_AFTER_SNAPSHOT",
+                                item_count=len(inv.get("items", [])),
+                                item_status=inv.get("item_status"),
+                                snapshot_item_count=len(inv.get("items", []))
+                            )
+                        except Exception as trace_err:
+                            logger.error(f"[TRACE_ERR] ITEM_TRACE_AFTER_SNAPSHOT: {trace_err}")
                 except Exception as e_create:
                     logger.error(f"[ASSEMBLY_FATAL_ERROR] FinalizedSnapshot.objects.create failed: {e_create}")
                     import traceback; logger.error(traceback.format_exc())

@@ -398,6 +398,25 @@ class CleanOCRStagingView(views.APIView):
         v_id = getattr(r, 'vendor_id', None)
         v_status_record = getattr(r, 'status', "PROCESSING")
         tenant_id = getattr(r, 'tenant_id', None)
+
+        # On-the-fly GSTIN classification fallback for UI mapping of legacy/historical records
+        if norm and not norm.get("canonical_vendor_gstin"):
+            raw_text = norm.get("_pdf_ocr_text") or norm.get("_raw_text") or ""
+            if raw_text:
+                try:
+                    from ocr_pipeline.gstin_classifier import GSTINOwnershipClassifier
+                    extracted_data_dict = {
+                        "gstin": getattr(r, 'gstin', None) or norm.get("gstin") or "",
+                        "vendor_gstin": norm.get("vendor_gstin") or norm.get("gstin") or "",
+                        "buyer_gstin": norm.get("buyer_gstin") or norm.get("bill_to_gstin") or "",
+                        "consignee_gstin": norm.get("consignee_gstin") or norm.get("ship_to_gstin") or "",
+                        "vendor_name": getattr(r, 'vendor_name', None) or norm.get("vendor_name") or ""
+                    }
+                    classification = GSTINOwnershipClassifier.classify_gstins(raw_text, extracted_data_dict, tenant_id)
+                    norm = dict(norm)
+                    norm.update(classification)
+                except Exception as _fe:
+                    logger.warning(f"[GSTIN_ON_THE_FLY_FALLBACK_FAILED] record_id={getattr(r, 'id', None)} error={_fe}")
         # [CANONICAL VENDOR RESOLUTION] Also check record.vendor_status DB field
         db_vendor_status = getattr(r, 'vendor_status', 'PENDING')
 
@@ -545,6 +564,26 @@ class CleanOCRStagingView(views.APIView):
             getattr(r, 'id', None), inv_no, len(items_val), item_status, list(norm.keys())
         )
 
+        try:
+            from ocr_pipeline.pipeline import trace_item_checkpoint
+            snapshot_count_temp = len(norm.get("items", []))
+            if not norm.get("items"):
+                _ae_temp = norm.get("assembled_exports") or []
+                if _ae_temp and isinstance(_ae_temp, list) and _ae_temp[0]:
+                    snapshot_count_temp = len(_ae_temp[0].get("items", []))
+            
+            trace_item_checkpoint(
+                record_id=str(getattr(r, 'id', None)),
+                invoice_no=inv_no,
+                page_number=norm.get('_page_no') or norm.get('page_no') or getattr(r, 'page_no', None),
+                stage="ITEM_TRACE_AFTER_HYDRATION",
+                item_count=len(items_val),
+                item_status=item_status,
+                snapshot_item_count=snapshot_count_temp
+            )
+        except Exception as trace_err:
+            logger.error(f"[TRACE_ERR] ITEM_TRACE_AFTER_HYDRATION: {trace_err}")
+
         # PHASE 6: HYDRATION ITEM VERIFY CHECKPOINT
         snapshot_count = len(norm.get("items", []))
         if not norm.get("items"):
@@ -636,8 +675,18 @@ class CleanOCRStagingView(views.APIView):
             ),
             "branch": branch,
             "vendor_name": vendor_name_val,
-            "vendor_gstin": getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or norm.get("vendor_gstin") or "—",
-            "gstin": getattr(r, 'gstin', None) or header.get("gstin") or norm.get("gstin") or supplier.get("gstin") or "—",
+            "vendor_gstin": norm.get("canonical_vendor_gstin") or norm.get("vendor_gstin") or getattr(r, 'gstin', None) or header.get("vendor_gstin") or norm.get("gstin") or supplier.get("gstin") or "—",
+            "gstin": norm.get("canonical_vendor_gstin") or norm.get("vendor_gstin") or getattr(r, 'gstin', None) or header.get("gstin") or norm.get("gstin") or supplier.get("gstin") or "—",
+            "buyer_gstin": norm.get("buyer_gstin") or norm.get("bill_to_gstin") or "—",
+            "consignee_gstin": norm.get("consignee_gstin") or norm.get("ship_to_gstin") or "—",
+            "ship_to_gstin": norm.get("ship_to_gstin") or norm.get("consignee_gstin") or "—",
+            "bill_to_gstin": norm.get("bill_to_gstin") or norm.get("buyer_gstin") or "—",
+            "raw_vendor_gstin": norm.get("raw_vendor_gstin") or getattr(r, 'gstin', None) or norm.get("gstin") or "—",
+            "raw_buyer_gstin": norm.get("raw_buyer_gstin") or "—",
+            "raw_consignee_gstin": norm.get("raw_consignee_gstin") or "—",
+            "canonical_vendor_gstin": norm.get("canonical_vendor_gstin") or getattr(r, 'gstin', None) or norm.get("gstin") or "—",
+            "canonical_buyer_gstin": norm.get("canonical_buyer_gstin") or "—",
+            "canonical_consignee_gstin": norm.get("canonical_consignee_gstin") or "—",
             "vendor_id": v_id,
             "status": final_status,
             "validationStatus": ui_status,
@@ -724,6 +773,16 @@ class CleanOCRStagingView(views.APIView):
             f"gstin={res.get('gstin')}"
         )
         logger.info(f"[READONLY_HYDRATION_CONFIRMED] Completed readonly hydration for record_id={getattr(r, 'id', None)} validation_status={ui_status}")
+        
+        # Forensic logging of GSTIN hydration and API response states
+        logger.info(
+            f"[GSTIN_HYDRATION] upload_session_id={getattr(r, 'upload_session_id', None)} "
+            f"record_id={getattr(r, 'id', None)} gstin={res.get('gstin')} status={res.get('status')}"
+        )
+        logger.info(
+            f"[GSTIN_API_RESPONSE] upload_session_id={getattr(r, 'upload_session_id', None)} "
+            f"record_id={getattr(r, 'id', None)} gstin={res.get('gstin')} status={res.get('status')}"
+        )
         return res
 
     def _log_final_api_response_rows(self, data, source):

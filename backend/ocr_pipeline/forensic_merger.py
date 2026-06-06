@@ -257,9 +257,108 @@ class ForensicMerger:
 
         # ── 1. PAGE CLASSIFICATION BEFORE GROUPING ──
         from .integrity_enforcer import detect_continuation_markers
-        for i, curr in enumerate(invoices):
+
+        # Step 1.1: Hydrate all pages first
+        for curr in invoices:
             # [MANDATORY HYDRATION] (Requirement #1)
             hydrate_identity_fields(curr)
+
+        # Step 1.2: Cross-page identity stabilization pass (majority vote reconciliation)
+        invoice_no_groups = defaultdict(list)
+        for curr in invoices:
+            inv_no = str(curr.get("invoice_no") or "").strip().upper()
+            if inv_no and inv_no not in ("MISSING", "NONE", "—", "NULL", "N/A"):
+                invoice_no_groups[inv_no].append(curr)
+
+        for inv_no, group_pages in invoice_no_groups.items():
+            if len(group_pages) > 1:
+                # Reconcile GSTIN
+                gstin_votes = defaultdict(int)
+                for p in group_pages:
+                    g = str(p.get("gstin") or p.get("vendor_gstin") or "").strip().upper()
+                    if g and g not in ("MISSING", "NONE", "—", "NULL", "N/A"):
+                        gstin_votes[g] += 1
+                if gstin_votes:
+                    candidate_gstins = list(gstin_votes.keys())
+                    # [DB_GSTIN_ELECTION] Prefer GSTINs that are registered vendors in the DB.
+                    # This prevents the buyer's GSTIN (extracted by OCR from a different block)
+                    # from winning a majority-vote tie against the real supplier's GSTIN.
+                    db_vendor_gstins = []
+                    try:
+                        from vendors.models import VendorMasterGSTDetails
+                        db_vendor_gstins = [
+                            g.upper() for g in
+                            VendorMasterGSTDetails.objects.filter(
+                                gstin__in=candidate_gstins
+                            ).values_list('gstin', flat=True)
+                        ]
+                    except Exception as _dbe:
+                        logger.warning(f"[STABILIZER_DB_GSTIN_LOOKUP_ERR] inv_no={inv_no} err={_dbe}")
+
+                    db_candidates = [g for g in candidate_gstins if g in db_vendor_gstins]
+                    if db_candidates:
+                        # Among DB-registered GSTINs, pick the one with the highest vote count
+                        best_gstin = max(db_candidates, key=lambda g: gstin_votes[g])
+                        logger.info(
+                            f"[STABILIZER_GSTIN_DB_ELECTED] inv_no={inv_no} "
+                            f"best={best_gstin} db_candidates={db_candidates} votes={dict(gstin_votes)}"
+                        )
+                    else:
+                        # No DB match — fall back to pure majority vote
+                        best_gstin = max(gstin_votes, key=gstin_votes.get)
+                        logger.info(
+                            f"[STABILIZER_GSTIN_VOTE_ELECTED] inv_no={inv_no} "
+                            f"best={best_gstin} votes={dict(gstin_votes)}"
+                        )
+                    for p in group_pages:
+                        p["gstin"] = best_gstin
+                        p["vendor_gstin"] = best_gstin
+                        p["canonical_gstin"] = best_gstin
+                        p["canonical_vendor_gstin"] = best_gstin
+                        if "extracted_data" in p and isinstance(p["extracted_data"], dict):
+                            p["extracted_data"]["gstin"] = best_gstin
+                            p["extracted_data"]["vendor_gstin"] = best_gstin
+                            p["extracted_data"]["canonical_vendor_gstin"] = best_gstin
+
+                # Reconcile invoice_date
+                date_votes = defaultdict(int)
+                for p in group_pages:
+                    d = str(p.get("invoice_date") or "").strip().upper()
+                    if d and d not in ("MISSING", "NONE", "—", "NULL", "N/A"):
+                        date_votes[d] += 1
+                if date_votes:
+                    best_date = max(date_votes, key=date_votes.get)
+                    for p in group_pages:
+                        p["invoice_date"] = best_date
+                        if "extracted_data" in p and isinstance(p["extracted_data"], dict):
+                            p["extracted_data"]["invoice_date"] = best_date
+
+                # Reconcile vendor_name
+                name_votes = defaultdict(int)
+                for p in group_pages:
+                    n = str(p.get("vendor_name") or "").strip().upper()
+                    if n and n not in ("MISSING", "NONE", "—", "NULL", "N/A"):
+                        name_votes[n] += 1
+                if name_votes:
+                    best_name = max(name_votes, key=name_votes.get)
+                    for p in group_pages:
+                        p["vendor_name"] = best_name
+                        p["canonical_vendor_name"] = best_name
+                        if "extracted_data" in p and isinstance(p["extracted_data"], dict):
+                            p["extracted_data"]["vendor_name"] = best_name
+
+        # Step 1.3: Classify page roles and apply relational check
+        for i, curr in enumerate(invoices):
+            # [GROUPING_INPUT]
+            logger.info(
+                f"[GROUPING_INPUT] "
+                f"page_number={curr.get('_page_no')} "
+                f"invoice_no={curr.get('invoice_no')} "
+                f"raw_gstin={curr.get('raw_gstin') or curr.get('gstin')} "
+                f"canonical_gstin={curr.get('canonical_gstin') or curr.get('gstin')} "
+                f"vendor_name={curr.get('vendor_name')} "
+                f"item_count={len(curr.get('items', []))}"
+            )
             
             # Pre-classify each page
             curr_ocr = curr.get("_pdf_ocr_text") or curr.get("_raw_text") or ""
@@ -317,6 +416,13 @@ class ForensicMerger:
             logger.info(f"[PAGE_ROLE_CLASSIFIED] page_no={curr.get('_page_no')} page_role={role} invoice_no={curr_inv} gstin={curr_gstin}")
 
         # ── 2. DOCUMENT GROUPING & CONTINUATION ATTACHMENT ──
+        # Counterfactual counters
+        total_rejections = 0
+        count_role_only_merged = 0
+        count_gstin_only_merged = 0
+        count_invoice_only_merged = 0
+        count_combined_merged = 0
+
         for curr_idx, curr in enumerate(invoices):
             curr_page_no = curr.get("_page_no")
             if curr_page_no in consumed_page_indices:
@@ -363,6 +469,117 @@ class ForensicMerger:
                 for group_idx, group in enumerate(final_groups):
                     prev = group[0]
                     should, reason = enforcer.should_merge(prev, curr)
+                    
+                    # [GROUPING_DECISION]
+                    p_no = str(prev.get("invoice_no") or "").strip().upper()
+                    c_no = str(curr.get("invoice_no") or "").strip().upper()
+                    p_gstin = str(prev.get("gstin") or prev.get("vendor_gstin") or "").strip().upper()
+                    c_gstin = str(curr.get("gstin") or curr.get("vendor_gstin") or "").strip().upper()
+                    p_can_gstin = str(prev.get("canonical_gstin") or prev.get("gstin") or "").strip().upper()
+                    c_can_gstin = str(curr.get("canonical_gstin") or curr.get("gstin") or "").strip().upper()
+                    
+                    invoice_match = (p_no == c_no and p_no not in ("", "MISSING", "N/A"))
+                    gstin_match = (p_gstin == c_gstin and p_gstin not in ("", "MISSING", "N/A"))
+                    canonical_gstin_match = (p_can_gstin == c_can_gstin and p_can_gstin not in ("", "MISSING", "N/A"))
+                    
+                    logger.info(
+                        f"[GROUPING_DECISION] page_a={prev.get('_page_no')} page_b={curr.get('_page_no')} "
+                        f"invoice_match={invoice_match} gstin_match={gstin_match} "
+                        f"canonical_gstin_match={canonical_gstin_match} grouped={should} "
+                        f"rejection_reason='{reason if not should else ''}'"
+                    )
+                    
+                    if not should:
+                        total_rejections += 1
+                        
+                        # Log CURRENT_DECISION
+                        page_a = prev.get('_page_no')
+                        page_b = curr.get('_page_no')
+                        logger.info(
+                            f"[CURRENT_DECISION] page_a={page_a} page_b={page_b} "
+                            f"grouped=False rejection_reason='{reason}'"
+                        )
+                        
+                        curr_ocr = curr.get("_pdf_ocr_text") or curr.get("_raw_text") or ""
+                        curr_role = enforcer.classify_page(curr_ocr, curr.get("items", []), invoice_data=curr)
+                        
+                        # Determine blocking conditions
+                        blocked_by_role = (curr_role == "PAGE_ROLE_PRIMARY")
+                        blocked_by_invoice = (p_no and c_no and p_no != c_no and p_no != "MISSING" and c_no != "MISSING")
+                        blocked_by_gstin = (p_gstin and c_gstin and p_gstin != c_gstin and p_gstin != "MISSING" and c_gstin != "MISSING")
+                        
+                        first_blocking = "other"
+                        if blocked_by_role:
+                            first_blocking = "PAGE_ROLE_PRIMARY"
+                        elif blocked_by_invoice:
+                            first_blocking = "invoice mismatch"
+                        elif blocked_by_gstin:
+                            first_blocking = "GSTIN mismatch"
+                            
+                        # Fuzzy matches
+                        # GSTIN fuzzy matching
+                        gstin_fuzzy_match = False
+                        if not p_gstin or not c_gstin or p_gstin == "MISSING" or c_gstin == "MISSING":
+                            gstin_fuzzy_match = True
+                        elif p_gstin == c_gstin:
+                            gstin_fuzzy_match = True
+                        else:
+                            from difflib import SequenceMatcher
+                            if SequenceMatcher(None, p_can_gstin, c_can_gstin).ratio() > 0.85:
+                                gstin_fuzzy_match = True
+                                
+                        # Invoice fuzzy matching
+                        invoice_fuzzy_match = False
+                        if not p_no or not c_no or p_no == "MISSING" or c_no == "MISSING":
+                            invoice_fuzzy_match = True
+                        elif p_no == c_no:
+                            invoice_fuzzy_match = True
+                        else:
+                            from difflib import SequenceMatcher
+                            p_no_clean = re.sub(r'[^A-Z0-9]', '', p_no)
+                            c_no_clean = re.sub(r'[^A-Z0-9]', '', c_no)
+                            if p_no_clean == c_no_clean:
+                                invoice_fuzzy_match = True
+                            elif SequenceMatcher(None, p_no, c_no).ratio() > 0.85:
+                                invoice_fuzzy_match = True
+                                
+                        # Date and branch
+                        p_branch = str(prev.get("tenant_id") or "").strip().upper()
+                        c_branch = str(curr.get("tenant_id") or "").strip().upper()
+                        same_branch = (not c_branch or c_branch == "MISSING" or c_branch == p_branch)
+                        
+                        p_date = str(prev.get("invoice_date") or "").strip().upper()
+                        c_date = str(curr.get("invoice_date") or "").strip().upper()
+                        same_date = (not c_date or c_date == "MISSING" or c_date == p_date or p_date == c_date)
+                        
+                        # 1. Role Only
+                        would_group_role_only = (not blocked_by_invoice and not blocked_by_gstin and same_branch and same_date)
+                        if would_group_role_only:
+                            count_role_only_merged += 1
+                            
+                        # 2. GSTIN Only
+                        would_group_gstin_only = (not blocked_by_role and not blocked_by_invoice and gstin_fuzzy_match and same_branch and same_date)
+                        if would_group_gstin_only:
+                            count_gstin_only_merged += 1
+                            
+                        # 3. Invoice Only
+                        would_group_invoice_only = (not blocked_by_role and not blocked_by_gstin and invoice_fuzzy_match and same_branch and same_date)
+                        if would_group_invoice_only:
+                            count_invoice_only_merged += 1
+                            
+                        # 4. Combined (Role disabled + GSTIN fuzzy + Invoice fuzzy)
+                        would_group_combined = (gstin_fuzzy_match and invoice_fuzzy_match and same_branch and same_date)
+                        if would_group_combined:
+                            count_combined_merged += 1
+                            
+                        logger.info(
+                            f"[COUNTERFACTUAL_DECISION] page_a={page_a} page_b={page_b} "
+                            f"would_group={would_group_combined} first_blocking='{first_blocking}' "
+                            f"would_group_role_only={would_group_role_only} "
+                            f"would_group_gstin_only={would_group_gstin_only} "
+                            f"would_group_invoice_only={would_group_invoice_only}"
+                        )
+                    
                     if should:
                         logger.info(f"[MERGE_DECISION] candidate_page={curr_page_no} decision='MERGE' reason='{reason}'")
                         group.append(curr)
@@ -379,6 +596,14 @@ class ForensicMerger:
                     logger.info(f"[GROUP_KEY_CREATED] group_key=GRP_{len(final_groups)-1}_{curr_inv} invoice_no={curr_inv} pages=[{curr_page_no}]")
 
         logger.info(f"[FORENSIC GROUP DONE] {len(invoices)} pages -> {len(final_groups)} distinct groups")
+        logger.info(
+            f"[COUNTERFACTUAL_SUMMARY] "
+            f"total_rejections={total_rejections} "
+            f"role_only_resolved={count_role_only_merged} "
+            f"gstin_only_resolved={count_gstin_only_merged} "
+            f"invoice_only_resolved={count_invoice_only_merged} "
+            f"combined_resolved={count_combined_merged}"
+        )
 
         # ── 3. FINAL GROUP RECONSTRUCTION & CLEANUP ──
         validated_groups = {}
@@ -588,7 +813,7 @@ class ForensicMerger:
             )
         return is_cont
 
-    def deduplicate_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def deduplicate_items(self, items: List[Dict[str, Any]], invoice_no: str = None, group_id: str = None) -> List[Dict[str, Any]]:
         """
         [FORENSIC] Deterministic Item Deduplication & Multi-page Summary Cleanup.
         Dedupes cross-page duplicate items and filters out fake summary/totals
@@ -616,6 +841,13 @@ class ForensicMerger:
                 unique_items.append(itm)
             else:
                 logger.info(f"[ITEM_DEDUPE_GUARD] Dropping cross-page duplicate item: desc='{desc[:20]}' amt={amt} rate={rate}")
+                # [CLEANUP_DECISION]
+                logger.info(
+                    f"[CLEANUP_DECISION] description='{itm.get('description') or itm.get('item_name')}' "
+                    f"reason='cross-page duplicate item' "
+                    f"invoice_no={invoice_no} "
+                    f"group_id={group_id}"
+                )
                 
         # Post-deduplication cleaning of fake summary and round-off rows
         # 1. Drop 'Rounded Off' / 'Round Off' rows as they are represented in header level
@@ -624,6 +856,13 @@ class ForensicMerger:
             desc = str(itm.get("description") or itm.get("item_name") or "").strip().lower()
             if desc in ["rounded off", "round off", "rounding adjustment", "rounding off", "round_off", "adjustment"]:
                 logger.info(f"[ITEM_CLEANUP_GUARD] Dropping 'Rounded Off' item: {itm}")
+                # [CLEANUP_DECISION]
+                logger.info(
+                    f"[CLEANUP_DECISION] description='{itm.get('description') or itm.get('item_name')}' "
+                    f"reason='rounded off or rounding adjustment item' "
+                    f"invoice_no={invoice_no} "
+                    f"group_id={group_id}"
+                )
                 continue
             non_roundoff_items.append(itm)
 
@@ -655,6 +894,13 @@ class ForensicMerger:
                             f"itm_taxable={itm_taxable} sum_other_taxable={sum_taxable} "
                             f"itm_qty={itm_qty} sum_other_qty={sum_qty}"
                         )
+                        # [CLEANUP_DECISION]
+                        logger.info(
+                            f"[CLEANUP_DECISION] description='{itm.get('description') or itm.get('item_name')}' "
+                            f"reason='generic summary row matching mathematical sum of other items' "
+                            f"invoice_no={invoice_no} "
+                            f"group_id={group_id}"
+                        )
                         continue
             final_items.append(itm)
 
@@ -671,6 +917,13 @@ class ForensicMerger:
             logger.info(f"[CONTINUATION_PAGE_REJECTED] Dropping item set because it only contains generic summary rows: {[itm.get('description') or itm.get('item_name') for itm in final_items]}")
             for itm in final_items:
                 logger.info(f"[SUMMARY_ROW_DROPPED] item={itm.get('description') or itm.get('item_name')} reason='standalone generic summary item without real items'")
+                # [CLEANUP_DECISION]
+                logger.info(
+                    f"[CLEANUP_DECISION] description='{itm.get('description') or itm.get('item_name')}' "
+                    f"reason='standalone generic summary item without real items (double-layer safety net)' "
+                    f"invoice_no={invoice_no} "
+                    f"group_id={group_id}"
+                )
             final_items = []
             explicitly_dropped = True
 
@@ -798,8 +1051,52 @@ class ForensicMerger:
                 if k.startswith("_") and (k not in merged_invoice or not merged_invoice[k]):
                     merged_invoice[k] = v
 
+        # Compute group_id deterministically
+        import hashlib
+        physical_pages = sorted(list(set(p.get("_physical_page_no") for p in group if p.get("_physical_page_no") is not None)))
+        page_str = ",".join(map(str, physical_pages))
+        record_id_str = str(group[0].get("record_id") or "")
+        group_hash = hashlib.sha256(f"{record_id_str}:{page_str}".encode('utf-8')).hexdigest()[:16]
+        group_id = f"GRP_HASH_{group_hash}"
+        pages_in_group = [p.get("_page_no") for p in sorted_group]
+
+        # [GROUP_RESULT]
+        logger.info(
+            f"[GROUP_RESULT] group_id={group_id} "
+            f"pages_in_group={pages_in_group} "
+            f"invoice_no={merged_invoice.get('invoice_no')} "
+            f"item_count_before_cleanup={len(all_raw_items)}"
+        )
+
+        item_count_before = len(all_raw_items)
+
         # Deduplicate and handle variations
-        merged_invoice["items"] = self.deduplicate_items(all_raw_items)
+        merged_invoice["items"] = self.deduplicate_items(all_raw_items, invoice_no=merged_invoice.get('invoice_no'), group_id=group_id)
+
+        item_count_after = len(merged_invoice["items"])
+
+        # [ITEM_LOSS_DETECTED]
+        if item_count_before > 0 and item_count_after == 0:
+            rule_responsible = "Unknown"
+            has_round_off = any(str(itm.get("description") or itm.get("item_name") or "").strip().lower() in ["rounded off", "round off", "rounding adjustment", "rounding off", "round_off", "adjustment"] for itm in all_raw_items)
+            has_generic = any(str(itm.get("description") or itm.get("item_name") or "").strip().lower() in ["services", "total", "subtotal", "sub-total", "summary", "carried forward", "brought forward"] for itm in all_raw_items)
+            
+            if has_generic and not has_round_off:
+                rule_responsible = "standalone generic summary item without real items (double-layer safety net)"
+            elif has_round_off and not has_generic:
+                rule_responsible = "rounded off or rounding adjustment item"
+            else:
+                rule_responsible = "combination of rounded-off and standalone generic summary items (double-layer safety net)"
+
+            logger.critical(
+                f"[ITEM_LOSS_DETECTED] "
+                f"invoice_no={merged_invoice.get('invoice_no')} "
+                f"group_id={group_id} "
+                f"pages_in_group={pages_in_group} "
+                f"item_count_before={item_count_before} "
+                f"item_count_after={item_count_after} "
+                f"exact_cleanup_rule_responsible='{rule_responsible}'"
+            )
         
         # [FORENSIC_CANONICAL_DTO]
         try:

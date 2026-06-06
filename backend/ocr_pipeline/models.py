@@ -586,7 +586,11 @@ class InvoiceTempOCR(models.Model):
                     db_extracted = db_record.get('extracted_data') or {}
                     
                     terminal_statuses = {'FINALIZED', 'FAILED', 'COMPLETED'}
-                    if db_status in terminal_statuses:
+                    # [PHASE 4 FIX] Only block regressions: terminal→non-terminal.
+                    # Idempotent terminal→terminal writes (e.g. FAILED→FAILED on retry) are safe.
+                    # This prevents assembly workers from crashing when FAILURE_CONTAINMENT has
+                    # already committed a terminal status and the caller tries an idempotent re-write.
+                    if db_status in terminal_statuses and self.status not in terminal_statuses:
                         raise RuntimeError(f"Post-finalization mutation blocked: record {self.pk} is in terminal state '{db_status}'")
                     
                     is_db_finalized = db_status in ('FINALIZED', 'FAILED') or db_processed is True or db_val_status in ('VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'PENDING_PURCHASE')
