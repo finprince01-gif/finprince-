@@ -854,12 +854,7 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
         ]
         
         if failed_indices:
-            logger.error(f"[FAILURE_CONTAINMENT] Aborting assembly for record {record.id} because pages {failed_indices} are failed/partial. Banning DTO_PARTIAL_VALID.")
-            record.status = PipelineStatus.FAILED
-            record.validation_status = 'EXTRACTION_FAILED'
-            record.processed = False
-            record.save(update_fields=['status', 'validation_status', 'processed'])
-            
+            logger.warning(f"[FAILURE_CONTAINMENT] Processing page list with failed pages {failed_indices} for record {record.id}. NOT aborting assembly.")
             try:
                 b_state = SessionFinalizationState.objects.filter(id=str(record.id)).first()
                 if b_state:
@@ -867,8 +862,6 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                     b_state.save(update_fields=['failed_pages'])
             except Exception as _b_err:
                 logger.warning(f"[BARRIER_STATE_WRITE_FAILED] {_b_err}")
-                
-            return {"status": "EXTRACTION_FAILED", "failed_pages": failed_indices}
             
         # Filter out failed pages from mapping (BYPASSED)
         raw_pages = {
@@ -896,12 +889,32 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             if not isinstance(payload_src, dict):
                 payload_src = {}
                 
-            p = get_canonical_export_record(payload_src, tenant_id=record.tenant_id)
+            page_int = int(k)
+            if page_int in failed_indices:
+                p = {
+                    "status": "PARTIAL_FAILED",
+                    "validation_warnings": ["page_ocr_failed"],
+                    "error": "Page failed raw OCR extraction.",
+                    "invoice_no": "FAILED",
+                    "vendor_name": "FAILED",
+                }
+            else:
+                try:
+                    p = get_canonical_export_record(payload_src, tenant_id=record.tenant_id)
+                except Exception as e_page:
+                    logger.error(f"[ASSEMBLY_PAGE_NORMALIZATION_FAILED] page={k} error={e_page}")
+                    p = {
+                        "status": "PARTIAL_FAILED",
+                        "validation_warnings": ["page_normalization_failed"],
+                        "error": f"Page normalization failed: {str(e_page)}",
+                        "invoice_no": "FAILED",
+                        "vendor_name": "FAILED",
+                    }
             
             # [FIX 4 & 5] Split physical page identity from runtime task ordering
             p["_page_no"] = p_idx                  # Sequential logical page for the UI/exported rows
-            p["_physical_page_no"] = int(k)        # True physical page from the PDF enumerate
-            p["_runtime_task_id"] = int(k)         # Preserve for async routing
+            p["_physical_page_no"] = page_int      # True physical page from the PDF enumerate
+            p["_runtime_task_id"] = page_int       # Preserve for async routing
             
             pages_list.append(p)
 
@@ -1529,6 +1542,8 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
                             f"[PERSISTENCE_ATTEMPT] invoice_no={sib.supplier_invoice_no} "
                             f"group_key=sibling page_count=1 session={record.upload_session_id}"
                         )
+                    # Clear stale sibling records for the session to prevent unique key violation
+                    InvoiceTempOCR.objects.filter(upload_session_id=record.upload_session_id).exclude(id=record.id).delete()
                     InvoiceTempOCR.objects.bulk_create(siblings)
                     for sib in siblings:
                         logger.info(
@@ -2011,7 +2026,14 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         data = record.extracted_data or {}
 
         # Enforce strict immutability post-finalization
-        is_already_finalized = record.status in ['FINALIZED', 'VOUCHER_CREATED', 'COMPLETED', 'DUPLICATE', 'FAILED', 'ERROR'] or getattr(record, 'processed', False) is True
+        # Restored original execution path: a status of FINALIZED only means the OCR/assembly step finished.
+        # It is only business-finalized if processed=True or validation_status is in terminal states.
+        is_already_finalized = (
+            record.status in ['VOUCHER_CREATED', 'COMPLETED', 'DUPLICATE', 'FAILED', 'ERROR']
+            or (record.status == 'FINALIZED' and getattr(record, 'processed', False) is True)
+            or getattr(record, 'processed', False) is True
+            or record.validation_status in ['VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE']
+        )
         if is_already_finalized:
             logger.info(f"[POST_FINALIZATION_MUTATION_BLOCKED] record_id={record.id} status={record.status} processed={record.processed}")
             logger.info(f"[CANONICAL_FREEZE_CONFIRMED] record_id={record.id}")
@@ -2024,7 +2046,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
 
         current_hash = get_dto_hash(data)
         val_rev = data.get("validation_revision")
-        if val_rev and isinstance(val_rev, dict) and val_rev.get("hash") == current_hash:
+        if val_rev and isinstance(val_rev, dict) and val_rev.get("hash") == current_hash and not auto_save:
             logger.info(f"[VALIDATION_SKIPPED_ALREADY_VALIDATED] Skip validate_and_process for record {record.id} hash {current_hash}")
             return {"status": record.validation_status or "SUCCESS"}
 
@@ -2444,13 +2466,20 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
             vendor_status_enum = ValidationEnums.VENDOR_STATUS_EXISTING if vendor else ValidationEnums.VENDOR_STATUS_CREATE
             voucher_status_enum = ValidationEnums.VOUCHER_STATUS_EXISTING if is_duplicate else ValidationEnums.VOUCHER_STATUS_NEW
             item_status_enum = ValidationEnums.ITEM_STATUS_EXISTING if inv_val["item_status"] == "ALREADY EXIST" else ValidationEnums.ITEM_STATUS_CREATE
-            
+            ui_row = {
+                'invoice_no': invoice_no,
+                'invoice_date': (canonical.get('invoice_date') or supplier.get('invoice_date') or supply.get('invoice_date') or ''),
+                'vendor_name': vendor_name,
+                'vendor_gstin': gstin,
+                'total_amount': (canonical.get('total_amount') or canonical.get('grand_total') or due.get('total_amount') or None),
+            }
             is_pending = evaluate_pending_purchase(
                 record,
                 vendor_status_enum,
                 voucher_status_enum,
                 item_status_enum,
-                tenant_id
+                tenant_id,
+                ui_row=ui_row
             )
             
             if is_pending:

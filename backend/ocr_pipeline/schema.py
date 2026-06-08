@@ -50,9 +50,13 @@ class CanonicalInvoiceSchema(BaseModel):
     raw_vendor_gstin: str = ""
     raw_buyer_gstin: str = ""
     raw_consignee_gstin: str = ""
+    raw_bill_to_gstin: str = ""
+    raw_ship_to_gstin: str = ""
     canonical_vendor_gstin: str = ""
     canonical_buyer_gstin: str = ""
     canonical_consignee_gstin: str = ""
+    canonical_bill_to_gstin: str = ""
+    canonical_ship_to_gstin: str = ""
     
     # Phase 1 & 3 Identity stabilization fields
     raw_invoice_no: str = ""

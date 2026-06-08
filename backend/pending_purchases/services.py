@@ -21,7 +21,7 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
         return False
 
     if (vendor_status == ValidationEnums.VENDOR_STATUS_EXISTING and
-        voucher_status == ValidationEnums.VOUCHER_STATUS_EXISTING and
+        voucher_status == ValidationEnums.VOUCHER_STATUS_NEW and
         item_status == ValidationEnums.ITEM_STATUS_EXISTING):
         is_fully_resolved = True
     else:

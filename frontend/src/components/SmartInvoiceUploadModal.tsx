@@ -27,7 +27,7 @@ import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherS
 type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR' | 'EXISTS' | 'NEW' | 'MATCHED' | 'CREATE_VENDOR';
 type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE' | 'DUPLICATE_IN_BATCH' | 'SUCCESS' | 'FAILED' | 'NEED_VENDOR' | 'INCOMPLETE' | 'EXTRACTING' | 'SCANNING' | 'PROCESSING' | 'NEED_TO_SAVE' | 'PENDING_PURCHASE';
 
-interface ScanResult {
+export interface ScanResult {
     id: string;
     file_hash: string;
     file_path: string;
@@ -322,7 +322,7 @@ const normalizeVoucherField = (k: string, voucherType: string) => {
 // Edit Modal ──────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
-const EditInvoiceModal: React.FC<{
+export const EditInvoiceModal: React.FC<{
     row: ScanResult;
     voucherType: string;
     onClose: () => void;

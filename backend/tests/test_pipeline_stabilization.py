@@ -1880,6 +1880,59 @@ def test_immutability_post_finalization():
     assert "Attempted mutation on frozen item" in str(exc_info.value)
 
 
+@pytest.mark.django_db
+def test_role_based_gstin_schema_fields():
+    """
+    Asserts that the normalization pipeline populates the new explicit role-based GSTIN fields.
+    """
+    invoice_data = {
+        "invoice_no": "INV-PHASE4-001",
+        "vendor_name": "Test Vendor",
+        "gstin": "33ABYFS6343M1ZC",
+        "_pdf_ocr_text": "Supplier GSTIN: 33ABYFS6343M1ZC, Buyer GSTIN: 33ABACA5718R1ZD, Ship To: 33CKJPS6256F1ZW",
+        "sections": {
+            "supplier_details": {"gstin": "33ABYFS6343M1ZC"},
+            "buyer_details": {"gstin": "33ABACA5718R1ZD"},
+            "consignee_details": {"gstin": "33CKJPS6256F1ZW"},
+            "items": []
+        }
+    }
+    
+    canonical = get_canonical_export_record(invoice_data, tenant_id="test-tenant")
+    
+    # Assert fields are present and correctly mapped
+    assert canonical["raw_bill_to_gstin"] == "33ABACA5718R1ZD"
+    assert canonical["raw_ship_to_gstin"] == "33CKJPS6256F1ZW"
+    assert canonical["canonical_bill_to_gstin"] == "33ABACA5718R1ZD"
+    assert canonical["canonical_ship_to_gstin"] == "33CKJPS6256F1ZW"
+
+
+@pytest.mark.django_db
+def test_schema_integrity_gate_cross_role_pollution():
+    """
+    Asserts that the normalization pipeline raises ValueError when the primary vendor GSTIN
+    is contaminated by the buyer or consignee GSTIN.
+    """
+    # Vendor GSTIN is polluted/identical to Buyer GSTIN (33ABACA5718R1ZD)
+    polluted_invoice_data = {
+        "invoice_no": "INV-POLLUTED-001",
+        "vendor_name": "Test Vendor",
+        "gstin": "33ABACA5718R1ZD",
+        "_pdf_ocr_text": "Supplier GSTIN: 33ABACA5718R1ZD, Buyer GSTIN: 33ABACA5718R1ZD",
+        "sections": {
+            "supplier_details": {"gstin": "33ABACA5718R1ZD"},
+            "buyer_details": {"gstin": "33ABACA5718R1ZD"},
+            "items": []
+        }
+    }
+    
+    with pytest.raises(ValueError) as exc_info:
+        get_canonical_export_record(polluted_invoice_data, tenant_id="test-tenant")
+        
+    assert "Cross-role GSTIN pollution detected" in str(exc_info.value)
+
+
+
 
 
 
