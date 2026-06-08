@@ -810,7 +810,7 @@ class CleanOCRStagingView(views.APIView):
         tenant_id = getattr(request.user, 'branch_id', None) or getattr(request.user, 'tenant_id', None) or '88fe4389-58a9-4244-9878-8a4e646898bd'
         resume = request.query_params.get('resume') == 'true'
 
-        if not resume and session_id in ['None', 'null', 'undefined', '', None]:
+        if not resume and not file_hash and session_id in ['None', 'null', 'undefined', '', None]:
             logger.warning(f"[ORPHAN_POLL_BLOCKED] Rejected staging poll with session_id='{session_id}'")
             return Response({
                 "status": "EMPTY_SESSION_TERMINAL",
@@ -840,6 +840,30 @@ class CleanOCRStagingView(views.APIView):
                 "completed": False,
                 "failed": False,
                 "progress_percent": 0.0,
+                "poll_latency": round(time.time() - t_poll_start, 3)
+            })
+
+        # [SINGLE RECORD DIRECT FETCH] If no session_id is provided, but a file_hash/id is specified,
+        # we can bypass session-level barrier/snapshot checks and return the single record directly.
+        if not session_id and file_hash:
+            logger.info(f"[SINGLE_RECORD_FETCH] record_id={prim_rec.id} file_hash={prim_rec.file_hash}")
+            from vendors.vendor_validation_logic import build_session_vendor_map
+            rec_tenant_id = prim_rec.tenant_id or tenant_id
+            _vendor_map = {}
+            try:
+                _vendor_map = build_session_vendor_map(rec_tenant_id, [prim_rec])
+            except Exception as _vme:
+                logger.warning(f"[SINGLE_RECORD_VENDOR_MAP_FAILED] error={_vme}")
+            mapped = self._map_record_to_ui_row(prim_rec, norm_data=prim_rec.extracted_data, vendor_map=_vendor_map)
+            return Response({
+                "status": "FINALIZED",
+                "data": [mapped],
+                "pipeline_status": "completed",
+                "terminal": True,
+                "hydration_pending": False,
+                "completed": True,
+                "failed": False,
+                "progress_percent": 100.0,
                 "poll_latency": round(time.time() - t_poll_start, 3)
             })
 
@@ -1195,6 +1219,21 @@ class CleanOCRStagingView(views.APIView):
             # Instead of calling old validate_vendor(), run the full pipeline validate_and_process
             # so the status, vendor_id and branch matching all stay in sync.
             
+            # If the record in the DB is terminal, we temporarily unblock it to allow re-validation on patch.
+            db_status = record.status
+            db_processed = record.processed
+            
+            # We temporarily reset processed to False in the DB using update()
+            # so that validate_and_process actually runs the validation logic
+            InvoiceTempOCR.objects.filter(id=record.id).update(
+                processed=False,
+                status='FINALIZED',
+                validation_status='PENDING'
+            )
+            
+            # Reload record to get clean state
+            record = InvoiceTempOCR.objects.get(id=record.id)
+            
             # RE-NORMALIZE on patch to ensure manual header edits propagate to line item tax types
             normalized_patch = get_canonical_export_record(updated_data, tenant_id=record.tenant_id)
             # Preserve the hierarchical 'sections' field so that nested objects (due_details, transit_details, etc.) are kept intact
@@ -1216,6 +1255,13 @@ class CleanOCRStagingView(views.APIView):
             # Run the authoritative pipeline validation
             from .pipeline import validate_and_process
             v_res = validate_and_process(record)
+            
+            # Restore terminal status in the DB if it was terminal before
+            if db_processed:
+                InvoiceTempOCR.objects.filter(id=record.id).update(
+                    processed=True,
+                    status=db_status
+                )
 
             # Re-run grouping after manual edit
             try:
@@ -1702,8 +1748,12 @@ class OCRStagingFinalizeView(views.APIView):
                             db_rec.validation_status = 'DUPLICATE'
                             db_rec.save(update_fields=['validation_status'])
                         elif save_status == 'PENDING_PURCHASE':
-                            summary['created'] += 1
-                            logger.info(f"[PENDING_PURCHASE_CREATED] record={db_rec.id}")
+                            # Pending Purchase entries are created at validation time (not finalize time).
+                            # If validate_and_process still returns PENDING_PURCHASE during finalize,
+                            # the record has unresolved items/vendor and cannot be auto-saved.
+                            # Count as skipped — the queue entry is handled by evaluate_pending_purchase.
+                            summary['skipped'] += 1
+                            logger.info(f"[PENDING_PURCHASE_ALREADY_QUEUED] record={db_rec.id} — skipping voucher creation")
                         else:
                             summary['failed'] += 1
                             err_msg = res.get('validation_message') if isinstance(res, dict) else "Finalization failed"

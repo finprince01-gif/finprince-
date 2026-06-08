@@ -40,6 +40,18 @@ const VoucherStatusBadge: React.FC<{ status: string }> = ({ status }) => {
   return <span className="bg-gray-100 text-gray-500 border border-gray-200 px-2 py-1 rounded inline-block text-[10px] font-bold uppercase">PENDING</span>;
 };
 
+// ── Helper to resolve line items from various payload structures ────────────
+const getLineItems = (purchase: any) => {
+  if (purchase?.review_payload?.items) return purchase.review_payload.items;
+  const ext = purchase?.extraction_payload || {};
+  if (ext.items) return ext.items;
+  if (ext.sections?.items) return ext.sections.items;
+  if (ext.line_items) return ext.line_items;
+  if (ext.assembled_exports && ext.assembled_exports[0]?.items) return ext.assembled_exports[0].items;
+  if (ext.invoice?.items) return ext.invoice.items;
+  return [];
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
@@ -420,7 +432,7 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                                   <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Line Items Validation</span>
                                   <span className="text-[10px] text-gray-500 font-mono">
-                                    Total Items: {purchase.review_payload?.items?.length || purchase.extraction_payload?.invoice?.items?.length || 0}
+                                    Total Items: {getLineItems(purchase).length}
                                   </span>
                                 </div>
                                 <table className="w-full text-left text-[11px]">
@@ -430,13 +442,15 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                                       <th className="px-3 py-2">Item Name</th>
                                       <th className="px-3 py-2">HSN/SAC</th>
                                       <th className="px-3 py-2">UOM</th>
+                                      <th className="px-3 py-2 text-right">Quantity</th>
                                       <th className="px-3 py-2 text-right">Rate</th>
+                                      <th className="px-3 py-2 text-right">Amount</th>
                                       <th className="px-3 py-2 text-center">Item Status</th>
                                       <th className="px-3 py-2 text-center">Action</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-100">
-                                    {(purchase.review_payload?.items || purchase.extraction_payload?.invoice?.items || []).map((item: any, itemIdx: number) => (
+                                    {getLineItems(purchase).map((item: any, itemIdx: number) => (
                                       <tr key={itemIdx} className="hover:bg-indigo-50/20 transition-colors">
                                         <td className="px-3 py-2 text-center text-slate-400 font-bold">{itemIdx + 1}</td>
                                         <td className="px-3 py-2">
@@ -447,7 +461,9 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
                                         </td>
                                         <td className="px-3 py-2 font-mono text-slate-600">{item.hsn_code || item.hsn || '—'}</td>
                                         <td className="px-3 py-2 text-slate-600 uppercase font-bold">{item.uom || item.unit || '—'}</td>
+                                        <td className="px-3 py-2 text-right text-slate-600">{item.qty || item.quantity || '—'}</td>
                                         <td className="px-3 py-2 text-right text-slate-700 font-bold">₹{parseFloat(item.rate || item.unit_price || 0).toFixed(2)}</td>
+                                        <td className="px-3 py-2 text-right text-slate-700 font-bold">₹{parseFloat(item.total_amount || item.amount || 0).toFixed(2)}</td>
                                         <td className="px-3 py-2 text-center whitespace-nowrap">
                                           <ItemStatusBadge status={item.item_status || ''} />
                                         </td>

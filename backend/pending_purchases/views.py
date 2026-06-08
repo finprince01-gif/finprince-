@@ -75,12 +75,15 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
     def revalidate(self, request, pk=None):
         """
         Re-run the same validate_and_process pipeline used by Purchase Upload.
-        Updates vendor_status, item_status, voucher_status on the PendingPurchase row.
-        Called after user creates a vendor or item.
+        Updates the PendingPurchase queue row via evaluate_pending_purchase (update_or_create).
+        Called after user creates a vendor or item to refresh statuses.
         """
         try:
             pp = self.get_object()
-            logger.info(f"[PENDING_REVALIDATE] id={pp.id} invoice={pp.invoice_number} source_row={pp.source_scan_row_id}")
+            logger.info(
+                f"[PENDING_REVALIDATE] id={pp.id} invoice={pp.invoice_number} "
+                f"source_row={pp.source_scan_row_id}"
+            )
 
             from ocr_pipeline.models import InvoiceTempOCR
             staging = InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).first()
@@ -90,38 +93,37 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Temporarily unmark processed so the pipeline can re-evaluate
-            staging.processed = False
-            staging.validation_status = 'PENDING'
-            staging.save(update_fields=['processed', 'validation_status'])
+            # Temporarily unmark processed so the pipeline can re-evaluate.
+            # Use update() to bypass save() guards, keeping FINALIZED status to avoid
+            # any downstream status regression.
+            InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                processed=False,
+                validation_status='PENDING',
+                status='FINALIZED'
+            )
+            # Reload to get fresh in-memory state
+            staging = InvoiceTempOCR.objects.get(id=pp.source_scan_row_id)
 
+            # Run the canonical pipeline (auto_save=False → validates only, does not create voucher).
+            # evaluate_pending_purchase is now called unconditionally inside validate_and_process,
+            # so the PendingPurchase row is updated via update_or_create automatically.
             from ocr_pipeline.pipeline import validate_and_process
             result = validate_and_process(staging, auto_save=False)
 
-            new_val_status = staging.validation_status
-            logger.info(f"[PENDING_REVALIDATE_RESULT] id={pp.id} result={result} new_val_status={new_val_status}")
+            logger.info(
+                f"[PENDING_REVALIDATE_RESULT] id={pp.id} result={result} "
+                f"staging_validation={staging.validation_status}"
+            )
 
-            # Sync validation statuses back to the queue record
-            from ocr_pipeline.statuses import ValidationEnums
-            from vendors.models import VendorMasterBasicDetail
-            from ocr_pipeline.inventory_validation import InventoryItemValidationService
-
-            data = staging.extracted_data or {}
-            canonical_items = data.get('items', [])
-            inv_val = InventoryItemValidationService.validate_items(staging.tenant_id, canonical_items)
-
-            vendor_obj = VendorMasterBasicDetail.objects.filter(id=staging.vendor_id, tenant_id=staging.tenant_id).first() if staging.vendor_id else None
-
-            pp.vendor_status = ValidationEnums.VENDOR_STATUS_EXISTING if vendor_obj else ValidationEnums.VENDOR_STATUS_CREATE
-            pp.item_status = ValidationEnums.ITEM_STATUS_EXISTING if inv_val.get('item_status') == 'ALREADY EXIST' else ValidationEnums.ITEM_STATUS_CREATE
-            pp.voucher_status = ValidationEnums.VOUCHER_STATUS_NEW  # Ready to save
-            pp.save(update_fields=['vendor_status', 'item_status', 'voucher_status'])
+            # Re-read the PendingPurchase row — it was updated by evaluate_pending_purchase
+            pp.refresh_from_db()
 
             return Response({
                 'status': result.get('status') if isinstance(result, dict) else str(result),
                 'vendor_status': pp.vendor_status,
                 'item_status': pp.item_status,
                 'voucher_status': pp.voucher_status,
+                'pending_purchase_status': pp.pending_purchase_status,
             })
         except Exception as e:
             logger.exception(f"[PENDING_REVALIDATE_ERROR] pk={pk} error={e}")
@@ -164,12 +166,15 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                     )
 
                 # 2. Temporarily allow the pipeline to run the save path
-                #    (the immutability guard blocks PENDING_PURCHASE → VOUCHER_CREATED transition
-                #     so we reset to a valid pre-save state)
-                staging.processed = False
-                staging.validation_status = 'NEED_TO_SAVE'
-                staging.status = 'EXTRACTED'
-                staging.save(update_fields=['processed', 'validation_status', 'status'])
+                #    Use update() to bypass save() guards, and avoid status regression (keep FINALIZED status)
+                InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                    processed=False,
+                    validation_status='NEED_TO_SAVE',
+                    status='FINALIZED'
+                )
+
+                # Reload staging
+                staging = InvoiceTempOCR.objects.get(id=pp.source_scan_row_id)
 
                 logger.info(f"[PENDING_STAGING_UNBLOCKED] staging_id={staging.id} reset for finalization")
 
@@ -183,10 +188,11 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
 
                 if save_status not in ('VOUCHER_CREATED', 'SUCCESS'):
                     # Restore pending state so user can retry
-                    staging.processed = True
-                    staging.validation_status = 'PENDING_PURCHASE'
-                    staging.status = 'COMPLETED'
-                    staging.save(update_fields=['processed', 'validation_status', 'status'])
+                    InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                        processed=True,
+                        validation_status='PENDING_PURCHASE',
+                        status='FINALIZED'
+                    )
                     return Response(
                         {
                             'error': f'Save failed: {result.get("validation_message", save_status)}',
@@ -198,6 +204,13 @@ class PendingPurchaseViewSet(viewsets.ModelViewSet):
                 # 4. Sync status to the queue row
                 # Reload staging to get latest voucher_id set by serializer
                 staging.refresh_from_db()
+
+                # Succeeded: ensure status is FINALIZED and processed=True (same update strategy as FinalizeWorker)
+                InvoiceTempOCR.objects.filter(id=pp.source_scan_row_id).update(
+                    status='FINALIZED',
+                    processed=True
+                )
+
                 pp.pending_purchase_status = 'RESOLVED'
                 if staging.voucher_id:
                     pp.review_payload = pp.review_payload or {}
