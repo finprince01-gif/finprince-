@@ -88,6 +88,20 @@ class GSTINOwnershipClassifier:
                             "raw_values": {val}
                         }
 
+        # Boost roles based on explicit extraction from AI (Gemini)
+        if ext_gstin:
+            c_ext = canonicalize_gstin_ocr(ext_gstin)
+            if c_ext in candidates_info:
+                candidates_info[c_ext]["scores"]["VENDOR"] += 30.0
+        if ext_buyer:
+            c_buyer = canonicalize_gstin_ocr(ext_buyer)
+            if c_buyer in candidates_info:
+                candidates_info[c_buyer]["scores"]["BUYER"] += 30.0
+        if ext_consignee:
+            c_cons = canonicalize_gstin_ocr(ext_consignee)
+            if c_cons in candidates_info:
+                candidates_info[c_cons]["scores"]["CONSIGNEE"] += 30.0
+
         logger.info(f"[GSTIN_CLASSIFIER_CANDIDATES] tenant_id={tenant_id} candidates={list(candidates_info.keys())}")
 
         # 2. Database Lookup by Vendor Name
@@ -189,10 +203,14 @@ class GSTINOwnershipClassifier:
             "raw_vendor_gstin": raw_vendor_gstin,
             "raw_buyer_gstin": raw_buyer_gstin,
             "raw_consignee_gstin": raw_consignee_gstin,
+            "raw_bill_to_gstin": raw_buyer_gstin,
+            "raw_ship_to_gstin": raw_consignee_gstin,
             
             "canonical_vendor_gstin": vendor_gstin,
             "canonical_buyer_gstin": buyer_gstin,
             "canonical_consignee_gstin": consignee_gstin,
+            "canonical_bill_to_gstin": buyer_gstin,
+            "canonical_ship_to_gstin": consignee_gstin,
         }
 
         logger.info(f"[GSTIN_CLASSIFIER_RESULT] tenant_id={tenant_id} result={result}")

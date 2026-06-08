@@ -370,6 +370,18 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
                         mapped_k = "supplier_invoice_no" if k == "invoice_no" else k
                         if not is_empty(sub.get(mapped_k)): return sub.get(mapped_k), f"sections.supplier.{k}"
                         if not is_empty(sub.get(k)): return sub.get(k), f"sections.supplier.{k}"
+                buyer = sections.get('buyer_details', {}) or sections.get('customer_details', {}) or sections.get('recipient_details', {})
+                if isinstance(buyer, dict):
+                    for k in keys:
+                        if not is_empty(buyer.get(k)): return buyer.get(k), f"sections.buyer.{k}"
+                        if k in ("buyer_gstin", "bill_to_gstin") and not is_empty(buyer.get("gstin")):
+                            return buyer.get("gstin"), f"sections.buyer.gstin"
+                consignee = sections.get('consignee_details', {}) or sections.get('ship_to_details', {})
+                if isinstance(consignee, dict):
+                    for k in keys:
+                        if not is_empty(consignee.get(k)): return consignee.get(k), f"sections.consignee.{k}"
+                        if k in ("consignee_gstin", "ship_to_gstin") and not is_empty(consignee.get("gstin")):
+                            return consignee.get("gstin"), f"sections.consignee.gstin"
             # 4. Check Title Case Aliases (Idempotency)
             TITLE_ALIASES = {
                 "invoice_no": "Invoice No", "invoice_date": "Date", "vendor_name": "Name",
@@ -482,6 +494,30 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
         }
     
     classification = GSTINOwnershipClassifier.classify_gstins(raw_text, extracted_data_dict, tenant_id)
+    
+    # ── SCHEMA INTEGRITY GATE: CROSS-ROLE POLLUTION DETECTION ──
+    v_gst = (classification.get("canonical_vendor_gstin") or gstin_val or "").strip().upper()
+    
+    b_gst = (classification.get("canonical_buyer_gstin") or "").strip().upper()
+    c_gst = (classification.get("canonical_consignee_gstin") or "").strip().upper()
+    
+    raw_buyer_val, _ = get_strict(["buyer_gstin", "bill_to_gstin"])
+    raw_consignee_val, _ = get_strict(["consignee_gstin", "ship_to_gstin"])
+    
+    from vendors.vendor_validation_logic import canonicalize_gstin_ocr
+    b_gst_raw = canonicalize_gstin_ocr(raw_buyer_val).strip().upper()
+    c_gst_raw = canonicalize_gstin_ocr(raw_consignee_val).strip().upper()
+    
+    if v_gst and len(v_gst) == 15:
+        if (b_gst and len(b_gst) == 15 and v_gst == b_gst) or (c_gst and len(c_gst) == 15 and v_gst == c_gst):
+            msg = f"[SCHEMA_INTEGRITY_VIOLATION] Cross-role GSTIN pollution detected! vendor_gstin={v_gst} matches buyer_gstin={b_gst} or consignee_gstin={c_gst}"
+            logger.error(msg)
+            raise ValueError(msg)
+        if (b_gst_raw and len(b_gst_raw) == 15 and v_gst == b_gst_raw) or (c_gst_raw and len(c_gst_raw) == 15 and v_gst == c_gst_raw):
+            msg = f"[SCHEMA_INTEGRITY_VIOLATION] Cross-role GSTIN pollution detected! vendor_gstin={v_gst} matches raw buyer_gstin={b_gst_raw} or raw consignee_gstin={c_gst_raw}"
+            logger.error(msg)
+            raise ValueError(msg)
+            
     if classification.get("vendor_gstin"):
         gstin_val = classification["vendor_gstin"]
 
@@ -518,9 +554,13 @@ def get_normalized_export_record(invoice: Any, tenant_id: str = None) -> Dict[st
         "raw_vendor_gstin": classification.get("raw_vendor_gstin") or "",
         "raw_buyer_gstin": classification.get("raw_buyer_gstin") or "",
         "raw_consignee_gstin": classification.get("raw_consignee_gstin") or "",
+        "raw_bill_to_gstin": classification.get("raw_bill_to_gstin") or "",
+        "raw_ship_to_gstin": classification.get("raw_ship_to_gstin") or "",
         "canonical_vendor_gstin": classification.get("canonical_vendor_gstin") or "",
         "canonical_buyer_gstin": classification.get("canonical_buyer_gstin") or "",
         "canonical_consignee_gstin": classification.get("canonical_consignee_gstin") or "",
+        "canonical_bill_to_gstin": classification.get("canonical_bill_to_gstin") or "",
+        "canonical_ship_to_gstin": classification.get("canonical_ship_to_gstin") or "",
     }
 
     # ── [TOTALS & POS OCR REGION EXTRACTION FALLBACK] (Requirement D) ──
@@ -919,9 +959,13 @@ def get_canonical_export_record(invoice: Any, tenant_id: str = None) -> Dict[str
         "raw_vendor_gstin": str(raw_header.get("raw_vendor_gstin", "")),
         "raw_buyer_gstin": str(raw_header.get("raw_buyer_gstin", "")),
         "raw_consignee_gstin": str(raw_header.get("raw_consignee_gstin", "")),
+        "raw_bill_to_gstin": str(raw_header.get("raw_bill_to_gstin", "")),
+        "raw_ship_to_gstin": str(raw_header.get("raw_ship_to_gstin", "")),
         "canonical_vendor_gstin": str(raw_header.get("canonical_vendor_gstin", "")),
         "canonical_buyer_gstin": str(raw_header.get("canonical_buyer_gstin", "")),
         "canonical_consignee_gstin": str(raw_header.get("canonical_consignee_gstin", "")),
+        "canonical_bill_to_gstin": str(raw_header.get("canonical_bill_to_gstin", "")),
+        "canonical_ship_to_gstin": str(raw_header.get("canonical_ship_to_gstin", "")),
 
         "items": [copy.deepcopy(item) for item in raw_items],
         "warnings": invoice.get("_warning_flags", []) if isinstance(invoice, dict) else []

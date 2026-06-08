@@ -288,9 +288,9 @@ def build_session_vendor_map(tenant_id, records):
         header = norm.get('header', {})
 
         gstin_raw = (
-            getattr(r, 'gstin', None) or
             norm.get('canonical_vendor_gstin') or
             norm.get('vendor_gstin') or
+            getattr(r, 'gstin', None) or
             header.get('vendor_gstin') or
             supplier.get('gstin') or
             norm.get('gstin') or ""

@@ -62,7 +62,8 @@ def run_grouping_logic(tenant_id, upload_session_id):
         # Collect distinct non-empty GSTINs
         gstin_to_recs = defaultdict(list)
         for r in rec_list:
-            gst = (r.gstin or "").strip().upper()
+            ext_data = r.extracted_data or {}
+            gst = (ext_data.get("canonical_vendor_gstin") or ext_data.get("vendor_gstin") or r.gstin or "").strip().upper()
             if gst and gst not in ("MISSING", "N/A", "—"):
                 gstin_to_recs[gst].append(r)
                 
@@ -165,14 +166,15 @@ def run_grouping_logic(tenant_id, upload_session_id):
         except (ValueError, TypeError):
             phys_page = page_no
 
+        gst_val = (ext_data.get("canonical_vendor_gstin") or ext_data.get("vendor_gstin") or r.gstin or "").strip().upper()
         payload = {
             "invoice_no": (r.supplier_invoice_no or "").strip(),
-            "gstin": (r.gstin or "").strip().upper(),
+            "gstin": gst_val,
             "vendor_name": (r.vendor_name or "").strip(),
             "tenant_id": str(r.tenant_id),
             "invoice_date": date_val,
-            "raw_gstin": (r.gstin or "").strip().upper(),
-            "canonical_gstin": (r.gstin or "").strip().upper(),
+            "raw_gstin": (ext_data.get("raw_vendor_gstin") or gst_val).strip().upper(),
+            "canonical_gstin": gst_val,
             "_page_no": page_no,
             "_physical_page_no": phys_page,
             "items": ext_data.get("items", []),
