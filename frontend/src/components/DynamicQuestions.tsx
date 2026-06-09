@@ -216,7 +216,7 @@ export const DynamicQuestions: React.FC<DynamicQuestionsProps> = ({
                 ))}
             </div>
 
-            <style jsx>{`
+            <style>{`
         .dynamic-questions {
           margin-top: 2rem;
           padding: 1.5rem;

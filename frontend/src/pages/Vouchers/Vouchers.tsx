@@ -620,6 +620,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [selectedCnConfig, setSelectedCnConfig] = useState<string>('');
   const [cnVoucherNumber, setCnVoucherNumber] = useState('Auto-generated');
   const [cnCustomer, setCnCustomer] = useState('');
+  const [cnCustomerId, setCnCustomerId] = useState('');
   const [cnBranch, setCnBranch] = useState('');
   const [cnSelectedSalesInvoices, setCnSelectedSalesInvoices] = useState<string[]>([]);
   const [cnSalesInvoiceDate, setCnSalesInvoiceDate] = useState('');
@@ -647,7 +648,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [cnReverseIncomeTaxTcs, setCnReverseIncomeTaxTcs] = useState<'Yes' | 'No'>('No');
   const [cnReverseIncomeTaxTds, setCnReverseIncomeTaxTds] = useState<'Yes' | 'No'>('No');
   const [cnIncomeTaxTdsTcsAmount, setCnIncomeTaxTdsTcsAmount] = useState('0.00');
-
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [cnAdvanceAmount, setCnAdvanceAmount] = useState('0.00');
   const [cnPayableAmount, setCnPayableAmount] = useState('0.00');
@@ -1563,6 +1564,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Contra Numbering
   useEffect(() => {
     if (voucherType === 'Contra' && selectedContraConfig && contraVoucherConfigs.length > 0) {
+      if (viewVoucherData) return;
       const config = contraVoucherConfigs.find(c => c.voucher_name === selectedContraConfig);
       if (config) {
         if (config.enable_auto_numbering) {
@@ -1587,6 +1589,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Journal Numbering
   useEffect(() => {
     if (voucherType === 'Journal' && selectedJournalConfig && journalVoucherConfigs.length > 0) {
+      if (viewVoucherData) return;
       const config = journalVoucherConfigs.find(c => c.voucher_name === selectedJournalConfig);
       if (config) {
         if (config.enable_auto_numbering) {
@@ -1611,6 +1614,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Expenses Numbering
   useEffect(() => {
     if (voucherType === 'Expenses' && selectedExpensesConfig && expensesVoucherConfigs.length > 0) {
+      if (viewVoucherData) return;
       const config = expensesVoucherConfigs.find(c => c.voucher_name === selectedExpensesConfig);
       if (config) {
         if (config.enable_auto_numbering) {
@@ -1824,6 +1828,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           const data = await httpClient.get<any[]>('/api/masters/master-voucher-purchases/');
           const purchaseConfigs = data || [];
           setPurchaseVoucherConfigs(purchaseConfigs);
+          if (purchaseConfigs.length === 1) {
+            setSelectedPurchaseConfig(prev => prev || purchaseConfigs[0].voucher_name);
+          }
         } catch (error) {
           console.error('Error fetching purchase voucher configurations:', error);
           setPurchaseVoucherConfigs([]);
@@ -1839,6 +1846,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Generate voucher number when purchase configuration is selected
   useEffect(() => {
     if (voucherType === 'Purchase') {
+      if (viewVoucherData) return; // Prevent overwriting during edit
       if (selectedPurchaseConfig && purchaseVoucherConfigs.length > 0) {
         const config = purchaseVoucherConfigs.find(c => c.voucher_name === selectedPurchaseConfig);
         if (config && config.enable_auto_numbering) {
@@ -2880,7 +2888,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             const qty = item.quantity || 0;
             const rate = item.rate || 0;
             const taxable = item.taxableValue || item.amount || (qty * rate);
-            
+
             const igst = item.igst !== undefined ? item.igst : (newIsInterState ? (taxable * 0.18) : 0);
             const cgst = item.cgst !== undefined ? item.cgst : (newIsInterState ? 0 : (taxable * 0.09));
             const sgst = item.sgst !== undefined ? item.sgst : (newIsInterState ? 0 : (taxable * 0.09));
@@ -2960,21 +2968,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       let addressLines: string[] = [];
 
       const indianStates = [
-        "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", 
-        "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", 
-        "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", 
-        "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Delhi", "Puducherry", 
+        "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
+        "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+        "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+        "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Delhi", "Puducherry",
         "Jammu and Kashmir", "Ladakh", "Chandigarh", "Dadra and Nagar Haveli", "Daman and Diu", "Lakshadweep", "Andaman and Nicobar Islands"
       ];
 
       const commonCities = [
-        "coimbatore", "chennai", "bangalore", "mumbai", "delhi", "kolkata", "pune", "hyderabad", 
-        "ahmedabad", "surat", "jaipur", "lucknow", "kanpur", "nagpur", "patna", "indore", "thane", 
-        "bhopal", "gurgaon", "noida", "ghaziabad", "faridabad", "visakhapatnam", "vijayawada", 
-        "guntur", "nellore", "tirupati", "kurnool", "secunderabad", "warangal", "madurai", "trichy", 
-        "salem", "tiruppur", "erode", "vellore", "thoothukudi", "nagercoil", "kanchipuram", 
-        "thanjavur", "tirunelveli", "mysore", "hubli", "dharwad", "mangalore", "belgaum", "gulbarga", 
-        "davanagere", "bellary", "bijapur", "shimoga", "kochi", "trivandrum", "kozhikode", "thrissur", 
+        "coimbatore", "chennai", "bangalore", "mumbai", "delhi", "kolkata", "pune", "hyderabad",
+        "ahmedabad", "surat", "jaipur", "lucknow", "kanpur", "nagpur", "patna", "indore", "thane",
+        "bhopal", "gurgaon", "noida", "ghaziabad", "faridabad", "visakhapatnam", "vijayawada",
+        "guntur", "nellore", "tirupati", "kurnool", "secunderabad", "warangal", "madurai", "trichy",
+        "salem", "tiruppur", "erode", "vellore", "thoothukudi", "nagercoil", "kanchipuram",
+        "thanjavur", "tirunelveli", "mysore", "hubli", "dharwad", "mangalore", "belgaum", "gulbarga",
+        "davanagere", "bellary", "bijapur", "shimoga", "kochi", "trivandrum", "kozhikode", "thrissur",
         "kollam", "palakkad", "alappuzha", "kottayam", "kannur"
       ];
 
@@ -2992,7 +3000,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
       parts.forEach(part => {
         const lowerPart = part.toLowerCase().replace(/[.\s"]/g, '');
-        
+
         if (lowerPart === 'india') {
           country = part;
           return;
@@ -3018,19 +3026,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         const lastPart = addressLines[lastIndex].trim();
         const lastPartLower = lastPart.toLowerCase().replace(/[.\s"]/g, '');
 
-        const isCommonCity = commonCities.includes(lastPartLower) || 
-                             commonCities.some(c => lastPartLower.includes(c));
+        const isCommonCity = commonCities.includes(lastPartLower) ||
+          commonCities.some(c => lastPartLower.includes(c));
 
-        const looksLikeStreet = lastPartLower.includes('road') || 
-                                lastPartLower.includes('rd') || 
-                                lastPartLower.includes('street') || 
-                                lastPartLower.includes('st') || 
-                                lastPartLower.includes('nagar') || 
-                                lastPartLower.includes('lane') || 
-                                lastPartLower.includes('building') || 
-                                lastPartLower.includes('plot') || 
-                                lastPartLower.includes('floor') || 
-                                lastPartLower.includes('no:');
+        const looksLikeStreet = lastPartLower.includes('road') ||
+          lastPartLower.includes('rd') ||
+          lastPartLower.includes('street') ||
+          lastPartLower.includes('st') ||
+          lastPartLower.includes('nagar') ||
+          lastPartLower.includes('lane') ||
+          lastPartLower.includes('building') ||
+          lastPartLower.includes('plot') ||
+          lastPartLower.includes('floor') ||
+          lastPartLower.includes('no:');
 
         if (isCommonCity && !looksLikeStreet) {
           city = lastPart.replace(/[."]/g, '').trim();
@@ -3647,7 +3655,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             const sgst = Number(it.sgst_amount !== undefined ? it.sgst_amount : (it.sgst !== undefined ? it.sgst : 0));
             const igst = Number(it.igst_amount !== undefined ? it.igst_amount : (it.igst !== undefined ? it.igst : 0));
             const cess = Number(it.cess_amount !== undefined ? it.cess_amount : (it.cess !== undefined ? it.cess : 0));
-            
+
             const rawInvVal = Number(it.invoice_value !== undefined ? it.invoice_value : (it.invoiceValue !== undefined ? it.invoiceValue : 0));
             const invoiceValue = rawInvVal > 0 ? rawInvVal : (taxableValue + cgst + sgst + igst + cess);
 
@@ -3728,7 +3736,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             const sgst = Number(it.sgst_amount !== undefined ? it.sgst_amount : (it.sgst !== undefined ? it.sgst : 0));
             const igst = Number(it.igst_amount !== undefined ? it.igst_amount : (it.igst !== undefined ? it.igst : 0));
             const cess = Number(it.cess_amount !== undefined ? it.cess_amount : (it.cess !== undefined ? it.cess : 0));
-            
+
             const rawInvVal = Number(it.invoice_value !== undefined ? it.invoice_value : (it.invoiceValue !== undefined ? it.invoiceValue : 0));
             const invoiceValue = rawInvVal > 0 ? rawInvVal : (taxableValue + cgst + sgst + igst + cess);
 
@@ -3846,469 +3854,526 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   };
 
   const handleSaveVoucher = async (shouldPrint = false, saveAndNext = false) => {
-    let voucher: Voucher | null = null;
-    const isEditing = !!viewVoucherData;
-    // reference_id on the fetched drillDownDetails is the actual VoucherContra/Journal/Expenses record ID.
-    // viewVoucherData.id is the generic Voucher table ID — NOT the right one for type-specific PUT endpoints.
-    const genericVoucherId = isEditing ? (viewVoucherData.rawVoucher?.voucher_id || viewVoucherData.voucherId || viewVoucherData.id || viewVoucherData.rawVoucher?.id) : null;
-    const referenceId = drillDownDetails?.reference_id || viewVoucherData?.rawVoucher?.reference_id || viewVoucherData?.reference_id || null;
-    // Use referenceId (specific model ID) for Contra/Journal/Expenses/CreditNote PUT calls
-    const voucherId = referenceId || genericVoucherId;
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
-    if (voucherType === 'Purchase') {
-      let currentVendorId = vendorId;
-      if (!currentVendorId && party) {
-        // Try auto-match from richVendors
-        const lowerParty = party.toLowerCase();
-        const match = richVendors.find(v => v.vendor_name.toLowerCase() === lowerParty);
-        if (match) {
-          currentVendorId = match.id;
-          setVendorId(match.id);
-        }
-      }
+    try {
+      let voucher: Voucher | null = null;
+      const isEditing = !!viewVoucherData;
+      // reference_id on the fetched drillDownDetails is the actual VoucherContra/Journal/Expenses record ID.
+      // viewVoucherData.id is the generic Voucher table ID — NOT the right one for type-specific PUT endpoints.
+      const genericVoucherId = isEditing ? (viewVoucherData.rawVoucher?.voucher_id || viewVoucherData.voucherId || viewVoucherData.id || viewVoucherData.rawVoucher?.id) : null;
+      const referenceId = drillDownDetails?.reference_id || viewVoucherData?.rawVoucher?.reference_id || viewVoucherData?.reference_id || null;
+      // For Purchase vouchers: drillDownDetails.id IS the VoucherPurchaseSupplierDetails integer PK
+      // (the backend serializer doesn't expose reference_id, only id).
+      // viewVoucherData.reference_id is also the same PK — set by the backend report endpoint.
+      // For all other types: referenceId is the specific model PK, fall back to genericVoucherId.
+      const purchasePk = drillDownDetails?.id || viewVoucherData?.reference_id || viewVoucherData?.rawVoucher?.reference_id || null;
+      const voucherId = referenceId || genericVoucherId;
 
-      if (!currentVendorId) {
-        showError("Please select a valid Vendor from the Master list.");
-        return;
-      }
+      console.log('🔴 [SAVE START] voucherType=', voucherType, '| isEditing=', isEditing, '| purchasePk=', purchasePk, '| voucherId=', voucherId, '| genericVoucherId=', genericVoucherId, '| drillDownDetails?.id=', drillDownDetails?.id, '| viewVoucherData?.reference_id=', viewVoucherData?.reference_id);
 
-      if (!selectedPurchaseConfig) {
-        showError("Please select a Purchase Voucher Series.");
-        return;
-      }
-
-      // Construct Payload for Purchase Voucher
-      const purchaseData: any = {
-        date: date,
-        supplier_invoice_no: invoiceNo,
-        supplier_invoice_date: supplierInvoiceDate,
-        purchase_voucher_series: selectedPurchaseConfig,
-        purchase_voucher_no: voucherNumber,
-        vendor_id: currentVendorId,
-        vendor_name: party,
-        branch: selectedBranch,
-        gstin: gstin,
-        grn_reference: grnRefNo,
-        bill_from: [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', '),
-        ship_from: sameAsBillFrom
-          ? [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ')
-          : [shipFromAddress1, shipFromAddress2, shipFromAddress3, shipFromCity, shipFromPincode, shipFromState, shipFromCountry].filter(Boolean).join(', '),
-        input_type: purchaseInputTypes.join(', '),
-        invoice_in_foreign_currency: invoiceInForeignCurrency,
-
-        due_details: {
-          tds_it: purchaseTdsIt || 0,
-          advance_paid: purchaseAdvancePaid || 0,
-          to_pay: (
-            purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)
-            + (purchaseTaxIsTcs ? (Number(purchaseTdsIt) || 0) : -(Number(purchaseTdsIt) || 0))
-            - (Number(purchaseAdvancePaid) || 0)
-          ).toFixed(2),
-          posting_note: purchasePostingNote,
-          terms: purchaseTerms,
-          advance_references: purchaseAdvanceRefs
-        },
-        transit_details: {
-          mode: purchaseTransitMode,
-          received_in: purchaseTransitReceivedIn,
-          receipt_date: purchaseTransitReceiptDate || null,
-          receipt_time: purchaseTransitReceiptTime || null,
-          received_quantity: purchaseTransitReceivedQty,
-          uqc: purchaseTransitReceivedUqc,
-          delivery_type: purchaseTransitDeliveryType,
-          self_third_party: purchaseTransitSelfThirdParty,
-          transporter_id: purchaseTransitTransporterId,
-          transporter_name: purchaseTransitTransporterName,
-          vehicle_no: purchaseTransitVehicleNo,
-          lr_gr_consignment: purchaseTransitLrGrConsignment
-        }
-      };
-
-      // Conditionally add Supply Details to avoid sending 'null' which creates strict validation errors
-      // Always include Supply INR Details
-      purchaseData.supply_inr_details = {
-        purchase_order_no: purchaseOrderNo,
-        purchase_ledger: purchaseLedger,
-        description: purchaseDescription,
-        items: purchaseItems
-      };
-
-      // Conditionally add Supply Foreign Details
-      if (invoiceInForeignCurrency === 'Yes') {
-        purchaseData.supply_foreign_details = {
-          purchase_order_no: purchaseOrderNo,
-          purchase_ledger: purchaseLedger,
-          exchange_rate: exchangeRate || 1.0,
-          description: purchaseDescription,
-          items: purchaseItems
-        };
-      }
-
-      // DEBUG: Alert/log the final payload
-
-      // alert('Debug: Sending Payload. Check Console.');
-
-      try {
-
-        let response;
-        if (isEditing && voucherId) {
-          response = await httpClient.put(`/api/vouchers/purchase/${voucherId}/`, purchaseData);
-          showSuccess('Purchase Voucher Updated Successfully!');
-        } else {
-          response = await httpClient.post('/api/vouchers/purchase/', purchaseData);
-          showSuccess('Purchase Voucher Saved Successfully!');
-        }
-
-        // Instantly propagate to application cache so reports reveal update immediately
-        if (onAddVouchers) {
-          onAddVouchers([{
-            id: genericVoucherId?.toString() || response?.id?.toString() || Date.now().toString(),
-            type: 'Purchase',
-            date: date,
-            party: party,
-            amount: Number(calculatePurchaseTotals().invoiceValue),
-            narration: purchasePostingNote,
-            ...response
-          }], false);
-        }
-
-        // Increment the voucher number if a series was selected
-        if (selectedPurchaseConfig && purchaseVoucherConfigs.length > 0) {
-          const config = purchaseVoucherConfigs.find(c => c.voucher_name === selectedPurchaseConfig);
-          if (config && config.enable_auto_numbering) {
-            await incrementPurchaseNumber(config.id);
-          }
-        }
-
-        // Optional: Handle file upload separately if needed, or if we switch to FormData later.
-
-        if (activeOcrFileHash) {
-          // Update the staging row to VOUCHER_CREATED so it doesn't get finalized again
-          try {
-            await httpClient.patch(`/api/ocr-staging/${activeOcrFileHash}/`, {
-              status: 'VOUCHER_CREATED',
-              voucher_id: response?.id
-            });
-          } catch (e) {
-            console.error('Failed to update OCR staging status', e);
-          }
-          if (saveAndNext) {
-            await loadNextScanItem(activeOcrFileHash);
+      if (voucherType === 'Purchase') {
+        let currentVendorId = vendorId;
+        console.log('🔴 [PURCHASE SAVE] vendorId state=', vendorId, '| party=', party, '| selectedPurchaseConfig=', selectedPurchaseConfig);
+        if (!currentVendorId && party) {
+          // Try auto-match from richVendors
+          const lowerParty = party.toLowerCase();
+          const match = richVendors.find(v => v.vendor_name.toLowerCase() === lowerParty);
+          if (match) {
+            currentVendorId = match.id;
+            setVendorId(match.id);
+            console.log('🔴 [PURCHASE SAVE] Auto-matched vendorId=', match.id);
           } else {
-            handleCloseVoucher();
-          }
-        } else if (shouldPrint) {
-          const totals = calculatePurchaseTotals();
-          setPostedPurchaseVoucherData({
-            ...purchaseData,
-            totals,
-            items: purchaseItems
-          });
-          setShowPurchasePrintPreview(true);
-        } else {
-          resetForm();
-          if (isEditing) handleCloseVoucher();
-        }
-        refetch(); // Refresh usage statistics
-
-      } catch (error: any) {
-        console.error('Error saving purchase voucher:');
-        const serverError = error.response?.data;
-        const errorMessage = serverError
-          ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
-          : error.message;
-        showError(`Failed to save Purchase Voucher.\n${errorMessage}`);
-
-      }
-      return;
-    }
-
-    if (voucherType === 'Credit Note') {
-      if (!cnCustomer) {
-        showError('Please select a Customer.');
-        return;
-      }
-      if (!selectedCnConfig) {
-        showError('Please select a Credit Note Series.');
-        return;
-      }
-
-      // Find Customer ID
-      const customer = richCustomers.find(c => c.customer_name === cnCustomer);
-      const customerId = customer?.id || null;
-
-      if (!customerId) {
-        showError('Please select a valid Customer from the Master list.');
-        return;
-      }
-
-      try {
-        const totals = calculateCreditNoteTotals();
-
-        const creditNoteData: any = {
-          date: cnDate,
-          credit_note_series: selectedCnConfig,
-          credit_note_no: cnVoucherNumber,
-          customer_name: cnCustomer,
-          customer_id: customerId,
-          branch: cnBranch,
-          sales_invoice_nos: Array.isArray(cnSelectedSalesInvoices) ? cnSelectedSalesInvoices.join(', ') : cnSelectedSalesInvoices,
-          sales_invoice_dates: cnSalesInvoiceDate,
-          customer_debit_note_no: cnCustomerDebitNoteNo,
-          customer_debit_note_date: cnCustomerDebitNoteDate,
-          gstin: cnGstin,
-          grn_ref_no: cnGrnRefNo,
-          bill_from: [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', '),
-          ship_from: cnSameAsBillFrom
-            ? [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ')
-            : [shipFromAddress1, shipFromAddress2, shipFromAddress3, shipFromCity, shipFromPincode, shipFromState, shipFromCountry].filter(Boolean).join(', '),
-          input_type: cnInputType.join(', '),
-          in_foreign_currency: cnInForeignCurrency,
-          narration: cnPostingNote || '',
-
-          item_details: {
-            items: cnItems,
-            total_taxable_value: totals.taxableValue,
-            total_igst: totals.igst,
-            total_cgst: totals.cgst,
-            total_sgst: totals.sgst,
-            total_cess: totals.cess,
-            total_invoice_value: totals.invoiceValue
-          },
-
-          due_details: {
-            reverse_gst_tcs: cnReverseGstTcs,
-            reverse_gst_tds: cnReverseGstTds,
-            reverse_income_tax_tcs: cnReverseIncomeTaxTcs,
-            reverse_income_tax_tds: cnReverseIncomeTaxTds,
-            income_tax_tds_tcs_amount: cnIncomeTaxTdsTcsAmount || 0,
-            gst_tds_tcs_amount: cnGstTdsTcsAmount || 0,
-            advance_amount: cnAdvanceAmount || 0,
-            payable_amount: cnPayableAmount || 0,
-            terms_conditions: cnTermsConditions || ''
-          },
-
-          transit_details: {
-            received_in: cnTransitReceivedIn,
-            mode_of_transport: cnTransitMode,
-            receipt_date: cnTransitReceiptDate || null,
-            receipt_time: cnTransitReceiptTime || null,
-            delivery_type: cnTransitDeliveryType,
-            transporter_id_gstin: cnTransitTransporterId,
-            transporter_name: cnTransitTransporterName,
-            vehicle_no: cnTransitVehicleNo,
-            lr_gr_consignment_no: cnTransitLrGrConsignment
-          }
-        };
-
-        let response: any;
-        if (isEditing && voucherId) {
-          response = await httpClient.put(`/api/vouchers/credit-note/${voucherId}/`, creditNoteData);
-          showSuccess('Credit Note Updated Successfully!');
-        } else {
-          response = await httpClient.post('/api/vouchers/credit-note/', creditNoteData);
-          showSuccess('Credit Note Saved Successfully!');
-        }
-
-        // Instantly propagate to application cache so reports reveal update immediately
-        if (onAddVouchers) {
-          onAddVouchers([{
-            id: genericVoucherId?.toString() || response?.id?.toString() || Date.now().toString(),
-            type: 'Credit Note',
-            date: cnDate,
-            party: cnCustomer,
-            amount: Number(totals.invoiceValue),
-            narration: cnPostingNote,
-            ...response
-          }], false);
-        }
-
-        // Increment number logic if applicable
-        if (selectedCnConfig && cnVoucherConfigs.length > 0) {
-          const config = cnVoucherConfigs.find(c => c.voucher_name === selectedCnConfig);
-          if (config && config.enable_auto_numbering) {
-            await incrementCreditNoteNumber(String(config.id));
+            console.log('🔴 [PURCHASE SAVE] No vendor match found in richVendors for party=', party, '| richVendors count=', richVendors.length);
           }
         }
 
-        if (shouldPrint) {
-          // TODO: Implement Credit Note Print Preview
-          // For now, just close
-          resetForm();
-          if (isEditing) handleCloseVoucher();
-        } else {
-          resetForm();
-          if (isEditing) handleCloseVoucher();
-        }
-        refetch();
-
-      } catch (error: any) {
-        console.error('Error saving Credit Note:', error);
-        const serverError = error.response?.data;
-        const errorMessage = serverError
-          ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
-          : error.message;
-        showError(`Failed to save Credit Note.\n${errorMessage}`);
-      }
-      return;
-    }
-
-    switch (voucherType) {
-      // (Removed Purchase case from switch and handled above)
-      case 'Sales':
-        voucher = { id: '', type: voucherType, date, isInterState, invoiceNo, party, items, totalTaxableAmount, totalCgst, totalSgst, totalIgst, total, narration };
-        break;
-      case 'Payment':
-      case 'Receipt':
-        voucher = { id: '', type: voucherType, date, account, party, amount: simpleAmount, narration };
-        break;
-
-      case 'Contra':
-        if (!fromAccount || !toAccount || simpleAmount <= 0) {
-          showError("Please fill all mandatory fields (Transfer From, Transfer To, Amount > 0)");
+        if (!currentVendorId) {
+          showError("Please select a valid Vendor from the Master list.");
+          console.error('🔴 [PURCHASE SAVE] BLOCKED: no currentVendorId');
           return;
         }
-        voucher = {
-          id: '',
-          type: voucherType,
-          date,
-          fromAccount,
-          toAccount,
-          amount: simpleAmount,
-          narration,
-          voucher_number: voucherNumber || undefined,
-          voucher_series: selectedContraConfig || undefined,
-          // New Forex fields
-          contraConversionRate,
-          contraPaymentAmtForeign,
-          contraPaymentRate,
-          contraPaymentAmtINR,
-          contraReceiptAmtForeign,
-          contraReceiptRate,
-          contraReceiptAmtINR,
-          contraForexGainLoss,
-          contraDeductChargesFrom,
-          contraConversionCharges,
-          contraFemaPurposeCode
-        } as any;
-        break;
-      case 'Journal':
-        if (isJournalBalanced) {
+
+        if (!selectedPurchaseConfig) {
+          showError("Please select a Purchase Voucher Series.");
+          console.error('🔴 [PURCHASE SAVE] BLOCKED: no selectedPurchaseConfig');
+          return;
+        }
+
+        console.log('🔴 [PURCHASE SAVE] Passed validation. Proceeding to build payload...');
+
+        // Construct Payload for Purchase Voucher
+        const purchaseData: any = {
+          date: date,
+          supplier_invoice_no: invoiceNo,
+          supplier_invoice_date: supplierInvoiceDate,
+          purchase_voucher_series: selectedPurchaseConfig,
+          purchase_voucher_no: voucherNumber,
+          vendor_id: currentVendorId,
+          vendor_name: party,
+          branch: selectedBranch,
+          gstin: gstin,
+          grn_reference: grnRefNo,
+          bill_from: [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', '),
+          ship_from: sameAsBillFrom
+            ? [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ')
+            : [shipFromAddress1, shipFromAddress2, shipFromAddress3, shipFromCity, shipFromPincode, shipFromState, shipFromCountry].filter(Boolean).join(', '),
+          input_type: purchaseInputTypes.join(', '),
+          invoice_in_foreign_currency: invoiceInForeignCurrency,
+
+          due_details: {
+            tds_it: purchaseTdsIt || 0,
+            advance_paid: purchaseAdvancePaid || 0,
+            to_pay: (
+              purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)
+              + (purchaseTaxIsTcs ? (Number(purchaseTdsIt) || 0) : -(Number(purchaseTdsIt) || 0))
+              - (Number(purchaseAdvancePaid) || 0)
+            ).toFixed(2),
+            posting_note: purchasePostingNote,
+            terms: purchaseTerms,
+            advance_references: purchaseAdvanceRefs
+          },
+          transit_details: {
+            mode: purchaseTransitMode,
+            received_in: purchaseTransitReceivedIn,
+            receipt_date: purchaseTransitReceiptDate || null,
+            receipt_time: purchaseTransitReceiptTime || null,
+            received_quantity: purchaseTransitReceivedQty,
+            uqc: purchaseTransitReceivedUqc,
+            delivery_type: purchaseTransitDeliveryType,
+            self_third_party: purchaseTransitSelfThirdParty,
+            transporter_id: purchaseTransitTransporterId,
+            transporter_name: purchaseTransitTransporterName,
+            vehicle_no: purchaseTransitVehicleNo,
+            lr_gr_consignment: purchaseTransitLrGrConsignment
+          }
+        };
+
+        const mappedItems = purchaseItems.map(item => ({
+          item_code: item.itemCode || '',
+          item_name: item.itemName || '',
+          hsn_sac: item.hsnSac || '',
+          quantity: Number(item.qty || 0),
+          uom: item.uom || '',
+          rate: Number(item.rate || 0),
+          taxable_value: Number(item.taxableValue || 0),
+          foreign_rate: Number(item.foreignRate || 0),
+          foreign_amount: Number(item.foreignAmount || 0),
+          igst_amount: Number(item.igst || 0),
+          cgst_amount: Number(item.cgst || 0),
+          sgst_amount: Number(item.sgst || 0),
+          cess_amount: Number(item.cess || 0),
+          invoice_value: Number(item.invoiceValue || 0),
+          description: item.description || ''
+        }));
+
+        // Conditionally add Supply Details to avoid sending 'null' which creates strict validation errors
+        // Always include Supply INR Details
+        purchaseData.supply_inr_details = {
+          purchase_order_no: purchaseOrderNo,
+          purchase_ledger: purchaseLedger,
+          description: purchaseDescription,
+          items: mappedItems
+        };
+
+        // Conditionally add Supply Foreign Details
+        if (invoiceInForeignCurrency === 'Yes') {
+          purchaseData.supply_foreign_details = {
+            purchase_order_no: purchaseOrderNo,
+            purchase_ledger: purchaseLedger,
+            exchange_rate: exchangeRate || 1.0,
+            description: purchaseDescription,
+            items: mappedItems
+          };
+        }
+
+        // DEBUG: Alert/log the final payload
+
+        // alert('Debug: Sending Payload. Check Console.');
+
+        try {
+
+          let response;
+          console.log('🔴 [PURCHASE SAVE] isEditing=', isEditing, '| purchasePk=', purchasePk, '| voucherId=', voucherId, '| Will PUT=', isEditing && !!(purchasePk || voucherId));
+          if (isEditing && (purchasePk || voucherId)) {
+            const putId = purchasePk || voucherId;
+            console.log('🔴 [PURCHASE SAVE] Sending PUT to /api/vouchers/purchase/' + putId + '/');
+            response = await httpClient.put(`/api/vouchers/purchase/${putId}/`, purchaseData);
+            console.log('🔴 [PURCHASE SAVE] PUT response=', response);
+            showSuccess('Purchase Voucher Updated Successfully!');
+          } else {
+            console.log('🔴 [PURCHASE SAVE] Sending POST (new voucher)');
+            response = await httpClient.post('/api/vouchers/purchase/', purchaseData);
+            showSuccess('Purchase Voucher Saved Successfully!');
+          }
+
+          // After a successful edit, force a fresh refetch from the server so the Daybook
+          // is 100% correct before the user sees it (avoids stale cache showing old data).
+          if (isEditing && onAddVouchers) {
+            // Optimistically update cache with new totals immediately
+            onAddVouchers([{
+              ...response,
+              id: genericVoucherId?.toString() || response?.id?.toString() || Date.now().toString(),
+              type: 'Purchase',
+              date: date,
+              party: party,
+              total: Number(calculatePurchaseTotals().invoiceValue),
+              narration: purchasePostingNote
+            }], false);
+          } else if (onAddVouchers) {
+            // New voucher: propagate to cache
+            onAddVouchers([{
+              ...response,
+              id: response?.id?.toString() || Date.now().toString(),
+              type: 'Purchase',
+              date: date,
+              party: party,
+              total: Number(calculatePurchaseTotals().invoiceValue),
+              narration: purchasePostingNote
+            }], false);
+          }
+
+          // Increment the voucher number if a series was selected
+          if (selectedPurchaseConfig && purchaseVoucherConfigs.length > 0) {
+            const config = purchaseVoucherConfigs.find(c => c.voucher_name === selectedPurchaseConfig);
+            if (config && config.enable_auto_numbering) {
+              await incrementPurchaseNumber(config.id);
+            }
+          }
+
+          // Optional: Handle file upload separately if needed, or if we switch to FormData later.
+
+          if (activeOcrFileHash) {
+            // Update the staging row to VOUCHER_CREATED so it doesn't get finalized again
+            try {
+              await httpClient.patch(`/api/ocr-staging/${activeOcrFileHash}/`, {
+                status: 'VOUCHER_CREATED',
+                voucher_id: response?.id
+              });
+            } catch (e) {
+              console.error('Failed to update OCR staging status', e);
+            }
+            if (saveAndNext) {
+              await loadNextScanItem(activeOcrFileHash);
+            } else {
+              handleCloseVoucher();
+            }
+          } else if (shouldPrint) {
+            const totals = calculatePurchaseTotals();
+            setPostedPurchaseVoucherData({
+              ...purchaseData,
+              totals,
+              items: purchaseItems
+            });
+            setShowPurchasePrintPreview(true);
+          } else {
+            resetForm();
+            if (isEditing) handleCloseVoucher();
+          }
+          refetch(); // Refresh usage statistics
+
+        } catch (error: any) {
+          console.error('Error saving purchase voucher:');
+          const serverError = error.response?.data;
+          const errorMessage = serverError
+            ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
+            : error.message;
+          showError(`Failed to save Purchase Voucher.\n${errorMessage}`);
+
+        }
+        return;
+      }
+
+      if (voucherType === 'Credit Note') {
+        if (!cnCustomer) {
+          showError('Please select a Customer.');
+          return;
+        }
+        if (!selectedCnConfig) {
+          showError('Please select a Credit Note Series.');
+          return;
+        }
+
+        // Find Customer ID
+        const customerId = cnCustomerId || null;
+        const customer = richCustomers.find(c => c.id.toString() === cnCustomerId);
+
+        if (!customerId) {
+          showError('Please select a valid Customer from the Master list.');
+          return;
+        }
+
+        try {
+          const totals = calculateCreditNoteTotals();
+
+          const creditNoteData: any = {
+            date: cnDate,
+            credit_note_series: selectedCnConfig,
+            credit_note_no: cnVoucherNumber,
+            customer_name: cnCustomer,
+            customer_id: customerId,
+            branch: cnBranch,
+            sales_invoice_nos: Array.isArray(cnSelectedSalesInvoices) ? cnSelectedSalesInvoices.join(', ') : cnSelectedSalesInvoices,
+            sales_invoice_dates: cnSalesInvoiceDate,
+            customer_debit_note_no: cnCustomerDebitNoteNo,
+            customer_debit_note_date: cnCustomerDebitNoteDate,
+            gstin: cnGstin,
+            grn_ref_no: cnGrnRefNo,
+            bill_from: [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', '),
+            ship_from: cnSameAsBillFrom
+              ? [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ')
+              : [shipFromAddress1, shipFromAddress2, shipFromAddress3, shipFromCity, shipFromPincode, shipFromState, shipFromCountry].filter(Boolean).join(', '),
+            input_type: cnInputType.join(', '),
+            in_foreign_currency: cnInForeignCurrency,
+            narration: cnPostingNote || '',
+
+            item_details: {
+              items: cnItems,
+              total_taxable_value: totals.taxableValue,
+              total_igst: totals.igst,
+              total_cgst: totals.cgst,
+              total_sgst: totals.sgst,
+              total_cess: totals.cess,
+              total_invoice_value: totals.invoiceValue
+            },
+
+            due_details: {
+              reverse_gst_tcs: cnReverseGstTcs,
+              reverse_gst_tds: cnReverseGstTds,
+              reverse_income_tax_tcs: cnReverseIncomeTaxTcs,
+              reverse_income_tax_tds: cnReverseIncomeTaxTds,
+              income_tax_tds_tcs_amount: cnIncomeTaxTdsTcsAmount || 0,
+              gst_tds_tcs_amount: cnGstTdsTcsAmount || 0,
+              advance_amount: cnAdvanceAmount || 0,
+              payable_amount: cnPayableAmount || 0,
+              terms_conditions: cnTermsConditions || ''
+            },
+
+            transit_details: {
+              received_in: cnTransitReceivedIn,
+              mode_of_transport: cnTransitMode,
+              receipt_date: cnTransitReceiptDate || null,
+              receipt_time: cnTransitReceiptTime || null,
+              delivery_type: cnTransitDeliveryType,
+              transporter_id_gstin: cnTransitTransporterId,
+              transporter_name: cnTransitTransporterName,
+              vehicle_no: cnTransitVehicleNo,
+              lr_gr_consignment_no: cnTransitLrGrConsignment
+            }
+          };
+
+          let response: any;
+          if (isEditing && voucherId) {
+            response = await httpClient.put(`/api/vouchers/credit-note/${voucherId}/`, creditNoteData);
+            showSuccess('Credit Note Updated Successfully!');
+          } else {
+            response = await httpClient.post('/api/vouchers/credit-note/', creditNoteData);
+            showSuccess('Credit Note Saved Successfully!');
+          }
+
+          // Instantly propagate to application cache so reports reveal update immediately
+          if (onAddVouchers) {
+            onAddVouchers([{
+              ...response,
+              id: genericVoucherId?.toString() || response?.id?.toString() || Date.now().toString(),
+              type: 'Credit Note',
+              date: cnDate,
+              party: cnCustomer,
+              total: Number(totals.invoiceValue),
+              narration: cnPostingNote
+            }], false);
+          }
+
+          // Increment number logic if applicable
+          if (selectedCnConfig && cnVoucherConfigs.length > 0) {
+            const config = cnVoucherConfigs.find(c => c.voucher_name === selectedCnConfig);
+            if (config && config.enable_auto_numbering) {
+              await incrementCreditNoteNumber(String(config.id));
+            }
+          }
+
+          if (shouldPrint) {
+            // TODO: Implement Credit Note Print Preview
+            // For now, just close
+            resetForm();
+            if (isEditing) handleCloseVoucher();
+          } else {
+            resetForm();
+            if (isEditing) handleCloseVoucher();
+          }
+          refetch();
+
+        } catch (error: any) {
+          console.error('Error saving Credit Note:', error);
+          const serverError = error.response?.data;
+          const errorMessage = serverError
+            ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
+            : error.message;
+          showError(`Failed to save Credit Note.\n${errorMessage}`);
+        }
+        return;
+      }
+
+      switch (voucherType) {
+        // (Removed Purchase case from switch and handled above)
+        case 'Sales':
+          voucher = { id: '', type: voucherType, date, isInterState, invoiceNo, party, items, totalTaxableAmount, totalCgst, totalSgst, totalIgst, total, narration };
+          break;
+        case 'Payment':
+        case 'Receipt':
+          voucher = { id: '', type: voucherType, date, account, party, amount: simpleAmount, narration };
+          break;
+
+        case 'Contra':
+          if (!fromAccount || !toAccount || simpleAmount <= 0) {
+            showError("Please fill all mandatory fields (Transfer From, Transfer To, Amount > 0)");
+            return;
+          }
           voucher = {
             id: '',
             type: voucherType,
             date,
-            entries,
-            totalDebit,
-            totalCredit,
+            fromAccount,
+            toAccount,
+            amount: simpleAmount,
             narration,
             voucher_number: voucherNumber || undefined,
-            voucher_series: selectedJournalConfig || undefined
+            voucher_series: selectedContraConfig || undefined,
+            // New Forex fields
+            contraConversionRate,
+            contraPaymentAmtForeign,
+            contraPaymentRate,
+            contraPaymentAmtINR,
+            contraReceiptAmtForeign,
+            contraReceiptRate,
+            contraReceiptAmtINR,
+            contraForexGainLoss,
+            contraDeductChargesFrom,
+            contraConversionCharges,
+            contraFemaPurposeCode
           } as any;
-        } else {
-          showError("Journal entries are not balanced!");
+          break;
+        case 'Journal':
+          if (isJournalBalanced) {
+            voucher = {
+              id: '',
+              type: voucherType,
+              date,
+              entries,
+              totalDebit,
+              totalCredit,
+              narration,
+              voucher_number: voucherNumber || undefined,
+              voucher_series: selectedJournalConfig || undefined
+            } as any;
+          } else {
+            showError("Journal entries are not balanced!");
+          }
+          break;
+        case 'Expenses':
+          voucher = {
+            id: '',
+            type: voucherType,
+            date,
+            // Expenses use expense_rows instead of account/party/amount
+            expense_rows: expenseRows.map(row => ({
+              id: row.id,
+              expense: row.expense,
+              postTo: row.postTo,
+              billRefNo: row.billRefNo || '',
+              entryNote: row.entryNote || '',
+              totalAmount: row.totalAmount,
+              gstRate: row.gstRate,
+              taxableValue: row.taxableValue,
+              igst: row.igst,
+              cgst: row.cgst,
+              sgst: row.sgst,
+              cess: row.cess,
+              showTax: row.showTax
+            })),
+            posting_note: narration,
+            voucher_number: voucherNumber || undefined,
+            voucher_series: selectedExpensesConfig || undefined,
+            uploaded_files: uploadedFiles.map(f => f.name)
+          } as any;
+          break;
+      }
+
+      if (voucher && ['Contra', 'Journal', 'Expenses'].includes(voucherType)) {
+        try {
+          let response: any;
+          // Map voucherType to correct API path
+          const typeToPath: Record<string, string> = {
+            'Contra': 'contra',
+            'Journal': 'journal',
+            'Expenses': 'expenses'
+          };
+          const apiPath = typeToPath[voucherType] || voucherType.toLowerCase();
+          // DEBUG: log IDs to identify the correct one
+          console.log('[Save Voucher] isEditing:', isEditing, '| voucherId:', voucherId, '| referenceId:', referenceId, '| genericVoucherId:', genericVoucherId, '| drillDownDetails.reference_id:', drillDownDetails?.reference_id, '| viewVoucherData:', viewVoucherData);
+          if (isEditing && voucherId) {
+            response = await httpClient.put(`/api/vouchers/${apiPath}/${voucherId}/`, voucher);
+            showSuccess(`${voucherType} Voucher Updated Successfully!`);
+          } else {
+            response = await httpClient.post(`/api/vouchers/${apiPath}/`, voucher);
+            showSuccess(`${voucherType} Voucher Saved Successfully!`);
+          }
+
+          let party = 'N/A';
+          if (voucherType === 'Expenses') {
+            party = expenseRows.find(e => e.postTo)?.postTo?.split(' - ')[0] || 'N/A';
+          } else if (voucherType === 'Journal') {
+            party = entries.find(e => e.ledger)?.ledger?.split(' - ')[0] || 'N/A';
+          } else if (voucherType === 'Contra') {
+            party = toAccount?.split(' - ')[0] || 'N/A';
+          }
+
+          const sourceMap: Record<string, string> = {
+            'Expenses': 'expense_voucher',
+            'Journal': 'journal_voucher',
+            'Contra': 'contra_voucher'
+          };
+
+          const savedVoucher = {
+            ...voucher,
+            ...response,
+            id: genericVoucherId || response?.id || voucherId || Date.now().toString(),
+            type: voucherType,
+            party: party,
+            source: sourceMap[voucherType] || (voucher as any)?.source,
+            total: response?.total_amount || response?.total_debit || response?.amount || (voucher as any)?.amount || 0
+          };
+          onAddVouchers([savedVoucher], false);
+
+          resetForm();
+          refetch(); // Refresh usage statistics
+
+          if (voucherType === 'Contra') fetchContraConfigs();
+          if (voucherType === 'Journal') fetchJournalConfigs();
+          if (voucherType === 'Expenses') fetchExpensesConfigs();
+
+          if (!shouldPrint && isEditing) {
+            handleCloseVoucher();
+          }
+
+        } catch (error: any) {
+          console.error(`Error saving ${voucherType}:`, error);
+          const serverError = error.response?.data;
+          const errorMessage = serverError ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError) : error.message;
+          showError(`Failed to save ${voucherType}.\n${errorMessage}`);
         }
-        break;
-      case 'Expenses':
-        voucher = {
-          id: '',
-          type: voucherType,
-          date,
-          // Expenses use expense_rows instead of account/party/amount
-          expense_rows: expenseRows.map(row => ({
-            id: row.id,
-            expense: row.expense,
-            postTo: row.postTo,
-            billRefNo: row.billRefNo || '',
-            entryNote: row.entryNote || '',
-            totalAmount: row.totalAmount,
-            gstRate: row.gstRate,
-            taxableValue: row.taxableValue,
-            igst: row.igst,
-            cgst: row.cgst,
-            sgst: row.sgst,
-            cess: row.cess,
-            showTax: row.showTax
-          })),
-          posting_note: narration,
-          voucher_number: voucherNumber || undefined,
-          voucher_series: selectedExpensesConfig || undefined,
-          uploaded_files: uploadedFiles.map(f => f.name)
-        } as any;
-        break;
-    }
-
-    if (voucher && ['Contra', 'Journal', 'Expenses'].includes(voucherType)) {
-      try {
-        let response: any;
-        // Map voucherType to correct API path
-        const typeToPath: Record<string, string> = {
-          'Contra': 'contra',
-          'Journal': 'journal',
-          'Expenses': 'expenses'
-        };
-        const apiPath = typeToPath[voucherType] || voucherType.toLowerCase();
-        // DEBUG: log IDs to identify the correct one
-        console.log('[Save Voucher] isEditing:', isEditing, '| voucherId:', voucherId, '| referenceId:', referenceId, '| genericVoucherId:', genericVoucherId, '| drillDownDetails.reference_id:', drillDownDetails?.reference_id, '| viewVoucherData:', viewVoucherData);
-        if (isEditing && voucherId) {
-          response = await httpClient.put(`/api/vouchers/${apiPath}/${voucherId}/`, voucher);
-          showSuccess(`${voucherType} Voucher Updated Successfully!`);
-        } else {
-          response = await httpClient.post(`/api/vouchers/${apiPath}/`, voucher);
-          showSuccess(`${voucherType} Voucher Saved Successfully!`);
-        }
-
-        let party = 'N/A';
-        if (voucherType === 'Expenses') {
-          party = expenseRows.find(e => e.postTo)?.postTo?.split(' - ')[0] || 'N/A';
-        } else if (voucherType === 'Journal') {
-          party = entries.find(e => e.ledger)?.ledger?.split(' - ')[0] || 'N/A';
-        } else if (voucherType === 'Contra') {
-          party = toAccount?.split(' - ')[0] || 'N/A';
-        }
-
-        const sourceMap: Record<string, string> = {
-          'Expenses': 'expense_voucher',
-          'Journal': 'journal_voucher',
-          'Contra': 'contra_voucher'
-        };
-
-        const savedVoucher = {
-          ...voucher,
-          ...response,
-          id: genericVoucherId || response?.id || voucherId || Date.now().toString(),
-          type: voucherType,
-          party: party,
-          source: sourceMap[voucherType] || (voucher as any)?.source,
-          total: response?.total_amount || response?.total_debit || response?.amount || (voucher as any)?.amount || 0
-        };
-        onAddVouchers([savedVoucher], false);
-
+      } else if (voucher) {
+        onAddVouchers([voucher]);
+        showSuccess(`${voucherType} Voucher Saved Successfully!`);
         resetForm();
         refetch(); // Refresh usage statistics
-
-        if (voucherType === 'Contra') fetchContraConfigs();
-        if (voucherType === 'Journal') fetchJournalConfigs();
-        if (voucherType === 'Expenses') fetchExpensesConfigs();
-
         if (!shouldPrint && isEditing) {
           handleCloseVoucher();
         }
-
-      } catch (error: any) {
-        console.error(`Error saving ${voucherType}:`, error);
-        const serverError = error.response?.data;
-        const errorMessage = serverError ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError) : error.message;
-        showError(`Failed to save ${voucherType}.\n${errorMessage}`);
       }
-    } else if (voucher) {
-      onAddVouchers([voucher]);
-      showSuccess(`${voucherType} Voucher Saved Successfully!`);
-      resetForm();
-      refetch(); // Refresh usage statistics
-      if (!shouldPrint && isEditing) {
-        handleCloseVoucher();
-      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -4515,45 +4580,26 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
     // Auto-calculate Taxable Value (Qty * Rate) and Taxes (INR)
-    if (field === 'qty' || field === 'rate' || field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
+    if (field === 'qty' || field === 'rate' || field === 'foreignRate' || field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
+      const exRate = parseFloat(exchangeRate) || 1;
+
+      // Sync rates if one changes
+      if (field === 'foreignRate') {
+        const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
+        item.rate = fRate * exRate;
+      } else if (field === 'rate') {
+        const iRate = parseFloat(item.rate?.toString() || '0') || 0;
+        item.foreignRate = iRate / exRate;
+      }
+
       const qty = parseFloat(item.qty.toString()) || 0;
       const rate = parseFloat(item.rate.toString()) || 0;
-      item.taxableValue = qty * rate;
-
-      // Fetch GST Rate from combined items (Master > Inventory Item)
-      const selectedStockItem = allItems.find((si: any) =>
-        ((si.item_code || si.code) || '').toLowerCase() === (item.itemCode || '').toLowerCase() ||
-        ((si.name || si.item_name) || '').toLowerCase() === (item.itemName || '').toLowerCase() ||
-        ((si.hsn_sac || si.hsn) || '').toString().trim() === (item.hsnSac || '').toString().trim()
-      );
-      const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
-      const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
-      const totalTax = item.taxableValue * (gstRate / 100);
-      item.cess = totalTax * (cessRate / 100);
-
-      if (isInterState) {
-        item.igst = totalTax;
-        item.cgst = 0;
-        item.sgst = 0;
-      } else {
-        item.igst = 0;
-        item.cgst = totalTax / 2;
-        item.sgst = totalTax / 2;
-      }
-    }
-
-    // Auto-calculate Foreign Amount (Qty * Foreign Rate) and sync to INR Rate if exchangeRate is set
-    if (field === 'qty' || field === 'foreignRate') {
-      const qty = parseFloat(item.qty.toString()) || 0;
       const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
+
+      item.taxableValue = qty * rate;
       item.foreignAmount = qty * fRate;
 
-      const exRate = parseFloat(exchangeRate) || 1; // Fallback to 1 ensures INR tab matches Foreign values if rate is empty
-      item.rate = fRate * exRate;
-      item.taxableValue = qty * item.rate;
-
-
-      // Recalculate taxes based on new taxable value - Source: Inventory Item Master
+      // Fetch GST Rate from combined items (Master > Inventory Item)
       const selectedStockItem = allItems.find((si: any) =>
         ((si.item_code || si.code) || '').toLowerCase() === (item.itemCode || '').toLowerCase() ||
         ((si.name || si.item_name) || '').toLowerCase() === (item.itemName || '').toLowerCase() ||
@@ -4852,10 +4898,55 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           if (details.invoice_in_foreign_currency) setInvoiceInForeignCurrency(details.invoice_in_foreign_currency);
           if (details.bill_from) setBillFromAddress1(details.bill_from);
           if (details.ship_from) setShipFromAddress1(details.ship_from);
+
+          // ── Pre-fill input_type ────────────────────────────────────────────
+          if (details.input_type) {
+            const rawInputType = details.input_type;
+            const parsedInputTypes = typeof rawInputType === 'string'
+              ? rawInputType.split(',').map((s: string) => s.trim()).filter(Boolean)
+              : (Array.isArray(rawInputType) ? rawInputType : []);
+            if (parsedInputTypes.length > 0) setPurchaseInputTypes(parsedInputTypes);
+          }
+
           const supplyInr = details.supply_inr_details;
           const items = details.line_items || supplyInr?.items || details.items || [];
           if (supplyInr?.purchase_ledger) setPurchaseLedger(supplyInr.purchase_ledger);
           if (supplyInr?.description) setPurchaseDescription(supplyInr.description);
+          // ── Pre-fill Purchase Order No from supply_inr_details ────────────
+          if (supplyInr?.purchase_order_no) setPurchaseOrderNo(supplyInr.purchase_order_no);
+
+          // ── Pre-fill Due Details (critical — prevents overwrite with defaults) ──
+          const dueDetails = details.due_details;
+          if (dueDetails) {
+            if (dueDetails.tds_it !== undefined && dueDetails.tds_it !== null)
+              setPurchaseTdsIt(String(parseFloat(dueDetails.tds_it || 0).toFixed(2)));
+            if (dueDetails.advance_paid !== undefined && dueDetails.advance_paid !== null)
+              setPurchaseAdvancePaid(String(parseFloat(dueDetails.advance_paid || 0).toFixed(2)));
+            if (dueDetails.posting_note) setPurchasePostingNote(dueDetails.posting_note);
+            if (dueDetails.terms) setPurchaseTerms(dueDetails.terms);
+            if (Array.isArray(dueDetails.advance_links) && dueDetails.advance_links.length > 0) {
+              setPurchaseAdvanceRefs(dueDetails.advance_links.map((link: any) => ({
+                refNo: link.ref_no || '',
+                date: link.date || '',
+                amount: parseFloat(link.amount || 0),
+                appliedNow: parseFloat(link.applied_now || 0)
+              })));
+            } else if (Array.isArray(dueDetails.advance_references) && dueDetails.advance_references.length > 0) {
+              setPurchaseAdvanceRefs(dueDetails.advance_references);
+            }
+          }
+
+          // ── Pre-fill Vendor ID so save doesn't fail validation ─────────────
+          const vendorNameForMatch = (details.vendor_name || details.party || party || '').toLowerCase();
+          if (vendorNameForMatch && richVendors && richVendors.length > 0) {
+            const matchedVendor = richVendors.find((v: any) =>
+              (v.vendor_name || '').toLowerCase() === vendorNameForMatch
+            );
+            if (matchedVendor) {
+              setVendorId(matchedVendor.id);
+            }
+          }
+
           if (Array.isArray(items) && items.length > 0) {
             setPurchaseItems(items.map((item: any, idx: number) => ({
               id: String(idx + 1),
@@ -4889,7 +4980,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         } else if (mappedType === 'Sales') {
           setLocalPrefilledData({
             voucherId: details.reference_id || details.id || voucherId,
-            invoiceNumber: details.voucher_number || details.voucher_no || '',
+            invoiceNumber: details.sales_invoice_no || details.voucher_number || details.voucher_no || '',
             // ── Sales Series ─────────────────────────────────────────────
             voucher_name: details.voucher_name || details.voucher_series || details.sales_series || details.sales_voucher_series || '',
             branch: details.branch || '',
@@ -4899,27 +4990,46 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             placeOfSupply: details.place_of_supply || details.placeOfSupply || '',
             invoiceType: details.invoice_type || details.invoiceType || 'Regular',
             stateType: details.state_type || details.stateType || 'within',
-            totalAmount: details.total_amount || details.total || 0,
-            subtotal: details.total_taxable_amount || 0,
-            cgstAmount: details.total_cgst || 0,
-            sgstAmount: details.total_sgst || 0,
-            igstAmount: details.total_igst || 0,
+            totalAmount: details.payment_details?.payment_invoice_value || details.total_amount || details.total || 0,
+            subtotal: details.payment_details?.payment_taxable_value || details.total_taxable_amount || 0,
+            cgstAmount: details.payment_details?.payment_cgst || details.total_cgst || 0,
+            sgstAmount: details.payment_details?.payment_sgst || details.total_sgst || 0,
+            igstAmount: details.payment_details?.payment_igst || details.total_igst || 0,
+            cessAmount: details.payment_details?.payment_cess || details.total_cess || 0,
 
             // ── Addresses ──
-            billToAddress1: details.bill_to_address_1 || details.bill_to_address || '',
-            billToAddress2: details.bill_to_address_2 || '',
-            billToAddress3: details.bill_to_address_3 || '',
-            billToCity: details.bill_to_city || '',
-            billToState: details.bill_to_state || '',
-            billToPincode: details.bill_to_pincode || '',
-            billToCountry: details.bill_to_country || '',
-            shipToAddress1: details.ship_to_address_1 || details.ship_to_address || '',
-            shipToAddress2: details.ship_to_address_2 || '',
-            shipToAddress3: details.ship_to_address_3 || '',
-            shipToCity: details.ship_to_city || '',
-            shipToState: details.ship_to_state || '',
-            shipToPincode: details.ship_to_pincode || '',
-            shipToCountry: details.ship_to_country || '',
+            ...(() => {
+              const parseAddress = (addr1: any, addr2: any) => {
+                const str = addr1 || addr2;
+                if (typeof str === 'string' && str.trim().startsWith('{')) {
+                  try { return JSON.parse(str); } catch { return null; }
+                }
+                return typeof str === 'object' ? str : null;
+              };
+              const pBill = parseAddress(details.bill_to_address, details.bill_to);
+              const pShip = parseAddress(details.ship_to_address, details.ship_to);
+
+              const rawBill = details.bill_to_address_1 || details.bill_to_address || details.bill_to || '';
+              const rawShip = details.ship_to_address_1 || details.ship_to_address || details.ship_to || '';
+
+              return {
+                billToAddress1: pBill?.address_line_1 || (typeof rawBill === 'string' && !pBill && !rawBill.trim().startsWith('{') ? rawBill : ''),
+                billToAddress2: pBill?.address_line_2 || details.bill_to_address_2 || '',
+                billToAddress3: pBill?.address_line_3 || details.bill_to_address_3 || '',
+                billToCity: pBill?.city || details.bill_to_city || '',
+                billToState: pBill?.state || details.bill_to_state || '',
+                billToPincode: pBill?.pincode || details.bill_to_pincode || '',
+                billToCountry: pBill?.country || details.bill_to_country || '',
+
+                shipToAddress1: pShip?.address_line_1 || (typeof rawShip === 'string' && !pShip && !rawShip.trim().startsWith('{') ? rawShip : ''),
+                shipToAddress2: pShip?.address_line_2 || details.ship_to_address_2 || '',
+                shipToAddress3: pShip?.address_line_3 || details.ship_to_address_3 || '',
+                shipToCity: pShip?.city || details.ship_to_city || '',
+                shipToState: pShip?.state || details.ship_to_state || '',
+                shipToPincode: pShip?.pincode || details.ship_to_pincode || '',
+                shipToCountry: pShip?.country || details.ship_to_country || ''
+              };
+            })(),
 
             // ── Extracted payment details ──
             stateCess: details.payment_details?.payment_state_cess || '0',
@@ -4928,6 +5038,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             advanceAmount: details.payment_details?.payment_advance || '0',
             payable: details.payment_details?.payment_payable || '0',
             postingNote: details.payment_details?.posting_note || '',
+            _rawEntry: viewVoucherData,
 
             // ── Extracted dispatch details ──
             dispatchFrom: details.dispatch_details?.dispatch_from || '',
@@ -4940,13 +5051,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             lrGrConsignment: details.dispatch_details?.lr_gr_consignment || '',
 
             lineItems: (details.items || []).map((item: any) => ({
-              itemDescription: item.itemName || item.item_name || item.description || '',
-              itemCode: item.itemCode || item.item_code || '',
-              hsnCode: item.hsnSac || item.hsn_sac || '',
+              itemDescription: item.item_name || item.itemName || item.description || '',
+              itemCode: item.item_code || item.itemCode || '',
+              hsnCode: item.hsn_sac || item.hsnSac || '',
               quantity: parseFloat(item.qty || item.quantity || '0') || 0,
-              rate: parseFloat(item.itemRate || item.rate || '0') || 0,
-              amount: parseFloat(item.invoiceValue || item.invoice_value || '0') || 0,
-              taxableValue: parseFloat(item.taxableValue || item.taxable_value || '0') || 0,
+              rate: parseFloat(item.item_rate || item.itemRate || item.rate || '0') || 0,
+              amount: parseFloat(item.invoice_value || item.invoiceValue || '0') || 0,
+              taxableValue: parseFloat(item.taxable_value || item.taxableValue || '0') || 0,
               cgst: parseFloat(item.cgst || item.cgst_amount || '0') || 0,
               sgst: parseFloat(item.sgst || item.sgst_amount || '0') || 0,
               igst: parseFloat(item.igst || item.igst_amount || '0') || 0,
@@ -4976,6 +5087,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             narration: details.narration || '',
             reference_number: details.ref_no || '',
             voucher_type: details.voucher_type || details.type || '',
+            items: details.items || details.item_details?.line_items || details.item_details?.items || [],
           } as any);
         }
         else if (mappedType === 'Contra') {
@@ -5003,15 +5115,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         else if (mappedType === 'Journal') {
           if (details.voucher_number || details.voucher_no) setVoucherNumber(details.voucher_number || details.voucher_no);
           if (details.voucher_series || details.journal_series) setSelectedJournalConfig(details.voucher_series || details.journal_series);
-          if (details.entries || details.journal_entries) {
-            const rawEntries = details.entries || details.journal_entries;
+          if (details.entries || details.journal_entries || details.entry_lines) {
+            const rawEntries = details.entries || details.journal_entries || details.entry_lines;
             if (Array.isArray(rawEntries) && rawEntries.length > 0) {
               setEntries(rawEntries.map((e: any) => ({
-                ledger: e.ledger || e.account || '',
-                note: e.note || e.narration || '',
-                refNo: e.refNo || e.ref_no || '',
-                debit: parseFloat(e.debit || '0'),
-                credit: parseFloat(e.credit || '0')
+                ledger: e.ledger || e.ledger_name || e.account || '',
+                note: e.note || e.entry_note || e.narration || '',
+                refNo: e.refNo || e.reference_no || e.ref_no || '',
+                debit: parseFloat(e.debit || e.debit_amount || '0'),
+                credit: parseFloat(e.credit || e.credit_amount || '0')
               })));
             }
           }
@@ -5043,7 +5155,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         else if (mappedType === 'Credit Note') {
           if (details.credit_note_no || details.voucher_number || details.voucher_no) setCnVoucherNumber(details.credit_note_no || details.voucher_number || details.voucher_no);
           if (details.credit_note_series || details.voucher_series) setSelectedCnConfig(details.credit_note_series || details.voucher_series);
-          if (details.customer_name || details.party) setCnCustomer(details.customer_name || details.party);
+          if (details.customer_name || details.party) {
+            const cname = details.customer_name || details.party;
+            setCnCustomer(cname);
+            const cst = richCustomers.find(c => c.customer_name === cname);
+            if (cst) setCnCustomerId(cst.id.toString());
+          }
           if (details.branch) setCnBranch(details.branch);
           // Date
           if (details.date) setCnDate(new Date(details.date).toISOString().split('T')[0]);
@@ -5193,6 +5310,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           narration: rawVoucher.narration || viewVoucherData.narration || '',
           reference_number: rawVoucher.ref_no || '',
           voucher_type: rawVoucher.voucher_type || rawVoucher.type || '',
+          items: rawVoucher.items || rawVoucher.item_details?.line_items || rawVoucher.item_details?.items || [],
         } as any);
       } else if (mappedType === 'Contra') {
         if (rawVoucher.fromAccount || rawVoucher.from_account) setFromAccount(rawVoucher.fromAccount || rawVoucher.from_account);
@@ -5232,7 +5350,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (isReadOnlyMode && party && richVendors.length > 0) {
       const match = richVendors.find((v: any) => v.vendor_name === party);
       if (match) {
-        if (!vendorId) setVendorId(match.id);
+        if (!vendorId) setVendorId(match.id.toString());
 
         // If running Purchase flow and missing basic branch/address fields, 
         // auto-fill from Vendor Master to avoid user seeing blank fields.
@@ -5250,6 +5368,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReadOnlyMode, party, richVendors, vendorId, vendorGstDetails, voucherType]);
+
+  // Resolve cnCustomerId from cnCustomer once richCustomers finishes loading
+  useEffect(() => {
+    if (isReadOnlyMode && cnCustomer && richCustomers.length > 0) {
+      const match = richCustomers.find((c: any) => c.customer_name === cnCustomer);
+      if (match) {
+        if (!cnCustomerId) setCnCustomerId(match.id.toString());
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReadOnlyMode, cnCustomer, richCustomers, cnCustomerId]);
 
   const renderPurchaseForm = () => {
     return (
@@ -5381,7 +5510,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <SearchableSelect
                       value={party}
                       onChange={handlePartyChange}
-                      options={purchasePartyOptions}
+                      options={purchasePartyOptions.map(name => {
+                        const vendor = richVendors.find(v => v.vendor_name === name);
+                        return vendor && vendor.vendor_code
+                          ? { label: `${name} (${vendor.vendor_code})`, value: name }
+                          : { label: name, value: name };
+                      })}
                       onFocus={fetchRichData}
                       placeholder="Select Vendor"
                       className="w-full"
@@ -8128,8 +8262,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <input
                     type="text"
                     value={cnVoucherNumber}
-                    readOnly
-                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
+                    onChange={(e) => setCnVoucherNumber(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-white text-gray-900 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="Enter invoice number"
                   />
                 </div>
@@ -8143,42 +8277,44 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </label>
                   <div className="flex flex-col gap-1.5">
                     <SearchableSelect
-                      value={cnCustomer}
+                      value={cnCustomerId}
                       onChange={(val) => {
-                        setCnCustomer(val);
+                        setCnCustomerId(val);
                         setCnBranch('');
                         setCnSelectedSalesInvoices([]);
+                        setCnItems([
+                          { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: null, financialAmount: 0 }
+                        ]);
                         setCnGstin('');
-                        if (val) {
+                        const customer = richCustomers.find(c => c.id.toString() === val);
+                        if (customer) {
+                          setCnCustomer(customer.customer_name);
                           // Auto-populate Terms & Conditions
-                          const customer = richCustomers.find(c => (c.customer_name || '').toLowerCase() === val.toLowerCase());
-                          if (customer) {
-                            const parts: string[] = [];
-                            if (customer.credit_period) parts.push(`Credit Period: ${customer.credit_period}`);
-                            if (customer.credit_terms) parts.push(`Credit Terms: ${customer.credit_terms}`);
-                            if (customer.penalty_terms) parts.push(`Penalty Terms: ${customer.penalty_terms}`);
-                            if (customer.delivery_terms) parts.push(`Delivery Terms: ${customer.delivery_terms}`);
-                            const warranty = customer.warranty_details || customer.warranty_guarantee_details;
-                            if (warranty) parts.push(`Warranty / Guarantee: ${warranty}`);
-                            if (customer.force_majeure) parts.push(`Force Majeure: ${customer.force_majeure}`);
-                            const dispute = customer.dispute_terms || customer.dispute_redressal_terms;
-                            if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
-                            setCnTermsConditions(parts.join('\n\n'));
-                            setMasterTermsData(customer);
-                          }
-                          apiService.getCustomerSalesInvoices(val)
-                            .then(data => {
-                              setCnSalesInvoicesList(data || []);
-                            });
+                          const parts: string[] = [];
+                          if (customer.credit_period) parts.push(`Credit Period: ${customer.credit_period}`);
+                          if (customer.credit_terms) parts.push(`Credit Terms: ${customer.credit_terms}`);
+                          if (customer.penalty_terms) parts.push(`Penalty Terms: ${customer.penalty_terms}`);
+                          if (customer.delivery_terms) parts.push(`Delivery Terms: ${customer.delivery_terms}`);
+                          const warranty = customer.warranty_details || customer.warranty_guarantee_details;
+                          if (warranty) parts.push(`Warranty / Guarantee: ${warranty}`);
+                          if (customer.force_majeure) parts.push(`Force Majeure: ${customer.force_majeure}`);
+                          const dispute = customer.dispute_terms || customer.dispute_redressal_terms;
+                          if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
+                          setCnTermsConditions(parts.join('\n\n'));
+                          setMasterTermsData(customer);
+
+                          // Don't fetch invoices yet — wait for branch selection
+                          setCnSalesInvoicesList([]);
                         } else {
+                          setCnCustomer('');
                           setCnSalesInvoicesList([]);
                           setCnTermsConditions('');
                           setMasterTermsData(null);
                         }
                       }}
                       options={richCustomers.map(c => ({
-                        value: c.customer_name,
-                        label: c.customer_name,
+                        value: c.id.toString(),
+                        label: c.customer_code ? `${c.customer_name} (${c.customer_code})` : c.customer_name,
                         id: c.id
                       }))}
                       placeholder="SEARCH OR SELECT CUSTOMER"
@@ -8201,7 +8337,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     value={cnBranch}
                     onChange={(e) => {
                       setCnBranch(e.target.value);
-                      const customer = richCustomers.find(c => c.customer_name === cnCustomer);
+                      setCnSelectedSalesInvoices([]);
+                      setCnItems([
+                        { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', salesLedger: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null, salesInvoiceNo: null, financialAmount: 0 }
+                      ]);
+                      const customer = richCustomers.find(c => c.id.toString() === cnCustomerId);
                       if (customer && customer.branches) {
                         const branch = customer.branches.find((b: any) => b.branch_reference_name === e.target.value);
                         if (branch) {
@@ -8227,6 +8367,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         apiService.getCustomerSalesInvoices(cnCustomer, e.target.value)
                           .then(data => {
                             setCnSalesInvoicesList(data || []);
+                          })
+                          .catch(err => {
+                            console.error('Failed to fetch invoices for branch:', err);
+                            setCnSalesInvoicesList([]);
                           });
                       } else {
                         setCnSalesInvoicesList([]);
@@ -8235,8 +8379,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                     disabled={!cnCustomer}
                   >
-                    <option value="">Select customer first</option>
-                    {richCustomers.find(c => c.customer_name === cnCustomer)?.branches?.map((b: any) => (
+                    <option value="">{cnCustomer ? 'Select Branch' : 'Select customer first'}</option>
+                    {richCustomers.find(c => c.id.toString() === cnCustomerId)?.branches?.map((b: any) => (
                       <option key={b.id} value={b.branch_reference_name}>{b.branch_reference_name}</option>
                     ))}
                   </select>
@@ -8262,8 +8406,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     SALES INVOICE NO. <span className="text-red-500">*</span>
                   </label>
                   <div
-                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-white cursor-pointer flex items-center justify-between min-h-[42px]"
-                    onClick={() => setIsCnInvoiceDropdownOpen(!isCnInvoiceDropdownOpen)}
+                    className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] flex items-center justify-between min-h-[42px] ${
+                      cnCustomer && cnBranch ? 'bg-white cursor-pointer' : 'bg-gray-50 cursor-not-allowed opacity-60'
+                    }`}
+                    onClick={() => {
+                      if (!cnCustomer || !cnBranch) return;
+                      if (!isCnInvoiceDropdownOpen) {
+                        // Always re-fetch when opening dropdown to ensure fresh data
+                        apiService.getCustomerSalesInvoices(cnCustomer, cnBranch)
+                          .then(data => setCnSalesInvoicesList(data || []))
+                          .catch(err => console.error('Failed to fetch invoices:', err));
+                      }
+                      setIsCnInvoiceDropdownOpen(!isCnInvoiceDropdownOpen);
+                    }}
                   >
                     <div className="flex flex-wrap gap-1 max-w-[90%]">
                       {cnSelectedSalesInvoices.length > 0 ? (
@@ -8281,7 +8436,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </span>
                         ))
                       ) : (
-                        <span className="text-gray-400">Select Multiple Invoices...</span>
+                        <span className="text-gray-400">
+                          {!cnCustomer ? 'Select Customer first' : !cnBranch ? 'Select Branch first' : 'Select Multiple Invoices...'}
+                        </span>
                       )}
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isCnInvoiceDropdownOpen ? 'rotate-180' : ''}`} />
@@ -12217,8 +12374,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       </div>
                     ) : (
                       <div className="flex space-x-3 mt-4">
-                        <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
-                        <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                        <button disabled={isSubmitting} onClick={() => handleSaveVoucher(false)} className={`erp-button-primary ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>{isSubmitting ? 'Posting...' : 'Post & Close'}</button>
+                        <button disabled={isSubmitting} onClick={() => handleSaveVoucher(true)} className={`erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>Post & Print/Email</button>
                         <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
                       </div>
                     )
@@ -12244,16 +12401,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </button>
                   ) : (
                     <div className="flex space-x-3 mt-4">
-                      <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
-                      <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                      <button disabled={isSubmitting} onClick={() => handleSaveVoucher(false)} className={`erp-button-primary ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>{isSubmitting ? 'Posting...' : 'Post & Close'}</button>
+                      <button disabled={isSubmitting} onClick={() => handleSaveVoucher(true)} className={`erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>Post & Print/Email</button>
                     </div>
                   )
                 )}
 
                 {!['Sales', 'Payment', 'Receipt', 'Purchase', 'Credit Note', 'Debit Note'].includes(voucherType) && (
                   <div className="flex space-x-3 mt-4">
-                    <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
-                    <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                    <button disabled={isSubmitting} onClick={() => handleSaveVoucher(false)} className={`erp-button-primary ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>{isSubmitting ? 'Posting...' : 'Post & Close'}</button>
+                    <button disabled={isSubmitting} onClick={() => handleSaveVoucher(true)} className={`erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>Post & Print/Email</button>
                   </div>
                 )}
               </>
@@ -13080,7 +13237,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     const sgst = Number(it.sgst_amount !== undefined ? it.sgst_amount : (it.sgst !== undefined ? it.sgst : 0));
                     const igst = Number(it.igst_amount !== undefined ? it.igst_amount : (it.igst !== undefined ? it.igst : 0));
                     const cess = Number(it.cess_amount !== undefined ? it.cess_amount : (it.cess !== undefined ? it.cess : 0));
-                    
+
                     const rawInvVal = Number(it.invoice_value !== undefined ? it.invoice_value : (it.invoiceValue !== undefined ? it.invoiceValue : 0));
                     const invoiceValue = rawInvVal > 0 ? rawInvVal : (taxableValue + cgst + sgst + igst + cess);
 
@@ -13138,6 +13295,4 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 };
 
 export default VouchersPage;
-
-
 

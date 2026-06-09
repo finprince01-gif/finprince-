@@ -873,13 +873,22 @@ const App: React.FC = () => {
     }
 
     setVouchers(prev => {
-      const updatedMap = new Map(prev.map(v => [v.id, v]));
+      const updatedMap = new Map(prev.map(v => [String(v.id || (v as any).reference_id || (v as any).referenceId), v]));
       newVouchers.forEach(nv => {
-        updatedMap.set(nv.id, nv);
+        updatedMap.set(String(nv.id || (nv as any).reference_id || (nv as any).referenceId), nv);
       });
       return Array.from(updatedMap.values())
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     });
+
+    // Fire a background refetch to guarantee the Daybook is 100% in sync with the DB
+    if (!saveToMySQL) {
+      setTimeout(() => {
+        apiService.getVouchers().then(v => {
+          if (v && v.length > 0) setVouchers(v);
+        }).catch(console.error);
+      }, 500);
+    }
   }, [companyDetails]);
 
   const handleUpdateVoucher = useCallback(async (updatedVoucher: Voucher) => {
@@ -890,7 +899,16 @@ const App: React.FC = () => {
       console.error(`Error updating voucher ${updatedVoucher.id} in backend:`);
     }
 
-    setVouchers(prevVouchers => prevVouchers.map(v => v.id === updatedVoucher.id ? updatedVoucher : v));
+    setVouchers(prevVouchers => prevVouchers.map(v =>
+      (v.id === updatedVoucher.id || (v as any).reference_id === updatedVoucher.id || (v as any).referenceId === updatedVoucher.id || v.id === (updatedVoucher as any).reference_id || v.id === (updatedVoucher as any).referenceId) ? updatedVoucher : v
+    ));
+
+    // Guarantee sync
+    setTimeout(() => {
+      apiService.getVouchers().then(v => {
+        if (v && v.length > 0) setVouchers(v);
+      }).catch(console.error);
+    }, 500);
   }, []);
 
   const handleMassUploadComplete = useCallback(async (vouchersToCreate: Voucher[]) => {

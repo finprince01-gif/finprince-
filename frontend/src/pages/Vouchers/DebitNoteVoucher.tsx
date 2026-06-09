@@ -192,7 +192,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
             }
             if (prefilledData.invoiceDate || (prefilledData as any).date) setDate(prefilledData.invoiceDate || (prefilledData as any).date);
             if ((prefilledData as any).debit_note_no) setDebitNoteNo((prefilledData as any).debit_note_no || '');
-            
+
             // Branch and GSTIN
             if (prefilledData.branch) setVendorBranch(prefilledData.branch);
             if (prefilledData.gstin) setGstin(prefilledData.gstin);
@@ -203,10 +203,10 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 setVendorName(prefilledData.sellerName || (prefilledData as any).vendor_name || '');
             }
             if ((prefilledData as any).vendor_id) setVendorId((prefilledData as any).vendor_id);
-            
+
             // Narration
-            if (prefilledData.narration) setNarration(prefilledData.narration);
-            
+            if ((prefilledData as any).narration) setNarration((prefilledData as any).narration);
+
             // Address Fields
             if ((prefilledData as any).bill_to) {
                 setBillFromAddress({ line1: (prefilledData as any).bill_to, line2: '', line3: '', city: '', pincode: '' });
@@ -217,7 +217,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
             // Purchase Reference
             if ((prefilledData as any).supplier_invoice_nos) {
-                const invoices = typeof (prefilledData as any).supplier_invoice_nos === 'string' 
+                const invoices = typeof (prefilledData as any).supplier_invoice_nos === 'string'
                     ? (prefilledData as any).supplier_invoice_nos.split(',').map((s: string) => s.trim()).filter(Boolean)
                     : (Array.isArray((prefilledData as any).supplier_invoice_nos) ? (prefilledData as any).supplier_invoice_nos : []);
                 setSelectedSupplierInvoices(invoices);
@@ -264,7 +264,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                     ledgerNarration: item.ledgerNarration || ''
                 })));
             }
-            
+
             // Due Details
             if ((prefilledData as any).due_details) {
                 const due = (prefilledData as any).due_details;
@@ -455,7 +455,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         }
     };
 
-    const handleVendorChange = async (name: string) => {
+    const handleVendorChange = async (name: string, explicitId?: number) => {
         setVendorName(name);
         setGstin('');
         setBillFromAddress({ line1: '', line2: '', line3: '', city: '', pincode: '' });
@@ -463,7 +463,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         setSupplierInvoiceNos([]);
         setSelectedSupplierInvoices([]);
 
-        const vendor = vendors.find(v => v.vendor_name === name);
+        const vendor = vendors.find(v => explicitId ? v.id === explicitId : v.vendor_name === name);
         if (vendor) {
             setVendorId(vendor.id);
             // Auto-fill terms and conditions from vendor master (Detailed Formatting)
@@ -495,7 +495,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
 
                 // If only one branch, auto-select it
                 if (gstDetails.length === 1) {
-                    handleBranchChange(gstDetails[0].reference_name, name, vendor.id);
+                    handleBranchChange(gstDetails[0].reference_name, name, vendor.id, gstDetails[0]);
                 } else {
                     // Pre-fetch transactions for the whole vendor (Procurement Source)
                     fetchVendorTransactions(vendor.id, name);
@@ -572,12 +572,12 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
         }
     };
 
-    const handleBranchChange = async (branchName: string, explicitVendorName?: string, explicitVendorId?: number) => {
+    const handleBranchChange = async (branchName: string, explicitVendorName?: string, explicitVendorId?: number, explicitBranchData?: any) => {
         const vName = explicitVendorName || vendorName;
         const vId = explicitVendorId || vendorId;
         if (explicitVendorId) setVendorId(explicitVendorId);
         setVendorBranch(branchName);
-        const branch = branches.find(b => b.reference_name === branchName);
+        const branch = explicitBranchData || branches.find(b => b.reference_name === branchName);
         if (branch) {
             setGstin(branch.gstin || '');
             const addr = [
@@ -1122,8 +1122,8 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                 const vid = response?.id || prefilledData?.voucherId || Date.now().toString();
                 // Map the backend response or local state to a normalized Voucher format
                 const totalAmt = response?.due_details?.net_amount_due || netAmountDue || 0;
-                const savedVoucher = { 
-                    ...response, 
+                const savedVoucher = {
+                    ...response,
                     id: vid,
                     type: 'Debit Note',
                     date: date,
@@ -1139,7 +1139,7 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                     isInterState: parseFloat(totalIgst.toString()) > 0,
                     narration: narration || response?.narration || ''
                 };
-                onAddVouchers([savedVoucher], false);
+                onAddVouchers([savedVoucher] as any);
             }
             handleCancel();
         } catch (error: any) {
@@ -1291,9 +1291,19 @@ const DebitNoteVoucher: React.FC<DebitNoteVoucherProps> = ({
                                     Vendor Name
                                 </label>
                                 <SearchableDropdown
-                                    value={vendorName}
-                                    onChange={handleVendorChange}
-                                    options={vendors.map(v => v.vendor_name)}
+                                    value={vendorId || vendorName}
+                                    onChange={(val) => {
+                                        if (typeof val === 'number' || !isNaN(Number(val))) {
+                                            const v = vendors.find(ven => ven.id === Number(val));
+                                            if (v) handleVendorChange(v.vendor_name, v.id);
+                                        } else {
+                                            handleVendorChange(val);
+                                        }
+                                    }}
+                                    options={vendors.map(v => ({
+                                        label: v.vendor_code ? `${v.vendor_name} (${v.vendor_code})` : v.vendor_name,
+                                        value: v.id
+                                    }))}
                                     placeholder="Select Vendor"
                                     onCreateAction={{
                                         label: "Add New Vendor",

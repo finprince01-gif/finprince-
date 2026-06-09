@@ -733,7 +733,7 @@ class VoucherSalesInvoiceDetailsSerializer(BranchModelSerializerMixin, serialize
         # Update the unified Voucher object
         if instance.voucher_id:
             try:
-                payment_obj = getattr(instance, 'payment_details', None)
+                payment_obj = VoucherSalesPaymentDetails.objects.filter(invoice=instance).first()
                 final_total = decimal.Decimal(str(payment_obj.payment_invoice_value if payment_obj else 0)).quantize(
                     decimal.Decimal('0.00'), rounding=decimal.ROUND_HALF_UP
                 )
