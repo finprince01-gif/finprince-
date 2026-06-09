@@ -147,8 +147,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
   }, [availableReports, reportType]);
 
   const [selectedLedger, setSelectedLedger] = useState<string>('all');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>(() => sessionStorage.getItem('reports_startDate') || '');
+  const [endDate, setEndDate] = useState<string>(() => sessionStorage.getItem('reports_endDate') || '');
+
+  useEffect(() => {
+    sessionStorage.setItem('reports_startDate', startDate);
+  }, [startDate]);
+
+  useEffect(() => {
+    sessionStorage.setItem('reports_endDate', endDate);
+  }, [endDate]);
   // Drill-down: null = summary view (all ledgers list), string = detail view for that ledger
   const [drillDownLedger, setDrillDownLedger] = useState<string | null>(navParams?.drillDownLedger || null);
 
@@ -1201,7 +1209,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           case 'Contra':
             return filteredLedgers.includes(v.fromAccount) || filteredLedgers.includes(v.toAccount);
           case 'Journal':
-            return v.entries && Array.isArray(v.entries) && v.entries.some(e => e && filteredLedgers.includes(e.ledger));
+            return v.entries && Array.isArray(v.entries) && v.entries.some((e: any) => e && (filteredLedgers.includes(e.ledger) || filteredLedgers.includes(e.ledger_name) || filteredLedgers.includes(e.account)));
           case 'Debit Note':
           case 'Credit Note':
             // Debit Note / Credit Note involve the party (vendor/customer)
@@ -1961,6 +1969,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
           <tr>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Voucher Type</th>
+            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Reference No</th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Party</th>
             <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
             <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
@@ -1983,6 +1992,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(v.date).toLocaleDateString()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{v.type}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-indigo-600">{(v as any).ref_no || (v as any).voucher_number || (v as any).invoice_no || '-'}</td>
                 <td 
                   className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-indigo-600 group-hover:font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   onClick={(e) => {

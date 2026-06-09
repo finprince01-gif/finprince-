@@ -279,16 +279,27 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
                 dr = float(row.debit_amount or 0)
                 cr = float(row.credit_amount or 0)
                 
-                if (dr > 0 or cr > 0) and row.ledger_id:
+                if dr > 0 and row.ledger_id:
                     entries_to_post.append({
                         "ledger_id": row.ledger_id,
                         "debit": dr,
+                        "credit": 0.0
+                    })
+                if cr > 0 and row.ledger_id:
+                    entries_to_post.append({
+                        "ledger_id": row.ledger_id,
+                        "debit": 0.0,
                         "credit": cr
                     })
             
             if len(entries_to_post) >= 2:
                 # Use referenced generic voucher ID
-                v_id = getattr(journal, 'voucher_id', None) or journal.id
+                v_id = getattr(journal, '_accounting_voucher_id', None)
+                if not v_id:
+                    from .models import Voucher
+                    generic_v = Voucher.objects.filter(source='journal_voucher', reference_id=journal.id).first()
+                    v_id = generic_v.id if generic_v else journal.id
+                    
                 post_transaction(
                     voucher_type="JOURNAL", 
                     voucher_id=v_id, 

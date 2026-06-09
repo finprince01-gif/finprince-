@@ -286,10 +286,22 @@ class VoucherSerializer(BranchModelSerializerMixin, serializers.ModelSerializer)
         
         # Add journal entries for journal vouchers
         if instance.type and instance.type.lower() == 'journal':
-            from .models import JournalEntry
-            # Voucher links to JournalEntry via voucher_id (loosely coupled)
-            entries = JournalEntry.objects.filter(voucher_id=instance.id, tenant_id=instance.tenant_id)
-            ret['entries'] = JournalEntrySerializer(entries, many=True).data
+            from .models_voucher_journal import JournalVoucherEntry
+            # Voucher links to JournalVoucherEntry via reference_id
+            entries = JournalVoucherEntry.objects.filter(voucher_id=instance.reference_id, tenant_id=instance.tenant_id)
+            # Map JournalVoucherEntry to the format expected by the frontend
+            ret['entries'] = [
+                {
+                    'id': e.id,
+                    'ledger': e.ledger_id,
+                    'ledger_name': e.ledger_name,
+                    'debit': e.debit_amount,
+                    'credit': e.credit_amount,
+                    'entry_note': e.entry_note,
+                    'reference_no': e.reference_no,
+                }
+                for e in entries
+            ]
         
         # Auto-resolve voucher_type from prefix configurations for payment/receipt
         v_type_lower = (instance.type or '').lower()

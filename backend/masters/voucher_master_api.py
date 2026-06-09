@@ -40,10 +40,12 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_tenant_id(self, request):
-        """Extract tenant_id from the authenticated user"""
-        user = request.user
-        if hasattr(user, 'tenant_id'):
-            return str(user.branch_id)
+        """Extract tenant_id from the authenticated user or header"""
+        from core.tenant import get_tenant_from_request
+        from django.core.exceptions import PermissionDenied
+        tenant_id = get_tenant_from_request(request)
+        if tenant_id:
+            return tenant_id
         raise PermissionDenied("User has no associated tenant")
     
     def get_queryset(self):
@@ -98,8 +100,8 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         # Mapping from Master model to Transaction model
         model_map = {
             'MasterVoucherSales': ('accounting.VoucherSalesInvoiceDetails', 'sales_invoice_no'),
-            'MasterVoucherCreditNote': ('accounting.VoucherCreditNoteSupplierDetails', 'credit_note_no'),
-            'MasterVoucherPurchases': ('accounting.VoucherPurchaseDetails', 'purchase_invoice_no'),
+            'MasterVoucherCreditNote': ('accounting.VoucherCreditNoteInvoiceDetails', 'credit_note_no'),
+            'MasterVoucherPurchases': ('accounting.VoucherPurchaseSupplierDetails', 'purchase_voucher_no'),
             'MasterVoucherDebitNote': ('accounting.VoucherDebitNoteSupplierDetails', 'debit_note_no'),
             'MasterVoucherReceipts': ('accounting.Transaction', 'voucher_number'),
             'MasterVoucherPayments': ('accounting.Transaction', 'voucher_number'),
