@@ -2099,6 +2099,123 @@ def test_clean_ocr_staging_view_single_record_and_patch_on_terminal_record():
         assert staging.processed is True
 
 
+@pytest.mark.django_db
+def test_hierarchical_item_validation():
+    """
+    Validates the 3-stage waterfall item validation engine:
+    1. Vendor PO History Match (Level 1) -> "History"
+    2. Vendor Product Mapping Match (Level 2) -> "Mapping"
+    3. Inventory Master Match (Level 3) -> "Master"
+    """
+    from ocr_pipeline.inventory_validation import InventoryItemValidationService
+    from inventory.models import InventoryItem
+    from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails
+    from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails, VoucherPurchaseItem
+    from vendors.vendorproduct_database import VendorProductServiceDatabase
+    from datetime import date
+
+    tenant_id = "tenant-waterfall-test"
+    gstin = "33ABYFS6343M1ZC"
+
+    # Seed Vendor Master
+    vendor = VendorMasterBasicDetail.objects.create(
+        tenant_id=tenant_id,
+        vendor_name="Waterfall Vendor",
+        email="waterfall@example.com",
+        contact_no="9876543210"
+    )
+    VendorMasterGSTDetails.objects.create(
+        tenant_id=tenant_id,
+        vendor_basic_detail=vendor,
+        gstin=gstin,
+        reference_name="Main"
+    )
+
+    # Seed Inventory Master Items with completely distinct names
+    item_hist = InventoryItem.objects.create(
+        tenant_id=tenant_id,
+        item_name="Apple iPhone 15 Pro Max Titanium Grey",
+        item_code="CODE-IPHONE",
+        hsn_code="8466"
+    )
+    item_map = InventoryItem.objects.create(
+        tenant_id=tenant_id,
+        item_name="Samsung Galaxy Ultra S24 Green",
+        item_code="CODE-SAMSUNG",
+        hsn_code="8466"
+    )
+    item_mast = InventoryItem.objects.create(
+        tenant_id=tenant_id,
+        item_name="Google Pixel 8 Obsidian Dark Black",
+        item_code="CODE-PIXEL",
+        hsn_code="8466"
+    )
+
+    # 1. LEVEL 1: PO History Match
+    # Create historical voucher supplier details and item
+    supplier_details = VoucherPurchaseSupplierDetails.objects.create(
+        tenant_id=tenant_id,
+        date=date.today(),
+        supplier_invoice_no="HIST-INV-100",
+        vendor_name="Waterfall Vendor",
+        vendor_basic_detail=vendor,
+        gstin=gstin
+    )
+    VoucherPurchaseItem.objects.create(
+        tenant_id=tenant_id,
+        supplier_details=supplier_details,
+        item_code="CODE-IPHONE",
+        item_name="Apple iPhone 15 Pro Max Titanium Grey"
+    )
+
+    # Test Level 1 Match
+    res_l1 = InventoryItemValidationService.validate_items(
+        tenant_id=tenant_id,
+        items=[{"description": "Apple iPhone 15 Pro Max Titanium Grey", "hsn_code": "8466"}],
+        vendor_id=vendor.id,
+        vendor_gstin=gstin
+    )
+    assert res_l1["item_status"] == "ALREADY EXIST"
+    assert res_l1["items"][0]["inventory_item_id"] == item_hist.id
+    assert res_l1["items"][0]["inventory_match_level"] == "History"
+
+    # 2. LEVEL 2: Vendor Product Mapping Match
+    # Create mapping record
+    VendorProductServiceDatabase.upsert_product_services(
+        tenant_id=tenant_id,
+        vendor_basic_detail_id=vendor.id,
+        items=[{
+            "hsn_sac_code": "8466",
+            "item_code": "CODE-SAMSUNG",
+            "item_name": "Samsung Galaxy Ultra S24 Green",
+            "supplier_item_name": "Vendor Custom Galaxy Phone"
+        }]
+    )
+
+    # Test Level 2 Match (using Vendor Custom Galaxy Phone, mapping to Samsung Galaxy Ultra S24 Green)
+    res_l2 = InventoryItemValidationService.validate_items(
+        tenant_id=tenant_id,
+        items=[{"description": "Vendor Custom Galaxy Phone", "hsn_code": "8466"}],
+        vendor_id=vendor.id,
+        vendor_gstin=gstin
+    )
+    assert res_l2["item_status"] == "ALREADY EXIST"
+    assert res_l2["items"][0]["inventory_item_id"] == item_map.id
+    assert res_l2["items"][0]["inventory_match_level"] == "Mapping"
+
+    # 3. LEVEL 3: Inventory Master Match
+    # Test Level 3 Match (falls back to master since no history or mapping match)
+    res_l3 = InventoryItemValidationService.validate_items(
+        tenant_id=tenant_id,
+        items=[{"description": "Google Pixel 8 Obsidian Dark Black", "hsn_code": "8466"}],
+        vendor_id=vendor.id,
+        vendor_gstin=gstin
+    )
+    assert res_l3["item_status"] == "ALREADY EXIST"
+    assert res_l3["items"][0]["inventory_item_id"] == item_mast.id
+    assert res_l3["items"][0]["inventory_match_level"] == "Master"
+
+
 
 
 

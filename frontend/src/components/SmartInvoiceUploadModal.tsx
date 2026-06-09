@@ -2879,12 +2879,16 @@ const handleRemove = async (fileHash: string) => {
                                                                 </span>
                                                             ) : row.validationStatus === "VOUCHER_CREATED" ? (
                                                                 <span className="bg-emerald-600 text-white px-2 py-1 rounded">✅ Saved</span>
-                                                            ) : row.validationStatus === "DUPLICATE" ? (
+                                                            ) : (row.validationStatus === "DUPLICATE" || row.validationStatus === "DUPLICATE_IN_BATCH" || row.validationStatus === "DUPLICATE_INVOICE") ? (
                                                                 <span className="bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded">Already Exist</span>
-                                                            ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_VENDOR', 'NEED_TO_SAVE'].includes(row.validationStatus)) ? (
+                                                            ) : (effectiveVendorId || ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEED_TO_SAVE', 'PENDING_PURCHASE'].includes(row.validationStatus)) ? (
                                                                 <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Need to Save</span>
+                                                            ) : (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'GSTIN_CONFLICT', 'CREATE_VENDOR'].includes(row.validationStatus)) ? (
+                                                                <span className="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded">Create Vendor First</span>
+                                                            ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded">Failed</span>
                                                             ) : (
-                                                                <span className="bg-gray-100 text-gray-400 border border-gray-200 px-2 py-1 rounded">Wait</span>
+                                                                <span className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-1 rounded">Pending</span>
                                                             )}
                                                         </td>
                                                         <td className="px-2 py-3 text-center">

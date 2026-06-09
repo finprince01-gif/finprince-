@@ -1037,7 +1037,9 @@ def assemble_multi_page_record(record: InvoiceTempOCR, **kwargs):
             # Run item validation during assembly before final freeze
             try:
                 from .inventory_validation import InventoryItemValidationService
-                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items)
+                v_id = ui_pay.get("vendor_id") or record.vendor_id
+                v_gst = ui_pay.get("vendor_gstin") or ui_pay.get("gstin") or record.gstin
+                inv_val = InventoryItemValidationService.validate_items(record.tenant_id, items, v_id, v_gst)
                 ui_pay["items"] = inv_val["items"]
                 ui_pay["item_status"] = inv_val["item_status"]
                 ui_pay["missing_items"] = inv_val["missing_items"]
@@ -2312,7 +2314,9 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
         )
 
         from .inventory_validation import InventoryItemValidationService
-        inv_val = InventoryItemValidationService.validate_items(tenant_id, items)
+        v_id = record.vendor_id
+        v_gst = gstin or record.gstin
+        inv_val = InventoryItemValidationService.validate_items(tenant_id, items, v_id, v_gst, record=record)
 
         # PHASE 2: PRINT REAL STRUCTURES - after validation
         logger.critical(
@@ -2391,6 +2395,7 @@ def validate_and_process(record: InvoiceTempOCR, auto_save: bool = False, **kwar
                 if vendor:
                     record.vendor_id = vendor.id
                     record.vendor_status = 'EXISTS'  # [CANONICAL FIX] Persist vendor_status to DB
+                    record.save(update_fields=['vendor_id', 'vendor_status'])
                     logger.info(
                         f"[VENDOR_VALIDATION_RESULT] "
                         f"gstin={gstin_key} "

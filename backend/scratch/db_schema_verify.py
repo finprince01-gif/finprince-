@@ -10,7 +10,7 @@ with connection.cursor() as cursor:
     tables = [row[0] for row in cursor.fetchall()]
     print("ALL TABLES:")
     for t in sorted(tables):
-        if 'pending_purchase' in t or 'pendingpurchase' in t:
+        if 'vendor' in t or 'gst' in t or 'basic' in t or 'creation' in t:
             print(f" -> {t}")
             
     # Show columns and row count of pending purchase queue table

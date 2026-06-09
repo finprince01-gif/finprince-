@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { httpClient } from '../../services';
-import { Package, RefreshCw, CheckCircle, Trash2, Edit2, Save } from 'lucide-react';
+import { CheckCircle, Trash2, Save, X } from 'lucide-react';
+import Package from 'lucide-react/dist/esm/icons/package';
+import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw';
+import Edit2 from 'lucide-react/dist/esm/icons/edit-2';
+import Zap from 'lucide-react/dist/esm/icons/zap';
+import AlertTriangle from 'lucide-react/dist/esm/icons/alert-triangle';
 import { CreateNewInventoryItemModal } from '../../components/CreateNewInventoryItemModal';
 import CreateNewVendorFullModal from '../../components/CreateNewVendorFullModal';
 import { EditInvoiceModal, type ScanResult } from '../../components/SmartInvoiceUploadModal';
@@ -72,6 +77,41 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
   // Per-row loading states
   const [revalidating, setRevalidating] = useState<Set<number>>(new Set());
   const [resolving, setResolving] = useState<Set<number>>(new Set());
+
+  // ── Bulk Finalize state ────────────────────────────────────────────────────
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [bulkPreview, setBulkPreview] = useState<{ eligible: number; skipped: number; total: number } | null>(null);
+  const [bulkFinalizing, setBulkFinalizing] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ processed: number; skipped: number; failed: number; errors: any[] } | null>(null);
+
+  const openBulkConfirm = useCallback(async () => {
+    try {
+      const res = await httpClient.get<any>('/api/pending-purchases/finalize-all/preview/');
+      setBulkPreview(res);
+      setBulkResult(null);
+      setShowBulkConfirm(true);
+    } catch (e) {
+      showError('Failed to load eligible record count');
+    }
+  }, []);
+
+  const executeBulkFinalize = useCallback(async () => {
+    setBulkFinalizing(true);
+    try {
+      const res = await httpClient.post<any>('/api/pending-purchases/finalize-all/', {});
+      setBulkResult(res);
+      setBulkPreview(null);
+      await fetchPurchases();
+      if (res.processed > 0) {
+        showSuccess(`Bulk Finalize: ${res.processed} voucher(s) created, ${res.skipped} skipped, ${res.failed} failed.`);
+      }
+    } catch (e: any) {
+      showError(e?.response?.data?.error || 'Bulk finalize failed');
+    } finally {
+      setBulkFinalizing(false);
+    }
+  }, []);
+  // ── end Bulk Finalize state ────────────────────────────────────────────────
 
   const fetchPurchases = useCallback(async () => {
     try {
@@ -183,12 +223,37 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
       {/* Create Inventory Item Modal */}
       {isCreateItemModalOpen && itemResolvingRow && (
         <CreateNewInventoryItemModal
-          prefilledData={extractedItemData}
+          prefilledData={(() => {
+            if (!extractedItemData) return undefined;
+            const name = extractedItemData.item_name || extractedItemData.name || extractedItemData.description || '';
+            const hsn = extractedItemData.hsn_code || extractedItemData.hsn || extractedItemData.hsn_sac || extractedItemData.hsnSacCode || '';
+            const rate = extractedItemData.rate || extractedItemData.unit_price || extractedItemData.price || '0.00';
+            const uom = extractedItemData.uom || extractedItemData.unit || 'nos';
+            const desc = extractedItemData.description || name || '';
+            
+            return {
+              item_name: name,
+              hsn_code: hsn,
+              rate: rate,
+              uom: uom,
+              description: desc,
+              gst_rate: extractedItemData.gst_rate || extractedItemData.igst_rate || '',
+              cgst_rate: extractedItemData.cgst_rate || '',
+              sgst_rate: extractedItemData.sgst_rate || '',
+              igst_rate: extractedItemData.igst_rate || '',
+              cess_rate: extractedItemData.cess_rate || '',
+            };
+          })()}
           onClose={() => { setIsCreateItemModalOpen(false); setItemResolvingRow(null); }}
           onItemCreated={async () => {
+            const rowToRevalidate = itemResolvingRow;
             setIsCreateItemModalOpen(false);
             setItemResolvingRow(null);
-            await fetchPurchases();
+            if (rowToRevalidate) {
+              await revalidatePurchase(rowToRevalidate);
+            } else {
+              await fetchPurchases();
+            }
           }}
         />
       )}
@@ -196,16 +261,51 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
       {/* Create Vendor Modal */}
       {isCreateVendorModalOpen && vendorResolvingRow && (
         <CreateNewVendorFullModal
-          prefilledData={{
-            vendor_name: vendorResolvingRow.vendor_name || '',
-            gstin: vendorResolvingRow.vendor_gstin || '',
-            branch: vendorResolvingRow.branch_id || '',
-          }}
+          prefilledData={(() => {
+            const ext = vendorResolvingRow.extraction_payload || {};
+            const supplier = ext.sections?.supplier_details || ext.supplier_details || {};
+            const header = ext.header || {};
+            
+            const vendorName = vendorResolvingRow.vendor_name || ext.vendor_name || header.vendor_name || supplier.vendor_name || '';
+            const gstin = vendorResolvingRow.vendor_gstin || ext.canonical_vendor_gstin || ext.vendor_gstin || ext.gstin || '';
+            const branch = vendorResolvingRow.branch_id || ext.branch || 'Main Branch';
+            const address = ext.bill_from || ext.billing_address || supplier.address || supplier.billing_address || ext.address || '';
+            const email = supplier.email || ext.email || ext.vendor_email || '';
+            const phone = supplier.phone || supplier.contact || ext.phone || ext.contact_no || ext.contact || '';
+            const state = supplier.state || ext.state || ext.vendor_state || '';
+            
+            const rawItems = getLineItems(vendorResolvingRow) || [];
+            const supplierItems = rawItems.map((itm: any) => ({
+              hsnSacCode: itm.hsn_code || itm.hsn || itm.hsn_sac || itm.hsnSacCode || '',
+              itemName: itm.item_name || itm.name || itm.description || '',
+              supplierItemName: itm.item_name || itm.name || itm.description || '',
+              supplierItemCode: vendorName, // Invoice Vendor Name -> Supplier Code/Supplier Reference
+              itemCode: itm.item_code || itm.code || itm.itemCode || '',
+            }));
+            
+            return {
+              vendor_name: vendorName,
+              pan_no: ext.pan_no || ext.pan || '',
+              email: email,
+              contact_no: phone,
+              gstin: gstin,
+              address: address,
+              branch: branch,
+              state: state,
+              contact_person: supplier.contact_person || ext.contact_person || '',
+              supplier_items: supplierItems,
+            };
+          })()}
           onClose={() => { setIsCreateVendorModalOpen(false); setVendorResolvingRow(null); }}
           onVendorCreated={async () => {
+            const rowToRevalidate = vendorResolvingRow;
             setIsCreateVendorModalOpen(false);
             setVendorResolvingRow(null);
-            await fetchPurchases();
+            if (rowToRevalidate) {
+              await revalidatePurchase(rowToRevalidate);
+            } else {
+              await fetchPurchases();
+            }
           }}
         />
       )}
@@ -221,6 +321,96 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
             await fetchPurchases();
           }}
         />
+      )}
+
+      {/* ── Bulk Finalize Confirmation Modal ── */}
+      {showBulkConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-white" />
+                <span className="text-white font-bold text-base">Finalize & Save All Eligible Vouchers</span>
+              </div>
+              <button onClick={() => setShowBulkConfirm(false)} className="text-white/70 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Pre-execution preview */}
+              {bulkPreview && !bulkResult && (
+                <>
+                  <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">Eligible Records</span>
+                      <span className="font-bold text-emerald-700 text-lg">{bulkPreview.eligible}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">Skipped (unresolved vendor/item)</span>
+                      <span className="font-bold text-amber-600">{bulkPreview.skipped}</span>
+                    </div>
+                    <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-sm">
+                      <span className="text-slate-500">Total Pending</span>
+                      <span className="font-bold text-slate-700">{bulkPreview.total}</span>
+                    </div>
+                  </div>
+                  {bulkPreview.eligible === 0 ? (
+                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-amber-700 text-sm">No eligible records found. Resolve vendor and item issues first.</p>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-xs">This will create vouchers, journals, and GRNs for all {bulkPreview.eligible} eligible record(s). This action cannot be undone.</p>
+                  )}
+                  <div className="flex gap-2 pt-2">
+                    <button onClick={() => setShowBulkConfirm(false)} className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={executeBulkFinalize}
+                      disabled={bulkPreview.eligible === 0 || bulkFinalizing}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-bold shadow hover:from-emerald-700 hover:to-teal-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {bulkFinalizing ? <><RefreshCw className="w-4 h-4 animate-spin" /> Processing...</> : <><Zap className="w-4 h-4" /> Finalize {bulkPreview.eligible} Voucher(s)</>}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Post-execution result */}
+              {bulkResult && (
+                <>
+                  <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">Successfully Finalized</span>
+                      <span className="font-bold text-emerald-700 text-lg">{bulkResult.processed}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">Skipped</span>
+                      <span className="font-bold text-amber-600">{bulkResult.skipped}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">Failed</span>
+                      <span className="font-bold text-red-600">{bulkResult.failed}</span>
+                    </div>
+                  </div>
+                  {bulkResult.failed > 0 && bulkResult.errors.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                      {bulkResult.errors.slice(0, 5).map((e: any, i: number) => (
+                        <div key={i}><span className="font-bold">{e.invoice || `#${e.pending_id}`}:</span> {e.error}</div>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={() => setShowBulkConfirm(false)} className="w-full px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-700 transition-colors">
+                    Done
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col h-full bg-slate-50 relative p-6">
@@ -254,6 +444,14 @@ const PendingPurchases: React.FC<PendingPurchasesProps> = ({ onNavigate }) => {
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
+          </button>
+          <button
+            onClick={openBulkConfirm}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg shadow-sm text-sm font-bold hover:from-emerald-700 hover:to-teal-700 transition-all"
+            title="Finalize all eligible records (vendor + item resolved, voucher not yet saved)"
+          >
+            <Zap className="w-4 h-4" />
+            Finalize &amp; Save All Eligible
           </button>
         </div>
 

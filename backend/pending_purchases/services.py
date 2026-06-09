@@ -84,7 +84,9 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
     print(trace_msg)
     logger.critical(trace_msg)
 
-    if not is_pending:
+    exists_in_queue = PendingPurchase.objects.filter(source_scan_row_id=record.id).exists()
+
+    if not is_pending and not exists_in_queue:
         logger.info(
             f"[PENDING_SKIP] record={record.id} "
             f"vendor={vendor_status} voucher={voucher_status} item={item_status} "
@@ -92,7 +94,7 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
         )
         return False
 
-    logger.info(f"[PENDING_MATCH] record={record.id} condition met — queuing for manual resolution")
+    logger.info(f"[PENDING_MATCH] record={record.id} condition met or exists in queue — queuing/updating for manual resolution")
 
     with transaction.atomic():
         logger.critical(
@@ -162,19 +164,26 @@ def evaluate_pending_purchase(record, vendor_status, voucher_status, item_status
         # ── Mark the OCR staging row without triggering immutability guards ──
         # Use queryset.update() so the model-level save() hook is bypassed.
         # This is safe: we are only updating bookkeeping fields, not business data.
+        target_val_status = 'PENDING_PURCHASE'
+        if not is_pending:
+            if is_duplicate:
+                target_val_status = 'DUPLICATE'
+            else:
+                target_val_status = 'NEED_TO_SAVE'
+
         InvoiceTempOCR.objects.filter(id=record.id).update(
             processed=True,
-            validation_status='PENDING_PURCHASE',
+            validation_status=target_val_status,
             status='COMPLETED',
         )
         # Keep the in-memory record consistent for callers that read these fields
         record.processed = True
-        record.validation_status = 'PENDING_PURCHASE'
+        record.validation_status = target_val_status
         record.status = 'COMPLETED'
 
         logger.info(
-            f"[PENDING_DB_COMMIT] record={record.id} marked as COMPLETED/PENDING_PURCHASE "
+            f"[PENDING_DB_COMMIT] record={record.id} marked as COMPLETED/{target_val_status} "
             f"(via update, immutability guard bypassed)"
         )
         logger.info(f"[PENDING_QUEUE_SUCCESS] record={record.id} moved to pending queue successfully")
-        return True
+        return is_pending
