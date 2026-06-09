@@ -4,6 +4,7 @@ import Icon from '../../components/Icon';
 import SearchableSelect from '../../components/SearchableSelect';
 import { useBankPartyOptions } from './useBankPartyOptions';
 import BankAllocationPanel, { AllocationState } from './BankAllocationPanel';
+import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface StagedFile {
@@ -54,6 +55,7 @@ interface BankUploadProps {
 
 const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mixed', onClose }) => {
   const fileRef = useRef<HTMLInputElement>(null);
+  const { isLimitReached, subscriptionUsage } = useSubscriptionUsage();
 
   const [step, setStep]               = useState<Step>('upload');
   const [sessionId, setSessionId]     = useState<string | null>(null);
@@ -226,6 +228,11 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
     setUploading(true);
     setUploadError(null);
     setPostSuccess(null);
+    if (isLimitReached) {
+      setUploadError('AI usage limit reached. Please upgrade your plan to upload more files.');
+      setUploading(false);
+      return;
+    }
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -387,6 +394,25 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
         </button>
       </div>
 
+      {/* Subscription Limit Banner */}
+      {isLimitReached && (
+        <div className="mb-6 bg-red-600 text-white px-6 py-4 rounded-2xl flex items-center gap-4">
+          <div className="p-2 bg-red-500 rounded-xl">
+            <Icon name="warning" className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <p className="font-black text-sm">AI Usage Limit Reached — Uploads Disabled</p>
+            <p className="text-[11px] text-red-100 font-medium mt-0.5">
+              You have used {subscriptionUsage?.used} / {subscriptionUsage?.limit} AI credits this cycle.
+              Upgrade your plan in Settings → Subscription to continue.
+            </p>
+          </div>
+          <a href="/?page=Settings&tab=Subscription" className="flex-shrink-0 px-5 py-2.5 bg-white text-red-600 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-red-50 transition-all">
+            Upgrade
+          </a>
+        </div>
+      )}
+
       {/* ── STEP 1: Upload ────────────────────────────────────────────────── */}
       {step === 'upload' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-10 shadow-sm max-w-2xl mx-auto">
@@ -438,7 +464,11 @@ const BankUpload: React.FC<BankUploadProps> = ({ ledgers = [], defaultType = 'mi
             </div>
           </div>
           {uploadError && <div className="p-4 mb-6 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-3"><Icon name="warning" className="w-5 h-5" /> {uploadError}</div>}
-          <button onClick={handleUpload} disabled={uploading} className="w-full erp-button-primary py-4 rounded-xl text-lg shadow-xl shadow-indigo-100 flex items-center justify-center gap-3">
+          <button onClick={handleUpload} disabled={uploading || isLimitReached} className={`w-full py-4 rounded-xl text-lg shadow-xl flex items-center justify-center gap-3 ${
+            isLimitReached
+              ? 'bg-red-100 text-red-400 cursor-not-allowed shadow-none border border-red-200'
+              : 'erp-button-primary shadow-indigo-100'
+          }`} title={isLimitReached ? 'AI usage limit reached — upgrade your plan' : undefined}>
             <Icon name={uploading ? 'spinner' : 'upload'} className={`w-6 h-6 ${uploading ? 'animate-spin' : ''}`} />
             {uploading ? (
               <div className="flex flex-col items-center">
