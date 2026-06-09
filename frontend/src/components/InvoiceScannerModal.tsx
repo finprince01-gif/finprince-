@@ -1642,7 +1642,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         (extractionMode === 'ai_native' ? 'AI Native' :
             (extractionMode.charAt(0).toUpperCase() + extractionMode.slice(1)));
 
-    const modalTitle = `${modePrefix} ${isSingleScan ? 'Single' : 'Bulk'} Scan â€“ Invoice Scanner`;
+    const modalTitle = 'Invoice Scanner';
     const modalHint = isSingleScan
         ? 'Upload a single invoice for fast AI extraction.'
         : 'Upload multiple invoices for batch AI processing.';

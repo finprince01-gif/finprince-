@@ -1,8 +1,8 @@
 from datetime import datetime
 from django.db.models import F # type: ignore
-from .models import AIUsage, Branch # type: ignore
+from .models import AIUsage, Tenant # type: ignore
 
-def get_or_create_usage(branch):
+def get_or_create_usage(tenant):
     """
     Get current year and month and return existing AIUsage row or create one.
     """
@@ -10,17 +10,17 @@ def get_or_create_usage(branch):
     year = now.year
     month = now.month
     
-    # Handle both Branch object or branch_id string
-    if isinstance(branch, str):
+    # Handle both Tenant/Branch object or tenant_id string
+    if isinstance(tenant, str):
         usage, created = AIUsage.objects.get_or_create(
-            branch_id=branch,
+            tenant_id=tenant,
             year=year,
             month=month,
             defaults={'used_count': 0}
         )
     else:
         usage, created = AIUsage.objects.get_or_create(
-            branch=branch,
+            tenant=tenant,
             year=year,
             month=month,
             defaults={'used_count': 0}
@@ -32,20 +32,34 @@ def check_and_increment_usage(tenant, limit):
     Fetch current usage. If used_count >= limit, return False.
     Else increment atomically and return True.
     """
-    import math
-    usage = get_or_create_usage(tenant)
-    if not usage:
+    from accounting.utils_subscription import get_invoice_usage
+    
+    # Extract tenant_id string from tenant parameter
+    tenant_id = tenant if isinstance(tenant, str) else getattr(tenant, 'id', None)
+    if not tenant_id:
         return False
         
-    if limit != float('inf') and usage.used_count >= limit:
+    class DummyUser:
+        def __init__(self, tenant_id):
+            self.tenant_id = tenant_id
+            self.subscription_start_date = None
+            self.created_at = None
+
+    dummy_user = DummyUser(tenant_id)
+    used = get_invoice_usage(dummy_user)
+    
+    if limit != float('inf') and used >= limit:
         return False
-    
-    # Atomic increment logic using F() expression
-    # We add the limit check in the filter to prevent race conditions 
-    # where multiple workers pass the initial check.
-    if limit == float('inf'):
-        updatedRows = AIUsage.objects.filter(pk=usage.pk).update(used_count=F("used_count") + 1)
-    else:
-        updatedRows = AIUsage.objects.filter(pk=usage.pk, used_count__lt=limit).update(used_count=F("used_count") + 1)
-    
-    return updatedRows > 0
+        
+    # Increment / sync the legacy counter row for compatibility and tracking
+    try:
+        usage = get_or_create_usage(tenant)
+        if usage:
+            AIUsage.objects.filter(pk=usage.pk).update(used_count=used + 1)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error syncing legacy AIUsage: {e}", exc_info=True)
+        
+    return True
+

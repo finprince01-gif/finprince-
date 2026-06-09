@@ -12124,9 +12124,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             bank_upload: {
                               id: 'bank_upload',
                               label: "Bank Statement Upload",
-                              icon: <Icon name="bank" className="w-4 h-4 mr-3 text-indigo-500" />,
-                              onClick: () => { setIsBankUploadModalOpen(true); setIsScannerMenuOpen(false); },
-                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              icon: <Icon name="bank" className={`w-4 h-4 mr-3 ${isLimitReached ? 'text-red-500' : 'text-indigo-500'}`} />,
+                              onClick: () => { if (isLimitReached) { handleLimitReached(); } else { setIsBankUploadModalOpen(true); } setIsScannerMenuOpen(false); },
+                              className: `flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`,
+                              extraLabel: isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>
                             },
                             sales_excel_upload: {
                               id: 'sales_excel_upload',
@@ -12138,15 +12139,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             upload_for_excel: {
                               id: 'upload_for_excel',
                               label: "UPLOAD FOR EXCEL",
-                              icon: <Icon name="document" className="w-4 h-4 mr-3 text-gray-500" />,
+                              icon: <Icon name="document" className={`w-4 h-4 mr-3 ${isLimitReached ? 'text-red-500' : 'text-gray-500'}`} />,
                               onClick: () => {
-                                setExtractionMode('zoho');
-                                setScanType('bulk');
-                                setScannerFiles(null);
-                                setIsInvoiceScannerOpen(true);
+                                if (isLimitReached) {
+                                  handleLimitReached();
+                                } else {
+                                  setExtractionMode('zoho');
+                                  setScanType('bulk');
+                                  setScannerFiles(null);
+                                  setIsInvoiceScannerOpen(true);
+                                }
                                 setIsScannerMenuOpen(false);
                               },
-                              className: "flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              className: `flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`,
+                              extraLabel: isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>
                             }
                           };
 

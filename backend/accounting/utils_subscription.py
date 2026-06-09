@@ -30,26 +30,77 @@ def get_billing_cycle_start(user):
 def get_invoice_usage(user):
     """
     Count invoices from AI extraction and scanner for the current month.
-    Fetches the used_count from the AIUsage model.
+    Dynamically sums:
+      - Purchase Upload Count (InvoiceTempOCR staging records)
+      - Excel Upload Count (Vouchers created from Excel upload)
+      - Bank Statement Upload Count (BankStatementStagingFile staging records)
     """
     tenant_id = getattr(user, 'tenant_id', None)
     if not tenant_id:
         return 0
 
-    from core.models import AIUsage
-    from datetime import datetime
+    from django.db.models import Q
+    from ocr_pipeline.models import InvoiceTempOCR
+    from bank_upload.models import BankStatementStagingFile
+    from accounting.models import Voucher
+    from core.models import User
     
-    now = datetime.now()
+    from django.utils.timezone import make_aware
+    import datetime
+    
     try:
-        usage = AIUsage.objects.filter(
+        # Try to find a real user for the tenant to get accurate billing cycle start
+        real_user = User.objects.filter(tenant_id=tenant_id).first()
+        query_user = real_user if real_user else user
+        cycle_start = get_billing_cycle_start(query_user)
+        cycle_start_dt = make_aware(datetime.datetime.combine(cycle_start, datetime.time.min))
+        
+        # 1. Purchase Upload Count
+        purchase_count = InvoiceTempOCR.objects.filter(
             tenant_id=tenant_id,
-            year=now.year,
-            month=now.month
-        ).first()
-        return usage.used_count if usage else 0
+            created_at__gte=cycle_start_dt
+        ).filter(
+            Q(is_primary=True) | Q(group_id__isnull=True) | Q(group_id='')
+        ).exclude(
+            status__in=['FAILED', 'ERROR']
+        ).exclude(
+            validation_status='EXTRACTION_FAILED'
+        ).count()
+        
+        # 2. Excel Upload Count
+        excel_count = Voucher.objects.filter(
+            tenant_id=tenant_id,
+            type="sales",
+            source="excel",
+            created_at__gte=cycle_start_dt
+        ).count()
+        
+        # 3. Bank Statement Upload Count
+        bank_count = BankStatementStagingFile.objects.filter(
+            tenant_id=tenant_id,
+            uploaded_at__gte=cycle_start_dt
+        ).exclude(
+            status='deleted'
+        ).count()
+        
+        return purchase_count + excel_count + bank_count
     except Exception as e:
-        print(f"Error fetching AI usage: {e}")
-        return 0
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error calculating dynamic AI usage: {e}", exc_info=True)
+        # Fallback to legacy count if dynamic query fails
+        try:
+            from core.models import AIUsage
+            from datetime import datetime
+            now = datetime.now()
+            usage = AIUsage.objects.filter(
+                tenant_id=tenant_id,
+                year=now.year,
+                month=now.month
+            ).first()
+            return usage.used_count if usage else 0
+        except:
+            return 0
 
 def check_subscription_limit(user, increment=1):
     """

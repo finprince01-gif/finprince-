@@ -682,7 +682,10 @@ class SalesExcelUploadView(APIView):
                             context={"request": request, "tenant_id": tenant_id}
                         )
                         if serializer.is_valid():
-                            serializer.save()
+                            invoice = serializer.save()
+                            if getattr(invoice, 'voucher_id', None):
+                                from accounting.models import Voucher
+                                Voucher.objects.filter(id=invoice.voucher_id).update(source="excel")
                             actual_items = len(items) + len(foreign_items)
                             total_items_count += actual_items
                             created_vouchers.append({
@@ -1118,7 +1121,10 @@ class SalesExcelWorkflowFinalizeView(APIView):
                             context={"request": request, "tenant_id": tenant_id}
                         )
                         if serializer.is_valid():
-                            serializer.save()
+                            invoice = serializer.save()
+                            if getattr(invoice, 'voucher_id', None):
+                                from accounting.models import Voucher
+                                Voucher.objects.filter(id=invoice.voucher_id).update(source="excel")
                             summary["created"] += 1
                             inv["created"] = True
                         else:

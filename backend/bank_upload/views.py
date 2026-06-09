@@ -145,6 +145,16 @@ class BankUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # ── Step 0b: Subscription Limit Check ──
+        from accounting.utils_subscription import check_subscription_limit
+        try:
+            check_subscription_limit(request.user)
+        except Exception as limit_exc:
+            return Response(
+                {'error': str(limit_exc), 'code': 'LIMIT_REACHED'},
+                status=status.HTTP_402_PAYMENT_REQUIRED
+            )
+
         # ── Step 1: Extract via Gemini ──
         logger.info(f"📤 BankUpload (Staging): tenant={tenant_id}, file={file_obj.name}")
         try:
