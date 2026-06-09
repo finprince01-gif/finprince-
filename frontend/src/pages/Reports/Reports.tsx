@@ -349,13 +349,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       setLedgerViewMode('ledger');
       setLedgerFilters({ date: '', dateFrom: '', dateTo: '', particulars: '', voucherNo: '', voucherType: '', debit: '', credit: '', runningBalance: '' });
       const ledgerName = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-      apiService.getJournalEntriesReport(ledgerName, startDate, endDate)
+      apiService.getJournalEntriesReport(ledgerName, undefined, undefined)
         .then(data => { setDrillDownData(Array.isArray(data) ? data : []); setIsDrillDownLoading(false); })
         .catch(() => { setIsDrillDownLoading(false); setDrillDownData([]); });
     } else {
       setDrillDownData([]);
     }
-  }, [drillDownLedger, startDate, endDate]);
+  }, [drillDownLedger]);
 
   // Download mappings for each report type
   const downloadMappings: { [key in ReportType]: { endpoint: string; filename: string } } = {
@@ -375,8 +375,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
     try {
       // Construct Query Params
       const params = new URLSearchParams();
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
+      if (startDate && reportType !== 'LedgerReport') params.append('startDate', startDate);
+      if (endDate && reportType !== 'LedgerReport') params.append('endDate', endDate);
       if (reportType === 'LedgerReport' && selectedLedger && selectedLedger !== 'all') {
         // Extract actual name if it has prefix
         const cleanName = selectedLedger.includes(':') ? selectedLedger.split(':')[1] : selectedLedger;
@@ -1220,7 +1220,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       });
     }
 
-    if ((reportType === 'DayBook' || reportType === 'LedgerReport') && (startDate || endDate)) {
+    if ((reportType === 'DayBook') && (startDate || endDate)) {
       filtered = filtered.filter(v => {
         const vDate = new Date(v.date);
         const start = startDate ? new Date(startDate) : null;
@@ -1273,11 +1273,11 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       }
 
       // Apply date filters if set
-      if (startDate) {
+      if (startDate && reportType !== 'LedgerReport') {
         const s = new Date(startDate);
         targetEntries = targetEntries.filter(e => new Date(e.date || e.transaction_date) >= s);
       }
-      if (endDate) {
+      if (endDate && reportType !== 'LedgerReport') {
         const e = new Date(endDate);
         targetEntries = targetEntries.filter(e => new Date(e.date || e.transaction_date) <= e);
       }
@@ -1565,7 +1565,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
       entries.forEach(e => {
         // Date filtering
         const vDate = e.transaction_date || e.date;
-        if (vDate) {
+        if (vDate && reportType !== 'LedgerReport') {
           const d = new Date(vDate);
           if (startDate && d < new Date(startDate)) return;
           if (endDate && d > new Date(endDate)) return;
@@ -2804,7 +2804,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                         // Refresh drill-down data to reflect changes
                         if (drillDownLedger) {
                           const ledgerName = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-                          apiService.getJournalEntriesReport(ledgerName, startDate, endDate)
+                          apiService.getJournalEntriesReport(ledgerName, undefined, undefined)
                             .then(data => setDrillDownData(Array.isArray(data) ? data : []))
                             .catch(() => { });
                         }
@@ -3921,7 +3921,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                           // Refresh reports drilldown
                           if (drillDownLedger) {
                             const name = drillDownLedger.includes(':') ? drillDownLedger.split(':')[1] : drillDownLedger;
-                            apiService.getJournalEntriesReport(name, startDate, endDate)
+                            apiService.getJournalEntriesReport(name, undefined, undefined)
                               .then(res => setDrillDownData(Array.isArray(res) ? res : []))
                               .catch(() => { });
                           }
@@ -4411,34 +4411,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], entries = [], 
                   </select>
                 </div>
               )}
-              <div className="min-w-[200px]">
-                <label htmlFor="ledgerStartDate" className="label-text">Start Date</label>
-                <input
-                  type="date"
-                  id="ledgerStartDate"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="erp-input"
-                />
-              </div>
-              <div className="min-w-[200px]">
-                <label htmlFor="ledgerEndDate" className="label-text">End Date</label>
-                <input
-                  type="date"
-                  id="ledgerEndDate"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="erp-input"
-                />
-              </div>
-              {(startDate || endDate) && (
-                <button
-                  onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="erp-button-secondary"
-                >
-                  Clear
-                </button>
-              )}
+
             </div>
 
             <div className="flex justify-end mb-4">
